@@ -56,6 +56,23 @@ class TestSootheConfig:
         cfg = SootheConfig.from_yaml_file(str(p))
         assert cfg.agent.name == "TestDaemonStrip"
 
+    def test_yaml_legacy_top_level_agent_loop_folds_into_agent_loop(self, tmp_path: Path) -> None:
+        """Legacy ``agent_loop:`` YAML must load under ``agent.loop`` (IG-407)."""
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "agent:\n"
+            "  name: LegacyFold\n"
+            "agent_loop:\n"
+            "  max_iterations: 42\n"
+            "  limits:\n"
+            "    max_parallel_steps: 7\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert cfg.agent.name == "LegacyFold"
+        assert cfg.agent.loop.max_iterations == 42
+        assert cfg.agent.loop.limits.max_parallel_steps == 7
+
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
         assert "explore" in cfg.subagents

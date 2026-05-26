@@ -17,13 +17,9 @@ ESSENTIAL_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         "soothe.cognition.agent_loop.completed",
         "soothe.cognition.goal.created",
         "soothe.cognition.goal.completed",
-        "soothe.lifecycle.loop.created",
-        "soothe.lifecycle.loop.completed",
         # Cognition events (milestones)
         "soothe.cognition.plan.created",
         "soothe.cognition.plan.completed",
-        "soothe.cognition.plan.step.started",
-        "soothe.cognition.plan.step.completed",
         # Error events (always show)
         "soothe.error.general.failed",
         "soothe.error.tool",

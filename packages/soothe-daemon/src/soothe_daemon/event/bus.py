@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # the queue fills during long streams; timeout ends the wait.)
 _NORMAL_DROP_LOG_LAST: dict[str, float] = {}
 _HIGH_DROP_LOG_LAST: dict[str, float] = {}
+_NO_SUBSCRIBER_LOG_LAST: dict[str, float] = {}
 _DROP_LOG_INTERVAL_SEC = 5.0
 
 
@@ -127,6 +128,19 @@ class EventBus:
 
         # Early return if no subscribers (no lock needed)
         if not queues:
+            if _throttle_log(
+                _NO_SUBSCRIBER_LOG_LAST,
+                topic,
+                interval=_DROP_LOG_INTERVAL_SEC,
+            ):
+                wire_type = (
+                    event.get("type") if isinstance(event, dict) else None
+                )
+                logger.warning(
+                    "No subscribers for topic %s; dropping event (type=%s)",
+                    topic,
+                    wire_type,
+                )
             return
 
         # Send (event, event_meta) tuple to queues for filtering (RFC-0022)
@@ -138,6 +152,13 @@ class EventBus:
 
             # Get event priority from metadata
             priority = event_meta.priority if event_meta else EventPriority.NORMAL
+            if (
+                event_meta is None
+                and isinstance(event, dict)
+                and event.get("type") == "status"
+                and event.get("state") in ("running", "idle")
+            ):
+                priority = EventPriority.CRITICAL
 
             # Fast drop when already at capacity (avoids exception per put on hot path)
             if priority == EventPriority.NORMAL and queue_size >= queue_max:

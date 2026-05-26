@@ -23,7 +23,7 @@ class _FakeRunner:
 
     async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
         self.calls.append({"text": text, **kwargs})
-        yield ((), "custom", {"type": "soothe.lifecycle.thread.started"})
+        yield ((), "custom", {"type": "soothe.internal.iteration.started"})
 
 
 @pytest.mark.asyncio

@@ -236,9 +236,6 @@ class TestComplexityMapping:
         config.resolve_model.return_value = "claude-opus-4-6"
         config.agent.name = "Soothe"
         config.agent.system_prompt = None
-        config.agent_loop.performance_enabled = True
-        config.agent_loop.optimize_system_prompts = True
-        config.agent_loop.unified_classification = True
         return SystemPromptOptimizationMiddleware(config)
 
     def test_minimal_complexity_no_extra_sections(

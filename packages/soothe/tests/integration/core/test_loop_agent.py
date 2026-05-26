@@ -282,7 +282,8 @@ class MockCoreAgent:
 def _make_config(max_iterations: int = 8) -> MagicMock:
     cfg = MagicMock()
     cfg.subagents = {}
-    al = cfg.agent_loop
+    cfg.agent = MagicMock()
+    al = cfg.agent.loop
     al.max_iterations = max_iterations
     al.max_subagent_tasks_per_wave = 16
     al.context_window_limit = 128000

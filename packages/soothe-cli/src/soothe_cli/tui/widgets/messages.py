@@ -828,16 +828,9 @@ class AssistantMessage(Vertical):
 
             config = load_config()
             self._render_markdown = config.render_markdown
-            # Load flush interval from output_streaming config (RFC-614)
-            streaming_cfg = getattr(config, "output_streaming", None)
-            if streaming_cfg is None:
-                # Try agent_loop.output_streaming path
-                agent_loop = getattr(config, "agent_loop", None)
-                if agent_loop:
-                    streaming_cfg = getattr(agent_loop, "output_streaming", None)
-            if streaming_cfg:
-                ms = getattr(streaming_cfg, "tui_flush_interval_ms", 200)
-                self._stream_flush_interval = ms / 1000.0
+            if hasattr(config, "agent"):
+                streaming_cfg = config.agent.loop.output_streaming
+                self._stream_flush_interval = streaming_cfg.tui_flush_interval_ms / 1000.0
         except Exception:
             pass  # Default to True if config unavailable
 

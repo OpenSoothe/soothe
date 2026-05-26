@@ -61,7 +61,7 @@ async def test_execute_emits_step_completed_per_result() -> None:
     scratch.plan_result = MagicMock()
 
     agent_loop = MagicMock()
-    agent_loop.config.agent_loop.limits.max_parallel_steps = 4
+    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
 
     ctx = LoopRuntimeContext(
         agent_loop=agent_loop,
@@ -148,7 +148,7 @@ async def test_execute_emits_step_started_when_dependency_unlocks() -> None:
     scratch.plan_result = MagicMock()
 
     agent_loop = MagicMock()
-    agent_loop.config.agent_loop.limits.max_parallel_steps = 4
+    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
 
     ctx = LoopRuntimeContext(
         agent_loop=agent_loop,

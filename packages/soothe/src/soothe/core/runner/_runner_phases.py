@@ -18,7 +18,6 @@ from soothe.core.events import (
     LoopCreatedEvent,
     LoopStartedEvent,
     PlanCreatedEvent,
-    PlanStepStartedEvent,
 )
 from soothe.core.loop.utils.messages import loop_assistant_messages_chunk
 from soothe.protocols.planner import PlanContext
@@ -602,13 +601,6 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                         is_plan_only=plan.is_plan_only,
                     ).to_dict()
                 )
-                if plan.steps:
-                    yield _custom(
-                        PlanStepStartedEvent(
-                            index=0,
-                            description=plan.steps[0].description,
-                        ).to_dict()
-                    )
             except Exception:
                 logger.debug("Plan creation failed", exc_info=True)
 

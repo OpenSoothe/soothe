@@ -1,49 +1,68 @@
 """Centralized event type string constants for Soothe system.
 
-This module provides the SINGLE SOURCE OF TRUTH for all event type string constants.
-Import from this module instead of hardcoding strings or importing from event_catalog.
-
-Architecture:
-- This file: Event type string constants ONLY
-- event_catalog.py: Event models, registry, registration logic
-
-RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
-
-Usage:
-    from soothe.core.events import GOAL_CREATED, BRANCH_CREATED
-
-    # For comparisons, routing, event emission
-    if event_type == GOAL_CREATED:
-        ...
+Client-facing: ``soothe.<domain>.<component>.<action>`` (RFC-0015).
+Internal (daemon/worker only, never WebSocket broadcast):
+``soothe.internal.<component>.<action>`` (IG-435).
 """
 
 from __future__ import annotations
 
 # ============================================================================
-# LIFECYCLE DOMAIN (soothe.lifecycle.*)
+# INTERNAL NAMESPACE (soothe.internal.*) — never broadcast to clients
 # ============================================================================
 
-# Iteration lifecycle
-ITERATION_STARTED = "soothe.lifecycle.iteration.started"
-ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"
+# Iteration
+ITERATION_STARTED = "soothe.internal.iteration.started"
+ITERATION_COMPLETED = "soothe.internal.iteration.completed"
 
-# Checkpoint lifecycle
-CHECKPOINT_SAVED = "soothe.lifecycle.checkpoint.saved"
-CHECKPOINT_ANCHOR_CREATED = "soothe.lifecycle.checkpoint.anchor.created"
+# Checkpoint
+CHECKPOINT_SAVED = "soothe.internal.checkpoint.saved"
+CHECKPOINT_ANCHOR_CREATED = "soothe.internal.checkpoint.anchor.created"
 
-# Recovery lifecycle
-RECOVERY_RESUMED = "soothe.lifecycle.recovery.resumed"
+# Recovery
+RECOVERY_RESUMED = "soothe.internal.recovery.resumed"
 
-# Loop lifecycle (NEW)
-LOOP_CREATED = "soothe.lifecycle.loop.created"
-LOOP_STARTED = "soothe.lifecycle.loop.started"
-LOOP_DETACHED = "soothe.lifecycle.loop.detached"
-LOOP_REATTACHED = "soothe.lifecycle.loop.reattached"
-LOOP_COMPLETED = "soothe.lifecycle.loop.completed"
-HISTORY_REPLAY_COMPLETE = "soothe.lifecycle.loop.history.replayed"
+# Loop lifecycle
+LOOP_CREATED = "soothe.internal.loop.created"
+LOOP_STARTED = "soothe.internal.loop.started"
+LOOP_DETACHED = "soothe.internal.loop.detached"
+LOOP_REATTACHED = "soothe.internal.loop.reattached"
+LOOP_COMPLETED = "soothe.internal.loop.completed"
+
+# Control-plane replay marker (prefer wire ``replay_complete`` envelope to clients)
+REPLAY_COMPLETE = "replay_complete"
+
+# Memory protocol
+MEMORY_RECALLED = "soothe.internal.memory.recalled"
+MEMORY_STORED = "soothe.internal.memory.stored"
+
+# Policy protocol
+POLICY_CHECKED = "soothe.internal.policy.checked"
+POLICY_DENIED = "soothe.internal.policy.denied"
+
+# Daemon
+DAEMON_HEARTBEAT = "soothe.internal.daemon.heartbeat"
+
+# Plugin lifecycle
+PLUGIN_LOADED = "soothe.internal.plugin.loaded"
+PLUGIN_FAILED = "soothe.internal.plugin.failed"
+PLUGIN_UNLOADED = "soothe.internal.plugin.unloaded"
+
+# Plan internals
+PLAN_DAG_SNAPSHOT = "soothe.internal.plan.dag_snapshot"
+
+# Branch internals
+BRANCH_ANALYZED = "soothe.internal.branch.analyzed"
+BRANCH_PRUNED = "soothe.internal.branch.pruned"
+
+# Autopilot internals (DETAILED)
+AUTOPILOT_GOAL_VALIDATED = "soothe.internal.autopilot.goal.validated"
+AUTOPILOT_SEND_BACK = "soothe.internal.autopilot.feedback.sent"
+AUTOPILOT_RELATIONSHIP_DETECTED = "soothe.internal.autopilot.relationship.detected"
+AUTOPILOT_CHECKPOINT_SAVED = "soothe.internal.autopilot.checkpoint.saved"
 
 # ============================================================================
-# COGNITION DOMAIN (soothe.cognition.*)
+# CLIENT-FACING (soothe.<domain>.*)
 # ============================================================================
 
 # Goal cognition
@@ -55,14 +74,10 @@ GOAL_REPORT = "soothe.cognition.goal.reported"
 GOAL_DIRECTIVES_APPLIED = "soothe.cognition.goal.directives.applied"
 GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 
-# Plan cognition
+# Plan cognition (client UX)
 PLAN_CREATED = "soothe.cognition.plan.created"
-PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
-PLAN_STEP_COMPLETED = "soothe.cognition.plan.step.completed"
-PLAN_STEP_FAILED = "soothe.cognition.plan.step.failed"
 PLAN_BATCH_STARTED = "soothe.cognition.plan.batch.started"
 PLAN_REFLECTED = "soothe.cognition.plan.reflected"
-PLAN_DAG_SNAPSHOT = "soothe.cognition.plan.dag_snapshot"
 
 # AgentLoop cognition
 AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
@@ -71,130 +86,82 @@ AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_QUEUED = "soothe.cognition.agent_loop.step.queued"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
+AGENT_LOOP_REASONED = "soothe.cognition.agent_loop.reasoned"
 
-# Branch cognition (NEW)
+# Branch cognition (client UX)
 BRANCH_CREATED = "soothe.cognition.branch.created"
-BRANCH_ANALYZED = "soothe.cognition.branch.analyzed"
 BRANCH_RETRY_STARTED = "soothe.cognition.branch.retry.started"
-BRANCH_PRUNED = "soothe.cognition.branch.pruned"
 
-# ============================================================================
-# PROTOCOL DOMAIN (soothe.protocol.*)
-# ============================================================================
+# Autopilot system (client UX)
+AUTOPILOT_STATUS_CHANGED = "soothe.system.autopilot.status.changed"
+AUTOPILOT_GOAL_CREATED = "soothe.system.autopilot.goal.created"
+AUTOPILOT_GOAL_PROGRESS = "soothe.system.autopilot.goal.reported"
+AUTOPILOT_GOAL_COMPLETED = "soothe.system.autopilot.goal.completed"
+AUTOPILOT_DREAMING_ENTERED = "soothe.system.autopilot.dreaming.started"
+AUTOPILOT_DREAMING_EXITED = "soothe.system.autopilot.dreaming.completed"
+AUTOPILOT_GOAL_SUSPENDED = "soothe.system.autopilot.goal.suspended"
+AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 
-# Memory protocol
-MEMORY_RECALLED = "soothe.protocol.memory.recalled"
-MEMORY_STORED = "soothe.protocol.memory.stored"
-
-# Policy protocol
-POLICY_CHECKED = "soothe.protocol.policy.checked"
-POLICY_DENIED = "soothe.protocol.policy.denied"
-
-# ============================================================================
-# SYSTEM DOMAIN (soothe.system.*)
-# ============================================================================
-
-DAEMON_HEARTBEAT = "soothe.system.daemon.heartbeat"
-
-# Autopilot system
-AUTOPILLOT_STATUS_CHANGED = "soothe.system.autopilot.status.changed"
-AUTOPILLOT_GOAL_CREATED = "soothe.system.autopilot.goal.created"
-AUTOPILLOT_GOAL_PROGRESS = "soothe.system.autopilot.goal.reported"
-AUTOPILLOT_GOAL_COMPLETED = "soothe.system.autopilot.goal.completed"
-AUTOPILLOT_DREAMING_ENTERED = "soothe.system.autopilot.dreaming.started"
-AUTOPILLOT_DREAMING_EXITED = "soothe.system.autopilot.dreaming.completed"
-AUTOPILLOT_GOAL_VALIDATED = "soothe.system.autopilot.goal.validated"
-AUTOPILLOT_GOAL_SUSPENDED = "soothe.system.autopilot.goal.suspended"
-AUTOPILLOT_SEND_BACK = "soothe.system.autopilot.feedback.sent"
-AUTOPILLOT_RELATIONSHIP_DETECTED = "soothe.system.autopilot.relationship.detected"
-AUTOPILLOT_CHECKPOINT_SAVED = "soothe.system.autopilot.checkpoint.saved"
-AUTOPILLOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
-
-# ============================================================================
-# PLUGIN DOMAIN (soothe.plugin.*)
-# ============================================================================
-
-PLUGIN_LOADED = "soothe.plugin.loaded"
-PLUGIN_FAILED = "soothe.plugin.failed"
-PLUGIN_UNLOADED = "soothe.plugin.unloaded"
-
-# ============================================================================
-# ERROR DOMAIN (soothe.error.*)
-# ============================================================================
-
+# Error
 ERROR = "soothe.error.general.failed"
 
+# Deprecated alias (use REPLAY_COMPLETE wire envelope)
+HISTORY_REPLAY_COMPLETE = REPLAY_COMPLETE
 
 __all__ = [
-    # Lifecycle - Iteration
-    "ITERATION_STARTED",
-    "ITERATION_COMPLETED",
-    # Lifecycle - Checkpoint
-    "CHECKPOINT_SAVED",
+    "AGENT_LOOP_COMPLETED",
+    "AGENT_LOOP_PLAN_DECISION",
+    "AGENT_LOOP_REASONED",
+    "AGENT_LOOP_STARTED",
+    "AGENT_LOOP_STEP_COMPLETED",
+    "AGENT_LOOP_STEP_QUEUED",
+    "AGENT_LOOP_STEP_STARTED",
+    "AUTOPILOT_CHECKPOINT_SAVED",
+    "AUTOPILOT_DREAMING_ENTERED",
+    "AUTOPILOT_DREAMING_EXITED",
+    "AUTOPILOT_GOAL_BLOCKED",
+    "AUTOPILOT_GOAL_COMPLETED",
+    "AUTOPILOT_GOAL_CREATED",
+    "AUTOPILOT_GOAL_PROGRESS",
+    "AUTOPILOT_GOAL_SUSPENDED",
+    "AUTOPILOT_GOAL_VALIDATED",
+    "AUTOPILOT_RELATIONSHIP_DETECTED",
+    "AUTOPILOT_SEND_BACK",
+    "AUTOPILOT_STATUS_CHANGED",
+    "BRANCH_ANALYZED",
+    "BRANCH_CREATED",
+    "BRANCH_PRUNED",
+    "BRANCH_RETRY_STARTED",
     "CHECKPOINT_ANCHOR_CREATED",
-    # Lifecycle - Recovery
-    "RECOVERY_RESUMED",
-    # Lifecycle - Loop
+    "CHECKPOINT_SAVED",
+    "DAEMON_HEARTBEAT",
+    "ERROR",
+    "GOAL_BATCH_STARTED",
+    "GOAL_COMPLETED",
+    "GOAL_CREATED",
+    "GOAL_DEFERRED",
+    "GOAL_DIRECTIVES_APPLIED",
+    "GOAL_FAILED",
+    "GOAL_REPORT",
+    "HISTORY_REPLAY_COMPLETE",
+    "ITERATION_COMPLETED",
+    "ITERATION_STARTED",
+    "LOOP_COMPLETED",
     "LOOP_CREATED",
-    "LOOP_STARTED",
     "LOOP_DETACHED",
     "LOOP_REATTACHED",
-    "LOOP_COMPLETED",
-    "HISTORY_REPLAY_COMPLETE",
-    # Lifecycle - Thread
-    # Cognition - Goal
-    "GOAL_CREATED",
-    "GOAL_COMPLETED",
-    "GOAL_FAILED",
-    "GOAL_BATCH_STARTED",
-    "GOAL_REPORT",
-    "GOAL_DIRECTIVES_APPLIED",
-    "GOAL_DEFERRED",
-    # Cognition - Plan
-    "PLAN_CREATED",
-    "PLAN_STEP_STARTED",
-    "PLAN_STEP_COMPLETED",
-    "PLAN_STEP_FAILED",
-    "PLAN_BATCH_STARTED",
-    "PLAN_REFLECTED",
-    "PLAN_DAG_SNAPSHOT",
-    # Cognition - AgentLoop
-    "AGENT_LOOP_STARTED",
-    "AGENT_LOOP_COMPLETED",
-    "AGENT_LOOP_STEP_STARTED",
-    "AGENT_LOOP_STEP_QUEUED",
-    "AGENT_LOOP_STEP_COMPLETED",
-    "AGENT_LOOP_PLAN_DECISION",
-    # Cognition - Branch
-    "BRANCH_CREATED",
-    "BRANCH_ANALYZED",
-    "BRANCH_RETRY_STARTED",
-    "BRANCH_PRUNED",
-    # Protocol - Memory
+    "LOOP_STARTED",
     "MEMORY_RECALLED",
     "MEMORY_STORED",
-    # Protocol - Policy
+    "PLAN_BATCH_STARTED",
+    "PLAN_CREATED",
+    "PLAN_DAG_SNAPSHOT",
+    "PLAN_REFLECTED",
+    "PLUGIN_FAILED",
+    "PLUGIN_LOADED",
+    "PLUGIN_UNLOADED",
     "POLICY_CHECKED",
     "POLICY_DENIED",
-    # System - Daemon
-    "DAEMON_HEARTBEAT",
-    # System - Autopilot
-    "AUTOPILLOT_STATUS_CHANGED",
-    "AUTOPILLOT_GOAL_CREATED",
-    "AUTOPILLOT_GOAL_PROGRESS",
-    "AUTOPILLOT_GOAL_COMPLETED",
-    "AUTOPILLOT_DREAMING_ENTERED",
-    "AUTOPILLOT_DREAMING_EXITED",
-    "AUTOPILLOT_GOAL_VALIDATED",
-    "AUTOPILLOT_GOAL_SUSPENDED",
-    "AUTOPILLOT_SEND_BACK",
-    "AUTOPILLOT_RELATIONSHIP_DETECTED",
-    "AUTOPILLOT_CHECKPOINT_SAVED",
-    "AUTOPILLOT_GOAL_BLOCKED",
-    # Plugin
-    "PLUGIN_LOADED",
-    "PLUGIN_FAILED",
-    "PLUGIN_UNLOADED",
-    # Error
-    "ERROR",
+    "RECOVERY_RESUMED",
+    "REPLAY_COMPLETE",
 ]

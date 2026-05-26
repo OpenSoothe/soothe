@@ -1,6 +1,7 @@
 """Unit tests for ClientSession and ClientSessionManager."""
 
 import asyncio
+import contextlib
 import logging
 from unittest.mock import AsyncMock, MagicMock
 
@@ -160,7 +161,10 @@ async def test_sender_loop_sends_events():
     # Give sender task time to start
     await asyncio.sleep(0.05)
 
-    event = {"type": "test", "data": "hello"}
+    event = {
+        "type": "event",
+        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+    }
     await bus.publish(loop_event_topic("loop-abc123"), event)
 
     # Wait for sender loop to process
@@ -189,7 +193,10 @@ async def test_sender_loop_stops_on_error():
     result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result is True
 
-    event = {"type": "test", "data": "hello"}
+    event = {
+        "type": "event",
+        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+    }
     await bus.publish(loop_event_topic("loop-abc123"), event)
 
     # Wait for sender loop to process
@@ -218,7 +225,10 @@ async def test_sender_loop_treats_connection_error_as_disconnect(caplog: pytest.
 
     caplog.set_level(logging.WARNING, logger="soothe_daemon.client_session")
 
-    event = {"type": "test", "data": "hello"}
+    event = {
+        "type": "event",
+        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+    }
     await bus.publish(loop_event_topic("loop-abc123"), event)
 
     # Wait for sender loop to process and exit.
@@ -291,21 +301,125 @@ async def test_sender_loop_filters_detailed_event_for_normal_verbosity() -> None
     assert result is True
 
     class TestEvent(SootheEvent):
-        type: str = "soothe.lifecycle.thread.created"
+        type: str = "soothe.internal.iteration.started"
 
-    event = {"type": "event", "data": {"type": "soothe.lifecycle.thread.created"}}
+    event = {"type": "event", "data": {"type": "soothe.internal.iteration.started"}}
     event_meta = EventMeta(
-        type_string="soothe.lifecycle.thread.created",
+        type_string="soothe.internal.iteration.started",
         model=TestEvent,
-        domain="lifecycle",
-        component="thread",
-        action="created",
-        verbosity=VerbosityTier.DETAILED,
+        domain="internal",
+        component="iteration",
+        action="started",
+        verbosity=VerbosityTier.INTERNAL,
     )
     await bus.publish(loop_event_topic("loop-abc123"), event, event_meta=event_meta)
     await asyncio.sleep(0.05)
 
     transport.send.assert_not_called()
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_sender_loop_filters_verbose_events_even_at_debug_verbosity() -> None:
+    """Client ``verbosity=debug`` must not receive DETAILED/DEBUG catalog events on the wire."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock()
+
+    client_id = await manager.create_session(transport, None)
+    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="debug")
+    assert result is True
+
+    class DebugEvent(SootheEvent):
+        type: str = "soothe.stream.heartbeat"
+
+    event = {"type": "event", "data": {"type": "soothe.stream.heartbeat"}}
+    event_meta = EventMeta(
+        type_string="soothe.stream.heartbeat",
+        model=DebugEvent,
+        domain="stream",
+        component="heartbeat",
+        action="tick",
+        verbosity=VerbosityTier.DEBUG,
+    )
+    await bus.publish(loop_event_topic("loop-abc123"), event, event_meta=event_meta)
+    await asyncio.sleep(0.05)
+
+    transport.send.assert_not_called()
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_send_to_client_serializes_concurrent_sends() -> None:
+    """Direct and sender-loop sends must not race on the same WebSocket."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    in_flight = 0
+    max_in_flight = 0
+    send_lock = asyncio.Lock()
+
+    async def tracked_send(_client: object, _msg: dict[str, object]) -> None:
+        nonlocal in_flight, max_in_flight
+        async with send_lock:
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0.05)
+            in_flight -= 1
+
+    transport.send = AsyncMock(side_effect=tracked_send)
+
+    client_id = await manager.create_session(transport, None)
+    session = await manager.get_session(client_id)
+    assert session is not None
+
+    await asyncio.gather(
+        manager.send_to_client(session, {"type": "status", "state": "running"}),
+        manager.send_to_client(session, {"type": "status", "state": "idle"}),
+    )
+
+    assert max_in_flight == 1
+    assert transport.send.await_count == 2
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_wake_senders_for_loop_restarts_dead_sender() -> None:
+    """Publishing after sender death should restart delivery."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock()
+
+    client_id = await manager.create_session(transport, None)
+    await manager.subscribe_loop(client_id, "loop-abc123")
+
+    session = await manager.get_session(client_id)
+    assert session is not None
+    assert session.sender_task is not None
+    session.sender_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await session.sender_task
+
+    await manager.wake_senders_for_loop("loop-abc123")
+    assert session.sender_task is not None
+    assert not session.sender_task.done()
+
+    event = {
+        "type": "event",
+        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+    }
+    await bus.publish(loop_event_topic("loop-abc123"), event)
+    await asyncio.sleep(0.25)
+
+    assert transport.send.await_count >= 1
     await manager.remove_session(client_id)
 
 
@@ -331,3 +445,15 @@ async def test_session_count():
 
     await manager.remove_session(client_id2)
     assert manager.session_count == 0
+
+
+def test_get_batch_timeout_reads_agent_loop_output_streaming() -> None:
+    """Sender loop must resolve streaming interval from ``agent.loop`` config (IG-407)."""
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    config.agent.loop.output_streaming.streaming_interval_ms = 500
+
+    manager = ClientSessionManager(EventBus(), config=config)
+
+    assert manager._get_batch_timeout() == 0.5

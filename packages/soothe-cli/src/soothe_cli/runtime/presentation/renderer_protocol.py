@@ -161,30 +161,6 @@ class RendererProtocol(Protocol):
         """
         ...
 
-    def on_plan_step_started(self, step_id: str, description: str) -> None:
-        """Plan step began execution.
-
-        Args:
-            step_id: Unique step identifier.
-            description: Step description.
-        """
-        ...
-
-    def on_plan_step_completed(
-        self,
-        step_id: str,
-        success: bool,  # noqa: FBT001
-        duration_ms: int,
-    ) -> None:
-        """Plan step finished.
-
-        Args:
-            step_id: Unique step identifier.
-            success: True if step succeeded.
-            duration_ms: Execution duration in milliseconds.
-        """
-        ...
-
     def on_turn_end(self) -> None:
         """Current turn completed.
 

@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _GLOBAL_TOPIC = "global"
+_SENDER_FILTER_DROP_LOG_LAST: dict[str, float] = {}
+_SENDER_FILTER_DROP_LOG_INTERVAL_SEC = 5.0
 
 
 @dataclass
@@ -42,6 +44,7 @@ class ClientSession:
         event_queue: Queue for delivering events to the client
         sender_task: Background task that sends events to the client
         verbosity: Client verbosity preference (RFC-0022)
+        wire_tier: Client wire filter tier (``full`` or ``progress``, IG-435)
         detach_requested: Whether client explicitly requested detach (RFC-0013)
         config: Optional SootheConfig for effective streaming config (RFC-614)
     """
@@ -54,7 +57,9 @@ class ClientSession:
         default_factory=lambda: asyncio.Queue(maxsize=10000)
     )
     sender_task: asyncio.Task[None] | None = None
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     verbosity: VerbosityLevel = "normal"  # RFC-0022: client verbosity preference
+    wire_tier: str = "full"
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
     config: SootheConfig | None = None  # RFC-614: daemon config reference
 
@@ -75,7 +80,7 @@ class ClientSession:
 
             return OutputStreamingConfig()
 
-        config = self.config.output_streaming
+        config = self.config.agent.loop.output_streaming
 
         if cli_overrides:
             # Apply CLI overrides (per-session override)
@@ -133,8 +138,7 @@ class ClientSessionManager:
 
         await self._event_bus.subscribe(_GLOBAL_TOPIC, session.event_queue)
 
-        # Start sender task
-        session.sender_task = asyncio.create_task(self._sender_loop(session))
+        await self._ensure_sender_loop(session)
 
         # Set client_id in logging context for full ID in daemon.log
         set_client_id(client_id)
@@ -153,6 +157,7 @@ class ClientSessionManager:
         verbosity: VerbosityLevel = "normal",
         *,
         stream_delivery: StreamDeliveryMode | None = None,
+        wire_tier: str = "full",
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
@@ -172,6 +177,7 @@ class ClientSessionManager:
             return False
 
         session.verbosity = verbosity
+        session.wire_tier = wire_tier if wire_tier in ("full", "progress") else "full"
         if stream_delivery is not None:
             # Accept "streaming" for backwards compatibility, map to "adaptive"
             delivery: StreamDeliveryMode = (
@@ -196,12 +202,14 @@ class ClientSessionManager:
         await self._event_bus.unsubscribe(_GLOBAL_TOPIC, session.event_queue)
 
         logger.info(
-            "[Session] Client %s → loop %s (verbosity=%s, stream_delivery=%s)",
+            "[Session] Client %s → loop %s (verbosity=%s, stream_delivery=%s, wire_tier=%s)",
             client_id,
             loop_id,
             verbosity,
             delivery,
+            session.wire_tier,
         )
+        await self._ensure_sender_loop(session)
         return True
 
     async def unsubscribe_loop(self, client_id: str, loop_id: str) -> bool:
@@ -295,7 +303,10 @@ class ClientSessionManager:
         set_loop_id(loop_id)
         async with self._lock:
             self._client_loop_ownership[client_id] = loop_id
+            session = self._sessions.get(client_id)
             logger.debug("Client %s claimed ownership of loop %s", client_id, loop_id)
+        if session is not None:
+            await self._ensure_sender_loop(session)
 
     async def release_loop_ownership(self, client_id: str) -> str | None:
         """Release loop ownership; returns the loop_id if any."""
@@ -307,12 +318,73 @@ class ClientSessionManager:
                 # Set logging context for full loop_id in daemon.log
                 set_loop_id(loop_id)
                 logger.debug("Client %s released ownership of loop %s", client_id, loop_id)
+                session = self._sessions.get(client_id)
+                if session is not None:
+                    backlog = session.event_queue.qsize()
+                    if backlog > 0:
+                        sender_alive = (
+                            session.sender_task is not None and not session.sender_task.done()
+                        )
+                        logger.warning(
+                            "Client %s has %d undelivered event(s) in session queue "
+                            "(sender_alive=%s, loop=%s)",
+                            client_id,
+                            backlog,
+                            sender_alive,
+                            loop_id,
+                        )
+                        if not sender_alive:
+                            await self._ensure_sender_loop(session)
             return loop_id
 
     async def get_owned_loop(self, client_id: str) -> str | None:
         """Return loop_id owned by client without releasing."""
         async with self._lock:
             return self._client_loop_ownership.get(client_id)
+
+    async def send_to_client(self, session: ClientSession, message: dict[str, Any]) -> None:
+        """Send a wire message to one client (serialized per WebSocket connection)."""
+        async with session.send_lock:
+            await session.transport.send(session.transport_client, message)
+
+    async def wake_senders_for_loop(self, loop_id: str) -> None:
+        """Ensure sender tasks are running for clients subscribed to a loop."""
+        async with self._lock:
+            sessions = [
+                session
+                for session in self._sessions.values()
+                if loop_id in session.subscriptions
+            ]
+        for session in sessions:
+            await self._ensure_sender_loop(session)
+
+    def _log_sender_task_outcome(self, session: ClientSession, task: asyncio.Task[None]) -> None:
+        """Log unexpected sender task termination (helps debug silent hangs)."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            set_client_id(session.client_id)
+            logger.warning(
+                "Sender loop exited for client %s: %s: %s",
+                session.client_id,
+                type(exc).__name__,
+                exc,
+                exc_info=exc,
+            )
+
+    async def _ensure_sender_loop(self, session: ClientSession) -> None:
+        """Start or restart the background sender when it is missing or dead."""
+        task = session.sender_task
+        if task is not None and not task.done():
+            return
+        if task is not None:
+            self._log_sender_task_outcome(session, task)
+        set_client_id(session.client_id)
+        session.sender_task = asyncio.create_task(self._sender_loop(session))
+        session.sender_task.add_done_callback(
+            lambda completed: self._log_sender_task_outcome(session, completed)
+        )
 
     async def _sender_loop(self, session: ClientSession) -> None:
         """Send events from queue with daemon-side filtering and batching (RFC-0022, IG-258)."""
@@ -325,78 +397,111 @@ class ClientSessionManager:
             batch: list[dict[str, Any]] = []
             while True:
                 try:
-                    event_data = await asyncio.wait_for(
-                        session.event_queue.get(), timeout=batch_timeout
-                    )
-                    batch.append(event_data)
-                except TimeoutError:
-                    if not batch:
+                    try:
+                        event_data = await asyncio.wait_for(
+                            session.event_queue.get(), timeout=batch_timeout
+                        )
+                        batch.append(event_data)
+                    except TimeoutError:
+                        if not batch:
+                            continue
+
+                    while not session.event_queue.empty() and len(batch) < 50:
+                        try:
+                            event_data = session.event_queue.get_nowait()
+                            batch.append(event_data)
+                        except asyncio.QueueEmpty:
+                            break
+
+                    filtered_events: list[dict[str, Any]] = []
+                    for event_data in batch:
+                        event: dict[str, Any]
+                        event_meta: EventMeta | None = None
+
+                        if isinstance(event_data, tuple):
+                            if len(event_data) != 2:
+                                logger.warning(
+                                    "Client %s sender skipping malformed queue item "
+                                    "(expected 2-tuple, got %d)",
+                                    session.client_id,
+                                    len(event_data),
+                                )
+                                continue
+                            event, event_meta = event_data
+                        else:
+                            event = event_data
+
+                        from soothe.core.events.visibility import (
+                            is_client_wire_visible,
+                            is_progress_wire_event,
+                        )
+
+                        if not isinstance(event, dict):
+                            continue
+
+                        if not is_client_wire_visible(event, event_meta=event_meta):
+                            continue
+                        if session.wire_tier == "progress" and not is_progress_wire_event(event):
+                            continue
+
+                        filtered_events.append(event)
+
+                    dropped_batch_size = len(batch)
+                    batch.clear()
+                    if not filtered_events:
+                        from soothe_daemon.event.bus import _throttle_log
+
+                        if _throttle_log(
+                            _SENDER_FILTER_DROP_LOG_LAST,
+                            session.client_id,
+                            interval=_SENDER_FILTER_DROP_LOG_INTERVAL_SEC,
+                        ):
+                            logger.warning(
+                                "Client %s sender dropped a batch of %d event(s) after "
+                                "daemon-side filtering (verbosity=%s, wire_tier=%s)",
+                                session.client_id,
+                                dropped_batch_size,
+                                session.verbosity,
+                                session.wire_tier,
+                            )
                         continue
 
-                while not session.event_queue.empty() and len(batch) < 10:
-                    try:
-                        event_data = session.event_queue.get_nowait()
-                        batch.append(event_data)
-                    except asyncio.QueueEmpty:
-                        break
-
-                filtered_events: list[dict[str, Any]] = []
-                for event_data in batch:
-                    event: dict[str, Any]
-                    event_meta: EventMeta | None = None
-
-                    if isinstance(event_data, tuple):
-                        event, event_meta = event_data
+                    if len(filtered_events) > 1:
+                        await self.send_to_client(
+                            session,
+                            {"type": "event_batch", "events": filtered_events},
+                        )
                     else:
-                        event = event_data
-
-                    if event_meta:
-                        is_heartbeat = False
-                        if isinstance(event, dict) and event.get("type") == "event":
-                            ev_data = event.get("data")
-                            if isinstance(ev_data, dict):
-                                is_heartbeat = (
-                                    ev_data.get("type") == "soothe.system.daemon.heartbeat"
-                                )
-
-                        if not is_heartbeat:
-                            from soothe_sdk.core.verbosity import should_show
-
-                            if not should_show(event_meta.verbosity, session.verbosity):
-                                continue
-
-                    filtered_events.append(event)
-
-                batch.clear()
-                if not filtered_events:
-                    continue
-
-                try:
-                    for event in filtered_events:
-                        await session.transport.send(session.transport_client, event)
+                        await self.send_to_client(session, filtered_events[0])
                 except websockets.exceptions.ConnectionClosedOK:
-                    logger.debug(
-                        "Client %s disconnected normally while sending",
+                    logger.warning(
+                        "Client %s sender stopped: disconnected normally while sending "
+                        "(%d queued)",
                         session.client_id,
+                        session.event_queue.qsize(),
                     )
                     break
                 except websockets.exceptions.ConnectionClosedError:
-                    logger.debug(
-                        "Client %s disconnected abnormally while sending",
+                    logger.warning(
+                        "Client %s sender stopped: disconnected abnormally while sending "
+                        "(%d queued)",
                         session.client_id,
+                        session.event_queue.qsize(),
                     )
                     break
                 except ConnectionError as e:
-                    logger.debug(
-                        "Client %s disconnected while sending: %s",
+                    logger.warning(
+                        "Client %s sender stopped while sending (%d queued): %s",
                         session.client_id,
+                        session.event_queue.qsize(),
                         e,
                     )
                     break
                 except Exception:
                     logger.warning(
-                        "Failed to send event to client %s, stopping sender loop",
+                        "Client %s sender loop error (%d queued), stopping sender",
                         session.client_id,
+                        session.event_queue.qsize(),
                         exc_info=True,
                     )
                     break
@@ -415,11 +520,8 @@ class ClientSessionManager:
         """
         if self._config is None:
             return 0.2  # 200ms default
-        streaming_cfg = getattr(self._config.agent_loop, "output_streaming", None)
-        if streaming_cfg is None:
-            return 0.2
-        ms = getattr(streaming_cfg, "streaming_interval_ms", 200)
-        return ms / 1000.0
+        streaming_cfg = self._config.agent.loop.output_streaming
+        return streaming_cfg.streaming_interval_ms / 1000.0
 
     @property
     def session_count(self) -> int:
