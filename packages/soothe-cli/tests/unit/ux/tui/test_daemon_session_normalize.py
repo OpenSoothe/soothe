@@ -49,12 +49,17 @@ def test_envelope_wraps_flat_ai_message_dict() -> None:
 
 
 def test_envelope_wraps_flat_chunk_dict() -> None:
-    """AIMessageChunk type is normalized to 'ai' (chunks not distinguished in wire format)."""
+    """IG-440: AIMessageChunk identity is preserved on the wire.
+
+    Pre-IG-440 the wire collapsed ``AIMessageChunk`` → ``ai`` so the client
+    restored it as plain ``AIMessage``. That broke the TUI synthesis stream
+    branch (``isinstance(msg, AIMessageChunk)``), silently dropping every
+    chunk after the first. The fix keeps the chunk tag intact end-to-end.
+    """
     flat = _serialize_for_json(AIMessageChunk(content="partial"))
     wrapped = envelope_langchain_message_dict(flat)
     restored = messages_from_dict([wrapped])
-    # AIMessageChunk is normalized to AIMessage in wire format (intentional)
-    assert isinstance(restored[0], AIMessage)
+    assert isinstance(restored[0], AIMessageChunk)
     assert restored[0].content == "partial"
 
 

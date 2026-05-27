@@ -115,9 +115,50 @@ def test_prepare_stream_data_for_wire_pair() -> None:
     )
     msg, meta = prepare_stream_data_for_wire((chunk, {"lc_source": "agent"}))
     assert isinstance(msg, dict)
-    assert msg["type"] == "ai"
+    # IG-440: AIMessageChunk identity MUST be preserved on the wire so the TUI
+    # streaming branch (``isinstance(msg, AIMessageChunk)``) fires for synthesis
+    # chunks. Collapsing to ``ai`` would restore as plain AIMessage on the client.
+    assert msg["type"] == "AIMessageChunk"
     assert msg["tool_calls"][0]["args"]["pattern"] == "foo"
     assert meta == {"lc_source": "agent"}
+
+
+def test_ai_message_chunk_roundtrip_preserves_chunk_identity() -> None:
+    """IG-440 regression: AIMessageChunk on wire → restored as AIMessageChunk (not AIMessage).
+
+    The pre-IG-440 mapping collapsed ``AIMessageChunk`` → wire tag ``ai`` for
+    ``messages_from_dict`` compatibility. That mapping caused synthesis stream
+    chunks to deserialize as plain ``AIMessage`` on the client, breaking the TUI
+    ``isinstance(msg, AIMessageChunk)`` check and silently dropping every chunk
+    after the first one.
+    """
+    chunk = AIMessageChunk(content="hello")
+    flat = prepare_stream_message_for_wire(chunk)
+    assert flat["type"] == "AIMessageChunk"
+    restored = deserialize_langchain_message_from_wire(flat)
+    assert isinstance(restored, AIMessageChunk)
+    assert not isinstance(restored, AIMessage) or isinstance(restored, AIMessageChunk)
+    assert restored.content == "hello"
+
+
+def test_ai_message_chunk_roundtrip_preserves_extra_phase_field() -> None:
+    """IG-440 regression: extra fields like ``phase`` survive wire round-trip.
+
+    The synthesis pipeline tags chunks with ``phase="goal_completion"``. The TUI
+    needs the chunk identity AND the phase attribute to route the goal-completion
+    streaming branch. Both must survive serialization → wire → deserialization.
+    """
+    chunk = AIMessageChunk(content="Synthesis fragment.", phase="goal_completion")
+    flat = prepare_stream_message_for_wire(chunk)
+    assert flat["type"] == "AIMessageChunk"
+    assert flat.get("phase") == "goal_completion"
+
+    restored = deserialize_langchain_message_from_wire(flat)
+    assert isinstance(restored, AIMessageChunk), (
+        f"expected AIMessageChunk, got {type(restored).__name__}"
+    )
+    assert getattr(restored, "phase", None) == "goal_completion"
+    assert restored.content == "Synthesis fragment."
 
 
 def test_envelope_idempotent_message_to_dict() -> None:
