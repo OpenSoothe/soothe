@@ -543,14 +543,21 @@ def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
         config: Soothe configuration.
 
     Returns:
-        A configured GoalEngine with backoff reasoner support.
+        A configured GoalEngine with backoff reasoner support, wired with
+        the singleton ``InternalEventBus`` so AutopilotService observers
+        receive state transitions (RFC-222).
     """
+    from soothe.core.events.internal_bus import get_internal_bus
     from soothe.core.goal_engine import GoalEngine
 
     # RFC-200: Pass config for GoalBackoffReasoner initialization
+    # RFC-222: Wire the singleton InternalEventBus so AutopilotService can
+    # observe goal transitions. Solo callers that don't construct an
+    # AutopilotService simply have no subscribers — bus.emit() is a no-op.
     return GoalEngine(
         max_retries=config.agent.autonomous.max_retries,
         config=config,  # Enable LLM-driven backoff reasoning
+        internal_bus=get_internal_bus(),
     )
 
 

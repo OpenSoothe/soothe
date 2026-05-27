@@ -79,29 +79,37 @@ class InternalEventBus:
         Handlers are called sequentially in subscription order.
         Handler errors are logged but don't prevent other handlers.
 
+        The internal lock is held ONLY long enough to snapshot the handler
+        list — it is released before any handler runs. This is critical:
+        handlers commonly emit further events (e.g. AutopilotService's
+        ``_handle_goal_state_changed`` calls ``_mark_loop_idle`` which
+        emits more events), and holding the lock across handler execution
+        would deadlock the bus.
+
         Args:
             event: Pydantic event model with `type` field.
         """
         event_type = getattr(event, "type", None) or event.__class__.__name__
         async with self._lock:
-            handlers = self._subscribers.get(event_type, [])
-            if not handlers:
-                logger.debug("No subscribers for %s", event_type)
-                return
+            handlers = list(self._subscribers.get(event_type, ()))
 
-            logger.debug("Emitting %s to %d handlers", event_type, len(handlers))
-            for handler in handlers:
-                try:
-                    result = handler(event)
-                    if asyncio.iscoroutine(result):
-                        await result
-                except Exception:
-                    logger.warning(
-                        "Handler for %s failed: %s",
-                        event_type,
-                        handler.__name__,
-                        exc_info=True,
-                    )
+        if not handlers:
+            logger.debug("No subscribers for %s", event_type)
+            return
+
+        logger.debug("Emitting %s to %d handlers", event_type, len(handlers))
+        for handler in handlers:
+            try:
+                result = handler(event)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception:
+                logger.warning(
+                    "Handler for %s failed: %s",
+                    event_type,
+                    handler.__name__,
+                    exc_info=True,
+                )
 
     def has_subscribers(self, event_type: str) -> bool:
         """Check if event type has subscribers.

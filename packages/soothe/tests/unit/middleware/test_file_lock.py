@@ -1,249 +1,230 @@
-"""Unit tests for FileLockMiddleware (RFC-222, IG-295)."""
+"""Unit tests for FileLockMiddleware (RFC-222)."""
+
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
+from langchain.agents.middleware.types import ToolCallRequest
+from langchain_core.messages import ToolMessage
 
 from soothe.core.events.internal_bus import InternalEventBus, reset_internal_bus
-from soothe.core.goal_engine.file_lock_registry import (
-    FileConflictError,
-    FileLockRegistry,
-)
-from soothe.middleware.file_lock import FileLockMiddleware, create_file_lock_middleware
+from soothe.core.goal_engine.file_lock_registry import FileLockRegistry
+from soothe.middleware.file_lock import FileLockMiddleware
+
+
+def _make_request(
+    tool_name: str,
+    args: dict[str, Any],
+    *,
+    call_id: str = "call-1",
+) -> ToolCallRequest:
+    """Build a minimal ToolCallRequest for middleware tests."""
+    return ToolCallRequest(
+        tool_call={"id": call_id, "name": tool_name, "args": args},
+        tool=None,
+        state={"messages": []},
+        runtime=MagicMock(),
+    )
+
+
+async def _success_handler(_req: ToolCallRequest) -> ToolMessage:
+    return ToolMessage(
+        content="ok", tool_call_id=_req.tool_call.get("id", ""), name=_req.tool_call.get("name", "")
+    )
 
 
 class TestFileLockMiddleware:
-    """Tests for FileLockMiddleware class."""
+    """Tests for FileLockMiddleware (langchain AgentMiddleware)."""
 
     def setup_method(self) -> None:
-        """Reset internal bus before each test."""
+        """Reset internal bus singleton before each test."""
         reset_internal_bus()
 
-    def test_create_middleware(self) -> None:
-        """Test basic middleware creation."""
+    def test_construct(self) -> None:
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
             file_registry=registry,
             loop_id="loop-001",
             goal_id="goal-001",
         )
-
         assert middleware._loop_id == "loop-001"
         assert middleware._goal_id == "goal-001"
-
-    def test_factory_function(self) -> None:
-        """Test create_file_lock_middleware factory."""
-        registry = FileLockRegistry()
-        middleware = create_file_lock_middleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
-        )
-
-        assert middleware._loop_id == "loop-001"
+        assert middleware.name == "FileLockMiddleware"
 
     @pytest.mark.asyncio
-    async def test_intercept_non_file_tool(self) -> None:
-        """Test that non-file tools pass through."""
+    async def test_non_file_tool_passes_through(self) -> None:
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        result = await middleware.intercept_tool_call(
-            tool_name="execute",
-            tool_input={"command": "ls"},
-        )
+        request = _make_request("execute", {"command": "ls"})
+        result = await middleware.awrap_tool_call(request, _success_handler)
 
-        assert result == {"command": "ls"}
+        assert isinstance(result, ToolMessage)
+        assert result.content == "ok"
         assert registry.lock_count() == 0
 
     @pytest.mark.asyncio
-    async def test_intercept_edit_file_no_conflict(self) -> None:
-        """Test edit_file acquires lock when no conflict."""
+    async def test_edit_file_acquires_lock(self) -> None:
         registry = FileLockRegistry()
-        bus = InternalEventBus()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
-            internal_bus=bus,
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        result = await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"path": "/file.py", "old_string": "a", "new_string": "b"},
+        request = _make_request(
+            "edit_file", {"file_path": "/file.py", "old_string": "a", "new_string": "b"}
         )
+        result = await middleware.awrap_tool_call(request, _success_handler)
 
-        assert result == {"path": "/file.py", "old_string": "a", "new_string": "b"}
+        assert isinstance(result, ToolMessage)
+        assert result.content == "ok"
         assert registry.is_locked("/file.py")
-        assert registry.get_lock("/file.py").loop_id == "loop-001"
+        lock = registry.get_lock("/file.py")
+        assert lock is not None
+        assert lock.loop_id == "loop-001"
+        assert lock.operation == "edit"
 
     @pytest.mark.asyncio
-    async def test_intercept_write_file_no_conflict(self) -> None:
-        """Test write_file acquires lock when no conflict."""
+    async def test_write_file_acquires_write_lock(self) -> None:
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        await middleware.intercept_tool_call(
-            tool_name="write_file",
-            tool_input={"path": "/new_file.py", "content": "test"},
-        )
+        request = _make_request("write_file", {"file_path": "/new.py", "content": "x"})
+        await middleware.awrap_tool_call(request, _success_handler)
 
-        assert registry.is_locked("/new_file.py")
-        lock = registry.get_lock("/new_file.py")
+        lock = registry.get_lock("/new.py")
+        assert lock is not None
         assert lock.operation == "write"
 
     @pytest.mark.asyncio
-    async def test_intercept_delete_file_no_conflict(self) -> None:
-        """Test delete_file acquires lock when no conflict."""
+    async def test_delete_file_acquires_delete_lock(self) -> None:
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        await middleware.intercept_tool_call(
-            tool_name="delete_file",
-            tool_input={"path": "/old_file.py"},
-        )
+        request = _make_request("delete_file", {"path": "/old.py"})
+        await middleware.awrap_tool_call(request, _success_handler)
 
-        assert registry.is_locked("/old_file.py")
-        lock = registry.get_lock("/old_file.py")
+        lock = registry.get_lock("/old.py")
+        assert lock is not None
         assert lock.operation == "delete"
 
     @pytest.mark.asyncio
-    async def test_intercept_read_file_no_lock(self) -> None:
-        """Test read_file does not acquire lock."""
+    async def test_read_file_not_intercepted(self) -> None:
+        """read_file is not a write op; should pass through with no lock."""
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        await middleware.intercept_tool_call(
-            tool_name="read_file",
-            tool_input={"path": "/file.py"},
-        )
+        request = _make_request("read_file", {"path": "/file.py"})
+        result = await middleware.awrap_tool_call(request, _success_handler)
 
+        assert isinstance(result, ToolMessage)
         assert not registry.is_locked("/file.py")
 
     @pytest.mark.asyncio
-    async def test_intercept_conflict_raises_error(self) -> None:
-        """Test conflict with different loop raises FileConflictError."""
+    async def test_conflict_returns_tool_message_error(self) -> None:
+        """Conflict yields a ToolMessage(status=error) instead of raising."""
         registry = FileLockRegistry()
-        # Lock by different loop
         registry.acquire_lock("/file.py", "goal-002", "loop-002", "edit")
 
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        with pytest.raises(FileConflictError) as exc_info:
-            await middleware.intercept_tool_call(
-                tool_name="edit_file",
-                tool_input={"path": "/file.py", "old_string": "a", "new_string": "b"},
-            )
+        called = {"handler": False}
 
-        assert exc_info.value.file_path == "/file.py"
-        assert exc_info.value.blocking_goal_id == "goal-002"
-        assert exc_info.value.blocking_loop_id == "loop-002"
+        async def handler(_req: ToolCallRequest) -> ToolMessage:
+            called["handler"] = True
+            return ToolMessage(content="ok", tool_call_id="call-1", name="edit_file")
+
+        request = _make_request("edit_file", {"file_path": "/file.py"})
+        result = await middleware.awrap_tool_call(request, handler)
+
+        assert isinstance(result, ToolMessage)
+        assert result.status == "error"
+        assert "file_conflict" in str(result.content)
+        assert "goal-002" in str(result.content)
+        assert "loop-002" in str(result.content)
+        assert called["handler"] is False  # handler must not run on conflict
 
     @pytest.mark.asyncio
-    async def test_same_loop_allowed(self) -> None:
-        """Test same loop can edit locked file."""
+    async def test_same_loop_can_re_edit(self) -> None:
+        """Same loop already owns the lock — no conflict, handler runs."""
         registry = FileLockRegistry()
-        # Lock by same loop
         registry.acquire_lock("/file.py", "goal-001", "loop-001", "edit")
 
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        # Should not raise - same loop owns the lock
-        result = await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"path": "/file.py", "old_string": "a", "new_string": "b"},
-        )
+        request = _make_request("edit_file", {"file_path": "/file.py"})
+        result = await middleware.awrap_tool_call(request, _success_handler)
 
-        assert result is not None
+        assert isinstance(result, ToolMessage)
+        assert result.content == "ok"
 
     @pytest.mark.asyncio
-    async def test_extract_path_variations(self) -> None:
-        """Test path extraction from various input formats."""
+    async def test_path_key_variations(self) -> None:
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        # Test 'path' key
-        await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"path": "/file1.py"},
+        await middleware.awrap_tool_call(
+            _make_request("edit_file", {"path": "/a.py"}), _success_handler
         )
-        assert registry.is_locked("/file1.py")
+        await middleware.awrap_tool_call(
+            _make_request("edit_file", {"file_path": "/b.py"}), _success_handler
+        )
+        await middleware.awrap_tool_call(
+            _make_request("edit_file", {"filepath": "/c.py"}), _success_handler
+        )
+        await middleware.awrap_tool_call(
+            _make_request("edit_file", {"file": "/d.py"}), _success_handler
+        )
 
-        # Test 'file_path' key
-        await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"file_path": "/file2.py"},
-        )
-        assert registry.is_locked("/file2.py")
+        assert registry.is_locked("/a.py")
+        assert registry.is_locked("/b.py")
+        assert registry.is_locked("/c.py")
+        assert registry.is_locked("/d.py")
 
     @pytest.mark.asyncio
     async def test_release_all_locks(self) -> None:
-        """Test releasing all locks for goal."""
         registry = FileLockRegistry()
         middleware = FileLockMiddleware(
-            file_registry=registry,
-            loop_id="loop-001",
-            goal_id="goal-001",
+            file_registry=registry, loop_id="loop-001", goal_id="goal-001"
         )
 
-        # Acquire multiple locks
-        await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"path": "/file1.py"},
+        await middleware.awrap_tool_call(
+            _make_request("edit_file", {"path": "/file1.py"}), _success_handler
         )
-        await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"path": "/file2.py"},
+        await middleware.awrap_tool_call(
+            _make_request("edit_file", {"path": "/file2.py"}), _success_handler
         )
-
         assert registry.lock_count() == 2
 
-        # Release all
         released = await middleware.release_all_locks()
-
-        assert len(released) == 2
-        assert "/file1.py" in released
-        assert "/file2.py" in released
+        assert sorted(released) == ["/file1.py", "/file2.py"]
         assert registry.lock_count() == 0
 
     @pytest.mark.asyncio
     async def test_emits_locked_event(self) -> None:
-        """Test that lock acquisition emits InternalFileLockedEvent."""
         registry = FileLockRegistry()
         bus = InternalEventBus()
-        events_received = []
+        received: list[Any] = []
 
-        async def handler(event: object) -> None:
-            events_received.append(event)
+        async def handler(event: Any) -> None:
+            received.append(event)
 
         bus.subscribe("soothe.internal.file.locked", handler)
-
         middleware = FileLockMiddleware(
             file_registry=registry,
             loop_id="loop-001",
@@ -251,31 +232,27 @@ class TestFileLockMiddleware:
             internal_bus=bus,
         )
 
-        await middleware.intercept_tool_call(
-            tool_name="edit_file",
-            tool_input={"path": "/file.py"},
-        )
+        request = _make_request("edit_file", {"path": "/file.py"})
+        await middleware.awrap_tool_call(request, _success_handler)
 
-        assert len(events_received) == 1
-        event = events_received[0]
-        assert event.file_path == "/file.py"
-        assert event.loop_id == "loop-001"
-        assert event.goal_id == "goal-001"
+        assert len(received) == 1
+        evt = received[0]
+        assert evt.file_path == "/file.py"
+        assert evt.loop_id == "loop-001"
+        assert evt.goal_id == "goal-001"
 
     @pytest.mark.asyncio
     async def test_emits_conflict_event(self) -> None:
-        """Test that conflict emits InternalFileConflictEvent."""
         registry = FileLockRegistry()
         registry.acquire_lock("/file.py", "goal-002", "loop-002", "edit")
 
         bus = InternalEventBus()
-        events_received = []
+        received: list[Any] = []
 
-        async def handler(event: object) -> None:
-            events_received.append(event)
+        async def handler(event: Any) -> None:
+            received.append(event)
 
         bus.subscribe("soothe.internal.file.conflict", handler)
-
         middleware = FileLockMiddleware(
             file_registry=registry,
             loop_id="loop-001",
@@ -283,14 +260,13 @@ class TestFileLockMiddleware:
             internal_bus=bus,
         )
 
-        with pytest.raises(FileConflictError):
-            await middleware.intercept_tool_call(
-                tool_name="edit_file",
-                tool_input={"path": "/file.py"},
-            )
+        request = _make_request("edit_file", {"path": "/file.py"})
+        result = await middleware.awrap_tool_call(request, _success_handler)
 
-        assert len(events_received) == 1
-        event = events_received[0]
-        assert event.file_path == "/file.py"
-        assert event.blocking_goal_id == "goal-002"
-        assert event.blocking_loop_id == "loop-002"
+        assert isinstance(result, ToolMessage)
+        assert result.status == "error"
+        assert len(received) == 1
+        evt = received[0]
+        assert evt.file_path == "/file.py"
+        assert evt.blocking_goal_id == "goal-002"
+        assert evt.blocking_loop_id == "loop-002"

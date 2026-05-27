@@ -48,6 +48,16 @@ agent:
     max_scheduled_tasks: 100
     webhooks: {}
 
+    # Loop pool (RFC-222) — AutopilotService worker management.
+    # `max_loops` caps the worker pool (loops can be reused for parent→child
+    # lineage); `max_parallel_goals` (above) caps active goals at once.
+    max_loops: 4
+    loop_idle_timeout: 300
+    poll_interval: 5
+    dreaming_poll_interval: 60
+    inbox_dir: "$SOOTHE_HOME/autopilot/inbox"
+    outbox_dir: "$SOOTHE_HOME/autopilot/outbox"
+
   # === LOOP (AgentLoop Internal Tuning) ===
   # Rarely edited. Defaults optimized for most use cases.
   loop:

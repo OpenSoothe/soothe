@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.core.agent import CoreAgent
+    from soothe.core.autopilot import AutopilotService
     from soothe.core.goal_engine import GoalEngine
     from soothe.protocols.memory import MemoryProtocol
 
@@ -143,8 +144,27 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
         self._planner: PlannerProtocol | None = self._agent.planner
         self._policy: PolicyProtocol | None = self._agent.policy
 
-        # GoalEngine resolved in Layer 3 (separate from CoreAgent Layer 1)
+        # GoalEngine resolved in Layer 3 (separate from CoreAgent Layer 1).
+        # RFC-222: the resolver wires GoalEngine to the singleton InternalEventBus.
         self._goal_engine: GoalEngine | None = resolve_goal_engine(self._config)
+
+        # RFC-222: AutopilotService owns loop pool + lineage + claim_goal so
+        # per-goal execution flows through it. Constructed whenever there's a
+        # GoalEngine; the service is a no-op until execute_goal is called.
+        self._autopilot_service: AutopilotService | None = None
+        if self._goal_engine is not None:
+            from soothe.core.autopilot import AutopilotService as _AutopilotService
+            from soothe.core.events.internal_bus import get_internal_bus
+
+            self._autopilot_service = _AutopilotService(
+                goal_engine=self._goal_engine,
+                config=self._config.agent.autonomous,
+                internal_bus=get_internal_bus(),
+            )
+            logger.debug(
+                "[AutopilotService] initialized (max_loops=%d)",
+                self._config.agent.autonomous.max_loops,
+            )
 
         durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)
