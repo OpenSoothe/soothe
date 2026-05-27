@@ -87,6 +87,7 @@ AGENT_LOOP_STEP_QUEUED = "soothe.cognition.agent_loop.step.queued"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
 AGENT_LOOP_REASONED = "soothe.cognition.agent_loop.reasoned"
+AGENT_LOOP_CONTEXT_COMPACTED = "soothe.cognition.agent_loop.context.compacted"  # RFC-224
 
 # Branch cognition (client UX)
 BRANCH_CREATED = "soothe.cognition.branch.created"
@@ -110,6 +111,7 @@ HISTORY_REPLAY_COMPLETE = REPLAY_COMPLETE
 
 __all__ = [
     "AGENT_LOOP_COMPLETED",
+    "AGENT_LOOP_CONTEXT_COMPACTED",
     "AGENT_LOOP_PLAN_DECISION",
     "AGENT_LOOP_REASONED",
     "AGENT_LOOP_STARTED",

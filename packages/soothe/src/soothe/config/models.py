@@ -779,7 +779,7 @@ class InfrastructureLimitsConfig(BaseModel):
     )
     # IG-XXX: Tool-level concurrency limit
     max_parallel_tools: int = Field(
-        default=5, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
+        default=15, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
     )
 
     # Rate limiting
@@ -970,6 +970,38 @@ class AgentLoopConfig(BaseModel):
         ge=10_000,
         le=1_000_000,
     )
+
+    # RFC-224: Automatic context window management
+    context_overflow_threshold_pct: float = Field(
+        default=0.80,
+        ge=0.5,
+        le=0.95,
+        description=(
+            "Percentage of context_window_limit at which automatic "
+            "in-place compaction is triggered."
+        ),
+    )
+    """RFC-224: Trigger threshold for context compaction (0.80 = 80%)."""
+
+    context_compaction_target_pct: float = Field(
+        default=0.60,
+        ge=0.30,
+        le=0.70,
+        description=(
+            "Target context percentage after compaction. "
+            "Provides buffer for subsequent execute waves."
+        ),
+    )
+    """RFC-224: Compaction target (0.60 = 60% of context_limit)."""
+
+    step_context_check_enabled: bool = Field(
+        default=False,
+        description=(
+            "Check context on step threads (loop_id__step_{step_id}). "
+            "Usually unnecessary; step threads are short-lived."
+        ),
+    )
+    """RFC-224: Enable step thread context checking."""
 
     output_streaming: OutputStreamingConfig = Field(
         default_factory=OutputStreamingConfig,

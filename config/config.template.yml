@@ -61,6 +61,11 @@ agent:
     prior_conversation_limit: 10
     context_window_limit: 200000
 
+    # RFC-224: Automatic context window management
+    context_overflow_threshold_pct: 0.80  # Trigger compaction at 80% (160k tokens)
+    context_compaction_target_pct: 0.60   # Compact to 60% (120k tokens)
+    step_context_check_enabled: false     # Step threads usually short-lived
+
     # Output streaming (RFC-614)
     output_streaming:
       mode: adaptive

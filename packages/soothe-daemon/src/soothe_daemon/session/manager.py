@@ -30,6 +30,49 @@ logger = logging.getLogger(__name__)
 _GLOBAL_TOPIC = "global"
 _SENDER_FILTER_DROP_LOG_LAST: dict[str, float] = {}
 _SENDER_FILTER_DROP_LOG_INTERVAL_SEC = 5.0
+_HIGH_PRIORITY_SETTLE_MARGIN_S = 0.15  # IG-436: Extra settle for HIGH events
+
+
+def _queue_has_high_priority(queue: asyncio.Queue) -> bool:
+    """Peek queue to check if any HIGH/CRITICAL priority events pending (IG-436).
+
+    Since asyncio.Queue doesn't support true peek, we temporarily drain and
+    re-queue to check priorities. Only used during drain settle when queue
+    has item.
+
+    Args:
+        queue: Event queue to check.
+
+    Returns:
+        True if any event has HIGH or CRITICAL priority.
+    """
+    if queue.empty():
+        return False
+    temp: list[Any] = []
+    has_high = False
+    from soothe.core.events import EventPriority
+
+    try:
+        while not queue.empty():
+            item = queue.get_nowait()
+            temp.append(item)
+            if isinstance(item, tuple) and len(item) == 2:
+                event_meta = item[1]
+                if event_meta is not None and event_meta.priority.value <= EventPriority.HIGH.value:
+                    has_high = True
+                    # Don't need to check more - we found a HIGH event
+                    break
+    except asyncio.QueueEmpty:
+        pass
+
+    # Re-queue all items in order
+    for item in temp:
+        try:
+            queue.put_nowait(item)
+        except asyncio.QueueFull:
+            logger.warning("Queue full while re-queuing during priority peek")
+
+    return has_high
 
 
 @dataclass
@@ -385,7 +428,11 @@ class ClientSessionManager:
         )
 
     async def _sender_loop(self, session: ClientSession) -> None:
-        """Send events from queue with daemon-side filtering and batching (RFC-0022, IG-258)."""
+        """Send events from queue with daemon-side filtering and batching (RFC-0022, IG-258).
+
+        IG-436: HIGH/CRITICAL priority events flush immediately without batch wait.
+        This prevents goal_completion events from being delayed by the batch timeout.
+        """
         # Set logging context for full client_id in daemon.log
         set_client_id(session.client_id)
         logger.debug("Sender loop started for client %s", session.client_id)
@@ -395,21 +442,39 @@ class ClientSessionManager:
             batch: list[dict[str, Any]] = []
             while True:
                 try:
+                    skip_batch_fill = False  # IG-436: Flag for HIGH priority flush
                     try:
                         event_data = await asyncio.wait_for(
                             session.event_queue.get(), timeout=batch_timeout
                         )
                         batch.append(event_data)
+
+                        # IG-436: Check priority - flush HIGH/CRITICAL immediately
+                        if isinstance(event_data, tuple) and len(event_data) == 2:
+                            event_meta = event_data[1]
+                            if event_meta is not None:
+                                from soothe.core.events import EventPriority
+
+                                if event_meta.priority.value <= EventPriority.HIGH.value:
+                                    skip_batch_fill = True
+                                    logger.debug(
+                                        "Client %s received HIGH priority event, "
+                                        "flushing immediately (priority=%s)",
+                                        session.client_id,
+                                        event_meta.priority.name,
+                                    )
                     except TimeoutError:
                         if not batch:
                             continue
 
-                    while not session.event_queue.empty() and len(batch) < 50:
-                        try:
-                            event_data = session.event_queue.get_nowait()
-                            batch.append(event_data)
-                        except asyncio.QueueEmpty:
-                            break
+                    # IG-436: Skip batch fill for HIGH priority events
+                    if not skip_batch_fill:
+                        while not session.event_queue.empty() and len(batch) < 50:
+                            try:
+                                event_data = session.event_queue.get_nowait()
+                                batch.append(event_data)
+                            except asyncio.QueueEmpty:
+                                break
 
                     filtered_events: list[dict[str, Any]] = []
                     for event_data in batch:
@@ -531,6 +596,10 @@ class ClientSessionManager:
 
         Ensures ``goal_completion`` and other tail frames are flushed before ``status: idle``.
 
+        IG-436: Adds extra settle margin for HIGH/CRITICAL priority events to prevent
+        race condition where sender hasn't flushed batched goal_completion before
+        ownership release.
+
         Args:
             loop_id: Loop scope to drain.
             batch_timeout_s: Sender/coalesce flush window; defaults to config interval.
@@ -566,6 +635,22 @@ class ClientSessionManager:
                 ]
             if queues and all(q.empty() for q in queues):
                 return True
+            # IG-436: Check for HIGH priority events that arrived during settle
+            if queues and any(_queue_has_high_priority(q) for q in queues):
+                logger.debug(
+                    "Loop %s drain: HIGH priority event(s) pending, adding extra settle margin",
+                    loop_id[:16],
+                )
+                await asyncio.sleep(_HIGH_PRIORITY_SETTLE_MARGIN_S)
+                # Re-check after extra margin
+                async with self._lock:
+                    queues = [
+                        session.event_queue
+                        for session in self._sessions.values()
+                        if loop_id in session.subscriptions
+                    ]
+                if queues and all(q.empty() for q in queues):
+                    return True
             await asyncio.sleep(0.05)
         logger.warning(
             "Loop %s delivery drain timed out after %.1fs (queues may still hold events)",
