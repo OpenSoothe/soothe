@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-05-27
 **Dependencies**: RFC-201, RFC-214, RFC-216, RFC-218
-**Related**: RFC-222 (Autopilot loop management), RFC-452 (Unified Thread Management)
+**Related**: RFC-222 (Autopilot loop management), RFC-452 (Unified Thread Management), RFC-224 (Context Window Management)
 
 ---
 

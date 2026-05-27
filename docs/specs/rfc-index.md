@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-05-27
-**Total RFCs**: 58
+**Total RFCs**: 59
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 40 |
+| Draft | 41 |
 | Implemented | 18 |
 
 ---
@@ -160,6 +160,13 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-05-27
   - Dependencies: RFC-201, RFC-214, RFC-216, RFC-218
+
+- **RFC-224**: [Automatic Context Window Management](RFC-224-automatic-context-window-management.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-05-27
+  - Dependencies: RFC-223, RFC-201, RFC-214
+  - Extends: RFC-223 (Thread Inheritance)
 
 ### Protocols (3xx)
 
@@ -346,7 +353,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 37 |
+| Architecture Design | 38 |
 | Implementation Interface Design | 10 |
 | Conceptual Design | 1 |
 | Not stated / ambiguous | 8 |
@@ -359,7 +366,7 @@ This index reflects the canonical RFC set and defines which files are active for
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 5 |
-| 2xx | AgentLoop & Cognition | 17 |
+| 2xx | AgentLoop & Cognition | 18 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
 | 5xx | CLI & TUI | 5 |
@@ -369,6 +376,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- **RFC-224**: Automatic Context Window Management (2026-05-27)
 - **RFC-223**: Thread Inheritance with LangGraph Checkpoint Forking (2026-05-27)
 - **RFC-222**: Autopilot and Goal Engine Architecture (2026-05-27)
 - **RFC-618**: Plan Subagent — Structured planning delegate with direct explore runnable invokes (2026-05-11)

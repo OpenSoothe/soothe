@@ -15,6 +15,11 @@ agent:
 
   loop:
     max_iterations: 99
+    # RFC-224: Context window management (dev defaults aligned with template)
+    context_window_limit: 200000
+    context_overflow_threshold_pct: 0.80
+    context_compaction_target_pct: 0.60
+    step_context_check_enabled: false
     output_streaming:
       mode: adaptive
       streaming_interval_ms: 300

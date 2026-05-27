@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from soothe.core.events.constants import AGENT_LOOP_CONTEXT_COMPACTED
+from soothe.core.loop.engine.context_window_manager import ContextWindowManager
 from soothe.core.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.core.loop.state.schemas import StepAction, StepResult
 
@@ -163,5 +165,31 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
     state.previous_plan = plan_result
 
     ctx.scratch.step_results = step_results
+
+    # RFC-224: Check context window and compact if needed
+    if checkpointer is not None and agent_loop.config is not None:
+        try:
+            context_manager = ContextWindowManager(checkpointer, agent_loop.config)
+            compaction_result = await context_manager.check_and_compact_if_needed(
+                state.thread_id,
+                state,
+            )
+            if compaction_result is not None:
+                await ctx.emit(
+                    AGENT_LOOP_CONTEXT_COMPACTED,
+                    {
+                        "thread_id": compaction_result.thread_id,
+                        "tokens_before": compaction_result.tokens_before,
+                        "tokens_after": compaction_result.tokens_after,
+                        "messages_removed": compaction_result.messages_removed,
+                        "summary_preview": compaction_result.summary_preview,
+                    },
+                )
+        except Exception:
+            logger.warning(
+                "[execute] Context compaction check failed for thread %s",
+                state.thread_id,
+                exc_info=True,
+            )
 
     return {}

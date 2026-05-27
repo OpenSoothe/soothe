@@ -146,3 +146,45 @@ def test_strip_tool_metadata_for_batch() -> None:
     body = stripped[0]
     assert "tool_calls" not in body
     assert "tool_call_chunks" not in body
+
+
+def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
+    """IG-436: Verify goal_completion flushed when AGENT_LOOP_COMPLETED arrives."""
+    coalescer = StreamDeliveryCoalescer("batch")
+    # Accumulate goal_completion chunks
+    assert coalescer.ingest(*_gc_chunk("part1")) == []
+    assert coalescer.ingest(*_gc_chunk("part2")) == []
+    # AGENT_LOOP_COMPLETED triggers flush
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+    )
+    # Should have flushed goal_completion + completed event
+    assert len(done) == 2
+    assert done[0][1] == "messages"
+    assert done[0][2][0]["phase"] == "goal_completion"
+    assert done[0][2][0]["content"] == "part1part2"
+    assert done[1][2]["type"] == AGENT_LOOP_COMPLETED
+    assert coalescer.turn_complete_pending
+
+
+def test_adaptive_mode_switches_to_batch_on_threshold() -> None:
+    """IG-436: Adaptive mode batches when exceeding threshold chars."""
+    coalescer = StreamDeliveryCoalescer("adaptive", adaptive_threshold_chars=10)
+    # First chunk under threshold - passthrough
+    out1 = coalescer.ingest(*_gc_chunk("abc"))
+    assert len(out1) == 1
+    assert out1[0][2][0]["content"] == "abc"
+    # Second chunk exceeds threshold - switches to batch mode
+    out2 = coalescer.ingest(*_gc_chunk("defghijklmn"))  # 11 chars
+    assert len(out2) == 0  # Buffered, not passed through
+    # Flush on completed
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+    )
+    assert len(done) == 2
+    # Coalesced content includes both chunks
+    assert done[0][2][0]["content"] == "abcdefghijklmn"

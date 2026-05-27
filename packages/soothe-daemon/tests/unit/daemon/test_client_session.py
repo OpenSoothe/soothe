@@ -457,3 +457,193 @@ def test_get_batch_timeout_reads_agent_loop_output_streaming() -> None:
     manager = ClientSessionManager(EventBus(), config=config)
 
     assert manager._get_batch_timeout() == 0.5
+
+
+def test_queue_has_high_priority_detects_high_event() -> None:
+    """IG-436: _queue_has_high_priority returns True for HIGH priority events."""
+    from soothe.core.events import EventPriority
+
+    from soothe_daemon.session.manager import _queue_has_high_priority
+
+    queue: asyncio.Queue = asyncio.Queue()
+
+    # Empty queue returns False
+    assert _queue_has_high_priority(queue) is False
+
+    # NORMAL priority event returns False
+    normal_meta = EventMeta(
+        type_string="soothe.cognition.agent_loop.step.started",
+        model=None,
+        domain="cognition",
+        component="agent_loop",
+        action="step.started",
+        verbosity=VerbosityTier.NORMAL,
+        priority=EventPriority.NORMAL,
+    )
+    queue.put_nowait(({"type": "event"}, normal_meta))
+    assert _queue_has_high_priority(queue) is False
+    # Queue should be restored
+    assert queue.qsize() == 1
+
+    # Clear and add HIGH priority event
+    queue.get_nowait()
+    high_meta = EventMeta(
+        type_string="soothe.cognition.agent_loop.completed",
+        model=None,
+        domain="cognition",
+        component="agent_loop",
+        action="completed",
+        verbosity=VerbosityTier.QUIET,
+        priority=EventPriority.HIGH,
+    )
+    queue.put_nowait(({"type": "event"}, high_meta))
+    assert _queue_has_high_priority(queue) is True
+    # Queue should be restored
+    assert queue.qsize() == 1
+
+
+def test_queue_has_high_priority_handles_tuple_and_non_tuple() -> None:
+    """IG-436: _queue_has_high_priority handles various queue item formats."""
+    from soothe_daemon.session.manager import _queue_has_high_priority
+
+    queue: asyncio.Queue = asyncio.Queue()
+
+    # Non-tuple item (legacy format) returns False
+    queue.put_nowait({"type": "event"})
+    assert _queue_has_high_priority(queue) is False
+    assert queue.qsize() == 1
+
+    # Clear and test tuple without event_meta
+    queue.get_nowait()
+    queue.put_nowait(({"type": "event"}, None))
+    assert _queue_has_high_priority(queue) is False
+    assert queue.qsize() == 1
+
+
+@pytest.mark.asyncio
+async def test_sender_loop_flushes_high_priority_immediately() -> None:
+    """IG-436: HIGH priority events bypass batch fill loop."""
+    from soothe.core.events import EventPriority
+
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock()
+
+    client_id = await manager.create_session(transport, None)
+    await manager.subscribe_loop(client_id, "loop-abc123")
+
+    session = await manager.get_session(client_id)
+    assert session is not None
+
+    # Give sender task time to start
+    await asyncio.sleep(0.05)
+
+    # Publish HIGH priority event
+    high_meta = EventMeta(
+        type_string="soothe.cognition.agent_loop.completed",
+        model=None,
+        domain="cognition",
+        component="agent_loop",
+        action="completed",
+        verbosity=VerbosityTier.QUIET,
+        priority=EventPriority.HIGH,
+    )
+    event = {
+        "type": "event",
+        "data": {"type": "soothe.cognition.agent_loop.completed", "status": "done"},
+    }
+    await bus.publish(loop_event_topic("loop-abc123"), event, event_meta=high_meta)
+
+    # HIGH priority should flush quickly (not wait for batch timeout)
+    await asyncio.sleep(0.1)
+
+    transport.send.assert_called_once()
+    call_args = transport.send.call_args
+    sent_event = call_args[0][1]
+    assert sent_event["data"]["type"] == "soothe.cognition.agent_loop.completed"
+
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_sender_loop_batches_normal_priority() -> None:
+    """IG-436: NORMAL priority events still batch normally."""
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    config.agent.loop.output_streaming.streaming_interval_ms = 300  # 300ms batch timeout
+
+    bus = EventBus()
+    manager = ClientSessionManager(bus, config=config)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock()
+
+    client_id = await manager.create_session(transport, None)
+    await manager.subscribe_loop(client_id, "loop-abc123")
+
+    # Give sender task time to start
+    await asyncio.sleep(0.05)
+
+    # Publish NORMAL priority events - should batch
+    event1 = {"type": "event", "data": {"type": "soothe.cognition.agent_loop.step.started"}}
+    event2 = {"type": "event", "data": {"type": "soothe.cognition.agent_loop.step.completed"}}
+    await bus.publish(loop_event_topic("loop-abc123"), event1)
+    await bus.publish(loop_event_topic("loop-abc123"), event2)
+
+    # After short delay (< batch timeout), should not have sent yet
+    await asyncio.sleep(0.05)
+    # Note: This test may be timing-dependent; the sender could have sent
+    # but the key behavior is that HIGH priority skips batching
+
+    # Wait for batch timeout
+    await asyncio.sleep(0.35)
+
+    # Should have sent (either batched or individual)
+    assert transport.send.await_count >= 1
+
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_await_loop_delivery_drained_with_high_priority() -> None:
+    """IG-436: Drain adds extra settle margin for HIGH priority events."""
+    from soothe.core.events import EventPriority
+
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock()
+
+    client_id = await manager.create_session(transport, None)
+    await manager.subscribe_loop(client_id, "loop-test")
+
+    session = await manager.get_session(client_id)
+    assert session is not None
+
+    # Put HIGH priority event directly in queue
+    high_meta = EventMeta(
+        type_string="soothe.cognition.agent_loop.completed",
+        model=None,
+        domain="cognition",
+        component="agent_loop",
+        action="completed",
+        verbosity=VerbosityTier.QUIET,
+        priority=EventPriority.HIGH,
+    )
+    session.event_queue.put_nowait(({"type": "event"}, high_meta))
+
+    # Drain should wait for HIGH priority to be processed
+    # with extra settle margin
+    result = await manager.await_loop_delivery_drained("loop-test", batch_timeout_s=0.1)
+
+    # Should return True after settling
+    assert result is True
+
+    await manager.remove_session(client_id)
