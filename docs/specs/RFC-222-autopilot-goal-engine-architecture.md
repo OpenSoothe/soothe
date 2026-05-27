@@ -106,7 +106,7 @@ Layer 1: CoreAgent (per AgentLoop)
 
 | Trigger | When | Source | Target | Method |
 |---------|------|--------|--------|--------|
-| **AP PULL #1** | Scheduling loop tick | AP | GE | `GE.ready_goals()` |
+| **AP PULL #1** | Scheduling loop tick | AP | GE | `GE.peek_ready_goals()` for capacity check, then `GE.claim_goal(id, loop_id=...)` per assigned loop |
 | **AL PULL #1** | Before Plan phase | AL | GE | `GE.get_goal(goal_id)` |
 | **AL PULL #2** | After backoff | AL | GE | `GE.get_goal(goal_id)` |
 | **AL REACTIVE #1** | Goal completion | AL | GE (EventBus) | `GoalCompletedEvent` |
@@ -660,28 +660,44 @@ async def schedule_goal(goal: Goal):
 
 ## Configuration
 
+Per IG-434, the project's autonomous + autopilot config blocks were merged
+into a single unified `agent.autonomous:` section. RFC-222 fields live there
+(not in a separate `autopilot:` block). The shape:
+
 ```yaml
-autopilot:
-  enabled: false  # false = solo mode, true = autopilot mode
+agent:
+  autonomous:
+    enabled_by_default: false  # solo mode default
 
-  # Loop pool settings (autopilot only)
-  max_loops: 4
-  loop_idle_timeout: 300  # seconds before releasing idle loop
-  poll_interval: 5  # scheduling loop tick interval
-  dreaming_poll_interval: 60  # reduced polling when idle
+    # Goal execution (existing)
+    max_iterations: 10
+    max_retries: 2
+    max_parallel_goals: 3   # caps active goals at once
+    enable_dynamic_goals: true
 
-  # Channels
-  inbox_dir: "$SOOTHE_HOME/autopilot/inbox"
-  outbox_dir: "$SOOTHE_HOME/autopilot/outbox"
+    # Orchestration (existing)
+    max_send_backs: 3
+    checkpoint_interval: 10
 
-  # Webhooks
-  webhooks:
-    on_goal_completed: null
-    on_goal_failed: null
-    on_autopilot_started: null
-    on_autopilot_stopped: null
-    on_dreaming_entered: null
-    on_dreaming_exited: null
+    # Dreaming (existing)
+    dreaming_enabled: true
+    dreaming_consolidation_interval: 300
+    dreaming_health_check_interval: 60
+
+    # Scheduler (existing)
+    scheduler_enabled: true
+    max_scheduled_tasks: 100
+    webhooks: {}
+
+    # Loop pool (RFC-222) — AutopilotService worker management.
+    # max_loops caps the worker pool; loops can be reused for parent→child
+    # lineage. max_parallel_goals (above) caps active goals at once.
+    max_loops: 4
+    loop_idle_timeout: 300        # seconds before releasing idle loop
+    poll_interval: 5              # scheduling loop tick interval
+    dreaming_poll_interval: 60    # reduced polling when idle
+    inbox_dir: "$SOOTHE_HOME/autopilot/inbox"
+    outbox_dir: "$SOOTHE_HOME/autopilot/outbox"
 ```
 
 ---

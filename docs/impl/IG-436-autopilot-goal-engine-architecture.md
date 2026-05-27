@@ -1,6 +1,6 @@
 # IG-436: Autopilot and Goal Engine Architecture
 
-**Status**: In Progress  
+**Status**: Phase 1 complete — `_run_autonomous` now delegates per-goal execution to `AutopilotService.execute_goal`  
 **RFC**: [RFC-222](../specs/RFC-222-autopilot-goal-engine-architecture.md)  
 **Created**: 2026-05-27  
 **Dependencies**: RFC-204, RFC-200, IG-420
@@ -459,13 +459,131 @@ pytest packages/soothe/tests/unit/core/goal_engine/test_file_lock_registry.py -v
 
 ---
 
+## Phase 1.5: Wiring + corrections (2026-05-27 follow-up)
+
+This phase fixed correctness defects in the initial Phase 1 scaffolding (commit
+`f3e76fb9`) so the new classes become functional building blocks rather than
+orphaned code. Triggered by a review finding several wiring gaps and one broken
+middleware contract.
+
+### Delivered
+
+- **GoalEngine wiring** — `GoalEngine.__init__` now accepts `internal_bus`
+  (optional) and `file_registry` (optional, defaults to a fresh
+  `FileLockRegistry`). `file_registry` and `internal_bus` are exposed as
+  public properties.
+- **State-change events** — every state-mutating method
+  (`create_goal`, `validate_goal`, `suspend_goal`, `block_goal`,
+  `reactivate_goal`, `check_reactivated_goals`, `complete_goal`, `fail_goal`,
+  `ready_goals`) now emits `InternalGoalStateChangedEvent` when a bus is wired.
+  `ready_goals` additionally emits a single `InternalGoalsReadyEvent` per call.
+- **Lock release on terminal transitions** — `complete_goal` and `fail_goal`
+  release any file locks for the goal and emit `InternalFileReleasedEvent` per
+  released path. Backoff and retry branches also release locks.
+- **Read-only `peek_ready_goals`** added — same filter as `ready_goals` but
+  does not mutate status and does not emit events. Used by AutopilotService
+  for capacity planning.
+- **Atomic `claim_goal(goal_id, *, loop_id=None)`** added — flips a specific
+  goal to `active`, stamps `assigned_loop_id`, re-checks conflicts at claim
+  time, emits the state-change event. Resolves the race that would have
+  occurred if the service used `ready_goals(limit=1)` to claim by index.
+- **FileLockMiddleware rewritten** to extend `langchain.agents.middleware.types.AgentMiddleware`
+  with the canonical `awrap_tool_call(request, handler)` hook
+  (previous version was a plain class with a non-existent `intercept_tool_call`
+  hook). Conflict now returns `ToolMessage(status="error")` — same pattern as
+  `SoothePolicyMiddleware` — so the agent can read the message and replan
+  instead of the chain raising. `read_file` interception was removed (reads
+  are not write operations).
+- **AutopilotService config unified** — the parallel `AutopilotConfig`
+  `BaseModel` was deleted. The service now accepts the project's
+  `AutonomousConfig` directly, which gained six RFC-222 fields
+  (`max_loops`, `loop_idle_timeout`, `poll_interval`,
+  `dreaming_poll_interval`, `inbox_dir`, `outbox_dir`). Both
+  `config/config.template.yml` and `config/config.dev.yml` were updated
+  (CLAUDE.md Critical Rule #2).
+- **Private-state reaches removed** — `AutopilotService` no longer touches
+  `_goal_engine._goals` or `_goal_engine._file_registry`. It uses the public
+  `get_goal`, `peek_ready_goals`, `claim_goal`, and `file_registry` surfaces.
+  `_assign_loop_with_lineage` is typed as `Goal` instead of `Any`.
+- **Reactivate log bug fix** — `reactivate_goal` previously read
+  `goal.status` after mutating it, so it always logged `"was pending"`.
+  Captured the old status first.
+
+### Test coverage added / changed
+
+- `tests/unit/core/goal_engine/test_engine_events.py` (new) — verifies
+  solo-mode silence, every state transition's emitted event, lock release on
+  completion, `peek_ready_goals` non-mutation, and `claim_goal` atomicity.
+- `tests/unit/middleware/test_file_lock.py` (rewritten) — drives the new
+  `awrap_tool_call(ToolCallRequest, handler)` API; asserts `ToolMessage`
+  error responses for conflicts (no more raising `FileConflictError`).
+
+### Still deferred to a follow-up IG
+
+- Channel inbox processing (`_process_inbox` is still TODO).
+- Scheduled task integration (`_check_scheduled_tasks` is still TODO).
+- Loop health monitoring (`_monitor_loop_health` is still TODO).
+- Daemon HTTP endpoints (`/autopilot/status`, `/autopilot/submit`, etc.).
+- Integration tests under `tests/integration/autopilot/`.
+- Real implementation of `FileLockRegistry.has_conflicts_for_goal` /
+  `get_conflicting_goals` (requires goals to declare their target files,
+  which they don't today).
+
+---
+
 ## Changelog
 
-### 2026-05-27
+### 2026-05-27 (initial scaffolding)
 - IG created for RFC-222 implementation
 - Defined 5 implementation phases
 - Identified new and modified files
 - Defined unit and integration test scope
+
+### 2026-05-27 (Phase 1.5 follow-up)
+- GoalEngine wired with InternalEventBus + FileLockRegistry
+- State-change event emission added to all mutating methods
+- `peek_ready_goals` and `claim_goal` added; `ready_goals` factored on
+  shared filter helper
+- FileLockMiddleware rewritten as a real `AgentMiddleware`
+- AutopilotService now consumes `AutonomousConfig`; RFC-222 fields landed in
+  the unified config + both YAML templates
+- Private-state reaches in AutopilotService replaced with public methods
+- New event-emission tests + rewritten middleware tests
+
+### 2026-05-27 (Phase 1 proper — runner delegation)
+- `AutopilotService.execute_goal(goal_id, executor)` async-generator added:
+  claims the goal, performs lineage-aware loop assignment, stamps
+  `assigned_loop_id`, sets the active-loop ContextVar, runs the executor,
+  finalizes the loop on completion/failure.
+- `_active_loop_context` ContextVar exported via `get_active_loop_context()`
+  so downstream middleware/observers can attribute work to the current
+  AutopilotService run without threading loop_id/goal_id through call sites.
+- `resolve_goal_engine` now wires the singleton `InternalEventBus` into
+  `GoalEngine` automatically — observers (AutopilotService) see every
+  state transition in production runs.
+- `SootheRunner.__init__` constructs an `AutopilotService` whenever a
+  `GoalEngine` is present, sharing the singleton bus.
+- `_runner_autonomous._execute_goal_via_autopilot` is the new delegation
+  seam: both the single-goal and parallel `asyncio.gather` call sites in
+  `_run_autonomous` now go through it. Intent classification, parallel
+  batching, proposal queue, send-back logic remain in the runner.
+- **Parallel-execution concurrency control (RFC-222)**:
+  - `AutopilotService._assignment_lock` (`asyncio.Lock`) serializes
+    `_assign_loop_with_lineage` so two concurrent `execute_goal` calls
+    can't double-claim a loop slot — even if a future refactor adds an
+    `await` inside the assignment path.
+  - `AutopilotService._execution_semaphore` (`asyncio.Semaphore`) sized at
+    `AutonomousConfig.max_parallel_goals` caps in-flight `execute_goal`
+    runs. This makes the service safe to call directly from any caller
+    (not just the runner, which had its own ConcurrencyController cap).
+- **Bus deadlock fix**: `InternalEventBus.emit` previously held its lock
+  for the entire handler fanout. Handlers that emit further events
+  (e.g. `_handle_goal_state_changed` → `_mark_loop_idle` → emit) would
+  deadlock. The lock now only protects the subscriber snapshot.
+- 11 new tests in `test_execute_goal.py`: happy path, missing goal,
+  no capacity, executor exception, claim race, lineage reuse, idle reuse,
+  and three parallel-execution tests (distinct loops under contention,
+  semaphore cap enforcement, assignment-lock serialization).
 
 ---
 

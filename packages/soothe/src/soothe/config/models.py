@@ -521,6 +521,11 @@ class AutonomousConfig(BaseModel):
     max_goal_depth: int = Field(default=5, ge=1, le=10)
     max_parallel_goals: int = Field(default=3, ge=1, le=10)
     enable_dynamic_goals: bool = Field(default=True)
+    # Concurrency cap for parallel goal execution. Enforced in two places:
+    # 1. ConcurrencyController in the runner (runner-side semaphore)
+    # 2. AutopilotService._execution_semaphore (service-side semaphore, RFC-222)
+    # Independent of `max_loops`: loops can be reused for lineage, so the
+    # number of in-flight executions can be lower than the loop pool size.
 
     # === Orchestration (from old autopilot) ===
     max_send_backs: int = Field(default=3, ge=1, le=10)
@@ -535,6 +540,41 @@ class AutonomousConfig(BaseModel):
     scheduler_enabled: bool = True
     max_scheduled_tasks: int = Field(default=100, ge=1, le=1000)
     webhooks: dict[str, str | None] = Field(default_factory=dict)
+
+    # === Loop pool (RFC-222) ===
+    # Distinct from `max_parallel_goals`: `max_loops` caps worker capacity in
+    # the AgentLoop pool (loops can be reused for parent→child lineage), while
+    # `max_parallel_goals` caps the number of goals actively scheduled at once.
+    # They can differ — e.g. max_loops=8 for lineage reuse, max_parallel_goals=4.
+    max_loops: int = Field(
+        default=4,
+        ge=1,
+        le=32,
+        description="Maximum concurrent AgentLoop workers in the autopilot pool (RFC-222)",
+    )
+    loop_idle_timeout: int = Field(
+        default=300,
+        ge=10,
+        description="Seconds an idle loop is kept before release (RFC-222)",
+    )
+    poll_interval: int = Field(
+        default=5,
+        ge=1,
+        description="AutopilotService scheduling-loop tick interval, seconds (RFC-222)",
+    )
+    dreaming_poll_interval: int = Field(
+        default=60,
+        ge=5,
+        description="Reduced polling cadence when in dreaming mode, seconds (RFC-222)",
+    )
+    inbox_dir: str = Field(
+        default="$SOOTHE_HOME/autopilot/inbox",
+        description="Path to autopilot channel inbox (RFC-222)",
+    )
+    outbox_dir: str = Field(
+        default="$SOOTHE_HOME/autopilot/outbox",
+        description="Path to autopilot channel outbox (RFC-222)",
+    )
 
 
 class LoopWorkingMemoryConfig(BaseModel):
