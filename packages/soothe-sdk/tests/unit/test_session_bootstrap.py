@@ -62,7 +62,8 @@ async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> No
     assert rr[1][1]["type"] == "loop_subscribe"
     assert rr[1][1]["loop_id"] == "loop-created"
     assert rr[1][1]["verbosity"] == "normal"
-    assert rr[1][1]["stream_delivery"] == "streaming"
+    # IG-441: ``adaptive`` is the bootstrap default — best UX for most clients.
+    assert rr[1][1]["stream_delivery"] == "adaptive"
 
 
 @pytest.mark.asyncio
@@ -104,4 +105,5 @@ async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
     assert rr[0][1]["type"] == "loop_subscribe"
     assert rr[0][1]["loop_id"] == "loop-existing"
     assert rr[0][1]["verbosity"] == "normal"
-    assert rr[0][1]["stream_delivery"] == "streaming"
+    # IG-441: ``adaptive`` is the bootstrap default.
+    assert rr[0][1]["stream_delivery"] == "adaptive"

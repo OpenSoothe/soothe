@@ -74,27 +74,24 @@ class TuiDaemonSession:
         return status_event
 
     def _resolve_stream_delivery_mode(self) -> str:
-        """Determine stream delivery mode from config (RFC-614).
+        """Determine stream delivery mode from config (RFC-614, IG-441).
 
-        Returns "batch" or "adaptive" based on config. Maps old "streaming"
-        to "adaptive" for backwards compatibility.
+        Returns one of ``batch`` | ``adaptive`` | ``streaming``. CLI override
+        wins, then config; defaults to ``adaptive`` (smooth UX for long
+        synthesis, see IG-441).
         """
-        # CLI override takes precedence
         if (
             self._cfg
             and hasattr(self._cfg, "output_streaming_mode")
             and self._cfg.output_streaming_mode
         ):
-            mode = self._cfg.output_streaming_mode
-            # Map old "streaming" to "adaptive" for backwards compatibility
-            return "adaptive" if mode == "streaming" else mode
+            return str(self._cfg.output_streaming_mode)
 
         if self._cfg and hasattr(self._cfg, "agent"):
             streaming_cfg = self._cfg.agent.loop.output_streaming
-            mode = streaming_cfg.mode
-            return "adaptive" if mode == "streaming" else mode
+            return str(streaming_cfg.mode)
 
-        return "adaptive"  # Default to adaptive mode
+        return "adaptive"
 
     async def new_loop(self) -> dict[str, Any]:
         """Start a new AgentLoop conversation."""
