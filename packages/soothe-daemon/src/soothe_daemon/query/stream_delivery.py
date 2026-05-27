@@ -170,7 +170,7 @@ class StreamDeliveryCoalescer:
         self,
         mode: StreamDeliveryMode,
         *,
-        adaptive_threshold_chars: int = 500,
+        adaptive_threshold_chars: int = 1000,
         file_output_threshold_chars: int = 0,
         file_output_preview_chars: int = 500,
         file_output_dir: str | None = None,
@@ -201,6 +201,8 @@ class StreamDeliveryCoalescer:
         self._effective_mode: Literal["batch", "streaming"] = "streaming"
         self._adaptive_decision_made = False
         self._coalesce_flush_count = 0
+        # Track cumulative streamed goal_completion chars to detect threshold crossing
+        self._gc_streamed_chars: int = 0
 
     @property
     def turn_complete_pending(self) -> bool:
@@ -497,17 +499,26 @@ class StreamDeliveryCoalescer:
             )
             return []
 
+        # Adaptive mode: track cumulative chars to detect threshold crossing
+        chunk_chars = len("".join(extract_text_from_ai_message(msg_wire)))
+        projected_chars = (
+            self._gc_streamed_chars + (len(self._joined_gc_text()) if self._gc else 0) + chunk_chars
+        )
+
         if not self._adaptive_decision_made:
-            self._accumulate_goal_completion(
-                namespace, msg_wire, wire_data[1] if len(wire_data) > 1 else {}
-            )
-            chars = len(self._joined_gc_text())
-            if chars >= self._adaptive_threshold_chars:
+            if projected_chars >= self._adaptive_threshold_chars:
+                # Threshold exceeded: switch to batch mode for all remaining chunks
                 self._effective_mode = "batch"
                 self._adaptive_decision_made = True
+                self._accumulate_goal_completion(
+                    namespace, msg_wire, wire_data[1] if len(wire_data) > 1 else {}
+                )
                 return []
+            # Under threshold: stream immediately, track chars, DO NOT accumulate
+            self._gc_streamed_chars += chunk_chars
             return [(namespace, "messages", wire_data)]
 
+        # Already switched to batch mode - accumulate only, no streaming
         self._accumulate_goal_completion(
             namespace, msg_wire, wire_data[1] if len(wire_data) > 1 else {}
         )
@@ -567,6 +578,8 @@ class StreamDeliveryCoalescer:
     def _flush_goal_completion(self, *, final: bool) -> list[tuple[tuple[str, ...], str, Any]]:
         if self._gc is None or not self._gc.parts:
             self._gc = None
+            # Reset adaptive streaming counter when buffer cleared
+            self._gc_streamed_chars = 0
             return []
 
         text = self._joined_gc_text()
@@ -589,6 +602,8 @@ class StreamDeliveryCoalescer:
 
         namespace = self._gc.namespace
         self._gc = None
+        # Reset adaptive streaming counter when buffer cleared
+        self._gc_streamed_chars = 0
         wire = prepare_stream_data_for_wire((msg, meta))
         return [(namespace, "messages", wire)]
 
@@ -611,6 +626,8 @@ class StreamDeliveryCoalescer:
 
         namespace = self._gc.namespace if self._gc else ()
         self._gc = None
+        # Reset adaptive streaming counter when buffer cleared
+        self._gc_streamed_chars = 0
         wire = prepare_stream_data_for_wire((msg, meta))
         return [(namespace, "messages", wire)]
 
