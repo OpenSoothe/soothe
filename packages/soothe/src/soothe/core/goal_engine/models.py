@@ -41,6 +41,10 @@ class Goal(BaseModel):
         source_file: Path to GOAL.md file that defined this goal (None if auto-created).
         created_at: Creation timestamp.
         updated_at: Last update timestamp.
+        assigned_loop_id: Loop assigned to this goal (RFC-222).
+        lock_status: File lock status for this goal (RFC-222).
+        locked_files: Files currently locked by this goal (RFC-222).
+        lock_acquired_at: Timestamp when lock acquired (RFC-222).
     """
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
@@ -64,6 +68,11 @@ class Goal(BaseModel):
     source_file: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # RFC-222: Autopilot-specific fields for loop assignment and file locking
+    assigned_loop_id: str | None = None
+    lock_status: Literal["none", "acquired", "released"] = "none"
+    locked_files: list[str] = Field(default_factory=list)
+    lock_acquired_at: datetime | None = None
 
 
 # RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration

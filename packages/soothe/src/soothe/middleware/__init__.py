@@ -9,6 +9,7 @@ This package provides middleware implementations that wrap deepagents:
 - PerTurnModelMiddleware: Per-stream model override for daemon/TUI
 - SootheFilesystemMiddleware: Extended filesystem tools middleware
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
+- FileLockMiddleware: File lock conflict resolution for autopilot mode (RFC-222)
 
 Utility functions:
 - create_llm_call_metadata: Create standardized metadata for LLM calls
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from soothe.middleware._utils import create_llm_call_metadata as create_llm_call_metadata
     from soothe.middleware.code_interpreter import CodeInterpreterMiddleware
     from soothe.middleware.execution_hints import ExecutionHintsMiddleware
+    from soothe.middleware.file_lock import FileLockMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
 __all__ = [
     "CodeInterpreterMiddleware",
     "ExecutionHintsMiddleware",
+    "FileLockMiddleware",
     "LLMRateLimitMiddleware",
     "SootheFilesystemMiddleware",
     "SoothePolicyMiddleware",
@@ -59,6 +62,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "create_llm_call_metadata": ("soothe.middleware._utils", "create_llm_call_metadata"),
     "ExecutionHintsMiddleware": ("soothe.middleware.execution_hints", "ExecutionHintsMiddleware"),
+    "FileLockMiddleware": ("soothe.middleware.file_lock", "FileLockMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
     "LLMRateLimitMiddleware": ("soothe.middleware.llm_rate_limit", "LLMRateLimitMiddleware"),
     "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
