@@ -49,6 +49,7 @@ from soothe.core.loop.engine.predecessor_branch_context import (
     predecessor_execute_messages_for_branch,
     transitive_dependency_step_ids,
 )
+from soothe.core.loop.engine.thread_fork_manager import ThreadForkManager
 from soothe.core.loop.engine.tool_call_args import (
     ToolCallArgsCollector,
     filter_redundant_stream_tool_updates,
@@ -742,6 +743,7 @@ class Executor:
         self,
         core_agent: CoreAgent,
         *,
+        checkpointer: Any | None = None,
         max_parallel_steps: int = 16,
         config: SootheConfig | None = None,
         goal_context_manager: GoalContextManager | None = None,
@@ -751,6 +753,7 @@ class Executor:
 
         Args:
             core_agent: Layer 1 CoreAgent for step execution
+            checkpointer: LangGraph checkpointer for thread fork inheritance (RFC-223).
             max_parallel_steps: Max steps to run **concurrently** in one batch. ``execute`` repeats
                 batches until all ready steps finish (e.g. 4 ready steps and ``2`` → two batches of 2).
                 ``0`` means unlimited (RFC-201 / concurrency).
@@ -759,6 +762,7 @@ class Executor:
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
         self.core_agent = core_agent
+        self._checkpointer = checkpointer
         self._max_parallel_steps = max_parallel_steps
         self._config = config
         self._goal_context_manager = goal_context_manager
@@ -1144,11 +1148,7 @@ class Executor:
             logger.warning("No ready steps to execute (all completed or blocked)")
             return
 
-        # Initialize tool concurrency semaphore for this thread
-        max_parallel_tools = 5  # Default
-        if self._config is not None:
-            max_parallel_tools = self._config.agent.loop.limits.max_parallel_tools
-        init_tool_concurrency_for_thread(max_parallel_tools)
+        max_parallel_tools = self._max_parallel_tools_limit()
 
         # IG-XXX: Use fast model for execute phase (tool-heavy operations)
         # The execute phase runs tools which benefit from a faster/cheaper model
@@ -1192,6 +1192,12 @@ class Executor:
             if model_override_token is not None:
                 reset_stream_model_override(model_override_token)
                 logger.debug("[Execute] Fast model override reset")
+
+    def _max_parallel_tools_limit(self) -> int:
+        """Configured concurrent tool-call cap for a single execute step stream."""
+        if self._config is None:
+            return 5
+        return self._config.agent.loop.limits.max_parallel_tools
 
     def _wave_size(self, remaining: int) -> int:
         """Concurrent step count for the next execute batch (``0`` = unlimited).
@@ -1573,6 +1579,8 @@ class Executor:
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
             max_tool_calls_per_step=self._max_tool_calls_per_step(),
         )
+        # Per-step ContextVar so parallel execute tasks each get a full tool budget.
+        init_tool_concurrency_for_thread(self._max_parallel_tools_limit())
 
         try:
             wire_subagent = _wire_subagent_from_routing(routing_classification)
@@ -1584,7 +1592,23 @@ class Executor:
                 wire_subagent,
             )
 
-            cfg_thread = stream_thread_id or thread_id
+            # RFC-223: Thread fork for checkpoint inheritance
+            # Use ThreadForkManager to prepare forked thread with inherited history
+            fork_thread_id = thread_id  # Default to main thread
+            direct_deps = step.dependencies or []
+            is_multi_dep = len(direct_deps) > 1
+
+            if loop_state is not None and loop_state.current_decision is not None:
+                fork_manager = ThreadForkManager(self._checkpointer)
+                fork_thread_id = await fork_manager.prepare_thread_for_step(
+                    step=step,
+                    decision=loop_state.current_decision,
+                    state=loop_state,
+                    main_thread_id=thread_id,
+                )
+
+            # Override with explicit stream_thread_id if provided (legacy compatibility)
+            cfg_thread = stream_thread_id or fork_thread_id
             configurable: dict[str, Any] = {
                 "thread_id": cfg_thread,
                 "soothe_step_subagent": wire_subagent,
@@ -1614,28 +1638,45 @@ class Executor:
             from soothe.core.prompts.user_envelope import build_execute_step_envelope
 
             graph_input_messages: list[BaseMessage] = []
-            use_parallel_branch = (
-                stream_thread_id is not None
-                and stream_thread_id != thread_id
-                and loop_state is not None
-                and loop_state.current_decision is not None
-            )
-            if use_parallel_branch:
-                preds = transitive_dependency_step_ids(step, loop_state.current_decision)
-                if preds:
+
+            # RFC-223: Multi-dep steps need message injection for all transitive predecessors
+            # Singleton deps get full history via checkpoint fork (no injection needed)
+            if is_multi_dep and loop_state is not None and loop_state.current_decision is not None:
+                transitive_preds = transitive_dependency_step_ids(step, loop_state.current_decision)
+                if transitive_preds:
                     cap = self._branch_predecessor_message_cap()
                     graph_input_messages = predecessor_execute_messages_for_branch(
                         loop_state.loop_messages,
-                        preds,
+                        transitive_preds,
                         max_messages=cap,
                     )
                     if graph_input_messages:
                         logger.info(
-                            "[BranchPred] step=%s injected %d predecessor ledger msgs (cap=%d)",
+                            "[ThreadFork] step=%s multi-dep injected %d transitive predecessor msgs",
                             step.id,
                             len(graph_input_messages),
-                            cap,
                         )
+            # Legacy: parallel branch with explicit stream_thread_id (not fork-based)
+            elif stream_thread_id is not None and stream_thread_id != thread_id:
+                use_parallel_branch = (
+                    loop_state is not None and loop_state.current_decision is not None
+                )
+                if use_parallel_branch:
+                    preds = transitive_dependency_step_ids(step, loop_state.current_decision)
+                    if preds:
+                        cap = self._branch_predecessor_message_cap()
+                        graph_input_messages = predecessor_execute_messages_for_branch(
+                            loop_state.loop_messages,
+                            preds,
+                            max_messages=cap,
+                        )
+                        if graph_input_messages:
+                            logger.info(
+                                "[BranchPred] step=%s injected %d predecessor ledger msgs (cap=%d)",
+                                step.id,
+                                len(graph_input_messages),
+                                cap,
+                            )
 
             hints_parts: list[str] = []
             if wire_subagent:

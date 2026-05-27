@@ -171,7 +171,7 @@ CARD_ACTIVITY_MUTED_LIGHT = GRAY_400
 
 # Header colors — prominent but not overwhelming
 CARD_HEADER_DARK = "#7AA2F7"
-"""Card header prefix (📍💭🚀❇️) in dark theme — soft blue."""
+"""Card header prefix (📍🚀❇️) in dark theme — soft blue."""
 
 CARD_HEADER_LIGHT = "#2E5EAA"
 """Card header prefix in light theme — deeper blue."""
@@ -417,7 +417,7 @@ class ThemeColors:
     """Card border hover state — slightly lighter/darker on interaction."""
 
     card_header: str
-    """Card header prefix color (📍💭🚀❇️) — prominent but restrained."""
+    """Card header prefix color (📍🚀❇️) — prominent but restrained."""
 
     card_activity: str
     """Activity text color — subdued gray, matches border for harmony."""

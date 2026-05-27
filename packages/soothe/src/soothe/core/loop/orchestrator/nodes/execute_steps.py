@@ -103,8 +103,13 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
 
     step_results: list[StepResult] = []
     step_desc = {s.id: s.description for s in decision.steps}
+
+    # RFC-223: Pass checkpointer for thread fork inheritance
+    checkpointer = getattr(agent_loop.core_agent.graph, "checkpointer", None)
+
     run_executor = Executor(
         agent_loop.core_agent,
+        checkpointer=checkpointer,
         max_parallel_steps=agent_loop.config.agent.loop.limits.max_parallel_steps,
         config=agent_loop.config,
         goal_context_manager=goal_context_manager,
