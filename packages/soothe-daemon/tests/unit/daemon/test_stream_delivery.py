@@ -170,21 +170,31 @@ def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
 
 
 def test_adaptive_mode_switches_to_batch_on_threshold() -> None:
-    """IG-436: Adaptive mode batches when exceeding threshold chars."""
+    """Adaptive mode batches remaining content when threshold crossed (no duplicate emission).
+
+    Previously streamed content is NOT re-emitted on flush - only new content after
+    threshold crossing is batched. This prevents duplicate emission when synthesis
+    crosses the adaptive threshold mid-stream.
+    """
     coalescer = StreamDeliveryCoalescer("adaptive", adaptive_threshold_chars=10)
-    # First chunk under threshold - passthrough
+    # First chunk under threshold - passthrough (NOT accumulated)
     out1 = coalescer.ingest(*_gc_chunk("abc"))
     assert len(out1) == 1
     assert out1[0][2][0]["content"] == "abc"
-    # Second chunk exceeds threshold - switches to batch mode
-    out2 = coalescer.ingest(*_gc_chunk("defghijklmn"))  # 11 chars
+    # Second chunk (11 chars) makes cumulative 14 chars > threshold 10
+    # Switches to batch mode for remaining content
+    out2 = coalescer.ingest(*_gc_chunk("defghijklmn"))
     assert len(out2) == 0  # Buffered, not passed through
-    # Flush on completed
+    # Flush on completed - only accumulated content (second chunk)
     done = coalescer.ingest(
         (),
         "custom",
         {"type": AGENT_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 2
-    # Coalesced content includes both chunks
-    assert done[0][2][0]["content"] == "abcdefghijklmn"
+    # Flush contains only content accumulated after threshold crossing
+    assert done[0][2][0]["content"] == "defghijklmn"
+    # Client receives complete content without duplicate:
+    # - streamed "abc" (during ingest)
+    # - flushed "defghijklmn" (after completed)
+    # Total: "abcdefghijklmn" in 2 separate messages (no duplicate)
