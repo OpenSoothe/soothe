@@ -414,7 +414,7 @@ _register(
 _register(
     ToolMeta(
         name="wizsearch_search",
-        display_name="MultiEngineSearch",
+        display_name="WebSearch",
         arg_keys=("query",),
         category="web",
         outcome_type="web_search",

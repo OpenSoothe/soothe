@@ -150,7 +150,9 @@ class ContextWindowManager:
         if self._checkpointer is None:
             return 0
 
-        checkpoint_tuple = await self._checkpointer.aget_tuple(thread_id)
+        checkpoint_tuple = await self._checkpointer.aget_tuple(
+            {"configurable": {"thread_id": thread_id}}
+        )
         if checkpoint_tuple is None:
             return 0
 
@@ -238,7 +240,9 @@ class ContextWindowManager:
 
         try:
             # Get current checkpoint
-            checkpoint_tuple = await self._checkpointer.aget_tuple(thread_id)
+            checkpoint_tuple = await self._checkpointer.aget_tuple(
+                {"configurable": {"thread_id": thread_id}}
+            )
             if checkpoint_tuple is None:
                 logger.debug("[ContextWindow] No checkpoint for thread %s", thread_id)
                 return None
@@ -299,7 +303,7 @@ class ContextWindowManager:
 
             # Update checkpoint in-place
             await self._checkpointer.aupdate(
-                thread_id,
+                {"configurable": {"thread_id": thread_id}},
                 {"messages": compacted_messages},
             )
 
