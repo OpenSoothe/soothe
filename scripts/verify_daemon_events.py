@@ -41,7 +41,7 @@ from soothe_sdk.core.subagent_wire import (
     parse_subagent_wire_agent,
 )
 
-STREAM_DELIVERY_MODES: list[StreamDeliveryMode] = ["batch", "streaming"]
+STREAM_DELIVERY_MODES: list[StreamDeliveryMode] = ["batch", "adaptive", "streaming"]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -640,7 +640,7 @@ async def run_verification(
     daemon_url: str,
     test_prompt: str,
     timeout: float,
-    stream_delivery: StreamDeliveryMode = "streaming",
+    stream_delivery: StreamDeliveryMode = "adaptive",
 ) -> EventStats:
     """Run verification by connecting to daemon and collecting events."""
 

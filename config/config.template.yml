@@ -13,16 +13,12 @@
 # AGENT (Identity, Behavior, Self-Driving, Loop, Protocols)
 # ============================================================
 # All agent-related settings consolidated in one section (IG-434).
-# Progressive disclosure: basic → behavior → autonomous → loop → protocols.
+# Progressive disclosure: basic → autonomous → loop → protocols → code_interpreter.
 
 agent:
   # === BASIC (User Identity) ===
   name: Soothe
   system_prompt: null
-
-  # === BEHAVIOR (Response Mode) ===
-  goal_completion_mode: llm_only
-  final_response: adaptive
 
   # === AUTONOMOUS (Self-Driving - Unified) ===
   # Merged former 'autonomous' + 'autopilot' sections (IG-434).
@@ -58,43 +54,38 @@ agent:
     enabled: true
     max_iterations: 10
     max_subagent_tasks_per_wave: 4
+    agent_loop_output_contract_enabled: true   # Suppress full tool output re-paste during Execute
     prior_conversation_limit: 10
     context_window_limit: 200000
 
-    # RFC-224: Automatic context window management
-    context_overflow_threshold_pct: 0.80  # Trigger compaction at 80% (160k tokens)
-    context_compaction_target_pct: 0.60   # Compact to 60% (120k tokens)
-    step_context_check_enabled: false     # Step threads usually short-lived
+    # Response shape (IG-298 / IG-199). Canonical reads live here, not at agent.*.
+    goal_completion_mode: llm_only             # llm_only | heuristic_only | hybrid
+    final_response: adaptive                   # adaptive | always_synthesize
 
-    # Output streaming (RFC-614)
+    # RFC-224: Automatic context window management
+    context_overflow_threshold_pct: 0.80       # Trigger compaction at 80% (160k tokens)
+    context_compaction_target_pct: 0.60        # Compact to 60% (120k tokens)
+    step_context_check_enabled: false          # Step threads usually short-lived
+
+    # RFC-220 loop orchestrator
+    loop_orchestrator_evidence_validate: true  # Run plan evidence validation node (currently a no-op)
+
+    # Output streaming (RFC-614, IG-441)
     output_streaming:
-      mode: adaptive
+      mode: adaptive                           # batch | adaptive | streaming
       streaming_interval_ms: 300
+      adaptive_threshold_chars: 500            # phase-1 → phase-2 cutover (adaptive)
+      adaptive_block_chars: 500                # phase-2 block size (adaptive)
+      adaptive_block_interval_ms: 250          # phase-2 max ms between blocks (adaptive)
+      file_output_threshold_chars: 0           # 0 = never write goal_completion to file
+      file_output_preview_chars: 500           # Preview chars in TUI when output saved to file
+      file_output_dir: null                    # null = <workspace>/.soothe/output
       message_coalesce_enabled: true
       tool_batch_enabled: true
       tool_batch_interval_ms: 200
       suppress_redundant_stream_tool_updates: true
       skip_redundant_tool_message_wire: false
       tui_flush_interval_ms: 200
-
-    # Planning
-    planning:
-      simple_max_tokens: 50
-      complexity_threshold: 160
-      force_keywords:
-      - plan for
-      - create a plan
-      - steps to
-      adaptive_escalation: true
-
-    # Early termination
-    early_termination:
-      enabled: true
-      completion_signals:
-      - task complete
-      - done
-      - finished successfully
-      error_threshold: 3
 
     # Working memory
     working_memory:
@@ -113,6 +104,12 @@ agent:
       display_threshold: 20000
       preview_chars: 500
       synthesis_max_chars: 0
+
+    # Plan-phase ledger projection caps (IG-380). 0 = unlimited (full passthrough).
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 0
+      plan_ledger_max_total_chars: 0
+      plan_ledger_max_message_chars: 0
 
     # Infrastructure limits (rate limiting, concurrency, timeouts)
     limits:
@@ -321,7 +318,7 @@ subagents:
     url: null
     config:
       llm_role: fast
-      synthesis_role: think
+      synthesis_role: fast        # set to ``think`` for higher-quality synthesis at higher latency
       effort: normal
     runtime_dir: ''
 
@@ -467,10 +464,6 @@ optimization:
     llm_confidence_threshold: 0.7
   structured_plan:
     enabled: false
-  scenario_registry:
-    enabled: true
-    config_path: null
-    embedding_match_threshold: 0.75
   tool_result_registry:
     enabled: true
 

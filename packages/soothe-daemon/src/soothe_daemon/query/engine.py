@@ -693,13 +693,15 @@ class QueryEngine:
                 delivery_mode = (
                     d._session_manager.get_stream_delivery(effective_loop_id)
                     if effective_loop_id
-                    else "batch"
+                    else "adaptive"
                 )
                 # Get streaming config parameters (RFC-614)
                 streaming_cfg = self._get_output_streaming_config(d)
                 coalescer = StreamDeliveryCoalescer(
                     delivery_mode,
                     adaptive_threshold_chars=streaming_cfg.get("adaptive_threshold_chars", 1000),
+                    adaptive_block_chars=streaming_cfg.get("adaptive_block_chars", 500),
+                    adaptive_block_interval_ms=streaming_cfg.get("adaptive_block_interval_ms", 250),
                     file_output_threshold_chars=streaming_cfg.get("file_output_threshold_chars", 0),
                     file_output_preview_chars=streaming_cfg.get("file_output_preview_chars", 500),
                     file_output_dir=streaming_cfg.get("file_output_dir"),

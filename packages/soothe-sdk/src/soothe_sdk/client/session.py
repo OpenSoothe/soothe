@@ -49,7 +49,7 @@ async def bootstrap_loop_session(
     workspace: str | Path | None = None,
     user_id: str | None = None,
     client_workspace_id: str | None = None,
-    stream_delivery: str = "streaming",
+    stream_delivery: str = "adaptive",
     is_ephemeral: bool = False,
     daemon_ready_timeout_s: float = _DAEMON_READY_TIMEOUT_S,
     subscribe_timeout_s: float = _SESSION_BOOTSTRAP_TIMEOUT_S,
@@ -60,7 +60,8 @@ async def bootstrap_loop_session(
         client: ``WebSocketClient`` instance (connected).
         resume_loop_id: If set, subscribe to this existing loop. Otherwise create ``loop_new``.
         verbosity: Event verbosity for ``loop_subscribe``.
-        stream_delivery: Daemon stream shaping — ``streaming`` (default) or ``batch``.
+        stream_delivery: Daemon stream shaping — one of ``batch`` | ``adaptive``
+            (default, IG-441) | ``streaming``.
         is_ephemeral: When True, loop execution data is GC'd after idle period.
         workspace: Optional client project directory (e.g. user's CWD). Sent as
             ``client_workspace`` on ``loop_new`` and used directly by the runner when set.
@@ -109,7 +110,11 @@ async def bootstrap_loop_session(
         if not loop_id:
             raise ValueError("loop_new_response missing loop_id")
 
-    delivery = stream_delivery if stream_delivery in ("batch", "streaming") else "streaming"
+    # IG-441: three first-class modes (batch / adaptive / streaming). Unknown
+    # values fall back to ``adaptive`` (the new bootstrap default).
+    delivery = (
+        stream_delivery if stream_delivery in ("batch", "adaptive", "streaming") else "adaptive"
+    )
     sub_resp = await client.request_response(
         {
             "type": "loop_subscribe",

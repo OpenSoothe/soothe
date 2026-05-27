@@ -180,6 +180,8 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
             loop=SimpleNamespace(
                 output_streaming=SimpleNamespace(
                     adaptive_threshold_chars=500,
+                    adaptive_block_chars=1024,
+                    adaptive_block_interval_ms=250,
                     file_output_threshold_chars=0,
                     file_output_preview_chars=500,
                     file_output_dir=None,

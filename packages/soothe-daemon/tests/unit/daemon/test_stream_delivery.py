@@ -169,32 +169,225 @@ def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
     assert coalescer.turn_complete_pending
 
 
-def test_adaptive_mode_switches_to_batch_on_threshold() -> None:
-    """Adaptive mode batches remaining content when threshold crossed (no duplicate emission).
+def test_adaptive_mode_switches_to_chunked_streaming_on_threshold() -> None:
+    """IG-441: After threshold, adaptive enters chunked-streaming (not pure batch).
 
-    Previously streamed content is NOT re-emitted on flush - only new content after
-    threshold crossing is batched. This prevents duplicate emission when synthesis
-    crosses the adaptive threshold mid-stream.
+    Pre-IG-441 the second phase was pure batch — every post-threshold chunk
+    was held until ``agent_loop.completed``. With block_chars=1024 (default)
+    and a short stream, the new behavior with default block thresholds still
+    holds chunks until the final flush, preserving the no-duplicate guarantee:
+    streamed bytes are NEVER re-emitted as part of a block.
     """
     coalescer = StreamDeliveryCoalescer("adaptive", adaptive_threshold_chars=10)
-    # First chunk under threshold - passthrough (NOT accumulated)
     out1 = coalescer.ingest(*_gc_chunk("abc"))
     assert len(out1) == 1
     assert out1[0][2][0]["content"] == "abc"
-    # Second chunk (11 chars) makes cumulative 14 chars > threshold 10
-    # Switches to batch mode for remaining content
+    assert coalescer.goal_completion_phase == "streaming"
+
+    # Crossing the threshold transitions the coalescer into chunked-streaming;
+    # under defaults (block_chars=1024) this small chunk does not yet trigger a
+    # size-based block flush, so the chunk is buffered.
     out2 = coalescer.ingest(*_gc_chunk("defghijklmn"))
-    assert len(out2) == 0  # Buffered, not passed through
-    # Flush on completed - only accumulated content (second chunk)
+    assert out2 == []
+    assert coalescer.goal_completion_phase == "chunked_streaming"
+
     done = coalescer.ingest(
         (),
         "custom",
         {"type": AGENT_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 2
-    # Flush contains only content accumulated after threshold crossing
+    # Final block carries only post-threshold content; streamed "abc" is never
+    # re-emitted.
     assert done[0][2][0]["content"] == "defghijklmn"
-    # Client receives complete content without duplicate:
-    # - streamed "abc" (during ingest)
-    # - flushed "defghijklmn" (after completed)
-    # Total: "abcdefghijklmn" in 2 separate messages (no duplicate)
+    assert done[0][2][0]["chunk_position"] == "last"
+
+
+def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
+    """IG-441: In chunked-streaming phase, size-based block flush kicks in.
+
+    With ``adaptive_threshold_chars=5`` and ``adaptive_block_chars=10``:
+    - first chunk "abc" (3 chars) streams individually (phase=streaming).
+    - second chunk "defghij" (7 chars) crosses threshold, transitions phase
+      and accumulates (buffer=7, below block_chars=10 → no flush).
+    - third chunk "kl" (2 chars) does not push buffer to 10 yet.
+    - fourth chunk "mnopqr" (6 chars) → buffer=15 ≥ 10 → emit a block
+      ("defghijklmnopqr") and reset.
+    - agent_loop.completed flushes any remainder (none here) and emits the
+      completed event.
+    """
+    coalescer = StreamDeliveryCoalescer(
+        "adaptive",
+        adaptive_threshold_chars=5,
+        adaptive_block_chars=10,
+        adaptive_block_interval_ms=2000,  # disable time-based flush for determinism
+    )
+
+    streamed = coalescer.ingest(*_gc_chunk("abc"))
+    assert len(streamed) == 1
+    assert coalescer.goal_completion_phase == "streaming"
+
+    assert coalescer.ingest(*_gc_chunk("defghij")) == []
+    assert coalescer.goal_completion_phase == "chunked_streaming"
+    assert coalescer.ingest(*_gc_chunk("kl")) == []
+
+    block_out = coalescer.ingest(*_gc_chunk("mnopqr"))
+    assert len(block_out) == 1
+    block_msg = block_out[0][2][0]
+    assert block_msg["phase"] == "goal_completion"
+    assert block_msg["content"] == "defghijklmnopqr"
+    # Intermediate block must NOT carry chunk_position=last.
+    assert "chunk_position" not in block_msg or block_msg.get("chunk_position") != "last"
+    assert coalescer.goal_completion_block_flush_count == 1
+
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+    )
+    # Buffer was empty after the block flush, so only the completed custom
+    # event is emitted (no trailing goal_completion frame with empty content).
+    assert len(done) == 1
+    assert done[0][2]["type"] == AGENT_LOOP_COMPLETED
+
+
+def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
+    """IG-441: Time-based block flush triggers when block_interval elapses.
+
+    Even when buffered chars are below ``adaptive_block_chars``, the coalescer
+    must emit a block once ``adaptive_block_interval_ms`` has elapsed so slow
+    streams still show progress. Drives time via a controlled monotonic clock.
+    """
+    import soothe_daemon.query.stream_delivery as sd
+
+    fake_clock = [1000.0]
+
+    def _fake_monotonic() -> float:
+        return fake_clock[0]
+
+    real_monotonic = sd.time.monotonic
+    sd.time.monotonic = _fake_monotonic  # type: ignore[assignment]
+    try:
+        coalescer = StreamDeliveryCoalescer(
+            "adaptive",
+            adaptive_threshold_chars=3,
+            adaptive_block_chars=10_000,  # disable size-based flush
+            adaptive_block_interval_ms=200,
+        )
+
+        # Cross the threshold so we land in chunked_streaming.
+        coalescer.ingest(*_gc_chunk("abcd"))
+        assert coalescer.goal_completion_phase == "chunked_streaming"
+
+        # Inject more buffered content; size threshold is far away.
+        fake_clock[0] += 0.05  # 50ms
+        out_under = coalescer.ingest(*_gc_chunk("xy"))
+        assert out_under == []
+        assert coalescer.goal_completion_block_flush_count == 0
+
+        # Advance past block_interval; next ingest should flush prior buffer
+        # via the time-based block flush on the new chunk.
+        fake_clock[0] += 0.25  # 250ms past last_block
+        out_after = coalescer.ingest(*_gc_chunk("z"))
+        assert len(out_after) == 1
+        block_msg = out_after[0][2][0]
+        assert block_msg["phase"] == "goal_completion"
+        # Time-based flush ran at start of ingest BEFORE the new chunk was
+        # accumulated, so only prior buffer ("abcdxy") is in this block.
+        assert block_msg["content"] == "abcdxy"
+        assert coalescer.goal_completion_block_flush_count == 1
+
+        # The "z" chunk is now buffered; final flush at completed event.
+        done = coalescer.ingest(
+            (),
+            "custom",
+            {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        )
+        assert len(done) == 2
+        assert done[0][2][0]["content"] == "z"
+        assert done[0][2][0]["chunk_position"] == "last"
+    finally:
+        sd.time.monotonic = real_monotonic  # type: ignore[assignment]
+
+
+def test_streaming_mode_passthrough_every_goal_completion_chunk() -> None:
+    """IG-441: ``streaming`` mode forwards every goal_completion chunk verbatim.
+
+    No buffering, no threshold, no chunked-streaming transition. The phase
+    tracker stays in ``streaming`` for the lifetime of the turn — this is the
+    native LLM generation rate.
+    """
+    coalescer = StreamDeliveryCoalescer(
+        "streaming",
+        # Generous thresholds to prove they don't apply in streaming mode.
+        adaptive_threshold_chars=3,
+        adaptive_block_chars=4,
+        adaptive_block_interval_ms=10_000,
+    )
+
+    out1 = coalescer.ingest(*_gc_chunk("hello "))
+    out2 = coalescer.ingest(*_gc_chunk("world "))
+    out3 = coalescer.ingest(*_gc_chunk("streaming!"))
+    assert len(out1) == 1 and out1[0][2][0]["content"] == "hello "
+    assert len(out2) == 1 and out2[0][2][0]["content"] == "world "
+    assert len(out3) == 1 and out3[0][2][0]["content"] == "streaming!"
+    # No buffering and no intermediate block emissions.
+    assert coalescer.goal_completion_phase == "streaming"
+    assert coalescer.goal_completion_block_flush_count == 0
+
+    # ``agent_loop.completed`` only emits the custom event — nothing was buffered.
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+    )
+    assert len(done) == 1
+    assert done[0][2]["type"] == AGENT_LOOP_COMPLETED
+
+
+def test_streaming_mode_file_output_still_buffers() -> None:
+    """IG-441: file_output_threshold overrides ``streaming`` mode to pure batch.
+
+    file_output cannot stream — it needs the full text in one place to decide
+    between file vs. wire delivery. ``streaming`` mode + file_output therefore
+    falls back to the buffer-everything path.
+    """
+    coalescer = StreamDeliveryCoalescer(
+        "streaming",
+        file_output_threshold_chars=10_000,  # very high → file path never taken
+    )
+    assert coalescer.ingest(*_gc_chunk("alpha")) == []
+    assert coalescer.ingest(*_gc_chunk("bravo")) == []
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+    )
+    assert len(done) == 2
+    assert done[0][2][0]["content"] == "alphabravo"
+    assert done[0][2][0]["chunk_position"] == "last"
+
+
+def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
+    """IG-441: When file_output_threshold_chars > 0, adaptive falls back to pure batch.
+
+    file_output needs the entire goal_completion text in one place to decide
+    whether to write the file. Streaming intermediate blocks would defeat
+    that, so the coalescer reverts to buffer-everything behavior.
+    """
+    coalescer = StreamDeliveryCoalescer(
+        "adaptive",
+        adaptive_threshold_chars=3,
+        adaptive_block_chars=4,
+        file_output_threshold_chars=50_000,  # never actually triggers file
+    )
+    assert coalescer.ingest(*_gc_chunk("abcd")) == []
+    assert coalescer.ingest(*_gc_chunk("efgh")) == []
+    assert coalescer.goal_completion_block_flush_count == 0
+    done = coalescer.ingest(
+        (),
+        "custom",
+        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+    )
+    assert len(done) == 2
+    assert done[0][2][0]["content"] == "abcdefgh"

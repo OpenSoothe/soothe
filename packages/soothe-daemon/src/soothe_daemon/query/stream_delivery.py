@@ -1,4 +1,32 @@
-"""Daemon-side stream delivery shaping for loop event broadcast (RFC-614)."""
+"""Daemon-side stream delivery shaping for loop event broadcast (RFC-614).
+
+Three goal_completion delivery modes (IG-441):
+
+- ``batch``: Buffer entire goal_completion synthesis, emit one ``AIMessageChunk``
+  with ``chunk_position="last"`` at ``agent_loop.completed``. No real-time
+  visibility — intended for headless automation.
+
+- ``adaptive`` (default): Two-phase streaming.
+
+  1. *Streaming phase* — every goal_completion chunk is forwarded individually
+     until cumulative emitted chars reach ``adaptive_threshold_chars``.
+  2. *Chunked-streaming phase* — once threshold crossed the coalescer
+     buffers further chunks and emits intermediate ``AIMessageChunk`` blocks
+     when either ``adaptive_block_chars`` of text or ``adaptive_block_interval_s``
+     elapse since the last block. The final block at ``agent_loop.completed``
+     carries ``chunk_position="last"``. Each block reuses the same
+     ``phase="goal_completion"`` tag so the TUI continues appending to the same
+     ``AssistantMessage`` card (see IG-440 for chunk identity preservation).
+
+- ``streaming``: Raw passthrough at the LLM's native generation speed. Every
+  goal_completion chunk is forwarded immediately with no buffering. Highest
+  wire-frame count, lowest latency, best for local/low-latency clients that
+  want token-level fidelity (debugging, inline rendering experiments).
+
+When ``file_output_threshold_chars`` > 0 the goal_completion path stays in
+pure-batch buffering regardless of mode/phase so the final file_output
+decision sees the complete text.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +47,7 @@ from soothe_sdk.ux.stream_tool_wire import (
     extract_tool_call_updates_from_wire_message,
 )
 
-StreamDeliveryMode = Literal["batch", "adaptive"]
+StreamDeliveryMode = Literal["batch", "adaptive", "streaming"]
 
 
 _MSG_PAIR_LEN = 2
@@ -171,6 +199,8 @@ class StreamDeliveryCoalescer:
         mode: StreamDeliveryMode,
         *,
         adaptive_threshold_chars: int = 1000,
+        adaptive_block_chars: int = 500,
+        adaptive_block_interval_ms: int = 250,
         file_output_threshold_chars: int = 0,
         file_output_preview_chars: int = 500,
         file_output_dir: str | None = None,
@@ -184,6 +214,9 @@ class StreamDeliveryCoalescer:
     ) -> None:
         self._mode: StreamDeliveryMode = mode
         self._adaptive_threshold_chars = adaptive_threshold_chars
+        # IG-441: chunked-streaming phase 2 controls
+        self._adaptive_block_chars = max(adaptive_block_chars, 1)
+        self._adaptive_block_interval_s = max(adaptive_block_interval_ms, 50) / 1000.0
         self._file_output_threshold_chars = file_output_threshold_chars
         self._file_output_preview_chars = file_output_preview_chars
         self._file_output_dir = file_output_dir
@@ -198,11 +231,21 @@ class StreamDeliveryCoalescer:
         self._text_buffers: dict[tuple[str, ...], _TextCoalesceBuffer] = {}
         self._tool_batches: dict[tuple[str, ...], _ToolBatchBuffer] = {}
         self._turn_complete_pending = False
-        self._effective_mode: Literal["batch", "streaming"] = "streaming"
-        self._adaptive_decision_made = False
+        # IG-441: per-turn phase tracker for goal_completion delivery.
+        # - ``streaming`` → individual chunk passthrough (mode ``streaming`` stays here
+        #   forever; mode ``adaptive`` starts here and transitions on threshold).
+        # - ``chunked_streaming`` → block flushes (mode ``adaptive`` after threshold).
+        # - ``batch`` → buffer everything, single shot at final flush (mode ``batch``
+        #   or when file_output overrides the active mode).
+        self._gc_phase: Literal["streaming", "chunked_streaming", "batch"] = (
+            "batch" if mode == "batch" else "streaming"
+        )
         self._coalesce_flush_count = 0
+        self._gc_block_flush_count = 0
         # Track cumulative streamed goal_completion chars to detect threshold crossing
         self._gc_streamed_chars: int = 0
+        # Last monotonic time we emitted a chunked-streaming block (for interval flush)
+        self._gc_last_block_monotonic: float = 0.0
 
     @property
     def turn_complete_pending(self) -> bool:
@@ -213,6 +256,16 @@ class StreamDeliveryCoalescer:
     def coalesce_flush_count(self) -> int:
         """Number of text-coalesce flushes this turn (metrics)."""
         return self._coalesce_flush_count
+
+    @property
+    def goal_completion_block_flush_count(self) -> int:
+        """Number of intermediate goal_completion block flushes this turn (IG-441)."""
+        return self._gc_block_flush_count
+
+    @property
+    def goal_completion_phase(self) -> Literal["streaming", "chunked_streaming", "batch"]:
+        """Current adaptive goal_completion phase (IG-441; for diagnostics/tests)."""
+        return self._gc_phase
 
     def consume_turn_complete_pending(self) -> bool:
         """Return and clear the turn-complete flag."""
@@ -250,6 +303,8 @@ class StreamDeliveryCoalescer:
         ns = tuple(namespace) if namespace else ()
         now = time.monotonic()
         out_prefix = self._flush_due_tool_batches(now)
+        # IG-441: time-based block flush in adaptive chunked-streaming phase
+        out_prefix.extend(self._maybe_flush_goal_completion_block(now))
 
         if mode == "updates":
             if _updates_has_interrupt(data):
@@ -488,41 +543,121 @@ class StreamDeliveryCoalescer:
         msg: Any,
         metadata: Any,
     ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Route a goal_completion message through the active delivery phase.
+
+        - ``batch``: always accumulate; ``_flush_goal_completion(final=True)``
+          emits a single message at agent_loop.completed.
+        - ``streaming``: passthrough each chunk; track cumulative chars and
+          transition to ``chunked_streaming`` once ``adaptive_threshold_chars``
+          is reached.
+        - ``chunked_streaming``: accumulate into the goal_completion buffer
+          and flush intermediate blocks when char or time thresholds are met
+          (IG-441).
+        """
         wire_data = prepare_stream_data_for_wire((msg, metadata))
         msg_wire = wire_data[0] if isinstance(wire_data, (tuple, list)) and wire_data else msg
         if not isinstance(msg_wire, dict):
             return [(namespace, "messages", wire_data)]
 
-        if self._mode == "batch":
-            self._accumulate_goal_completion(
-                namespace, msg_wire, wire_data[1] if len(wire_data) > 1 else {}
-            )
+        meta = wire_data[1] if isinstance(wire_data, (tuple, list)) and len(wire_data) > 1 else {}
+
+        # file_output is incompatible with any streaming variant: we need to see
+        # total chars at final flush to decide between file vs. wire delivery.
+        # Force pure-batch buffering whenever file_output is enabled.
+        if self._mode == "batch" or self._file_output_threshold_chars > 0:
+            self._accumulate_goal_completion(namespace, msg_wire, meta)
             return []
 
-        # Adaptive mode: track cumulative chars to detect threshold crossing
-        chunk_chars = len("".join(extract_text_from_ai_message(msg_wire)))
-        projected_chars = (
-            self._gc_streamed_chars + (len(self._joined_gc_text()) if self._gc else 0) + chunk_chars
-        )
-
-        if not self._adaptive_decision_made:
-            if projected_chars >= self._adaptive_threshold_chars:
-                # Threshold exceeded: switch to batch mode for all remaining chunks
-                self._effective_mode = "batch"
-                self._adaptive_decision_made = True
-                self._accumulate_goal_completion(
-                    namespace, msg_wire, wire_data[1] if len(wire_data) > 1 else {}
-                )
-                return []
-            # Under threshold: stream immediately, track chars, DO NOT accumulate
-            self._gc_streamed_chars += chunk_chars
+        # Mode "streaming" is raw passthrough at the LLM's native rate — no
+        # buffering, no threshold-based transition, never enters
+        # chunked_streaming. The phase tracker stays in "streaming" forever.
+        if self._mode == "streaming":
             return [(namespace, "messages", wire_data)]
 
-        # Already switched to batch mode - accumulate only, no streaming
-        self._accumulate_goal_completion(
-            namespace, msg_wire, wire_data[1] if len(wire_data) > 1 else {}
+        chunk_chars = len("".join(extract_text_from_ai_message(msg_wire)))
+
+        if self._gc_phase == "streaming":
+            projected_chars = (
+                self._gc_streamed_chars
+                + (len(self._joined_gc_text()) if self._gc else 0)
+                + chunk_chars
+            )
+            if projected_chars < self._adaptive_threshold_chars:
+                # Phase 1: low-latency passthrough.
+                self._gc_streamed_chars += chunk_chars
+                return [(namespace, "messages", wire_data)]
+            # Threshold crossed → enter chunked-streaming phase. Buffer this
+            # chunk and let the threshold check below decide whether to flush
+            # immediately as the first block.
+            self._gc_phase = "chunked_streaming"
+            self._gc_last_block_monotonic = time.monotonic()
+
+        # Phase 2: chunked-streaming. Accumulate and flush blocks on demand.
+        self._accumulate_goal_completion(namespace, msg_wire, meta)
+        return self._maybe_flush_goal_completion_block(time.monotonic())
+
+    def _maybe_flush_goal_completion_block(
+        self, now: float
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Emit an intermediate goal_completion block if size or time threshold met.
+
+        Called from ``_ingest_goal_completion`` and from periodic ingest entry to
+        ensure long synthesis streams emit visible progress at least every
+        ``adaptive_block_interval_s`` seconds without crossing
+        ``adaptive_block_chars`` characters.
+        """
+        if self._gc_phase != "chunked_streaming":
+            return []
+        if self._gc is None or not self._gc.parts:
+            return []
+        size_due = self._gc.char_count >= self._adaptive_block_chars
+        time_due = (
+            self._gc_last_block_monotonic > 0.0
+            and (now - self._gc_last_block_monotonic) >= self._adaptive_block_interval_s
         )
-        return []
+        if not (size_due or time_due):
+            return []
+        return self._emit_goal_completion_block(now, final=False)
+
+    def _emit_goal_completion_block(
+        self, now: float, *, final: bool
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Flush the goal_completion buffer as an intermediate or final block.
+
+        Each block keeps the same ``phase="goal_completion"`` tag so the TUI
+        appends it onto the same ``AssistantMessage`` card (IG-440). Only the
+        final block carries ``chunk_position="last"``.
+        """
+        if self._gc is None or not self._gc.parts:
+            return []
+        text = self._joined_gc_text()
+        namespace = self._gc.namespace
+        template_msg = dict(self._gc.template_msg or {})
+        template_meta = dict(self._gc.template_meta or {})
+
+        # Reset buffer text but keep template + namespace for further blocks.
+        self._gc.parts = []
+        self._gc.char_count = 0
+        self._gc_last_block_monotonic = now
+        if not final:
+            self._gc_block_flush_count += 1
+
+        msg = dict(template_msg)
+        msg.setdefault("type", "AIMessageChunk")
+        msg["content"] = text
+        msg["phase"] = "goal_completion"
+        if final:
+            msg["chunk_position"] = "last"
+        else:
+            msg.pop("chunk_position", None)
+
+        wire = prepare_stream_data_for_wire((msg, template_meta))
+        if final:
+            # Final flush clears the buffer entirely.
+            self._gc = None
+            self._gc_streamed_chars = 0
+            self._gc_phase = "batch" if self._mode == "batch" else "streaming"
+        return [(namespace, "messages", wire)]
 
     def _flush_all_text_buffers(self, *, final: bool) -> list[tuple[tuple[str, ...], str, Any]]:
         out: list[tuple[tuple[str, ...], str, Any]] = []
@@ -576,10 +711,19 @@ class StreamDeliveryCoalescer:
         return "".join(self._gc.parts)
 
     def _flush_goal_completion(self, *, final: bool) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Flush remaining buffered goal_completion text.
+
+        Called at stream end (``flush``) and on ``agent_loop.completed``. The
+        text may be empty if the entire synthesis was already streamed (pure
+        adaptive streaming phase) or if the chunked-streaming blocks emptied
+        the buffer between block flushes. file_output_threshold short-circuits
+        to a file-summary message regardless of phase.
+        """
         if self._gc is None or not self._gc.parts:
             self._gc = None
-            # Reset adaptive streaming counter when buffer cleared
             self._gc_streamed_chars = 0
+            self._gc_phase = "batch" if self._mode == "batch" else "streaming"
+            self._gc_last_block_monotonic = 0.0
             return []
 
         text = self._joined_gc_text()
@@ -587,25 +731,7 @@ class StreamDeliveryCoalescer:
         if self._file_output_threshold_chars > 0 and len(text) >= self._file_output_threshold_chars:
             return self._emit_file_output_message(text)
 
-        msg = dict(self._gc.template_msg or {})
-        msg.setdefault("type", "AIMessageChunk")
-        msg["content"] = text
-        msg["phase"] = "goal_completion"
-        if final:
-            msg["chunk_position"] = "last"
-        elif "chunk_position" in msg:
-            msg.pop("chunk_position", None)
-
-        meta: dict[str, Any] = {}
-        if isinstance(self._gc.template_meta, dict):
-            meta = dict(self._gc.template_meta)
-
-        namespace = self._gc.namespace
-        self._gc = None
-        # Reset adaptive streaming counter when buffer cleared
-        self._gc_streamed_chars = 0
-        wire = prepare_stream_data_for_wire((msg, meta))
-        return [(namespace, "messages", wire)]
+        return self._emit_goal_completion_block(time.monotonic(), final=final)
 
     def _emit_file_output_message(self, text: str) -> list[tuple[tuple[str, ...], str, Any]]:
         """Write large goal_completion to file and emit summary message."""
@@ -626,8 +752,10 @@ class StreamDeliveryCoalescer:
 
         namespace = self._gc.namespace if self._gc else ()
         self._gc = None
-        # Reset adaptive streaming counter when buffer cleared
+        # Reset adaptive streaming counter and phase when buffer cleared
         self._gc_streamed_chars = 0
+        self._gc_phase = "batch" if self._mode == "batch" else "streaming"
+        self._gc_last_block_monotonic = 0.0
         wire = prepare_stream_data_for_wire((msg, meta))
         return [(namespace, "messages", wire)]
 

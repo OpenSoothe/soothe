@@ -134,6 +134,8 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
                 loop=SimpleNamespace(
                     output_streaming=SimpleNamespace(
                         adaptive_threshold_chars=500,
+                        adaptive_block_chars=1024,
+                        adaptive_block_interval_ms=250,
                         file_output_threshold_chars=0,
                         file_output_preview_chars=500,
                         file_output_dir=None,
@@ -219,6 +221,8 @@ def _daemon_factory(
                 loop=SimpleNamespace(
                     output_streaming=SimpleNamespace(
                         adaptive_threshold_chars=500,
+                        adaptive_block_chars=1024,
+                        adaptive_block_interval_ms=250,
                         file_output_threshold_chars=0,
                         file_output_preview_chars=500,
                         file_output_dir=None,
@@ -367,6 +371,8 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
                 loop=SimpleNamespace(
                     output_streaming=SimpleNamespace(
                         adaptive_threshold_chars=500,
+                        adaptive_block_chars=1024,
+                        adaptive_block_interval_ms=250,
                         file_output_threshold_chars=0,
                         file_output_preview_chars=500,
                         file_output_dir=None,

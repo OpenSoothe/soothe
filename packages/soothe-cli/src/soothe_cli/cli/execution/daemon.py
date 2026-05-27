@@ -82,9 +82,11 @@ async def _run_headless_session_once(
     try:
         await connect_websocket_with_retries(client)
         cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
-        stream_delivery = "streaming"
-        if getattr(cfg, "output_streaming_mode", None) == "batch":
-            stream_delivery = "batch"
+        # IG-441: three first-class modes (batch / adaptive / streaming).
+        # Default is ``adaptive`` for headless runs as well — it gives smooth
+        # progress on long synthesis while keeping wire traffic bounded.
+        override = getattr(cfg, "output_streaming_mode", None)
+        stream_delivery = override if override in ("batch", "adaptive", "streaming") else "adaptive"
 
         status_event = await bootstrap_loop_session(
             client,

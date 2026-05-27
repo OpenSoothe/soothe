@@ -190,9 +190,14 @@ class ClientSessionManager:
 
         return client_id
 
-    def get_stream_delivery(self, loop_id: str) -> StreamDeliveryMode:
-        """Return stream shaping mode for a loop (``batch`` or ``adaptive``)."""
-        return self._loop_stream_delivery.get(loop_id, "batch")
+    def get_stream_delivery(self, loop_id: str) -> StreamDeliveryMode:  # noqa: D401
+        """Return stream shaping mode for a loop.
+
+        IG-441: ``batch`` | ``adaptive`` | ``streaming``. Defaults to
+        ``adaptive`` for any loop that has not explicitly subscribed yet —
+        adaptive provides the best UX for unknown workloads.
+        """
+        return self._loop_stream_delivery.get(loop_id, "adaptive")
 
     async def subscribe_loop(
         self,
@@ -223,13 +228,16 @@ class ClientSessionManager:
         session.verbosity = verbosity
         session.wire_tier = wire_tier if wire_tier in ("full", "progress") else "full"
         if stream_delivery is not None:
-            # Accept "streaming" for backwards compatibility, map to "adaptive"
+            # IG-441: accept the canonical three modes (batch / adaptive / streaming).
+            # Unknown values fall back to "batch" for safety.
             delivery: StreamDeliveryMode = (
-                stream_delivery if stream_delivery in ("batch", "adaptive") else "batch"
+                stream_delivery
+                if stream_delivery in ("batch", "adaptive", "streaming")
+                else "batch"
             )
             self._loop_stream_delivery[loop_id] = delivery
         else:
-            delivery = self._loop_stream_delivery.get(loop_id, "batch")
+            delivery = self._loop_stream_delivery.get(loop_id, "adaptive")
 
         # Strict single-loop subscription per client for isolation
         for prev in list(session.subscriptions):

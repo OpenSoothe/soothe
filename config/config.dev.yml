@@ -20,13 +20,6 @@ agent:
     context_overflow_threshold_pct: 0.80
     context_compaction_target_pct: 0.60
     step_context_check_enabled: false
-    output_streaming:
-      mode: adaptive
-      streaming_interval_ms: 300
-      message_coalesce_enabled: true
-      tool_batch_enabled: true
-      tool_batch_interval_ms: 200
-      suppress_redundant_stream_tool_updates: true
     plan_prompt_ledger:
       plan_ledger_max_messages: 20
     limits:
