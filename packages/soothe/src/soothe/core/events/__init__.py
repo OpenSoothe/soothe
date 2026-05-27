@@ -40,6 +40,7 @@ from .catalog import (
     AgenticStepQueuedEvent,
     AgenticStepStartedEvent,
     CheckpointSavedEvent,
+    ContextCompactionEvent,
     DaemonHeartbeatEvent,
     EventMeta,
     EventPriority,
@@ -81,6 +82,7 @@ from .catalog import (
 # Import all event type constants
 from .constants import (
     AGENT_LOOP_COMPLETED,
+    AGENT_LOOP_CONTEXT_COMPACTED,
     AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_REASONED,
     AGENT_LOOP_STARTED,
@@ -173,6 +175,7 @@ __all__ = [
     "REPLAY_COMPLETE",
     "AGENT_LOOP_STARTED",
     "AGENT_LOOP_COMPLETED",
+    "AGENT_LOOP_CONTEXT_COMPACTED",
     "AGENT_LOOP_PLAN_DECISION",
     "AGENT_LOOP_STEP_STARTED",
     "AGENT_LOOP_STEP_QUEUED",
@@ -230,6 +233,7 @@ __all__ = [
     "AgenticStepQueuedEvent",
     "AgenticStepStartedEvent",
     "AgenticStepCompletedEvent",
+    "ContextCompactionEvent",
     "MemoryRecalledEvent",
     "MemoryStoredEvent",
     "PlanCreatedEvent",

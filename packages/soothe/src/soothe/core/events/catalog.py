@@ -45,6 +45,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 # Import ALL event type constants from single source of truth
 from .constants import (
     AGENT_LOOP_COMPLETED,
+    AGENT_LOOP_CONTEXT_COMPACTED,
     AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
@@ -267,6 +268,24 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     summary: str
     duration_ms: int
     tool_call_count: int = 0
+
+
+class ContextCompactionEvent(LifecycleEvent):
+    """Context window compaction event (RFC-224).
+
+    Emitted when automatic context compaction occurs to stay within
+    configured threshold. Provides visibility into context management
+    for observability.
+    """
+
+    type: Literal["soothe.cognition.agent_loop.context.compacted"] = (
+        "soothe.cognition.agent_loop.context.compacted"
+    )
+    thread_id: str
+    tokens_before: int
+    tokens_after: int
+    messages_removed: int
+    summary_preview: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -689,6 +708,13 @@ _reg(
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
     priority=EventPriority.HIGH,
+)
+_reg(
+    AGENT_LOOP_CONTEXT_COMPACTED,
+    ContextCompactionEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Context compacted: {tokens_before} → {tokens_after} tokens",
+    priority=EventPriority.NORMAL,
 )
 
 # -- Protocol: memory --------------------------------------------------------

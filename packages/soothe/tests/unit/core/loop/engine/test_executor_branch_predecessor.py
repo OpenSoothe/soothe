@@ -201,6 +201,7 @@ async def test_parallel_branch_respects_plan_ledger_max_messages_cap() -> None:
 
     cfg = MagicMock()
     cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_messages = 3
+    cfg.agent.loop.limits.max_parallel_tools = 5  # Required for init_tool_concurrency_for_thread
 
     step_b = StepAction(
         id="B",

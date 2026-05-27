@@ -2,6 +2,7 @@
 
 from .agent_loop import AgentLoop
 from .anchor_manager import CheckpointAnchorManager
+from .context_window_manager import ContextCompactionResult, ContextWindowManager
 from .executor import (
     DELEGATE_FINAL_WAVE_CAP,
     Executor,
@@ -19,6 +20,8 @@ from .thread_switch_policy import ThreadSwitchPolicyManager
 __all__ = [
     "AgentLoop",
     "CheckpointAnchorManager",
+    "ContextCompactionResult",
+    "ContextWindowManager",
     "DELEGATE_FINAL_WAVE_CAP",
     "Executor",
     "StepWaveQueued",
