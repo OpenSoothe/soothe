@@ -13,6 +13,7 @@ from langchain_core.messages import (
 
 from soothe.core.loop.utils.messages import (
     LoopAIMessage,
+    LoopAIMessageChunk,
     LoopHumanMessage,
     loop_message_to_thread_metadata,
 )
@@ -373,3 +374,73 @@ class TestWaveIdFormat:
 
         assert msg.wave_id == wave_id
         assert len(msg.wave_id) == 8
+
+
+class TestLoopAIMessageChunkWireRoundtrip:
+    """IG-440: LoopAIMessageChunk must keep chunk identity across the wire.
+
+    The synthesis pipeline streams ``LoopAIMessageChunk`` instances tagged with
+    ``phase="goal_completion"``. The TUI's streaming branch checks
+    ``isinstance(msg, AIMessageChunk)`` to know it should keep appending text
+    onto a single ``AssistantMessage`` card. If the wire collapses the chunk
+    identity, the TUI's first chunk mounts a tiny card and every subsequent
+    chunk falls through the ``existing_msg is not None`` early-return and is
+    silently dropped — exactly the failure reported for loop c191 / turn 2.
+    """
+
+    def test_chunk_roundtrip_preserves_class_and_phase(self) -> None:
+        from langchain_core.messages import AIMessageChunk
+        from soothe_sdk.client.wire import (
+            deserialize_langchain_message_from_wire,
+            prepare_stream_message_for_wire,
+        )
+
+        chunk = LoopAIMessageChunk(
+            content="Synthesis fragment 1.",
+            phase="goal_completion",
+            thread_id="thread-abc",
+            iteration=3,
+        )
+
+        wire = prepare_stream_message_for_wire(chunk)
+        assert wire["type"] == "AIMessageChunk", (
+            "AIMessageChunk wire tag must be preserved; collapsing to 'ai' "
+            "breaks the TUI synthesis stream branch (IG-440)."
+        )
+        assert wire.get("phase") == "goal_completion"
+
+        restored = deserialize_langchain_message_from_wire(wire)
+        assert isinstance(restored, AIMessageChunk), (
+            f"expected AIMessageChunk after wire round-trip, got {type(restored).__name__}"
+        )
+        assert getattr(restored, "phase", None) == "goal_completion"
+        assert restored.content == "Synthesis fragment 1."
+
+    def test_chunk_roundtrip_via_serialize_for_json(self) -> None:
+        """The runner emits chunks through ``prepare_stream_data_for_wire``.
+
+        This exercises the same path as ``_broadcast_stream_tuple`` in
+        ``soothe_daemon.query.engine``: pair (msg, meta) → flat dicts.
+        """
+        from langchain_core.messages import AIMessageChunk
+        from soothe_sdk.client.wire import (
+            deserialize_langchain_message_from_wire,
+            prepare_stream_data_for_wire,
+        )
+
+        chunk = LoopAIMessageChunk(
+            content="part",
+            phase="goal_completion",
+            thread_id="t",
+            iteration=1,
+            chunk_position="last",
+        )
+        wire_msg, wire_meta = prepare_stream_data_for_wire((chunk, {"lc_source": "agent"}))
+        assert isinstance(wire_msg, dict)
+        assert wire_msg["type"] == "AIMessageChunk"
+        assert wire_meta == {"lc_source": "agent"}
+
+        restored = deserialize_langchain_message_from_wire(wire_msg)
+        assert isinstance(restored, AIMessageChunk)
+        assert getattr(restored, "phase", None) == "goal_completion"
+        assert getattr(restored, "chunk_position", None) == "last"

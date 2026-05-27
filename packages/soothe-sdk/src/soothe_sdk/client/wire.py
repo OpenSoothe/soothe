@@ -2,7 +2,14 @@
 
 Canonical serialization uses :func:`langchain_core.messages.message_to_dict` (enveloped)
 then flattens to ``{type, content, tool_calls, …}`` with short wire type tags (``ai``,
-``human``, …). Deserialization uses :func:`messages_from_wire_dicts`.
+``human``, …) for full messages and explicit ``*Chunk`` tags for streaming chunks.
+Deserialization uses :func:`messages_from_wire_dicts`.
+
+IMPORTANT: ``AIMessageChunk`` / ``HumanMessageChunk`` MUST keep their distinct wire
+tags. Collapsing them to ``ai`` / ``human`` (the pre-IG-440 mapping) causes the TUI
+to receive synthesis stream chunks as plain ``AIMessage`` instances, breaking the
+streaming branch (``isinstance(message, AIMessageChunk)`` returns ``False``) and
+silently dropping all chunks after the first. See IG-440.
 """
 
 from __future__ import annotations
@@ -13,11 +20,14 @@ from typing import Any
 # ``messages_from_dict`` / ``_message_from_dict`` only accept short wire tags (``ai``,
 # ``human``, ``tool``, …) or explicit ``*Chunk`` tags — not Pydantic class names like
 # ``AIMessage``. Some serializers emit class names; normalize before enveloping.
+#
+# Chunk types (``AIMessageChunk`` / ``HumanMessageChunk``) intentionally pass through
+# unchanged: ``messages_from_dict`` understands these tags natively, and preserving
+# them on the wire keeps the chunk identity intact so streaming consumers (TUI
+# synthesis branch, etc.) can use ``isinstance(msg, AIMessageChunk)``.
 _LC_MESSAGE_CLASS_TO_WIRE: dict[str, str] = {
     "AIMessage": "ai",
-    "AIMessageChunk": "ai",
     "HumanMessage": "human",
-    "HumanMessageChunk": "human",
     "SystemMessage": "system",
     "ToolMessage": "tool",
     "FunctionMessage": "function",
