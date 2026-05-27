@@ -537,36 +537,6 @@ class AutonomousConfig(BaseModel):
     webhooks: dict[str, str | None] = Field(default_factory=dict)
 
 
-class PlanningConfig(BaseModel):
-    """Adaptive planning configuration (RFC-0008).
-
-    Args:
-        simple_max_tokens: Skip planning for queries < N tokens.
-        complexity_threshold: Tokens threshold for complex planning.
-        force_keywords: Keywords that force comprehensive planning.
-        adaptive_escalation: Escalate planning if iteration shows complexity.
-    """
-
-    simple_max_tokens: int = Field(
-        default=50,
-        description="Skip planning for queries < N tokens",
-    )
-    complexity_threshold: int = Field(
-        default=160,
-        description="Tokens threshold for complex planning",
-    )
-
-    force_keywords: list[str] = Field(
-        default=["plan for", "create a plan", "steps to"],
-        description="Keywords that force comprehensive planning",
-    )
-
-    adaptive_escalation: bool = Field(
-        default=True,
-        description="Escalate planning if iteration shows complexity",
-    )
-
-
 class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory (RFC-203).
 
@@ -591,29 +561,6 @@ class LoopWorkingMemoryConfig(BaseModel):
         ge=200,
         le=50_000,
         description="Spill step output to disk under SOOTHE_HOME/data/threads/{thread_id}/working_memory/ when longer than this",
-    )
-
-
-class EarlyTerminationConfig(BaseModel):
-    """Early termination configuration (RFC-0008).
-
-    Args:
-        enabled: Enable early termination based on completion signals.
-        completion_signals: Signals that indicate task completion.
-        error_threshold: Max errors before stopping iteration.
-    """
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable early termination based on completion signals",
-    )
-    completion_signals: list[str] = Field(
-        default=["task complete", "done", "finished successfully"],
-        description="Signals that indicate task completion",
-    )
-    error_threshold: int = Field(
-        default=3,
-        description="Max errors before stopping iteration",
     )
 
 
@@ -806,14 +753,48 @@ class OutputStreamingConfig(BaseModel):
     """Configuration for output streaming behavior (RFC-614).
 
     Controls how goal_completion synthesis and other assistant outputs are
-    delivered from daemon to client. Supports batch (coalesce all) and adaptive
-    (stream small outputs, batch large outputs) modes.
+    delivered from daemon to client.
+
+    Three delivery modes (IG-441):
+
+    - ``batch``: Buffer the entire goal_completion synthesis. Emit a single
+      ``AIMessageChunk`` with ``chunk_position="last"`` when the agent loop
+      completes. Pure single-shot delivery; the client sees nothing during the
+      synthesis. Intended for headless automation that does not need real-time
+      progress.
+
+    - ``adaptive`` (default, two-phase):
+
+      1. *Streaming phase* — while cumulative goal_completion chars are below
+         ``adaptive_threshold_chars`` every incoming chunk is forwarded
+         individually, giving the lowest possible first-token latency.
+      2. *Chunked-streaming phase* — once the threshold is crossed the
+         coalescer buffers incoming text and flushes intermediate
+         ``AIMessageChunk`` frames whenever the buffer reaches
+         ``adaptive_block_chars`` characters or ``adaptive_block_interval_ms``
+         milliseconds have elapsed since the last block flush, whichever
+         happens first. The final block carries ``chunk_position="last"``.
+         This keeps the user informed of progress on long outputs while
+         reducing wire frame count vs. raw passthrough.
+
+    - ``streaming``: Raw passthrough at the LLM's native generation speed.
+      Every goal_completion chunk is forwarded immediately with no buffering.
+      Highest wire-frame count and lowest latency — intended for local /
+      low-latency clients that want token-level fidelity.
+
+    If ``file_output_threshold_chars`` is set (> 0) goal_completion reverts to
+    pure-batch buffering regardless of mode so the final file_output decision
+    sees the complete text.
 
     Args:
-        mode: Streaming mode - "batch" (coalesce all) or "adaptive" (stream small, batch large).
+        mode: Delivery mode (``batch`` | ``adaptive`` | ``streaming``).
         streaming_interval_ms: Daemon WebSocket batching interval (milliseconds).
         tui_flush_interval_ms: TUI rendering flush interval (milliseconds).
-        adaptive_threshold_chars: Threshold for adaptive mode switching (chars).
+        adaptive_threshold_chars: Cumulative chars at which adaptive switches
+            from streaming phase to chunked-streaming phase.
+        adaptive_block_chars: Chars per block in chunked-streaming phase.
+        adaptive_block_interval_ms: Max ms between block flushes in
+            chunked-streaming phase.
         file_output_threshold_chars: Threshold to write goal_completion to file (0 = never).
         file_output_preview_chars: Preview chars in TUI when output saved to file.
         file_output_dir: Directory for output files (default: current workspace root/.soothe/output).
@@ -824,9 +805,14 @@ class OutputStreamingConfig(BaseModel):
         skip_redundant_tool_message_wire: Drop empty tool-result wire frames (off by default).
     """
 
-    mode: Literal["batch", "adaptive"] = Field(
+    mode: Literal["batch", "adaptive", "streaming"] = Field(
         default="adaptive",
-        description="Streaming mode - batch: coalesce all, adaptive: stream small, batch large",
+        description=(
+            "Delivery mode. batch: buffer entire goal_completion and emit one frame "
+            "at agent_loop.completed. adaptive: stream until adaptive_threshold_chars, "
+            "then emit block-sized AIMessageChunk frames. streaming: raw passthrough "
+            "at the LLM's native generation rate (no buffering)."
+        ),
     )
     streaming_interval_ms: int = Field(
         default=300,
@@ -844,7 +830,31 @@ class OutputStreamingConfig(BaseModel):
         default=500,
         ge=100,
         le=10000,
-        description="Chars threshold for adaptive mode switching",
+        description=(
+            "Cumulative chars at which adaptive switches from per-chunk streaming "
+            "to chunked-streaming (block-buffered) goal_completion delivery"
+        ),
+    )
+    adaptive_block_chars: int = Field(
+        default=500,
+        ge=128,
+        le=16384,
+        description=(
+            "Chars per intermediate block in adaptive chunked-streaming phase "
+            "(IG-441). Higher values reduce frame count; lower values smooth UX. "
+            "Default 500 aligns with adaptive_threshold_chars so the first block "
+            "after cutover is the same size as one streamed chunk window."
+        ),
+    )
+    adaptive_block_interval_ms: int = Field(
+        default=250,
+        ge=50,
+        le=2000,
+        description=(
+            "Max milliseconds between intermediate block flushes in adaptive "
+            "chunked-streaming phase (IG-441). Time-based fallback so slow streams "
+            "still show progress before adaptive_block_chars accumulates."
+        ),
     )
     file_output_threshold_chars: int = Field(
         default=0,
@@ -900,8 +910,6 @@ class AgentLoopConfig(BaseModel):
         agent_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
             assistant text when appropriate, or use adaptive heuristics (IG-199).
-        planning: Planning configuration.
-        early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
         goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
@@ -1013,16 +1021,6 @@ class AgentLoopConfig(BaseModel):
         description=(
             "Enable plan evidence validation node in the loop orchestrator (RFC-220; currently a no-op)."
         ),
-    )
-
-    planning: PlanningConfig = Field(
-        default_factory=PlanningConfig,
-        description="Planning configuration",
-    )
-
-    early_termination: EarlyTerminationConfig = Field(
-        default_factory=EarlyTerminationConfig,
-        description="Early termination configuration",
     )
 
     working_memory: LoopWorkingMemoryConfig = Field(

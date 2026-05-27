@@ -949,12 +949,12 @@ class MessageRouter:
 
         verbosity = msg.get("verbosity", "normal")
         wire_tier = msg.get("wire_tier", "full")
-        stream_delivery = msg.get("stream_delivery", "batch")
-        # Accept "streaming" for backwards compatibility, map to "adaptive"
-        if stream_delivery not in ("batch", "streaming", "adaptive"):
-            stream_delivery = "batch"
-        if stream_delivery == "streaming":
-            stream_delivery = "adaptive"  # Map old mode to new adaptive mode
+        # IG-441: three first-class modes (batch / adaptive / streaming);
+        # default to ``adaptive`` for new subscribers since it gives the best
+        # all-round UX. Unknown values fall back to adaptive too.
+        stream_delivery = msg.get("stream_delivery", "adaptive")
+        if stream_delivery not in ("batch", "adaptive", "streaming"):
+            stream_delivery = "adaptive"
         await d._session_manager.subscribe_loop(
             client_id,
             loop_id,
