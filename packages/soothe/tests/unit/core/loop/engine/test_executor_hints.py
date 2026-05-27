@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import StepAction
+from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction
 
 
 class TestExecutorHints:
@@ -128,24 +128,40 @@ class TestExecutorHints:
         assert "wire_subagent=explore" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_executor_stream_thread_id_branches_langgraph_config(self) -> None:
-        """Parallel steps pass branched thread_id into configurable for checkpoint isolation."""
+    async def test_executor_thread_fork_creates_isolated_thread(self) -> None:
+        """ThreadForkManager creates isolated step thread for checkpoint inheritance (RFC-223)."""
         mock_agent = MagicMock()
         mock_agent.astream = AsyncMock(return_value=iter([]))
+        mock_checkpointer = MagicMock()
+        mock_checkpointer.acopy_thread = AsyncMock()
 
-        executor = Executor(mock_agent)
+        executor = Executor(mock_agent, checkpointer=mock_checkpointer)
         step = StepAction(id="a1b2c3d4", description="Explore slice", expected_output="ok")
+        state = LoopState(
+            goal="test",
+            thread_id="logical-thread",
+            current_decision=AgentDecision(
+                type="execute_steps",
+                steps=[step],
+                execution_mode="parallel",
+                reasoning="test",
+            ),
+            loop_messages=[],
+        )
 
         _events, step_result, _msgs, _df = await executor._execute_step_collecting_events(
             step,
             "logical-thread",
-            stream_thread_id="logical-thread__pa1b2c3d4",
+            loop_state=state,
         )
 
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
-        assert configurable["thread_id"] == "logical-thread__pa1b2c3d4"
+        # ThreadForkManager creates __step_ prefixed thread
+        assert configurable["thread_id"] == "logical-thread__step_a1b2c3d4"
         assert step_result.thread_id == "logical-thread"
+        # Verify fork was called
+        mock_checkpointer.acopy_thread.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_executor_step_cancelled_error_propagates(self) -> None:

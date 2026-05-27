@@ -530,14 +530,24 @@ class ClientSessionManager:
                             event = event_data
 
                         from soothe.core.events.visibility import (
-                            is_client_wire_visible,
+                            decide_client_wire_visibility,
                             is_progress_wire_event,
                         )
 
                         if not isinstance(event, dict):
                             continue
 
-                        if not is_client_wire_visible(event, event_meta=event_meta):
+                        decision = decide_client_wire_visibility(event, event_meta=event_meta)
+                        if not decision.visible:
+                            # Defense in depth: broadcast layer already filtered.
+                            # Re-classification here catches direct queue.put_nowait
+                            # callers that bypass _broadcast (history replay, etc.).
+                            logger.debug(
+                                "Client %s sender suppressing event (kind=%s, reason=%s)",
+                                session.client_id,
+                                decision.kind.value,
+                                decision.reason,
+                            )
                             continue
                         if session.wire_tier == "progress" and not is_progress_wire_event(event):
                             continue

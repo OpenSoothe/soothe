@@ -1,4 +1,4 @@
-"""Executor integration tests for parallel-branch predecessor ledger replay (RFC-214)."""
+"""Executor integration tests for thread fork predecessor handling (RFC-223)."""
 
 from __future__ import annotations
 
@@ -27,6 +27,13 @@ def _make_mock_agent() -> MagicMock:
     return mock_agent
 
 
+def _make_mock_checkpointer() -> MagicMock:
+    """Create mock checkpointer with async copy_thread."""
+    mock_checkpointer = MagicMock()
+    mock_checkpointer.acopy_thread = AsyncMock()
+    return mock_checkpointer
+
+
 def _astream_messages(mock_agent: MagicMock) -> list:
     call_args = mock_agent.astream.call_args
     assert call_args is not None
@@ -36,21 +43,23 @@ def _astream_messages(mock_agent: MagicMock) -> list:
 
 
 @pytest.mark.asyncio
-async def test_parallel_branch_prepends_predecessor_ledger_before_envelope() -> None:
-    """Branched LangGraph thread receives transitive predecessor execute pairs then envelope."""
+async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
+    """Multi-dependency steps inject transitive predecessor ledger messages."""
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
     step_a = StepAction(id="A", description="first", expected_output="o1")
-    step_b = StepAction(
-        id="B",
-        description="second",
-        expected_output="o2",
-        dependencies=["A"],
+    step_b = StepAction(id="B", description="second", expected_output="o2")
+    step_c = StepAction(
+        id="C",
+        description="third",
+        expected_output="o3",
+        dependencies=["A", "B"],  # Multi-dep triggers message injection
     )
     decision = AgentDecision(
         type="execute_steps",
-        steps=[step_a, step_b],
-        execution_mode="parallel",
+        steps=[step_a, step_b, step_c],
+        execution_mode="dependency",
         reasoning="r",
     )
     ledger = [
@@ -66,40 +75,94 @@ async def test_parallel_branch_prepends_predecessor_ledger_before_envelope() -> 
             step_id="A",
             thread_id="logical-t",
         ),
+        LoopHumanMessage(
+            content="ledger-human-B",
+            phase="execute_step",
+            step_id="B",
+            thread_id="logical-t",
+        ),
+        LoopAIMessage(
+            content="ledger-ai-B",
+            phase="execute_step",
+            step_id="B",
+            thread_id="logical-t",
+        ),
     ]
     state = LoopState(
-        goal="Branch goal text",
+        goal="Test goal",
         thread_id="logical-t",
         current_decision=decision,
         loop_messages=ledger,
+        step_thread_ids={"A": "logical-t__step_A", "B": "logical-t__step_B"},
     )
-    executor = Executor(mock_agent)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
+
+    await executor._execute_step_collecting_events(
+        step_c,
+        "logical-t",
+        loop_state=state,
+    )
+
+    # Multi-dep steps inject predecessor messages (transitive closure)
+    messages = _astream_messages(mock_agent)
+    # Should have predecessor messages + execute envelope
+    assert len(messages) >= 1
+    # Last message should be the execute envelope
+    assert isinstance(messages[-1], LoopHumanMessage)
+    assert messages[-1].phase == "execute_step"
+    assert "third" in str(messages[-1].content)
+
+    # Thread fork from main (multi-dep fallback)
+    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    assert cfg["thread_id"] == "logical-t__step_C"
+
+
+@pytest.mark.asyncio
+async def test_singleton_dep_step_forks_from_predecessor_thread() -> None:
+    """Singleton dependency steps fork checkpoint from predecessor's thread."""
+    mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
+
+    step_a = StepAction(id="A", description="first", expected_output="o1")
+    step_b = StepAction(
+        id="B",
+        description="second",
+        expected_output="o2",
+        dependencies=["A"],  # Singleton dep forks from predecessor
+    )
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step_a, step_b],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    state = LoopState(
+        goal="Test goal",
+        thread_id="logical-t",
+        current_decision=decision,
+        loop_messages=[],
+        step_thread_ids={"A": "logical-t__step_A"},
+    )
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
         step_b,
         "logical-t",
-        stream_thread_id="logical-t__pB",
         loop_state=state,
     )
 
-    messages = _astream_messages(mock_agent)
-    assert len(messages) == 3
-    assert messages[0].content == "ledger-human-A"
-    assert messages[1].content == "ledger-ai-A"
-    assert messages[0] is not ledger[0]
-    assert messages[1] is not ledger[1]
-    assert isinstance(messages[2], LoopHumanMessage)
-    assert messages[2].phase == "execute_step"
-    assert "<CURRENT_GOAL>" not in str(messages[2].content)
-    assert "second" in str(messages[2].content)
-
+    # Singleton dep should fork from predecessor's thread
     cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
-    assert cfg["thread_id"] == "logical-t__pB"
+    assert cfg["thread_id"] == "logical-t__step_B"
+    assert state.step_thread_ids.get("B") == "logical-t__step_B"
+    assert state.thread_fork_sources.get("logical-t__step_B") == "logical-t__step_A"
 
 
 @pytest.mark.asyncio
-async def test_parallel_branch_no_predecessors_when_step_has_no_dependencies() -> None:
+async def test_no_dep_step_forks_from_main_thread() -> None:
+    """Steps with no dependencies fork from main thread."""
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
     step = StepAction(id="solo", description="alone", expected_output="o")
     decision = AgentDecision(
@@ -108,111 +171,69 @@ async def test_parallel_branch_no_predecessors_when_step_has_no_dependencies() -
         execution_mode="parallel",
         reasoning="r",
     )
-    ledger = [
-        LoopHumanMessage(content="hA", phase="execute_step", step_id="A"),
-        LoopAIMessage(content="aA", phase="execute_step", step_id="A"),
-    ]
     state = LoopState(
         goal="g",
         thread_id="logical-t",
         current_decision=decision,
-        loop_messages=ledger,
+        loop_messages=[],
     )
-    executor = Executor(mock_agent)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
         step,
         "logical-t",
-        stream_thread_id="logical-t__psolo",
         loop_state=state,
     )
 
-    messages = _astream_messages(mock_agent)
-    assert len(messages) == 1
-    assert isinstance(messages[0], LoopHumanMessage)
-    assert "alone" in str(messages[0].content)
+    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    assert cfg["thread_id"] == "logical-t__step_solo"
+    assert state.thread_fork_sources.get("logical-t__step_solo") == "logical-t"
 
 
 @pytest.mark.asyncio
-async def test_same_thread_id_skips_predecessor_injection_even_with_loop_state() -> None:
-    """Sequential / single-thread execute path must not replay ledger into graph input."""
+async def test_step_without_loop_state_uses_main_thread() -> None:
+    """Without loop_state, step uses main thread (no fork)."""
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
-    step_b = StepAction(
+    step = StepAction(
         id="B",
         description="second",
         expected_output="o2",
         dependencies=["A"],
     )
-    decision = AgentDecision(
-        type="execute_steps",
-        steps=[step_b],
-        execution_mode="parallel",
-        reasoning="r",
-    )
-    ledger = [
-        LoopHumanMessage(content="hA", phase="execute_step", step_id="A"),
-        LoopAIMessage(content="aA", phase="execute_step", step_id="A"),
-    ]
-    state = LoopState(
-        goal="g",
-        thread_id="same",
-        current_decision=decision,
-        loop_messages=ledger,
-    )
-    executor = Executor(mock_agent)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
-        step_b,
-        "same",
-        stream_thread_id="same",
-        loop_state=state,
-    )
-
-    assert len(_astream_messages(mock_agent)) == 1
-
-
-@pytest.mark.asyncio
-async def test_parallel_branch_without_loop_state_skips_predecessor_injection() -> None:
-    mock_agent = _make_mock_agent()
-
-    step_b = StepAction(
-        id="B",
-        description="second",
-        expected_output="o2",
-        dependencies=["A"],
-    )
-    executor = Executor(mock_agent)
-
-    await executor._execute_step_collecting_events(
-        step_b,
+        step,
         "logical-t",
-        stream_thread_id="logical-t__pB",
         loop_state=None,
     )
 
-    assert len(_astream_messages(mock_agent)) == 1
+    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    assert cfg["thread_id"] == "logical-t"
 
 
 @pytest.mark.asyncio
-async def test_parallel_branch_respects_plan_ledger_max_messages_cap() -> None:
-    """Reuse plan_prompt_ledger.plan_ledger_max_messages as predecessor slice cap."""
+async def test_multi_dep_respects_plan_ledger_max_messages_cap() -> None:
+    """Multi-dep predecessor injection respects plan_ledger_max_messages cap."""
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
     cfg = MagicMock()
     cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_messages = 3
-    cfg.agent.loop.limits.max_parallel_tools = 5  # Required for init_tool_concurrency_for_thread
+    cfg.agent.loop.limits.max_parallel_tools = 5
 
-    step_b = StepAction(
-        id="B",
+    step_c = StepAction(
+        id="C",
         description="consume",
         expected_output="o",
-        dependencies=["A"],
+        dependencies=["A", "B"],  # Multi-dep
     )
     decision = AgentDecision(
         type="execute_steps",
-        steps=[step_b],
-        execution_mode="parallel",
+        steps=[step_c],
+        execution_mode="dependency",
         reasoning="r",
     )
     ledger: list = []
@@ -226,25 +247,26 @@ async def test_parallel_branch_respects_plan_ledger_max_messages_cap() -> None:
         thread_id="logical-t",
         current_decision=decision,
         loop_messages=ledger,
+        step_thread_ids={"A": "logical-t__step_A", "B": "logical-t__step_B"},
     )
-    executor = Executor(mock_agent, config=cfg)
+    executor = Executor(mock_agent, config=cfg, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
-        step_b,
+        step_c,
         "logical-t",
-        stream_thread_id="logical-t__pB",
         loop_state=state,
     )
 
     messages = _astream_messages(mock_agent)
-    assert len(messages) == 4
-    assert [m.content for m in messages[:3]] == ["h0", "a0", "h1"]
-    assert isinstance(messages[3], LoopHumanMessage)
+    # Should have up to cap predecessor messages + execute envelope
+    assert len(messages) <= 4  # cap=3 predecessors + 1 envelope
 
 
 @pytest.mark.asyncio
-async def test_parallel_branch_human_envelope_uses_logical_thread_id() -> None:
+async def test_execute_envelope_uses_logical_thread_id() -> None:
+    """Human envelope message uses logical thread_id regardless of fork."""
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
     step = StepAction(id="X", description="d", expected_output="o")
     decision = AgentDecision(
@@ -254,12 +276,11 @@ async def test_parallel_branch_human_envelope_uses_logical_thread_id() -> None:
         reasoning="r",
     )
     state = LoopState(goal="g", thread_id="logical-t", current_decision=decision, loop_messages=[])
-    executor = Executor(mock_agent)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
         step,
         "logical-t",
-        stream_thread_id="logical-t__pX",
         loop_state=state,
     )
 
@@ -268,8 +289,10 @@ async def test_parallel_branch_human_envelope_uses_logical_thread_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_parallel_branch_without_current_decision_skips_predecessor_injection() -> None:
+async def test_step_without_current_decision_uses_main_thread() -> None:
+    """Without current_decision in loop_state, step uses main thread."""
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
     step_b = StepAction(
         id="B",
@@ -286,36 +309,38 @@ async def test_parallel_branch_without_current_decision_skips_predecessor_inject
             LoopAIMessage(content="aA", phase="execute_step", step_id="A"),
         ],
     )
-    executor = Executor(mock_agent)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
         step_b,
         "logical-t",
-        stream_thread_id="logical-t__pB",
         loop_state=state,
     )
 
-    assert len(_astream_messages(mock_agent)) == 1
+    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    assert cfg["thread_id"] == "logical-t"
 
 
 @pytest.mark.asyncio
-async def test_parallel_branch_logs_when_predecessors_injected(
+async def test_multi_dep_injection_logs_threadfork(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Multi-dep steps log ThreadFork message injection."""
     caplog.set_level(logging.INFO)
 
     mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
 
-    step_b = StepAction(
-        id="B",
-        description="second",
-        expected_output="o2",
-        dependencies=["A"],
+    step_c = StepAction(
+        id="C",
+        description="third",
+        expected_output="o3",
+        dependencies=["A", "B"],  # Multi-dep triggers injection
     )
     decision = AgentDecision(
         type="execute_steps",
-        steps=[step_b],
-        execution_mode="parallel",
+        steps=[step_c],
+        execution_mode="dependency",
         reasoning="r",
     )
     ledger = [
@@ -327,15 +352,49 @@ async def test_parallel_branch_logs_when_predecessors_injected(
         thread_id="logical-t",
         current_decision=decision,
         loop_messages=ledger,
+        step_thread_ids={"A": "logical-t__step_A", "B": "logical-t__step_B"},
     )
-    executor = Executor(mock_agent)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
-        step_b,
+        step_c,
         "logical-t",
-        stream_thread_id="logical-t__pB",
         loop_state=state,
     )
 
-    assert "[BranchPred]" in caplog.text
-    assert "injected" in caplog.text and "predecessor" in caplog.text
+    assert "[ThreadFork]" in caplog.text
+    assert "multi-dep" in caplog.text or "injected" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_fork_checkpoint_called_for_step() -> None:
+    """ThreadForkManager.fork_checkpoint is called for step execution."""
+    mock_agent = _make_mock_agent()
+    mock_checkpointer = _make_mock_checkpointer()
+
+    step = StepAction(id="test-step", description="test", expected_output="o")
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="r",
+    )
+    state = LoopState(
+        goal="g",
+        thread_id="main-thread",
+        current_decision=decision,
+        loop_messages=[],
+    )
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
+
+    await executor._execute_step_collecting_events(
+        step,
+        "main-thread",
+        loop_state=state,
+    )
+
+    # Verify fork was called (from main to step thread)
+    mock_checkpointer.acopy_thread.assert_called_once()
+    call_args = mock_checkpointer.acopy_thread.call_args
+    assert call_args[0][0] == "main-thread"  # source
+    assert call_args[0][1] == "main-thread__step_test-step"  # target

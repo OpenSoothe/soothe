@@ -1371,11 +1371,11 @@ class Executor:
         async def _run_parallel_step(step: StepAction, *, first_in_wave: bool) -> None:
             sid = step.id
             try:
+                # RFC-223: ThreadForkManager handles thread isolation via checkpoint fork
                 payload = await self._execute_step_collecting_events(
                     step,
                     logical_tid,
                     state.workspace,
-                    stream_thread_id=(f"{logical_tid}__p{sid}" if n_steps > 1 else logical_tid),
                     routing_classification=getattr(state, "routing_classification", None),
                     git_status=state.git_status,
                     intent_type=itype,
@@ -1539,7 +1539,6 @@ class Executor:
         thread_id: str,
         workspace: str | None = None,
         *,
-        stream_thread_id: str | None = None,
         routing_classification: Any | None = None,
         git_status: dict[str, Any] | None = None,
         intent_type: str | None = None,
@@ -1555,19 +1554,18 @@ class Executor:
 
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
-        RFC-214: When ``stream_thread_id`` branches off ``thread_id``, prepends deep-copied
-        ``execute_step`` ledger rows for transitive dependency predecessors.
+        RFC-223: ThreadForkManager handles checkpoint fork for parallel isolation and
+        predecessor inheritance. Multi-dep steps inject transitive predecessor ledger messages.
 
         Args:
             step: StepAction with description and optional hints
             thread_id: Logical thread ID for StepResult, logs, and durability lookups
             workspace: Thread-specific workspace path (RFC-103)
-            stream_thread_id: Optional LangGraph ``thread_id`` for this stream (parallel isolation)
             routing_classification: Loop routing payload for middleware (IG-349, IG-383).
             git_status: Optional git snapshot for prompt XML (RFC-104).
             intent_type: Optional intent label for scenario guidance (IG-384).
-            loop_state: When set and the graph uses a branched ``thread_id``, predecessor
-                execute-step ledger messages are injected before this step's envelope.
+            loop_state: When set, ThreadForkManager creates isolated thread with inherited
+                checkpoint history; multi-dep steps inject predecessor ledger messages.
 
         Returns:
             Tuple of ``(events, StepResult, AI messages for IG-199, delegate_final_text)``.
@@ -1607,10 +1605,8 @@ class Executor:
                     main_thread_id=thread_id,
                 )
 
-            # Override with explicit stream_thread_id if provided (legacy compatibility)
-            cfg_thread = stream_thread_id or fork_thread_id
             configurable: dict[str, Any] = {
-                "thread_id": cfg_thread,
+                "thread_id": fork_thread_id,
                 "soothe_step_subagent": wire_subagent,
                 "soothe_step_expected_output": step.expected_output,
             }
@@ -1632,7 +1628,7 @@ class Executor:
             # may still omit it here because middleware reads configurable elsewhere.
             config: dict[str, Any] = {"configurable": configurable}
             if self._config is not None:
-                config = self._executor_langfuse_merge_for_stream(config, thread_id=cfg_thread)
+                config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
             # Build user message envelope with execution hints (RFC-214)
             from soothe.core.prompts.user_envelope import build_execute_step_envelope
@@ -1656,27 +1652,6 @@ class Executor:
                             step.id,
                             len(graph_input_messages),
                         )
-            # Legacy: parallel branch with explicit stream_thread_id (not fork-based)
-            elif stream_thread_id is not None and stream_thread_id != thread_id:
-                use_parallel_branch = (
-                    loop_state is not None and loop_state.current_decision is not None
-                )
-                if use_parallel_branch:
-                    preds = transitive_dependency_step_ids(step, loop_state.current_decision)
-                    if preds:
-                        cap = self._branch_predecessor_message_cap()
-                        graph_input_messages = predecessor_execute_messages_for_branch(
-                            loop_state.loop_messages,
-                            preds,
-                            max_messages=cap,
-                        )
-                        if graph_input_messages:
-                            logger.info(
-                                "[BranchPred] step=%s injected %d predecessor ledger msgs (cap=%d)",
-                                step.id,
-                                len(graph_input_messages),
-                                cap,
-                            )
 
             hints_parts: list[str] = []
             if wire_subagent:

@@ -908,19 +908,23 @@ class SootheDaemon(DaemonHandlersMixin):
 
         from soothe.core.events import REGISTRY
         from soothe.core.events.visibility import (
+            decide_client_wire_visibility,
             event_type_from_wire_message,
-            is_client_wire_visible,
         )
 
         event_type_for_meta = event_type_from_wire_message(msg) or msg_type
         event_meta = REGISTRY.get_meta(event_type_for_meta) if event_type_for_meta else None
-        if not is_client_wire_visible(msg, event_meta=event_meta):
+        decision = decide_client_wire_visibility(msg, event_meta=event_meta)
+        if not decision.visible:
             suppressed = getattr(self, "_internal_events_suppressed", 0) + 1
             self._internal_events_suppressed = suppressed
             if suppressed % 500 == 1:
                 logger.debug(
-                    "Suppressing non-client-visible event broadcast (type=%s, total=%d)",
+                    "Suppressing non-client-visible event broadcast "
+                    "(type=%s, kind=%s, reason=%s, total=%d)",
                     event_type_for_meta,
+                    decision.kind.value,
+                    decision.reason,
                     suppressed,
                 )
             return
