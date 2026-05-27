@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 import uuid
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
@@ -352,33 +353,67 @@ class ClientSessionManager:
             await self._ensure_sender_loop(session)
 
     async def release_loop_ownership(self, client_id: str) -> str | None:
-        """Release loop ownership; returns the loop_id if any."""
+        """Release loop ownership; returns the loop_id if any.
+
+        IG-XXX: Wait for queue drain when sender is alive to prevent race condition
+        where events arrive after await_loop_delivery_drained() but before ownership
+        release (e.g., "idle" status broadcast after goal completion).
+        """
         # Set logging context for full client_id in daemon.log
         set_client_id(client_id)
+        loop_id: str | None = None
         async with self._lock:
             loop_id = self._client_loop_ownership.pop(client_id, None)
-            if loop_id:
-                # Set logging context for full loop_id in daemon.log
-                set_loop_id(loop_id)
-                logger.debug("Client %s released ownership of loop %s", client_id, loop_id)
-                session = self._sessions.get(client_id)
-                if session is not None:
-                    backlog = session.event_queue.qsize()
-                    if backlog > 0:
-                        sender_alive = (
-                            session.sender_task is not None and not session.sender_task.done()
-                        )
+        if loop_id:
+            # Set logging context for full loop_id in daemon.log
+            set_loop_id(loop_id)
+            session = self._sessions.get(client_id)
+            if session is not None:
+                backlog = session.event_queue.qsize()
+                sender_alive = session.sender_task is not None and not session.sender_task.done()
+                if backlog > 0 and sender_alive:
+                    # IG-XXX: Wait for sender to drain events before releasing
+                    # This prevents race where idle status arrives after drain check
+                    logger.debug(
+                        "Client %s has %d undelivered event(s) with sender alive, "
+                        "waiting for drain (loop=%s)",
+                        client_id,
+                        backlog,
+                        loop_id,
+                    )
+                    # Wait up to 500ms for queue to drain
+                    drain_start = time.monotonic()
+                    max_drain_wait = 0.5
+                    while (
+                        session.event_queue.qsize() > 0
+                        and time.monotonic() - drain_start < max_drain_wait
+                        and session.sender_task is not None
+                        and not session.sender_task.done()
+                    ):
+                        await asyncio.sleep(0.05)
+                    remaining = session.event_queue.qsize()
+                    if remaining > 0:
                         logger.warning(
-                            "Client %s has %d undelivered event(s) in session queue "
+                            "Client %s still has %d undelivered event(s) after drain wait "
                             "(sender_alive=%s, loop=%s)",
                             client_id,
-                            backlog,
-                            sender_alive,
+                            remaining,
+                            not session.sender_task.done() if session.sender_task else False,
                             loop_id,
                         )
-                        if not sender_alive:
-                            await self._ensure_sender_loop(session)
-            return loop_id
+                elif backlog > 0:
+                    logger.warning(
+                        "Client %s has %d undelivered event(s) in session queue "
+                        "(sender_alive=%s, loop=%s)",
+                        client_id,
+                        backlog,
+                        sender_alive,
+                        loop_id,
+                    )
+                    if not sender_alive:
+                        await self._ensure_sender_loop(session)
+            logger.debug("Client %s released ownership of loop %s", client_id, loop_id)
+        return loop_id
 
     async def get_owned_loop(self, client_id: str) -> str | None:
         """Return loop_id owned by client without releasing."""
