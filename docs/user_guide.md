@@ -107,7 +107,6 @@ Technical documentation for developers and system architects.
 
 | Guide | Title |
 |-------|-------|
-| [IG-295](impl/IG-295-deepxiv-integration.md) | DeepXiv Integration |
 | [IG-351](impl/IG-351-cli-shared-reorganization.md) | CLI Shared Reorganization |
 | [IG-352](impl/IG-352-subagent-delegation-goal-loop-evidence.md) | Subagent Delegation and Goal Loop Evidence |
 | [IG-353](impl/IG-353-planner-performance-prototype.md) | Planner Performance Prototype |
@@ -180,6 +179,7 @@ Technical documentation for developers and system architects.
 | [IG-426](impl/IG-426-tui-streaming-event-reduction.md) | TUI Streaming Event Reduction |
 | [IG-427](impl/IG-427-stream-event-volume-fifo-latency.md) | Stream Event Volume FIFO Latency |
 | [IG-428](impl/IG-428-step-card-tool-activity-preview.md) | Step Card Tool Activity Preview |
+| [IG-437](impl/IG-437-deepxiv-integration.md) | DeepXiv Integration |
 
 ---
 

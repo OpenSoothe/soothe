@@ -834,6 +834,16 @@ class LoopState(BaseModel):
         description="RoutingClassification for Plan + Execute (IG-349, IG-383).",
     )
 
+    # RFC-223: Thread fork tracking for checkpoint inheritance
+    step_thread_ids: dict[str, str] = Field(
+        default_factory=dict,
+        description="Maps step_id → thread_id used for execution (RFC-223).",
+    )
+    thread_fork_sources: dict[str, str] = Field(
+        default_factory=dict,
+        description="Maps thread_id → source thread_id for fork lineage (RFC-223).",
+    )
+
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.
 

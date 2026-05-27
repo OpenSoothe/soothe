@@ -431,3 +431,40 @@ async def test_backoff_between_retries(
             assert len(sleep_times) == 2
             assert sleep_times[0] == 0.0  # First retry backoff (1.0 * 0)
             assert sleep_times[1] == 1.0  # Second retry backoff (1.0 * 1)
+
+
+def test_thread_id_from_request_uses_langgraph_configurable() -> None:
+    """Parallel execute steps must not share the fallback 'default' LLM budget."""
+    runtime = MagicMock()
+    runtime.config = {"configurable": {"thread_id": "loop-1__pCLJ-02"}}
+    request = ModelRequest(model=MagicMock(), messages=[], runtime=runtime)
+
+    assert LLMRateLimitMiddleware._thread_id_from_request(request) == "loop-1__pCLJ-02"
+
+
+def test_thread_id_from_request_falls_back_to_default() -> None:
+    request = ModelRequest(model=MagicMock(), messages=[])
+
+    assert LLMRateLimitMiddleware._thread_id_from_request(request) == "default"
+
+
+@pytest.mark.asyncio
+async def test_parallel_steps_get_independent_llm_budgets(
+    middleware_with_retry: LLMRateLimitMiddleware,
+    mock_handler: AsyncMock,
+) -> None:
+    """Each LangGraph thread_id gets its own semaphore and RPM budget."""
+    runtime_a = MagicMock()
+    runtime_a.config = {"configurable": {"thread_id": "loop-1__pCLJ-01"}}
+    runtime_b = MagicMock()
+    runtime_b.config = {"configurable": {"thread_id": "loop-1__pCLJ-02"}}
+    request_a = ModelRequest(model=MagicMock(), messages=[], runtime=runtime_a)
+    request_b = ModelRequest(model=MagicMock(), messages=[], runtime=runtime_b)
+
+    await middleware_with_retry.awrap_model_call(request_a, mock_handler)
+    await middleware_with_retry.awrap_model_call(request_b, mock_handler)
+
+    assert set(middleware_with_retry._thread_budgets) == {
+        "loop-1__pCLJ-01",
+        "loop-1__pCLJ-02",
+    }

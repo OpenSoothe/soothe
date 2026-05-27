@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-05-27
-**Total RFCs**: 57
+**Total RFCs**: 58
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 39 |
+| Draft | 40 |
 | Implemented | 18 |
 
 ---
@@ -154,6 +154,12 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-05-27
   - Dependencies: RFC-000, RFC-201, RFC-204
+
+- **RFC-223**: [Thread Inheritance with LangGraph Checkpoint Forking](RFC-223-thread-inheritance-checkpoint-forking.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-05-27
+  - Dependencies: RFC-201, RFC-214, RFC-216, RFC-218
 
 ### Protocols (3xx)
 
@@ -353,7 +359,7 @@ This index reflects the canonical RFC set and defines which files are active for
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 5 |
-| 2xx | AgentLoop & Cognition | 16 |
+| 2xx | AgentLoop & Cognition | 17 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
 | 5xx | CLI & TUI | 5 |
@@ -363,6 +369,8 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- **RFC-223**: Thread Inheritance with LangGraph Checkpoint Forking (2026-05-27)
+- **RFC-222**: Autopilot and Goal Engine Architecture (2026-05-27)
 - **RFC-618**: Plan Subagent — Structured planning delegate with direct explore runnable invokes (2026-05-11)
 - **RFC-221**: LoopRunnerProtocol — Unified Subprocess-Isolated Agent Loop Execution (2026-05-09)
 - **RFC-220**: LangGraph Agent Loop Orchestrator — Loop Graph keyed by `loop_id` (2026-05-05)
