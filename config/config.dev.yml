@@ -12,6 +12,9 @@ agent:
   autonomous:
     enabled_by_default: false
     max_iterations: 15
+    # RFC-222: faster scheduling cadence for local iteration
+    poll_interval: 2
+    loop_idle_timeout: 60
 
   loop:
     max_iterations: 99

@@ -202,30 +202,22 @@ class FileLockRegistry(BaseModel):
         """
         return [lock for lock in self.locks.values() if lock.loop_id == loop_id]
 
-    def has_conflicts_for_goal(self, goal_id: str, loop_id: str | None = None) -> bool:
-        """Check if goal has any file lock conflicts.
+    def has_conflicts_for_goal(self, goal_id: str, loop_id: str | None = None) -> bool:  # noqa: ARG002
+        """STUB: Check if goal has any file lock conflicts.
 
-        Args:
-            goal_id: Goal to check.
-            loop_id: Optional loop ID (for same-loop check).
-
-        Returns:
-            True if any files locked by other loops.
+        Always returns False today — implementing this requires goals to
+        declare their target files up-front (no such metadata exists yet).
+        Reserved for a future scheduling-time conflict check; not used by
+        ``ready_goals`` at present.
         """
-        # This is used by ready_goals() to defer goals with file conflicts
-        # For now, return False - actual implementation requires goal file tracking
         return False
 
-    def get_conflicting_goals(self, goal_id: str) -> list[str]:
-        """Get goal IDs that have file conflicts with this goal.
+    def get_conflicting_goals(self, goal_id: str) -> list[str]:  # noqa: ARG002
+        """STUB: Get goal IDs that have file conflicts with this goal.
 
-        Args:
-            goal_id: Goal to check.
-
-        Returns:
-            List of goal IDs holding conflicting locks.
+        Always returns an empty list today. See ``has_conflicts_for_goal``
+        for the underlying dependency.
         """
-        # For future implementation when goals track target files
         return []
 
     def lock_count(self) -> int:

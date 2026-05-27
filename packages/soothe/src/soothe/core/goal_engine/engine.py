@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.core.goal_engine.backoff_reasoner import GoalBackoffReasoner
+from soothe.core.goal_engine.file_lock_registry import FileLockRegistry
 from soothe.core.goal_engine.models import (
     TERMINAL_STATES,
     BackoffDecision,
@@ -33,11 +34,10 @@ class GoalEngine:
     Scheduling: highest priority first, oldest creation time as tiebreaker.
 
     RFC-200: Integrates GoalBackoffReasoner for LLM-driven backoff decisions.
-
-    Args:
-        max_retries: Default max retries for new goals.
-        max_send_backs: Default max consensus send-back rounds (RFC-204).
-        config: Optional SootheConfig for backoff reasoning (RFC-200).
+    RFC-222: Owns a FileLockRegistry for multi-AL conflict tracking and
+    optionally an InternalEventBus to emit goal-state-change events when
+    running in autopilot mode. In solo mode the bus is left unset and event
+    emission is a no-op (zero overhead).
     """
 
     def __init__(
@@ -45,6 +45,9 @@ class GoalEngine:
         max_retries: int = 2,
         max_send_backs: int = 3,
         config: Any = None,  # SootheConfig type hint avoided for circular dependency
+        *,
+        internal_bus: Any = None,  # InternalEventBus | None — avoid circular import
+        file_registry: FileLockRegistry | None = None,
     ) -> None:
         """Initialize the goal engine.
 
@@ -52,6 +55,10 @@ class GoalEngine:
             max_retries: Default max retries for new goals.
             max_send_backs: Default max consensus send-back rounds (RFC-204).
             config: Optional SootheConfig for backoff reasoning (RFC-200).
+            internal_bus: Optional InternalEventBus for autopilot coordination
+                (RFC-222). When None, state-change events are not emitted.
+            file_registry: Optional pre-constructed FileLockRegistry. When None,
+                a fresh registry is created (cheap, always present).
         """
         self._goals: dict[str, Goal] = {}
         self._max_retries = max_retries
@@ -64,6 +71,65 @@ class GoalEngine:
                 logger.info("GoalBackoffReasoner initialized for LLM-driven backoff")
             except Exception:
                 logger.warning("Failed to initialize GoalBackoffReasoner", exc_info=True)
+        # RFC-222: File lock registry (always present) + optional event bus
+        self._internal_bus = internal_bus
+        self._file_registry: FileLockRegistry = file_registry or FileLockRegistry()
+
+    @property
+    def file_registry(self) -> FileLockRegistry:
+        """File lock registry for multi-AL conflict tracking (RFC-222)."""
+        return self._file_registry
+
+    @property
+    def internal_bus(self) -> Any:
+        """Optional InternalEventBus for autopilot coordination (RFC-222)."""
+        return self._internal_bus
+
+    async def _emit_state_change(
+        self,
+        goal: Goal,
+        old_status: str | None,
+        *,
+        reason: str | None = None,
+        loop_id: str | None = None,
+    ) -> None:
+        """Emit InternalGoalStateChangedEvent if a bus is wired (RFC-222).
+
+        Args:
+            goal: The goal whose status changed.
+            old_status: Previous status string, or None for newly created goals.
+            reason: Optional human-readable reason.
+            loop_id: Optional loop_id associated with the transition.
+        """
+        if self._internal_bus is None:
+            return
+        from soothe.core.events.internal_events import InternalGoalStateChangedEvent
+
+        await self._internal_bus.emit(
+            InternalGoalStateChangedEvent(
+                goal_id=goal.id,
+                old_status=old_status or "none",
+                new_status=goal.status,
+                reason=reason,
+                loop_id=loop_id or goal.assigned_loop_id,
+            )
+        )
+
+    async def _release_locks_and_emit(self, goal_id: str) -> None:
+        """Release all file locks for a goal and emit released events (RFC-222).
+
+        Args:
+            goal_id: Goal whose locks should be released.
+        """
+        released = self._file_registry.release_all_for_goal(goal_id)
+        if not released or self._internal_bus is None:
+            return
+        from soothe.core.events.internal_events import InternalFileReleasedEvent
+
+        for path in released:
+            await self._internal_bus.emit(
+                InternalFileReleasedEvent(goal_id=goal_id, file_path=path)
+            )
 
     async def create_goal(
         self,
@@ -142,6 +208,8 @@ class GoalEngine:
             'Created goal %s: "%s"%s (priority=%d)', goal.id, description, parent_context, priority
         )
         logger.debug(self._format_goal_dag())
+        # RFC-222: Emit creation as a transition from "none" → "pending"
+        await self._emit_state_change(goal, old_status=None, reason="created")
         return goal
 
     async def next_goal(self) -> Goal | None:
@@ -155,21 +223,13 @@ class GoalEngine:
         goals = await self.ready_goals(limit=1)
         return goals[0] if goals else None
 
-    async def ready_goals(self, limit: int = 1) -> list[Goal]:
-        """Return goals whose dependencies are all completed (RFC-0009, RFC-204).
+    def _filter_ready_candidates(self, limit: int) -> list[Goal]:
+        """Compute the prefix of goals eligible for activation (read-only).
 
-        Goals are eligible if they are ``pending`` and all goals in their
-        ``depends_on`` list are in terminal states (completed or failed).
-        Results are sorted by ``(priority DESC, created_at ASC)``.
-
-        Conflict-aware: goals with ``conflicts_with`` pointing to an ``active``
-        goal are deferred to prevent concurrent execution.
-
-        Args:
-            limit: Max goals to return.
-
-        Returns:
-            List of ready goals, activated to ``active`` status.
+        Shared by ``ready_goals`` (activating) and ``peek_ready_goals``
+        (non-mutating). Filters by hard dependencies and conflicts_with,
+        sorts by ``(priority DESC, created_at ASC)``, returns the first
+        ``limit`` candidates.
         """
         ready: list[Goal] = []
         active_ids = {g.id for g in self._goals.values() if g.status == "active"}
@@ -195,7 +255,82 @@ class GoalEngine:
             ready.append(goal)
 
         ready.sort(key=lambda g: (-g.priority, g.created_at))
-        result = ready[:limit]
+        return ready[:limit]
+
+    async def peek_ready_goals(self, limit: int = 1) -> list[Goal]:
+        """Read-only variant of ``ready_goals`` (RFC-222).
+
+        Returns the same candidates as ``ready_goals`` but does **not**
+        mutate goal status and does **not** emit events. Use this for
+        capacity planning (AutopilotService) where you may not be able to
+        actually claim every returned goal.
+
+        Args:
+            limit: Max goals to return.
+
+        Returns:
+            List of ready candidates, with status unchanged.
+        """
+        return self._filter_ready_candidates(limit)
+
+    async def claim_goal(self, goal_id: str, *, loop_id: str | None = None) -> Goal | None:
+        """Atomically transition a specific goal to ``active`` (RFC-222).
+
+        Used by ``AutopilotService`` after ``peek_ready_goals`` chose a
+        candidate and a loop was assigned for it. Verifies the goal is
+        still eligible (pending or active) and not blocked by a fresh
+        conflict, then flips status and emits the transition.
+
+        Args:
+            goal_id: Goal to claim.
+            loop_id: Optional loop_id to stamp on the goal.
+
+        Returns:
+            The Goal if successfully claimed, None if the goal vanished,
+            became ineligible, or hit a conflict in the race window.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal or goal.status not in ("pending", "active"):
+            return None
+        # Re-check conflicts at claim time
+        active_ids = {
+            g.id for g in self._goals.values() if g.status == "active" and g.id != goal.id
+        }
+        if any(dep_id in active_ids for dep_id in goal.conflicts_with):
+            logger.debug("Goal %s claim aborted: conflict appeared", goal_id)
+            return None
+        old = goal.status
+        goal.status = "active"
+        goal.updated_at = datetime.now(UTC)
+        if loop_id:
+            goal.assigned_loop_id = loop_id
+        if old != "active":
+            await self._emit_state_change(goal, old, reason="claimed", loop_id=loop_id)
+        return goal
+
+    async def ready_goals(self, limit: int = 1) -> list[Goal]:
+        """Return goals whose dependencies are all completed (RFC-0009, RFC-204).
+
+        Goals are eligible if they are ``pending`` and all goals in their
+        ``depends_on`` list are in terminal states (completed or failed).
+        Results are sorted by ``(priority DESC, created_at ASC)``.
+
+        Conflict-aware: goals with ``conflicts_with`` pointing to an ``active``
+        goal are deferred to prevent concurrent execution.
+
+        **Side effect:** every returned goal is transitioned to ``active``.
+        Use ``peek_ready_goals`` for a read-only query.
+
+        Args:
+            limit: Max goals to return.
+
+        Returns:
+            List of ready goals, activated to ``active`` status.
+        """
+        result = self._filter_ready_candidates(limit)
+
+        # RFC-222: capture old statuses before mutating so we can emit transitions
+        transitions: list[tuple[Goal, str]] = [(g, g.status) for g in result]
 
         for goal in result:
             goal.status = "active"
@@ -210,6 +345,20 @@ class GoalEngine:
             logger.info("Ready goals: %d%s", len(result), "".join(goal_summaries))
         else:
             logger.debug("No ready goals (waiting for dependencies)")
+
+        # RFC-222: emit per-goal state change + a single goals-ready event
+        if result and self._internal_bus is not None:
+            for goal, old in transitions:
+                if old != "active":
+                    await self._emit_state_change(goal, old, reason="ready_activated")
+            from soothe.core.events.internal_events import InternalGoalsReadyEvent
+
+            await self._internal_bus.emit(
+                InternalGoalsReadyEvent(
+                    goal_ids=[g.id for g in result],
+                    count=len(result),
+                )
+            )
 
         return result
 
@@ -239,9 +388,11 @@ class GoalEngine:
         if not goal:
             msg = f"Goal {goal_id} not found"
             raise KeyError(msg)
+        old = goal.status
         goal.status = "validated"
         goal.updated_at = datetime.now(UTC)
         logger.info("Validated goal %s", goal_id)
+        await self._emit_state_change(goal, old, reason="validated")
         return goal
 
     async def suspend_goal(self, goal_id: str, *, reason: str = "") -> Goal:
@@ -261,9 +412,11 @@ class GoalEngine:
         if not goal:
             msg = f"Goal {goal_id} not found"
             raise KeyError(msg)
+        old = goal.status
         goal.status = "suspended"
         goal.updated_at = datetime.now(UTC)
         logger.warning("Suspended goal %s: %s", goal_id, reason)
+        await self._emit_state_change(goal, old, reason=reason or "suspended")
         return goal
 
     async def block_goal(self, goal_id: str, *, reason: str = "") -> Goal:
@@ -283,9 +436,11 @@ class GoalEngine:
         if not goal:
             msg = f"Goal {goal_id} not found"
             raise KeyError(msg)
+        old = goal.status
         goal.status = "blocked"
         goal.updated_at = datetime.now(UTC)
         logger.warning("Blocked goal %s: %s", goal_id, reason)
+        await self._emit_state_change(goal, old, reason=reason or "blocked")
         return goal
 
     async def reactivate_goal(self, goal_id: str) -> Goal:
@@ -307,10 +462,12 @@ class GoalEngine:
         if goal.status not in ("suspended", "blocked"):
             msg = f"Goal {goal_id} is {goal.status}, not suspended/blocked"
             raise ValueError(msg)
+        old = goal.status
         goal.status = "pending"
         goal.send_back_count = 0  # Reset send-back budget
         goal.updated_at = datetime.now(UTC)
-        logger.info("Reactivated goal %s (was %s)", goal_id, goal.status)
+        logger.info("Reactivated goal %s (was %s)", goal_id, old)
+        await self._emit_state_change(goal, old, reason="reactivated")
         return goal
 
     async def check_reactivated_goals(self) -> list[Goal]:
@@ -322,7 +479,8 @@ class GoalEngine:
         Returns:
             List of reactivated goals.
         """
-        reactivated = []
+        reactivated: list[Goal] = []
+        transitions: list[tuple[Goal, str]] = []
         for goal in self._goals.values():
             if goal.status not in ("suspended", "blocked"):
                 continue
@@ -331,11 +489,15 @@ class GoalEngine:
                 for dep_id in goal.depends_on
             )
             if deps_met:
+                transitions.append((goal, goal.status))
                 goal.status = "pending"
                 goal.send_back_count = 0
                 goal.updated_at = datetime.now(UTC)
                 reactivated.append(goal)
                 logger.info("Auto-reactivated goal %s (dependencies resolved)", goal.id)
+        # RFC-222: emit transitions after mutations so observers see the new state
+        for goal, old in transitions:
+            await self._emit_state_change(goal, old, reason="deps_resolved")
         return reactivated
 
     async def complete_goal(self, goal_id: str) -> Goal:
@@ -358,6 +520,7 @@ class GoalEngine:
         # Calculate duration before updating timestamp
         duration = (datetime.now(UTC) - goal.created_at).total_seconds()
 
+        old = goal.status
         goal.status = "completed"
         goal.updated_at = datetime.now(UTC)
 
@@ -388,6 +551,9 @@ class GoalEngine:
             duration,
         )
         logger.debug(self._format_goal_dag())
+        # RFC-222: release file locks and emit transition
+        await self._release_locks_and_emit(goal_id)
+        await self._emit_state_change(goal, old, reason="completed")
         return goal
 
     async def fail_goal(
@@ -426,6 +592,8 @@ class GoalEngine:
             logger.error("No EvidenceBundle provided for goal failure")
             return None
 
+        old = goal.status
+
         # RFC-200: Apply backoff reasoning if reasoner available
         backoff_decision = None
         if self._backoff_reasoner and evidence:
@@ -444,6 +612,10 @@ class GoalEngine:
 
                 # Apply backoff decision
                 await self._apply_backoff_decision(backoff_decision, goal_id)
+                # RFC-222: emit transition with backoff reason; locks released
+                # because the goal's current attempt is done either way.
+                await self._release_locks_and_emit(goal_id)
+                await self._emit_state_change(goal, old, reason="backoff")
                 return backoff_decision
             except Exception:
                 logger.warning(
@@ -466,6 +638,9 @@ class GoalEngine:
                 f" - {error_text}" if error_text else "",
             )
             logger.debug(self._format_goal_dag())
+            # RFC-222: release locks held by the failed attempt; emit retry transition
+            await self._release_locks_and_emit(goal_id)
+            await self._emit_state_change(goal, old, reason="retry")
             return None
 
         goal.status = "failed"
@@ -507,6 +682,9 @@ class GoalEngine:
             f" - {goal.error}" if goal.error else "",
         )
         logger.debug(self._format_goal_dag())
+        # RFC-222: release locks + emit permanent-failure transition
+        await self._release_locks_and_emit(goal_id)
+        await self._emit_state_change(goal, old, reason="failed")
         return None  # RFC-200: Return None for permanent failure (BackoffDecision | None)
 
     async def list_goals(self, status: GoalStatus | None = None) -> list[Goal]:
