@@ -188,10 +188,9 @@ async def test_stream_and_collect_rewrites_subgraph_tool_ids_to_task_level() -> 
 
 
 @pytest.mark.asyncio
-async def test_stream_and_collect_emits_tool_call_update_custom_events() -> None:
-    """Namespaced tool kwargs are also sent as ``soothe.stream.tool_call.update`` events."""
+async def test_stream_and_collect_rewrites_tool_call_id_to_unified() -> None:
+    """Provider tool_call_ids are rewritten to unified format for namespaced chunks."""
     from langchain_core.messages import AIMessageChunk
-    from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
     chunk: tuple = (
         ("tools:subgraph-1",),
@@ -217,23 +216,29 @@ async def test_stream_and_collect_emits_tool_call_update_custom_events() -> None
         yield chunk
 
     executor = Executor(mock_agent)
-    custom_payloads: list[dict] = []
+    rewritten_msg: AIMessageChunk | None = None
     async for _out, event, _tc, _msgs, _df, _outcomes in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="GHT-01",
     ):
-        if isinstance(event, tuple) and len(event) == 3 and event[1] == "custom":  # noqa: PLR2004
-            data = event[2]
-            if isinstance(data, dict):
-                custom_payloads.append(data)
+        # Rewritten message is in event tuple for intermediate yields (not in msgs)
+        if isinstance(event, tuple) and len(event) == 3:
+            ns, mode, data = event
+            if mode == "messages" and isinstance(data, tuple) and len(data) >= 1:
+                msg = data[0]
+                if isinstance(msg, AIMessageChunk) and msg.tool_calls:
+                    rewritten_msg = msg
 
-    assert any(
-        p.get("type") == STREAM_TOOL_CALL_UPDATE
-        and p.get("tool_call_id", "").startswith("GHT_01:t0:grep")
-        and p.get("args", {}).get("pattern") == "TODO"
-        for p in custom_payloads
-    )
+    # Verify tool_call_id was rewritten to unified format
+    # The provider id "functions.grep:0" becomes "GHT_01:t0:grep:0" (task-level since namespaced)
+    assert rewritten_msg is not None
+    assert len(rewritten_msg.tool_calls) == 1
+    tc = rewritten_msg.tool_calls[0]
+    # Unified format: {step_wire}:{type}:{tool}:{idx} where step_wire uses underscore
+    assert tc["id"] == "GHT_01:t0:grep:0"
+    assert tc["name"] == "grep"
+    assert tc["args"] == {"pattern": "TODO"}
 
 
 @pytest.mark.asyncio

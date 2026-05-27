@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-13
-**Total RFCs**: 56
+**Last Updated**: 2026-05-27
+**Total RFCs**: 57
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 38 |
+| Draft | 39 |
 | Implemented | 18 |
 
 ---
@@ -148,6 +148,12 @@ This index reflects the canonical RFC set and defines which files are active for
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-05-09
+
+- **RFC-222**: [Autopilot and Goal Engine Architecture](RFC-222-autopilot-goal-engine-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-05-27
+  - Dependencies: RFC-000, RFC-201, RFC-204
 
 ### Protocols (3xx)
 
