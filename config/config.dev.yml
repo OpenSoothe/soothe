@@ -25,8 +25,9 @@ agent:
     plan_prompt_ledger:
       plan_ledger_max_messages: 20
     limits:
-      max_parallel_steps: 3
-      max_parallel_tools: 30
+      max_parallel_steps: 4
+      max_parallel_tools: 50
+      llm_concurrent_limit: 20
       global_max_llm_calls: 10
       tool_call_limit:
         global_thread_limit: 200

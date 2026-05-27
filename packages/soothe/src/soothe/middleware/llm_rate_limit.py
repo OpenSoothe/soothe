@@ -303,6 +303,22 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                 timeout_retry_multiplier,
             )
 
+    @staticmethod
+    def _thread_id_from_request(request: ModelRequest[Any]) -> str:
+        """Resolve LangGraph ``configurable.thread_id`` for per-stream LLM budgets."""
+        runtime = getattr(request, "runtime", None)
+        config = getattr(runtime, "config", None) if runtime is not None else None
+        if isinstance(config, dict):
+            configurable = config.get("configurable", {})
+            if isinstance(configurable, dict):
+                thread_id = configurable.get("thread_id")
+                if isinstance(thread_id, str) and thread_id:
+                    return thread_id
+        legacy = getattr(request, "thread_id", None)
+        if isinstance(legacy, str) and legacy:
+            return legacy
+        return "default"
+
     async def _get_thread_budget(self, thread_id: str) -> ThreadBudget:
         """Get or create thread-local budget with fair distribution (Phase 2).
 
@@ -448,8 +464,7 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         Raises:
             EnhancedTimeoutError: When retries exhausted after timeout.
         """
-        # Get thread_id from request context (if available)
-        thread_id = getattr(request, "thread_id", "default")
+        thread_id = self._thread_id_from_request(request)
 
         # Determine max attempts (retry + initial attempt)
         max_attempts = self._max_timeout_retries + 1 if self._retry_on_timeout else 1

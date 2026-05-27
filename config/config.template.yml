@@ -114,7 +114,7 @@ agent:
       max_parallel_goals: 1
       max_parallel_steps: 2
       max_parallel_subagents: 4
-      max_parallel_tools: 5
+      max_parallel_tools: 15
       global_max_llm_calls: 5
       step_parallelism: dependency
       llm_rpm_limit: 120

@@ -2937,7 +2937,7 @@ class CognitionReasonMessage(_TimestampClickMixin, Vertical):
             body = self._next_action or ""
         if self._plan_action in ("keep", "new") and body:
             body = f"{body} · {self._plan_action}"
-        return _assemble_card_header(self, "💭 ", body)
+        return _assemble_card_header(self, "", body)
 
     def compose(self) -> ComposeResult:
         yield Static(self._plan_header_content(), classes="cognition-plan-header")
