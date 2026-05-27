@@ -255,8 +255,8 @@ __all__ = [
 ]
 
 
-# Lazy imports for replay submodule to avoid circular dependencies
-def __getattr__(name: str) -> object:
+# Lazy imports for replay submodule and internal bus to avoid circular dependencies
+def __getattr__(name: str) -> object:  # noqa: PLW0912
     if name == "reconstruct_event_stream":
         from soothe.core.events.replay import reconstruct_event_stream
 
@@ -265,4 +265,103 @@ def __getattr__(name: str) -> object:
         from soothe.core.events.replay import enrich_events_with_coreagent_details
 
         return enrich_events_with_coreagent_details
+    # RFC-222: Internal EventBus (lazy import to avoid circular deps)
+    if name == "InternalEventBus":
+        from soothe.core.events.internal_bus import InternalEventBus
+
+        return InternalEventBus
+    if name == "get_internal_bus":
+        from soothe.core.events.internal_bus import get_internal_bus
+
+        return get_internal_bus
+    if name == "reset_internal_bus":
+        from soothe.core.events.internal_bus import reset_internal_bus
+
+        return reset_internal_bus
+    # RFC-222: Internal event types (lazy import to avoid circular deps)
+    if name == "INTERNAL_EVENT_TYPES":
+        from soothe.core.events.internal_events import INTERNAL_EVENT_TYPES  # noqa: F401
+
+        return INTERNAL_EVENT_TYPES
+    if name == "is_internal_event_type":
+        from soothe.core.events.internal_events import is_internal_event_type
+
+        return is_internal_event_type
+
+    # Internal goal events
+    if name == "InternalGoalCompletedEvent":
+        from soothe.core.events.internal_events import InternalGoalCompletedEvent
+
+        return InternalGoalCompletedEvent
+    if name == "InternalGoalFailedEvent":
+        from soothe.core.events.internal_events import InternalGoalFailedEvent
+
+        return InternalGoalFailedEvent
+    if name == "InternalGoalProgressEvent":
+        from soothe.core.events.internal_events import InternalGoalProgressEvent
+
+        return InternalGoalProgressEvent
+    if name == "InternalGoalStateChangedEvent":
+        from soothe.core.events.internal_events import InternalGoalStateChangedEvent
+
+        return InternalGoalStateChangedEvent
+    if name == "InternalGoalsReadyEvent":
+        from soothe.core.events.internal_events import InternalGoalsReadyEvent
+
+        return InternalGoalsReadyEvent
+
+    # Internal loop events
+    if name == "InternalLoopAssignedEvent":
+        from soothe.core.events.internal_events import InternalLoopAssignedEvent
+
+        return InternalLoopAssignedEvent
+    if name == "InternalLoopIdleEvent":
+        from soothe.core.events.internal_events import InternalLoopIdleEvent
+
+        return InternalLoopIdleEvent
+    if name == "InternalLoopReleasedEvent":
+        from soothe.core.events.internal_events import InternalLoopReleasedEvent
+
+        return InternalLoopReleasedEvent
+    if name == "InternalLoopSpawnedEvent":
+        from soothe.core.events.internal_events import InternalLoopSpawnedEvent
+
+        return InternalLoopSpawnedEvent
+
+    # Internal file events
+    if name == "InternalFileLockedEvent":
+        from soothe.core.events.internal_events import InternalFileLockedEvent
+
+        return InternalFileLockedEvent
+    if name == "InternalFileReleasedEvent":
+        from soothe.core.events.internal_events import InternalFileReleasedEvent
+
+        return InternalFileReleasedEvent
+    if name == "InternalFileConflictEvent":
+        from soothe.core.events.internal_events import InternalFileConflictEvent
+
+        return InternalFileConflictEvent
+
+    # Internal autopilot events
+    if name == "InternalAutopilotStartedEvent":
+        from soothe.core.events.internal_events import InternalAutopilotStartedEvent
+
+        return InternalAutopilotStartedEvent
+    if name == "InternalAutopilotStoppedEvent":
+        from soothe.core.events.internal_events import InternalAutopilotStoppedEvent
+
+        return InternalAutopilotStoppedEvent
+    if name == "InternalLoopPoolChangedEvent":
+        from soothe.core.events.internal_events import InternalLoopPoolChangedEvent
+
+        return InternalLoopPoolChangedEvent
+    if name == "InternalAutopilotDreamingEvent":
+        from soothe.core.events.internal_events import InternalAutopilotDreamingEvent
+
+        return InternalAutopilotDreamingEvent
+    if name == "InternalAutopilotAwakeEvent":
+        from soothe.core.events.internal_events import InternalAutopilotAwakeEvent
+
+        return InternalAutopilotAwakeEvent
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
