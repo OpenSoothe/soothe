@@ -1,23 +1,19 @@
 """Cognition intention module for LLM-driven query classification.
 
-IG-226: Unified intent classification system with three-tier classification:
+IG-226: Quiz-only classification — the LLM decides quiz vs agentic.
+The continue_thread vs new_goal distinction is resolved structurally
+by the runner based on loop state (not by the classifier).
+
+Three-tier runtime classification (resolved after LLM + structural rule):
 - quiz: Direct minimal reply (greetings, thanks, trivia) without tools
-- continue_thread: Reuse current thread/goal
-- new_goal: Create goal via GoalEngine
+- continue_thread: Same-loop follow-up (prior goals exist)
+- new_goal: Fresh loop or first query in a new loop
 
 This module provides:
 - IntentClassification: Primary intent classification model
-- IntentClassifier: LLM-driven classifier with conversation context
+- IntentClassifier: LLM-driven quiz detector
 - RoutingClassification: Routing complexity classification for execution path selection
 - IntentHint: Enum for suggested intent to bypass LLM classification
-
-Architecture:
-- Pure LLM-driven classification (no keyword heuristics)
-- Conversation context awareness (last 8 messages)
-- Active goal context for thread continuation
-- Robust fallbacks to safe defaults
-- Single structured LLM call (~2-4s latency)
-- Intent hint support for caller-suggested routing
 
 Related RFCs: RFC-201, RFC-217, RFC-200, RFC-0016
 """

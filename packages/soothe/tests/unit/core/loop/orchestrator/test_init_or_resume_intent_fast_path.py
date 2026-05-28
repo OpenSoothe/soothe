@@ -36,9 +36,6 @@ async def test_init_or_resume_routes_fast_path_for_quiz() -> None:
         loop_state=loop_state,
         intent_classifier=None,
         preferred_subagent=None,
-        recent_messages_for_intent=None,
-        active_goal_id_for_intent=None,
-        active_goal_description_for_intent=None,
         state_manager=SimpleNamespace(loop_id="L1"),
         emit=_emit,
     )
