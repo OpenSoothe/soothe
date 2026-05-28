@@ -433,9 +433,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 if proto_section:
                     semi_static_sections.append(proto_section)
 
-        # Scenario guidance
+        # Scenario guidance (RFC-225: continue_loop_mode replaces intent_type plumbing)
         if state:
-            intent_type = (state.get("intent_type") or "").strip()
+            continue_loop_mode = bool(state.get("continue_loop_mode"))
             goal_type = ""
             scen = (state.get("synthesis_scenario") or "").strip()
             if scen == "code_architecture_design":
@@ -443,15 +443,8 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             elif scen == "research_synthesis":
                 goal_type = "research_synthesis"
 
-            classification = state.get("routing_classification")
-            if not intent_type and classification:
-                if isinstance(classification, dict):
-                    intent_type = (classification.get("intent_type") or "").strip()
-                else:
-                    intent_type = (getattr(classification, "intent_type", "") or "").strip()
-
-            if intent_type or goal_type:
-                scenario_section = self._build_scenario_section(intent_type, goal_type)
+            if continue_loop_mode or goal_type:
+                scenario_section = self._build_scenario_section(continue_loop_mode, goal_type)
                 if scenario_section:
                     semi_static_sections.append(scenario_section.strip())
 
@@ -536,13 +529,11 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         result = build_soothe_protocols_section(protocol_summary)
         return result or None
 
-    def _build_scenario_section(self, intent_type: str, goal_type: str) -> str | None:
-        """Build scenario-specific guidance section (IG-268).
-
-        Injects targeted guidance based on intent classification and goal type.
+    def _build_scenario_section(self, continue_loop_mode: bool, goal_type: str) -> str | None:
+        """Build scenario-specific guidance section (RFC-225).
 
         Args:
-            intent_type: Intent classification (quiz/continue_thread/new_goal).
+            continue_loop_mode: True when the loop has prior goals.
             goal_type: Goal type classification (architecture_analysis/research_synthesis/etc).
 
         Returns:
@@ -550,18 +541,13 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """
         from soothe.core.prompts.system_templates import (
             _ARCHITECTURE_ANALYSIS_GUIDE,
-            _QUIZ_RESPONSE_GUIDE,
+            _LOOP_CONTINUATION_GUIDE,
             _RESEARCH_SYNTHESIS_GUIDE,
-            _THREAD_CONTINUATION_GUIDE,
         )
 
-        # Quiz intent: concise factual answers
-        if intent_type == "quiz":
-            return _QUIZ_RESPONSE_GUIDE
-
-        # Continue-thread: build on prior context
-        if intent_type == "continue_thread":
-            return _THREAD_CONTINUATION_GUIDE
+        # Loop continuation: build on prior goal context within this loop
+        if continue_loop_mode:
+            return _LOOP_CONTINUATION_GUIDE
 
         # Architecture analysis: structured layers + components
         if goal_type == "architecture_analysis":
@@ -711,7 +697,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "context_projection": request.state.get("context_projection"),
                 "recalled_memories": request.state.get("recalled_memories"),
                 "_subagent_routing_directive": request.state.get("_subagent_routing_directive"),
-                "intent_type": request.state.get("intent_type"),
+                "continue_loop_mode": request.state.get("continue_loop_mode"),
                 "synthesis_scenario": request.state.get("synthesis_scenario"),
             }
 

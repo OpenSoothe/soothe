@@ -1,0 +1,25 @@
+<intent_instructions>
+Re-classify intent. ONLY valid JSON per schema below.
+
+intent_type: "quiz" (greeting/thanks/static trivia answerable without tools) or "agentic" (everything else).
+NOT quiz: real-time/time-sensitive, web/tools/files needed, not answerable from training knowledge alone, or follow-ups → "agentic".
+
+When "quiz": quiz_response (concise direct answer).
+When "agentic": goal_description (5-15 words).
+task_complexity: minimal|simple|medium|complex.
+
+JSON schema:
+{{
+  "intent_type": "quiz"|"agentic",
+  "goal_description": string|null,
+  "task_complexity": "minimal"|"simple"|"medium"|"complex",
+  "quiz_response": string|null
+}}
+</intent_instructions>
+
+<intent_inputs>
+<current_time>{current_time}</current_time>
+<current_query>
+{query}
+</current_query>
+</intent_inputs>

@@ -51,7 +51,7 @@ async def test_get_plan_context_no_goals(goal_context_manager, mock_state_manage
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         goal_history=[],
         current_goal_index=-1,
         thread_health_metrics=ThreadHealthMetrics(
@@ -74,7 +74,7 @@ async def test_get_plan_context_filters_same_thread(goal_context_manager, mock_s
         loop_id="test_loop",
         thread_ids=["thread_A", "thread_B"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         goal_history=[
             GoalExecutionRecord(
                 goal_id="goal_1",
@@ -124,7 +124,7 @@ async def test_get_plan_context_filters_completed_only(goal_context_manager, moc
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         goal_history=[
             GoalExecutionRecord(
                 goal_id="goal_1",
@@ -173,7 +173,7 @@ async def test_get_plan_context_respects_limit(goal_context_manager, mock_state_
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         goal_history=[
             GoalExecutionRecord(
                 goal_id=f"goal_{i}",
@@ -213,7 +213,7 @@ async def test_get_plan_context_config_disabled(mock_state_manager):
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         goal_history=[
             GoalExecutionRecord(
                 goal_id="goal_1",
@@ -251,7 +251,7 @@ async def test_get_execute_briefing_returns_none_without_flag(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         thread_switch_pending=False,  # Flag is False
         goal_history=[],
         current_goal_index=-1,
@@ -275,7 +275,7 @@ async def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state
         loop_id="test_loop",
         thread_ids=["thread_A", "thread_B"],
         current_thread_id="thread_B",
-        status="ready_for_next_goal",
+        status="idle",
         thread_switch_pending=True,  # Flag is True
         goal_history=[
             GoalExecutionRecord(
@@ -316,7 +316,7 @@ async def test_get_execute_briefing_cross_thread(goal_context_manager, mock_stat
         loop_id="test_loop",
         thread_ids=["thread_A", "thread_B"],
         current_thread_id="thread_B",
-        status="ready_for_next_goal",
+        status="idle",
         thread_switch_pending=True,
         goal_history=[
             GoalExecutionRecord(
@@ -370,7 +370,7 @@ async def test_get_execute_briefing_no_completed_goals(goal_context_manager, moc
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         thread_switch_pending=True,
         goal_history=[
             GoalExecutionRecord(
@@ -411,7 +411,7 @@ async def test_get_execute_briefing_config_disabled(mock_state_manager):
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
-        status="ready_for_next_goal",
+        status="idle",
         thread_switch_pending=True,
         goal_history=[
             GoalExecutionRecord(

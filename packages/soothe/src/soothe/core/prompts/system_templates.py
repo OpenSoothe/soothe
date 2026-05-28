@@ -1,50 +1,39 @@
 """System prompt templates for Soothe agents (CoreAgent defaults and tool guides).
 
 Moved from ``soothe.config.prompts`` (IG-384); imported by config package for re-exports.
+
+Static prose (system prompts and scenario response guides) lives as ``.xml``
+fragments under ``soothe.core.prompts.fragments``; this module composes them
+with the in-process tool/subagent guides into the final templates.
 """
 
 from __future__ import annotations
 
+from soothe.core.prompts.fragments import (
+    ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT,
+    DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
+    LOOP_CONTINUATION_GUIDE_FRAGMENT,
+    MEDIUM_SYSTEM_PROMPT_FRAGMENT,
+    QUIZ_RESPONSE_GUIDE_FRAGMENT,
+    RESEARCH_SYNTHESIS_GUIDE_FRAGMENT,
+    SIMPLE_SYSTEM_PROMPT_FRAGMENT,
+)
+
 # ---------------------------------------------------------------------------
 # Scenario-specific guides (IG-268: Intelligent response length control)
+# Sourced from prompts/fragments/system/response_guides/*.xml.
 # ---------------------------------------------------------------------------
 
-_ARCHITECTURE_ANALYSIS_GUIDE = """\
-Architecture analysis approach:
-- Start with system overview (purpose, scale, tech stack)
-- Break down layers with specific component names
-- List 5-10 critical components with descriptions
-- Identify design patterns with concrete examples
-- Provide specific library names for dependencies
-- Large repos: disjoint readonly `task`/explore scopes, then synthesize
-"""
-
-_RESEARCH_SYNTHESIS_GUIDE = """\
-Research synthesis approach:
-- Lead with key findings with numbers ("Found X patterns")
-- Describe methodology briefly
-- Connect findings into conclusions
-- Use concrete evidence from tool results
-"""
-
-_THREAD_CONTINUATION_GUIDE = """\
-Thread continuation approach:
-- Reference prior conversation context
-- Build on previous results
-- Provide incremental updates
-- Avoid repeating full context
-"""
-
-_QUIZ_RESPONSE_GUIDE = """\
-Quiz/factual questions:
-- Provide concise factual answer (1-3 sentences)
-- Use your knowledge directly
-- No tool execution needed
-"""
+_ARCHITECTURE_ANALYSIS_GUIDE = ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT
+_RESEARCH_SYNTHESIS_GUIDE = RESEARCH_SYNTHESIS_GUIDE_FRAGMENT
+_LOOP_CONTINUATION_GUIDE = LOOP_CONTINUATION_GUIDE_FRAGMENT
+_QUIZ_RESPONSE_GUIDE = QUIZ_RESPONSE_GUIDE_FRAGMENT
 
 # ---------------------------------------------------------------------------
 # Domain-scoped tool guides (RFC-0016)
-# Updated to use single-purpose tools instead of unified dispatch tools
+# Updated to use single-purpose tools instead of unified dispatch tools.
+# Tool/subagent guides stay inline so tool surface changes ship in the same
+# module as the runtime tool registration.
 # ---------------------------------------------------------------------------
 
 _SHELL_GUIDE = """\
@@ -146,38 +135,8 @@ Key rules:
 - Use run_command for shell execution, run_python for Python code.\
 """
 
-_DEFAULT_SYSTEM_PROMPT = (
-    """\
-You are {assistant_name}, a proactive AI assistant, \
-designed for continuous, around-the-clock operation.
+_DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT + _TOOL_ORCHESTRATION_GUIDE
 
-Guidelines:
-- Be direct and concise. Lead with answers, not preambles.
-- For multi-step tasks, state a brief plan, then execute.
-- If you encounter an obstacle, explain what happened and suggest alternatives.
-- Never reference your internal architecture, frameworks, or technical stack.
-- Maintain context across the conversation and build on prior results.
-- **IMPORTANT**: If `CLAUDE.md` or `AGENTS.md` files exist in the workspace, \
-you MUST read and respect their instructions. These files contain project-specific \
-guidance that overrides general behaviors. Always check for these files first \
-and follow their directives strictly.\
-"""
-    + _TOOL_ORCHESTRATION_GUIDE
-)
+_SIMPLE_SYSTEM_PROMPT = SIMPLE_SYSTEM_PROMPT_FRAGMENT
 
-_SIMPLE_SYSTEM_PROMPT = """\
-You are {assistant_name}, a helpful AI assistant.
-
-Keep responses direct and concise. Prefer one focused action at a time.
-"""
-
-_MEDIUM_SYSTEM_PROMPT = """\
-You are {assistant_name}, a proactive AI assistant.
-
-Handle practical tasks with concise execution and clear progress.
-
-Guidelines:
-- Be direct and concise. Lead with answers, not preambles.
-- For multi-step tasks, state a brief plan, then execute.
-- If you encounter an obstacle, explain what happened and suggest alternatives.
-"""
+_MEDIUM_SYSTEM_PROMPT = MEDIUM_SYSTEM_PROMPT_FRAGMENT

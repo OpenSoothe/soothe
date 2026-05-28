@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from soothe.core.prompts.fragments import SCENARIO_CLASSIFIER_PROMPT_FRAGMENT
+
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
@@ -167,7 +169,7 @@ def _build_classifier_prompt(
 
     Args:
         goal: User's goal description.
-        intent_type: Intent classification (quiz/continue_thread/new_goal).
+        intent_type: Intent classification (quiz/agentic).
         task_complexity: Task complexity (minimal/simple/medium/complex).
         execution_summary: Execution metadata dict.
 
@@ -179,63 +181,17 @@ def _build_classifier_prompt(
         for i, name in enumerate(BUILTIN_SCENARIOS.keys())
     )
 
-    return f"""Analyze the goal and execution pattern to determine the most appropriate synthesis scenario.
-
-GOAL: {goal}
-INTENT: {intent_type} (complexity: {task_complexity})
-
-EXECUTION SUMMARY:
-- Total steps: {execution_summary["total_steps"]}
-- Successful: {execution_summary["successful_steps"]}
-- Step types: {execution_summary["step_types"]}
-- Tools used: {execution_summary["tools_used"]}
-- Evidence volume: {execution_summary["evidence_volume"]} chars
-
-AVAILABLE BUILT-IN SCENARIOS:
-{scenarios_list}
-
-TASK:
-1. Match goal + execution pattern to a built-in scenario if appropriate
-2. If novel situation not covered above → return "custom" scenario with designed sections
-3. Generate 2-3 contextual_focus areas specific to THIS goal (not generic)
-4. Generate evidence_emphasis instructing logical grouping of actions and outcomes (not chronological replay of assistant narration or meta-reasoning)
-5. When the goal is written in a non-English language, phrase contextual_focus and evidence_emphasis in that language so the final synthesis stays aligned with the user's locale
-
-OUTPUT FORMAT (JSON):
-{{
-    "scenario": "<scenario_name from above OR custom>",
-    "sections": ["<section1>", "<section2>", "<section3>", ...],
-    "contextual_focus": [
-        "<specific focus area 1 for this goal>",
-        "<specific focus area 2 for this goal>",
-        "<specific focus area 3 for this goal>"
-    ],
-    "evidence_emphasis": "<instruction for using evidence>"
-}}
-
-EXAMPLE OUTPUT:
-{{
-    "scenario": "code_architecture_design",
-    "sections": ["Summary", "Component Analysis", "Key Findings", "Recommendations"],
-    "contextual_focus": [
-        "Compare monolithic vs modular approach",
-        "Highlight dependency bottlenecks",
-        "Quantify component complexity metrics"
-    ],
-    "evidence_emphasis": "Include module relationship diagrams and code snippets showing key dependencies"
-}}
-
-ANOTHER EXAMPLE (custom):
-{{
-    "scenario": "custom",
-    "sections": ["Recipe Overview", "Ingredient Analysis", "Cooking Instructions", "Recommendations"],
-    "contextual_focus": [
-        "Group recipes by cuisine and difficulty",
-        "Identify common ingredient substitutions",
-        "Provide time-based recommendations"
-    ],
-    "evidence_emphasis": "Include full recipe content, ingredient lists, and cooking times from web search results"
-}}"""
+    return SCENARIO_CLASSIFIER_PROMPT_FRAGMENT.format(
+        goal=goal,
+        intent_type=intent_type,
+        task_complexity=task_complexity,
+        total_steps=execution_summary["total_steps"],
+        successful_steps=execution_summary["successful_steps"],
+        step_types=execution_summary["step_types"],
+        tools_used=execution_summary["tools_used"],
+        evidence_volume=execution_summary["evidence_volume"],
+        scenarios_list=scenarios_list,
+    )
 
 
 def _coerce_response_text(content: object) -> str:
@@ -330,7 +286,7 @@ async def classify_synthesis_scenario(
         No exceptions - returns fallback classification on any failure.
     """
     # Extract intent classification
-    intent_type = "new_goal"
+    intent_type = "agentic"
     task_complexity = "medium"
     if state.intent and hasattr(state.intent, "intent_type"):
         intent_type = state.intent.intent_type

@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-27
-**Total RFCs**: 59
+**Last Updated**: 2026-05-29
+**Total RFCs**: 60
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 41 |
+| Draft | 42 |
 | Implemented | 18 |
 
 ---
@@ -167,6 +167,13 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-05-27
   - Dependencies: RFC-223, RFC-201, RFC-214
   - Extends: RFC-223 (Thread Inheritance)
+
+- **RFC-225**: [Loop Continuity and Goal Record Enrichment](RFC-225-loop-continuity-and-goal-record-enrichment.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-05-29
+  - Dependencies: RFC-201, RFC-214, RFC-216, RFC-218, RFC-220
+  - Related: RFC-217, RFC-223, RFC-224
 
 ### Protocols (3xx)
 
@@ -353,7 +360,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 38 |
+| Architecture Design | 39 |
 | Implementation Interface Design | 10 |
 | Conceptual Design | 1 |
 | Not stated / ambiguous | 8 |
@@ -366,7 +373,7 @@ This index reflects the canonical RFC set and defines which files are active for
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 5 |
-| 2xx | AgentLoop & Cognition | 18 |
+| 2xx | AgentLoop & Cognition | 19 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
 | 5xx | CLI & TUI | 5 |
@@ -376,6 +383,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- **RFC-225**: Loop Continuity and Goal Record Enrichment (2026-05-29)
 - **RFC-224**: Automatic Context Window Management (2026-05-27)
 - **RFC-223**: Thread Inheritance with LangGraph Checkpoint Forking (2026-05-27)
 - **RFC-222**: Autopilot and Goal Engine Architecture (2026-05-27)

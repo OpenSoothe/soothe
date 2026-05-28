@@ -1,8 +1,8 @@
 """Loop Graph ``init_or_resume`` node (RFC-220).
 
 Hydrates intent/routing from the pre-classified intent passed by the runner.
-The runner handles quiz detection and structural continue_thread/new_goal resolution;
-this node just emits the classified intent for event streaming.
+The runner handles quiz detection; loop continuation is derived in ``AgentLoop``
+from the checkpoint. This node just emits the classified intent for event streaming.
 """
 
 from __future__ import annotations

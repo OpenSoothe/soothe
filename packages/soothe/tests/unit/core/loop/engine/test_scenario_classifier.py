@@ -31,7 +31,7 @@ class _StubLLM:
 
 def _build_state() -> SimpleNamespace:
     return SimpleNamespace(
-        intent=SimpleNamespace(intent_type="new_goal", task_complexity="medium"),
+        intent=SimpleNamespace(intent_type="agentic", task_complexity="medium"),
         step_results=[_StubStepResult()],
     )
 

@@ -210,7 +210,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
     mock_ckpt.loop_messages = []
-    mock_ckpt.status = "ready_for_next_goal"
+    mock_ckpt.status = "idle"
     mock_ckpt.current_thread_id = "legacy-thread"
     mock_ckpt.thread_ids = ["legacy-thread"]
 

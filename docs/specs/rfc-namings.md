@@ -100,6 +100,20 @@ This document defines the terminology and naming conventions used in this projec
 | Tool Result Cache | File system cache for large tool results (>50KB) at `~/.soothe/runs/{thread_id}/tool_results/{tool_call_id}.json`. Optional, cleaned up after thread completion. | RFC-211 |
 | Minimal Data Contract | Design principle where Layer 2 receives only outcome metadata from Layer 1, not full tool result content. Layer 1 owns final report generation. | RFC-211 |
 
+### Loop Continuity & Goal Record Terms (RFC-225)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Loop | A continuous conversational unit identified by `loop_id`. Spans many goals and survives across user turns until the user starts a new loop (`/clear`). The unit of continuity for agentic intent. | RFC-216, RFC-225 |
+| `continue_loop_mode` | Boolean derived once in `AgentLoop` immediately after `state_manager.load()`. True when the loaded checkpoint has prior goals and is alive (`status ∈ {running, idle}`). Replaces the prior `continue_thread_mode` flag. | RFC-225 |
+| Intent Type | Two-value LLM classification: `quiz` (greeting / thanks / trivia answerable without tools) or `agentic` (everything else). Whether an agentic query continues a loop is derived structurally, not classified. | RFC-225 |
+| Quiz Fast-Path | Pre-stream short-circuit when `IntentClassification.intent_type == "quiz"`; uses the LLM's piggybacked `quiz_response` to skip the agent loop entirely. | RFC-225 |
+| Idle (loop status) | `AgentLoopCheckpoint.status == "idle"` — loop is alive between goals. Renamed from the legacy value `ready_for_next_goal`; legacy persisted values are coerced on load. | RFC-225 |
+| Goal Record | `GoalExecutionRecord` — durable per-goal log inside `AgentLoopCheckpoint.goal_history`. Carries the latest plan DAG (`current_plan`), accumulated `step_results`, `evidence_ledger`, `completed_step_ids`, `plan_revision_count`, the orchestration `loop_messages` ledger, and final output. Sufficient to recover the goal's plan DAG with execution overlay without external lookup. | RFC-216, RFC-225 |
+| Plan DAG Recoverability | Invariant that the full DAG of any persisted goal — nodes, edges, execution mode, planner metadata, done-node overlay, per-node outcomes — is recoverable from `GoalExecutionRecord` alone. | RFC-225 |
+| `_LOOP_CONTINUATION_GUIDE` | System-prompt section injected by `system_prompt_optimization` when `state["continue_loop_mode"]` is `True`. Renamed from `_THREAD_CONTINUATION_GUIDE`. | RFC-225 |
+| `seed_loop_ledger_from_prior_goal()` | Seeds a new goal's `loop_messages` from the immediately prior completed goal in the same loop. Runs unconditionally for any same-loop new goal. Renamed from `seed_continue_thread_ledger_from_prior_goal()`. | RFC-225 |
+
 ### Prompt Architecture Terms (RFC-206)
 
 | Term | Definition | Introduced In |

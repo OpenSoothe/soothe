@@ -27,7 +27,7 @@ def test_normalize_register_loop_stub_validates() -> None:
     assert checkpoint.loop_id == loop_id
     assert checkpoint.current_thread_id == thread_id
     assert checkpoint.thread_health_metrics.thread_id == thread_id
-    assert checkpoint.status == "ready_for_next_goal"
+    assert checkpoint.status == "idle"
     assert checkpoint.goal_history == []
 
 
@@ -43,4 +43,4 @@ def test_normalize_created_status_maps_to_ready() -> None:
         loop_id="loop-a",
     )
     checkpoint = AgentLoopCheckpoint.model_validate(normalized)
-    assert checkpoint.status == "ready_for_next_goal"
+    assert checkpoint.status == "idle"

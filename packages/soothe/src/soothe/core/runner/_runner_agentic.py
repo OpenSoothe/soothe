@@ -321,27 +321,13 @@ class AgenticMixin:
         # One load for unified classification (tail) - IG-128, IG-133
         await self._ensure_checkpointer_initialized()
 
-        # Structural continue_thread decision: if the loop has prior completed goals,
-        # default to continue_thread (same-loop queries carry forward context).
-        # Only fresh loops or explicit /clear produce new_goal.
-        continue_thread = False
-        if self._goal_engine:
-            try:
-                completed = await self._goal_engine.list_goals(status="completed")
-                active = await self._goal_engine.list_goals(status="active")
-                if completed or active:
-                    continue_thread = True
-            except Exception:
-                logger.debug(
-                    "Failed to query goal engine for continue_thread decision", exc_info=True
-                )
-
-        # Early intent classification for quiz short-circuit (matches autonomous mode)
+        # RFC-225: intent classification is quiz vs. agentic only.
+        # Loop continuation is derived structurally inside AgentLoop from the
+        # loaded checkpoint, not by the runner.
         intent_classification = None
         if self._intent_classifier:
             intent_classification = await self._intent_classifier.classify_intent(
                 user_input,
-                continue_thread=continue_thread,
                 intent_hint=intent_hint,
             )
 

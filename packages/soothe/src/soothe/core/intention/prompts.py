@@ -1,86 +1,36 @@
-"""LLM prompts for intent classification (IG-226, IG-250, IG-325, IG-363, IG-364).
+"""LLM prompts for intent classification (RFC-225).
 
-Quiz-only classification with piggybacked quiz answer: the LLM decides whether
+Two-value classification with piggybacked quiz answer: the LLM decides whether
 a query is a simple quiz (greeting, thanks, static trivia answerable without
 tools) or requires the agentic loop. When quiz, the LLM also provides the
-direct answer (quiz_response) to avoid a second LLM call. The continue_thread
-vs new_goal distinction is determined structurally by the runner based on loop
-state, not by the classifier.
+direct answer (``quiz_response``) to avoid a second LLM call. Loop continuation
+is derived structurally inside ``AgentLoop`` from the checkpoint, not classified.
 
-Prompt layout: static instructions and schema first; variable runtime fields
-last inside flat XML structure (no nested wrappers).
+Prompt bodies live as ``.xml`` fragments under
+``soothe.core.prompts.fragments.classifiers``; this module re-exports them
+under their established public names so callers (``intention.classifier``)
+remain unchanged.
 
 XML structure:
 - <intent_instructions>: Static content (classification rules, JSON schema)
-- <intent_inputs>: Dynamic runtime fields as flat XML elements
+- <intent_inputs> (retry only): Dynamic runtime fields as flat XML elements
   - <current_time>, <current_query>: Runtime context
 """
 
 from __future__ import annotations
 
+from soothe.core.prompts.fragments import (
+    INTENT_CLASSIFICATION_PROMPT_FRAGMENT,
+    INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT,
+)
+
 # Intent classification prompt (quiz detection only; continue/new_goal decided structurally)
-INTENT_CLASSIFICATION_PROMPT = """\
-<intent_instructions>
-Classify whether the user query is a simple quiz or requires the agentic loop. Reply with ONLY valid JSON matching the schema below.
-
-intent_type must be exactly one of:
-- "quiz": greetings, thanks, fillers, pleasantries, static factual/trivia/definitions/simple math — only when answerable reliably from training knowledge without tools, files, web, or live data.
-- "agentic": everything else — needs tools/files/web/search/analysis/code, is a follow-up, or cannot be answered from training knowledge alone.
-
-NOT quiz (use "agentic" instead):
-- Real-time or time-sensitive queries: weather, news, stocks, sports scores, exchange rates, traffic, flight status, etc.
-- Anything requiring web search, external APIs, attached files, code execution, or tools to answer correctly.
-- Questions you cannot answer confidently from training knowledge alone.
-- Follow-ups on prior conversation or work.
-
-When intent_type is "quiz", also provide:
-- quiz_response: concise, factual direct answer from training knowledge. For greetings/thanks, a brief polite reply. For factual questions, a direct answer.
-
-When intent_type is "agentic", also provide:
-- goal_description: normalized, 5-15 words.
-- task_complexity: minimal|simple|medium|complex where minimal=one direct answer without tools; simple=one focused execute step; medium=several steps or moderate tool use; complex=architecture, migration, broad refactor, or multi-phase work.
-
-JSON schema:
-{{
-  "intent_type": "quiz"|"agentic",
-  "goal_description": string|null,
-  "task_complexity": "minimal"|"simple"|"medium"|"complex",
-  "quiz_response": string|null
-}}
-</intent_instructions>
-
-<current_time>{current_time}</current_time>
-
-<current_query>
-{query}
-</current_query>
-"""
+INTENT_CLASSIFICATION_PROMPT = INTENT_CLASSIFICATION_PROMPT_FRAGMENT
 
 # Retry prompt (simplified)
-INTENT_CLASSIFICATION_RETRY_PROMPT = """\
-<intent_instructions>
-Re-classify intent. ONLY valid JSON per schema below.
+INTENT_CLASSIFICATION_RETRY_PROMPT = INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT
 
-intent_type: "quiz" (greeting/thanks/static trivia answerable without tools) or "agentic" (everything else).
-NOT quiz: real-time/time-sensitive, web/tools/files needed, not answerable from training knowledge alone, or follow-ups → "agentic".
-
-When "quiz": quiz_response (concise direct answer).
-When "agentic": goal_description (5-15 words).
-task_complexity: minimal|simple|medium|complex.
-
-JSON schema:
-{{
-  "intent_type": "quiz"|"agentic",
-  "goal_description": string|null,
-  "task_complexity": "minimal"|"simple"|"medium"|"complex",
-  "quiz_response": string|null
-}}
-</intent_instructions>
-
-<intent_inputs>
-<current_time>{current_time}</current_time>
-<current_query>
-{query}
-</current_query>
-</intent_inputs>
-"""
+__all__ = [
+    "INTENT_CLASSIFICATION_PROMPT",
+    "INTENT_CLASSIFICATION_RETRY_PROMPT",
+]

@@ -1,7 +1,8 @@
-"""Intent classifier implementation (IG-226, IG-250).
+"""Intent classifier implementation (RFC-225).
 
-Quiz-only classification: LLM detects quiz vs agentic.
-continue_thread vs new_goal is resolved structurally by the runner.
+Two-value LLM classification (``quiz`` vs. ``agentic``). Loop continuation
+is derived structurally inside ``AgentLoop`` from the loaded checkpoint
+and is not a classifier concern.
 """
 
 from __future__ import annotations
@@ -32,22 +33,16 @@ logger = logging.getLogger(__name__)
 
 
 class IntentClassifier:
-    """LLM-driven intent classification system (IG-226).
+    """LLM-driven intent classification (RFC-225).
 
-    Pure LLM-driven classification with conversation context:
-    - Intent classification (quiz/continue_thread/new_goal)
-    - Routing classification (task complexity for execution path selection)
-    - No keyword heuristics or language detection shortcuts
-
-    Single structured LLM call (~2-4s latency) with:
-    - Conversation context (last 8 messages)
-    - Active goal context for thread continuation
-    - Thread ID awareness
-    - Robust fallbacks to safe defaults
+    - Quiz vs. agentic decision via a single structured LLM call.
+    - No structural / continuation logic — that is owned by ``AgentLoop``.
+    - Robust fallbacks to safe defaults on failure.
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
         assistant_name: Name used in quiz fallback replies.
+        soothe_config: Optional config for Langfuse tracing.
     """
 
     def __init__(
@@ -56,21 +51,12 @@ class IntentClassifier:
         assistant_name: str = "Soothe",
         soothe_config: SootheConfig | None = None,
     ) -> None:
-        """Initialize intent classifier.
-
-        Args:
-            model: Fast LLM for classification.
-            assistant_name: Name used in responses.
-            soothe_config: Soothe config for Langfuse tracing (optional).
-        """
         self._fast_model = model
         self._assistant_name = assistant_name
         self._soothe_config = soothe_config
 
-        # Pre-create structured output model for performance
         if model:
             self._intent_model = self._create_structured_model(model, IntentClassificationLLMResult)
-
             logger.info("[IntentClassifier] Initialized with structured output model")
         else:
             self._intent_model = None
@@ -82,49 +68,34 @@ class IntentClassifier:
         self,
         query: str,
         *,
-        continue_thread: bool = False,
         observability_metadata: dict[str, str] | None = None,
         intent_hint: IntentHint | None = None,
     ) -> IntentClassification:
-        """Quiz-only intent classification with structural continue/new_goal resolution.
+        """Classify the query as quiz or agentic.
 
-        The LLM decides quiz vs agentic. The ``continue_thread`` parameter
-        (set by the runner based on loop state) resolves agentic into
-        continue_thread or new_goal.
-
-        When ``intent_hint`` is ``quiz``, bypasses LLM classification entirely
-        and returns a pre-built classification.
-
-        Heuristic shortcut: queries longer than 80 chars, 15+ words, or 2+ lines
-        are classified as agentic directly without an LLM call.
+        - ``intent_hint=quiz`` short-circuits to a quiz classification.
+        - Long/complex queries (heuristic) skip the LLM and resolve as agentic.
+        - Otherwise: one structured LLM call with retry; fallback to agentic.
 
         Args:
             query: User input text.
-            continue_thread: Whether this is a same-loop continuation (structural rule).
             observability_metadata: Optional metadata for observability.
-            intent_hint: Suggested intent to bypass LLM classification (``quiz`` only).
+            intent_hint: Optional bypass hint (``quiz`` only).
 
         Returns:
-            IntentClassification with intent type and routing attributes.
+            IntentClassification with ``intent_type`` ∈ {``quiz``, ``agentic``}.
         """
-        # Fast-path bypass when hint provided for quiz
         if intent_hint == IntentHint.QUIZ:
-            logger.info(
-                "Intent hint bypass: using suggested intent_type=%s",
-                intent_hint.value,
-            )
-            return self._build_intent_from_hint(query, intent_hint, continue_thread=continue_thread)
+            logger.info("Intent hint bypass: quiz")
+            return self._build_quiz_intent()
 
-        # Heuristic: long/complex queries are always agentic
         if self._is_likely_agentic(query):
             logger.info("Heuristic bypass: query too long/complex for quiz, classifying as agentic")
-            return self._build_heuristic_agentic(query, continue_thread=continue_thread)
+            return self._build_agentic_intent(query)
 
-        # Fallback when classifier disabled
         if not self._fast_model or not self._intent_model:
-            return self._fallback_intent(query, continue_thread=continue_thread)
+            return self._fallback_intent(query)
 
-        # Attempt classification with retry
         result: IntentClassification | None = None
         last_error: Exception | None = None
 
@@ -133,7 +104,6 @@ class IntentClassifier:
                 result = await self._classify_intent_llm(
                     query,
                     retry_mode=retry_mode,
-                    continue_thread=continue_thread,
                     observability_metadata=observability_metadata,
                 )
                 break
@@ -145,23 +115,18 @@ class IntentClassifier:
                 )
                 logger.debug("Intent classification error: %s", exc, exc_info=True)
 
-        # Fallback on persistent failure
         if result is None:
             logger.warning(
                 "Intent classification failed after retry, using fallback (error: %s)",
                 type(last_error).__name__ if last_error else "unknown",
             )
-            return self._fallback_intent(
-                query, continue_thread=continue_thread, error_context=last_error
-            )
+            return self._fallback_intent(query, error_context=last_error)
 
-        # Post-process: patch missing fields
         result = self._patch_missing_fields(result, query)
 
         logger.debug(
-            "Intent classified: intent_type=%s reuse_goal=%s complexity=%s",
+            "Intent classified: intent_type=%s complexity=%s",
             result.intent_type,
-            result.reuse_current_goal,
             result.task_complexity,
         )
 
@@ -174,7 +139,6 @@ class IntentClassifier:
         query: str,
         *,
         retry_mode: bool = False,
-        continue_thread: bool = False,
         observability_metadata: dict[str, str] | None = None,
     ) -> IntentClassification:
         """LLM quiz detection with structured output."""
@@ -188,7 +152,6 @@ class IntentClassifier:
             current_time=current_time,
         )
 
-        # Build traced config with Langfuse callbacks + metadata
         config = self._build_invoke_config(
             "classify_intent",
             "intent.primary",
@@ -201,14 +164,13 @@ class IntentClassifier:
             logger.exception("LLM intent classification call failed")
             raise
 
-        # Validate result
         if llm_result is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
         if llm_result.intent_type not in ("agentic", "quiz"):
             raise ValueError(f"Invalid intent_type from LLM: {llm_result.intent_type!r}")
 
-        return llm_result.to_intent_classification(continue_thread=continue_thread)
+        return llm_result.to_intent_classification()
 
     # -- Model creation ----------------------------------------------------
 
@@ -220,15 +182,7 @@ class IntentClassifier:
         """Create structured output model.
 
         Prefers function_calling over json_mode for better literal validation.
-
-        Args:
-            base_model: Base chat model.
-            schema: Pydantic schema for structured output.
-
-        Returns:
-            Model with structured output support.
         """
-        # Try function_calling first (best for literal validation)
         for method in ("function_calling", None, "json_mode"):
             try:
                 if method is None:
@@ -237,119 +191,57 @@ class IntentClassifier:
             except Exception:
                 logger.debug("with_structured_output failed for method=%s", method, exc_info=True)
 
-        # Final fallback
         return base_model.with_structured_output(schema, method="json_mode")
 
     # -- Helpers ------------------------------------------------------------
 
-    def _build_intent_from_hint(
-        self,
-        query: str,
-        hint: IntentHint,
-        *,
-        continue_thread: bool = False,
-    ) -> IntentClassification:
-        """Build intent classification from hint (bypasses LLM).
+    @staticmethod
+    def _build_quiz_intent() -> IntentClassification:
+        """Build a quiz IntentClassification (fast-path hint bypass)."""
+        return IntentClassification(
+            intent_type="quiz",
+            goal_description=None,
+            task_complexity=TaskComplexity.MINIMAL,
+            quiz_response=None,
+        )
 
-        Used when caller provides ``intent_hint=quiz`` to skip LLM classification.
-
-        Args:
-            query: Original user query.
-            hint: Suggested intent type.
-            continue_thread: Whether this is a same-loop continuation.
-
-        Returns:
-            IntentClassification with the hinted intent type.
-        """
-        if hint == IntentHint.QUIZ:
-            return IntentClassification(
-                intent_type="quiz",
-                reuse_current_goal=False,
-                goal_description=None,
-                task_complexity=TaskComplexity.MINIMAL,
-                quiz_response=None,  # Filled by _run_quiz if not piggybacked
-            )
-        elif hint == IntentHint.CONTINUE_THREAD:
-            return IntentClassification(
-                intent_type="continue_thread",
-                reuse_current_goal=True,
-                goal_description=query,
-                task_complexity=TaskComplexity.MEDIUM,
-            )
-        elif hint == IntentHint.NEW_GOAL:
-            return IntentClassification(
-                intent_type="new_goal",
-                reuse_current_goal=False,
-                goal_description=query,
-                task_complexity=TaskComplexity.MEDIUM,
-            )
-        else:
-            # Fallback for unknown hint (should not happen with enum)
-            return self._fallback_intent(query, continue_thread=continue_thread)
+    @staticmethod
+    def _build_agentic_intent(query: str) -> IntentClassification:
+        """Build an agentic IntentClassification with medium complexity."""
+        return IntentClassification(
+            intent_type="agentic",
+            goal_description=query,
+            task_complexity=TaskComplexity.MEDIUM,
+            quiz_response=None,
+        )
 
     def _fallback_intent(
         self,
         query: str,
         *,
-        continue_thread: bool = False,
         error_context: Exception | None = None,
     ) -> IntentClassification:
-        """Safe fallback intent when classification fails.
-
-        Args:
-            query: Original user query.
-            continue_thread: Whether this is a same-loop continuation.
-            error_context: Optional exception when falling back after classification failure.
-
-        Returns:
-            IntentClassification with safe defaults.
-        """
+        """Safe fallback to agentic when classification is unavailable or fails."""
         reason = type(error_context).__name__ if error_context else "classification_disabled"
-        resolved_type = "continue_thread" if continue_thread else "new_goal"
-        logger.debug("Intent fallback to %s (%s)", resolved_type, reason)
-        return IntentClassification(
-            intent_type=resolved_type,
-            reuse_current_goal=continue_thread,
-            goal_description=query,
-            task_complexity=TaskComplexity.MEDIUM,
-        )
+        logger.debug("Intent fallback to agentic (%s)", reason)
+        return self._build_agentic_intent(query)
 
     def _patch_missing_fields(
         self,
         intent: IntentClassification,
         query: str,
     ) -> IntentClassification:
-        """Post-process intent to patch missing fields.
-
-        Args:
-            intent: Original intent classification.
-            query: Original user query.
-
-        Returns:
-            IntentClassification with patched fields.
-        """
-        # Patch missing goal_description
-        if intent.intent_type == "new_goal" and not intent.goal_description:
+        """Patch missing goal_description on agentic results."""
+        if intent.intent_type == "agentic" and not intent.goal_description:
             intent.goal_description = query
             logger.debug("Patched missing goal_description")
-
         return intent
 
     # -- Heuristic classification -------------------------------------------
 
     @staticmethod
     def _is_likely_agentic(query: str) -> bool:
-        """Check if query is too long/complex to be a simple quiz.
-
-        Heuristic: queries with >80 chars, >15 words, or >2 lines are
-        almost always agentic (not greetings/thanks/trivia).
-
-        Args:
-            query: User input text.
-
-        Returns:
-            True if query should be classified as agentic without LLM call.
-        """
+        """Heuristic: queries with >80 chars, >15 words, or >2 lines are agentic."""
         if len(query) > 80:
             return True
         if len(query.split()) > 15:
@@ -358,29 +250,6 @@ class IntentClassifier:
             return True
         return False
 
-    def _build_heuristic_agentic(
-        self,
-        query: str,
-        *,
-        continue_thread: bool = False,
-    ) -> IntentClassification:
-        """Build agentic intent from heuristic (bypasses LLM).
-
-        Args:
-            query: Original user query.
-            continue_thread: Whether this is a same-loop continuation.
-
-        Returns:
-            IntentClassification with agentic type and medium complexity.
-        """
-        resolved_type = "continue_thread" if continue_thread else "new_goal"
-        return IntentClassification(
-            intent_type=resolved_type,
-            reuse_current_goal=continue_thread,
-            goal_description=query,
-            task_complexity=TaskComplexity.MEDIUM,
-        )
-
     def _build_invoke_config(
         self,
         purpose: str,
@@ -388,16 +257,7 @@ class IntentClassifier:
         *,
         observability_metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Build RunnableConfig with Langfuse tracing and call metadata.
-
-        Args:
-            purpose: Classification purpose (classify_intent).
-            component: Component identifier.
-            observability_metadata: Extra metadata from caller.
-
-        Returns:
-            RunnableConfig dict for ``model.ainvoke(..., config=)``.
-        """
+        """Build RunnableConfig with Langfuse tracing and call metadata."""
         try:
             from soothe.utils.observability.langfuse import build_traced_config
 
