@@ -41,6 +41,7 @@ from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.message_store import MessageStore
 from soothe_cli.tui.widgets.messages import (
+    AssistantMessage,
     QueuedUserMessage,
 )
 from soothe_cli.tui.widgets.status import StatusBar
@@ -286,6 +287,15 @@ class SootheApp(
 
         self._last_hydration_check_mono: float = 0.0
         """Monotonic timestamp of the last scroll-triggered hydration check."""
+
+        self._deferred_assistant_renders: deque[tuple[AssistantMessage, str]] = deque()
+        """Queue of hydrated assistant cards pending markdown render."""
+
+        self._assistant_render_drain_scheduled = False
+        """Whether assistant render-drain has been scheduled."""
+
+        self._assistant_render_drain_in_progress = False
+        """Whether assistant render-drain is currently active."""
 
         self._startup_task: asyncio.Task[None] | None = None
         """Startup task reference (set in on_mount)."""

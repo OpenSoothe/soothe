@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
+import os
+import platform
+import sys
 from contextlib import suppress
+from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -33,6 +38,67 @@ logger = logging.getLogger(__name__)
 
 class _StartupMixin:
     """Startup, server/daemon workers, skills discovery, prewarm and update methods."""
+
+    @staticmethod
+    def _env_flag(name: str) -> bool:
+        """Return True when an env var contains a truthy value."""
+        raw = os.environ.get(name, "")
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+    def _should_dump_tui_debug_snapshot(self) -> bool:
+        """Return True when CLI/TUI debug logging is enabled."""
+        if self._env_flag("SOOTHE_TUI_DEBUG"):
+            return True
+        root_logger = logging.getLogger()
+        return root_logger.isEnabledFor(logging.DEBUG) or logger.isEnabledFor(logging.DEBUG)
+
+    def _dump_tui_debug_snapshot(self) -> None:
+        """Emit one startup diagnostic snapshot for TUI/Textual troubleshooting."""
+        if not self._should_dump_tui_debug_snapshot():
+            return
+        textual_version = "unknown"
+        rich_version = "unknown"
+        try:
+            textual_version = version("textual")
+        except PackageNotFoundError:
+            pass
+        try:
+            rich_version = version("rich")
+        except PackageNotFoundError:
+            pass
+        logger.info(
+            "[TUI Debug] runtime python=%s platform=%s textual=%s rich=%s",
+            platform.python_version(),
+            platform.platform(),
+            textual_version,
+            rich_version,
+        )
+        logger.info(
+            "[TUI Debug] terminal term=%r colorterm=%r term_program=%r shell=%r",
+            os.environ.get("TERM", ""),
+            os.environ.get("COLORTERM", ""),
+            os.environ.get("TERM_PROGRAM", ""),
+            os.environ.get("SHELL", ""),
+        )
+        logger.info(
+            "[TUI Debug] gc enabled=%s count=%s threshold=%s frozen=%s",
+            gc.isenabled(),
+            gc.get_count(),
+            gc.get_threshold(),
+            hasattr(gc, "get_freeze_count") and gc.get_freeze_count() > 0,
+        )
+        logger.info(
+            "[TUI Debug] tui window_size=%d hydrate_buffer=%d render_queue_len=%d",
+            self._message_store.WINDOW_SIZE,
+            self._message_store.HYDRATE_BUFFER,
+            len(self._deferred_assistant_renders),
+        )
+        logger.info(
+            "[TUI Debug] env SOOTHE_TUI_DEBUG=%r SOOTHE_LOG_LEVEL=%r argv0=%r",
+            os.environ.get("SOOTHE_TUI_DEBUG", ""),
+            os.environ.get("SOOTHE_LOG_LEVEL", ""),
+            sys.argv[0] if sys.argv else "",
+        )
 
     async def on_mount(self) -> None:
         """Initialize components after mount.
@@ -135,6 +201,7 @@ class _StartupMixin:
         self._ui_adapter._on_tokens_update = self._on_tokens_update
         self._ui_adapter._on_tokens_hide = self._hide_tokens
         self._ui_adapter._on_tokens_show = self._show_tokens
+        self._dump_tui_debug_snapshot()
 
         # Seed static slash commands now that the first frame has rendered.
         # Skill commands are appended later when _discover_skills() completes.
