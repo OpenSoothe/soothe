@@ -111,9 +111,6 @@ class AgentLoop:
         routing_classification: Any | None = None,  # IG-349, IG-383: RoutingClassification
         intent_classifier: Any | None = None,
         preferred_subagent: str | None = None,
-        recent_messages_for_intent: list[Any] | None = None,
-        active_goal_id_for_intent: str | None = None,
-        active_goal_description_for_intent: str | None = None,
         shared_pool: Any | None = None,  # IG-406: SharedPostgreSQLPool for high-concurrency
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
@@ -272,7 +269,11 @@ class AgentLoop:
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
-            if continue_thread_mode:
+            # Always seed prior goal context for same-loop goals, not just
+            # continue_thread_mode. A new goal within an existing loop
+            # benefits from prior context (e.g., "DUMP review to report"
+            # needs the review's findings).
+            if len(checkpoint.goal_history) >= 2:
                 seed_continue_thread_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
             await state_manager.save(checkpoint)
             iteration = 0
@@ -369,9 +370,6 @@ class AgentLoop:
             emit=emit,
             intent_classifier=intent_classifier,
             preferred_subagent=preferred_subagent,
-            recent_messages_for_intent=recent_messages_for_intent,
-            active_goal_id_for_intent=active_goal_id_for_intent,
-            active_goal_description_for_intent=active_goal_description_for_intent,
         )
 
         async def pump_graph() -> None:

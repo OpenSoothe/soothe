@@ -30,9 +30,6 @@ from soothe.core.loop.utils.stream_normalize import extract_text_from_message_co
 from soothe.core.runner._runner_shared import StreamChunk, _custom
 from soothe.utils.text_preview import preview_first
 
-# Default limit of recent messages to inspect for query classification
-_RECENT_MESSAGES_FOR_CLASSIFY_LIMIT = 6
-
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -323,37 +320,26 @@ class AgenticMixin:
         # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
         # One load for unified classification (tail) - IG-128, IG-133
         await self._ensure_checkpointer_initialized()
-        # Load more messages for routing (IG-133)
-        recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
 
-        # Truncate for intent classification (used early and in graph)
-        limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
-        recent_for_classify = (
-            recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
-        )
-
-        active_goal_id = None
-        active_goal_description = None
-
-        # Get active goal context if available (used by graph-entry classification)
+        # Structural continue_thread decision: if the loop has prior completed goals,
+        # default to continue_thread (same-loop queries carry forward context).
+        # Only fresh loops or explicit /clear produce new_goal.
+        continue_thread = False
         if self._goal_engine:
             try:
-                goals = await self._goal_engine.list_goals(status="active")
-                if goals:
-                    active_goal_id = goals[0].id
-                    active_goal_description = goals[0].description
+                completed = await self._goal_engine.list_goals(status="completed")
+                active = await self._goal_engine.list_goals(status="active")
+                if completed or active:
+                    continue_thread = True
             except Exception:
-                logger.debug("Failed to get active goal for intent classification", exc_info=True)
+                logger.debug("Failed to query goal engine for continue_thread decision", exc_info=True)
 
         # Early intent classification for quiz short-circuit (matches autonomous mode)
         intent_classification = None
         if self._intent_classifier:
             intent_classification = await self._intent_classifier.classify_intent(
                 user_input,
-                recent_messages=recent_for_classify,
-                active_goal_id=active_goal_id,
-                active_goal_description=active_goal_description,
-                thread_id=tid,
+                continue_thread=continue_thread,
                 intent_hint=intent_hint,
             )
 
@@ -427,9 +413,6 @@ class AgenticMixin:
             routing_classification=routing_classification,
             intent_classifier=self._intent_classifier,
             preferred_subagent=preferred_subagent,
-            recent_messages_for_intent=recent_for_classify,
-            active_goal_id_for_intent=active_goal_id,
-            active_goal_description_for_intent=active_goal_description,
             shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
         ):
             if event_type == "intent_classified":
