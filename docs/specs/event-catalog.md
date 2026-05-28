@@ -131,7 +131,7 @@ Sparse **`soothe.subagent.*`** events are emitted on the LangGraph **`custom`** 
 | `soothe.subagent.tacitus.gather.summary` | `query_preview`, `result_count`, `sources_touched` | NORMAL |
 | `soothe.subagent.tacitus.completed` | `duration_ms`, `answer_length`, `summary` | NORMAL |
 
-**Removed / not emitted (core)**: `soothe.capability.*` (hard cut). Browser, Claude, and Research subagents moved to [soothe-community](https://github.com/OpenSoothe/soothe-community); their wire types are not part of the core daemon contract. Historical per-phase names such as `soothe.subagent.claude.text` or `soothe.subagent.research.gather` are **not** emitted unless reintroduced under IG-339-style review.
+**Removed / not emitted (core)**: `soothe.capability.*` (hard cut). Browser, Claude, and Research subagents moved to [soothe-community](https://github.com/mirasoth/soothe-community); their wire types are not part of the core daemon contract. Historical per-phase names such as `soothe.subagent.claude.text` or `soothe.subagent.research.gather` are **not** emitted unless reintroduced under IG-339-style review.
 
 ### Skillify Subagent
 

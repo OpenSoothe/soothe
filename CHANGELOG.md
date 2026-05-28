@@ -19,7 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - IG-375: Removed first-party LangSmith tracing integration (CLI `/trace`, env bootstrap for LangSmith, doctor LangSmith check, `ls_integration` stream metadata); removed legacy local LLM log tracing (middleware + ``LLMTracingWrapper`` / ``observability.llm_tracing_enabled``) in favor of Langfuse
 - IG-303: AgentLoop plan step ids use ``<PLANID>-<model-step-id>`` (random 3-letter uppercase ``plan_id`` per new plan, ``LoopState.plan_id`` reused on ``plan_action=keep``); replaces per-step random 3-char ids while keeping IG-358 collision safety against prior ``step_results``
-- Migrated soothe-community to standalone project ([github.com/OpenSoothe/soothe-community](https://github.com/OpenSoothe/soothe-community))
+- Migrated soothe-community to standalone project ([github.com/mirasoth/soothe-community](https://github.com/mirasoth/soothe-community))
 - Removed soothe-community from monorepo workspace
 - Centralized version management across monorepo packages
 - Simplified version extraction logic
@@ -428,26 +428,26 @@ _No changes from 0.2.5 — duplicate tag._
 ### Fixed
 - Pin `claude-agent-sdk` to exclude macOS-only version 0.1.49
 
-[0.3.4]: https://github.com/mirasurf/Soothe/releases/tag/0.3.4
-[0.3.3]: https://github.com/mirasurf/Soothe/releases/tag/0.3.3
-[0.3.2]: https://github.com/mirasurf/Soothe/releases/tag/0.3.2
-[0.3.1]: https://github.com/mirasurf/Soothe/releases/tag/0.3.1
-[0.3.0]: https://github.com/mirasurf/Soothe/releases/tag/0.3.0
-[0.2.12]: https://github.com/mirasurf/Soothe/releases/tag/0.2.12
-[0.2.11]: https://github.com/mirasurf/Soothe/releases/tag/0.2.11
-[0.2.10]: https://github.com/mirasurf/Soothe/releases/tag/0.2.10
-[0.2.9]: https://github.com/mirasurf/Soothe/releases/tag/0.2.9
-[0.2.8]: https://github.com/mirasurf/Soothe/releases/tag/0.2.8
-[0.2.7]: https://github.com/mirasurf/Soothe/releases/tag/0.2.7
-[0.2.6]: https://github.com/mirasurf/Soothe/releases/tag/0.2.6
-[0.2.5]: https://github.com/mirasurf/Soothe/releases/tag/0.2.5
-[0.2.4]: https://github.com/mirasurf/Soothe/releases/tag/0.2.4
-[0.2.3]: https://github.com/mirasurf/Soothe/releases/tag/0.2.3
-[0.2.2]: https://github.com/mirasurf/Soothe/releases/tag/0.2.2
-[0.2.0]: https://github.com/mirasurf/Soothe/releases/tag/0.2.0
-[0.1.6]: https://github.com/mirasurf/Soothe/releases/tag/0.1.6
-[0.1.5]: https://github.com/mirasurf/Soothe/releases/tag/0.1.5
-[0.1.4]: https://github.com/mirasurf/Soothe/releases/tag/0.1.4
-[0.1.3]: https://github.com/mirasurf/Soothe/releases/tag/0.1.3
-[0.1.2]: https://github.com/mirasurf/Soothe/releases/tag/0.1.2
-[0.1.1]: https://github.com/mirasurf/Soothe/releases/tag/0.1.1
+[0.3.4]: https://github.com/mirasoth/Soothe/releases/tag/0.3.4
+[0.3.3]: https://github.com/mirasoth/Soothe/releases/tag/0.3.3
+[0.3.2]: https://github.com/mirasoth/Soothe/releases/tag/0.3.2
+[0.3.1]: https://github.com/mirasoth/Soothe/releases/tag/0.3.1
+[0.3.0]: https://github.com/mirasoth/Soothe/releases/tag/0.3.0
+[0.2.12]: https://github.com/mirasoth/Soothe/releases/tag/0.2.12
+[0.2.11]: https://github.com/mirasoth/Soothe/releases/tag/0.2.11
+[0.2.10]: https://github.com/mirasoth/Soothe/releases/tag/0.2.10
+[0.2.9]: https://github.com/mirasoth/Soothe/releases/tag/0.2.9
+[0.2.8]: https://github.com/mirasoth/Soothe/releases/tag/0.2.8
+[0.2.7]: https://github.com/mirasoth/Soothe/releases/tag/0.2.7
+[0.2.6]: https://github.com/mirasoth/Soothe/releases/tag/0.2.6
+[0.2.5]: https://github.com/mirasoth/Soothe/releases/tag/0.2.5
+[0.2.4]: https://github.com/mirasoth/Soothe/releases/tag/0.2.4
+[0.2.3]: https://github.com/mirasoth/Soothe/releases/tag/0.2.3
+[0.2.2]: https://github.com/mirasoth/Soothe/releases/tag/0.2.2
+[0.2.0]: https://github.com/mirasoth/Soothe/releases/tag/0.2.0
+[0.1.6]: https://github.com/mirasoth/Soothe/releases/tag/0.1.6
+[0.1.5]: https://github.com/mirasoth/Soothe/releases/tag/0.1.5
+[0.1.4]: https://github.com/mirasoth/Soothe/releases/tag/0.1.4
+[0.1.3]: https://github.com/mirasoth/Soothe/releases/tag/0.1.3
+[0.1.2]: https://github.com/mirasoth/Soothe/releases/tag/0.1.2
+[0.1.1]: https://github.com/mirasoth/Soothe/releases/tag/0.1.1
