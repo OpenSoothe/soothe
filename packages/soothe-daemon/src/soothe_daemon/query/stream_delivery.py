@@ -720,11 +720,20 @@ class StreamDeliveryCoalescer:
         to a file-summary message regardless of phase.
         """
         if self._gc is None or not self._gc.parts:
+            emit_terminal_marker = (
+                final
+                and self._gc is not None
+                and self._gc_phase == "chunked_streaming"
+                and self._gc_block_flush_count > 0
+            )
+            terminal: list[tuple[tuple[str, ...], str, Any]] = []
+            if emit_terminal_marker:
+                terminal = self._emit_goal_completion_terminal_marker()
             self._gc = None
             self._gc_streamed_chars = 0
             self._gc_phase = "batch" if self._mode == "batch" else "streaming"
             self._gc_last_block_monotonic = 0.0
-            return []
+            return terminal
 
         text = self._joined_gc_text()
 
@@ -732,6 +741,26 @@ class StreamDeliveryCoalescer:
             return self._emit_file_output_message(text)
 
         return self._emit_goal_completion_block(time.monotonic(), final=final)
+
+    def _emit_goal_completion_terminal_marker(self) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Emit a final ``chunk_position=last`` marker when buffered text is empty.
+
+        In adaptive chunked-streaming, a large one-shot message can emit an
+        intermediate block and leave the goal_completion buffer empty before
+        ``agent_loop.completed`` arrives. Clients still need a terminal marker
+        to finalize streaming state.
+        """
+        if self._gc is None:
+            return []
+        namespace = self._gc.namespace
+        msg = dict(self._gc.template_msg or {})
+        msg.setdefault("type", "AIMessageChunk")
+        msg["phase"] = "goal_completion"
+        msg["content"] = ""
+        msg["chunk_position"] = "last"
+        meta = dict(self._gc.template_meta or {})
+        wire = prepare_stream_data_for_wire((msg, meta))
+        return [(namespace, "messages", wire)]
 
     def _emit_file_output_message(self, text: str) -> list[tuple[tuple[str, ...], str, Any]]:
         """Write large goal_completion to file and emit summary message."""

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import contextvars
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -43,33 +42,11 @@ from soothe.core.events.internal_events import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator, Callable
-
     from soothe.config.models import AutonomousConfig
     from soothe.core.goal_engine.engine import GoalEngine
     from soothe.core.goal_engine.models import Goal
 
 logger = logging.getLogger(__name__)
-
-
-# RFC-222: ContextVar carrying the active (loop_id, goal_id) for the current
-# AsyncIO task. Middleware (FileLockMiddleware, observability hooks) reads this
-# to attribute lock ownership and lineage without needing the values threaded
-# through every call site. Set by AutopilotService.execute_goal; None in solo
-# mode (zero overhead — readers see None and short-circuit).
-_active_loop_context: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar(
-    "soothe_autopilot_active_loop", default=None
-)
-
-
-def get_active_loop_context() -> tuple[str, str] | None:
-    """Return the (loop_id, goal_id) active in the current task, if any.
-
-    Used by middleware components that need to attribute work to a specific
-    AutopilotService loop assignment without taking loop_id/goal_id as
-    constructor arguments.
-    """
-    return _active_loop_context.get()
 
 
 class AutopilotService:
@@ -480,118 +457,6 @@ class AutopilotService:
             )
 
         return loop
-
-    async def execute_goal(
-        self,
-        goal_id: str,
-        executor: Callable[[Goal, LoopHandle], AsyncIterator[Any]],
-    ) -> AsyncGenerator[Any, None]:
-        """Execute a goal end-to-end with loop assignment + claim + cleanup.
-
-        Wraps an injected ``executor`` (typically the runner's
-        ``_execute_autonomous_goal``) with:
-        - lineage-aware loop assignment from the pool
-        - atomic ``claim_goal`` so the goal flips to ``active`` and the
-          assigned loop_id is stamped on it
-        - ``_active_loop_context`` ContextVar set for the duration of the
-          run so middleware can attribute file locks correctly
-        - loop release/idle bookkeeping on completion or failure
-
-        The executor itself is responsible for actually driving AgentLoop,
-        emitting domain events, calling ``complete_goal``/``fail_goal``,
-        and yielding stream chunks back to the caller.
-
-        Args:
-            goal_id: Goal to execute.
-            executor: Callable that takes (Goal, LoopHandle) and returns
-                an async iterator of stream chunks. Invoked once after
-                the goal is claimed and the loop is assigned.
-
-        Yields:
-            Whatever the executor yields. If the goal can't be claimed
-            (vanished or raced), yields nothing and returns silently.
-        """
-        # Resolve goal first so we can do lineage assignment with the parent_id
-        goal = await self._goal_engine.get_goal(goal_id)
-        if not goal:
-            logger.warning("execute_goal: goal %s not found", goal_id)
-            return
-
-        # Bound concurrent goal execution via the configured cap so callers
-        # that fan out via asyncio.gather can't exceed max_parallel_goals.
-        # The semaphore is acquired BEFORE loop assignment so we don't burn
-        # a loop slot while waiting for execution capacity.
-        async with self._execution_semaphore:
-            # Lineage + idle + spawn checks must be atomic w.r.t. other
-            # parallel execute_goal calls. Without this lock, two coroutines
-            # could both read "parent loop is reusable" and stomp each other.
-            async with self._assignment_lock:
-                loop = await self._assign_loop_with_lineage(goal)
-            if not loop:
-                logger.warning("execute_goal: no loop capacity for goal %s", goal_id)
-                return
-
-            claimed = await self._goal_engine.claim_goal(goal_id, loop_id=loop.loop_id)
-            if not claimed:
-                logger.warning(
-                    "execute_goal: goal %s no longer claimable; releasing loop %s",
-                    goal_id,
-                    loop.loop_id,
-                )
-                # Return the loop to the idle queue so it can serve another goal.
-                async with self._assignment_lock:
-                    self._loop_pool.idle_loops.append(loop.loop_id)
-                    loop.current_goal_id = None
-                    loop.mark_idle()
-                return
-
-            # Set ContextVar so downstream middleware/observers can read loop+goal.
-            token = _active_loop_context.set((loop.loop_id, goal_id))
-            succeeded = False
-            try:
-                async for chunk in executor(claimed, loop):
-                    yield chunk
-                succeeded = True
-            finally:
-                _active_loop_context.reset(token)
-                await self._finalize_loop_for_goal(loop, goal_id, success=succeeded)
-
-    async def _finalize_loop_for_goal(
-        self,
-        loop: LoopHandle,
-        goal_id: str,
-        *,
-        success: bool,
-    ) -> None:
-        """Move a loop from active → idle (or error) after a goal run."""
-        if success:
-            # The executor is expected to call complete_goal/fail_goal on
-            # GoalEngine, which already releases file locks via
-            # _release_locks_and_emit. Here we only update pool bookkeeping.
-            self._loop_pool.record_goal_completion(goal_id, loop.loop_id)
-            await self._internal_bus.emit(
-                InternalLoopIdleEvent(
-                    loop_id=loop.loop_id,
-                    last_goal_id=goal_id,
-                    goal_history_count=loop.get_history_count(),
-                )
-            )
-            await self._internal_bus.emit(
-                InternalLoopPoolChangedEvent(
-                    active_count=self._loop_pool.active_count(),
-                    idle_count=self._loop_pool.idle_count(),
-                    total_count=self._loop_pool.total_count(),
-                    change_type="idle",
-                    loop_id=loop.loop_id,
-                )
-            )
-        else:
-            # Executor raised — mark loop as errored and release it so a
-            # fresh one will be spawned next time. Locks held by the
-            # erroring loop are released defensively here even though
-            # GoalEngine.fail_goal also does it on the goal_id side.
-            self._loop_pool.record_goal_failure(goal_id, loop.loop_id)
-            await self._release_loop(loop.loop_id, reason="error")
 
     async def _run_scheduling_loop(self) -> None:
         """Main scheduling loop coroutine.

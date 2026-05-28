@@ -153,7 +153,14 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
         assert get_response["loop"]["loop_id"] == loop_id
 
         await unix_client.send_loop_reattach(loop_id)
-        resume_response = await await_event_type(unix_client.read_event, "status", timeout=3.0)
+        # `loop_reattach` responds with history_replay + loop_reattached control
+        # frames (see soothe_daemon.event.reattachment); the only `status`
+        # frame on the wire is the handshake `idle` frame, which carries no
+        # loop_id and would always match here. Match the dedicated control
+        # frame instead.
+        resume_response = await await_event_type(
+            unix_client.read_event, "loop_reattached", timeout=3.0
+        )
         assert (
             resume_response.get("loop_id") == loop_id or resume_response.get("thread_id") == loop_id
         )
@@ -204,7 +211,9 @@ async def test_multi_transport_cross_transport_thread_sync(
         assert fetched["loop"]["loop_id"] == loop_id
 
         await unix_client.send_loop_reattach(loop_id)
-        resumed = await await_event_type(unix_client.read_event, "status", timeout=3.0)
+        # See note in test_multi_transport_thread_operations — reattach emits
+        # `loop_reattached`, not `status`, and that's the frame carrying loop_id.
+        resumed = await await_event_type(unix_client.read_event, "loop_reattached", timeout=3.0)
         assert resumed.get("loop_id") == loop_id or resumed.get("thread_id") == loop_id
     finally:
         if ws_client.is_connected:
