@@ -580,13 +580,12 @@ class _StartupMixin:
         except Exception:
             logger.warning("Could not prewarm third-party imports", exc_info=True)
 
-        # Markdown rendering stack — ~170 ms cold (textual._markdown pulls in
-        # markdown_it, pygments, linkify_it — 438 modules).  Hit on first
-        # SkillMessage compose() and first code-fence highlight.  Warming
-        # here makes the first expand/Ctrl+O instant.
+        # Markdown rendering stack — ~170 ms cold (markdown_it, pygments,
+        # linkify_it).  Hit on first AssistantMessage flush and first
+        # SkillMessage expand.  Warming here makes the first render instant.
         import markdown_it  # noqa: F401
         from pygments.lexers import get_lexer_by_name as _get_lexer
-        from textual.widgets import Markdown  # noqa: F401
+        from rich.markdown import Markdown as _RichMarkdown  # noqa: F401
 
         # Instantiate the Python lexer to populate Pygments' internal
         # lexer cache (~12 ms cold).  Python is the most common fence

@@ -273,9 +273,7 @@ class AgentLoop:
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
             if continue_thread_mode:
-                seed_continue_thread_ledger_from_prior_goal(
-                    checkpoint, goal_record, main_thread_id
-                )
+                seed_continue_thread_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
             await state_manager.save(checkpoint)
             iteration = 0
             logger.debug(

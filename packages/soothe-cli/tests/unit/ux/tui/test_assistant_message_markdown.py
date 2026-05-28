@@ -1,4 +1,4 @@
-"""Tests for AssistantMessage markdown streaming and flush behavior."""
+"""Tests for AssistantMessage markdown rendering and flush behavior."""
 
 from __future__ import annotations
 
@@ -10,59 +10,94 @@ from soothe_cli.tui.widgets.messages import AssistantMessage
 
 
 @pytest.mark.asyncio
-async def test_stop_stream_finalizes_markdown_stream_with_code_blocks() -> None:
-    """IG-426: Full markdown refresh only happens when content has fenced code blocks."""
+async def test_stop_stream_renders_content_to_body() -> None:
+    """stop_stream() renders final content via _render_to_body."""
     msg = AssistantMessage(id="asst-test")
-    stream = MagicMock()
-    stream.stop = AsyncMock()
-    msg._stream = stream
-    msg._content = "```python\nprint('hello')\n```"  # Content with code blocks
+    msg._content = "```python\nprint('hello')\n```"
     msg._streaming_active = True
     msg._render_markdown = True
-    md = MagicMock()
-    md.update = AsyncMock()
-    msg._markdown = md
+    body = MagicMock()
+    msg._body = body
 
     await msg.stop_stream()
 
-    stream.stop.assert_awaited_once()
-    assert msg._stream is None
-    md.update.assert_awaited_once_with("```python\nprint('hello')\n```")
+    assert not msg._streaming_active
+    body.update.assert_called_once()
+    # Verify we passed a RichMarkdown instance
+    from rich.markdown import Markdown as RichMarkdown
+
+    call_arg = body.update.call_args[0][0]
+    assert isinstance(call_arg, RichMarkdown)
 
 
 @pytest.mark.asyncio
-async def test_stop_stream_skips_full_refresh_without_code_blocks() -> None:
-    """IG-426: Optimization - skip expensive full markdown refresh when no code blocks."""
+async def test_stop_stream_renders_plain_text_when_markdown_disabled() -> None:
+    """stop_stream() renders plain text when render_markdown is False."""
     msg = AssistantMessage(id="asst-test")
-    stream = MagicMock()
-    stream.stop = AsyncMock()
-    msg._stream = stream
-    msg._content = "Hello"  # Plain text without code blocks
+    msg._content = "Hello world"
     msg._streaming_active = True
-    msg._render_markdown = True
-    md = MagicMock()
-    md.update = AsyncMock()
-    msg._markdown = md
+    msg._render_markdown = False
+    body = MagicMock()
+    msg._body = body
 
     await msg.stop_stream()
 
-    stream.stop.assert_awaited_once()
-    assert msg._stream is None
-    md.update.assert_not_called()  # Optimization: no refresh for plain text
+    assert not msg._streaming_active
+    body.update.assert_called_once_with("Hello world")
 
 
 @pytest.mark.asyncio
-async def test_stop_stream_skips_full_markdown_refresh_without_stream() -> None:
+async def test_stop_stream_no_op_when_content_empty() -> None:
+    """stop_stream() renders empty string when content is empty."""
     msg = AssistantMessage(id="asst-test")
-    msg._stream = None
-    msg._content = "Hello"
-    md = MagicMock()
-    md.update = AsyncMock()
-    msg._markdown = md
+    msg._content = ""
+    msg._streaming_active = False
+    msg._render_markdown = True
+    body = MagicMock()
+    msg._body = body
 
     await msg.stop_stream()
 
-    md.update.assert_not_called()
+    body.update.assert_called_once_with("")
+
+
+@pytest.mark.asyncio
+async def test_flush_renders_rich_markdown_to_body() -> None:
+    """_flush_pending_content renders accumulated content as RichMarkdown."""
+    msg = AssistantMessage(id="asst-test")
+    msg._content = "# Hello\n\nSome text"
+    msg._pending_buffer = "Some text"
+    msg._render_markdown = True
+    body = MagicMock()
+    msg._body = body
+
+    await msg._flush_pending_content()
+
+    from rich.markdown import Markdown as RichMarkdown
+
+    assert msg._pending_buffer == ""
+    body.update.assert_called_once()
+    call_arg = body.update.call_args[0][0]
+    assert isinstance(call_arg, RichMarkdown)
+
+
+@pytest.mark.asyncio
+async def test_set_content_hydration_uses_rich_markdown() -> None:
+    """set_content() (used by hydration) renders content as RichMarkdown."""
+    msg = AssistantMessage(id="asst-test")
+    msg._render_markdown = True
+    msg._streaming_active = False
+    body = MagicMock()
+    msg._body = body
+
+    await msg.set_content("# Hydrated\n\nContent here")
+
+    from rich.markdown import Markdown as RichMarkdown
+
+    assert msg._content == "# Hydrated\n\nContent here"
+    # stop_stream renders empty (no content yet), then set_content renders final
+    last_call_arg = body.update.call_args[0][0]
+    assert isinstance(last_call_arg, RichMarkdown)
 
 
 @pytest.mark.asyncio

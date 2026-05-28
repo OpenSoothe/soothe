@@ -58,14 +58,9 @@ from soothe_cli.tui.widgets.clipboard import (
 )
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
-# Pattern for fenced code blocks (IG-426)
-_FENCED_CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]*?```", re.MULTILINE)
-
 if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.timer import Timer
-    from textual.widgets import Markdown
-    from textual.widgets._markdown import MarkdownStream
 
 logger = logging.getLogger(__name__)
 
@@ -767,8 +762,9 @@ class AssistantMessage(Vertical):
     """Assistant reply card: markdown or plain text body (no title row).
 
     When ``render_markdown`` is enabled (default), model output is rendered as
-    Markdown. When disabled, output is shown verbatim. User and assistant messages
-    are always shown in full (no truncation or collapse).
+    Markdown via ``rich.markdown.Markdown`` inside a single ``Static`` widget.
+    When disabled, output is shown verbatim. This avoids the heavy widget tree
+    that ``textual.widgets.Markdown`` creates (one child widget per block).
     """
 
     ALLOW_SELECT = True
@@ -780,12 +776,6 @@ class AssistantMessage(Vertical):
         padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
-    }
-
-    AssistantMessage Markdown {
-        padding: 0;
-        margin: 0;
-        height: auto;
     }
 
     AssistantMessage .assistant-body {
@@ -811,9 +801,7 @@ class AssistantMessage(Vertical):
         """
         super().__init__(**kwargs)
         self._content = content
-        self._markdown: Markdown | None = None
         self._body: Static | None = None
-        self._stream: MarkdownStream | None = None
         self._streaming_active: bool = False
 
         # Batching buffer for streaming content
@@ -835,41 +823,28 @@ class AssistantMessage(Vertical):
             pass  # Default to True if config unavailable
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
-        """Compose markdown body or plain body."""
-        if self._render_markdown:
-            from textual.widgets import Markdown
-
-            yield Markdown("", id="assistant-md")
-        else:
-            yield Static("", markup=False, classes="assistant-body", id="assistant-body")
+        """Compose the assistant body as a single Static widget."""
+        yield Static("", markup=False, classes="assistant-body", id="assistant-body")
 
     def on_mount(self) -> None:
-        """Wire child widgets."""
+        """Wire child widget reference."""
         if is_ascii_mode():
             self.add_class("-ascii")
+        self._body = self.query_one("#assistant-body", Static)
 
+    def _render_to_body(self) -> None:
+        """Render current content into the body Static widget."""
+        if self._body is None:
+            return
+        if not self._content:
+            self._body.update("")
+            return
         if self._render_markdown:
-            from textual.widgets import Markdown
+            from rich.markdown import Markdown as RichMarkdown
 
-            self._markdown = self.query_one("#assistant-md", Markdown)
+            self._body.update(RichMarkdown(self._content, code_theme="monokai"))
         else:
-            self._body = self.query_one("#assistant-body", Static)
-
-    def _get_markdown(self) -> Markdown:
-        """Return the markdown widget, querying if not cached."""
-        if self._markdown is None:
-            from textual.widgets import Markdown
-
-            self._markdown = self.query_one("#assistant-md", Markdown)
-        return self._markdown
-
-    def _ensure_stream(self) -> MarkdownStream:
-        """Ensure the markdown stream is initialized."""
-        if self._stream is None:
-            from textual.widgets import Markdown
-
-            self._stream = Markdown.get_stream(self._get_markdown())
-        return self._stream
+            self._body.update(self._content)
 
     def on_click(self, event: Click) -> None:
         """Show timestamp toast on click."""
@@ -879,19 +854,12 @@ class AssistantMessage(Vertical):
         _show_timestamp_toast(self)
 
     async def _flush_pending_content(self) -> None:
-        """Flush buffered content to stream or body widget (batched update)."""
+        """Flush buffered content to body widget (batched update)."""
         self._flush_timer = None
         if not self._pending_buffer:
             return
-
-        text = self._pending_buffer
         self._pending_buffer = ""
-
-        if self._render_markdown:
-            stream = self._ensure_stream()
-            await stream.write(text)
-        elif self._body is not None:
-            await self._body.update(self._content)
+        self._render_to_body()
 
     async def append_content(self, text: str) -> None:
         """Append content to the message (for streaming with batching).
@@ -917,11 +885,7 @@ class AssistantMessage(Vertical):
         """Write initial content from constructor and finalize streaming state."""
         if self._content:
             self._streaming_active = True
-            if self._render_markdown:
-                stream = self._ensure_stream()
-                await stream.write(self._content)
-            elif self._body is not None:
-                await self._body.update(self._content)
+            self._render_to_body()
             await self.stop_stream()
 
     async def stop_stream(self) -> None:
@@ -934,38 +898,14 @@ class AssistantMessage(Vertical):
             await self._flush_pending_content()
 
         self._streaming_active = False
-        if self._render_markdown:
-            stream_was_active = self._stream is not None
-            if self._stream is not None:
-                await self._stream.stop()
-                self._stream = None
-            # Textual's incremental `Markdown.append` (used by MarkdownStream) can
-            # leave fenced code blocks / merged tails inconsistent once the stream
-            # ends. Re-parse the full document so the finished card matches what a
-            # one-shot render would produce.
-            # IG-426: Only re-render if fenced code blocks detected (expensive operation)
-            if stream_was_active and self._content:
-                has_code_blocks = bool(_FENCED_CODE_BLOCK_PATTERN.search(self._content))
-                if has_code_blocks:
-                    try:
-                        await self._get_markdown().update(self._content)
-                    except Exception:
-                        logger.debug(
-                            "AssistantMessage: full markdown refresh after stream failed",
-                            exc_info=True,
-                        )
-        elif self._body is not None:
-            await self._body.update(self._content)
+        self._render_to_body()
 
     async def set_content(self, content: str) -> None:
         """Set the full message content (stops any active stream)."""
         await self.stop_stream()
         self._content = content
         self._pending_buffer = ""
-        if self._render_markdown and self._markdown:
-            await self._markdown.update(content)
-        elif self._body:
-            await self._body.update(content)
+        self._render_to_body()
 
 
 class DiffMessage(_TimestampClickMixin, Static):

@@ -81,9 +81,13 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
             await subscribe_loop_stream(client1, loop_id)
 
             await client1.send_input(loop_id, "Say test")
-            status = await await_status_state(client1.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
+            status = await await_status_state(
+                client1.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout()
+            )
             if status.get("state") == "running":
-                await await_status_state(client1.read_event, "idle", timeout=integration_llm_idle_timeout())
+                await await_status_state(
+                    client1.read_event, "idle", timeout=integration_llm_idle_timeout()
+                )
 
         finally:
             await client1.close()
@@ -121,9 +125,13 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
             await subscribe_loop_stream(client2, loop_id)
 
             await client2.send_input(loop_id, "Say hello")
-            status2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
+            status2 = await await_status_state(
+                client2.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout()
+            )
             if status2.get("state") == "running":
-                await await_status_state(client2.read_event, "idle", timeout=integration_llm_idle_timeout())
+                await await_status_state(
+                    client2.read_event, "idle", timeout=integration_llm_idle_timeout()
+                )
 
         finally:
             await client2.close()
@@ -150,9 +158,13 @@ async def test_thread_recovery_missing_metadata(
         await subscribe_loop_stream(client, loop_id)
 
         await client.send_input(loop_id, "Say test")
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
+        status = await await_status_state(
+            client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout()
+        )
         if status.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
+            await await_status_state(
+                client.read_event, "idle", timeout=integration_llm_idle_timeout()
+            )
 
         get_response = await request_loop_get(client, loop_id)
         assert get_response["loop"]["loop_id"] == loop_id
@@ -193,9 +205,13 @@ async def test_concurrent_thread_execution(
         await subscribe_loop_stream(client, loop_ids[0])
 
         await client.send_input(loop_ids[0], "Say thread")
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
+        status = await await_status_state(
+            client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout()
+        )
         if status.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
+            await await_status_state(
+                client.read_event, "idle", timeout=integration_llm_idle_timeout()
+            )
 
     finally:
         await client.close()
@@ -221,11 +237,15 @@ async def test_thread_cancellation(
         await client.send_input(loop_id, "Start a potentially long operation")
 
         try:
-            await await_status_state(client.read_event, "running", timeout=integration_llm_idle_timeout())
+            await await_status_state(
+                client.read_event, "running", timeout=integration_llm_idle_timeout()
+            )
 
             await client.send_command("/cancel")
 
-            cancel_status = await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
+            cancel_status = await await_status_state(
+                client.read_event, "idle", timeout=integration_llm_idle_timeout()
+            )
             assert cancel_status.get("state") == "idle"
         except TimeoutError:
             pass
@@ -235,10 +255,14 @@ async def test_thread_cancellation(
 
         await client.send_input(loop_id, "Say continue")
         try:
-            status2 = await await_status_state(client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
+            status2 = await await_status_state(
+                client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout()
+            )
             if status2.get("state") == "running":
                 try:
-                    await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
+                    await await_status_state(
+                        client.read_event, "idle", timeout=integration_llm_idle_timeout()
+                    )
                 except TimeoutError:
                     pass
         except TimeoutError:
