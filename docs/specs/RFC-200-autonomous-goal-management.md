@@ -2,15 +2,18 @@
 
 **RFC**: 200
 **Title**: Autonomous Goal Management Loop
-**Status**: Implemented
+**Status**: Implemented — control-flow sections partially superseded by RFC-222 (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-03-15
-**Updated**: 2026-05-26
+**Updated**: 2026-05-28
+
 **Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
+
+> **Compatibility note (2026-05-28)**: RFC-222 revised replaces the **inverted control flow** described in §"Pull-Based Architecture" and §"AgentLoop ↔ GoalEngine Integration" with **autopilot push** — daemon's `AutopilotService` dispatches goals to AgentLoop workers; AgentLoop never sees `GoalEngine`. The following sections of this RFC remain authoritative: §"GoalEngine Responsibilities", §"Backoff Reasoning Architecture", §"EvidenceBundle Schema", §"GoalEngine Internal Backoff Application", §"Goal Directives". The §"GoalContext Construction for Plan Phase" section uses `GoalContext` in the RFC-200 sense (DAG snapshot for backoff); RFC-222's distinct concept is named `GoalDispatchContextBundle` to avoid collision.
 
 ## Abstract
 
-This RFC defines GoalEngine, Soothe's autonomous goal management system for long-running complex workflows. GoalEngine manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to AgentLoop (RFC-201) through explicit PERFORM → AgentLoop delegation, and receives PlanResult for GoalEngine reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines GoalEngine, Soothe's autonomous goal management system for long-running complex workflows. GoalEngine manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. **Per RFC-222 (revised 2026-05-28)**, execution is driven by the daemon-owned `AutopilotService` which dispatches goals to subprocess AgentLoop workers via a job contract. AgentLoop emits a completion chunk that the daemon's autopilot consumes to advance the DAG. GoalEngine itself remains the authoritative state machine for goal lifecycle, backoff reasoning, and DAG semantics. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 

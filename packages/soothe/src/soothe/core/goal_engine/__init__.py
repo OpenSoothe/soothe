@@ -8,8 +8,16 @@ from soothe.core.goal_engine.file_lock_registry import (
     FileLockRegistry,
 )
 from soothe.core.goal_engine.models import (
+    FileTouchSummary,
+    Finding,
     Goal,
+    GoalDispatchContextBundle,
+    GoalDispatchContextContribution,
     GoalStatus,
+    ParentFinding,
+    PriorStepSummary,
+    StepSummary,
+    ToolCallStats,
 )
 from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
 from soothe.core.goal_engine.scheduled_tasks import (
@@ -22,13 +30,21 @@ __all__ = [
     "FileConflictError",
     "FileLockEntry",
     "FileLockRegistry",
+    "FileTouchSummary",
+    "Finding",
     "Goal",
     "GoalBackoffReasoner",
+    "GoalDispatchContextBundle",
+    "GoalDispatchContextContribution",
     "GoalEngine",
     "GoalStatus",
+    "ParentFinding",
+    "PriorStepSummary",
     "Proposal",
     "ProposalQueue",
-    "ScheduledTask",
     "ScheduleSpec",
+    "ScheduledTask",
     "SchedulerService",
+    "StepSummary",
+    "ToolCallStats",
 ]

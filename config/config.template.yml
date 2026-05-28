@@ -58,6 +58,21 @@ agent:
     inbox_dir: "$SOOTHE_HOME/autopilot/inbox"
     outbox_dir: "$SOOTHE_HOME/autopilot/outbox"
 
+    # Context projection (RFC-222 revised) — bounds for the
+    # GoalDispatchContextBundle that the daemon's ContextProjector ships to
+    # each worker. Keeps cross-process IPC bounded.
+    context_projection:
+      max_findings: 20
+      max_files: 50
+      max_plan_steps: 30
+      context_retention_hours: 168    # evict after root goal terminal + 1 week
+
+    # Workspace reservation (RFC-222 revised) — scheduling-time conflict gate.
+    # Refuses to dispatch two goals on overlapping workspace prefixes.
+    workspace_reservation:
+      enabled: true
+      strict_overlap: true
+
   # === LOOP (AgentLoop Internal Tuning) ===
   # Rarely edited. Defaults optimized for most use cases.
   loop:
