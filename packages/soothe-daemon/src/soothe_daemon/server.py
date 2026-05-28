@@ -857,7 +857,7 @@ class SootheDaemon(DaemonHandlersMixin):
         # so it doesn't dispatch new goals while the rest of the daemon shuts down.
         if self._autopilot_service is not None:
             try:
-                await self._autopilot_service.stop(reason="daemon_shutdown")
+                await self._autopilot_service.stop(reason="shutdown")
             except Exception:
                 logger.warning("[Autopilot] stop raised during shutdown", exc_info=True)
 

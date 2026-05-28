@@ -21,7 +21,7 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
-from tests.integration.ws_loop_client import loop_new_with_initial_input, request_loop_list
+from tests.integration.ws_loop_client import loop_new, request_loop_list, subscribe_loop_stream
 
 
 @pytest.fixture
@@ -90,7 +90,9 @@ async def test_message_size_limit(tmp_path: Path) -> None:
 
         try:
             small_message = "x" * (1 * 1024 * 1024)
-            loop_id = await loop_new_with_initial_input(client, initial_message=small_message)
+            loop_id = await loop_new(client)
+            await subscribe_loop_stream(client, loop_id)
+            await client.send_loop_input(loop_id, small_message)
             assert loop_id
 
         finally:

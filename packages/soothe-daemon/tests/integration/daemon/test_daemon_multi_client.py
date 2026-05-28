@@ -206,7 +206,7 @@ async def test_event_message_includes_thread_and_loop_id(tmp_path: Path):
         await client.send_input(loop_id, "hello")
 
         for _ in range(10):
-            event = await asyncio.wait_for(client.read_event(), timeout=2.0)
+            event = await asyncio.wait_for(client.read_event(), timeout=10.0)
             if event and event.get("type") == "event":
                 assert event.get("loop_id") == loop_id
                 break

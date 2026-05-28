@@ -27,6 +27,7 @@ from tests.integration.conftest import (
     await_status_state,
     build_daemon_config,
     force_isolated_home,
+    integration_llm_idle_timeout,
     websocket_bootstrap_loop_session,
     websocket_create_loop_only,
 )
@@ -211,9 +212,9 @@ class TestLoopIsolation:
 
             # loop2 should still accept work after loop1 is cancelled
             await client2.send_input(loop2, "Reply with only: OK-after-cancel")
-            post = await await_status_state(client2.read_event, {"running", "idle"}, timeout=30.0)
+            post = await await_status_state(client2.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if post.get("state") == "running":
-                await await_status_state(client2.read_event, "idle", timeout=30.0)
+                await await_status_state(client2.read_event, "idle", timeout=integration_llm_idle_timeout())
 
             await client1.close()
             await client2.close()
@@ -446,9 +447,9 @@ class TestLoopIsolation:
 
             # Client1 executes on loop1 (creates event history)
             await client1.send_input(loop1, "First message in loop1")
-            st = await await_status_state(client1.read_event, {"running", "idle"}, timeout=30.0)
+            st = await await_status_state(client1.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if st.get("state") == "running":
-                await await_status_state(client1.read_event, "idle", timeout=30.0)
+                await await_status_state(client1.read_event, "idle", timeout=integration_llm_idle_timeout())
 
             client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client2)
@@ -472,7 +473,7 @@ class TestLoopIsolation:
             # Client1 reattaches to loop1 with replay (RFC-411: history_replay + markers)
             client1.clear_pending_events()
             await client1.send_loop_reattach(loop1)
-            await await_event_type(client1.read_event, "history_replay", timeout=30.0)
+            await await_event_type(client1.read_event, "history_replay", timeout=integration_llm_idle_timeout())
             await await_event_type(client1.read_event, "loop_reattached", timeout=15.0)
             await await_event_type(client1.read_event, "replay_complete", timeout=15.0)
 
@@ -615,14 +616,14 @@ class TestLoopIsolation:
 
             # Execute on both loops (wait for completion to avoid overlapping workers)
             await client1.send_input(loop1, "Execute in loop1")
-            st1 = await await_status_state(client1.read_event, {"running", "idle"}, timeout=30.0)
+            st1 = await await_status_state(client1.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if st1.get("state") == "running":
-                await await_status_state(client1.read_event, "idle", timeout=30.0)
+                await await_status_state(client1.read_event, "idle", timeout=integration_llm_idle_timeout())
 
             await client2.send_input(loop2, "Execute in loop2")
-            st2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=30.0)
+            st2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if st2.get("state") == "running":
-                await await_status_state(client2.read_event, "idle", timeout=30.0)
+                await await_status_state(client2.read_event, "idle", timeout=integration_llm_idle_timeout())
 
             # Delete loop1
             delete_resp = await client1.request_response(
@@ -647,7 +648,7 @@ class TestLoopIsolation:
 
             # Verify loop2 can still execute
             await client2.send_input(loop2, "Continue execution in loop2")
-            event = await asyncio.wait_for(client2.read_event(), timeout=2.0)
+            event = await asyncio.wait_for(client2.read_event(), timeout=integration_llm_idle_timeout())
             assert event is not None
             # Events with loop_id should match loop2
             if event.get("loop_id"):

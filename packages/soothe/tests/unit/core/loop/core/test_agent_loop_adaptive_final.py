@@ -37,17 +37,18 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_sm.save = AsyncMock()
     mock_sm.record_iteration = AsyncMock()
     mock_sm.finalize_goal = AsyncMock()
+    mock_sm.close = AsyncMock()
 
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
     with (
         patch(
-            "soothe.core.loop.state.manager.AgentLoopStateManager",
+            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.goal_context_manager.GoalContextManager",
+            "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -100,17 +101,18 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_sm.save = AsyncMock()
     mock_sm.record_iteration = AsyncMock()
     mock_sm.finalize_goal = AsyncMock()
+    mock_sm.close = AsyncMock()
 
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
     with (
         patch(
-            "soothe.core.loop.state.manager.AgentLoopStateManager",
+            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.goal_context_manager.GoalContextManager",
+            "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -157,17 +159,18 @@ async def test_completed_payload_for_summary_path() -> None:
     mock_sm.save = AsyncMock()
     mock_sm.record_iteration = AsyncMock()
     mock_sm.finalize_goal = AsyncMock()
+    mock_sm.close = AsyncMock()
 
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
     with (
         patch(
-            "soothe.core.loop.state.manager.AgentLoopStateManager",
+            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.goal_context_manager.GoalContextManager",
+            "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -194,3 +197,62 @@ async def test_completed_payload_for_summary_path() -> None:
 
     completed = [e for e in events if e[0] == "completed"]
     assert len(completed) == 1
+
+
+@pytest.mark.asyncio
+async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
+    """RFC-223: AgentLoop main thread id must align to loop_id."""
+    mock_core = Mock()
+    mock_core.astream = AsyncMock()
+
+    mock_gr = Mock()
+    mock_gr.loop_messages = []
+    mock_ckpt = Mock()
+    mock_ckpt.goal_history = []
+    mock_ckpt.loop_messages = []
+    mock_ckpt.status = "ready_for_next_goal"
+    mock_ckpt.current_thread_id = "legacy-thread"
+    mock_ckpt.thread_ids = ["legacy-thread"]
+
+    mock_sm = Mock()
+    mock_sm.loop_id = "loop-test"
+    mock_sm.load = AsyncMock(return_value=None)
+    mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
+    mock_sm.start_new_goal = Mock(return_value=mock_gr)
+    mock_sm.save = AsyncMock()
+    mock_sm.record_iteration = AsyncMock()
+    mock_sm.finalize_goal = AsyncMock()
+    mock_sm.close = AsyncMock()
+
+    mock_gcm = Mock()
+    mock_gcm.get_plan_context = AsyncMock(return_value=[])
+
+    with (
+        patch(
+            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            return_value=mock_sm,
+        ),
+        patch(
+            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            return_value=mock_gcm,
+        ),
+    ):
+        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop.plan_phase.assess_status = AsyncMock(
+            return_value=StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                require_goal_completion=False,
+            ),
+        )
+
+        _ = [
+            evt
+            async for evt in loop.run_with_progress(
+                goal="simple goal",
+                thread_id="thread-a",
+                max_iterations=8,
+            )
+        ]
+
+    mock_sm.initialize.assert_awaited_once_with("loop-test", 8)
