@@ -110,6 +110,11 @@ class SootheDaemon(DaemonHandlersMixin):
         self._daemon_workspace = resolve_daemon_workspace()
         logger.info("Daemon workspace: %s", self._daemon_workspace)
 
+        # Incremental skill index (mtime-cached, global user skills only)
+        from soothe.skills.index import SkillIndex
+
+        self._skill_index = SkillIndex()
+
         self._clients: list[_ClientConn] = []
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
@@ -263,6 +268,17 @@ class SootheDaemon(DaemonHandlersMixin):
                     config=self._config,
                     internal_bus=daemon_autopilot_bus,
                 )
+                # RFC-222 H4: any goal still in ``active`` from a previous daemon
+                # run is stranded — its worker subprocess is gone. Reset to
+                # ``pending`` so the scheduling loop re-dispatches it. No-op when
+                # the engine starts empty (in-memory restore is a future RFC).
+                recovered_ids = daemon_goal_engine.recover_active_goals()
+                if recovered_ids:
+                    logger.warning(
+                        "[Autopilot] crash recovery: reset %d active goal(s) → pending: %s",
+                        len(recovered_ids),
+                        ", ".join(recovered_ids),
+                    )
                 ws_cfg = self._config.agent.autonomous.workspace_reservation
                 workspace_reservation = WorkspaceReservation(
                     enabled=ws_cfg.enabled,

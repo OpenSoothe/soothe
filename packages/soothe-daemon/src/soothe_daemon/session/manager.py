@@ -213,7 +213,25 @@ class ClientSessionManager:
         For strict isolation, also unsubscribes from the ``global`` topic when
         subscribing to a specific loop. Loop-scoped clients should only receive
         events from their subscribed loop, not daemon-wide broadcasts.
+
+        RFC-222 §WorkerPool: refuses subscriptions to ``autopilot__*`` worker
+        loop_ids. Those are internal autopilot subprocess workers and must
+        never be exposed as user-facing sessions.
         """
+        try:
+            from soothe.core.autopilot.worker_pool import is_autopilot_worker_loop_id
+
+            if is_autopilot_worker_loop_id(loop_id):
+                logger.warning(
+                    "[Session] rejected subscribe to autopilot worker loop %s by client %s",
+                    loop_id,
+                    client_id,
+                )
+                return False
+        except Exception:
+            # Helper unavailable — fall through; this is purely a defensive gate.
+            logger.debug("autopilot worker loop_id check unavailable", exc_info=True)
+
         async with self._lock:
             session = self._sessions.get(client_id)
 

@@ -73,6 +73,9 @@ class Goal(BaseModel):
     lock_status: Literal["none", "acquired", "released"] = "none"
     locked_files: list[str] = Field(default_factory=list)
     lock_acquired_at: datetime | None = None
+    # RFC-222 H4: incremented each time crash recovery resets this goal from
+    # ``active`` back to ``pending`` on daemon start.
+    attempts_after_crash: int = 0
 
 
 # RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration

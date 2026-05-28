@@ -6,11 +6,14 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
 from soothe.skills.builtins import is_builtin_skill_directory
 from soothe.skills.workspace_sync import skill_directories_for_resolution
+
+if TYPE_CHECKING:
+    from soothe.skills.index import SkillIndex
 
 logger = logging.getLogger(__name__)
 
@@ -124,22 +127,85 @@ def _parse_skill_directory(skill_dir: str | Path) -> dict[str, Any] | None:
 def wire_entries_for_agent_config(
     config: SootheConfig,
     workspace: str | None = None,
+    *,
+    skill_index: SkillIndex | None = None,
 ) -> list[dict[str, str]]:
     """Return wire-safe skill metadata sorted by name.
 
-    Scans built-in, user, and project skill directories declared in the
-    config and returns a list of dicts suitable for RPC serialization.
-    The ``path`` field is intentionally excluded (wire-safe).
+    When ``skill_index`` is provided, global user skills are served from the
+    cached index (fast, stat-only invalidation) and only workspace-local skills
+    are scanned from the filesystem. Without an index, falls back to full
+    filesystem scan for backward compatibility.
 
     Args:
         config: SootheConfig with optional ``config.skills`` directories.
         workspace: Optional workspace directory for project-local skills
             (scans `<workspace>/.soothe/skills/`). Falls back to cwd if not provided.
+        skill_index: Optional ``SkillIndex`` instance for incremental loading.
 
     Returns:
         List of ``{name, description, source, version?}`` dicts sorted
         alphabetically by name. No ``path`` field is included.
     """
+    if skill_index is not None:
+        return _wire_entries_from_index(config, workspace, skill_index)
+    return _wire_entries_full_scan(config, workspace)
+
+
+def _wire_entries_from_index(
+    config: SootheConfig,
+    workspace: str | None,
+    skill_index: SkillIndex,
+) -> list[dict[str, str]]:
+    """Build wire entries using cached index for global skills + filesystem for workspace."""
+    entries: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+
+    # Global user skills from index (fast path)
+    for idx_entry in skill_index.rebuild_if_stale():
+        entry: dict[str, str] = {
+            "name": idx_entry.name,
+            "description": idx_entry.description,
+            "source": idx_entry.source,
+        }
+        if idx_entry.tags:
+            entry["tags"] = idx_entry.tags
+        seen_names.add(idx_entry.name)
+        entries.append(entry)
+
+    # Workspace-local skills (filesystem scan, small set)
+    ws = workspace or str(Path.cwd().resolve())
+    from soothe.skills.workspace_sync import workspace_skills_mirror_root
+
+    mirror = workspace_skills_mirror_root(ws)
+    if mirror.is_dir():
+        for skill_md in mirror.glob("*/SKILL.md"):
+            meta = _parse_skill_directory(str(skill_md.parent.resolve()))
+            if meta is None:
+                continue
+            name = meta["name"]
+            # Workspace wins over global (last-wins)
+            if name in seen_names:
+                entries = [e for e in entries if e["name"] != name]
+            seen_names.add(name)
+            entry = {
+                "name": name,
+                "description": meta["description"],
+                "source": "project",
+            }
+            if meta.get("version"):
+                entry["version"] = meta["version"]
+            entries.append(entry)
+
+    entries.sort(key=lambda e: e["name"].lower())
+    return entries
+
+
+def _wire_entries_full_scan(
+    config: SootheConfig,
+    workspace: str | None,
+) -> list[dict[str, str]]:
+    """Legacy full-scan path (no index available)."""
     ws = workspace or str(Path.cwd().resolve())
     all_dirs = skill_directories_for_resolution(config, ws)
 
@@ -151,7 +217,6 @@ def wire_entries_for_agent_config(
         if meta is None:
             continue
 
-        # Determine source label
         if is_builtin_skill_directory(dir_path):
             source = "builtin"
         else:
@@ -165,7 +230,6 @@ def wire_entries_for_agent_config(
         if meta.get("version"):
             entry["version"] = meta["version"]
 
-        # Last-wins: later entries override earlier ones with same name
         if meta["name"] in seen_names:
             entries = [e for e in entries if e["name"] != meta["name"]]
         seen_names.add(meta["name"])

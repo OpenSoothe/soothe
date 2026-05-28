@@ -141,8 +141,13 @@ _internal_bus: InternalEventBus | None = None
 def get_internal_bus() -> InternalEventBus:
     """Get the singleton InternalEventBus instance.
 
-    Creates on first call. Used across GoalEngine, AutopilotService,
-    and AgentLoop for internal coordination.
+    .. deprecated:: RFC-222 Q8
+        This singleton is deprecated. New code MUST construct its own
+        ``InternalEventBus`` and inject it where needed. Module-global state
+        creates spooky coupling across ``AutopilotService`` instances and
+        breaks isolation between tests. The singleton is kept solely as a
+        fallback for the preserved-unwired ``FileLockMiddleware`` and for
+        backward compatibility with older test fixtures.
 
     Returns:
         The singleton InternalEventBus.

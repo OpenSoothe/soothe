@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.autopilot.loop_pool import LoopHandle, LoopPool
-from soothe.core.events.internal_bus import get_internal_bus
+from soothe.core.events.internal_bus import InternalEventBus
 from soothe.core.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
     INTERNAL_GOALS_READY,
@@ -113,7 +113,7 @@ class AutopilotService:
         """
         self._goal_engine = goal_engine
         self._config = config
-        self._internal_bus = internal_bus or get_internal_bus()
+        self._internal_bus = internal_bus if internal_bus is not None else InternalEventBus()
         self._loop_pool = LoopPool(max_loops=self._config.max_loops)
         self._running = False
         self._dreaming = False
@@ -389,12 +389,12 @@ class AutopilotService:
         return await self._goal_engine.get_goal(goal_id)
 
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> Goal | None:
-        """Best-effort cancel: transition the goal to ``failed``.
+        """Cancel a goal: stop the worker (if any) and transition to ``failed``.
 
-        If the goal is currently dispatched to a worker, RFC-221 cooperative
-        cancellation will pick up the engine state on its next chunk-boundary
-        check (Phase C scaffolding; full worker.runner.cancel() integration
-        lands later).
+        RFC-222 H8: when the goal is currently dispatched, resolve the assigned
+        worker via ``WorkerPool`` and call ``worker.runner.cancel()`` to abort
+        the subprocess via RFC-221's cooperative cancellation. The goal is then
+        transitioned to ``failed`` with ``allow_retry=False``.
 
         Args:
             goal_id: Goal to cancel.
@@ -408,6 +408,26 @@ class AutopilotService:
         goal = await self._goal_engine.get_goal(goal_id)
         if goal is None:
             return None
+
+        # H8: resolve and cancel the worker if a real-dispatch pool is wired
+        # and the goal is currently active on a worker.
+        if self._worker_pool is not None and goal.assigned_loop_id:
+            worker = self._worker_pool.get_worker(goal.assigned_loop_id)
+            if worker is not None and worker.current_goal_id == goal_id:
+                try:
+                    await worker.runner.cancel()
+                    logger.info(
+                        "[Autopilot] cancel_goal: requested cancel of worker %s for goal %s",
+                        worker.loop_id,
+                        goal_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "worker.runner.cancel() raised during cancel_goal(%s)",
+                        goal_id,
+                        exc_info=True,
+                    )
+
         evidence = EvidenceBundle(
             structured={"reason": reason},
             narrative=f"Cancelled by autopilot: {reason}",
@@ -500,12 +520,94 @@ class AutopilotService:
                 await asyncio.sleep(poll_interval)
 
     async def _process_inbox(self) -> None:
-        """Process channel inbox for new tasks.
+        """Drain channel inbox files into goals (RFC-222 Phase C).
 
-        Reads pending messages and creates goals via GoalEngine.
+        Each ``task_submit`` message becomes a new goal via ``submit_task``.
+        ``signal_resume`` / ``signal_interrupt`` messages are deferred to a
+        future enhancement (currently logged and skipped). Failures on a
+        single file are isolated — never break the scheduling loop.
         """
-        # TODO: Implement inbox processing when channel protocol is ready
-        pass
+        try:
+            inbox = self._get_or_init_inbox()
+        except Exception:
+            logger.debug("Inbox initialization failed", exc_info=True)
+            return
+        if inbox is None:
+            return
+
+        try:
+            messages = inbox.read_pending()
+        except Exception:
+            logger.warning("Failed to read pending inbox messages", exc_info=True)
+            return
+
+        for msg in messages:
+            try:
+                if msg.type != "task_submit":
+                    logger.debug(
+                        "Inbox: skipping non-task message type=%s (signals not wired yet)",
+                        msg.type,
+                    )
+                    continue
+                payload = msg.payload or {}
+                description = str(payload.get("description") or "").strip()
+                if not description:
+                    logger.warning("Inbox: skipping message with empty description")
+                    continue
+                priority_raw = payload.get("priority", 50)
+                try:
+                    priority = int(priority_raw)
+                except (TypeError, ValueError):
+                    priority = 50
+                goal = await self.submit_task(description, priority=priority)
+                logger.info(
+                    "[Autopilot] inbox → goal %s (priority=%d): %s",
+                    goal.id,
+                    priority,
+                    description[:80],
+                )
+            except Exception:
+                logger.warning("Inbox: failed to process message", exc_info=True)
+
+        try:
+            archived = inbox.archive_processed()
+            if archived:
+                logger.debug("Inbox: archived %d processed files", archived)
+        except Exception:
+            logger.debug("Inbox: archive_processed raised", exc_info=True)
+
+    def _get_or_init_inbox(self) -> Any:
+        """Lazily construct the ChannelInbox bound to ``config.inbox_dir``.
+
+        Returns the inbox instance, or ``None`` when the configured path is
+        empty / cannot be created.
+        """
+        existing = getattr(self, "_channel_inbox", None)
+        if existing is not None:
+            return existing
+
+        inbox_dir_raw = getattr(self._config, "inbox_dir", "") or ""
+        if not inbox_dir_raw:
+            self._channel_inbox = None
+            return None
+
+        import os
+        from pathlib import Path
+
+        from soothe.core.channel.inbox import ChannelInbox
+
+        expanded = os.path.expandvars(inbox_dir_raw)
+        path = Path(expanded).expanduser()
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            logger.warning("Inbox: unable to create %s", path, exc_info=True)
+            self._channel_inbox = None
+            return None
+        inbox = ChannelInbox(path)
+        self._channel_inbox = inbox
+        logger.info("[Autopilot] channel inbox bound to %s", path)
+        return inbox
 
     async def _check_scheduled_tasks(self) -> None:
         """Check scheduled tasks and create goals for due tasks."""
@@ -599,6 +701,11 @@ class AutopilotService:
         # ContextProjector to fetch and project parents' contributions.
         bundle = await self._build_merged_context(goal)
 
+        # RFC-222 H5: compute wall-clock deadline from config. The worker logs
+        # this value; the daemon-side monitor (``_monitor_loop_health``) is
+        # the authoritative enforcer — it cancels the worker on overrun.
+        deadline_seconds = getattr(self._config, "goal_deadline_seconds", None)
+
         request = LoopRunRequest(
             loop_id=worker.loop_id,
             thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
@@ -607,7 +714,7 @@ class AutopilotService:
                 goal_id=goal.id,
                 goal_description=goal.description,
                 merged_context=bundle,
-                deadline_seconds=None,  # H5: hook for deadline; not yet enforced.
+                deadline_seconds=deadline_seconds,
                 attempt=goal.retry_count + 1,
             ),
             autonomous=True,
@@ -902,12 +1009,70 @@ class AutopilotService:
         await self._schedule_ready_goals()
 
     async def _monitor_loop_health(self) -> None:
-        """Monitor active loop health.
+        """Monitor active workers — enforce wall-clock deadlines (RFC-222 H5).
 
-        Checks for stalled or errored loops.
+        For each active worker, if ``goal_deadline_seconds`` is configured and
+        the worker has been busy longer than that, request cooperative
+        cancellation via ``worker.runner.cancel()`` and fail the goal with a
+        deadline_exceeded evidence bundle. The stream consumer task will see
+        the cancel and unwind cleanly (releasing reservation + worker).
         """
-        # TODO: Implement health monitoring (timeout checks, heartbeat)
-        pass
+        if self._worker_pool is None:
+            return  # legacy in-memory LoopPool path has no real workers
+
+        deadline = getattr(self._config, "goal_deadline_seconds", None)
+        if not deadline or deadline <= 0:
+            return
+
+        from soothe.core.goal_engine.models import EvidenceBundle
+
+        now = datetime.now(UTC)
+        for worker in self._worker_pool.active_workers():
+            started = getattr(worker, "dispatch_started_at", None)
+            goal_id = worker.current_goal_id
+            if started is None or goal_id is None:
+                continue
+            elapsed = (now - started).total_seconds()
+            if elapsed < deadline:
+                continue
+
+            logger.warning(
+                "[Autopilot] H5: goal %s on %s exceeded deadline (%.1fs > %.1fs); cancelling",
+                goal_id,
+                worker.loop_id,
+                elapsed,
+                deadline,
+            )
+            # Request cooperative cancel of the worker first; the stream
+            # consumer task will then see termination and clean up.
+            try:
+                await worker.runner.cancel()
+            except Exception:
+                logger.debug("worker.runner.cancel() raised for %s", worker.loop_id, exc_info=True)
+
+            # Transition the goal to failed so backoff/retry logic can react.
+            try:
+                await self._goal_engine.fail_goal(
+                    goal_id,
+                    evidence=EvidenceBundle(
+                        structured={
+                            "reason": "deadline_exceeded",
+                            "elapsed_seconds": round(elapsed, 2),
+                            "deadline_seconds": float(deadline),
+                            "loop_id": worker.loop_id,
+                        },
+                        narrative=(
+                            "Goal exceeded deadline_seconds budget; "
+                            "worker cancelled by autopilot monitor."
+                        ),
+                        source="layer3_reflect",
+                    ),
+                    allow_retry=False,
+                )
+            except Exception:
+                logger.debug(
+                    "fail_goal raised after deadline cancel for %s", goal_id, exc_info=True
+                )
 
     async def _release_idle_loops(self) -> None:
         """Release idle loops past timeout."""

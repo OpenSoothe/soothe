@@ -89,16 +89,11 @@ def build_soothe_middleware_stack(
        for programmatic tool calling. Enabled when ``code_interpreter.enabled``
        is True. Exposes allowlisted tools via ``tools.*`` namespace.
 
-    7. **SkillWorkspaceSyncMiddleware** - When virtual mode is on, mirrors
-       host skill directories (e.g. ``~/.agents/skills``) into
-       ``<workspace>/.soothe/skills`` before tools run. Built-in package skills
-       are not copied.
-
-    8. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    7. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    9. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    8. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -113,7 +108,6 @@ def build_soothe_middleware_stack(
     from .llm_rate_limit import LLMRateLimitMiddleware
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
-    from .skill_workspace_sync import SkillWorkspaceSyncMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
     from .tool_concurrency import ToolConcurrencyMiddleware
     from .tool_network_errors import NetworkToolErrorsMiddleware
@@ -208,15 +202,11 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Code interpreter disabled (opt-in)")
 
-    # 7. Skill mirror for virtual-mode workspace access
-    stack.append(SkillWorkspaceSyncMiddleware(config=config))
-    logger.debug("[Middleware] Skill workspace sync enabled (virtual mode)")
-
-    # 8. Workspace context (thread-aware filesystem)
+    # 7. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 9. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 8. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

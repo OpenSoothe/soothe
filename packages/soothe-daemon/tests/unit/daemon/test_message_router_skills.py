@@ -36,6 +36,7 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-router")
         _session_manager = _FakeSessionManager()
+        _skill_index = None
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))
