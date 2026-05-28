@@ -935,26 +935,16 @@ class Executor:
             current_input = Command(resume=resume_payload)
 
     @staticmethod
-    def _intent_type_for_prompt(state: LoopState) -> str | None:
-        """Intent primary label for CoreAgent prompt scenario blocks (IG-384)."""
-        intent = getattr(state, "intent", None)
-        if intent is not None and hasattr(intent, "intent_type"):
-            raw = getattr(intent, "intent_type", None)
-            if raw:
-                return str(raw)
-        return None
-
-    @staticmethod
     def _execute_graph_input(
         messages: list[Any],
         *,
         routing_classification: Any | None = None,
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
-        intent_type: str | None = None,
+        continue_loop_mode: bool = False,
         synthesis_scenario: str | None = None,
     ) -> dict[str, Any]:
-        """Build LangGraph input for execute waves (IG-349, IG-383)."""
+        """Build LangGraph input for execute waves (RFC-225 carries continue_loop_mode)."""
         out: dict[str, Any] = {"messages": messages}
         if routing_classification is not None:
             out["routing_classification"] = routing_classification
@@ -962,8 +952,8 @@ class Executor:
             out["workspace"] = workspace
         if git_status is not None:
             out["git_status"] = git_status
-        if intent_type:
-            out["intent_type"] = intent_type
+        if continue_loop_mode:
+            out["continue_loop_mode"] = True
         if synthesis_scenario:
             out["synthesis_scenario"] = synthesis_scenario
         return out
@@ -1362,7 +1352,7 @@ class Executor:
         """
         # Branched LangGraph thread_id for parallel checkpoint isolation; StepResult keeps logical thread_id.
         logical_tid = state.thread_id
-        itype = self._intent_type_for_prompt(state)
+        continue_loop_mode = bool(getattr(state, "continue_loop", False))
         n_steps = len(steps)
         live_queue: asyncio.Queue[_ParallelLiveQueueItem] = asyncio.Queue()
         gather_results: list[Any] = [None] * n_steps
@@ -1379,7 +1369,7 @@ class Executor:
                     state.workspace,
                     routing_classification=getattr(state, "routing_classification", None),
                     git_status=state.git_status,
-                    intent_type=itype,
+                    continue_loop_mode=continue_loop_mode,
                     loop_state=state,
                     live_event_queue=live_queue,
                     first_human_in_wave=first_in_wave,
@@ -1542,7 +1532,7 @@ class Executor:
         *,
         routing_classification: Any | None = None,
         git_status: dict[str, Any] | None = None,
-        intent_type: str | None = None,
+        continue_loop_mode: bool = False,
         loop_state: LoopState | None = None,
         live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None = None,
         first_human_in_wave: bool = True,
@@ -1564,7 +1554,8 @@ class Executor:
             workspace: Thread-specific workspace path (RFC-103)
             routing_classification: Loop routing payload for middleware (IG-349, IG-383).
             git_status: Optional git snapshot for prompt XML (RFC-104).
-            intent_type: Optional intent label for scenario guidance (IG-384).
+            continue_loop_mode: True when this loop has prior goals (RFC-225);
+                flows into LangGraph state so middleware injects loop-continuation guidance.
             loop_state: When set, ThreadForkManager creates isolated thread with inherited
                 checkpoint history; multi-dep steps inject predecessor ledger messages.
 
@@ -1697,7 +1688,7 @@ class Executor:
                     routing_classification=routing_classification,
                     workspace=workspace,
                     git_status=git_status,
-                    intent_type=intent_type,
+                    continue_loop_mode=continue_loop_mode,
                 ),
                 config,
             )

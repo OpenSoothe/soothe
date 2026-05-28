@@ -8,35 +8,89 @@ Cache Strategy (RFC-104, IG-183):
 - Module constants reused across all agent invocations
 - Estimated cache hit rate: >95% for static content
 - Estimated savings: -5-10ms per request, -200-400 tokens
+
+Note: The Jinja2 template ``instructions/synthesis_format.xml`` lives alongside
+these fragments but is loaded on demand via ``prompts.loader.load_prompt_fragment``;
+it is intentionally not prefetched as a string here.
 """
 
 from pathlib import Path
 
 _FRAGMENTS_DIR = Path(__file__).parent
 
+
+def _read(relative: str, *, strip: bool = False) -> str:
+    text = _FRAGMENTS_DIR.joinpath(relative).read_text(encoding="utf-8")
+    return text.strip() if strip else text
+
+
+# ---------------------------------------------------------------------------
+# Plan / execution instructions (existing)
+# ---------------------------------------------------------------------------
+
 # Plan-assess only: matches StatusAssessment schema (IG-372)
-PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = (
-    _FRAGMENTS_DIR.joinpath("instructions/plan_assess_instructions.xml")
-    .read_text(encoding="utf-8")
-    .strip()
-)
+PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = _read("instructions/plan_assess_instructions.xml", strip=True)
 
 # Plan-generate only: matches PlanGeneration schema (IG-329)
-PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = (
-    _FRAGMENTS_DIR.joinpath("instructions/plan_generate_instructions.xml")
-    .read_text(encoding="utf-8")
-    .strip()
+PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read(
+    "instructions/plan_generate_instructions.xml", strip=True
 )
 
 # Prefetch static policy fragments (IG-183 merged policies)
-EXECUTION_POLICIES_FRAGMENT = (
-    _FRAGMENTS_DIR.joinpath("system/policies/execution_policies.xml")
-    .read_text(encoding="utf-8")
-    .strip()
-)
+EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", strip=True)
+
+# Currently-unused on-disk fragment, exposed so callers can wire it up later.
+EXECUTION_RULES_FRAGMENT = _read("instructions/execution_rules.xml", strip=True)
+
+
+# ---------------------------------------------------------------------------
+# System prompts and response-length guides
+# (consumed by ``soothe.core.prompts.system_templates``).
+# Byte-for-byte preserved from previous Python literals — do not ``.strip()``.
+# ---------------------------------------------------------------------------
+
+DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT = _read("system/prompts/default_system_body.xml")
+SIMPLE_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/simple_system.xml")
+MEDIUM_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/medium_system.xml")
+
+ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT = _read("system/response_guides/architecture_analysis.xml")
+RESEARCH_SYNTHESIS_GUIDE_FRAGMENT = _read("system/response_guides/research_synthesis.xml")
+LOOP_CONTINUATION_GUIDE_FRAGMENT = _read("system/response_guides/loop_continuation.xml")
+QUIZ_RESPONSE_GUIDE_FRAGMENT = _read("system/response_guides/quiz_response.xml")
+
+
+# ---------------------------------------------------------------------------
+# Classifier prompts
+# ---------------------------------------------------------------------------
+
+INTENT_CLASSIFICATION_PROMPT_FRAGMENT = _read("classifiers/intent_classification.xml")
+INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = _read("classifiers/intent_classification_retry.xml")
+SCENARIO_CLASSIFIER_PROMPT_FRAGMENT = _read("classifiers/scenario_classifier.xml")
+CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT = _read("classifiers/criticality_assessment.xml")
+
+
+# ---------------------------------------------------------------------------
+# Planning prompts
+# ---------------------------------------------------------------------------
+
+STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("planning/structured_plan_parse.xml")
+
 
 __all__ = [
+    "ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT",
+    "CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT",
+    "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
+    "EXECUTION_POLICIES_FRAGMENT",
+    "EXECUTION_RULES_FRAGMENT",
+    "INTENT_CLASSIFICATION_PROMPT_FRAGMENT",
+    "INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT",
+    "LOOP_CONTINUATION_GUIDE_FRAGMENT",
+    "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
-    "EXECUTION_POLICIES_FRAGMENT",
+    "QUIZ_RESPONSE_GUIDE_FRAGMENT",
+    "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",
+    "SCENARIO_CLASSIFIER_PROMPT_FRAGMENT",
+    "SIMPLE_SYSTEM_PROMPT_FRAGMENT",
+    "STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT",
 ]

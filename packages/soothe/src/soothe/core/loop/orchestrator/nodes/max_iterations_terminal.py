@@ -29,7 +29,7 @@ async def emit_max_iterations_terminal(ctx: LoopRuntimeContext) -> None:
     if goal_record is not None:
         goal_record.status = "failed"
         goal_record.completed_at = datetime.now(UTC)
-    checkpoint.status = "ready_for_next_goal"
+    checkpoint.status = "idle"
     checkpoint.thread_health_metrics.consecutive_goal_failures += 1
     checkpoint.thread_health_metrics.last_goal_status = "failed"
     await state_manager.save(checkpoint)

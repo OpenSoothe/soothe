@@ -1,10 +1,10 @@
 """Assess-only planning node (RFC-220 split plan flow).
 
-Continue-thread first-plan bootstrap (IG-325) integrated here.
+RFC-225 loop-continuation first-plan bootstrap integrated here.
 
-When intent classification is ``continue_thread`` and loop state is a true
-first plan for this run, skip the initial planner LLM and inject a single-step
-``PlanResult``. Guards use execution/checkpoint structure only (no query heuristics).
+When ``continue_loop_mode`` is True and loop state is a true first plan for
+this run, skip the initial planner LLM and inject a single-step ``PlanResult``.
+Guards use execution/checkpoint structure only (no query heuristics).
 """
 
 from __future__ import annotations
@@ -38,9 +38,9 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
 ]
 
 
-def continue_thread_plan_bootstrap_allowed(
+def continue_loop_plan_bootstrap_allowed(
     *,
-    continue_thread_mode: bool,
+    continue_loop_mode: bool,
     state: LoopState,
     recovery_valid_resume: bool,
     goal_record: GoalExecutionRecord | None,
@@ -48,7 +48,7 @@ def continue_thread_plan_bootstrap_allowed(
     """Return True when the first Plan call may use a synthetic bootstrap result.
 
     Args:
-        continue_thread_mode: True when intent is ``continue_thread``.
+        continue_loop_mode: True when this loop has prior goals (RFC-225).
         state: Current loop state (iteration, step_results).
         recovery_valid_resume: True when resuming a running checkpoint with a valid
             ``GoalExecutionRecord`` (not the invalid-index re-init path).
@@ -58,7 +58,7 @@ def continue_thread_plan_bootstrap_allowed(
     Returns:
         Whether bootstrap is structurally allowed.
     """
-    if not continue_thread_mode:
+    if not continue_loop_mode:
         return False
     if state.iteration != 0:
         return False
@@ -76,7 +76,7 @@ def continue_thread_plan_bootstrap_allowed(
     return True
 
 
-def seed_continue_thread_ledger_from_prior_goal(
+def seed_loop_ledger_from_prior_goal(
     checkpoint: AgentLoopCheckpoint,
     new_goal: GoalExecutionRecord,
     thread_id: str,
@@ -125,8 +125,8 @@ def seed_continue_thread_ledger_from_prior_goal(
     )
 
 
-def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
-    """Build a synthetic first ``PlanResult`` for continue-thread (IG-325, RFC-214).
+def build_continue_loop_bootstrap_plan(_goal: str) -> PlanResult:
+    """Build a synthetic first ``PlanResult`` for loop continuation (RFC-225, RFC-214).
 
     The loop goal is the user's current request on ``LoopState.goal``; prior turns
     are supplied via ``loop_messages`` ledger for Execute prompts (RFC-214).
@@ -171,14 +171,14 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     plan_manager = ctx.plan_manager
     context = agent_loop._build_plan_context(state)
 
-    if continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=ctx.continue_thread_mode,
+    if continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=ctx.continue_loop_mode,
         state=state,
         recovery_valid_resume=ctx.recovery_valid_resume,
         goal_record=ctx.goal_record,
     ):
-        logger.info("[Plan] iter=0 continue-thread bootstrap (no planner LLM)")
-        plan_result = build_continue_thread_bootstrap_plan(state.goal)
+        logger.info("[Plan] iter=0 loop-continuation bootstrap (no planner LLM)")
+        plan_result = build_continue_loop_bootstrap_plan(state.goal)
         ctx.scratch.plan_result = plan_result
         ctx.scratch.plan_assessment = None
         await ctx.emit(

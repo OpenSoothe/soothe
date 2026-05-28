@@ -57,14 +57,12 @@ async def parse_plan_structured(
     """Use LLM structured output to extract a plan from planner markdown/text."""
     from langchain_core.messages import HumanMessage
 
+    from soothe.core.prompts.fragments import STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT
     from soothe.utils.observability.langfuse import build_traced_config
 
-    prompt = (
-        "Extract an execution plan from the planner output below.\n"
-        f"Goal: {goal}\n\n"
-        f"Planner output:\n{planner_output[:12000]}\n\n"
-        "Return ordered steps with step_number starting at 1. "
-        "Use depends_on for step numbers that must complete first."
+    prompt = STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT.format(
+        goal=goal,
+        planner_output=planner_output[:12000],
     )
     invoke_config = build_traced_config(
         soothe_config,

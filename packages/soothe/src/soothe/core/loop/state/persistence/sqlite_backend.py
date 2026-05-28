@@ -34,6 +34,12 @@ _LOOP_COLUMN_MIGRATIONS: dict[str, str] = {
     "current_workspace": "TEXT",
 }
 
+# RFC-225 / IG-445: enriched GoalExecutionRecord fields packed as JSON
+# into one column to keep the goal_records schema additive.
+_GOAL_RECORD_COLUMN_MIGRATIONS: dict[str, str] = {
+    "extras_jsonb": "TEXT",
+}
+
 
 class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
     """SQLite backend for AgentLoop checkpoint persistence.
@@ -871,10 +877,20 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                 db.execute(f"ALTER TABLE agentloop_loops ADD COLUMN {col} {typedef}")  # noqa: S608
 
     @staticmethod
+    def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
+        """Add enriched-goal-record columns to existing ``goal_records`` tables (RFC-225)."""
+        cursor = db.execute("PRAGMA table_info(goal_records)")
+        existing = {row[1] for row in cursor.fetchall()}
+        for col, typedef in _GOAL_RECORD_COLUMN_MIGRATIONS.items():
+            if col not in existing:
+                db.execute(f"ALTER TABLE goal_records ADD COLUMN {col} {typedef}")  # noqa: S608
+
+    @staticmethod
     def _ensure_loop_columns_on_path(db_path: Path) -> None:
-        """Migrate ``agentloop_loops`` columns on an existing database file."""
+        """Migrate ``agentloop_loops`` and ``goal_records`` columns on an existing database file."""
         with sqlite3.connect(db_path) as db:
             SQLitePersistenceBackend._ensure_loop_columns(db)
+            SQLitePersistenceBackend._ensure_goal_record_columns(db)
             db.commit()
 
     @staticmethod
@@ -1013,9 +1029,13 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     tokens_used INTEGER DEFAULT 0,
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
+                    extras_jsonb TEXT,
                     FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)
+
+            # Backfill enriched columns on existing databases (RFC-225).
+            SQLitePersistenceBackend._ensure_goal_record_columns(db)
 
             # Create indexes for goal_records
             db.execute("""
@@ -1166,6 +1186,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     tokens_used INTEGER DEFAULT 0,
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
+                    extras_jsonb TEXT,
                     FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)

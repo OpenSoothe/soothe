@@ -23,7 +23,7 @@ from soothe.core.loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview
 
-from ..orchestrator.nodes.plan_assess import seed_continue_thread_ledger_from_prior_goal
+from ..orchestrator.nodes.plan_assess import seed_loop_ledger_from_prior_goal
 from .anchor_manager import CheckpointAnchorManager
 from .goal_context_manager import GoalContextManager
 
@@ -124,9 +124,9 @@ class AgentLoop:
             git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
-            intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
+            intent: IntentClassification (RFC-225). ``quiz`` is short-circuited by the runner;
+                ``agentic`` is handled here. Loop continuation is derived from the checkpoint.
             shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
-                - continue_thread: Adjust iteration behavior, reuse working memory
                 - new_goal: Normal goal execution flow
                 - quiz: Should not reach here (handled in runner)
             routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
@@ -193,18 +193,6 @@ class AgentLoop:
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
 
-        # IG-226: Handle continue-thread intent
-        continue_thread_mode = False
-        if intent and hasattr(intent, "intent_type"):
-            if intent.intent_type == "continue_thread":
-                continue_thread_mode = True
-                logger.info(
-                    "[AgentLoop] Continue-thread mode: reuse_current_goal=%s",
-                    intent.reuse_current_goal if hasattr(intent, "reuse_current_goal") else False,
-                )
-                # Continue-thread may benefit from fewer iterations (follow-up actions)
-                # but keep max_iterations unchanged for now - let Plan phase determine completion
-
         # RFC-217: Create GoalContextManager for goal-level context injection
         from soothe.config.models import GoalContextConfig
 
@@ -215,6 +203,15 @@ class AgentLoop:
         # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
         # same TUI/daemon thread reuses one AgentLoop checkpoint across user turns.
         checkpoint = await state_manager.load()
+
+        # RFC-225: derive continue_loop_mode structurally from the loaded checkpoint
+        # BEFORE any branch reassigns it. Mode is True when the loop already has
+        # at least one goal in flight (running) or completed-and-paused (idle).
+        continue_loop_mode = (
+            checkpoint is not None
+            and len(checkpoint.goal_history) >= 1
+            and checkpoint.status in ("running", "idle")
+        )
         if checkpoint is not None:
             checkpoint_normalized = False
             if checkpoint.current_thread_id != main_thread_id:
@@ -261,7 +258,7 @@ class AgentLoop:
                 iteration = 0
                 recovery_valid_resume = False
 
-        elif checkpoint and checkpoint.status == "ready_for_next_goal":
+        elif checkpoint and checkpoint.status == "idle":
             checkpoint.current_thread_id = main_thread_id
             if main_thread_id not in checkpoint.thread_ids:
                 checkpoint.thread_ids.append(main_thread_id)
@@ -269,12 +266,11 @@ class AgentLoop:
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
-            # Always seed prior goal context for same-loop goals, not just
-            # continue_thread_mode. A new goal within an existing loop
-            # benefits from prior context (e.g., "DUMP review to report"
-            # needs the review's findings).
+            # RFC-225: always seed prior goal context for same-loop goals.
+            # A new goal within an existing loop benefits from prior context
+            # (e.g., "DUMP review to report" needs the review's findings).
             if len(checkpoint.goal_history) >= 2:
-                seed_continue_thread_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
+                seed_loop_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
             await state_manager.save(checkpoint)
             iteration = 0
             logger.debug(
@@ -320,10 +316,8 @@ class AgentLoop:
             loop_messages=goal_record.loop_messages if goal_record else [],
         )
 
-        # IG-226: Set continue-thread flag for working memory context
-        if continue_thread_mode:
-            state.continue_thread = True  # Add flag to LoopState if it exists
-            logger.debug("[AgentLoop] Continue-thread flag set for working memory enhancement")
+        # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring
+        state.continue_loop = continue_loop_mode
 
         wm_cfg = self.config.agent.loop.working_memory
         if wm_cfg.enabled:
@@ -333,19 +327,12 @@ class AgentLoop:
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
             )
 
-            # IG-226: Continue-thread working memory enhancement
-            # Reuse current thread's working memory content more aggressively
-            if continue_thread_mode:
-                logger.info("[AgentLoop] Continue-thread: working memory context reuse enabled")
-                # Working memory will automatically load from thread persistence
-                # No special handling needed - it already loads existing entries
-
         logger.info(
-            "[Goal] %s (max_iterations=%d, iteration=%d, continue_thread=%s)",
+            "[Goal] %s (max_iterations=%d, iteration=%d, continue_loop=%s)",
             log_preview(execution_goal, 80),
             max_iterations,
             state.iteration,
-            continue_thread_mode,
+            continue_loop_mode,
         )
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
@@ -364,7 +351,7 @@ class AgentLoop:
             plan_manager=plan_manager,
             checkpoint=checkpoint,
             goal_record=goal_record,
-            continue_thread_mode=continue_thread_mode,
+            continue_loop_mode=continue_loop_mode,
             recovery_valid_resume=recovery_valid_resume,
             loop_state=state,
             emit=emit,

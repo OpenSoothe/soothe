@@ -20,7 +20,6 @@ async def test_init_or_resume_routes_fast_path_for_quiz() -> None:
 
     intent = IntentClassification(
         intent_type="quiz",
-        reuse_current_goal=False,
         goal_description=None,
         task_complexity="minimal",
         quiz_response="hello",

@@ -31,6 +31,7 @@ from soothe.core.loop.state.persistence.directory_manager import (
 from soothe.core.loop.state.persistence.sqlite_backend import (
     SQLitePersistenceBackend,
 )
+from soothe.core.loop.state.schemas import EvidenceEntry, PlanResult, StepResult
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 if TYPE_CHECKING:
@@ -39,8 +40,6 @@ if TYPE_CHECKING:
     from soothe.core.loop.state.schemas import (
         AgentDecision,
         LoopState,
-        PlanResult,
-        StepResult,
     )
     from soothe.core.loop.state.working_memory import LoopWorkingMemory
 
@@ -256,7 +255,7 @@ class AgentLoopStateManager:
             max_iterations: Maximum loop iterations per goal
 
         Returns:
-            New AgentLoopCheckpoint instance (status=ready_for_next_goal)
+            New AgentLoopCheckpoint instance (status=idle)
         """
         now = datetime.now(UTC)
 
@@ -264,7 +263,7 @@ class AgentLoopStateManager:
             loop_id=self.loop_id,
             thread_ids=[thread_id],  # First thread
             current_thread_id=thread_id,
-            status="ready_for_next_goal",
+            status="idle",
             goal_history=[],
             current_goal_index=-1,  # No active goal yet
             working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
@@ -275,14 +274,14 @@ class AgentLoopStateManager:
             total_tokens_used=0,
             created_at=now,
             updated_at=now,
-            schema_version="3.1",  # Current schema version (informational)
+            schema_version="3.2",  # RFC-225 enrichment
         )
 
         self._checkpoint = checkpoint
         await self._save_checkpoint_to_db(checkpoint)
 
         logger.info(
-            "Initialized loop %s on thread %s (status: ready_for_next_goal)",
+            "Initialized loop %s on thread %s (status: idle)",
             self.loop_id,
             thread_id,
         )
@@ -376,12 +375,16 @@ class AgentLoopStateManager:
                         for msg in loop_messages_raw
                     ]
 
+                    # RFC-225: unpack enriched fields stored in extras_jsonb
+                    extras_raw = goal_row[13] if len(goal_row) > 13 else None
+                    extras = json.loads(extras_raw) if extras_raw else {}
+
                     goal_record = GoalExecutionRecord(
                         goal_id=goal_row[0],
                         goal_text=goal_row[2],
                         thread_id=goal_row[3],
                         iteration=goal_row[4],
-                        max_iterations=10,  # Default
+                        max_iterations=extras.get("max_iterations", 10),
                         status=goal_row[5],
                         loop_messages=loop_messages,  # RFC-214: ledger
                         goal_completion=goal_row[7] or "",
@@ -390,6 +393,21 @@ class AgentLoopStateManager:
                         tokens_used=goal_row[10],
                         started_at=datetime.fromisoformat(goal_row[11]),
                         completed_at=datetime.fromisoformat(goal_row[12]) if goal_row[12] else None,
+                        # RFC-225 enrichment (default to empty on legacy rows)
+                        current_plan=(
+                            PlanResult.model_validate(extras["current_plan"])
+                            if extras.get("current_plan")
+                            else None
+                        ),
+                        completed_step_ids=set(extras.get("completed_step_ids", [])),
+                        plan_revision_count=extras.get("plan_revision_count", 0),
+                        step_results=[
+                            StepResult.model_validate(s) for s in extras.get("step_results", [])
+                        ],
+                        evidence_ledger=[
+                            EvidenceEntry.model_validate(e)
+                            for e in extras.get("evidence_ledger", [])
+                        ],
                     )
                     goal_history.append(goal_record)
 
@@ -415,10 +433,7 @@ class AgentLoopStateManager:
                 self._checkpoint = checkpoint
 
                 # Auto-repair: Detect and fix orphaned running goals
-                if (
-                    checkpoint.status == "ready_for_next_goal"
-                    and checkpoint.current_goal_index == -1
-                ):
+                if checkpoint.status == "idle" and checkpoint.current_goal_index == -1:
                     # Check if goal_history has running goals
                     running_goals = [g for g in checkpoint.goal_history if g.status == "running"]
                     if running_goals:
@@ -473,7 +488,8 @@ class AgentLoopStateManager:
             """
             SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
                    loop_messages, goal_completion, evidence_summary,
-                   duration_ms, tokens_used, started_at, completed_at
+                   duration_ms, tokens_used, started_at, completed_at,
+                   extras_jsonb
             FROM goal_records WHERE loop_id = ?
             ORDER BY started_at
             """,
@@ -620,14 +636,28 @@ class AgentLoopStateManager:
             completed_at_str = (
                 goal_record.completed_at.isoformat() if goal_record.completed_at else None
             )
+            # RFC-225: pack enriched fields into extras_jsonb
+            extras_payload = {
+                "max_iterations": goal_record.max_iterations,
+                "current_plan": (
+                    goal_record.current_plan.model_dump(mode="json")
+                    if goal_record.current_plan is not None
+                    else None
+                ),
+                "completed_step_ids": sorted(goal_record.completed_step_ids),
+                "plan_revision_count": goal_record.plan_revision_count,
+                "step_results": [s.model_dump(mode="json") for s in goal_record.step_results],
+                "evidence_ledger": [e.model_dump(mode="json") for e in goal_record.evidence_ledger],
+            }
+            extras_json = json.dumps(extras_payload, ensure_ascii=False)
 
             conn.execute(
                 """
                 INSERT OR REPLACE INTO goal_records
                 (goal_id, loop_id, goal_text, thread_id, iteration, status,
                  loop_messages, goal_completion, evidence_summary,
-                 duration_ms, tokens_used, started_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 duration_ms, tokens_used, started_at, completed_at, extras_jsonb)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     goal_record.goal_id,
@@ -643,6 +673,7 @@ class AgentLoopStateManager:
                     goal_record.tokens_used,
                     goal_record.started_at.isoformat(),
                     completed_at_str,
+                    extras_json,
                 ),
             )
 
@@ -699,12 +730,22 @@ class AgentLoopStateManager:
 
         return goal_record
 
-    async def finalize_goal(self, goal_record: GoalExecutionRecord, goal_completion: str) -> None:
+    async def finalize_goal(
+        self,
+        goal_record: GoalExecutionRecord,
+        goal_completion: str,
+        loop_state: LoopState | None = None,
+    ) -> None:
         """Mark goal completed, update loop metrics (RFC-216).
 
+        RFC-225: when ``loop_state`` is provided, mirror the latest plan DAG,
+        step results, completed step ids, and evidence ledger into the goal
+        record so the AgentLoop checkpoint becomes the durable orchestration log.
+
         Args:
-            goal_record: Goal execution record to finalize
-            goal_completion: Generated goal completion content
+            goal_record: Goal execution record to finalize.
+            goal_completion: Generated goal completion content.
+            loop_state: Active LoopState for RFC-225 enrichment mirroring.
         """
         if self._checkpoint is None:
             return
@@ -735,6 +776,25 @@ class AgentLoopStateManager:
         target_goal.goal_completion = goal_completion
         target_goal.completed_at = datetime.now(UTC)
 
+        # RFC-225: mirror LoopState orchestration overlay into the goal record
+        if loop_state is not None:
+            if loop_state.current_decision is not None:
+                # Snapshot the latest plan + decision as the goal's final plan DAG.
+                from soothe.core.loop.state.schemas import PlanResult as _PlanResult
+
+                target_goal.current_plan = _PlanResult(
+                    status="done",
+                    decision=loop_state.current_decision,
+                    evidence_summary=loop_state.evidence_summary,
+                    goal_progress="complete",
+                )
+            target_goal.completed_step_ids = set(loop_state.completed_step_ids)
+            target_goal.step_results = list(loop_state.step_results)
+            target_goal.evidence_ledger = list(loop_state.evidence_ledger)
+            target_goal.evidence_summary = (
+                loop_state.evidence_summary or target_goal.evidence_summary
+            )
+
         logger.debug(
             "finalize_goal: modified id=%s iter=%d ledger_msgs=%d",
             target_goal.goal_id,
@@ -752,7 +812,7 @@ class AgentLoopStateManager:
         checkpoint.thread_health_metrics.last_goal_status = "completed"
 
         # Reset loop state for next goal
-        checkpoint.status = "ready_for_next_goal"
+        checkpoint.status = "idle"
         checkpoint.current_goal_index = -1  # IG-055: Reset index after goal completion
 
         await self.save(checkpoint)
