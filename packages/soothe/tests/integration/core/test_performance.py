@@ -47,7 +47,7 @@ async def test_conditional_memory_recall(test_config: SootheConfig, requires_llm
 
     try:
         assert hasattr(runner, "_memory")
-        if test_config.protocols.memory.enabled and runner._memory is not None:
+        if test_config.agent.protocols.memory.enabled and runner._memory is not None:
             assert runner._memory is not None
 
     finally:

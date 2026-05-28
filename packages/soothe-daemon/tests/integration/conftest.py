@@ -289,9 +289,14 @@ def build_daemon_config(
         vector_store_router=base_config.vector_store_router,
         filesystem_middleware=fs_middleware,
         persistence={"persist_dir": str(tmp_path / "persistence")},
-        protocols={
-            "memory": {"enabled": False},
-            "durability": {"backend": "sqlite", "persist_dir": str(tmp_path / "durability")},
+        agent={
+            "protocols": {
+                "memory": {"enabled": False},
+                "durability": {
+                    "backend": "sqlite",
+                    "persist_dir": str(tmp_path / "durability"),
+                },
+            },
         },
     )
     return agent, SootheDaemonConfig.model_validate(daemon_config)
@@ -393,7 +398,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.agent.loop.limits.max_parallel_goals = 1
     test_config.agent.loop.limits.max_parallel_steps = 1
     test_config.agent.loop.limits.global_max_llm_calls = 3
-    test_config.autonomous.max_iterations = 5
+    test_config.agent.autonomous.max_iterations = 5
 
     return test_config
 

@@ -182,12 +182,16 @@ async def test_websocket_cors_rejects_disallowed_origin(tmp_path: Path) -> None:
     await asyncio.sleep(0.2)
 
     try:
-        async with websockets.asyncio.client.connect(
-            f"ws://127.0.0.1:{port}",
-            origin="https://evil.example",
-        ) as denied:
-            with pytest.raises(websockets.exceptions.ConnectionClosed):
-                await denied.recv()
+        # The transport rejects disallowed origins at the WebSocket handshake
+        # stage (Starlette returns HTTP 403 when close() is called before
+        # accept()). The handshake itself raises InvalidStatus; a successful
+        # connect followed by ConnectionClosed is no longer the contract.
+        with pytest.raises(websockets.exceptions.InvalidStatus):
+            async with websockets.asyncio.client.connect(
+                f"ws://127.0.0.1:{port}",
+                origin="https://evil.example",
+            ):
+                pass
     finally:
         await transport.stop()
 

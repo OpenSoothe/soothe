@@ -23,15 +23,29 @@ async def _connect_and_drain_handshake(client: WebSocketClient) -> None:
     await client.wait_for_daemon_ready()
 
 
-async def _first_status_with_client_id(client: WebSocketClient, *, timeout_s: float = 10.0) -> dict:
-    """Read until a ``status`` event includes ``client_id``."""
-    deadline = asyncio.get_running_loop().time() + timeout_s
-    while asyncio.get_running_loop().time() < deadline:
-        ev = await client.read_event()
-        if isinstance(ev, dict) and ev.get("type") == "status" and ev.get("client_id"):
+async def _first_event_with_client_id(client: WebSocketClient, *, timeout_s: float = 10.0) -> dict:
+    """Read until a wire frame carries a ``client_id`` field.
+
+    The daemon emits ``client_id`` on its ``subscription_confirmed`` frame
+    (not on generic ``status`` frames); accept any wire shape so the helper
+    stays robust to protocol changes. Per-read timeout ensures the deadline
+    fires even if no events arrive (otherwise ``read_event`` would block
+    forever).
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_s
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            msg = "Timed out waiting for wire frame with client_id"
+            raise TimeoutError(msg)
+        try:
+            ev = await asyncio.wait_for(client.read_event(), timeout=remaining)
+        except TimeoutError as exc:
+            msg = "Timed out waiting for wire frame with client_id"
+            raise TimeoutError(msg) from exc
+        if isinstance(ev, dict) and ev.get("client_id"):
             return ev
-    msg = "Timed out waiting for status with client_id"
-    raise TimeoutError(msg)
 
 
 @pytest.mark.asyncio
@@ -137,7 +151,14 @@ async def test_loop_subscribe_handshake_succeeds(tmp_path: Path):
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_client_id_in_status(tmp_path: Path):
-    """Test that status message includes client_id."""
+    """Daemon delivers the server-assigned ``client_id`` after loop subscribe.
+
+    The protocol carries ``client_id`` on a dedicated ``subscription_confirmed``
+    frame (router.py emits it once per ``loop_subscribe``); generic ``status``
+    frames intentionally do not. The test asserts the SDK-visible contract:
+    after bootstrap, the client has received a wire frame identifying its
+    server-assigned id.
+    """
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
     config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
@@ -151,11 +172,10 @@ async def test_client_id_in_status(tmp_path: Path):
         await _connect_and_drain_handshake(client)
         await websocket_bootstrap_loop_session(client)
 
-        status = await _first_status_with_client_id(client)
-        assert status.get("loop_id") or status.get("thread_id")
-        client_id = status.get("client_id")
-        assert client_id is not None
-        assert isinstance(client_id, str)
+        frame = await _first_event_with_client_id(client)
+        assert frame.get("loop_id") or frame.get("thread_id")
+        client_id = frame.get("client_id")
+        assert isinstance(client_id, str) and client_id
 
         await client.close()
     finally:
