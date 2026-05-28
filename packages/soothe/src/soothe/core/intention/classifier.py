@@ -95,6 +95,9 @@ class IntentClassifier:
         When ``intent_hint`` is ``quiz``, bypasses LLM classification entirely
         and returns a pre-built classification.
 
+        Heuristic shortcut: queries longer than 80 chars, 15+ words, or 2+ lines
+        are classified as agentic directly without an LLM call.
+
         Args:
             query: User input text.
             continue_thread: Whether this is a same-loop continuation (structural rule).
@@ -111,6 +114,11 @@ class IntentClassifier:
                 intent_hint.value,
             )
             return self._build_intent_from_hint(query, intent_hint, continue_thread=continue_thread)
+
+        # Heuristic: long/complex queries are always agentic
+        if self._is_likely_agentic(query):
+            logger.info("Heuristic bypass: query too long/complex for quiz, classifying as agentic")
+            return self._build_heuristic_agentic(query, continue_thread=continue_thread)
 
         # Fallback when classifier disabled
         if not self._fast_model or not self._intent_model:
@@ -143,7 +151,9 @@ class IntentClassifier:
                 "Intent classification failed after retry, using fallback (error: %s)",
                 type(last_error).__name__ if last_error else "unknown",
             )
-            return self._fallback_intent(query, continue_thread=continue_thread, error_context=last_error)
+            return self._fallback_intent(
+                query, continue_thread=continue_thread, error_context=last_error
+            )
 
         # Post-process: patch missing fields
         result = self._patch_missing_fields(result, query)
@@ -257,7 +267,7 @@ class IntentClassifier:
                 reuse_current_goal=False,
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
-                quiz_response=None,  # Filled by _run_quiz (default-role model)
+                quiz_response=None,  # Filled by _run_quiz if not piggybacked
             )
         elif hint == IntentHint.CONTINUE_THREAD:
             return IntentClassification(
@@ -323,25 +333,53 @@ class IntentClassifier:
             intent.goal_description = query
             logger.debug("Patched missing goal_description")
 
-        # Patch missing friendly_message (IG-287)
-        if intent.intent_type == "new_goal" and not intent.friendly_message:
-            intent.friendly_message = self._generate_friendly_message(query)
-            logger.debug("Patched missing friendly_message")
-
         return intent
 
-    def _generate_friendly_message(self, query: str) -> str:
-        """Generate friendly message fallback (IG-287).
+    # -- Heuristic classification -------------------------------------------
+
+    @staticmethod
+    def _is_likely_agentic(query: str) -> bool:
+        """Check if query is too long/complex to be a simple quiz.
+
+        Heuristic: queries with >80 chars, >15 words, or >2 lines are
+        almost always agentic (not greetings/thanks/trivia).
 
         Args:
-            query: User query text.
+            query: User input text.
 
         Returns:
-            Friendly task reinterpretation placeholder.
+            True if query should be classified as agentic without LLM call.
         """
-        # Fallback placeholder - primary path uses piggybacked friendly_message from classification
-        # This is only used if LLM classification fails to provide friendly_message
-        return f"I will work on: {query}"
+        if len(query) > 80:
+            return True
+        if len(query.split()) > 15:
+            return True
+        if query.count("\n") >= 2:
+            return True
+        return False
+
+    def _build_heuristic_agentic(
+        self,
+        query: str,
+        *,
+        continue_thread: bool = False,
+    ) -> IntentClassification:
+        """Build agentic intent from heuristic (bypasses LLM).
+
+        Args:
+            query: Original user query.
+            continue_thread: Whether this is a same-loop continuation.
+
+        Returns:
+            IntentClassification with agentic type and medium complexity.
+        """
+        resolved_type = "continue_thread" if continue_thread else "new_goal"
+        return IntentClassification(
+            intent_type=resolved_type,
+            reuse_current_goal=continue_thread,
+            goal_description=query,
+            task_complexity=TaskComplexity.MEDIUM,
+        )
 
     def _build_invoke_config(
         self,

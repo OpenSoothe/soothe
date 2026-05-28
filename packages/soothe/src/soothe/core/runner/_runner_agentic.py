@@ -332,7 +332,9 @@ class AgenticMixin:
                 if completed or active:
                     continue_thread = True
             except Exception:
-                logger.debug("Failed to query goal engine for continue_thread decision", exc_info=True)
+                logger.debug(
+                    "Failed to query goal engine for continue_thread decision", exc_info=True
+                )
 
         # Early intent classification for quiz short-circuit (matches autonomous mode)
         intent_classification = None
@@ -364,7 +366,6 @@ class AgenticMixin:
                 thread_id=tid,
                 goal=display_goal,
                 max_iterations=max_iterations,
-                friendly_message=None,
             ).to_dict()
         )
 
@@ -416,11 +417,11 @@ class AgenticMixin:
             shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
         ):
             if event_type == "intent_classified":
-                friendly = (
-                    event_data.get("friendly_message") if isinstance(event_data, dict) else None
+                goal_desc = (
+                    event_data.get("goal_description") if isinstance(event_data, dict) else None
                 )
-                if isinstance(friendly, str) and friendly.strip():
-                    display_goal = friendly.strip()
+                if isinstance(goal_desc, str) and goal_desc.strip():
+                    display_goal = goal_desc.strip()
                     yield _custom(
                         LoopAgentReasonEvent(
                             status="",

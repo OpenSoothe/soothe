@@ -207,7 +207,6 @@ class AgenticLoopStartedEvent(LifecycleEvent):
     thread_id: str
     goal: str
     max_iterations: int
-    friendly_message: str | None = None  # IG-287: User-friendly task reinterpretation
 
 
 class AgenticLoopCompletedEvent(LifecycleEvent):
@@ -351,7 +350,6 @@ class GoalCreatedEvent(ProtocolEvent):
     goal_id: str = ""
     description: str = ""
     priority: int | str = ""
-    friendly_message: str | None = None  # IG-287: User-friendly task reinterpretation
 
 
 class GoalCompletedEvent(ProtocolEvent):
