@@ -201,7 +201,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         }
     )
 
-    await state_manager.finalize_goal(goal_record, updated_result.full_output)
+    await state_manager.finalize_goal(goal_record, updated_result.full_output, loop_state=state)
     logger.info(
         "Goal completed: iterations=%d duration=%dms action=%s",
         state.iteration,

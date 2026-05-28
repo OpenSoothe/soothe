@@ -1,11 +1,11 @@
-"""Tests for IG-325 continue-thread plan bootstrap."""
+"""Tests for RFC-225 loop-continuation plan bootstrap."""
 
 from datetime import UTC, datetime
 
 from soothe.core.loop.orchestrator.nodes.plan_assess import (
-    build_continue_thread_bootstrap_plan,
-    continue_thread_plan_bootstrap_allowed,
-    seed_continue_thread_ledger_from_prior_goal,
+    build_continue_loop_bootstrap_plan,
+    continue_loop_plan_bootstrap_allowed,
+    seed_loop_ledger_from_prior_goal,
 )
 from soothe.core.loop.state.checkpoint import (
     AgentLoopCheckpoint,
@@ -45,8 +45,8 @@ def _goal_record(
 
 def test_bootstrap_allowed_fresh_continue_thread() -> None:
     state = LoopState(goal="follow up", thread_id="t1", iteration=0, step_results=[])
-    assert continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=False,
         goal_record=_goal_record(),
@@ -55,8 +55,8 @@ def test_bootstrap_allowed_fresh_continue_thread() -> None:
 
 def test_bootstrap_disallowed_without_continue_thread() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=False,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=False,
         state=state,
         recovery_valid_resume=False,
         goal_record=_goal_record(),
@@ -65,8 +65,8 @@ def test_bootstrap_disallowed_without_continue_thread() -> None:
 
 def test_bootstrap_disallowed_when_iteration_nonzero() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=1, step_results=[])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=False,
         goal_record=_goal_record(),
@@ -82,8 +82,8 @@ def test_bootstrap_disallowed_when_step_results_present() -> None:
         thread_id="t1",
     )
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[sr])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=False,
         goal_record=_goal_record(),
@@ -92,8 +92,8 @@ def test_bootstrap_disallowed_when_step_results_present() -> None:
 
 def test_bootstrap_disallowed_recovery_with_reason_history() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=True,
         goal_record=_goal_record(ledger_entries=1),
@@ -102,8 +102,8 @@ def test_bootstrap_disallowed_recovery_with_reason_history() -> None:
 
 def test_bootstrap_disallowed_recovery_with_act_history() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=True,
         goal_record=_goal_record(ledger_entries=1),
@@ -112,8 +112,8 @@ def test_bootstrap_disallowed_recovery_with_act_history() -> None:
 
 def test_bootstrap_disallowed_recovery_iteration_advances() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=True,
         goal_record=_goal_record(iteration=1),
@@ -122,8 +122,8 @@ def test_bootstrap_disallowed_recovery_iteration_advances() -> None:
 
 def test_bootstrap_disallowed_recovery_goal_record_none() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert not continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=True,
         goal_record=None,
@@ -132,8 +132,8 @@ def test_bootstrap_disallowed_recovery_goal_record_none() -> None:
 
 def test_bootstrap_allowed_recovery_iteration_zero_clean_record() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert continue_thread_plan_bootstrap_allowed(
-        continue_thread_mode=True,
+    assert continue_loop_plan_bootstrap_allowed(
+        continue_loop_mode=True,
         state=state,
         recovery_valid_resume=True,
         goal_record=_goal_record(iteration=0, ledger_entries=0),
@@ -141,7 +141,7 @@ def test_bootstrap_allowed_recovery_iteration_zero_clean_record() -> None:
 
 
 def test_build_bootstrap_plan_shape() -> None:
-    pr = build_continue_thread_bootstrap_plan("user follow-up")
+    pr = build_continue_loop_bootstrap_plan("user follow-up")
     assert pr.status == "continue"
     assert pr.plan_action == "new"
     assert pr.decision is not None
@@ -156,7 +156,7 @@ def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> AgentLoopCheckpo
         loop_id="loop-x",
         thread_ids=["tid"],
         current_thread_id="tid",
-        status="ready_for_next_goal",
+        status="idle",
         goal_history=list(goals),
         current_goal_index=-1,
         working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
@@ -188,7 +188,7 @@ def test_seed_continuation_copies_prior_ledger() -> None:
         started_at=now,
     )
     ckpt = _minimal_checkpoint(goals=[prev, new_g])
-    seed_continue_thread_ledger_from_prior_goal(ckpt, new_g, "tid")
+    seed_loop_ledger_from_prior_goal(ckpt, new_g, "tid")
     assert len(new_g.loop_messages) == 2
     assert new_g.loop_messages[0].content == "h"
     assert new_g.loop_messages[1].content == "found 3"
@@ -215,6 +215,6 @@ def test_seed_continuation_falls_back_to_goal_completion() -> None:
         started_at=now,
     )
     ckpt = _minimal_checkpoint(goals=[prev, new_g])
-    seed_continue_thread_ledger_from_prior_goal(ckpt, new_g, "tid")
+    seed_loop_ledger_from_prior_goal(ckpt, new_g, "tid")
     assert len(new_g.loop_messages) == 2
     assert "README" in new_g.loop_messages[1].content

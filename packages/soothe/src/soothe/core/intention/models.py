@@ -1,9 +1,9 @@
-"""Intent classification Pydantic models (IG-226).
+"""Intent classification Pydantic models (RFC-225).
 
-Models for LLM-driven intent classification with three-tier system:
-- quiz: Minimal direct reply (greetings, thanks, trivia) without tools
-- continue_thread: Reuse current thread/goal
-- new_goal: Create goal via GoalEngine
+Two-value intent classification: ``quiz`` (greetings, thanks, trivia
+answered without tools) vs. ``agentic`` (everything else). Whether an
+agentic query continues an in-flight loop is derived structurally
+inside ``AgentLoop`` from the loaded checkpoint, not classified here.
 """
 
 from __future__ import annotations
@@ -17,15 +17,11 @@ from pydantic import BaseModel, Field
 class IntentHint(StrEnum):
     """Suggested intent hint to bypass LLM classification.
 
-    When provided, the classifier may use this hint directly without
-    invoking an LLM call, enabling faster routing for known intent types.
-
-    Values match ``IntentClassification.intent_type`` literal values.
+    Only ``QUIZ`` is supported — agentic flow is the structural default
+    for any non-quiz input and needs no hint.
     """
 
     QUIZ = "quiz"
-    CONTINUE_THREAD = "continue_thread"
-    NEW_GOAL = "new_goal"
 
 
 class TaskComplexity(StrEnum):
@@ -66,31 +62,26 @@ class RoutingClassification(BaseModel):
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (IG-226, IG-250, IG-287).
+    """Primary intent classification model (RFC-225).
 
-    LLM-driven query intent classification determining execution path and goal handling.
-    Three-tier classification system with conversation context awareness.
+    Two-value LLM classification:
+    - ``quiz``: minimal direct reply (greeting/thanks/trivia) without tools.
+    - ``agentic``: everything else; the runner / AgentLoop derive loop
+      continuation structurally from the checkpoint.
 
     Args:
-        intent_type: Primary intent (continue_thread | new_goal | quiz).
-        reuse_current_goal: Whether to reuse active goal in current thread.
-        goal_description: Normalized goal description for display and GoalEngine.
-        task_complexity: Routing complexity level (minimal | simple | medium | complex).
-            For quiz intents, task_complexity is always "minimal".
-        quiz_response: Direct quiz answer piggybacked from classification or set by quiz answer step.
+        intent_type: ``quiz`` or ``agentic``.
+        goal_description: Normalized goal description (populated for agentic).
+        task_complexity: Routing complexity level.
+        quiz_response: Direct quiz answer piggybacked from the LLM (quiz only).
     """
 
-    intent_type: Literal["continue_thread", "new_goal", "quiz"] = Field(
-        description="Primary intent: quiz (greeting/thanks/trivia without tools), "
-        "continue_thread (follow-up), new_goal (tool-requiring task)"
-    )
-    reuse_current_goal: bool = Field(
-        default=False,
-        description="Whether to reuse active goal in current thread (continue_thread only)",
+    intent_type: Literal["quiz", "agentic"] = Field(
+        description="Primary intent: quiz (greeting/thanks/trivia without tools) or agentic (everything else)"
     )
     goal_description: str | None = Field(
         default=None,
-        description="Normalized goal description for display and GoalEngine (new_goal/continue_thread only)",
+        description="Normalized goal description for display and GoalEngine (agentic only)",
     )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity: minimal (quiz), simple, medium, or complex"
@@ -101,11 +92,7 @@ class IntentClassification(BaseModel):
     )
 
     def to_routing_classification(self) -> RoutingClassification:
-        """Convert to RoutingClassification for execution path selection.
-
-        Returns:
-            RoutingClassification with routing attributes from intent.
-        """
+        """Convert to RoutingClassification for execution path selection."""
         return RoutingClassification(
             task_complexity=self.task_complexity,
             routing_hint="intent_based",
@@ -113,21 +100,14 @@ class IntentClassification(BaseModel):
 
 
 class IntentClassificationLLMResult(BaseModel):
-    """Structured output from intent classifier LLM (quiz detection with piggybacked answer).
+    """Structured output from intent classifier LLM.
 
-    The LLM decides quiz vs agentic. The runner resolves agentic into
-    continue_thread or new_goal based on loop state (structural rule).
-    When quiz, the LLM also provides the direct answer (quiz_response)
-    to avoid a second LLM call.
-
-    Args:
-        intent_type: Primary intent (agentic | quiz).
-        goal_description: Normalized goal description for display and GoalEngine.
-        task_complexity: Routing complexity level.
-        quiz_response: Direct answer for quiz intents (piggybacked to avoid second LLM call).
+    The LLM decides ``quiz`` vs. ``agentic`` only. Quiz fast-path piggybacks
+    the answer in ``quiz_response`` so the runner can short-circuit without
+    a second LLM call.
     """
 
-    intent_type: Literal["agentic", "quiz"] = Field(
+    intent_type: Literal["quiz", "agentic"] = Field(
         description="Primary intent: quiz (greeting/thanks/static trivia without tools), "
         "agentic (everything else — tools, follow-ups, analysis)"
     )
@@ -143,28 +123,17 @@ class IntentClassificationLLMResult(BaseModel):
         description="Direct answer for quiz intents (greeting/thanks/trivia). Provide concise, factual response from training knowledge.",
     )
 
-    def to_intent_classification(self, *, continue_thread: bool) -> IntentClassification:
-        """Convert LLM result to runtime IntentClassification.
-
-        Args:
-            continue_thread: Whether this is a same-loop continuation (structural decision).
-
-        Returns:
-            IntentClassification with quiz_response forwarded from LLM.
-        """
+    def to_intent_classification(self) -> IntentClassification:
+        """Convert LLM result to runtime IntentClassification."""
         if self.intent_type == "quiz":
             return IntentClassification(
                 intent_type="quiz",
-                reuse_current_goal=False,
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
                 quiz_response=self.quiz_response,
             )
-
-        resolved_type = "continue_thread" if continue_thread else "new_goal"
         return IntentClassification(
-            intent_type=resolved_type,
-            reuse_current_goal=continue_thread,
+            intent_type="agentic",
             goal_description=self.goal_description,
             task_complexity=self.task_complexity,
             quiz_response=None,
@@ -175,15 +144,7 @@ def build_loop_routing_classification(
     intent: IntentClassification | None,
     preferred_subagent: str | None,
 ) -> RoutingClassification | None:
-    """Build routing classification consumed by AgentLoop Plan/Execute.
-
-    Args:
-        intent: IntentClassification from classifier.
-        preferred_subagent: Optional subagent hint (e.g., 'explore', 'research').
-
-    Returns:
-        RoutingClassification for middleware/planner consumption.
-    """
+    """Build routing classification consumed by AgentLoop Plan/Execute."""
     if intent is None:
         if preferred_subagent:
             return RoutingClassification(

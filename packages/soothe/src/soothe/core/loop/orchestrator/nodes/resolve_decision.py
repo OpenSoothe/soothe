@@ -69,6 +69,9 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
     if plan_result.plan_action == "new":
         state.completed_step_ids.clear()
         state.current_decision = decision
+        # RFC-225: count plan revisions in the active goal record
+        if ctx.goal_record is not None:
+            ctx.goal_record.plan_revision_count += 1
 
     ctx.scratch.decision = decision
     merged = plan_result.model_copy(update={"decision": decision})

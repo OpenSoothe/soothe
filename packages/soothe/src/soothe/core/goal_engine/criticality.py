@@ -89,22 +89,12 @@ async def _evaluate_with_llm(
     Returns:
         Tuple of (risk_level, reasons) where risk_level is "high", "medium", or "low".
     """
+    from soothe.core.prompts.fragments import CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT
     from soothe.utils.observability.langfuse import build_traced_config
 
-    prompt_text = (
-        "You are evaluating whether a proposed autonomous agent task requires human approval.\n"
-        f"\nProposed task: {description}\n"
-        f"\nPriority: {priority}/100\n"
-        "\nAssess the risk across these dimensions:\n"
-        "  - Affects external systems (APIs, databases, services)\n"
-        "  - Security implications (credentials, access, data exposure)\n"
-        "  - High resource cost (compute, time, API calls)\n"
-        "  - Modifies user data or external state\n"
-        "  - Irreversible operations\n"
-        "  - Broad dependency chain\n"
-        "\nRespond with exactly two lines:\n"
-        "RISK_LEVEL: <high|medium|low>\n"
-        "REASONS: <comma-separated list of specific concerns>\n"
+    prompt_text = CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT.format(
+        description=description,
+        priority=priority,
     )
 
     try:

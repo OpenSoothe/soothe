@@ -760,7 +760,7 @@ class LoopState(BaseModel):
         last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
             (``task_tool_aggregate`` provenance), not root-graph assistant stream (IG-355).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
-        continue_thread: IG-226 flag for continue-thread intent (adjusts iteration behavior).
+        continue_loop: RFC-225 flag — True when this loop has prior goals (carrier for executor wiring).
     """
 
     goal: str
@@ -820,7 +820,7 @@ class LoopState(BaseModel):
     last_execute_assistant_text: str | None = None
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
-    continue_thread: bool = False  # IG-226: Continue-thread mode flag
+    continue_loop: bool = False  # RFC-225: True when loop has prior goals
     project_instructions_execute_iteration: int | None = Field(
         default=None,
         description=(

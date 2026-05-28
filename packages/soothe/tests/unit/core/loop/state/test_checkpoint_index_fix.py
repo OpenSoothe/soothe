@@ -68,7 +68,7 @@ class TestIndexCalculationFix:
         checkpoint.status = "running"
         await sm.save(checkpoint)
 
-        # Complete first goal (changes status to ready_for_next_goal)
+        # Complete first goal (changes status to idle)
         await sm.finalize_goal(goal1, "report 1")
 
         # Now loop is ready for next goal, add second goal
@@ -163,13 +163,13 @@ class TestValidationLogic:
         checkpoint.status = "running"
         await sm.save(checkpoint)
 
-        # Finalize goal (status becomes ready_for_next_goal)
+        # Finalize goal (status becomes idle)
         await sm.finalize_goal(goal1, "report 1")
 
         # Reload checkpoint
         checkpoint = sm._checkpoint
 
-        # Now can start second goal (because status=ready_for_next_goal)
+        # Now can start second goal (because status=idle)
         goal2 = sm.start_new_goal("goal 2")
         checkpoint.goal_history.append(goal2)
         checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
@@ -194,7 +194,7 @@ class TestOrphanedGoalRecovery:
         # Simulate buggy behavior: append AFTER index
         checkpoint.current_goal_index = len(checkpoint.goal_history) - 1  # = -1 (BUG)
         checkpoint.goal_history.append(goal)  # Append AFTER (goal now exists)
-        checkpoint.status = "ready_for_next_goal"  # Loop thinks it's idle
+        checkpoint.status = "idle"  # Loop thinks it's idle
 
         await sm._save_checkpoint_to_db(checkpoint)
 
@@ -222,7 +222,7 @@ class TestOrphanedGoalRecovery:
             # Simulate bug: don't update index properly
             checkpoint.current_goal_index = -1  # Keep at -1 to simulate orphaned state
 
-        checkpoint.status = "ready_for_next_goal"  # Loop thinks it's idle
+        checkpoint.status = "idle"  # Loop thinks it's idle
         await sm._save_checkpoint_to_db(checkpoint)
 
         # Load and repair
@@ -249,10 +249,10 @@ class TestOrphanedGoalRecovery:
         # Finalize goal (IG-055: resets current_goal_index to -1)
         await sm.finalize_goal(goal, "report")
 
-        # Load should NOT repair (status=ready_for_next_goal is correct)
+        # Load should NOT repair (status=idle is correct)
         loaded = await sm.load()
         assert loaded.current_goal_index == -1  # IG-055: Reset to -1 after completion
-        assert loaded.status == "ready_for_next_goal"  # Correct status
+        assert loaded.status == "idle"  # Correct status
         assert loaded.goal_history[0].status == "completed"
 
 
@@ -333,7 +333,7 @@ class TestEdgeCases:
 
         assert checkpoint.goal_history == []
         assert checkpoint.current_goal_index == -1  # Correct: no active goal
-        assert checkpoint.status == "ready_for_next_goal"
+        assert checkpoint.status == "idle"
 
     @pytest.mark.asyncio
     async def test_single_goal_iteration(self, temp_state_manager):

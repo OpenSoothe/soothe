@@ -8,15 +8,19 @@ RFC-214 introduces unified message ledger replacing fragmented traces.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
-_AGENT_LOOP_CHECKPOINT_STATUSES = frozenset(
-    {"running", "ready_for_next_goal", "finalized", "cancelled"}
-)
+if TYPE_CHECKING:
+    # Forward references — actual imports happen during model_rebuild() at the
+    # end of soothe.core.loop.state.__init__ to break the circular import via
+    # protocols.loop_planner (RFC-225 / IG-445).
+    from soothe.core.loop.state.schemas import EvidenceEntry, PlanResult, StepResult
+
+_AGENT_LOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
 
 
 class WorkingMemoryEntry(BaseModel):
@@ -123,7 +127,13 @@ class GoalThreadRelevanceAnalysis(BaseModel):
 
 
 class GoalExecutionRecord(BaseModel):
-    """Single goal execution record (RFC-216: on specific thread, RFC-214: ledger-based)."""
+    """Single goal execution record (RFC-216: on specific thread, RFC-214: ledger-based).
+
+    RFC-225 enrichment: carries the latest plan DAG (``current_plan``), accumulated
+    ``step_results`` and ``evidence_ledger``, plus ``completed_step_ids`` and a
+    monotonic ``plan_revision_count`` so the goal's plan DAG and execution overlay
+    are recoverable from the checkpoint alone.
+    """
 
     # Identity (RFC-216: goal_id independent of thread)
     goal_id: str  # "{loop_id}_goal_{seq}"
@@ -134,6 +144,15 @@ class GoalExecutionRecord(BaseModel):
     iteration: int = 0
     max_iterations: int = 10
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
+
+    # RFC-225: Orchestration — latest plan DAG (revisions emitted via events)
+    current_plan: PlanResult | None = None
+    completed_step_ids: set[str] = Field(default_factory=set)
+    plan_revision_count: int = 0
+
+    # RFC-225: Execution overlay — per-step outcomes and evidence accumulated for goal
+    step_results: list[StepResult] = Field(default_factory=list)
+    evidence_ledger: list[EvidenceEntry] = Field(default_factory=list)
 
     # RFC-214: Unified message ledger (replaces reason_history/act_history)
     loop_messages: list[LoopHumanMessage | LoopAIMessage] = Field(
@@ -163,7 +182,7 @@ class AgentLoopCheckpoint(BaseModel):
     current_thread_id: str  # Active thread
 
     # Status (RFC-216: loop-scoped)
-    status: Literal["running", "ready_for_next_goal", "finalized", "cancelled"]
+    status: Literal["running", "idle", "finalized", "cancelled"]
 
     # Goal execution history (RFC-216: across all threads)
     goal_history: list[GoalExecutionRecord] = Field(default_factory=list)
@@ -194,7 +213,7 @@ class AgentLoopCheckpoint(BaseModel):
     updated_at: datetime
 
     # Metadata (informational only, no migration logic)
-    schema_version: str = "3.1"  # Current schema version
+    schema_version: str = "3.2"  # RFC-225 enrichment
 
 
 def normalize_checkpoint_data(
@@ -236,13 +255,13 @@ def normalize_checkpoint_data(
     out.setdefault("total_duration_ms", 0)
     out.setdefault("total_tokens_used", 0)
     out.setdefault("thread_switch_pending", False)
-    out.setdefault("schema_version", "3.1")
+    out.setdefault("schema_version", "3.2")
 
     status = out.get("status")
     if status not in _AGENT_LOOP_CHECKPOINT_STATUSES:
-        out["status"] = "ready_for_next_goal"
+        out["status"] = "idle"
     elif status == "running" and not out.get("goal_history"):
         # Daemon metadata-only row after bind (status=running, no goals yet).
-        out["status"] = "ready_for_next_goal"
+        out["status"] = "idle"
 
     return out
