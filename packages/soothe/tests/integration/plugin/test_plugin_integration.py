@@ -116,7 +116,7 @@ def test_health_check_event_exists():
         status="healthy",
         details="All systems operational",
     )
-    assert event.type == "soothe.plugin.health_checked"
+    assert event.type == "soothe.internal.plugin.health_checked"
     assert event.name == "test-plugin"
     assert event.status == "healthy"
     assert event.details == "All systems operational"
