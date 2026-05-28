@@ -79,7 +79,6 @@ class TestIntentClassificationLLMResult:
         llm_result = IntentClassificationLLMResult(
             intent_type="agentic",
             goal_description="Refactor auth module",
-            friendly_message="I'll refactor the auth module.",
             task_complexity=TaskComplexity.COMPLEX,
         )
         intent = llm_result.to_intent_classification(continue_thread=False)
@@ -92,13 +91,36 @@ class TestIntentClassificationLLMResult:
         llm_result = IntentClassificationLLMResult(
             intent_type="agentic",
             goal_description="DUMP review to report",
-            friendly_message="I'll export the review findings into a report.",
             task_complexity=TaskComplexity.MEDIUM,
         )
         intent = llm_result.to_intent_classification(continue_thread=True)
         assert intent.intent_type == "continue_thread"
         assert intent.reuse_current_goal is True
         assert intent.goal_description == "DUMP review to report"
+
+    def test_quiz_piggybacks_response(self) -> None:
+        """Quiz result forwards piggybacked quiz_response."""
+        llm_result = IntentClassificationLLMResult(
+            intent_type="quiz",
+            goal_description=None,
+            task_complexity=TaskComplexity.MINIMAL,
+            quiz_response="Shakespeare wrote Romeo and Juliet.",
+        )
+        intent = llm_result.to_intent_classification(continue_thread=False)
+        assert intent.intent_type == "quiz"
+        assert intent.quiz_response == "Shakespeare wrote Romeo and Juliet."
+
+    def test_agentic_result_has_no_quiz_response(self) -> None:
+        """Agentic result does not carry quiz_response."""
+        llm_result = IntentClassificationLLMResult(
+            intent_type="agentic",
+            goal_description="Build a scraper",
+            task_complexity=TaskComplexity.MEDIUM,
+            quiz_response=None,
+        )
+        intent = llm_result.to_intent_classification(continue_thread=False)
+        assert intent.intent_type == "new_goal"
+        assert intent.quiz_response is None
 
 
 class TestIntentClassificationPrompts:
@@ -111,7 +133,7 @@ class TestIntentClassificationPrompts:
         assert "continue_thread" not in INTENT_CLASSIFICATION_PROMPT
         assert "new_goal" not in INTENT_CLASSIFICATION_PROMPT
         assert "weather" in INTENT_CLASSIFICATION_PROMPT
-        assert "Do not generate user-facing answers" in INTENT_CLASSIFICATION_PROMPT
+        assert "quiz_response" in INTENT_CLASSIFICATION_PROMPT
 
     def test_retry_prompt_is_quiz_only(self) -> None:
         """Retry prompt uses quiz/agentic."""
@@ -164,7 +186,6 @@ class TestIntentClassifier:
             intent_type="new_goal",
             reuse_current_goal=False,
             goal_description="Look up Shanghai weather",
-            friendly_message="I'll look up the current weather in Shanghai for you.",
             task_complexity=TaskComplexity.SIMPLE,
         )
 
@@ -184,7 +205,6 @@ class TestIntentClassifier:
             intent_type="continue_thread",
             reuse_current_goal=True,
             goal_description="DUMP review to report",
-            friendly_message="I'll export the review findings into a report.",
             task_complexity=TaskComplexity.MEDIUM,
         )
 
@@ -246,5 +266,48 @@ class TestIntentClassifier:
         """Fallback intent when classifier is disabled defaults to continue_thread with prior goals."""
         classifier = IntentClassifier(model=None, assistant_name="TestBot")
         result = await classifier.classify_intent("do something", continue_thread=True)
+        assert result.intent_type == "continue_thread"
+        assert result.reuse_current_goal is True
+
+
+class TestHeuristicClassification:
+    """Test heuristic bypass for long/complex queries."""
+
+    def test_short_query_is_not_agentic(self) -> None:
+        """Short simple query is not classified as agentic by heuristic."""
+        assert not IntentClassifier._is_likely_agentic("hello")
+        assert not IntentClassifier._is_likely_agentic("what is 2+2?")
+        assert not IntentClassifier._is_likely_agentic("thanks")
+
+    def test_long_query_is_agentic(self) -> None:
+        """Query over 80 chars is classified as agentic by heuristic."""
+        long_query = "Please help me refactor the authentication module to use OAuth2 with PKCE flow and update all the tests"
+        assert len(long_query) > 80
+        assert IntentClassifier._is_likely_agentic(long_query)
+
+    def test_many_words_is_agentic(self) -> None:
+        """Query with over 15 words is classified as agentic by heuristic."""
+        many_words = "I want you to create a new feature that allows users to export their data as a CSV file"
+        assert len(many_words.split()) > 15
+        assert IntentClassifier._is_likely_agentic(many_words)
+
+    def test_multiline_is_agentic(self) -> None:
+        """Query with 2+ lines is classified as agentic by heuristic."""
+        multiline = "First do this\nThen do that\nAnd also this"
+        assert IntentClassifier._is_likely_agentic(multiline)
+
+    async def test_heuristic_bypasses_llm(self) -> None:
+        """Long query skips LLM call entirely via heuristic."""
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
+        long_query = "Please help me refactor the authentication module to use OAuth2 with PKCE flow and update all the tests"
+        result = await classifier.classify_intent(long_query, continue_thread=False)
+        assert result.intent_type == "new_goal"
+        assert result.goal_description == long_query
+
+    async def test_heuristic_respects_continue_thread(self) -> None:
+        """Heuristic classification respects continue_thread flag."""
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
+        long_query = "Please help me refactor the authentication module to use OAuth2 with PKCE flow and update all the tests"
+        result = await classifier.classify_intent(long_query, continue_thread=True)
         assert result.intent_type == "continue_thread"
         assert result.reuse_current_goal is True
