@@ -10,9 +10,9 @@
   [![soothe-daemon](https://img.shields.io/pypi/v/soothe-daemon?label=soothe-daemon)](https://pypi.org/project/soothe-daemon/)
   [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=soothe-cli)](https://pypi.org/project/soothe-cli/)
   [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=soothe-sdk)](https://pypi.org/project/soothe-sdk/)
-  [![License](https://img.shields.io/github/license/OpenSoothe/soothe)](https://github.com/OpenSoothe/soothe/blob/main/LICENSE)
-  [![GitHub Stars](https://img.shields.io/github/stars/OpenSoothe/soothe)](https://github.com/OpenSoothe/soothe)
-  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OpenSoothe/soothe)
+  [![License](https://img.shields.io/github/license/mirasoth/soothe)](https://github.com/mirasoth/soothe/blob/main/LICENSE)
+  [![GitHub Stars](https://img.shields.io/github/stars/mirasoth/soothe)](https://github.com/mirasoth/soothe)
+  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mirasoth/soothe)
 
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)
 </div>
@@ -81,7 +81,7 @@ Monorepo packages:
 | `soothe-daemon` | Standalone daemon (WebSocket/HTTP) |
 | `soothe-cli` | CLI client + TUI |
 | `soothe-sdk` | SDK for plugins & custom clients |
-| `soothe-community` | Community plugins ([separate repo](https://github.com/OpenSoothe/soothe-community)) |
+| `soothe-community` | Community plugins ([separate repo](https://github.com/mirasoth/soothe-community)) |
 
 ```bash
 # Full install

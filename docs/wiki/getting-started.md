@@ -336,7 +336,7 @@ pip install soothe[all]
 
 ## soothe-community Integration
 
-The [soothe-community](https://github.com/OpenSoothe/soothe-community) package provides additional delegated agents and extensions:
+The [soothe-community](https://github.com/mirasoth/soothe-community) package provides additional delegated agents and extensions:
 
 ```bash
 # Install soothe-community
@@ -357,7 +357,7 @@ pip install soothe-community
 2 Analyze security vulnerabilities
 ```
 
-See the [soothe-community repository](https://github.com/OpenSoothe/soothe-community) for:
+See the [soothe-community repository](https://github.com/mirasoth/soothe-community) for:
 - Full list of available agents
 - Installation and setup instructions
 - Configuration options

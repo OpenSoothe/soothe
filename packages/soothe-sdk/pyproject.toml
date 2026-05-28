@@ -38,9 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/OpenSoothe/soothe"
+Homepage = "https://github.com/mirasoth/soothe"
 Documentation = "https://soothe.readthedocs.io"
-Repository = "https://github.com/OpenSoothe/soothe"
+Repository = "https://github.com/mirasoth/soothe"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe_sdk"]

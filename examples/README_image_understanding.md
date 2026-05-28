@@ -301,5 +301,5 @@ input_message = {
 ## See Also
 
 - `examples/batch_tasks_example.py`: Headless CLI batch processing
-- [`soothe-community`](https://github.com/OpenSoothe/soothe-community): optional delegates and runnable examples
+- [`soothe-community`](https://github.com/mirasoth/soothe-community): optional delegates and runnable examples
 - `packages/soothe-cli/src/soothe_cli/tui/media_utils.py`: TUI image handling

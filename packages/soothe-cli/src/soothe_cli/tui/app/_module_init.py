@@ -342,7 +342,7 @@ class TextualSessionState:
 _COMMAND_URLS: dict[str, str] = {
     "/changelog": CHANGELOG_URL,
     "/docs": DOCS_URL,
-    "/feedback": "https://github.com/langchain-ai/Soothe/issues/new/choose",
+    "/feedback": "https://github.com/mirasoth/soothe/issues/new/choose",
 }
 """Slash-command to URL mapping for commands that just open a browser."""
 
