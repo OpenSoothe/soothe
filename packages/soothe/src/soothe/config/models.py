@@ -567,6 +567,15 @@ class AutonomousConfig(BaseModel):
         ge=5,
         description="Reduced polling cadence when in dreaming mode, seconds (RFC-222)",
     )
+    # RFC-222 H5: wall-clock budget per dispatched goal. None disables.
+    goal_deadline_seconds: float | None = Field(
+        default=None,
+        description=(
+            "Wall-clock budget per dispatched autopilot goal in seconds; "
+            "the AutopilotService monitor cancels the worker on overrun (RFC-222 H5). "
+            "None disables deadline enforcement."
+        ),
+    )
     inbox_dir: str = Field(
         default="$SOOTHE_HOME/autopilot/inbox",
         description="Path to autopilot channel inbox (RFC-222)",

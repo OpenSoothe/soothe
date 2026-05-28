@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -74,6 +75,9 @@ class GoalEngine:
         # RFC-222: File lock registry (always present) + optional event bus
         self._internal_bus = internal_bus
         self._file_registry: FileLockRegistry = file_registry or FileLockRegistry()
+        # RFC-222 Q6: track in-flight backoff reasoner tasks so they aren't
+        # garbage-collected while pending and so shutdown can drain them.
+        self._backoff_tasks: set[asyncio.Task[Any]] = set()
 
     @property
     def file_registry(self) -> FileLockRegistry:
@@ -594,34 +598,30 @@ class GoalEngine:
 
         old = goal.status
 
-        # RFC-200: Apply backoff reasoning if reasoner available
-        backoff_decision = None
+        # RFC-222 Q6: backoff reasoning runs as a fire-and-forget asyncio task
+        # so the dispatch loop and direct fail_goal callers never block on the
+        # LLM. The goal is transitioned now (retry-or-failed); the reasoner
+        # may later restructure the DAG by transitioning a different goal to
+        # ``pending`` with new directives.
         if self._backoff_reasoner and evidence:
-            try:
-                backoff_decision = await self._backoff_reasoner.reason_backoff(
-                    goal_id=goal_id,
-                    goals=self._goals,
-                    failed_evidence=evidence,
-                )
-                logger.info(
-                    "Backoff decision for goal %s: backoff to %s - %s",
-                    goal_id,
-                    backoff_decision.backoff_to_goal_id,
-                    backoff_decision.reason,
-                )
-
-                # Apply backoff decision
-                await self._apply_backoff_decision(backoff_decision, goal_id)
-                # RFC-222: emit transition with backoff reason; locks released
-                # because the goal's current attempt is done either way.
-                await self._release_locks_and_emit(goal_id)
-                await self._emit_state_change(goal, old, reason="backoff")
-                return backoff_decision
-            except Exception:
-                logger.warning(
-                    "Backoff reasoning failed, using fallback retry logic",
-                    exc_info=True,
-                )
+            scheduled = self._spawn_backoff_task(goal_id, evidence)
+            if scheduled:
+                # Apply the immediate retry/failed transition, mirroring the
+                # fallback path below, so callers see deterministic state
+                # before the reasoner finishes.
+                if allow_retry and goal.retry_count < goal.max_retries:
+                    goal.retry_count += 1
+                    goal.status = "pending"
+                    goal.updated_at = datetime.now(UTC)
+                    await self._release_locks_and_emit(goal_id)
+                    await self._emit_state_change(goal, old, reason="retry")
+                else:
+                    goal.status = "failed"
+                    goal.error = evidence.narrative
+                    goal.updated_at = datetime.now(UTC)
+                    await self._release_locks_and_emit(goal_id)
+                    await self._emit_state_change(goal, old, reason="failed")
+                return None  # decision not yet ready; emitted later by task
 
         # Fallback: Simple retry logic
         if allow_retry and goal.retry_count < goal.max_retries:
@@ -876,6 +876,91 @@ class GoalEngine:
 
         return " | ".join(context_parts)
 
+    def _spawn_backoff_task(
+        self,
+        goal_id: str,
+        evidence: EvidenceBundle,
+    ) -> bool:
+        """Schedule reason_backoff as a fire-and-forget task (RFC-222 Q6).
+
+        Returns True on successful scheduling. Returns False when no event
+        loop is running (e.g. legacy synchronous test contexts) so the caller
+        can fall through to the inline backoff path.
+        """
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+
+        # Snapshot the goal map so the reasoner sees a consistent DAG even
+        # if other coroutines mutate _goals while it runs.
+        goals_snapshot = dict(self._goals)
+        task = running_loop.create_task(self._run_backoff_task(goal_id, evidence, goals_snapshot))
+        self._backoff_tasks.add(task)
+        task.add_done_callback(self._backoff_tasks.discard)
+        logger.debug(
+            "Scheduled async backoff reasoner task for goal %s (%d in flight)",
+            goal_id,
+            len(self._backoff_tasks),
+        )
+        return True
+
+    async def _run_backoff_task(
+        self,
+        goal_id: str,
+        evidence: EvidenceBundle,
+        goals_snapshot: dict[str, Goal],
+    ) -> None:
+        """Run reason_backoff and apply the decision asynchronously.
+
+        Errors are logged and swallowed — the goal already transitioned to its
+        immediate state in ``fail_goal``; the worst case is that no DAG
+        restructuring happens.
+        """
+        if self._backoff_reasoner is None:
+            return  # nothing to do (defensive)
+
+        try:
+            decision = await self._backoff_reasoner.reason_backoff(
+                goal_id=goal_id,
+                goals=goals_snapshot,
+                failed_evidence=evidence,
+            )
+        except Exception:
+            logger.warning(
+                "Async backoff reasoning failed for goal %s; immediate transition stands",
+                goal_id,
+                exc_info=True,
+            )
+            return
+
+        logger.info(
+            "Async backoff decision for goal %s: backoff to %s — %s",
+            goal_id,
+            decision.backoff_to_goal_id,
+            decision.reason,
+        )
+
+        try:
+            await self._apply_backoff_decision(decision, goal_id)
+        except Exception:
+            logger.warning(
+                "Failed to apply async backoff decision for goal %s",
+                goal_id,
+                exc_info=True,
+            )
+            return
+
+        # Emit a separate ``backoff`` transition for observability after the
+        # decision lands. The original ``retry``/``failed`` event already fired
+        # synchronously inside fail_goal.
+        failed_goal = self._goals.get(goal_id)
+        if failed_goal is not None:
+            try:
+                await self._emit_state_change(failed_goal, failed_goal.status, reason="backoff")
+            except Exception:
+                logger.debug("emit_state_change raised after async backoff", exc_info=True)
+
     async def _apply_backoff_decision(
         self,
         decision: BackoffDecision,
@@ -920,8 +1005,9 @@ class GoalEngine:
                 "Applying %d new directives from backoff decision",
                 len(decision.new_directives),
             )
-            # TODO: Implement directive application logic
-            # Future: Use goal directive processor from _runner_goal_directives.py
+            # TODO: Implement directive application logic.
+            # Tracked for a future RFC; the legacy _runner_goal_directives
+            # processor was removed with the autonomous loop in Phase D.
 
     def _format_goal_dag(self) -> str:
         """Format the current goal DAG state for logging.
@@ -990,6 +1076,44 @@ class GoalEngine:
                 logger.debug("Skipping invalid goal record: %s", item, exc_info=True)
         logger.info("Restored %d goals", len(self._goals))
         logger.debug(self._format_goal_dag())
+
+    def recover_active_goals(self) -> list[str]:
+        """RFC-222 H4: reset goals stuck in ``active`` from a previous run.
+
+        Called by the daemon after ``restore_from_snapshot`` on startup. Any
+        goal still flagged ``active`` was mid-flight when the previous daemon
+        process exited; the worker subprocess is gone, so the goal must be
+        re-dispatched. Each recovered goal:
+
+        - has ``assigned_loop_id`` cleared (the old worker is dead),
+        - is flipped back to ``pending`` so the scheduler picks it up,
+        - has ``attempts_after_crash`` incremented for visibility / audit,
+        - logs a warning so operators see the recovery happened.
+
+        Returns:
+            IDs of goals that were reset. Empty list when nothing was active.
+        """
+        recovered: list[str] = []
+        now = datetime.now(UTC)
+        for goal in self._goals.values():
+            if goal.status != "active":
+                continue
+            prev_loop = goal.assigned_loop_id
+            goal.assigned_loop_id = None
+            goal.attempts_after_crash += 1
+            goal.status = "pending"
+            goal.updated_at = now
+            recovered.append(goal.id)
+            logger.warning(
+                "Crash recovery: reset goal %s (was active on loop=%s) → pending "
+                "(attempts_after_crash=%d)",
+                goal.id,
+                prev_loop,
+                goal.attempts_after_crash,
+            )
+        if recovered:
+            logger.info("Crash recovery: reset %d active goals to pending", len(recovered))
+        return recovered
 
     # ------------------------------------------------------------------
     # RFC-204: Goal File Discovery & Status Tracking

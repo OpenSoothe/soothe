@@ -302,13 +302,20 @@ class MessageRouter:
         workspace: str | None = None
         loop_id = await self._client_subscribed_loop_id(client_id)
         if loop_id:
-            # Get workspace from thread registry (set by bind_execution_thread_for_loop)
             current_thread_id = getattr(d, "_current_thread_id", None)
             ws_path = d._thread_registry.get_workspace(current_thread_id or loop_id)
             if ws_path:
                 workspace = str(ws_path)
+            else:
+                # Thread registry not populated yet (before first loop_input);
+                # read workspace from loop metadata set at loop_new time.
+                meta = await d._persistence_manager.get_loop_metadata(loop_id)
+                if meta:
+                    raw_ws = meta.get("current_workspace") or meta.get("client_workspace")
+                    if isinstance(raw_ws, str) and raw_ws.strip():
+                        workspace = raw_ws.strip()
 
-        skills = wire_entries_for_agent_config(d._config, workspace)
+        skills = wire_entries_for_agent_config(d._config, workspace, skill_index=d._skill_index)
         await d._send_client_message(
             client_id,
             {

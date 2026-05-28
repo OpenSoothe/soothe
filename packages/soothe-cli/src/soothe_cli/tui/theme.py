@@ -830,7 +830,7 @@ function call and cannot be mutated after freeze. The `ClassVar` declaration on
 `ThemeEntry` provides the type; this assignment supplies the value.
 """
 
-DEFAULT_THEME = "langchain"
+DEFAULT_THEME = "textual-dark"
 """Theme name used when no preference is saved."""
 
 
