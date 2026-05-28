@@ -303,7 +303,8 @@ class MessageRouter:
         loop_id = await self._client_subscribed_loop_id(client_id)
         if loop_id:
             # Get workspace from thread registry (set by bind_execution_thread_for_loop)
-            ws_path = d._thread_registry.get_workspace(d._current_thread_id or loop_id)
+            current_thread_id = getattr(d, "_current_thread_id", None)
+            ws_path = d._thread_registry.get_workspace(current_thread_id or loop_id)
             if ws_path:
                 workspace = str(ws_path)
 
@@ -365,7 +366,8 @@ class MessageRouter:
         loop_id = await self._client_subscribed_loop_id(client_id)
         if loop_id:
             # Get workspace from thread registry (set by bind_execution_thread_for_loop)
-            ws_path = d._thread_registry.get_workspace(d._current_thread_id or loop_id)
+            current_thread_id = getattr(d, "_current_thread_id", None)
+            ws_path = d._thread_registry.get_workspace(current_thread_id or loop_id)
             if ws_path:
                 workspace = str(ws_path)
 
