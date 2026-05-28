@@ -6,17 +6,17 @@ from soothe_sdk import PluginError, plugin, subagent, tool
 
 
 def test_plugin_decorator():
-    """Test plugin decorator sets metadata correctly."""
+    """Test plugin decorator sets manifest correctly."""
 
     @plugin(name="test-plugin", version="1.0.0", description="Test plugin")
     class TestPlugin:
         pass
 
-    assert hasattr(TestPlugin, "_plugin_metadata")
-    metadata = TestPlugin._plugin_metadata
-    assert metadata["name"] == "test-plugin"
-    assert metadata["version"] == "1.0.0"
-    assert metadata["description"] == "Test plugin"
+    assert hasattr(TestPlugin, "_plugin_manifest")
+    manifest = TestPlugin._plugin_manifest
+    assert manifest.name == "test-plugin"
+    assert manifest.version == "1.0.0"
+    assert manifest.description == "Test plugin"
 
 
 def test_tool_decorator():
