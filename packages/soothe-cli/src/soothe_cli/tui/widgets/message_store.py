@@ -47,7 +47,7 @@ class MessageStore:
     """
 
     WINDOW_SIZE: int = 200
-    HYDRATE_BUFFER: int = 15
+    HYDRATE_BUFFER: int = 8
 
     def __init__(self) -> None:
         """Initialize the message store."""
