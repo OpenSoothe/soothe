@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from contextlib import suppress
@@ -106,24 +105,10 @@ class _MessagesMixin:
             if widgets:
                 await messages_container.mount(*widgets)
 
-            # 8. Render content for AssistantMessage after mount
-            assistant_updates = [
-                widget.set_content(msg_data.content)
-                for widget, msg_data in zip(widgets, visible, strict=False)
-                if isinstance(widget, AssistantMessage) and msg_data.content
-            ]
-            if assistant_updates:
-                assistant_results = await asyncio.gather(
-                    *assistant_updates,
-                    return_exceptions=True,
-                )
-                for error in assistant_results:
-                    if isinstance(error, Exception):
-                        logger.warning(
-                            "Failed to render assistant history message for %s: %s",
-                            history_loop_id,
-                            error,
-                        )
+            # 8. Render assistant markdown progressively to avoid startup stalls
+            for widget, msg_data in zip(widgets, visible, strict=False):
+                if isinstance(widget, AssistantMessage) and msg_data.content:
+                    self._enqueue_hydrated_assistant_render(widget, msg_data.content)
 
             # 9. Add footer immediately and resolve link asynchronously
             loop_msg_widget = AppMessage(f"Resumed loop: {history_loop_id}")
@@ -285,6 +270,8 @@ class _MessagesMixin:
         """Clear the messages area and message store."""
         # Clear the message store first
         self._message_store.clear()
+        self._deferred_assistant_renders.clear()
+        self._assistant_render_drain_scheduled = False
         try:
             messages = self.query_one("#messages", Container)
             await messages.remove_children()

@@ -115,6 +115,48 @@ class _UIMixin:
             self._hydrate_scheduled = True
             self.call_later(self._hydrate_messages_above)
 
+    def _enqueue_hydrated_assistant_render(
+        self,
+        widget: AssistantMessage,
+        content: str,
+    ) -> None:
+        """Queue hydrated assistant markdown rendering onto a paced drain loop."""
+        if not content:
+            return
+        self._deferred_assistant_renders.append((widget, content))
+        if self._assistant_render_drain_scheduled or self._assistant_render_drain_in_progress:
+            return
+        self._assistant_render_drain_scheduled = True
+        self.call_later(lambda: asyncio.create_task(self._drain_hydrated_assistant_renders()))
+
+    async def _drain_hydrated_assistant_renders(self) -> None:
+        """Render hydrated assistant markdown in small batches to keep scroll responsive."""
+        if self._assistant_render_drain_in_progress:
+            self._assistant_render_drain_scheduled = True
+            return
+        self._assistant_render_drain_scheduled = False
+        self._assistant_render_drain_in_progress = True
+        try:
+            batch_start = _monotonic()
+            batch_count = 0
+            # Keep each drain short; schedule follow-up work for remaining cards.
+            while self._deferred_assistant_renders and batch_count < 2:
+                if (_monotonic() - batch_start) > 0.03:
+                    break
+                widget, content = self._deferred_assistant_renders.popleft()
+                if not widget.is_attached:
+                    continue
+                await widget.set_content(content)
+                batch_count += 1
+                await asyncio.sleep(0)
+        finally:
+            self._assistant_render_drain_in_progress = False
+            if self._deferred_assistant_renders:
+                self._assistant_render_drain_scheduled = True
+                self.call_later(
+                    lambda: asyncio.create_task(self._drain_hydrated_assistant_renders())
+                )
+
     async def _hydrate_messages_above(self) -> None:
         """Hydrate older messages when user scrolls near the top.
 
@@ -166,7 +208,6 @@ class _UIMixin:
                         exc_info=True,
                     )
 
-            assistant_render_tasks: list[Any] = []
             mounted_messages: list[Any] = []
             for widget, msg_data in reversed(hydrated_widgets):
                 try:
@@ -177,24 +218,15 @@ class _UIMixin:
                     first_child = widget
                     hydrated_count += 1
                     mounted_messages.append(msg_data)
-                    # Render plain text for hydrated assistant messages
+                    # Queue markdown rendering so hydration mounts stay responsive.
                     if isinstance(widget, AssistantMessage) and msg_data.content:
-                        assistant_render_tasks.append(widget.set_content(msg_data.content))
+                        self._enqueue_hydrated_assistant_render(widget, msg_data.content)
                 except Exception:
                     logger.warning(
                         "Failed to mount hydrated widget %s",
                         widget.id,
                         exc_info=True,
                     )
-
-            if assistant_render_tasks:
-                rendered = await asyncio.gather(*assistant_render_tasks, return_exceptions=True)
-                for error in rendered:
-                    if isinstance(error, Exception):
-                        logger.warning(
-                            "Failed to render hydrated assistant message",
-                            exc_info=True,
-                        )
 
             # Only update store for the number we actually mounted
             if hydrated_count > 0:
