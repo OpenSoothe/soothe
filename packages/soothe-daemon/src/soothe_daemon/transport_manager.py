@@ -45,6 +45,7 @@ class TransportManager:
         runner: Any | None = None,
         soothe_config: Any | None = None,
         session_manager: Any | None = None,
+        autopilot_service: Any | None = None,
     ) -> None:
         """Initialize transport manager.
 
@@ -53,11 +54,14 @@ class TransportManager:
             runner: Optional SootheRunner for HTTP REST transport.
             soothe_config: Optional SootheConfig for HTTP REST transport.
             session_manager: Optional ClientSessionManager for session management.
+            autopilot_service: Optional daemon-owned AutopilotService for the
+                HTTP /autopilot/* endpoints (RFC-222 revised, Phase C).
         """
         self._config = config
         self._runner = runner
         self._soothe_config = soothe_config
         self._session_manager = session_manager
+        self._autopilot_service = autopilot_service
         self._transports: list[TransportServer] = []
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
@@ -121,6 +125,7 @@ class TransportManager:
                 soothe_config=self._soothe_config,
                 session_manager=self._session_manager,
                 unified_app=self._unified_app,
+                autopilot_service=self._autopilot_service,
             )
             self._transports.append(http_transport)
             logger.debug("Configured HTTP REST transport (unified ASGI listener)")

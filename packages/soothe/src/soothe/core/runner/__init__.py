@@ -36,6 +36,7 @@ from soothe.protocols.policy import PolicyProtocol
 
 from ._runner_agentic import AgenticMixin
 from ._runner_autonomous import AutonomousMixin
+from ._runner_autopilot_worker import AutopilotWorkerMixin
 from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
@@ -64,7 +65,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
+class SootheRunner(
+    CheckpointMixin,
+    AutonomousMixin,
+    AutopilotWorkerMixin,
+    AgenticMixin,
+    PhasesMixin,
+):
     """Protocol-orchestrated agent runner.
 
     Wraps ``create_soothe_agent()`` with pre/post protocol steps and
@@ -510,6 +517,7 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
         preferred_subagent: str | None = None,
         client_loop_id: str | None = None,
         intent_hint: IntentHint | None = None,
+        autopilot_job: Any = None,  # AutopilotJob | None — see RFC-222 revised
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -517,9 +525,14 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
         format.  Protocol events are emitted as ``custom`` events with
         ``soothe.*`` type prefix.
 
-        **Two execution modes**:
-        - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit goal management
-        - Default (RFC-201): Agentic loop with Reason → Act iteration
+        **Three execution modes** (selected in priority order):
+        - ``autopilot_job`` set (RFC-222 revised): daemon-dispatched goal, runs
+          ``_run_single_autopilot_goal`` which hydrates from the bundle and
+          emits a ``GoalCompletionChunk`` at the end. AgentLoop never sees the
+          DAG. ``user_input`` is ignored.
+        - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit
+          goal management (legacy multi-goal path, removed in Phase D).
+        - Default (RFC-201): Agentic loop with Reason → Act iteration.
 
         Args:
             user_input: The user's query text.
@@ -533,6 +546,11 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
             client_loop_id: Daemon client loop scope for logging and stream correlation.
             intent_hint: Suggested intent to bypass LLM classification. When ``quiz``,
                 skips the intent classification LLM call.
+            autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
+                Worker hydrates AgentLoop from ``autopilot_job.merged_context`` and runs
+                ``autopilot_job.goal_description``; ``user_input`` is ignored. Emits a
+                ``GoalCompletionChunk`` exactly once before the terminal chunk.
+                ``None`` (default) keeps today's behavior.
         """
         # Update thread_id for logging if one is provided
         from soothe.core.workspace import resolve_daemon_workspace
@@ -558,6 +576,19 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
                 effective_workspace,
                 resolved.source,
             )
+
+            # RFC-222 revised: autopilot-dispatched job takes priority
+            # over autonomous= flag. AgentLoop runs the single goal hydrated
+            # from the bundle; ignores user_input.
+            if autopilot_job is not None:
+                async for chunk in self._run_single_autopilot_goal(
+                    autopilot_job,
+                    thread_id=thread_id,
+                    workspace=effective_workspace,
+                    max_iterations=max_iterations or self._config.agent.loop.max_iterations,
+                ):
+                    yield chunk
+                return
 
             # Autonomous mode
             if autonomous and self._goal_engine:

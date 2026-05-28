@@ -1,0 +1,285 @@
+"""End-to-end tests for AutopilotService real dispatch (RFC-222 revised, Phase C).
+
+Covers the full path: submit_task → scheduling tick → WorkerPool.pick_worker
+→ claim_goal → LoopRunRequest dispatch → fake runner emits GoalCompletionChunk
+→ AutopilotService updates GoalEngine state and releases worker.
+"""
+
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from soothe.config.models import AutonomousConfig
+from soothe.core.autopilot import AutopilotService
+from soothe.core.autopilot.context_store import InMemoryGoalDispatchContextStore
+from soothe.core.autopilot.workspace_reservation import WorkspaceReservation
+from soothe.core.events.internal_bus import InternalEventBus
+from soothe.core.goal_engine import GoalEngine
+
+# ---- Fakes -------------------------------------------------------------
+
+
+class _FakeRunner:
+    """LoopRunnerProtocol stub that emits a canned GoalCompletionChunk."""
+
+    def __init__(self, loop_id: str, *, outcome: str = "completed") -> None:
+        self.loop_id = loop_id
+        self._outcome = outcome
+        self._cancelled = False
+
+    async def run(self, request):  # noqa: ANN001
+        # Simulate a couple of progress chunks first.
+        yield ((), "custom", {"type": "soothe.internal.autopilot.progress.plan", "x": 1})
+        # Terminal completion chunk.
+        yield (
+            (),
+            "custom",
+            {
+                "type": "soothe.internal.autopilot.goal_completion",
+                "goal_id": request.autopilot_job.goal_id,
+                "outcome": self._outcome,
+                "attempt": request.autopilot_job.attempt,
+                "context_contribution": {
+                    "plan_steps_executed": [],
+                    "files_touched": {},
+                    "findings": [],
+                    "tool_call_stats": {"counts_by_name": {}, "failures_by_name": {}},
+                },
+                "plan_result_status": "complete" if self._outcome == "completed" else "abandoned",
+                "evidence_summary": "ok" if self._outcome == "completed" else "boom",
+            },
+        )
+
+    async def cancel(self) -> None:
+        self._cancelled = True
+
+
+class _FakeFactory:
+    def __init__(self, *, outcome: str = "completed") -> None:
+        self._outcome = outcome
+        self.created: list[str] = []
+
+    def create_runner(self, loop_id: str):  # noqa: ANN001
+        self.created.append(loop_id)
+        return _FakeRunner(loop_id, outcome=self._outcome)
+
+
+# ---- Helpers -----------------------------------------------------------
+
+
+def _service(*, outcome: str = "completed", with_reservation: bool = False) -> AutopilotService:
+    bus = InternalEventBus()
+    ge = GoalEngine(internal_bus=bus)
+    factory = _FakeFactory(outcome=outcome)
+    res = WorkspaceReservation() if with_reservation else None
+    svc = AutopilotService(
+        goal_engine=ge,
+        config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
+        internal_bus=bus,
+        runner_factory=factory,
+        workspace_reservation=res,
+    )
+    # Attach a context store so contributions get persisted.
+    svc._context_store = InMemoryGoalDispatchContextStore()
+    return svc
+
+
+async def _wait_until(predicate, *, timeout: float = 1.0, interval: float = 0.01) -> bool:
+    """Poll a predicate; return True when it succeeds, False on timeout."""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(interval)
+    return False
+
+
+# ---- Tests -------------------------------------------------------------
+
+
+class TestRealDispatchHasFlag:
+    def test_factory_present_enables_real_dispatch(self) -> None:
+        svc = _service()
+        assert svc.has_real_dispatch is True
+        assert svc._worker_pool is not None
+
+    def test_no_factory_keeps_legacy_path(self) -> None:
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        svc = AutopilotService(
+            goal_engine=ge,
+            config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
+            internal_bus=bus,
+        )
+        assert svc.has_real_dispatch is False
+        assert svc._worker_pool is None
+
+
+class TestEndToEndCompleted:
+    @pytest.mark.asyncio
+    async def test_submit_then_schedule_dispatches_and_completes(self) -> None:
+        svc = _service(outcome="completed")
+        goal = await svc.submit_task("write a poem")
+
+        # Run one scheduling tick directly — no need to start the full loop.
+        await svc._schedule_ready_goals()
+
+        # Wait for the consumer task to finish.
+        ok = await _wait_until(
+            lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done())
+        )
+        assert ok, "dispatch task did not complete"
+
+        # Goal transitioned to completed.
+        finished = await svc.get_goal(goal.id)
+        assert finished is not None
+        assert finished.status == "completed"
+
+        # Worker returned to idle.
+        assert svc._worker_pool.idle_count() == 1
+        assert svc._worker_pool.active_count() == 0
+
+        # Contribution persisted (empty bundle in this test, but key exists).
+        store_keys = await svc._context_store.all_goal_ids()
+        assert goal.id in store_keys
+
+
+class TestEndToEndFailed:
+    @pytest.mark.asyncio
+    async def test_failed_outcome_marks_goal_failed(self) -> None:
+        svc = _service(outcome="failed")
+        # max_retries=0 so it goes straight to terminal failed
+        goal = await svc.submit_task("doomed", max_retries=0)
+
+        await svc._schedule_ready_goals()
+        await _wait_until(lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done()))
+
+        finished = await svc.get_goal(goal.id)
+        assert finished is not None
+        assert finished.status == "failed"
+        assert "boom" in (finished.error or "")
+
+
+class TestEndToEndReservation:
+    @pytest.mark.asyncio
+    async def test_workspace_reservation_blocks_overlap(self) -> None:
+        """Manual reservation pre-acquired blocks autopilot from dispatching
+        a goal whose workspace overlaps.
+
+        Phase C scaffolding uses a per-goal sentinel for workspace, so to
+        exercise the gate we pre-reserve that exact path.
+        """
+        svc = _service(outcome="completed", with_reservation=True)
+        goal = await svc.submit_task("blocked")
+
+        # Pre-reserve the workspace path that AutopilotService will infer.
+        svc._workspace_reservation.acquire("external-holder", f"$autopilot/goal/{goal.id}")
+
+        await svc._schedule_ready_goals()
+        # Goal stays pending — workspace conflict deferred dispatch.
+        unchanged = await svc.get_goal(goal.id)
+        assert unchanged is not None
+        assert unchanged.status == "pending"
+        # No worker was spawned.
+        assert svc._worker_pool.total_count() == 0
+
+    @pytest.mark.asyncio
+    async def test_reservation_released_after_completion(self) -> None:
+        svc = _service(outcome="completed", with_reservation=True)
+        await svc.submit_task("clean")
+        await svc._schedule_ready_goals()
+        await _wait_until(lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done()))
+        # Reservation released.
+        assert svc._workspace_reservation.reservation_count() == 0
+
+
+class TestParallelDispatch:
+    @pytest.mark.asyncio
+    async def test_two_goals_run_on_two_workers(self) -> None:
+        svc = _service(outcome="completed")
+        a = await svc.submit_task("a", priority=80)
+        b = await svc.submit_task("b", priority=80)
+
+        await svc._schedule_ready_goals()
+        await _wait_until(
+            lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done()),
+            timeout=2.0,
+        )
+
+        a_done = await svc.get_goal(a.id)
+        b_done = await svc.get_goal(b.id)
+        assert a_done.status == "completed"
+        assert b_done.status == "completed"
+        # Both workers idle.
+        assert svc._worker_pool.idle_count() == 2
+
+    @pytest.mark.asyncio
+    async def test_third_goal_deferred_when_pool_full(self) -> None:
+        svc = _service(outcome="completed")
+        # Submit 3 — only 2 should dispatch in one tick (max_loops=2)
+        for i in range(3):
+            await svc.submit_task(f"g{i}", priority=50)
+
+        # Block runners so the first two stay busy.
+        async def _blocking_run(request):  # noqa: ANN001
+            await asyncio.sleep(10)  # noqa: ASYNC110 - intentional block in test fake
+            yield None  # pragma: no cover
+
+        # Replace the runner's run with a blocker so the test sees mid-dispatch.
+        original_factory = svc._runner_factory.create_runner
+
+        def _slow_factory(loop_id: str):
+            r = original_factory(loop_id)
+            r.run = _blocking_run  # type: ignore[method-assign]
+            return r
+
+        svc._runner_factory.create_runner = _slow_factory  # type: ignore[assignment]
+
+        await svc._schedule_ready_goals()
+
+        # Pool full at max_loops=2 — third goal stayed pending.
+        assert svc._worker_pool.active_count() == 2
+        all_goals = await svc.list_goals()
+        active = [g for g in all_goals if g.status == "active"]
+        pending = [g for g in all_goals if g.status == "pending"]
+        assert len(active) == 2
+        assert len(pending) == 1
+
+        # Cleanup hanging dispatch tasks.
+        for t in svc._dispatch_tasks.values():
+            t.cancel()
+        for t in list(svc._dispatch_tasks.values()):
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+
+
+class TestNoCompletionChunk:
+    @pytest.mark.asyncio
+    async def test_worker_exits_without_completion_chunk_marks_failed(self) -> None:
+        svc = _service(outcome="completed")
+
+        async def _silent_run(request):  # noqa: ANN001
+            # Yield only progress chunks, never a completion chunk.
+            yield ((), "custom", {"type": "soothe.internal.autopilot.progress.plan"})
+
+        original_factory = svc._runner_factory.create_runner
+
+        def _silent_factory(loop_id: str):
+            r = original_factory(loop_id)
+            r.run = _silent_run  # type: ignore[method-assign]
+            return r
+
+        svc._runner_factory.create_runner = _silent_factory  # type: ignore[assignment]
+
+        goal = await svc.submit_task("ghosted", max_retries=0)
+        await svc._schedule_ready_goals()
+        await _wait_until(lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done()))
+
+        finished = await svc.get_goal(goal.id)
+        assert finished is not None
+        assert finished.status == "failed"
+        assert "GoalCompletionChunk" in (finished.error or "")

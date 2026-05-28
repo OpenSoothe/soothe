@@ -1,0 +1,91 @@
+"""Tests for AutopilotService(subscribe_to_bus=...) flag (RFC-222 revised, Phase B).
+
+The daemon's daemon-owned AutopilotService must coexist with the per-runner
+AutopilotService until Phase D retires the latter. They share the singleton
+InternalEventBus, so the daemon instance must pass subscribe_to_bus=False
+to avoid double-handling every event.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from soothe.config.models import AutonomousConfig
+from soothe.core.autopilot import AutopilotService
+from soothe.core.events.internal_bus import InternalEventBus
+from soothe.core.events.internal_events import (
+    INTERNAL_GOAL_STATE_CHANGED,
+    INTERNAL_GOALS_READY,
+)
+from soothe.core.goal_engine import GoalEngine
+
+
+def _config() -> AutonomousConfig:
+    return AutonomousConfig(max_loops=2, max_parallel_goals=2)
+
+
+class TestSubscribeToBusFlag:
+    def test_default_subscribes(self) -> None:
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        svc = AutopilotService(goal_engine=ge, config=_config(), internal_bus=bus)
+        assert svc._subscribed is True
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+        assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
+
+    def test_explicit_true_subscribes(self) -> None:
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        svc = AutopilotService(
+            goal_engine=ge, config=_config(), internal_bus=bus, subscribe_to_bus=True
+        )
+        assert svc._subscribed is True
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+
+    def test_false_does_not_subscribe(self) -> None:
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        svc = AutopilotService(
+            goal_engine=ge, config=_config(), internal_bus=bus, subscribe_to_bus=False
+        )
+        assert svc._subscribed is False
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 0
+        assert bus.subscriber_count(INTERNAL_GOALS_READY) == 0
+
+    def test_coexistence_only_one_subscriber_fires(self) -> None:
+        """Two AutopilotService instances sharing a bus: only the
+        subscribing one handles events."""
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        svc_subscribed = AutopilotService(
+            goal_engine=ge, config=_config(), internal_bus=bus, subscribe_to_bus=True
+        )
+        svc_dormant = AutopilotService(
+            goal_engine=ge, config=_config(), internal_bus=bus, subscribe_to_bus=False
+        )
+        assert svc_subscribed._subscribed is True
+        assert svc_dormant._subscribed is False
+        # Bus sees exactly one handler per relevant topic.
+        assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+        assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
+
+    @pytest.mark.asyncio
+    async def test_dormant_service_still_has_execute_goal(self) -> None:
+        """Dormant service must still be a usable object (just not subscribed)."""
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        svc = AutopilotService(
+            goal_engine=ge, config=_config(), internal_bus=bus, subscribe_to_bus=False
+        )
+        # status() works
+        status = svc.status()
+        assert status["running"] is False
+        # execute_goal is callable (returns nothing for a missing goal id)
+        out: list = []
+
+        async def _executor(_g, _loop):  # noqa: ANN001
+            yield None
+
+        async for chunk in svc.execute_goal("missing-id", executor=_executor):
+            out.append(chunk)
+        assert out == []

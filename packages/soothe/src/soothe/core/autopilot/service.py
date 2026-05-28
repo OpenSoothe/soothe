@@ -17,6 +17,7 @@ when autopilot.enabled is true.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import contextvars
 import logging
 from datetime import UTC, datetime
@@ -102,6 +103,10 @@ class AutopilotService:
         goal_engine: GoalEngine,
         config: AutonomousConfig,
         internal_bus: Any | None = None,
+        *,
+        subscribe_to_bus: bool = True,
+        runner_factory: Any | None = None,
+        workspace_reservation: Any | None = None,
     ) -> None:
         """Initialize AutopilotService.
 
@@ -111,6 +116,23 @@ class AutopilotService:
                 fields (``max_loops``, ``loop_idle_timeout``, ``poll_interval``,
                 ``dreaming_poll_interval``).
             internal_bus: Internal EventBus (uses singleton if None).
+            subscribe_to_bus: When True (default), subscribe handlers to the
+                bus immediately. RFC-222 (revised, Phase B): the daemon
+                constructs a daemon-owned ``AutopilotService`` alongside the
+                per-runner one — they share the singleton bus, so the daemon
+                instance must pass ``subscribe_to_bus=False`` to avoid
+                double-handling every event. Phase D will retire the
+                per-runner instance and the daemon's will start subscribing.
+            runner_factory: Optional ``LoopRunnerFactory``-shaped object
+                exposing ``create_runner(loop_id) -> LoopRunnerProtocol``.
+                When provided (Phase C+), the scheduling loop dispatches
+                goals to real subprocess workers via a ``WorkerPool``. When
+                ``None`` (legacy / per-runner usage), the service uses the
+                in-memory ``LoopPool`` which never spawns workers.
+            workspace_reservation: Optional ``WorkspaceReservation`` gate.
+                When provided, the scheduling loop refuses to dispatch a
+                goal whose workspace overlaps an active reservation. When
+                ``None``, no workspace gating is applied.
         """
         self._goal_engine = goal_engine
         self._config = config
@@ -119,6 +141,7 @@ class AutopilotService:
         self._running = False
         self._dreaming = False
         self._scheduling_task: asyncio.Task | None = None
+        self._subscribed = False
 
         # RFC-222: parallel-execution concurrency control.
         # `_assignment_lock` makes loop assignment atomic so two concurrent
@@ -130,8 +153,32 @@ class AutopilotService:
         self._assignment_lock = asyncio.Lock()
         self._execution_semaphore = asyncio.Semaphore(self._config.max_parallel_goals)
 
-        # Subscribe to GoalEngine events
-        self._setup_subscriptions()
+        # RFC-222 revised (Phase C): optional WorkerPool-driven dispatch.
+        # When ``runner_factory`` is supplied, ``WorkerPool`` wraps it and
+        # the scheduling loop uses real subprocess dispatch. When None, the
+        # legacy in-memory LoopPool path runs (used by the per-runner
+        # AutopilotService instance for backward compat).
+        self._runner_factory = runner_factory
+        self._worker_pool: Any = None  # WorkerPool | None
+        self._workspace_reservation = workspace_reservation
+        self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
+        if runner_factory is not None:
+            from soothe.core.autopilot.worker_pool import WorkerPool
+
+            self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
+
+        if subscribe_to_bus:
+            self._setup_subscriptions()
+            self._subscribed = True
+
+    @property
+    def has_real_dispatch(self) -> bool:
+        """True when a ``runner_factory`` was provided (RFC-222 Phase C+).
+
+        When True, the scheduling loop uses ``WorkerPool`` + real subprocess
+        dispatch. When False, it uses the legacy in-memory ``LoopPool``.
+        """
+        return self._worker_pool is not None
 
     def _setup_subscriptions(self) -> None:
         """Subscribe to InternalEventBus events."""
@@ -286,6 +333,14 @@ class AutopilotService:
                 pass
             self._scheduling_task = None
 
+        # Cancel any in-flight dispatch consumer tasks (RFC-222 Phase C).
+        for goal_id, task in list(self._dispatch_tasks.items()):
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+            self._dispatch_tasks.pop(goal_id, None)
+
         # Release all loops
         for loop_id in list(self._loop_pool.loops.keys()):
             await self._release_loop(loop_id, reason="shutdown")
@@ -299,6 +354,92 @@ class AutopilotService:
         )
 
         logger.info("AutopilotService stopped: %s", reason)
+
+    # ---- Public submission API (RFC-222 revised, Phase C) -------------
+
+    async def submit_task(
+        self,
+        description: str,
+        *,
+        priority: int = 50,
+        parent_id: str | None = None,
+        max_retries: int | None = None,
+        depends_on: list[str] | None = None,
+        informs: list[str] | None = None,
+        source_file: str | None = None,
+    ) -> Goal:
+        """Create a goal in this service's GoalEngine (RFC-222 revised).
+
+        Public entry point for callers (HTTP ``/autopilot/submit``,
+        ``ChannelInbox`` consumer, future programmatic clients) to add a
+        new goal to the DAG. The scheduling loop will pick it up on its
+        next tick when ``self._running`` is True.
+
+        Args:
+            description: Goal description text.
+            priority: 0-100, higher schedules earlier.
+            parent_id: Optional parent goal id for hierarchical decomposition.
+            max_retries: Override default max retries.
+            depends_on: Hard dependencies — goal won't run until these complete.
+            informs: Soft dependencies — context flows from these but the
+                child can still run if they haven't completed yet.
+            source_file: Optional file path for goal-file-discovery use cases
+                (RFC-204).
+
+        Returns:
+            The newly-created ``Goal``. Callers can read ``.id`` to track it.
+
+        Raises:
+            ValueError: If goal depth limit would be exceeded.
+        """
+        return await self._goal_engine.create_goal(
+            description,
+            priority=priority,
+            parent_id=parent_id,
+            max_retries=max_retries,
+            depends_on=depends_on,
+            informs=informs,
+            source_file=source_file,
+        )
+
+    async def list_goals(self, *, status: str | None = None) -> list[Goal]:
+        """Read-through to the underlying GoalEngine for HTTP/CLI surfaces."""
+        # GoalStatus literal accepted; pass through as-is.
+        return await self._goal_engine.list_goals(status=status)  # type: ignore[arg-type]
+
+    async def get_goal(self, goal_id: str) -> Goal | None:
+        """Read-through to the underlying GoalEngine for HTTP/CLI surfaces."""
+        return await self._goal_engine.get_goal(goal_id)
+
+    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> Goal | None:
+        """Best-effort cancel: transition the goal to ``failed``.
+
+        If the goal is currently dispatched to a worker, RFC-221 cooperative
+        cancellation will pick up the engine state on its next chunk-boundary
+        check (Phase C scaffolding; full worker.runner.cancel() integration
+        lands later).
+
+        Args:
+            goal_id: Goal to cancel.
+            reason: Logged with the failure for audit.
+
+        Returns:
+            The Goal if it existed, else None.
+        """
+        from soothe.core.goal_engine.models import EvidenceBundle
+
+        goal = await self._goal_engine.get_goal(goal_id)
+        if goal is None:
+            return None
+        evidence = EvidenceBundle(
+            structured={"reason": reason},
+            narrative=f"Cancelled by autopilot: {reason}",
+            source="layer3_reflect",
+        )
+        await self._goal_engine.fail_goal(goal_id, evidence=evidence, allow_retry=False)
+        return await self._goal_engine.get_goal(goal_id)
+
+    # ---- Internals ----------------------------------------------------
 
     async def _release_loop(self, loop_id: str, reason: str = "idle_timeout") -> LoopHandle | None:
         """Release a loop from the pool.
@@ -509,11 +650,16 @@ class AutopilotService:
     async def _schedule_ready_goals(self) -> None:
         """Schedule all ready goals from GoalEngine.
 
-        Uses ``peek_ready_goals`` for capacity planning (no side effects),
-        then activates each goal only after a loop is successfully
-        assigned. This avoids prematurely flipping goals to ``active``
-        when there isn't enough loop capacity.
+        Two paths:
+        - ``has_real_dispatch`` True (RFC-222 Phase C+): use ``WorkerPool``
+          to pick subprocess workers and dispatch via ``LoopRunRequest``.
+        - Else: legacy in-memory ``LoopPool`` path (per-runner instance).
         """
+        if self.has_real_dispatch:
+            await self._schedule_via_worker_pool()
+            return
+
+        # Legacy path (per-runner instance, no real dispatch)
         max_par = self._config.max_loops - self._loop_pool.active_count()
         if max_par <= 0:
             return
@@ -526,6 +672,230 @@ class AutopilotService:
                 logger.warning("No loop capacity for goal %s; deferring", candidate.id)
                 break
             await self._activate_and_record(candidate.id, loop)
+
+    async def _schedule_via_worker_pool(self) -> None:
+        """RFC-222 Phase C: schedule via WorkerPool + real subprocess dispatch.
+
+        For each ready goal under capacity, optionally check workspace
+        reservation, claim the goal, and spawn a stream-consuming task
+        that drives ``worker.runner.run(LoopRunRequest)`` and reacts to
+        the worker's terminal ``GoalCompletionChunk``.
+        """
+        if self._worker_pool is None:
+            return  # safety: should never happen when has_real_dispatch is True
+
+        # Bound by min(WorkerPool capacity, max_parallel_goals semaphore)
+        cap_remaining = max(0, self._config.max_loops - self._worker_pool.active_count())
+        if cap_remaining <= 0:
+            return
+
+        candidates = await self._goal_engine.peek_ready_goals(limit=cap_remaining)
+        for candidate in candidates:
+            # Workspace reservation gate (RFC-222 revised Q1).
+            if self._workspace_reservation is not None:
+                ws = self._infer_workspace(candidate)
+                conflict = self._workspace_reservation.conflicts_with_active(ws)
+                if conflict:
+                    logger.debug(
+                        "Goal %s deferred: workspace %s conflicts with active goal %s",
+                        candidate.id,
+                        ws,
+                        conflict,
+                    )
+                    continue
+                if not self._workspace_reservation.acquire(candidate.id, ws):
+                    continue
+
+            worker = await self._worker_pool.pick_worker(candidate)
+            if worker is None:
+                # Pool filled mid-iteration; release the reservation we just took.
+                if self._workspace_reservation is not None:
+                    self._workspace_reservation.release(candidate.id)
+                logger.debug("No worker capacity for goal %s; deferring", candidate.id)
+                break
+
+            # Atomically claim — re-checks conflicts at flip time.
+            claimed = await self._goal_engine.claim_goal(candidate.id, loop_id=worker.loop_id)
+            if claimed is None:
+                # Race: another path consumed the goal first.
+                logger.debug("Goal %s vanished before claim; releasing worker", candidate.id)
+                await self._worker_pool.mark_idle(worker.loop_id, success=True)
+                if self._workspace_reservation is not None:
+                    self._workspace_reservation.release(candidate.id)
+                continue
+
+            await self._dispatch_to_worker(claimed, worker)
+
+    async def _dispatch_to_worker(self, goal: Goal, worker: Any) -> None:
+        """Build the LoopRunRequest and spawn a stream-consuming task."""
+        from soothe.protocols.runner import AutopilotJob, LoopRunRequest
+
+        # Phase C ships an empty merged_context. Phase C+ wires the
+        # ContextProjector to fetch and project parents' contributions.
+        bundle = await self._build_merged_context(goal)
+
+        request = LoopRunRequest(
+            loop_id=worker.loop_id,
+            thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
+            user_input="",
+            autopilot_job=AutopilotJob(
+                goal_id=goal.id,
+                goal_description=goal.description,
+                merged_context=bundle,
+                deadline_seconds=None,  # H5: hook for deadline; not yet enforced.
+                attempt=goal.retry_count + 1,
+            ),
+            autonomous=True,
+            max_iterations=self._config.max_iterations,
+        )
+
+        task = asyncio.create_task(self._consume_worker_stream(goal.id, worker, request))
+        worker.active_task = task
+        self._dispatch_tasks[goal.id] = task
+        logger.info(
+            "[Autopilot] dispatched goal %s to worker %s (attempt %d)",
+            goal.id,
+            worker.loop_id,
+            request.autopilot_job.attempt,
+        )
+
+    async def _build_merged_context(self, goal: Goal) -> Any:
+        """Build the GoalDispatchContextBundle for ``goal``.
+
+        Hooks the ``ContextProjector`` if one was wired (Phase C+ optional).
+        Returns an empty bundle by default so dispatch always succeeds.
+        """
+        from soothe.core.goal_engine.models import GoalDispatchContextBundle
+
+        projector = getattr(self, "_context_projector", None)
+        if projector is None:
+            return GoalDispatchContextBundle()
+        try:
+            return await projector.project(goal, self._goal_engine._goals)
+        except Exception:
+            logger.warning(
+                "ContextProjector failed for goal %s; falling back to empty bundle",
+                goal.id,
+                exc_info=True,
+            )
+            return GoalDispatchContextBundle()
+
+    async def _consume_worker_stream(self, goal_id: str, worker: Any, request: Any) -> None:
+        """Drain a worker's stream and react to ``GoalCompletionChunk``.
+
+        On a successful completion: mark goal completed in GoalEngine,
+        store the contribution if a context store is wired, return the
+        worker to the idle queue, release any workspace reservation.
+
+        On exception or non-completion termination: mark goal failed.
+        """
+        from soothe.core.goal_engine.models import (
+            EvidenceBundle,
+            GoalDispatchContextContribution,
+        )
+
+        completion_seen = False
+        try:
+            async for chunk in worker.runner.run(request):
+                # chunk = (namespace, mode, data) per StreamChunk shape.
+                _, mode, data = chunk
+                if mode != "custom" or not isinstance(data, dict):
+                    continue
+                ctype = data.get("type", "")
+                if ctype != "soothe.internal.autopilot.goal_completion":
+                    continue
+
+                completion_seen = True
+                outcome = data.get("outcome", "failed")
+                contribution_dict = data.get("context_contribution") or {}
+                try:
+                    contribution = GoalDispatchContextContribution.model_validate(contribution_dict)
+                except Exception:
+                    logger.warning(
+                        "Invalid GoalDispatchContextContribution for goal %s; using empty",
+                        goal_id,
+                        exc_info=True,
+                    )
+                    contribution = GoalDispatchContextContribution()
+
+                # Persist the contribution if a store is wired.
+                store = getattr(self, "_context_store", None)
+                if store is not None:
+                    try:
+                        await store.put(goal_id, contribution)
+                    except Exception:
+                        logger.warning(
+                            "Failed to persist contribution for goal %s",
+                            goal_id,
+                            exc_info=True,
+                        )
+
+                # React to outcome by transitioning the goal.
+                if outcome == "completed":
+                    try:
+                        await self._goal_engine.complete_goal(goal_id)
+                    except Exception:
+                        logger.exception("complete_goal failed for goal %s", goal_id)
+                else:  # failed / needs_replan → fail with evidence
+                    evidence = EvidenceBundle(
+                        structured={
+                            "outcome": outcome,
+                            "plan_result_status": data.get("plan_result_status"),
+                        },
+                        narrative=str(data.get("evidence_summary", ""))
+                        or str(data.get("error_text", "no narrative")),
+                        source="layer2_execute",
+                    )
+                    try:
+                        await self._goal_engine.fail_goal(
+                            goal_id, evidence=evidence, allow_retry=outcome == "needs_replan"
+                        )
+                    except Exception:
+                        logger.exception("fail_goal raised for goal %s", goal_id)
+
+                break  # one completion chunk per dispatch is the contract
+        except Exception:
+            logger.exception(
+                "Worker stream raised for goal %s on worker %s",
+                goal_id,
+                worker.loop_id,
+            )
+
+        if not completion_seen:
+            # Worker stream ended without a completion chunk — treat as failed.
+            from soothe.core.goal_engine.models import EvidenceBundle as _EvBundle
+
+            try:
+                await self._goal_engine.fail_goal(
+                    goal_id,
+                    evidence=_EvBundle(
+                        structured={"outcome": "no_completion_chunk"},
+                        narrative="Worker exited without emitting GoalCompletionChunk",
+                        source="layer2_execute",
+                    ),
+                    allow_retry=False,
+                )
+            except Exception:
+                logger.debug("fail_goal raised on missing completion", exc_info=True)
+
+        # Always release worker + reservation, even on errors.
+        if self._worker_pool is not None:
+            await self._worker_pool.mark_idle(worker.loop_id, success=completion_seen)
+        if self._workspace_reservation is not None:
+            self._workspace_reservation.release(goal_id)
+
+        self._dispatch_tasks.pop(goal_id, None)
+
+    @staticmethod
+    def _infer_workspace(goal: Goal) -> str:
+        """Best-effort workspace path for a goal (Phase C scaffolding).
+
+        Goals don't carry a workspace field today; the runner resolves it
+        from the request. For Phase C scheduling-time conflict gating, use
+        a stable per-goal sentinel so each goal gets its own reservation
+        slot. Phase C+ will plumb through actual workspace metadata.
+        """
+        return f"$autopilot/goal/{goal.id}"
 
     async def _schedule_goal(self, goal_id: str) -> None:
         """Schedule a single goal to a loop.
