@@ -99,19 +99,35 @@ class PhasesMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for quiz-style queries (greetings, thanks, brief trivia).
 
-        Invokes the configured **default** role chat model for the answer.
-        Classification supplies routing only (``intent_type=quiz``).
+        Uses piggybacked ``quiz_response`` from intent classification when
+        available (avoiding a second LLM call). Falls back to a separate
+        LLM invocation when the classification did not provide an answer.
 
         Args:
             user_input: User message.
             thread_id: Thread ID for state tracking.
-            classification: IntentClassification from classifier (routing only).
+            classification: IntentClassification from classifier (may contain piggybacked quiz_response).
 
         Yields:
             StreamChunk events for quiz response.
         """
         logger.info("Quiz: %s", user_input[:50])
 
+        # Use piggybacked quiz_response from intent classification (avoids second LLM call)
+        piggybacked_answer = None
+        if classification is not None:
+            piggybacked_answer = getattr(classification, "quiz_response", None)
+            if isinstance(piggybacked_answer, str) and piggybacked_answer.strip():
+                logger.debug("Quiz using piggybacked answer from classification")
+                yield loop_assistant_messages_chunk(
+                    content=piggybacked_answer.strip(),
+                    phase="quiz",
+                    thread_id=thread_id,
+                )
+                await self._save_quiz_to_state(user_input, piggybacked_answer.strip(), thread_id)
+                return
+
+        # Fallback: separate LLM call for quiz answer
         quiz_model = getattr(self, "_fast_model", None)
         model_label = "fast"
         if not quiz_model:

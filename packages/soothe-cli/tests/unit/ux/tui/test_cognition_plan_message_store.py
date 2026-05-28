@@ -56,7 +56,7 @@ def test_assess_only_card_round_trip() -> None:
 
 
 def test_intent_only_card_round_trip() -> None:
-    """Intent card stores and restores friendly_message via assessment_reasoning."""
+    """Intent card stores and restores goal_description via assessment_reasoning."""
     w = CognitionReasonMessage(
         next_action="",
         status="",
