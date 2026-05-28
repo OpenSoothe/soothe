@@ -3,6 +3,12 @@ Output: plan_action, type, steps, execution_mode, reasoning, adaptive_granularit
 
 Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal and iteration are in ``<GOAL_PROGRESS>``. When ``<USER_PRIMARY_QUERY>`` exists, prefer that over ``<FULL_GOAL_AND_SKILL_CONTEXT>``.
 
+**Language lock**:
+- Use the same natural language as the current goal statement in ``<GOAL_PROGRESS>``.
+- Apply this consistently to ``steps[].description``, ``steps[].expected_output``, ``reasoning``, and ``next_action``.
+- Do not switch output language unless the user explicitly requests another language.
+- Keep code, file paths, identifiers, and quoted literals unchanged.
+
 **Step count**: Follow EXECUTION_POLICIES (first wave: 1–2 only; later: 1–3).
 
 **plan_action**: ``keep`` (reuse plan) or ``new`` (fresh decision per rules above).

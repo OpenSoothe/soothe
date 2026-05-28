@@ -24,7 +24,7 @@ from tests.integration.conftest import (
     force_isolated_home,
 )
 from tests.integration.ws_loop_client import (
-    loop_new_with_initial_input,
+    loop_new,
     request_loop_delete,
     request_loop_get,
     request_loop_list,
@@ -114,10 +114,7 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
     await unix_client.connect()
 
     try:
-        loop_id = await loop_new_with_initial_input(
-            unix_client,
-            initial_message="test broadcast",
-        )
+        loop_id = await loop_new(unix_client)
         assert isinstance(loop_id, str)
 
         # Verify daemon reports correct client count
@@ -144,10 +141,7 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
     await unix_client.connect()
 
     try:
-        loop_id = await loop_new_with_initial_input(
-            unix_client,
-            initial_message="cross-transport thread",
-        )
+        loop_id = await loop_new(unix_client)
 
         get_response = await request_loop_get(unix_client, loop_id)
         assert get_response["loop"]["loop_id"] == loop_id
@@ -204,6 +198,7 @@ async def test_multi_transport_cross_transport_thread_sync(
         created = await ws_client.request_response(
             {"type": "loop_new"},
             response_type="loop_new_response",
+            timeout=15.0,
         )
         loop_id = created["loop_id"]
 
