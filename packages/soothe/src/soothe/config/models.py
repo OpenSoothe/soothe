@@ -576,6 +576,59 @@ class AutonomousConfig(BaseModel):
         description="Path to autopilot channel outbox (RFC-222)",
     )
 
+    # === Context projection (RFC-222 revised) ===
+    # Bounds the GoalDispatchContextBundle that the daemon's ContextProjector
+    # builds for each dispatched goal. Keeps cross-process IPC bounded and
+    # caps memory of the GoalDispatchContextStore in durability.
+    context_projection: ContextProjectionConfig = Field(
+        default_factory=lambda: ContextProjectionConfig(),
+        description="Bounds for GoalDispatchContextBundle merging (RFC-222 revised)",
+    )
+
+    # === Workspace reservation (RFC-222 revised) ===
+    # Scheduling-time conflict gate. Refuses to dispatch two goals whose
+    # workspace prefixes overlap. Supersedes per-path FileLockMiddleware for v1.
+    workspace_reservation: WorkspaceReservationConfig = Field(
+        default_factory=lambda: WorkspaceReservationConfig(),
+        description="Workspace-prefix conflict gate config (RFC-222 revised)",
+    )
+
+
+class ContextProjectionConfig(BaseModel):
+    """Bounds for GoalDispatchContextBundle merging (RFC-222 revised).
+
+    The ContextProjector unions parents' GoalDispatchContextContributions,
+    deduplicates, and truncates to these caps. Bundle stays small enough to
+    ship over IPC cheaply (~100 KB).
+
+    Args:
+        max_findings: Max LLM-synthesized findings per bundle.
+        max_files: Max file touchpoints per bundle.
+        max_plan_steps: Max prior plan steps per bundle.
+        context_retention_hours: After a root goal reaches a terminal state,
+            its DAG's contributions become evictable from the store this many
+            hours later. Default 168 (1 week). LRU-evict if quota exceeded.
+    """
+
+    max_findings: int = Field(default=20, ge=1, le=200)
+    max_files: int = Field(default=50, ge=1, le=500)
+    max_plan_steps: int = Field(default=30, ge=1, le=300)
+    context_retention_hours: int = Field(default=168, ge=1)
+
+
+class WorkspaceReservationConfig(BaseModel):
+    """Workspace-prefix conflict gate config (RFC-222 revised).
+
+    Args:
+        enabled: When false, autopilot does not check for workspace overlap
+            (allows multiple goals on overlapping paths). Default true.
+        strict_overlap: When true, any prefix overlap counts as conflict
+            (`/foo/bar` conflicts with `/foo/bar/baz`). Default true.
+    """
+
+    enabled: bool = True
+    strict_overlap: bool = True
+
 
 class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory (RFC-203).

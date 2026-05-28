@@ -1,13 +1,43 @@
-"""Loop runner protocol definitions (RFC-221)."""
+"""Loop runner protocol definitions (RFC-221, extended by RFC-222 revised)."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from soothe.core.goal_engine.models import GoalDispatchContextBundle
 
 StreamChunk = tuple[tuple[str, ...], str, Any]
 """Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
+
+
+@dataclass(frozen=True)
+class AutopilotJob:
+    """Autopilot-dispatched goal job (RFC-222 revised).
+
+    Attached to ``LoopRunRequest.autopilot_job`` when the daemon's
+    ``AutopilotService`` dispatches a goal to a subprocess worker. When
+    present, the worker hydrates AgentLoop from ``merged_context`` and
+    executes ``goal_description``, ignoring ``LoopRunRequest.user_input``.
+    When ``LoopRunRequest.autopilot_job`` is ``None``, the worker runs
+    solo-mode behavior — today's path, unchanged.
+
+    Attributes:
+        goal_id: Daemon's canonical goal id.
+        goal_description: Frozen at dispatch time.
+        merged_context: Pre-projected hydration bundle from the daemon's
+            ``ContextProjector``. Worker treats it as opaque.
+        deadline_seconds: Wall-clock budget for this attempt; ``None`` = no cap.
+        attempt: 1 on first dispatch, N on retry/backoff.
+    """
+
+    goal_id: str
+    goal_description: str
+    merged_context: GoalDispatchContextBundle
+    deadline_seconds: float | None = None
+    attempt: int = 1
 
 
 @dataclass
@@ -23,6 +53,12 @@ class LoopRunRequest:
         - else → ``$SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>`` where
           ``normalized_user_id`` is ``anonymous`` when ``user_id`` is empty, and
           hash uses ``user_id`` (or ``""``) with ``client_workspace_id`` or ``loop_id``.
+
+    RFC-222 revised extension (additive): when ``autopilot_job`` is set, this
+    request is dispatched by the daemon's ``AutopilotService``; the worker
+    branches to a hydrate-from-bundle path. When ``None``, the worker runs
+    today's solo-mode path. The ``LoopRunnerProtocol.run`` signature is
+    unchanged.
     """
 
     loop_id: str
@@ -40,6 +76,9 @@ class LoopRunRequest:
     timeout_seconds: float | None = None
     # Intent hint to bypass LLM classification
     intent_hint: str | None = None
+    # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched
+    # goals. None for solo-mode requests (default).
+    autopilot_job: AutopilotJob | None = None
 
     def resolve_workspace_path(self) -> str:
         """Absolute workspace path for ``SootheRunner.astream(workspace=...)``."""
@@ -73,4 +112,4 @@ class LoopRunnerProtocol(Protocol):
         ...
 
 
-__all__ = ["LoopRunRequest", "LoopRunnerProtocol", "StreamChunk"]
+__all__ = ["AutopilotJob", "LoopRunRequest", "LoopRunnerProtocol", "StreamChunk"]

@@ -2,10 +2,13 @@
 
 **RFC**: 204
 **Title**: Autopilot Mode (Layer 3 Extension)
-**Status**: Implemented
+**Status**: Implemented — runtime architecture refined by RFC-222 (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Dependencies**: RFC-200, RFC-201, RFC-203, RFC-450, RFC-500
+**Updated**: 2026-05-28
+**Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
+
+> **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — channel inbox/outbox, file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
 
 ## Abstract
 
