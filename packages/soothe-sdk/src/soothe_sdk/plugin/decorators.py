@@ -91,16 +91,6 @@ def plugin(
             config_requirements=config_requirements or [],
             trust_level=trust_level,
         )
-        # Legacy metadata used by older tests and plugin scaffolds.
-        cls._plugin_metadata = {
-            "name": name,
-            "version": version,
-            "description": description,
-            "author": author,
-            "homepage": homepage,
-            "repository": repository,
-            "license": license,
-        }
 
         # Add manifest property
         @property

@@ -1,14 +1,15 @@
 """Tests for the ToolMeta registry (single source of truth for display metadata)."""
 
-from soothe_sdk.tools.metadata import extract_filesystem_path_for_policy, is_policy_filesystem_tool
-from soothe_sdk.utils.tool_meta import (
+from soothe_sdk.tools.metadata import (
     TOOL_REGISTRY,
+    extract_filesystem_path_for_policy,
     get_all_path_arg_keys,
     get_outcome_type,
     get_tool_categories,
     get_tool_display_name,
     get_tool_meta,
     get_tools_with_header_info,
+    is_policy_filesystem_tool,
 )
 
 
@@ -184,21 +185,22 @@ class TestGetOutcomeTypeHelper:
 
 
 class TestToolMetaDisplayNames:
-    """Verify display names match the old curated dict in display.py."""
+    """Verify display names from ToolMeta registry."""
 
     def test_curated_display_names(self) -> None:
+        """Display names are PascalCase from ToolMeta registry."""
         expected = {
-            "execute": "Shell Execute",
-            "ls": "List Files",
-            "read_file": "Read File",
-            "write_file": "Write File",
-            "edit_file": "Edit File",
-            "glob": "Search Files",
-            "grep": "Search Content",
-            "web_search": "Web Search",
-            "fetch_url": "Web Crawl",
-            "wizsearch_search": "Multi-Engine Search",
-            "wizsearch_crawl": "Headless Crawl",
+            "execute": "ShellExecute",
+            "ls": "ListFiles",
+            "read_file": "ReadFile",
+            "write_file": "WriteFile",
+            "edit_file": "EditFile",
+            "glob": "Glob",
+            "grep": "Grep",
+            "web_search": "WebSearch",
+            "fetch_url": "FetchUrl",
+            "wizsearch_search": "WebSearch",
+            "wizsearch_crawl": "HeadlessCrawl",
             "tacitus": "Tacitus",
         }
         for name, expected_display in expected.items():
@@ -207,10 +209,12 @@ class TestToolMetaDisplayNames:
             )
 
     def test_unknown_tool_fallback(self) -> None:
-        assert get_tool_display_name("unknown_tool") == "Unknown Tool"
+        """Unknown tools use title() fallback (PascalCase, no spaces)."""
+        assert get_tool_display_name("unknown_tool") == "UnknownTool"
 
-    def test_canonical_name_with_title_fallback(self) -> None:
-        assert get_tool_display_name("current_datetime") == "Current DateTime"
+    def test_canonical_name_with_explicit_display_name(self) -> None:
+        """Tools with explicit display_name return that value."""
+        assert get_tool_display_name("current_datetime") == "CurrentDateTime"
 
 
 class TestToolMetaAliases:
@@ -247,9 +251,10 @@ class TestToolMetaAliases:
         assert meta.name == "fetch_url"
 
     def test_alias_has_same_display_name(self) -> None:
-        assert get_tool_display_name("shell") == "Shell Execute"
-        assert get_tool_display_name("list_files") == "List Files"
-        assert get_tool_display_name("search_web") == "Web Search"
+        """Aliases resolve to canonical tool's display name."""
+        assert get_tool_display_name("shell") == "ShellExecute"
+        assert get_tool_display_name("list_files") == "ListFiles"
+        assert get_tool_display_name("search_web") == "WebSearch"
 
 
 class TestToolMetaRegistry:
