@@ -245,10 +245,14 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
         "custom",
         {"type": AGENT_LOOP_COMPLETED, "status": "done"},
     )
-    # Buffer was empty after the block flush, so only the completed custom
-    # event is emitted (no trailing goal_completion frame with empty content).
-    assert len(done) == 1
-    assert done[0][2]["type"] == AGENT_LOOP_COMPLETED
+    # Buffer was empty after the block flush, but we still emit a terminal
+    # marker so clients can finalize goal_completion streaming state.
+    assert len(done) == 2
+    marker = done[0][2][0]
+    assert marker["phase"] == "goal_completion"
+    assert marker["content"] == ""
+    assert marker["chunk_position"] == "last"
+    assert done[1][2]["type"] == AGENT_LOOP_COMPLETED
 
 
 def test_adaptive_chunked_streaming_time_based_block_flush() -> None:

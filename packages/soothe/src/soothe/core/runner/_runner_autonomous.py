@@ -264,7 +264,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             if len(ready_goals) == 1:
                 g = ready_goals[0]
-                async for chunk in self._execute_goal_via_autopilot(
+                async for chunk in self._execute_autonomous_goal(
                     g,
                     parent_state=state,
                     thread_id=state.thread_id,
@@ -289,7 +289,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     chunks: list[StreamChunk] = []
                     goal_tid = f"{state.thread_id}__goal_{g.id}"
                     async with self._concurrency.acquire_goal():
-                        async for chunk in self._execute_goal_via_autopilot(
+                        async for chunk in self._execute_autonomous_goal(
                             g,
                             parent_state=state,
                             thread_id=goal_tid,
@@ -347,57 +347,6 @@ class AutonomousMixin(GoalDirectivesMixin):
         yield _custom(
             LoopCompletedEvent(loop_id=state.thread_id, thread_id=state.thread_id).to_dict()
         )
-
-    async def _execute_goal_via_autopilot(
-        self,
-        goal: Any,
-        *,
-        parent_state: Any,
-        thread_id: str,
-        user_input: str,
-        iteration_records: list[Any],
-        total_iterations: int,
-        parallel_goals: int = 1,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Run ``_execute_autonomous_goal`` through ``AutopilotService.execute_goal`` (RFC-222).
-
-        ``AutopilotService`` claims the goal, assigns a LoopHandle from its
-        pool (with parent→child lineage reuse), stamps ``assigned_loop_id``
-        on the Goal, sets the active-loop ContextVar so file-lock middleware
-        can attribute lock ownership, and finalizes the loop on completion.
-
-        Falls back to a direct call when ``AutopilotService`` is unavailable
-        (e.g. some test harnesses construct the runner without the goal
-        engine).
-        """
-        if self._autopilot_service is None:
-            # Solo / test path: AutopilotService not constructed.
-            async for chunk in self._execute_autonomous_goal(
-                goal,
-                parent_state=parent_state,
-                thread_id=thread_id,
-                user_input=user_input,
-                iteration_records=iteration_records,
-                total_iterations=total_iterations,
-                parallel_goals=parallel_goals,
-            ):
-                yield chunk
-            return
-
-        def _executor(_goal: Any, _loop: Any) -> AsyncGenerator[StreamChunk]:
-            # Bound closure so AutopilotService.execute_goal can drive it.
-            return self._execute_autonomous_goal(
-                _goal,
-                parent_state=parent_state,
-                thread_id=thread_id,
-                user_input=user_input,
-                iteration_records=iteration_records,
-                total_iterations=total_iterations,
-                parallel_goals=parallel_goals,
-            )
-
-        async for chunk in self._autopilot_service.execute_goal(goal.id, executor=_executor):
-            yield chunk
 
     async def _execute_autonomous_goal(
         self,
