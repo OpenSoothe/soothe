@@ -62,6 +62,8 @@ class LoopRunnerProtocol(Protocol):
 
 `LoopRunRequest` consolidates all parameters currently passed ad-hoc into `SootheRunner.astream()`, including thread/workspace binding that was previously applied by `bind_execution_thread_for_loop()` via a mutation on the shared singleton.
 
+> **RFC-222 extension (additive)**: `LoopRunRequest` gains an optional `autopilot_job: AutopilotJob | None = None` field. When set, the worker treats the request as an autopilot-dispatched goal (hydrates from a `GoalDispatchContextBundle`, emits a `GoalCompletionChunk`). When `None`, the worker runs solo mode — today's behavior, unchanged. The `LoopRunnerProtocol.run(request)` signature and the streaming contract are unchanged; RFC-222 layers entirely on top of RFC-221 without modifying its existing semantics. See RFC-222 §"The Job and Stream Contracts" for details.
+
 ---
 
 ## Architecture
