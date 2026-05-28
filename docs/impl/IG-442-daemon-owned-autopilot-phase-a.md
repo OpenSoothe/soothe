@@ -153,3 +153,36 @@ Acceptance criteria:
 - IG created for RFC-222 (revised) Phase A
 - Listed 5 sub-steps with file paths + test locations
 - Acceptance criteria specified
+
+### 2026-05-28 — Phase B follow-on (covered in same IG)
+
+Phase B wired the worker path in parallel with the existing per-runner
+AutopilotService. No behavior change in production paths — every existing
+call site passes `autopilot_job=None`, and the daemon-owned
+`AutopilotService` is constructed dormant.
+
+Delivered:
+
+| # | Change |
+|---|---|
+| B1a | `SootheRunner.astream` gains `autopilot_job: AutopilotJob \| None = None`. When set, routes to `_run_single_autopilot_goal`. When `None`, today's solo / autonomous paths run unchanged. |
+| B1b | New `AutopilotWorkerMixin` (`core/runner/_runner_autopilot_worker.py`). Implements `_run_single_autopilot_goal`: builds AgentLoop, runs it on `job.goal_description`, forwards progress events as namespaced custom chunks, and emits a single `GoalCompletionChunk` (`type=soothe.internal.autopilot.goal_completion`) before terminal `done`. Maps `PlanResult` to one of `completed` / `failed` / `needs_replan`. |
+| B1c | Subprocess workers (`PoolLoopRunner`, `ThreadLoopRunner`, `RayLoopRunner`/`ray_actor.py`) updated to forward `req.autopilot_job` through to `runner.astream(...)`. |
+| B2a | `AutopilotService(..., subscribe_to_bus: bool = True)` flag. Defaults preserve today's behavior (per-runner instance subscribes). Daemon-side instance constructs with `subscribe_to_bus=False` so two coexisting services don't double-handle bus events. New `_subscribed` attribute for assertions/observability. |
+| B2b | `SootheDaemon.start()` constructs `self._autopilot_service = AutopilotService(goal_engine=runner._goal_engine, config=..., subscribe_to_bus=False)` after the utility `SootheRunner` is up. Construction failure is logged loudly and tolerated — it must never fail daemon startup in Phase B. |
+
+Tests added:
+
+| Suite | Tests |
+|---|---|
+| `tests/unit/core/runner/test_runner_autopilot_worker.py` | 18 — derive-outcome (5), build-contribution (4), goal-completion-chunk format (3), streaming path with stubbed AgentLoop (5), thread_id resolution (2) |
+| `tests/unit/core/autopilot/test_subscribe_to_bus.py` | 5 — default subscribes, explicit True subscribes, False does not subscribe, coexistence (one subscriber fires only once), dormant service still has `execute_goal` |
+
+Verification:
+- `./scripts/verify_finally.sh` — all packages clean, **2834 passing** (was 2811 after Phase A; +23 from B1/B2)
+- Per-package: soothe-sdk 200, soothe-cli 307, soothe 1943, soothe-daemon 384.
+
+### Still deferred (Phase C / Phase D)
+
+- **Phase C cutover** — HTTP `/autopilot/submit` calls daemon's `AutopilotService.submit_task`; `ChannelInbox` consumer turns on; both old and new path coexist for one release.
+- **Phase D destructive** — delete `SootheRunner._autopilot_service`, delete `_run_autonomous` multi-goal scheduling, delete `_execute_goal_via_autopilot`. Migrate `soothe --autopilot` CLI to a daemon client. Daemon-owned `AutopilotService` switches from `subscribe_to_bus=False` to `True` and starts driving the scheduling loop.

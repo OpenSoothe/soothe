@@ -42,6 +42,7 @@ class LoopRunnerActor:
                 max_iterations=request.max_iterations,
                 preferred_subagent=request.preferred_subagent,
                 client_loop_id=request.loop_id,
+                autopilot_job=request.autopilot_job,  # RFC-222 revised
             ):
                 if self._cancelled:
                     break
