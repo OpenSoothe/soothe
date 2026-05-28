@@ -21,9 +21,10 @@ from tests.integration.conftest import (
     await_status_state,
     build_daemon_config,
     force_isolated_home,
+    integration_llm_idle_timeout,
 )
 from tests.integration.ws_loop_client import (
-    loop_new_with_initial_input,
+    loop_new,
     request_loop_get,
     request_loop_list,
     subscribe_loop_stream,
@@ -76,16 +77,13 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
         await client1.connect()
 
         try:
-            loop_id = await loop_new_with_initial_input(
-                client1,
-                initial_message="First conversation turn",
-            )
+            loop_id = await loop_new(client1)
             await subscribe_loop_stream(client1, loop_id)
 
             await client1.send_input(loop_id, "Say test")
-            status = await await_status_state(client1.read_event, {"running", "idle"}, timeout=5.0)
+            status = await await_status_state(client1.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if status.get("state") == "running":
-                await await_status_state(client1.read_event, "idle", timeout=5.0)
+                await await_status_state(client1.read_event, "idle", timeout=integration_llm_idle_timeout())
 
         finally:
             await client1.close()
@@ -123,9 +121,9 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
             await subscribe_loop_stream(client2, loop_id)
 
             await client2.send_input(loop_id, "Say hello")
-            status2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=5.0)
+            status2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if status2.get("state") == "running":
-                await await_status_state(client2.read_event, "idle", timeout=5.0)
+                await await_status_state(client2.read_event, "idle", timeout=integration_llm_idle_timeout())
 
         finally:
             await client2.close()
@@ -148,13 +146,13 @@ async def test_thread_recovery_missing_metadata(
     await client.connect()
 
     try:
-        loop_id = await loop_new_with_initial_input(client, initial_message="test recovery")
+        loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
 
         await client.send_input(loop_id, "Say test")
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
+        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
         if status.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=5.0)
+            await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
 
         get_response = await request_loop_get(client, loop_id)
         assert get_response["loop"]["loop_id"] == loop_id
@@ -179,7 +177,7 @@ async def test_concurrent_thread_execution(
     try:
         loop_ids: list[str] = []
         for i in range(3):
-            lid = await loop_new_with_initial_input(client, initial_message=f"Thread {i}")
+            lid = await loop_new(client)
             loop_ids.append(lid)
 
         list_response = await request_loop_list(client)
@@ -195,9 +193,9 @@ async def test_concurrent_thread_execution(
         await subscribe_loop_stream(client, loop_ids[0])
 
         await client.send_input(loop_ids[0], "Say thread")
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
+        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
         if status.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=5.0)
+            await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
 
     finally:
         await client.close()
@@ -217,17 +215,17 @@ async def test_thread_cancellation(
     await client.connect()
 
     try:
-        loop_id = await loop_new_with_initial_input(client, initial_message="test cancellation")
+        loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
 
         await client.send_input(loop_id, "Start a potentially long operation")
 
         try:
-            await await_status_state(client.read_event, "running", timeout=5.0)
+            await await_status_state(client.read_event, "running", timeout=integration_llm_idle_timeout())
 
             await client.send_command("/cancel")
 
-            cancel_status = await await_status_state(client.read_event, "idle", timeout=5.0)
+            cancel_status = await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
             assert cancel_status.get("state") == "idle"
         except TimeoutError:
             pass
@@ -237,10 +235,10 @@ async def test_thread_cancellation(
 
         await client.send_input(loop_id, "Say continue")
         try:
-            status2 = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
+            status2 = await await_status_state(client.read_event, {"running", "idle"}, timeout=integration_llm_idle_timeout())
             if status2.get("state") == "running":
                 try:
-                    await await_status_state(client.read_event, "idle", timeout=5.0)
+                    await await_status_state(client.read_event, "idle", timeout=integration_llm_idle_timeout())
                 except TimeoutError:
                     pass
         except TimeoutError:
@@ -264,8 +262,8 @@ async def test_loop_isolation_distinct_ids(
     await client.connect()
 
     try:
-        loop_a = await loop_new_with_initial_input(client, initial_message="Thread A context")
-        loop_b = await loop_new_with_initial_input(client, initial_message="Thread B context")
+        loop_a = await loop_new(client)
+        loop_b = await loop_new(client)
         assert loop_a != loop_b
 
         ga = await request_loop_get(client, loop_a)

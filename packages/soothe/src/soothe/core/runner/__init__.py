@@ -554,7 +554,7 @@ class SootheRunner(
                 installation_default=str(resolve_daemon_workspace()),
             )
             effective_workspace = resolved.path
-            tid_for_log = str(thread_id or self._current_thread_id or "")
+            tid_for_log = log_scope
             logger.debug(
                 "stream_workspace_resolved thread_id=%s path=%s source=%s",
                 tid_for_log,

@@ -182,6 +182,16 @@ class AgentLoop:
             config=self.config,
             shared_pool=shared_pool,
         )
+        # RFC-223: Main AgentLoop thread id must align to loop_id.
+        # Keep caller-provided thread_id for upstream intent/routing context, but normalize
+        # all AgentLoop checkpoint + execution thread bookkeeping to loop_id.
+        main_thread_id = state_manager.loop_id
+        if thread_id and thread_id != main_thread_id:
+            logger.info(
+                "[AgentLoop] normalizing main thread_id to loop_id: input=%s loop_id=%s",
+                thread_id,
+                main_thread_id,
+            )
 
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
@@ -208,6 +218,21 @@ class AgentLoop:
         # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
         # same TUI/daemon thread reuses one AgentLoop checkpoint across user turns.
         checkpoint = await state_manager.load()
+        if checkpoint is not None:
+            checkpoint_normalized = False
+            if checkpoint.current_thread_id != main_thread_id:
+                checkpoint.current_thread_id = main_thread_id
+                checkpoint_normalized = True
+            if main_thread_id not in checkpoint.thread_ids:
+                checkpoint.thread_ids.append(main_thread_id)
+                checkpoint_normalized = True
+            if checkpoint_normalized:
+                await state_manager.save(checkpoint)
+                logger.info(
+                    "Normalized checkpoint thread identity to loop_id: loop=%s current_thread_id=%s",
+                    state_manager.loop_id,
+                    main_thread_id,
+                )
         # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
         recovery_valid_resume = False
         goal_record = None
@@ -230,7 +255,7 @@ class AgentLoop:
                     current_goal_index,
                     len(checkpoint.goal_history),
                 )
-                checkpoint = await state_manager.initialize(thread_id, max_iterations)
+                checkpoint = await state_manager.initialize(main_thread_id, max_iterations)
                 goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
                 checkpoint.goal_history.append(goal_record)
                 checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
@@ -240,15 +265,17 @@ class AgentLoop:
                 recovery_valid_resume = False
 
         elif checkpoint and checkpoint.status == "ready_for_next_goal":
-            checkpoint.current_thread_id = thread_id
-            if thread_id not in checkpoint.thread_ids:
-                checkpoint.thread_ids.append(thread_id)
+            checkpoint.current_thread_id = main_thread_id
+            if main_thread_id not in checkpoint.thread_ids:
+                checkpoint.thread_ids.append(main_thread_id)
             goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
             if continue_thread_mode:
-                seed_continue_thread_ledger_from_prior_goal(checkpoint, goal_record, thread_id)
+                seed_continue_thread_ledger_from_prior_goal(
+                    checkpoint, goal_record, main_thread_id
+                )
             await state_manager.save(checkpoint)
             iteration = 0
             logger.debug(
@@ -265,7 +292,7 @@ class AgentLoop:
                     checkpoint.status,
                     state_manager.loop_id,
                 )
-            checkpoint = await state_manager.initialize(thread_id, max_iterations)
+            checkpoint = await state_manager.initialize(main_thread_id, max_iterations)
             goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
@@ -284,7 +311,7 @@ class AgentLoop:
             goal=execution_goal,
             goal_user_submission=goal_user_submission,
             skill_context=skill_context,
-            thread_id=thread_id,
+            thread_id=main_thread_id,
             workspace=workspace,
             git_status=git_status,
             iteration=iteration,  # Use recovered or initial iteration
@@ -302,7 +329,7 @@ class AgentLoop:
         wm_cfg = self.config.agent.loop.working_memory
         if wm_cfg.enabled:
             state.working_memory = LoopWorkingMemory(
-                thread_id=thread_id,
+                thread_id=main_thread_id,
                 max_inline_chars=wm_cfg.max_inline_chars,
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
             )
