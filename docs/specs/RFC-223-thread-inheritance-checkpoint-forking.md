@@ -2,9 +2,10 @@
 
 **RFC**: 223
 **Title**: Thread Inheritance with LangGraph Checkpoint Forking
-**Status**: Draft
+**Status**: Draft (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-05-27
+**Revised**: 2026-05-28 — sole-child optimization; in-house ``copy_thread_via_public_api`` (no LangGraph saver implements ``acopy_thread`` natively).
 **Dependencies**: RFC-201, RFC-214, RFC-216, RFC-218
 **Related**: RFC-222 (Autopilot loop management), RFC-452 (Unified Thread Management), RFC-224 (Context Window Management)
 
@@ -54,19 +55,32 @@ The `__step_` prefix distinguishes sequential fork threads from the existing `__
 
 ---
 
-## Fork Strategy (Hybrid)
+## Fork Strategy (Hybrid + Sole-Child Optimization)
 
-| Dependency Count | Fork Source | Context Mechanism |
-|------------------|-------------|-------------------|
-| 0 (first step) | Main thread (`loop_id`) | Empty history |
-| 1 (singleton) | Predecessor's step thread | `acopy_thread()` (full checkpoint) |
-| >1 (multi-dep) | Main thread (`loop_id`) | Message injection from all predecessors |
+Per the 2026-05-28 revision, the strategy now distinguishes singleton-with-siblings from singleton-sole-child:
 
-**Why hybrid**: LangGraph checkpoint forking (`acopy_thread`) can only copy from one source thread. Multi-dependency steps need context from multiple predecessors, which cannot be merged via checkpoint. The existing message injection mechanism handles multi-dep cases.
+| Direct deps | Predecessor's other dependents | Fork source | Should fork? | Resulting thread_id | Context |
+|---|---|---|---|---|---|
+| 0           | n/a                            | main           | ✅ fork (empty source) | `{loop_id}__step_<id>` | empty |
+| 1           | 0 (sole child)                 | predecessor    | ❌ reuse — **no copy** | predecessor's thread | inherited |
+| 1           | ≥1 (has sibling)               | predecessor    | ✅ fork (copy parent) | `{loop_id}__step_<id>` | inherited via fork |
+| ≥2          | n/a                            | main           | ✅ fork (empty source) | `{loop_id}__step_<id>` | message injection |
+
+**Sole-child optimization rationale**: when a step is the *only* dependent of its predecessor, no sibling will race on the predecessor's checkpoint namespace. Reusing the predecessor's thread directly is correct (no race) and saves the cost of copying every checkpoint row. For a linear chain A→B→C with no branches, every link reuses A's thread — total checkpoint copies = 0.
+
+**Sibling fork rationale**: when two or more steps depend on the same predecessor (e.g. fan-out A→{B,C}), both B and C want to write under their own histories without polluting each other. Each forks an independent copy of A's checkpoints into its own `__step_<id>` namespace.
+
+**No-deps fork rationale**: parallel-safety. Two no-deps steps running concurrently must not share a thread namespace, so each gets its own `__step_<id>` namespace sourced from main (empty when main has no checkpoints yet).
+
+**Multi-deps fork rationale**: as before, no single source thread carries the union of all parents' history. The step gets a fresh isolated namespace and the executor injects transitive predecessor messages into the input list.
 
 **Key distinction**:
-- **Direct dependencies** determine fork source selection (singleton vs multi)
-- **Transitive dependencies** determine message injection scope (all ancestors)
+- **Direct dependencies** + sibling count determine fork source AND whether to copy
+- **Transitive dependencies** determine message injection scope (multi-dep only)
+
+### In-house copy implementation
+
+LangGraph's stock savers (`InMemorySaver`, `AsyncSqliteSaver`, `AsyncPostgresSaver`, ...) all inherit `BaseCheckpointSaver.acopy_thread` which raises `NotImplementedError`. We supply our own copy via `core/loop/engine/checkpoint_copy.py::copy_thread_via_public_api`, which iterates the source thread's checkpoints with `alist`, rewrites `configurable.thread_id` to the target, and replays them with `aput` + `aput_writes`. Works on every saver because it relies only on the public protocol surface. ``ThreadForkManager.fork_checkpoint`` calls this helper instead of the saver's broken `acopy_thread`.
 
 ---
 
@@ -138,13 +152,14 @@ class ThreadForkManager:
         step: StepAction,
         decision: AgentDecision,
         state: LoopState,
-    ) -> str:
-        """Select source thread_id for checkpoint fork.
+    ) -> tuple[str, bool]:
+        """Select source thread_id and whether to fork.
 
-        Rules:
-            - No direct deps → main thread (loop_id)
-            - Single direct dep → predecessor's step thread
-            - Multiple direct deps → main thread (fallback)
+        Returns ``(source_thread_id, should_fork)``:
+            - 0 deps                          → (main, True)
+            - 1 dep, sole child of pred       → (pred_thread, False)  # reuse, no copy
+            - 1 dep, pred has siblings        → (pred_thread, True)   # fork
+            - ≥2 deps                         → (main, True)
         """
         ...
 
@@ -447,6 +462,24 @@ Step D (depends on B + C):
 - Thread naming scheme: `{loop_id}` for main, `{loop_id}__step_{step_id}` for steps
 - ThreadForkManager component specification
 - LoopState extension with fork tracking fields
+
+### 2026-05-28 (Revised)
+- **Sole-child optimization**: singleton-dependency step that is the only
+  dependent of its predecessor reuses the predecessor's thread directly
+  with no copy. Linear chains (A→B→C with no branches) skip every fork
+  cost. Siblings of the same predecessor still fork to keep histories
+  independent.
+- ``select_fork_source`` return type changed from ``str`` to
+  ``tuple[str, bool]`` so the caller can distinguish reuse from fork.
+- **In-house ``copy_thread_via_public_api``** helper added in
+  ``core/loop/engine/checkpoint_copy.py``. Implements ``acopy_thread``
+  semantics on top of any ``BaseCheckpointSaver`` via ``alist`` + ``aput``
+  + ``aput_writes`` because no concrete saver in the current LangGraph
+  release implements ``acopy_thread`` natively. ThreadForkManager calls
+  the helper instead of the saver's stub.
+- Tests added: ``test_checkpoint_copy.py`` (helper unit tests against
+  ``InMemorySaver``), expanded ``test_thread_fork_manager.py`` for the
+  sole-child / siblings split, updated executor integration tests.
 
 ---
 

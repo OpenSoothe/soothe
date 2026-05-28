@@ -118,8 +118,9 @@ async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
 
 
 @pytest.mark.asyncio
-async def test_singleton_dep_step_forks_from_predecessor_thread() -> None:
-    """Singleton dependency steps fork checkpoint from predecessor's thread."""
+async def test_singleton_sole_child_reuses_predecessor_thread() -> None:
+    """When B is the only step depending on A, B reuses A's thread directly
+    (sole-child optimization — no checkpoint copy)."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -128,7 +129,7 @@ async def test_singleton_dep_step_forks_from_predecessor_thread() -> None:
         id="B",
         description="second",
         expected_output="o2",
-        dependencies=["A"],  # Singleton dep forks from predecessor
+        dependencies=["A"],
     )
     decision = AgentDecision(
         type="execute_steps",
@@ -151,11 +152,11 @@ async def test_singleton_dep_step_forks_from_predecessor_thread() -> None:
         loop_state=state,
     )
 
-    # Singleton dep should fork from predecessor's thread
+    # Sole-child reuse: B's CoreAgent runs under A's thread, no rename/copy.
     cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
-    assert cfg["thread_id"] == "logical-t__step_B"
-    assert state.step_thread_ids.get("B") == "logical-t__step_B"
-    assert state.thread_fork_sources.get("logical-t__step_B") == "logical-t__step_A"
+    assert cfg["thread_id"] == "logical-t__step_A"
+    assert state.step_thread_ids.get("B") == "logical-t__step_A"
+    assert state.thread_fork_sources.get("logical-t__step_A") == "logical-t__step_A"
 
 
 @pytest.mark.asyncio
@@ -367,8 +368,24 @@ async def test_multi_dep_injection_logs_threadfork(
 
 
 @pytest.mark.asyncio
-async def test_fork_checkpoint_called_for_step() -> None:
-    """ThreadForkManager.fork_checkpoint is called for step execution."""
+async def test_fork_copies_main_thread_into_step_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A no-deps step forks from main into a fresh ``__step_<id>`` namespace.
+
+    The copy goes through ``copy_thread_via_public_api`` (in-house helper)
+    because no LangGraph saver implements ``acopy_thread``.
+    """
+    from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+
+    copy_calls: list[tuple[str, str]] = []
+
+    async def _fake_copy(saver: Any, source: str, target: str) -> int:
+        copy_calls.append((source, target))
+        return 0  # main has no checkpoints in this test fixture
+
+    monkeypatch.setattr(tfm_mod, "copy_thread_via_public_api", _fake_copy)
+
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -393,8 +410,5 @@ async def test_fork_checkpoint_called_for_step() -> None:
         loop_state=state,
     )
 
-    # Verify fork was called (from main to step thread)
-    mock_checkpointer.acopy_thread.assert_called_once()
-    call_args = mock_checkpointer.acopy_thread.call_args
-    assert call_args[0][0] == "main-thread"  # source
-    assert call_args[0][1] == "main-thread__step_test-step"  # target
+    # Fork from main into __step_ namespace (parallel-safe isolation).
+    assert ("main-thread", "main-thread__step_test-step") in copy_calls
