@@ -37,6 +37,8 @@ def test_generate_system_includes_policies_and_plan_generate() -> None:
     assert "<PLAN_EXECUTE_LOOP>" not in system.content
     assert "<EXECUTION_POLICIES>" in system.content
     assert "<PLAN_ASSESS>" not in system.content
+    assert "Language lock" in system.content
+    assert "same natural language as the current goal statement" in system.content
 
 
 def test_assess_with_config_still_includes_environment_workspace() -> None:
