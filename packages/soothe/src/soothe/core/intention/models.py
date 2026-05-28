@@ -117,44 +117,56 @@ class IntentClassification(BaseModel):
 
 
 class IntentClassificationLLMResult(BaseModel):
-    """Structured output from intent classifier LLM (routing only, no answer text).
+    """Structured output from intent classifier LLM (quiz detection only).
+
+    The LLM decides quiz vs agentic. The runner resolves agentic into
+    continue_thread or new_goal based on loop state (structural rule).
 
     Args:
-        intent_type: Primary intent (continue_thread | new_goal | quiz).
-        reuse_current_goal: Whether to reuse active goal in current thread.
+        intent_type: Primary intent (agentic | quiz).
         goal_description: Normalized goal description for GoalEngine.
         friendly_message: User-friendly reinterpretation for display.
         task_complexity: Routing complexity level.
     """
 
-    intent_type: Literal["continue_thread", "new_goal", "quiz"] = Field(
+    intent_type: Literal["agentic", "quiz"] = Field(
         description="Primary intent: quiz (greeting/thanks/static trivia without tools), "
-        "continue_thread (follow-up), new_goal (tool-requiring task)"
-    )
-    reuse_current_goal: bool = Field(
-        default=False,
-        description="Whether to reuse active goal in current thread (continue_thread only)",
+        "agentic (everything else — tools, follow-ups, analysis)"
     )
     goal_description: str | None = Field(
-        default=None, description="Normalized goal description extracted from query (new_goal only)"
+        default=None, description="Normalized goal description extracted from query (agentic only)"
     )
     friendly_message: str | None = Field(
         default=None,
-        description="User-friendly task reinterpretation for display (new_goal only)",
+        description="User-friendly task reinterpretation for display (agentic only)",
     )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity: minimal (quiz), simple, medium, or complex"
     )
 
-    def to_intent_classification(self) -> IntentClassification:
-        """Convert LLM routing result to runtime IntentClassification.
+    def to_intent_classification(self, *, continue_thread: bool) -> IntentClassification:
+        """Convert LLM result to runtime IntentClassification.
+
+        Args:
+            continue_thread: Whether this is a same-loop continuation (structural decision).
 
         Returns:
             IntentClassification with quiz_response unset (filled by quiz answer step).
         """
+        if self.intent_type == "quiz":
+            return IntentClassification(
+                intent_type="quiz",
+                reuse_current_goal=False,
+                goal_description=None,
+                friendly_message=None,
+                task_complexity=TaskComplexity.MINIMAL,
+                quiz_response=None,
+            )
+
+        resolved_type = "continue_thread" if continue_thread else "new_goal"
         return IntentClassification(
-            intent_type=self.intent_type,
-            reuse_current_goal=self.reuse_current_goal,
+            intent_type=resolved_type,
+            reuse_current_goal=continue_thread,
             goal_description=self.goal_description,
             friendly_message=self.friendly_message,
             task_complexity=self.task_complexity,

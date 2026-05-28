@@ -1,8 +1,7 @@
 """Intent classifier implementation (IG-226, IG-250).
 
-LLM-driven query intent classifier with conversation context awareness.
-Pure LLM-driven classification - no keyword heuristics.
-Supports intent_hint parameter to bypass LLM for known intent types.
+Quiz-only classification: LLM detects quiz vs agentic.
+continue_thread vs new_goal is resolved structurally by the runner.
 """
 
 from __future__ import annotations
@@ -12,8 +11,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
-
-from soothe.utils.text_preview import preview_first
 
 from .models import (
     IntentClassification,
@@ -85,27 +82,22 @@ class IntentClassifier:
         self,
         query: str,
         *,
-        recent_messages: list[Any] | None = None,
-        active_goal_id: str | None = None,
-        active_goal_description: str | None = None,
-        thread_id: str | None = None,
+        continue_thread: bool = False,
         observability_metadata: dict[str, str] | None = None,
         intent_hint: IntentHint | None = None,
     ) -> IntentClassification:
-        """Unified intent classification with goal awareness.
+        """Quiz-only intent classification with structural continue/new_goal resolution.
 
-        Single LLM call determines intent, goal handling, and routing complexity.
-        Uses conversation context to detect thread continuation queries.
+        The LLM decides quiz vs agentic. The ``continue_thread`` parameter
+        (set by the runner based on loop state) resolves agentic into
+        continue_thread or new_goal.
 
         When ``intent_hint`` is ``quiz``, bypasses LLM classification entirely
         and returns a pre-built classification.
 
         Args:
             query: User input text.
-            recent_messages: Conversation context for intent detection.
-            active_goal_id: Current active goal ID in thread (if any).
-            active_goal_description: Description of active goal.
-            thread_id: Thread context for state awareness.
+            continue_thread: Whether this is a same-loop continuation (structural rule).
             observability_metadata: Optional metadata for observability.
             intent_hint: Suggested intent to bypass LLM classification (``quiz`` only).
 
@@ -118,21 +110,11 @@ class IntentClassifier:
                 "Intent hint bypass: using suggested intent_type=%s",
                 intent_hint.value,
             )
-            return self._build_intent_from_hint(query, intent_hint)
+            return self._build_intent_from_hint(query, intent_hint, continue_thread=continue_thread)
 
         # Fallback when classifier disabled
         if not self._fast_model or not self._intent_model:
-            return self._fallback_intent(query)
-
-        # Build conversation context
-        conversation_context = self._format_conversation_context(recent_messages)
-
-        # Build active goal context
-        active_goal_context = self._format_active_goal_context(
-            active_goal_id, active_goal_description
-        )
-
-        thread_id_display = thread_id or "new-thread"
+            return self._fallback_intent(query, continue_thread=continue_thread)
 
         # Attempt classification with retry
         result: IntentClassification | None = None
@@ -142,10 +124,8 @@ class IntentClassifier:
             try:
                 result = await self._classify_intent_llm(
                     query,
-                    conversation_context=conversation_context,
-                    active_goal_context=active_goal_context,
-                    thread_id=thread_id_display,
                     retry_mode=retry_mode,
+                    continue_thread=continue_thread,
                     observability_metadata=observability_metadata,
                 )
                 break
@@ -163,7 +143,7 @@ class IntentClassifier:
                 "Intent classification failed after retry, using fallback (error: %s)",
                 type(last_error).__name__ if last_error else "unknown",
             )
-            return self._fallback_intent(query, error_context=last_error)
+            return self._fallback_intent(query, continue_thread=continue_thread, error_context=last_error)
 
         # Post-process: patch missing fields
         result = self._patch_missing_fields(result, query)
@@ -183,13 +163,11 @@ class IntentClassifier:
         self,
         query: str,
         *,
-        conversation_context: str,
-        active_goal_context: str,
-        thread_id: str,
         retry_mode: bool = False,
+        continue_thread: bool = False,
         observability_metadata: dict[str, str] | None = None,
     ) -> IntentClassification:
-        """LLM intent classification with structured output."""
+        """LLM quiz detection with structured output."""
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         prompt_template = (
@@ -198,10 +176,6 @@ class IntentClassifier:
         prompt = prompt_template.format(
             query=query,
             current_time=current_time,
-            assistant_name=self._assistant_name,
-            conversation_context=conversation_context if not retry_mode else "",
-            active_goal_context=active_goal_context,
-            thread_id=thread_id,
         )
 
         # Build traced config with Langfuse callbacks + metadata
@@ -221,10 +195,10 @@ class IntentClassifier:
         if llm_result is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if llm_result.intent_type not in ("continue_thread", "new_goal", "quiz"):
+        if llm_result.intent_type not in ("agentic", "quiz"):
             raise ValueError(f"Invalid intent_type from LLM: {llm_result.intent_type!r}")
 
-        return llm_result.to_intent_classification()
+        return llm_result.to_intent_classification(continue_thread=continue_thread)
 
     # -- Model creation ----------------------------------------------------
 
@@ -258,75 +232,12 @@ class IntentClassifier:
 
     # -- Helpers ------------------------------------------------------------
 
-    def _format_conversation_context(
-        self,
-        messages: list[Any] | None,
-        *,
-        max_messages: int = 8,
-        preview_chars: int = 200,
-    ) -> str:
-        """Format conversation messages for LLM prompt.
-
-        Uses ``<user>`` / ``<assistant>`` XML blocks (IG-363), matching AgentLoop plan
-        excerpt style; includes Human and AI turns only (skips tool/system messages).
-
-        Args:
-            messages: Recent conversation messages.
-            max_messages: Maximum messages to include.
-            preview_chars: Preview length per message.
-
-        Returns:
-            Formatted conversation context string.
-        """
-        if not messages:
-            return ""
-
-        from langchain_core.messages import AIMessage, HumanMessage
-
-        lines: list[str] = []
-        for msg in messages[-max_messages:]:
-            if isinstance(msg, HumanMessage):
-                tag = "user"
-            elif isinstance(msg, AIMessage):
-                tag = "assistant"
-            else:
-                continue
-            content = getattr(msg, "content", "")
-            if not isinstance(content, str):
-                content = str(content)
-
-            preview = preview_first(content, preview_chars).strip()
-            if preview:
-                lines.append(f"<{tag}>\n{preview}\n</{tag}>")
-
-        return "\n\n".join(lines) if lines else ""
-
-    def _format_active_goal_context(
-        self,
-        goal_id: str | None,
-        goal_description: str | None,
-    ) -> str:
-        """Format active goal context for LLM prompt.
-
-        Args:
-            goal_id: Active goal ID.
-            goal_description: Active goal description.
-
-        Returns:
-            Formatted active goal context string.
-        """
-        if goal_id and goal_description:
-            preview = preview_first(goal_description, 80)
-            return f"{goal_id}: {preview}"
-        elif goal_id:
-            return f"{goal_id} (active)"
-        else:
-            return "None (no active goal in thread)"
-
     def _build_intent_from_hint(
         self,
         query: str,
         hint: IntentHint,
+        *,
+        continue_thread: bool = False,
     ) -> IntentClassification:
         """Build intent classification from hint (bypasses LLM).
 
@@ -335,6 +246,7 @@ class IntentClassifier:
         Args:
             query: Original user query.
             hint: Suggested intent type.
+            continue_thread: Whether this is a same-loop continuation.
 
         Returns:
             IntentClassification with the hinted intent type.
@@ -363,28 +275,31 @@ class IntentClassifier:
             )
         else:
             # Fallback for unknown hint (should not happen with enum)
-            return self._fallback_intent(query)
+            return self._fallback_intent(query, continue_thread=continue_thread)
 
     def _fallback_intent(
         self,
         query: str,
         *,
+        continue_thread: bool = False,
         error_context: Exception | None = None,
     ) -> IntentClassification:
         """Safe fallback intent when classification fails.
 
         Args:
             query: Original user query.
+            continue_thread: Whether this is a same-loop continuation.
             error_context: Optional exception when falling back after classification failure.
 
         Returns:
-            IntentClassification with safe defaults (new_goal).
+            IntentClassification with safe defaults.
         """
         reason = type(error_context).__name__ if error_context else "classification_disabled"
-        logger.debug("Intent fallback to new_goal (%s)", reason)
+        resolved_type = "continue_thread" if continue_thread else "new_goal"
+        logger.debug("Intent fallback to %s (%s)", resolved_type, reason)
         return IntentClassification(
-            intent_type="new_goal",
-            reuse_current_goal=False,
+            intent_type=resolved_type,
+            reuse_current_goal=continue_thread,
             goal_description=query,
             task_complexity=TaskComplexity.MEDIUM,
         )
