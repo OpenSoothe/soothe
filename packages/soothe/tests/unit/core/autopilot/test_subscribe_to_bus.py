@@ -8,8 +8,6 @@ to avoid double-handling every event.
 
 from __future__ import annotations
 
-import pytest
-
 from soothe.config.models import AutonomousConfig
 from soothe.core.autopilot import AutopilotService
 from soothe.core.events.internal_bus import InternalEventBus
@@ -69,23 +67,14 @@ class TestSubscribeToBusFlag:
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
         assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
 
-    @pytest.mark.asyncio
-    async def test_dormant_service_still_has_execute_goal(self) -> None:
+    def test_dormant_service_still_callable(self) -> None:
         """Dormant service must still be a usable object (just not subscribed)."""
         bus = InternalEventBus()
         ge = GoalEngine(internal_bus=bus)
         svc = AutopilotService(
             goal_engine=ge, config=_config(), internal_bus=bus, subscribe_to_bus=False
         )
-        # status() works
         status = svc.status()
         assert status["running"] is False
-        # execute_goal is callable (returns nothing for a missing goal id)
-        out: list = []
-
-        async def _executor(_g, _loop):  # noqa: ANN001
-            yield None
-
-        async for chunk in svc.execute_goal("missing-id", executor=_executor):
-            out.append(chunk)
-        assert out == []
+        # has_real_dispatch is False without a runner_factory
+        assert svc.has_real_dispatch is False

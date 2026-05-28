@@ -109,7 +109,13 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
             assert loop_id is not None and loop_id in loop_ids
 
             await client2.send_loop_reattach(loop_id)
-            resume_status = await await_event_type(client2.read_event, "status", timeout=3.0)
+            # `loop_reattach` responds with history_replay + loop_reattached
+            # control frames; the only `status` frame on the wire is the
+            # handshake `idle` frame, which has no loop_id and would always
+            # match here. Match the dedicated reattach control frame.
+            resume_status = await await_event_type(
+                client2.read_event, "loop_reattached", timeout=3.0
+            )
             assert (
                 resume_status.get("loop_id") == loop_id or resume_status.get("thread_id") == loop_id
             )
@@ -182,7 +188,9 @@ async def test_concurrent_thread_execution(
             assert lid in listed
 
         await client.send_loop_reattach(loop_ids[0])
-        await await_event_type(client.read_event, "status", timeout=3.0)
+        # Reattach produces `loop_reattached`, not `status` — see note in
+        # test_loop_resume_from_disk above.
+        await await_event_type(client.read_event, "loop_reattached", timeout=3.0)
 
         await subscribe_loop_stream(client, loop_ids[0])
 

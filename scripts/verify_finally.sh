@@ -118,19 +118,21 @@ print_info() {
     echo -e "${CYAN}ℹ $1${NC}"
 }
 
-# Sync a single package (idempotent, skips if already synced)
-_sync_package() {
-    local pkg="$1"
-    cd "$PROJECT_ROOT/packages/$pkg"
-    uv sync --all-extras >/dev/null 2>&1 || true
-    cd "$PROJECT_ROOT"
-}
+# Sync command kept in lockstep with `make sync` (UV_SYNC in Makefile).
+# Broken/partial mirrors (e.g. tsinghua) leave dist-info without wheels for
+# packages like psycopg_pool and jsonschema; force PyPI by clearing index vars.
+UV_SYNC_CMD=(env UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras)
 
-# Sync all packages once
-_sync_all_packages() {
-    for pkg in "${ALL_PACKAGES[@]}"; do
-        _sync_package "$pkg"
-    done
+# Verify critical daemon dependencies are importable after sync.
+# Mirrors the `sync-verify` Makefile target so the script catches the same
+# broken-mirror failures `make sync` does.
+_verify_critical_deps() {
+    .venv/bin/python - <<'PY'
+import importlib.util
+pkgs = ("psycopg_pool", "jsonschema", "langfuse")
+missing = [p for p in pkgs if importlib.util.find_spec(p) is None]
+assert not missing, f"Missing packages after sync (broken mirror?): {missing}"
+PY
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -211,8 +213,10 @@ validate_package_dependencies() {
     if ! command -v uv >/dev/null 2>&1; then
         print_warning "uv not found, skipping workspace sync check"
     else
-        if ! uv sync --dry-run >/dev/null 2>&1; then
-            print_failure "Workspace sync would fail (run 'uv sync' to resolve)"
+        # Match the real sync invocation (UV_SYNC_CMD) so the dry-run cannot
+        # quietly disagree with `make sync` / setup_workspace.
+        if ! env UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --dry-run >/dev/null 2>&1; then
+            print_failure "Workspace sync would fail (run 'make sync' to resolve)"
             return 1
         else
             print_success "Workspace packages are in sync"
@@ -244,14 +248,39 @@ setup_workspace() {
         exit 1
     fi
 
-    print_info "Syncing workspace packages with all dependencies..."
-    # Run uv sync with all packages and extras - must succeed
-    if ! uv sync --all-packages --all-extras 2>&1; then
+    print_info "Syncing workspace packages with all dependencies (equivalent to 'make sync')..."
+    # Equivalent to `make sync`: --all-packages + --all-extras with index env
+    # vars cleared so a misconfigured mirror cannot leave the venv with
+    # dist-info but no wheels (psycopg_pool/jsonschema/langfuse drop-outs).
+    if ! "${UV_SYNC_CMD[@]}" 2>&1; then
         print_failure "uv sync failed - cannot continue verification"
         print_info "Try running 'make sync' or 'uv sync --all-packages --all-extras' manually"
         exit 1
     fi
     print_success "Workspace synced (all packages, all extras)"
+
+    print_info "Verifying critical daemon dependencies (psycopg_pool, jsonschema, langfuse)..."
+    if ! _verify_critical_deps; then
+        print_failure "Critical dependencies missing after sync (broken mirror?)"
+        print_info "Try: 'make sync' to re-sync with PyPI"
+        exit 1
+    fi
+    print_success "Critical daemon dependencies present"
+}
+
+# Re-verify the venv still has everything installed before the most
+# dependency-heavy phase (tests). Cheap import-only check; on failure we
+# re-run the workspace sync rather than failing the run.
+ensure_deps_installed() {
+    if _verify_critical_deps >/dev/null 2>&1; then
+        return 0
+    fi
+    print_warning "Critical deps missing mid-run; re-syncing workspace..."
+    if ! "${UV_SYNC_CMD[@]}" >/dev/null 2>&1; then
+        print_failure "Re-sync failed"
+        return 1
+    fi
+    _verify_critical_deps
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -277,7 +306,6 @@ check_formatting() {
 
         for pkg in "${ALL_PACKAGES[@]}"; do
             print_info "  $pkg..."
-            _sync_package "$pkg"
             cd "$PROJECT_ROOT/packages/$pkg"
             local paths="src/"
             if [ -d "tests/" ]; then
@@ -325,7 +353,6 @@ check_linting() {
 
         for pkg in "${ALL_PACKAGES[@]}"; do
             print_info "  $pkg..."
-            _sync_package "$pkg"
             cd "$PROJECT_ROOT/packages/$pkg"
             local paths="src/"
             if [ -d "tests/" ]; then
@@ -364,6 +391,14 @@ run_tests() {
 
     PROJECT_ROOT="$(pwd)"
 
+    # Safety net before the dependency-heaviest phase: confirm the venv still
+    # has the critical packages installed; if anything has been stripped
+    # (e.g. by a stray per-package `uv sync` in another shell), re-sync.
+    if ! ensure_deps_installed; then
+        print_failure "Cannot run tests: dependency state could not be restored"
+        return 1
+    fi
+
     local tests_failed=false
 
     for pkg in "${ALL_PACKAGES[@]}"; do
@@ -372,7 +407,6 @@ run_tests() {
         fi
 
         print_info "Running unit tests for $pkg..."
-        _sync_package "$pkg"
         cd "$PROJECT_ROOT/packages/$pkg"
         if uv run python -m pytest tests/unit/ -v --tb=short; then
             cd "$PROJECT_ROOT"
