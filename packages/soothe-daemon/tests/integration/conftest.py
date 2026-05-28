@@ -297,6 +297,14 @@ def build_daemon_config(
                     "persist_dir": str(tmp_path / "durability"),
                 },
             },
+            "autonomous": {"max_iterations": 3},
+            "loop": {
+                "limits": {
+                    "max_parallel_goals": 1,
+                    "max_parallel_steps": 1,
+                    "global_max_llm_calls": 5,
+                },
+            },
         },
     )
     return agent, SootheDaemonConfig.model_validate(daemon_config)
