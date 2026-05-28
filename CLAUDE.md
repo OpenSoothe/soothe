@@ -144,7 +144,7 @@ packages/
 └── soothe/            # Daemon server (main package, reuses PyPI name)
 ```
 
-> **Note**: Community plugins have been moved to a standalone project: [soothe-community](https://github.com/OpenSoothe/soothe-community)
+> **Note**: Community plugins have been moved to a standalone project: [soothe-community](https://github.com/mirasoth/soothe-community)
 
 ### soothe Package (Daemon Server)
 | Package | Purpose |
