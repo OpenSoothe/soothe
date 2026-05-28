@@ -188,7 +188,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.agent.loop.limits.max_parallel_goals = 1
     test_config.agent.loop.limits.max_parallel_steps = 1
     test_config.agent.loop.limits.global_max_llm_calls = 3
-    test_config.autonomous.max_iterations = 5
+    test_config.agent.autonomous.max_iterations = 5
 
     return test_config
 

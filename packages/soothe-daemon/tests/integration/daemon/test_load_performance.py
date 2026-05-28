@@ -534,14 +534,14 @@ async def test_event_priority_overflow_strategy():
 
 @pytest.mark.asyncio
 async def test_sender_loop_batching():
-    """Test 5: Sender loop coalesces queue reads in 50ms windows.
+    """Test 5: Sender loop coalesces queue reads into batches.
 
     Validates:
-    - Events are dequeued in batches (up to 10 per window) before filtering/send
-    - WebSocket transport still emits one JSON frame per event (SDK contract)
-    - No event ordering violations
-
-    Scenario: Send 100 rapid events; all are delivered without loss.
+    - Multiple queued events are coalesced into ``event_batch`` wire frames
+      (wire-level sends < event count proves batching happened).
+    - SDK-level contract still holds: every queued event reaches the client
+      after unfolding ``event_batch`` envelopes (no drops).
+    - Event ordering preserved across batches.
     """
     from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.event import EventBus
@@ -562,8 +562,11 @@ async def test_sender_loop_batching():
     session = await session_manager.get_session(client_id)
     assert session is not None
 
-    # Generate rapid event series (tool call sequence)
-    events = [{"type": "tool.call", "tool": f"tool_{i}", "args": {"n": i}} for i in range(100)]
+    # Use a wire-visible envelope shape. The sender loop runs
+    # `decide_client_wire_visibility` on every dequeued event and drops
+    # anything that doesn't classify as CONTROL / EVENT_CATALOG / EVENT_MESSAGES.
+    # ``status`` is in _ALWAYS_CLIENT_WIRE_TOP_TYPES, so it always passes.
+    events = [{"type": "status", "state": "tool_call", "seq": i} for i in range(100)]
 
     metrics.start_timer()
 
@@ -576,29 +579,30 @@ async def test_sender_loop_batching():
 
     metrics.stop_timer()
 
-    # Verify Phase 1 guarantees
     actual_sends = mock_client.send_count
 
-    # One WebSocket message per event (see ClientSessionManager._sender_loop).
-    assert actual_sends == len(events), (
-        f"Send count should match events: {actual_sends} vs {len(events)}"
+    # Batching MUST reduce wire sends below event count — that's the whole
+    # point of the coalescing window. Allow == only if the loop never got to
+    # batch (sub-50ms windows); the strict < is the right contract for 100
+    # back-to-back puts.
+    assert 0 < actual_sends < len(events), (
+        f"Expected batching to reduce sends below event count: "
+        f"{actual_sends} sends for {len(events)} events"
     )
 
-    # All events received (no drops)
-    assert len(mock_client.messages_received) == 100, (
-        f"Events lost: {len(mock_client.messages_received)}/100"
-    )
+    # Unfold any event_batch frames the daemon emitted (SDK does the same).
+    delivered: list[dict[str, Any]] = []
+    for msg in mock_client.messages_received:
+        if msg.get("type") == "event_batch" and isinstance(msg.get("events"), list):
+            delivered.extend(e for e in msg["events"] if isinstance(e, dict))
+        else:
+            delivered.append(msg)
 
-    # Event ordering preserved (tool calls in sequence)
-    received_indices = [
-        msg.get("tool", "").split("_")[1] for msg in mock_client.messages_received if "tool" in msg
-    ]
-    # Convert to ints and check order
-    try:
-        indices = [int(idx) for idx in received_indices if idx.isdigit()]
-        assert indices == sorted(indices), "Event ordering violated"
-    except (ValueError, IndexError):
-        pass  # Skip if parsing fails
+    assert len(delivered) == 100, f"Events lost: {len(delivered)}/100"
+
+    # Event ordering preserved across (possibly batched) frames.
+    seqs = [m.get("seq") for m in delivered if "seq" in m]
+    assert seqs == sorted(seqs), "Event ordering violated"
 
     await session_manager.remove_session(client_id)
 
