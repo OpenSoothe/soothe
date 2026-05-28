@@ -1371,7 +1371,8 @@ class Executor:
         async def _run_parallel_step(step: StepAction, *, first_in_wave: bool) -> None:
             sid = step.id
             try:
-                # RFC-223: ThreadForkManager handles thread isolation via checkpoint fork
+                # Per-step thread isolation; predecessor context flows via
+                # message injection (no checkpoint fork — see RFC-223 revised).
                 payload = await self._execute_step_collecting_events(
                     step,
                     logical_tid,
@@ -1590,8 +1591,11 @@ class Executor:
                 wire_subagent,
             )
 
-            # RFC-223: Thread fork for checkpoint inheritance
-            # Use ThreadForkManager to prepare forked thread with inherited history
+            # RFC-223: Thread fork for checkpoint inheritance.
+            # Use ThreadForkManager to prepare a forked thread with inherited
+            # history from the predecessor. Sole-child optimization: when a
+            # singleton-dependency step is the only child of its predecessor,
+            # the manager reuses the predecessor's thread directly (no copy).
             fork_thread_id = thread_id  # Default to main thread
             direct_deps = step.dependencies or []
             is_multi_dep = len(direct_deps) > 1

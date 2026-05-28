@@ -1,6 +1,7 @@
 """Unit tests for Executor hint passing."""
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -128,12 +129,27 @@ class TestExecutorHints:
         assert "wire_subagent=explore" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_executor_thread_fork_creates_isolated_thread(self) -> None:
-        """ThreadForkManager creates isolated step thread for checkpoint inheritance (RFC-223)."""
+    async def test_executor_thread_fork_creates_isolated_thread(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A no-deps step gets a fresh isolated ``__step_<id>`` thread (RFC-223).
+
+        The fork goes through the in-house ``copy_thread_via_public_api`` helper
+        (LangGraph savers don't implement ``acopy_thread``).
+        """
+        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+
+        copy_calls: list[tuple[str, str]] = []
+
+        async def _fake_copy(saver: Any, source: str, target: str) -> int:
+            copy_calls.append((source, target))
+            return 0
+
+        monkeypatch.setattr(tfm_mod, "copy_thread_via_public_api", _fake_copy)
+
         mock_agent = MagicMock()
         mock_agent.astream = AsyncMock(return_value=iter([]))
         mock_checkpointer = MagicMock()
-        mock_checkpointer.acopy_thread = AsyncMock()
 
         executor = Executor(mock_agent, checkpointer=mock_checkpointer)
         step = StepAction(id="a1b2c3d4", description="Explore slice", expected_output="ok")
@@ -160,8 +176,8 @@ class TestExecutorHints:
         # ThreadForkManager creates __step_ prefixed thread
         assert configurable["thread_id"] == "logical-thread__step_a1b2c3d4"
         assert step_result.thread_id == "logical-thread"
-        # Verify fork was called
-        mock_checkpointer.acopy_thread.assert_called_once()
+        # Verify fork copy was invoked once via the in-house helper.
+        assert copy_calls == [("logical-thread", "logical-thread__step_a1b2c3d4")]
 
     @pytest.mark.asyncio
     async def test_executor_step_cancelled_error_propagates(self) -> None:
