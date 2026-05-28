@@ -113,6 +113,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._clients: list[_ClientConn] = []
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
+        # RFC-222 revised (Phase B): daemon-owned AutopilotService placeholder.
+        # Constructed in start() with subscribe_to_bus=False to coexist with
+        # the per-runner AutopilotService until Phase D retires that one.
+        self._autopilot_service: Any = None  # AutopilotService | None
         self._running = False
         self._query_running = False  # Deprecated: use _active_threads instead
         self._current_query_task: asyncio.Task | None = None
@@ -222,6 +226,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 raise
 
             # RFC-221: LoopRunnerFactory creates one subprocess runner per loop_id.
+            # Construct it BEFORE AutopilotService — the autopilot wraps it.
             from soothe_daemon.runner.factory import LoopRunnerFactory
 
             try:
@@ -230,6 +235,64 @@ class SootheDaemon(DaemonHandlersMixin):
                 self._readiness_state = "error"
                 self._readiness_message = str(exc)
                 raise
+
+            # RFC-222 revised (Phase C): daemon-owned AutopilotService with
+            # full real-dispatch wiring. Constructs its OWN GoalEngine and
+            # InternalEventBus (not the singleton/runner's) so its DAG state
+            # and event subscriptions are isolated from the per-runner
+            # AutopilotService that handles autonomous mode in subprocess.
+            #
+            # The daemon-owned instance is the one HTTP /autopilot/submit
+            # talks to (Phase C5 cutover). Its scheduling loop dispatches
+            # to subprocess workers via the runner_factory above.
+            try:
+                from soothe.core.autopilot import (
+                    AutopilotService,
+                    ContextProjector,
+                    InMemoryGoalDispatchContextStore,
+                    WorkspaceReservation,
+                )
+                from soothe.core.events.internal_bus import InternalEventBus
+                from soothe.core.goal_engine import GoalEngine
+
+                # Isolated bus for the daemon's autopilot domain.
+                daemon_autopilot_bus = InternalEventBus()
+                # Isolated GoalEngine — separate DAG from the runner's autonomous mode.
+                daemon_goal_engine = GoalEngine(
+                    max_retries=self._config.agent.autonomous.max_retries,
+                    config=self._config,
+                    internal_bus=daemon_autopilot_bus,
+                )
+                ws_cfg = self._config.agent.autonomous.workspace_reservation
+                workspace_reservation = WorkspaceReservation(
+                    enabled=ws_cfg.enabled,
+                    strict_overlap=ws_cfg.strict_overlap,
+                )
+
+                self._autopilot_service = AutopilotService(
+                    goal_engine=daemon_goal_engine,
+                    config=self._config.agent.autonomous,
+                    internal_bus=daemon_autopilot_bus,
+                    subscribe_to_bus=True,
+                    runner_factory=self._runner_factory,
+                    workspace_reservation=workspace_reservation,
+                )
+                # Wire the dispatch context store + projector (Phase C optional).
+                self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
+                self._autopilot_service._context_projector = ContextProjector(
+                    self._autopilot_service._context_store,
+                    self._config.agent.autonomous.context_projection,
+                )
+                logger.info(
+                    "[Autopilot] daemon-owned AutopilotService constructed "
+                    "(real dispatch enabled; scheduling loop will start)"
+                )
+            except Exception:
+                # Construction must never block daemon startup. Log loudly;
+                # autopilot endpoints will degrade gracefully (return 503 /
+                # fall back to file-based behavior).
+                logger.exception("[Autopilot] failed to construct daemon-owned AutopilotService")
+                self._autopilot_service = None
 
             # Reap orphaned worker_pool subprocesses left after crashes / restarts.
             try:
@@ -285,6 +348,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 runner=self._runner,
                 soothe_config=self._config,
                 session_manager=self._session_manager,
+                autopilot_service=self._autopilot_service,
             )
             self._transport_manager.set_message_handler(self._handle_transport_message)
             self._transport_manager.set_handshake_callback(self._get_handshake_messages)
@@ -322,6 +386,17 @@ class SootheDaemon(DaemonHandlersMixin):
                     "state": "idle",
                 }
             )
+
+            # RFC-222 revised (Phase C): start the daemon-owned AutopilotService's
+            # scheduling loop so HTTP /autopilot/submit submissions get dispatched.
+            # Failure to start is logged but does not block the daemon — autopilot
+            # endpoints will return 503-equivalent until the next restart.
+            if self._autopilot_service is not None:
+                try:
+                    await self._autopilot_service.start()
+                    logger.info("[Autopilot] scheduling loop started")
+                except Exception:
+                    logger.exception("[Autopilot] failed to start scheduling loop")
 
             self._readiness_state = "ready"
             self._readiness_message = None
@@ -777,6 +852,14 @@ class SootheDaemon(DaemonHandlersMixin):
         self._readiness_message = None
         self._running = False
         self._query_running = False
+
+        # RFC-222 revised (Phase C): stop the autopilot scheduling loop early
+        # so it doesn't dispatch new goals while the rest of the daemon shuts down.
+        if self._autopilot_service is not None:
+            try:
+                await self._autopilot_service.stop(reason="daemon_shutdown")
+            except Exception:
+                logger.warning("[Autopilot] stop raised during shutdown", exc_info=True)
 
         await self._loop_input_dispatcher.shutdown()
 

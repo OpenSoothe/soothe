@@ -55,6 +55,7 @@ class HttpRestTransport(TransportServer):
         session_manager: Any | None = None,
         *,
         unified_app: FastAPI | None = None,
+        autopilot_service: Any | None = None,
     ) -> None:
         """Initialize HTTP REST transport.
 
@@ -65,11 +66,17 @@ class HttpRestTransport(TransportServer):
             session_manager: Optional ClientSessionManager for queue metrics.
             unified_app: When set, routes and middleware attach to this shared ASGI app
                 and this transport does not start its own uvicorn process.
+            autopilot_service: Optional daemon-owned AutopilotService. When
+                provided (RFC-222 revised, Phase C), the ``/api/v1/autopilot/*``
+                endpoints route through it instead of the legacy file-based
+                inbox. When ``None``, endpoints fall back to writing files
+                under ``$SOOTHE_HOME/autopilot/inbox/`` for backward compat.
         """
         self._config = config
         self._runner = runner
         self._soothe_config = soothe_config
         self._session_manager = session_manager
+        self._autopilot_service = autopilot_service
         self._unified_mode = unified_app is not None
         self._app = unified_app or FastAPI(
             title="Soothe Daemon API",
@@ -237,11 +244,22 @@ class HttpRestTransport(TransportServer):
             Returns:
                 JSON with list of goals and their statuses.
             """
-            # Try to get goals from engine first
+            # RFC-222 revised (Phase C): prefer the daemon-owned AutopilotService.
+            if self._autopilot_service is not None:
+                goals = await self._autopilot_service.list_goals()
+                return {
+                    "goals": [g.model_dump(mode="json") for g in goals],
+                    "source": "autopilot_service",
+                }
+
+            # Legacy: per-runner GoalEngine (autonomous-mode DAG).
             engine = getattr(self._runner, "_goal_engine", None)
             if engine:
                 goals = await engine.list_goals()
-                return {"goals": [g.model_dump(mode="json") for g in goals]}
+                return {
+                    "goals": [g.model_dump(mode="json") for g in goals],
+                    "source": "runner_engine",
+                }
 
             # Fallback: parse goal files directly
             from soothe.config import SOOTHE_HOME
@@ -261,12 +279,18 @@ class HttpRestTransport(TransportServer):
             Returns:
                 JSON with goal details.
             """
+            # RFC-222 revised (Phase C): prefer the daemon-owned AutopilotService.
+            if self._autopilot_service is not None:
+                goal = await self._autopilot_service.get_goal(goal_id)
+                if goal:
+                    return {"goal": goal.model_dump(mode="json"), "source": "autopilot_service"}
+
             engine = getattr(self._runner, "_goal_engine", None)
             if engine:
                 goal = await engine.get_goal(goal_id)
                 if goal:
-                    return {"goal": goal.model_dump(mode="json")}
-                raise HTTPException(status_code=404, detail="Goal not found")
+                    return {"goal": goal.model_dump(mode="json"), "source": "runner_engine"}
+
             raise HTTPException(status_code=404, detail="Goal not found")
 
         @self._app.post("/api/v1/autopilot/submit")
@@ -275,17 +299,32 @@ class HttpRestTransport(TransportServer):
 
             Request body:
                 {"description": "task text", "priority": 50}
+
+            Phase C: when the daemon-owned AutopilotService is available,
+            calls ``submit_task`` directly so the goal lands in the live DAG
+            and gets dispatched on the next scheduling tick. Falls back to
+            the legacy file-based inbox if the service is unavailable.
             """
-            from datetime import UTC, datetime
-
-            from soothe.config import SOOTHE_HOME
-
             body = await request.json()
             description = body.get("description", "")
             priority = int(body.get("priority", 50))
 
             if not description:
                 raise HTTPException(status_code=400, detail="description is required")
+
+            # RFC-222 revised (Phase C): live submit via AutopilotService.
+            if self._autopilot_service is not None:
+                goal = await self._autopilot_service.submit_task(description, priority=priority)
+                return {
+                    "status": "submitted",
+                    "goal_id": goal.id,
+                    "transport": "live",
+                }
+
+            # Fallback: legacy file-based inbox (backward compat).
+            from datetime import UTC, datetime
+
+            from soothe.config import SOOTHE_HOME
 
             inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
             inbox_dir.mkdir(parents=True, exist_ok=True)
@@ -296,27 +335,45 @@ class HttpRestTransport(TransportServer):
             fpath.write_text(
                 f"---\ntype: task_submit\npriority: {priority}\n---\n\n{description}\n"
             )
-            return {"status": "submitted", "file": filename}
+            return {"status": "submitted", "file": filename, "transport": "file"}
 
         @self._app.delete("/api/v1/autopilot/goals/{goal_id}")
         async def autopilot_cancel_goal(goal_id: str) -> dict[str, Any]:
-            """Cancel a goal (remove from inbox if pending).
+            """Cancel a goal.
 
-            Args:
-                goal_id: Goal identifier.
+            Phase C: when the daemon-owned AutopilotService is available,
+            calls ``cancel_goal`` which transitions the goal to ``failed``
+            and releases its workspace reservation. Falls back to inbox
+            file deletion otherwise.
             """
+            if self._autopilot_service is not None:
+                cancelled = await self._autopilot_service.cancel_goal(goal_id, reason="http_delete")
+                if cancelled is None:
+                    return {"status": "not_found", "transport": "live"}
+                return {
+                    "status": "cancelled",
+                    "goal_id": cancelled.id,
+                    "new_status": cancelled.status,
+                    "transport": "live",
+                }
+
+            # Fallback: legacy file-based behavior.
             from soothe.config import SOOTHE_HOME
 
             inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
             if not inbox_dir.exists():
-                return {"status": "not_found"}
+                return {"status": "not_found", "transport": "file"}
 
             removed = 0
             for f in inbox_dir.glob("*.md"):
                 if goal_id in f.stem:
                     f.unlink()
                     removed += 1
-            return {"status": "cancelled" if removed else "not_found", "removed": removed}
+            return {
+                "status": "cancelled" if removed else "not_found",
+                "removed": removed,
+                "transport": "file",
+            }
 
         @self._app.post("/api/v1/autopilot/goals/{goal_id}/approve")
         async def autopilot_approve_goal(goal_id: str) -> dict[str, Any]:
