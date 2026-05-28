@@ -24,7 +24,6 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
 
     A valid skill directory contains a `SKILL.md` file. The search includes:
     - Package-bundled built-ins (`soothe/built_in_skills/`)
-    - User skills in `~/.agents/skills/`
     - User skills in `~/.soothe/skills/`
     - Project skills in `<workspace>/.soothe/skills/` (if workspace provided)
 
@@ -37,7 +36,6 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     module_dir = Path(__file__).resolve().parent.parent
     candidate_roots = [
         module_dir / "built_in_skills",
-        Path.home() / ".agents" / "skills",
         Path.home() / ".soothe" / "skills",
     ]
 

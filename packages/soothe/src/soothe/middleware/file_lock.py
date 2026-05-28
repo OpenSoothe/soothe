@@ -49,6 +49,12 @@ _OP_MAP: dict[str, str] = {
 class FileLockMiddleware(AgentMiddleware):
     """Langchain middleware for file lock conflict resolution (RFC-222).
 
+    RFC-222 Q1 (preserved-unwired): the daemon-owned ``WorkspaceReservation``
+    gate supersedes per-path file locking for v1. This middleware is
+    intentionally not installed by any code path. It remains here as a
+    tested implementation that can be revived if/when fine-grained per-path
+    conflicts within a single workspace become a real production concern.
+
     Construct one per (loop_id, goal_id) pair so the middleware can
     attribute lock ownership correctly. ``AutopilotService`` is the
     expected constructor; solo mode never instantiates this.

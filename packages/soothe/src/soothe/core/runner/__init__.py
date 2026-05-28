@@ -4,21 +4,23 @@ Wraps `create_soothe_agent()` with protocol pre/post-processing and
 yields the deepagents-canonical ``(namespace, mode, data)`` stream
 extended with ``soothe.*`` custom events for protocol observability.
 
-RFC-0007 adds autonomous iteration: when ``autonomous=True``, the runner
-loops reflect -> revise -> re-execute until the goal is complete or
-max_iterations is reached.
-
 RFC-0008 adds agentic loop: default execution mode with Reason → Act
 iterative refinement loop (RFC-201) via ``AgentLoop`` and the compiled
 loop graph (RFC-220). DAG-style multi-step execution is implemented
 inside the AgentLoop execute phase (``StepScheduler`` / ``Executor``),
 not as a separate runner mixin.
 
-Implementation is decomposed into four mixins:
+RFC-222 Phase D: the legacy in-process autonomous multi-goal loop has
+been removed. Autopilot is daemon-owned; goals dispatched by the daemon
+arrive through ``LoopRunRequest.autopilot_job`` and route to the
+single-goal worker path. The ``autonomous`` flag on ``astream`` is kept
+for backward compatibility with existing callers but is now a no-op.
+
+Implementation is decomposed into mixins:
 
 - `PhasesMixin`     -- pre-stream helpers (threads, policy, memory, plan bootstrap)
 - `AgenticMixin`    -- agentic loop (RFC-0008)
-- `AutonomousMixin` -- autonomous iteration loop (RFC-0007)
+- `AutopilotWorkerMixin` -- single-goal worker entry (RFC-222 revised)
 - `CheckpointMixin` -- progressive checkpoint, artifacts, reports (RFC-0010)
 """
 
@@ -35,7 +37,6 @@ from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
 
 from ._runner_agentic import AgenticMixin
-from ._runner_autonomous import AutonomousMixin
 from ._runner_autopilot_worker import AutopilotWorkerMixin
 from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
@@ -66,7 +67,6 @@ logger = logging.getLogger(__name__)
 
 class SootheRunner(
     CheckpointMixin,
-    AutonomousMixin,
     AutopilotWorkerMixin,
     AgenticMixin,
     PhasesMixin,
@@ -510,13 +510,11 @@ class SootheRunner(
         format.  Protocol events are emitted as ``custom`` events with
         ``soothe.*`` type prefix.
 
-        **Three execution modes** (selected in priority order):
+        **Two execution modes** (selected in priority order):
         - ``autopilot_job`` set (RFC-222 revised): daemon-dispatched goal, runs
           ``_run_single_autopilot_goal`` which hydrates from the bundle and
           emits a ``GoalCompletionChunk`` at the end. AgentLoop never sees the
           DAG. ``user_input`` is ignored.
-        - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit
-          goal management (legacy multi-goal path, removed in Phase D).
         - Default (RFC-201): Agentic loop with Reason → Act iteration.
 
         Args:
@@ -525,7 +523,11 @@ class SootheRunner(
             workspace: Thread-specific workspace path (RFC-103). When omitted, resolved via
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
-            autonomous: Enable autonomous iteration loop (explicit goals).
+            autonomous: **Deprecated no-op (RFC-222 Phase D).** The legacy
+                in-process multi-goal autonomous loop has been removed. Autopilot
+                is daemon-owned; HTTP-submitted goals flow through it and arrive
+                here via ``autopilot_job``. The flag is preserved on the signature
+                only for backward compatibility with existing daemon/CLI callers.
             max_iterations: Override max iterations from config.
             preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
             client_loop_id: Daemon client loop scope for logging and stream correlation.
@@ -575,17 +577,14 @@ class SootheRunner(
                     yield chunk
                 return
 
-            # Autonomous mode
-            if autonomous and self._goal_engine:
-                async for chunk in self._run_autonomous(
-                    user_input,
-                    thread_id=thread_id,
-                    workspace=effective_workspace,
-                    max_iterations=max_iterations or self._config.agent.autonomous.max_iterations,
-                    intent_hint=intent_hint,
-                ):
-                    yield chunk
-                return
+            # RFC-222 Phase D: ``autonomous`` is a deprecated no-op. Legacy
+            # multi-goal scheduling is gone; queries always run the agentic
+            # loop. The daemon-owned autopilot dispatches via autopilot_job.
+            if autonomous:
+                logger.debug(
+                    "astream: autonomous=True is a no-op since RFC-222 Phase D; "
+                    "running agentic loop"
+                )
 
             # Default: agentic loop (RFC-0008)
             async for chunk in self._run_agentic_loop(

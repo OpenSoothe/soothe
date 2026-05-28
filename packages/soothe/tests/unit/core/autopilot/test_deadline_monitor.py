@@ -1,0 +1,108 @@
+"""Tests for AutopilotService H5 deadline enforcement (RFC-222 revised)."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from soothe.config.models import AutonomousConfig
+from soothe.core.autopilot import AutopilotService
+from soothe.core.events.internal_bus import InternalEventBus
+from soothe.core.goal_engine import GoalEngine
+
+
+class _FakeRunner:
+    def __init__(self, loop_id: str) -> None:
+        self.loop_id = loop_id
+        self.cancel_called = False
+
+    async def run(self, request):  # noqa: ANN001
+        yield None  # never reached in monitor-only tests
+
+    async def cancel(self) -> None:
+        self.cancel_called = True
+
+
+class _FakeFactory:
+    def create_runner(self, loop_id: str):  # noqa: ANN001
+        return _FakeRunner(loop_id)
+
+
+def _service(*, deadline: float | None) -> AutopilotService:
+    bus = InternalEventBus()
+    ge = GoalEngine(internal_bus=bus)
+    cfg = AutonomousConfig(max_loops=2, max_parallel_goals=2)
+    cfg.goal_deadline_seconds = deadline
+    return AutopilotService(
+        goal_engine=ge,
+        config=cfg,
+        internal_bus=bus,
+        runner_factory=_FakeFactory(),
+    )
+
+
+class TestDeadlineMonitorNoOps:
+    @pytest.mark.asyncio
+    async def test_no_worker_pool_short_circuits(self) -> None:
+        bus = InternalEventBus()
+        ge = GoalEngine(internal_bus=bus)
+        cfg = AutonomousConfig(max_loops=1, max_parallel_goals=1)
+        cfg.goal_deadline_seconds = 1.0
+        svc = AutopilotService(goal_engine=ge, config=cfg, internal_bus=bus)
+        # Should not raise and should not require a pool.
+        await svc._monitor_loop_health()
+
+    @pytest.mark.asyncio
+    async def test_no_deadline_configured_skips(self) -> None:
+        svc = _service(deadline=None)
+        # Manually claim a worker far in the past — no deadline so no action.
+        goal = await svc.submit_task("g1", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal)
+        assert worker is not None
+        worker.dispatch_started_at = datetime.now(UTC) - timedelta(seconds=600)
+        await svc._monitor_loop_health()
+        assert worker.runner.cancel_called is False
+
+    @pytest.mark.asyncio
+    async def test_under_deadline_skips(self) -> None:
+        svc = _service(deadline=60.0)
+        goal = await svc.submit_task("g1", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal)
+        assert worker is not None
+        await svc._goal_engine.claim_goal(goal.id, loop_id=worker.loop_id)
+        # Just started — well under deadline.
+        await svc._monitor_loop_health()
+        assert worker.runner.cancel_called is False
+        refreshed = await svc.get_goal(goal.id)
+        assert refreshed.status == "active"
+
+
+class TestDeadlineMonitorEnforces:
+    @pytest.mark.asyncio
+    async def test_overrun_cancels_worker_and_fails_goal(self) -> None:
+        svc = _service(deadline=1.0)
+        goal = await svc.submit_task("slow", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal)
+        assert worker is not None
+        await svc._goal_engine.claim_goal(goal.id, loop_id=worker.loop_id)
+        # Pretend the worker started long enough ago to overrun.
+        worker.dispatch_started_at = datetime.now(UTC) - timedelta(seconds=10)
+
+        await svc._monitor_loop_health()
+
+        assert worker.runner.cancel_called is True
+        finished = await svc.get_goal(goal.id)
+        assert finished is not None
+        assert finished.status == "failed"
+        assert "deadline" in (finished.error or "").lower()
+
+    @pytest.mark.asyncio
+    async def test_no_started_at_skips(self) -> None:
+        svc = _service(deadline=1.0)
+        goal = await svc.submit_task("g1", max_retries=0)
+        worker = await svc._worker_pool.pick_worker(goal)
+        assert worker is not None
+        worker.dispatch_started_at = None  # idle-ish
+        await svc._monitor_loop_health()
+        assert worker.runner.cancel_called is False

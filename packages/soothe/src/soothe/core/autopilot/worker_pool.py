@@ -62,6 +62,9 @@ class WorkerSlot:
     active_task: Any = None  # asyncio.Task[Any] | None — Any avoids generic-in-dataclass headaches
     idle_since: datetime | None = field(default_factory=lambda: datetime.now(UTC))
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # RFC-222 H5: wall-clock dispatch start, used by AutopilotService monitor
+    # to detect deadline overruns. None whenever the worker is idle.
+    dispatch_started_at: datetime | None = None
 
     # Recency cache bound — see RFC-222 §"WorkerPool". Larger than typical DAG
     # depth so the sticky lookup keeps working for long lineages.
@@ -72,6 +75,7 @@ class WorkerSlot:
         self.status = "active"
         self.current_goal_id = goal_id
         self.idle_since = None
+        self.dispatch_started_at = datetime.now(UTC)
 
     def release_to_idle(self, success: bool = True) -> None:
         """Move this worker back to idle (or error) after a goal completes."""
@@ -81,6 +85,7 @@ class WorkerSlot:
                 self.last_goal_ids.pop(0)
         self.current_goal_id = None
         self.active_task = None
+        self.dispatch_started_at = None
         self.status = "idle" if success else "error"
         self.idle_since = datetime.now(UTC) if success else None
 
