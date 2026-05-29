@@ -199,13 +199,13 @@ class TestLoggingConfig:
         assert cfg.subagents["tacitus"].enabled is False
 
     def test_mcp_server_config_stdio(self) -> None:
-        cfg = MCPServerConfig(command="npx", args=["-y", "@my/server"])
+        cfg = MCPServerConfig(name="my-server", command="npx", args=["-y", "@my/server"])
         assert cfg.transport == "stdio"
         assert cfg.command == "npx"
         assert cfg.args == ["-y", "@my/server"]
 
     def test_mcp_server_config_sse(self) -> None:
-        cfg = MCPServerConfig(url="https://example.com/sse", transport="sse")
+        cfg = MCPServerConfig(name="sse-server", url="https://example.com/sse", transport="sse")
         assert cfg.transport == "sse"
         assert cfg.url == "https://example.com/sse"
 

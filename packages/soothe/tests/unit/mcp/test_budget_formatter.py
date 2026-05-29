@@ -57,7 +57,7 @@ class TestFormatMcpToolsWithinBudget:
         ]
         text, tel = format_mcp_tools_within_budget(
             entries,
-            budget_chars=50,  # force truncation
+            budget_chars=100,  # enough for essential + truncated non-essential
             per_entry_cap_chars=30,
         )
 
