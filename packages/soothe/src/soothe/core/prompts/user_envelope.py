@@ -5,6 +5,7 @@ Builds the XML envelope that wraps per-turn dynamic content:
 - Slash-skill turns: optional ``<SKILL_CONTEXT>`` after ``<USER_QUERY>`` (skill reference
   only, not the full expanded goal prompt)
 - ``--- Context ---`` then <DYNAMIC_CONTEXT>: execution hints, timestamp, language hint
+- Optional ``<MCP_RESOURCE>`` blocks for ``@server:uri`` attachment references
 
 This envelope keeps volatile content out of the system prompt,
 maximizing prompt cache hits.
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from typing import Any
 
 # Strip legacy AgentLoop suffix accidentally baked into goal text or stored checkpoints.
 _GOAL_ITERATION_SUFFIX_RE = re.compile(
@@ -31,6 +33,43 @@ _RESPONSE_LANGUAGE_HINT = (
 
 _EXECUTE_STEP_CONTEXT_SEPARATOR = "\n\n--- Context ---\n\n"
 
+# Pattern for @server:uri references in user messages (e.g. @github:issue://123)
+_MCP_RESOURCE_REF_RE = re.compile(r"@(\w+):(\S+)")
+
+
+def extract_mcp_resource_refs(text: str) -> list[tuple[str, str]]:
+    """Extract ``@server:uri`` references from user text.
+
+    Returns:
+        List of ``(server, uri)`` tuples.
+    """
+    return [(m.group(1), m.group(2)) for m in _MCP_RESOURCE_REF_RE.finditer(text)]
+
+
+async def resolve_mcp_resource_blocks(
+    refs: list[tuple[str, str]],
+    mcp_registry: Any | None,
+) -> list[str]:
+    """Resolve ``@server:uri`` refs into ``<MCP_RESOURCE>`` XML blocks.
+
+    Args:
+        refs: List of ``(server, uri)`` tuples from ``extract_mcp_resource_refs``.
+        mcp_registry: Optional ``MCPRegistry`` for reading resources.
+
+    Returns:
+        List of ``<MCP_RESOURCE>`` XML block strings.
+    """
+    if not refs or mcp_registry is None:
+        return []
+    blocks: list[str] = []
+    for server, uri in refs:
+        try:
+            content = await mcp_registry.read_resource(server, uri)
+        except Exception:  # noqa: BLE001
+            content = f"<error>Failed to read resource {server}:{uri}</error>"
+        blocks.append(f'<MCP_RESOURCE server="{server}" uri="{uri}">\n{content}\n</MCP_RESOURCE>')
+    return blocks
+
 
 def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
     """Normalize goal string (strip iteration suffix)."""
@@ -47,6 +86,7 @@ def build_execute_step_envelope(
     execution_hints: str | None = None,
     workspace_state: str | None = None,
     skill_context: str | None = None,
+    mcp_resource_blocks: list[str] | None = None,
 ) -> str:
     """Build the user message envelope for an execute-step (RFC-214).
 
@@ -58,6 +98,7 @@ def build_execute_step_envelope(
         execution_hints: Optional hints text from ExecutionHintsMiddleware.
         workspace_state: Optional lightweight workspace diff summary.
         skill_context: Skill reference only (SKILL.md); omitted when not a slash-skill turn.
+        mcp_resource_blocks: Optional pre-resolved ``<MCP_RESOURCE>`` XML blocks.
 
     Returns:
         XML envelope string for the LoopHumanMessage content.
@@ -72,6 +113,8 @@ def build_execute_step_envelope(
     skill_ref = (skill_context or "").strip()
     if skill_ref:
         body_parts.append(f"<SKILL_CONTEXT>\n{skill_ref}\n</SKILL_CONTEXT>")
+    for block in mcp_resource_blocks or []:
+        body_parts.append(block)
 
     # <DYNAMIC_CONTEXT>: hints + context only (step instruction is above the fold)
     dynamic_parts: list[str] = []

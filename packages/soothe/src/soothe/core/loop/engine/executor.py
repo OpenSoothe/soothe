@@ -923,6 +923,7 @@ class Executor:
         continue_loop_mode: bool = False,
         synthesis_scenario: str | None = None,
         skill_activation: dict[str, Any] | None = None,
+        mcp_state: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build LangGraph input for execute waves (RFC-225 carries continue_loop_mode)."""
         out: dict[str, Any] = {"messages": messages}
@@ -938,6 +939,8 @@ class Executor:
             out["synthesis_scenario"] = synthesis_scenario
         if skill_activation is not None:
             out["skill_activation"] = skill_activation
+        if mcp_state is not None:
+            out.update(mcp_state)
         return out
 
     @staticmethod
@@ -1000,6 +1003,53 @@ class Executor:
         # Slash invocation signal consumed once — clear to prevent re-seeding
         loop_state.slash_invoked_skill_name = None
         loop_state.slash_invoked_skill_body = None
+
+    @staticmethod
+    def _seed_mcp_state(loop_state: LoopState) -> dict[str, Any] | None:
+        """Rehydrate MCP progressive disclosure state from LoopState for graph input.
+
+        Returns ``None`` when no MCP state exists, so middleware ``abefore_agent``
+        will lazy-init fresh fields.
+        """
+        has_data = (
+            loop_state.sent_mcp_tool_names
+            or loop_state.invoked_mcp_tools
+            or loop_state.disabled_mcp_servers
+            or loop_state.cached_mcp_resources
+        )
+        if not has_data:
+            return None
+
+        return {
+            "sent_mcp_tool_names": set(loop_state.sent_mcp_tool_names),
+            "invoked_mcp_tools": dict(loop_state.invoked_mcp_tools),
+            "disabled_mcp_servers": set(loop_state.disabled_mcp_servers),
+            "cached_mcp_resources": dict(loop_state.cached_mcp_resources),
+        }
+
+    @staticmethod
+    def _snapshot_mcp_state(
+        graph_output: dict[str, Any] | None,
+        loop_state: LoopState,
+    ) -> None:
+        """Copy MCP progressive disclosure state from graph output back into LoopState.
+
+        Best-effort: missing or malformed data is silently skipped.
+        """
+        if not graph_output:
+            return
+        sent = graph_output.get("sent_mcp_tool_names")
+        invoked = graph_output.get("invoked_mcp_tools")
+        disabled = graph_output.get("disabled_mcp_servers")
+        cached = graph_output.get("cached_mcp_resources")
+        if isinstance(sent, (set, list, tuple)):
+            loop_state.sent_mcp_tool_names = set(sent)
+        if isinstance(invoked, dict):
+            loop_state.invoked_mcp_tools = dict(invoked)
+        if isinstance(disabled, (set, list, tuple)):
+            loop_state.disabled_mcp_servers = set(disabled)
+        if isinstance(cached, dict):
+            loop_state.cached_mcp_resources = dict(cached)
 
     def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
         """Extract token usage from last AIMessage response metadata.
@@ -1742,6 +1792,7 @@ class Executor:
             )
             graph_input_messages.append(human_msg)
             skill_activation = self._seed_skill_activation(loop_state) if loop_state else None
+            mcp_state = self._seed_mcp_state(loop_state) if loop_state else None
             stream = self._core_agent_astream_with_interrupt_resume(
                 self._execute_graph_input(
                     graph_input_messages,
@@ -1750,6 +1801,7 @@ class Executor:
                     git_status=git_status,
                     continue_loop_mode=continue_loop_mode,
                     skill_activation=skill_activation,
+                    mcp_state=mcp_state,
                 ),
                 config,
             )
@@ -1792,6 +1844,7 @@ class Executor:
                     )
                     if graph_state and graph_state.values:
                         self._snapshot_skill_activation(graph_state.values, loop_state)
+                        self._snapshot_mcp_state(graph_state.values, loop_state)
                 except Exception:  # noqa: BLE001
                     logger.debug("[Skill] Failed to snapshot skill_activation from graph state")
 

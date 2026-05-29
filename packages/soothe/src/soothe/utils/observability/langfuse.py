@@ -297,6 +297,8 @@ def merge_langfuse_runnable_config(
         name = (soothe_config.observability.langfuse.trace_name or "").strip()
     if name:
         out["run_name"] = name
+        # Langfuse SDK v3 reads trace title from metadata (not Runnable run_name alone).
+        meta.setdefault("langfuse_trace_name", name)
     return out
 
 

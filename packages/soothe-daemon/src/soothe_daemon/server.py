@@ -253,14 +253,16 @@ class SootheDaemon(DaemonHandlersMixin):
             # talks to (Phase C5 cutover). Its scheduling loop dispatches
             # to subprocess workers via the runner_factory above.
             try:
+                from soothe.backends.persistence import create_persist_store
                 from soothe.core.autopilot import (
                     AutopilotService,
                     ContextProjector,
-                    InMemoryGoalDispatchContextStore,
+                    DurabilityGoalDispatchContextStore,
                     WorkspaceReservation,
                 )
                 from soothe.core.events.internal_bus import InternalEventBus
                 from soothe.core.goal_engine import GoalEngine
+                from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
                 # Isolated bus for the daemon's autopilot domain.
                 daemon_autopilot_bus = InternalEventBus()
@@ -270,22 +272,47 @@ class SootheDaemon(DaemonHandlersMixin):
                     config=self._config,
                     internal_bus=daemon_autopilot_bus,
                 )
-                # RFC-222 H4: any goal still in ``active`` from a previous daemon
-                # run is stranded — its worker subprocess is gone. Reset to
-                # ``pending`` so the scheduling loop re-dispatches it. No-op when
-                # the engine starts empty (in-memory restore is a future RFC).
-                recovered_ids = daemon_goal_engine.recover_active_goals()
-                if recovered_ids:
-                    logger.warning(
-                        "[Autopilot] crash recovery: reset %d active goal(s) → pending: %s",
-                        len(recovered_ids),
-                        ", ".join(recovered_ids),
-                    )
                 ws_cfg = self._config.agent.autonomous.workspace_reservation
                 workspace_reservation = WorkspaceReservation(
                     enabled=ws_cfg.enabled,
                     strict_overlap=ws_cfg.strict_overlap,
                 )
+
+                dur_backend = self._config.resolve_durability_backend()
+                dur_cfg = self._config.agent.protocols.durability
+                persist_dir = dur_cfg.persist_dir or str(SOOTHE_DATA_DIR)
+                if dur_backend == "postgresql":
+                    dsn = self._config.resolve_postgres_dsn_for_database("metadata")
+                    goal_persist_store = create_persist_store(
+                        backend="postgresql",
+                        dsn=dsn,
+                        namespace="autopilot_goals",
+                    )
+                    context_persist_store = create_persist_store(
+                        backend="postgresql",
+                        dsn=dsn,
+                        namespace="autopilot_context",
+                    )
+                else:
+                    goal_persist_store = create_persist_store(
+                        persist_dir=persist_dir,
+                        backend="sqlite",
+                        namespace="autopilot_goals",
+                    )
+                    context_persist_store = create_persist_store(
+                        persist_dir=persist_dir,
+                        backend="sqlite",
+                        namespace="autopilot_context",
+                    )
+
+                consensus_model = None
+                try:
+                    consensus_model = self._config.create_chat_model("think")
+                except Exception:
+                    logger.warning(
+                        "[Autopilot] consensus model unavailable; "
+                        "completed goals will suspend until model is configured"
+                    )
 
                 self._autopilot_service = AutopilotService(
                     goal_engine=daemon_goal_engine,
@@ -294,9 +321,17 @@ class SootheDaemon(DaemonHandlersMixin):
                     subscribe_to_bus=True,
                     runner_factory=self._runner_factory,
                     workspace_reservation=workspace_reservation,
+                    consensus_model=consensus_model,
+                    goal_persist_store=goal_persist_store,
                 )
-                # Wire the dispatch context store + projector (Phase C optional).
-                self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
+                if context_persist_store is not None:
+                    self._autopilot_service._context_store = DurabilityGoalDispatchContextStore(
+                        context_persist_store
+                    )
+                else:
+                    from soothe.core.autopilot import InMemoryGoalDispatchContextStore
+
+                    self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
                 self._autopilot_service._context_projector = ContextProjector(
                     self._autopilot_service._context_store,
                     self._config.agent.autonomous.context_projection,

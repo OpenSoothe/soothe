@@ -115,6 +115,10 @@ class _OptimizationState(TypedDict):
 
     messages: Annotated[list[AnyMessage], add_messages]
     routing_classification: NotRequired[Any]  # Type: RoutingClassification
+    sent_mcp_tool_names: NotRequired[set[str]]
+    invoked_mcp_tools: NotRequired[dict[str, dict]]
+    disabled_mcp_servers: NotRequired[set[str]]
+    cached_mcp_resources: NotRequired[dict[str, str]]
 
 
 class SystemPromptOptimizationMiddleware(AgentMiddleware):
@@ -161,9 +165,11 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """Push effective system prompt for Langfuse generation input (IG-385).
 
         Returns:
-            ContextVar reset token from :func:`push_langfuse_system_prompt_hint`, or None.
+            ContextVar reset token from :func:`publish_langfuse_system_prompt_hint`, or None.
         """
-        from soothe.utils.observability.langfuse_system_hint import push_langfuse_system_prompt_hint
+        from soothe.utils.observability.langfuse_system_hint import (
+            publish_langfuse_system_prompt_hint,
+        )
 
         sm = request.system_message
         if sm is None:
@@ -174,7 +180,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             text = ""
         if not text and isinstance(sm.content, str):
             text = sm.content.strip()
-        return push_langfuse_system_prompt_hint(text) if text else None
+        if not text:
+            return None
+        return publish_langfuse_system_prompt_hint(text)
 
     def _build_environment_section(self) -> str:
         """Build <ENVIRONMENT> section (static, always present for medium/complex).
@@ -906,7 +914,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             Model response from handler.
         """
         from soothe.utils.observability.langfuse_system_hint import (
-            reset_langfuse_system_prompt_hint,
+            clear_langfuse_system_prompt_hint,
         )
 
         modified_request = self.modify_request(request)
@@ -914,7 +922,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         try:
             return handler(modified_request)
         finally:
-            reset_langfuse_system_prompt_hint(tok)
+            clear_langfuse_system_prompt_hint(tok)
 
     async def awrap_model_call(
         self,
@@ -931,7 +939,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             Model response from handler.
         """
         from soothe.utils.observability.langfuse_system_hint import (
-            reset_langfuse_system_prompt_hint,
+            clear_langfuse_system_prompt_hint,
         )
 
         modified_request = self.modify_request(request)
@@ -939,4 +947,4 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         try:
             return await handler(modified_request)
         finally:
-            reset_langfuse_system_prompt_hint(tok)
+            clear_langfuse_system_prompt_hint(tok)

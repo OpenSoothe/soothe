@@ -82,6 +82,13 @@ def main(
         str | None,
         typer.Option("--streaming-mode", help="Streaming mode: 'streaming' or 'batch'"),
     ] = None,
+    mcp_config: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-config",
+            help="Path to additional MCP server config (JSON/YAML) to merge into daemon config.",
+        ),
+    ] = None,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
@@ -127,6 +134,7 @@ def main(
             streaming_enabled=streaming,
             streaming_mode=streaming_mode,
             tui_with_prompt=tui_with_prompt,
+            mcp_config=mcp_config,
         )
 
 

@@ -17,8 +17,8 @@ def route_after_init(state: dict[str, Any]) -> str:
 
 
 def route_after_iteration_gate(state: dict[str, Any]) -> str:
-    """End graph after max-iteration terminal; otherwise begin iteration body."""
-    if state.get("last_outcome") == "max_iterations":
+    """End graph after max-iteration or rate-limit terminal; otherwise begin iteration body."""
+    if state.get("last_outcome") in ("max_iterations", "rate_limited"):
         return END
     return "iteration_start"
 

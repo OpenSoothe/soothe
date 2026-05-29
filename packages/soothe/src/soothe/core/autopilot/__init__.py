@@ -23,6 +23,7 @@ from .context_store import (
     GoalDispatchContextStoreProtocol,
     InMemoryGoalDispatchContextStore,
 )
+from .durability_context_store import DurabilityGoalDispatchContextStore
 from .loop_pool import LoopHandle, LoopPool
 from .service import AutopilotService
 from .worker_pool import WorkerPool, WorkerSlot, is_autopilot_worker_loop_id
@@ -31,6 +32,7 @@ from .workspace_reservation import WorkspaceReservation
 __all__ = [
     "AutopilotService",
     "ContextProjector",
+    "DurabilityGoalDispatchContextStore",
     "GoalDispatchContextStoreProtocol",
     "InMemoryGoalDispatchContextStore",
     "LoopHandle",

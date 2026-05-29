@@ -383,13 +383,19 @@ class HttpRestTransport(TransportServer):
             Args:
                 goal_id: Goal identifier.
             """
+            if self._autopilot_service is not None:
+                approved = await self._autopilot_service.approve_confirmation(goal_id)
+                if approved:
+                    return {"status": "approved", "goal_id": goal_id, "transport": "live"}
+                raise HTTPException(status_code=404, detail="Confirmation not found")
+
             from soothe.config import SOOTHE_HOME
 
             inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
             inbox_dir.mkdir(parents=True, exist_ok=True)
             approval = inbox_dir / f"APPROVE-{goal_id}.md"
             approval.write_text(f"---\ntype: approve\ngoal_id: {goal_id}\n---\n\nApproved.\n")
-            return {"status": "approved", "goal_id": goal_id}
+            return {"status": "approved", "goal_id": goal_id, "transport": "file"}
 
         @self._app.post("/api/v1/autopilot/goals/{goal_id}/reject")
         async def autopilot_reject_goal(goal_id: str) -> dict[str, Any]:
@@ -398,35 +404,49 @@ class HttpRestTransport(TransportServer):
             Args:
                 goal_id: Goal identifier.
             """
+            if self._autopilot_service is not None:
+                rejected = await self._autopilot_service.reject_confirmation(goal_id)
+                if rejected:
+                    return {"status": "rejected", "goal_id": goal_id, "transport": "live"}
+                raise HTTPException(status_code=404, detail="Confirmation not found")
+
             from soothe.config import SOOTHE_HOME
 
             inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
             inbox_dir.mkdir(parents=True, exist_ok=True)
             rejection = inbox_dir / f"REJECT-{goal_id}.md"
             rejection.write_text(f"---\ntype: reject\ngoal_id: {goal_id}\n---\n\nRejected.\n")
-            return {"status": "rejected", "goal_id": goal_id}
+            return {"status": "rejected", "goal_id": goal_id, "transport": "file"}
 
         @self._app.post("/api/v1/autopilot/wake")
         async def autopilot_wake() -> dict[str, Any]:
             """Exit dreaming mode — resume active execution."""
+            if self._autopilot_service is not None:
+                await self._autopilot_service.wake_from_dreaming(trigger="wake_signal")
+                return {"status": "wake_sent", "transport": "live"}
+
             from soothe.config import SOOTHE_HOME
 
             inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
             inbox_dir.mkdir(parents=True, exist_ok=True)
             signal = inbox_dir / "WAKE.md"
             signal.write_text("---\ntype: signal_resume\n---\n\nWake signal.\n")
-            return {"status": "wake_sent"}
+            return {"status": "wake_sent", "transport": "file"}
 
         @self._app.post("/api/v1/autopilot/dream")
         async def autopilot_dream() -> dict[str, Any]:
             """Force enter dreaming mode."""
+            if self._autopilot_service is not None:
+                await self._autopilot_service.force_dream()
+                return {"status": "dream_sent", "transport": "live"}
+
             from soothe.config import SOOTHE_HOME
 
             inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
             inbox_dir.mkdir(parents=True, exist_ok=True)
             signal = inbox_dir / "DREAM.md"
             signal.write_text("---\ntype: signal_interrupt\n---\n\nDream signal.\n")
-            return {"status": "dream_sent"}
+            return {"status": "dream_sent", "transport": "file"}
 
         @self._app.get("/api/v1/autopilot/inbox")
         async def autopilot_inbox(

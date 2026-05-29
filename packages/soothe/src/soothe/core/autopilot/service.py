@@ -84,6 +84,8 @@ class AutopilotService:
         subscribe_to_bus: bool = True,
         runner_factory: Any | None = None,
         workspace_reservation: Any | None = None,
+        consensus_model: Any | None = None,
+        goal_persist_store: Any | None = None,
     ) -> None:
         """Initialize AutopilotService.
 
@@ -110,6 +112,10 @@ class AutopilotService:
                 When provided, the scheduling loop refuses to dispatch a
                 goal whose workspace overlaps an active reservation. When
                 ``None``, no workspace gating is applied.
+            consensus_model: Optional LLM for RFC-204 consensus validation.
+                When ``None``, completed goals suspend until a model is configured.
+            goal_persist_store: Optional ``AsyncPersistStore`` for persisting
+                the GoalEngine DAG snapshot across daemon restarts.
         """
         self._goal_engine = goal_engine
         self._config = config
@@ -138,6 +144,12 @@ class AutopilotService:
         self._runner_factory = runner_factory
         self._worker_pool: Any = None  # WorkerPool | None
         self._workspace_reservation = workspace_reservation
+        self._consensus_model = consensus_model
+        self._goal_persist_store = goal_persist_store
+        self._scheduler: Any = None  # SchedulerService | None
+        self._context_store: Any = None
+        self._context_projector: Any = None
+        self._channel_inbox: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
         if runner_factory is not None:
             from soothe.core.autopilot.worker_pool import WorkerPool
@@ -266,6 +278,8 @@ class AutopilotService:
             logger.warning("AutopilotService already running")
             return
 
+        await self._restore_persisted_goals()
+
         self._running = True
         self._dreaming = False
 
@@ -300,6 +314,8 @@ class AutopilotService:
 
         self._running = False
         self._dreaming = False
+
+        await self._persist_goals()
 
         # Cancel scheduling task
         if self._scheduling_task:
@@ -369,7 +385,7 @@ class AutopilotService:
         Raises:
             ValueError: If goal depth limit would be exceeded.
         """
-        return await self._goal_engine.create_goal(
+        goal = await self._goal_engine.create_goal(
             description,
             priority=priority,
             parent_id=parent_id,
@@ -378,6 +394,10 @@ class AutopilotService:
             informs=informs,
             source_file=source_file,
         )
+        if self._dreaming:
+            await self.wake_from_dreaming(trigger="new_task")
+        await self._persist_goals()
+        return goal
 
     async def list_goals(self, *, status: str | None = None) -> list[Goal]:
         """Read-through to the underlying GoalEngine for HTTP/CLI surfaces."""
@@ -434,6 +454,7 @@ class AutopilotService:
             source="layer3_reflect",
         )
         await self._goal_engine.fail_goal(goal_id, evidence=evidence, allow_retry=False)
+        await self._persist_goals()
         return await self._goal_engine.get_goal(goal_id)
 
     # ---- Internals ----------------------------------------------------
@@ -543,9 +564,15 @@ class AutopilotService:
 
         for msg in messages:
             try:
+                if msg.type == "signal_resume":
+                    await self.wake_from_dreaming(trigger="wake_signal")
+                    continue
+                if msg.type == "signal_interrupt":
+                    await self.force_dream()
+                    continue
                 if msg.type != "task_submit":
                     logger.debug(
-                        "Inbox: skipping non-task message type=%s (signals not wired yet)",
+                        "Inbox: skipping unsupported message type=%s",
                         msg.type,
                     )
                     continue
@@ -611,8 +638,29 @@ class AutopilotService:
 
     async def _check_scheduled_tasks(self) -> None:
         """Check scheduled tasks and create goals for due tasks."""
-        # TODO: Implement scheduled task check when scheduler is integrated
-        pass
+        if not self._config.scheduler_enabled:
+            return
+
+        scheduler = self._get_or_init_scheduler()
+        if scheduler is None:
+            return
+
+        due = scheduler.get_due_tasks()
+        for task in due:
+            scheduler.mark_running(task.id)
+            try:
+                await self.submit_task(task.description, priority=task.priority)
+                if task.schedule.kind in ("every", "cron"):
+                    scheduler.schedule_next(task.id)
+                else:
+                    scheduler.mark_completed(task.id)
+            except Exception:
+                logger.warning(
+                    "Failed to create goal from scheduled task %s",
+                    task.id,
+                    exc_info=True,
+                )
+                scheduler.cancel_task(task.id)
 
     async def _schedule_ready_goals(self) -> None:
         """Schedule all ready goals from GoalEngine.
@@ -804,10 +852,10 @@ class AutopilotService:
 
                 # React to outcome by transitioning the goal.
                 if outcome == "completed":
-                    try:
-                        await self._goal_engine.complete_goal(goal_id)
-                    except Exception:
-                        logger.exception("complete_goal failed for goal %s", goal_id)
+                    await self._apply_consensus_and_finalize(
+                        goal_id,
+                        evidence_summary=str(data.get("evidence_summary", "")),
+                    )
                 else:  # failed / needs_replan → fail with evidence
                     evidence = EvidenceBundle(
                         structured={
@@ -857,6 +905,42 @@ class AutopilotService:
             self._workspace_reservation.release(goal_id)
 
         self._dispatch_tasks.pop(goal_id, None)
+        await self._persist_goals()
+
+    async def _apply_consensus_and_finalize(
+        self,
+        goal_id: str,
+        *,
+        evidence_summary: str,
+    ) -> None:
+        """RFC-204: validate worker completion before accepting the goal."""
+        from soothe.core.goal_engine.consensus import evaluate_goal_completion
+
+        goal = await self._goal_engine.get_goal(goal_id)
+        if goal is None:
+            return
+
+        response_text = evidence_summary or goal.description
+        try:
+            decision, reasoning = await evaluate_goal_completion(
+                goal.description,
+                response_text,
+                evidence_summary,
+                model=self._consensus_model,
+            )
+        except Exception:
+            logger.exception("Consensus evaluation failed for goal %s", goal_id)
+            decision, reasoning = "suspend", "Consensus evaluation failed"
+
+        try:
+            if decision == "accept":
+                await self._goal_engine.complete_goal(goal_id)
+            elif decision == "send_back":
+                await self._goal_engine.send_back_goal(goal_id, reason=reasoning)
+            else:
+                await self._goal_engine.suspend_goal(goal_id, reason=reasoning)
+        except Exception:
+            logger.exception("Goal transition failed after consensus for %s", goal_id)
 
     @staticmethod
     def _infer_workspace(goal: Goal) -> str:
@@ -1119,6 +1203,114 @@ class AutopilotService:
         )
 
         logger.info("Woke from dreaming mode - trigger: %s", trigger)
+
+    async def force_dream(self) -> None:
+        """Force-enter dreaming mode (HTTP/CLI ``dream`` command)."""
+        if not self._config.dreaming_enabled:
+            logger.info("Dreaming disabled in config; ignoring force_dream")
+            return
+        await self._enter_dreaming_mode()
+
+    async def approve_confirmation(self, confirmation_id: str) -> bool:
+        """Approve a pending MUST-confirmation and create the goal."""
+        import json
+
+        from soothe.config import SOOTHE_HOME
+
+        path = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
+        if not path.exists():
+            return False
+        try:
+            confirmations = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return False
+
+        for item in confirmations:
+            if item.get("id") != confirmation_id:
+                continue
+            description = str(item.get("description") or "").strip()
+            if not description:
+                return False
+            priority = int(item.get("priority", 50))
+            await self.submit_task(description, priority=priority)
+            remaining = [c for c in confirmations if c.get("id") != confirmation_id]
+            path.write_text(json.dumps(remaining, indent=2))
+            return True
+        return False
+
+    async def reject_confirmation(self, confirmation_id: str) -> bool:
+        """Reject a pending MUST-confirmation without creating a goal."""
+        import json
+
+        from soothe.config import SOOTHE_HOME
+
+        path = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
+        if not path.exists():
+            return False
+        try:
+            confirmations = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return False
+
+        remaining = [c for c in confirmations if c.get("id") != confirmation_id]
+        if len(remaining) == len(confirmations):
+            return False
+        path.write_text(json.dumps(remaining, indent=2))
+        return True
+
+    _GOALS_SNAPSHOT_KEY = "autopilot:goals:snapshot"
+
+    async def _persist_goals(self) -> None:
+        """Persist GoalEngine DAG snapshot when a store is wired."""
+        if self._goal_persist_store is None:
+            return
+        try:
+            await self._goal_persist_store.save(
+                self._GOALS_SNAPSHOT_KEY,
+                self._goal_engine.snapshot(),
+            )
+        except Exception:
+            logger.warning("Failed to persist autopilot goals snapshot", exc_info=True)
+
+    async def _restore_persisted_goals(self) -> None:
+        """Restore GoalEngine DAG from persistence and recover stranded actives."""
+        if self._goal_persist_store is None:
+            return
+        try:
+            data = await self._goal_persist_store.load(self._GOALS_SNAPSHOT_KEY)
+            if isinstance(data, list) and data:
+                self._goal_engine.restore_from_snapshot(data)
+        except Exception:
+            logger.warning("Failed to restore autopilot goals snapshot", exc_info=True)
+        recovered = self._goal_engine.recover_active_goals()
+        if recovered:
+            logger.warning(
+                "[Autopilot] crash recovery: reset %d active goal(s) → pending: %s",
+                len(recovered),
+                ", ".join(recovered),
+            )
+
+    def _get_or_init_scheduler(self) -> Any:
+        """Lazily construct SchedulerService bound to SOOTHE_HOME."""
+        if self._scheduler is not None:
+            return self._scheduler
+        if not self._config.scheduler_enabled:
+            return None
+
+        import os
+        from pathlib import Path
+
+        from soothe.core.goal_engine.scheduled_tasks import SchedulerService
+
+        inbox_dir_raw = getattr(self._config, "inbox_dir", "") or ""
+        base = Path(os.path.expandvars(inbox_dir_raw)).expanduser().parent
+        if not str(base) or str(base) == ".":
+            from soothe.config import SOOTHE_HOME
+
+            base = SOOTHE_HOME / "autopilot"
+        persist_path = base / "scheduled_tasks.json"
+        self._scheduler = SchedulerService(persist_path=persist_path)
+        return self._scheduler
 
     def status(self) -> dict[str, Any]:
         """Get AutopilotService status.

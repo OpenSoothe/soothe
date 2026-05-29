@@ -669,6 +669,14 @@ class WebSocketClient:
             timeout=timeout,
         )
 
+    async def get_mcp_status(self, *, timeout: float = 15.0) -> dict[str, Any]:
+        """Request MCP server status from the daemon."""
+        return await self.request_response(
+            {"type": "mcp_status"},
+            response_type="mcp_status_response",
+            timeout=timeout,
+        )
+
     async def invoke_skill(
         self,
         skill: str,
