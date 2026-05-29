@@ -45,6 +45,8 @@ class Goal(BaseModel):
         lock_status: File lock status for this goal (RFC-222).
         locked_files: Files currently locked by this goal (RFC-222).
         lock_acquired_at: Timestamp when lock acquired (RFC-222).
+        workspace: Absolute filesystem workspace for execution (RFC-222).
+            When unset, the worker falls back to a per-loop persisted sandbox.
     """
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
@@ -76,6 +78,8 @@ class Goal(BaseModel):
     # RFC-222 H4: incremented each time crash recovery resets this goal from
     # ``active`` back to ``pending`` on daemon start.
     attempts_after_crash: int = 0
+    # RFC-222: client workspace for autopilot dispatch (optional).
+    workspace: str | None = None
 
 
 # RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration

@@ -35,3 +35,8 @@ dev = [
     "textual-dev>=1.8.0",
     "soothe[langfuse]",
 ]
+
+[tool.pytest.ini_options]
+# Use importlib import mode to handle duplicate module names in monorepo
+testpaths = ["packages", "community", "tests"]
+addopts = "--import-mode=importlib"

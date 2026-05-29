@@ -360,6 +360,7 @@ class AutopilotService:
         depends_on: list[str] | None = None,
         informs: list[str] | None = None,
         source_file: str | None = None,
+        workspace: str | None = None,
     ) -> Goal:
         """Create a goal in this service's GoalEngine (RFC-222 revised).
 
@@ -378,13 +379,21 @@ class AutopilotService:
                 child can still run if they haven't completed yet.
             source_file: Optional file path for goal-file-discovery use cases
                 (RFC-204).
+            workspace: Optional client workspace path. When set, workers execute
+                in this directory and scheduling-time reservation uses it.
 
         Returns:
             The newly-created ``Goal``. Callers can read ``.id`` to track it.
 
         Raises:
-            ValueError: If goal depth limit would be exceeded.
+            ValueError: If goal depth limit would be exceeded or workspace invalid.
         """
+        resolved_workspace: str | None = None
+        if workspace is not None and str(workspace).strip():
+            from soothe.core.workspace import validate_client_workspace
+
+            resolved_workspace = str(validate_client_workspace(workspace))
+
         goal = await self._goal_engine.create_goal(
             description,
             priority=priority,
@@ -393,6 +402,7 @@ class AutopilotService:
             depends_on=depends_on,
             informs=informs,
             source_file=source_file,
+            workspace=resolved_workspace,
         )
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
@@ -586,7 +596,17 @@ class AutopilotService:
                     priority = int(priority_raw)
                 except (TypeError, ValueError):
                     priority = 50
-                goal = await self.submit_task(description, priority=priority)
+                workspace_raw = payload.get("workspace")
+                workspace = (
+                    str(workspace_raw).strip()
+                    if isinstance(workspace_raw, str) and workspace_raw.strip()
+                    else None
+                )
+                goal = await self.submit_task(
+                    description,
+                    priority=priority,
+                    workspace=workspace,
+                )
                 logger.info(
                     "[Autopilot] inbox → goal %s (priority=%d): %s",
                     goal.id,
@@ -758,6 +778,7 @@ class AutopilotService:
             loop_id=worker.loop_id,
             thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
             user_input="",
+            client_workspace=goal.workspace,
             autopilot_job=AutopilotJob(
                 goal_id=goal.id,
                 goal_description=goal.description,
@@ -944,13 +965,13 @@ class AutopilotService:
 
     @staticmethod
     def _infer_workspace(goal: Goal) -> str:
-        """Best-effort workspace path for a goal (Phase C scaffolding).
+        """Workspace path for scheduling-time reservation (RFC-222).
 
-        Goals don't carry a workspace field today; the runner resolves it
-        from the request. For Phase C scheduling-time conflict gating, use
-        a stable per-goal sentinel so each goal gets its own reservation
-        slot. Phase C+ will plumb through actual workspace metadata.
+        Uses the goal's client workspace when set; otherwise a per-goal sentinel
+        so goals without an explicit workspace still get distinct reservation slots.
         """
+        if goal.workspace:
+            return goal.workspace
         return f"$autopilot/goal/{goal.id}"
 
     async def _schedule_goal(self, goal_id: str) -> None:

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from soothe_daemon import SootheDaemon
-from tests.integration.conftest import (
+from ..daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
     force_isolated_home,

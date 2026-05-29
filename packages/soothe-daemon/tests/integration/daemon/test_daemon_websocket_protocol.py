@@ -17,7 +17,7 @@ from soothe_daemon import SootheDaemon
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import WebSocketConfig
 from soothe_daemon.transports.websocket import WebSocketTransport
-from tests.integration.conftest import (
+from ..daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     build_daemon_config,

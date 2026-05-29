@@ -16,12 +16,12 @@ from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.loop_gc import purge_loop_execution_data
-from tests.integration.conftest import (
+from ..daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
     force_isolated_home,
 )
-from tests.integration.ws_loop_client import loop_new, request_loop_get
+from ..ws_loop_client import loop_new, request_loop_get
 
 
 async def _connect_client(port: int) -> WebSocketClient:

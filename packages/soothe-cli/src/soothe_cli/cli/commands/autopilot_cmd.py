@@ -7,6 +7,7 @@ Requires ``soothed start``. Real-time monitoring is via TUI ``/autopilot``.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -22,6 +23,16 @@ from soothe_sdk.client import (
 from soothe_sdk.client.protocol import preview_first
 
 app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
+
+
+def _resolve_submit_workspace(explicit: str | None) -> str:
+    """Resolve workspace for autopilot submit (IG-344 aligned with headless/TUI)."""
+    raw = (
+        explicit.strip()
+        if explicit and explicit.strip()
+        else os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
+    )
+    return str(Path(raw).expanduser().resolve())
 
 
 def _require_daemon_http() -> AutopilotHttpClient:
@@ -53,6 +64,12 @@ def run(
         None,
         "--max-iterations",
         help="Ignored — use daemon config agent.autonomous.max_iterations.",
+    ),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Filesystem workspace for the goal (default: current directory).",
     ),
     wait: bool = typer.Option(True, "--wait/--no-wait", help="Poll until the goal completes."),
 ) -> None:
