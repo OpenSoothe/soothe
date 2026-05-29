@@ -55,4 +55,3 @@ def test_submit_includes_workspace_when_provided() -> None:
         "/api/v1/autopilot/submit",
         body={"description": "task", "priority": 50, "workspace": "/tmp/proj"},
     )
-

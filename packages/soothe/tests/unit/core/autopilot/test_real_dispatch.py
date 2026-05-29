@@ -167,9 +167,7 @@ class TestEndToEndCompleted:
         goal = await svc.submit_task("list files", workspace=ws)
 
         await svc._schedule_ready_goals()
-        await _wait_until(
-            lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done())
-        )
+        await _wait_until(lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done()))
 
         runner = next(iter(svc._worker_pool._workers.values())).runner
         assert runner.last_request is not None

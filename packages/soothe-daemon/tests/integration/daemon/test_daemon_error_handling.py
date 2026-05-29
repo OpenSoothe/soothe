@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from soothe_daemon import SootheDaemon, WebSocketClient
+
 from ..daemon_fixtures import (
     alloc_ephemeral_port,
     await_status_state,
