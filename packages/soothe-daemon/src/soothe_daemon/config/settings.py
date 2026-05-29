@@ -15,6 +15,7 @@ from pydantic_settings import BaseSettings
 from soothe.config import SOOTHE_HOME
 
 from soothe_daemon.config.models import (
+    ChannelsConfig,
     DistributedConfig,
     EphemeralLoopGcConfig,
     StaleWorkerReapConfig,
@@ -52,6 +53,10 @@ class SootheDaemonConfig(BaseSettings):
     # --- Transport (RFC-0013) ------------------------------------------------
 
     transports: TransportConfig = Field(default_factory=TransportConfig)
+
+    # --- Channels (RFC-620) --------------------------------------------------
+
+    channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
 
     # --- Concurrency / safety (IG-138, IG-258) ------------------------------
 
