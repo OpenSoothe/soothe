@@ -64,10 +64,46 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Map TUI theme names to Pygments code themes for visually consistent code blocks.
+_CODE_THEME_MAP: dict[str, str] = {
+    "langchain": "monokai",
+    "langchain-light": "default",
+    "textual-dark": "monokai",
+    "textual-light": "default",
+    "textual-ansi": "default",
+    "atom-one-dark": "one-dark",
+    "atom-one-light": "default",
+    "catppuccin-frappe": "monokai",
+    "catppuccin-latte": "default",
+    "catppuccin-macchiato": "monokai",
+    "catppuccin-mocha": "monokai",
+    "dracula": "dracula",
+    "flexoki": "monokai",
+    "gruvbox": "gruvbox-dark",
+    "monokai": "monokai",
+    "nord": "nord",
+    "rose-pine": "monokai",
+    "rose-pine-dawn": "default",
+    "rose-pine-moon": "monokai",
+    "solarized-dark": "solarized-dark",
+    "solarized-light": "solarized-light",
+    "tokyo-night": "monokai",
+}
+_DEFAULT_DARK_CODE_THEME = "monokai"
+_DEFAULT_LIGHT_CODE_THEME = "default"
 
-def _click_has_text_selection(widget: Static | Vertical) -> bool:
-    """Return True when the screen still has an active text selection."""
-    return screen_has_text_selection(widget.screen)
+
+def _code_theme_for_app(widget_or_app: object | None = None) -> str:
+    """Return the Pygments code theme matching the active TUI theme."""
+    colors = theme.get_theme_colors(widget_or_app)
+    try:
+        app = widget_or_app.app if hasattr(type(widget_or_app), "app") else widget_or_app  # type: ignore[attr-defined]
+        theme_name = app.theme  # type: ignore[attr-defined]
+        if theme_name in _CODE_THEME_MAP:
+            return _CODE_THEME_MAP[theme_name]
+    except Exception:  # noqa: BLE001
+        pass
+    return _DEFAULT_DARK_CODE_THEME if colors.background < "#888888" else _DEFAULT_LIGHT_CODE_THEME
 
 
 _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
@@ -241,48 +277,6 @@ def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Co
     )
 
 
-def _show_timestamp_toast(widget: Static | Vertical) -> None:
-    """Show a toast with the message's creation timestamp.
-
-    No-ops silently if the widget is not mounted or has no associated message
-    data in the store.
-
-    Args:
-        widget: The message widget whose timestamp to display.
-    """
-    from datetime import UTC, datetime
-
-    try:
-        app = widget.app
-    except Exception:  # noqa: BLE001  # Textual raises when widget has no app
-        return
-    if not widget.id:
-        return
-    store = app._message_store  # type: ignore[attr-defined]
-    data = store.get_message(widget.id)
-    if not data:
-        return
-    dt = datetime.fromtimestamp(data.timestamp, tz=UTC).astimezone()
-    label = f"{dt:%b} {dt.day}, {dt.hour % 12 or 12}:{dt:%M:%S} {dt:%p}"
-    app.notify(label, timeout=3)
-
-
-class _TimestampClickMixin:
-    """Mixin that shows a timestamp toast on click.
-
-    Add to any message widget that should display its creation timestamp when
-    clicked. Widgets needing additional click behavior (e.g. `ToolCallMessage`,
-    `AppMessage`) should override `on_click` and call `_show_timestamp_toast`
-    directly instead.
-    """
-
-    def on_click(self, event: Click) -> None:  # noqa: ARG002  # Textual event handler
-        """Show timestamp toast on click."""
-        if _click_has_text_selection(self):  # type: ignore[arg-type]
-            return
-        _show_timestamp_toast(self)  # type: ignore[arg-type]
-
-
 def _mode_color(mode: str | None, widget_or_app: object | None = None) -> str:
     """Return the hex color string for a mode, falling back to primary.
 
@@ -334,7 +328,7 @@ def _strip_success_exit_line(text: str) -> str:
     return _SUCCESS_EXIT_RE.sub("", text)
 
 
-class UserMessage(_TimestampClickMixin, Static):
+class UserMessage(Static):
     """Widget displaying a user message with enhanced styling."""
 
     ALLOW_SELECT = True
@@ -698,7 +692,7 @@ class SkillMessage(Vertical):
         try:
             from rich.markdown import Markdown as RichMarkdown
 
-            self._md_widget.update(RichMarkdown(body))
+            self._md_widget.update(RichMarkdown(body, code_theme=_code_theme_for_app(self)))
         except Exception:
             logger.warning(
                 "Failed to render skill body as markdown; falling back to plain text",
@@ -754,8 +748,6 @@ class SkillMessage(Vertical):
         event.stop()
         if self._stripped_body.strip():
             self.toggle_body()
-        else:
-            _show_timestamp_toast(self)
 
 
 class AssistantMessage(Vertical):
@@ -842,16 +834,13 @@ class AssistantMessage(Vertical):
         if self._render_markdown:
             from rich.markdown import Markdown as RichMarkdown
 
-            self._body.update(RichMarkdown(self._content, code_theme="monokai"))
+            self._body.update(RichMarkdown(self._content, code_theme=_code_theme_for_app(self)))
         else:
             self._body.update(self._content)
 
     def on_click(self, event: Click) -> None:
-        """Show timestamp toast on click."""
+        """Handle click on assistant message."""
         event.stop()
-        if _click_has_text_selection(self):
-            return
-        _show_timestamp_toast(self)
 
     async def _flush_pending_content(self) -> None:
         """Flush buffered content to body widget (batched update)."""
@@ -908,7 +897,7 @@ class AssistantMessage(Vertical):
         self._render_to_body()
 
 
-class DiffMessage(_TimestampClickMixin, Static):
+class DiffMessage(Static):
     """Widget displaying a diff with syntax highlighting."""
 
     ALLOW_SELECT = True
@@ -1315,9 +1304,9 @@ class CognitionStepMessage(Vertical):
         self._maybe_auto_collapse_step_card()
 
     def on_click(self, event: Click) -> None:  # noqa: ARG002
-        """Toggle tool-row folding, card collapse, or show timestamp."""
+        """Toggle tool-row folding or card collapse."""
         event.stop()
-        if _click_has_text_selection(self):
+        if screen_has_text_selection(self.screen):
             return
         if (
             STEP_CARD_SHOW_TOOL_ROW_DETAILS
@@ -1338,8 +1327,6 @@ class CognitionStepMessage(Vertical):
         )
         if has_collapsible_content:
             self.toggle_collapse()
-        else:
-            _show_timestamp_toast(self)
 
     def toggle_collapse(self) -> None:
         """Toggle the entire card body collapse state."""
@@ -2819,7 +2806,7 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.display = False
 
 
-class CognitionReasonMessage(_TimestampClickMixin, Vertical):
+class CognitionReasonMessage(Vertical):
     """Single card for plan assessment and plan reasoning (keep/new suffix).
 
     Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
@@ -2949,7 +2936,7 @@ class _StepLineState:
         self.summary = summary
 
 
-class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
+class CognitionGoalTreeMessage(Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
     Title line matches ``CognitionStepMessage`` / ``CognitionReasonMessage``:
@@ -3288,7 +3275,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
             pass
 
 
-class ErrorMessage(_TimestampClickMixin, Static):
+class ErrorMessage(Static):
     """Widget displaying an error message."""
 
     ALLOW_SELECT = True
@@ -3373,11 +3360,10 @@ class AppMessage(Static):
         super().__init__(rendered, **kwargs)
 
     def on_click(self, event: Click) -> None:
-        """Open style-embedded hyperlinks on single click and show timestamp."""
-        if _click_has_text_selection(self):
+        """Open style-embedded hyperlinks on single click."""
+        if screen_has_text_selection(self.screen):
             return
         open_style_link(event)
-        _show_timestamp_toast(self)
 
 
 class SummarizationMessage(AppMessage):

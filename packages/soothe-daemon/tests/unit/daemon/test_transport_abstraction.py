@@ -92,6 +92,12 @@ class TestProtocolV2:
 class TestTransportConfig:
     """Transport configuration helpers."""
 
+    def test_http_rest_enabled_by_default(self) -> None:
+        """Fresh daemon config enables HTTP REST without explicit YAML."""
+        assert HttpRestConfig().enabled is True
+        assert TransportConfig().http_rest.enabled is True
+        assert SootheDaemonConfig().transports.http_rest.enabled is True
+
     def test_effective_http_rest_listen_when_unified(self) -> None:
         """HTTP REST reaches the WebSocket bind address when both transports are on."""
         cfg = TransportConfig(

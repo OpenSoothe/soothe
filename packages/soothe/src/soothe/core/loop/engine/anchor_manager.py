@@ -41,15 +41,23 @@ class CheckpointAnchorManager:
         self,
         iteration: int,
         thread_id: str,
-        checkpointer: BaseCheckpointSaver,
+        checkpointer: BaseCheckpointSaver | None,
     ) -> None:
         """Capture iteration start anchor before Plan phase.
 
         Args:
             iteration: Current iteration number.
             thread_id: Current thread ID.
-            checkpointer: LangGraph checkpointer instance.
+            checkpointer: LangGraph checkpointer instance, or ``None`` to skip.
         """
+        if checkpointer is None:
+            logger.debug(
+                "No checkpointer available, skipping iter_start anchor for thread=%s iter=%d",
+                thread_id,
+                iteration,
+            )
+            return
+
         # Get current CoreAgent checkpoint
         config = {"configurable": {"thread_id": thread_id}}
         checkpoint_tuple = await checkpointer.aget_tuple(config)
@@ -88,7 +96,7 @@ class CheckpointAnchorManager:
         self,
         iteration: int,
         thread_id: str,
-        checkpointer: BaseCheckpointSaver,
+        checkpointer: BaseCheckpointSaver | None,
         execution_summary: dict[str, Any] | None = None,
     ) -> None:
         """Capture iteration end anchor after successful Execute phase.
@@ -96,9 +104,17 @@ class CheckpointAnchorManager:
         Args:
             iteration: Current iteration number.
             thread_id: Current thread ID.
-            checkpointer: LangGraph checkpointer instance.
+            checkpointer: LangGraph checkpointer instance, or ``None`` to skip.
             execution_summary: Execution summary (status, tools, reasoning).
         """
+        if checkpointer is None:
+            logger.debug(
+                "No checkpointer available, skipping iter_end anchor for thread=%s iter=%d",
+                thread_id,
+                iteration,
+            )
+            return
+
         # Get latest CoreAgent checkpoint
         config = {"configurable": {"thread_id": thread_id}}
         checkpoint_tuple = await checkpointer.aget_tuple(config)

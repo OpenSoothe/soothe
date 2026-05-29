@@ -9,6 +9,12 @@ from typing import Any
 
 from soothe_sdk.client.helpers import websocket_url_from_config
 
+_HTTP_REST_DISABLED_HINT = (
+    "HTTP REST is disabled on the daemon. Autopilot CLI commands require "
+    "transports.http_rest.enabled: true in daemon_config.yml — then restart "
+    "with 'soothed restart'."
+)
+
 
 def http_rest_url_from_config(cfg: Any) -> str:
     """Derive HTTP REST base URL from a config object's WebSocket settings.
@@ -25,6 +31,34 @@ def http_rest_url_from_config(cfg: Any) -> str:
     if ws_url.startswith("ws://"):
         return "http://" + ws_url[len("ws://") :]
     return ws_url
+
+
+def ensure_http_rest_available(base_url: str, *, timeout: float = 5.0) -> None:
+    """Verify the daemon exposes HTTP REST before autopilot commands run.
+
+    Args:
+        base_url: HTTP base URL (e.g. ``http://127.0.0.1:8765``).
+        timeout: Request timeout in seconds.
+
+    Raises:
+        RuntimeError: When REST is unreachable or disabled (404 on /api/v1/health).
+    """
+    url = f"{base_url.rstrip('/')}/api/v1/health"
+    req = urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:  # noqa: PLR2004
+                msg = f"HTTP REST health check failed with status {resp.status}"
+                raise RuntimeError(msg)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise RuntimeError(_HTTP_REST_DISABLED_HINT) from exc
+        detail = exc.read().decode("utf-8", errors="replace")
+        msg = f"HTTP REST health check failed ({exc.code}): {detail}"
+        raise RuntimeError(msg) from exc
+    except urllib.error.URLError as exc:
+        msg = f"Cannot reach daemon HTTP REST at {base_url}: {exc.reason}"
+        raise RuntimeError(msg) from exc
 
 
 class AutopilotHttpClient:
@@ -54,6 +88,9 @@ class AutopilotHttpClient:
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 404 and path.startswith("/api/v1/autopilot"):
+                msg = _HTTP_REST_DISABLED_HINT
+                raise RuntimeError(msg) from exc
             msg = f"HTTP {exc.code} for {path}: {detail}"
             raise RuntimeError(msg) from exc
 
