@@ -299,7 +299,7 @@ class HttpRestTransport(TransportServer):
             """Submit a new task to autopilot.
 
             Request body:
-                {"description": "task text", "priority": 50}
+                {"description": "task text", "priority": 50, "workspace": "/path/to/project"}
 
             Phase C: when the daemon-owned AutopilotService is available,
             calls ``submit_task`` directly so the goal lands in the live DAG
@@ -309,13 +309,26 @@ class HttpRestTransport(TransportServer):
             body = await request.json()
             description = body.get("description", "")
             priority = int(body.get("priority", 50))
+            workspace_raw = body.get("workspace")
+            workspace: str | None = None
+            if isinstance(workspace_raw, str) and workspace_raw.strip():
+                from soothe.core.workspace import validate_client_workspace
+
+                try:
+                    workspace = str(validate_client_workspace(workspace_raw))
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
 
             if not description:
                 raise HTTPException(status_code=400, detail="description is required")
 
             # RFC-222 revised (Phase C): live submit via AutopilotService.
             if self._autopilot_service is not None:
-                goal = await self._autopilot_service.submit_task(description, priority=priority)
+                goal = await self._autopilot_service.submit_task(
+                    description,
+                    priority=priority,
+                    workspace=workspace,
+                )
                 return {
                     "status": "submitted",
                     "goal_id": goal.id,
