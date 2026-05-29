@@ -15,13 +15,11 @@ When intent_type is "quiz", also provide:
 - quiz_response: concise, factual direct answer from training knowledge. For greetings/thanks, a brief polite reply. For factual questions, a direct answer.
 
 When intent_type is "agentic", also provide:
-- goal_description: normalized, 5-15 words, the first person narrative.
 - task_complexity: minimal|simple|medium|complex where minimal=one direct answer without tools; simple=one focused execute step; medium=several steps or moderate tool use; complex=architecture, migration, broad refactor, or multi-phase work.
 
 JSON schema:
 {{
   "intent_type": "quiz"|"agentic",
-  "goal_description": string|null,
   "task_complexity": "minimal"|"simple"|"medium"|"complex",
   "quiz_response": string|null
 }}
