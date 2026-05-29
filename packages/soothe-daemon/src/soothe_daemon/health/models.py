@@ -88,10 +88,11 @@ class HealthReport:
 
     Attributes:
         timestamp: ISO 8601 timestamp of report generation
-        soothe_version: Soothe package version
+        soothe_version: Soothe framework package version
         config_path: Path to config file used (or None if not loaded)
         overall_status: Aggregated status across all categories
         categories: List of category results
+        daemon_version: Soothe daemon package version
     """
 
     timestamp: str
@@ -99,12 +100,14 @@ class HealthReport:
     config_path: str | None
     overall_status: CheckStatus
     categories: list[CategoryResult]
+    daemon_version: str = "0.0.0"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "timestamp": self.timestamp,
             "soothe_version": self.soothe_version,
+            "daemon_version": self.daemon_version,
             "config_path": self.config_path,
             "overall_status": self.overall_status.value,
             "categories": [cat.to_dict() for cat in self.categories],

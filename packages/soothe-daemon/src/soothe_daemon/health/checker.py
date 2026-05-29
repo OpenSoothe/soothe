@@ -7,6 +7,7 @@ from typing import Any
 
 from soothe.config import SootheConfig
 
+from soothe_daemon import __version__ as daemon_version
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckStatus, HealthReport
@@ -137,6 +138,7 @@ class HealthChecker:
         return HealthReport(
             timestamp=datetime.now(UTC).isoformat(),
             soothe_version=soothe_version,
+            daemon_version=daemon_version,
             config_path=config_path,
             overall_status=overall_status,
             categories=category_results,
