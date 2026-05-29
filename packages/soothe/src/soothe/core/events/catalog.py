@@ -886,3 +886,4 @@ _reg(AUTOPILOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORM
 # These modules call register_event() at import time
 # Must be at the end after all core events are registered
 # ---------------------------------------------------------------------------
+import soothe.skills.events as _skill_events  # noqa: F401, E402

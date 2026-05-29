@@ -944,6 +944,7 @@ class Executor:
         git_status: dict[str, Any] | None = None,
         continue_loop_mode: bool = False,
         synthesis_scenario: str | None = None,
+        skill_activation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build LangGraph input for execute waves (RFC-225 carries continue_loop_mode)."""
         out: dict[str, Any] = {"messages": messages}
@@ -957,7 +958,45 @@ class Executor:
             out["continue_loop_mode"] = True
         if synthesis_scenario:
             out["synthesis_scenario"] = synthesis_scenario
+        if skill_activation is not None:
+            out["skill_activation"] = skill_activation
         return out
+
+    @staticmethod
+    def _seed_skill_activation(loop_state: LoopState) -> dict[str, Any] | None:
+        """Rehydrate ``skill_activation`` from LoopState for graph input (RFC-105).
+
+        Returns ``None`` when no skill-activation data exists on the LoopState,
+        so the middleware's ``abefore_agent`` will lazy-init a fresh dict.
+        """
+        if not loop_state.activated_skill_names and not loop_state.invoked_skill_names:
+            return None
+        return {
+            "sent": set(loop_state.sent_skill_names),
+            "activated": set(loop_state.activated_skill_names),
+            "invoked": set(loop_state.invoked_skill_names),
+            "invoked_bodies": dict(loop_state.invoked_skill_bodies),
+            "just_invoked": set(),
+        }
+
+    @staticmethod
+    def _snapshot_skill_activation(
+        graph_output: dict[str, Any] | None,
+        loop_state: LoopState,
+    ) -> None:
+        """Copy ``skill_activation`` from graph output back into LoopState (RFC-105).
+
+        Best-effort: missing or malformed ``skill_activation`` is silently skipped.
+        """
+        if not graph_output:
+            return
+        activation = graph_output.get("skill_activation")
+        if not isinstance(activation, dict):
+            return
+        loop_state.sent_skill_names = set(activation.get("sent", ()))
+        loop_state.activated_skill_names = set(activation.get("activated", ()))
+        loop_state.invoked_skill_names = set(activation.get("invoked", ()))
+        loop_state.invoked_skill_bodies = dict(activation.get("invoked_bodies", {}))
 
     def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
         """Extract token usage from last AIMessage response metadata.
@@ -1707,6 +1746,7 @@ class Executor:
                 phase="execute_step",
             )
             graph_input_messages.append(human_msg)
+            skill_activation = self._seed_skill_activation(loop_state) if loop_state else None
             stream = self._core_agent_astream_with_interrupt_resume(
                 self._execute_graph_input(
                     graph_input_messages,
@@ -1714,6 +1754,7 @@ class Executor:
                     workspace=workspace,
                     git_status=git_status,
                     continue_loop_mode=continue_loop_mode,
+                    skill_activation=skill_activation,
                 ),
                 config,
             )
@@ -1747,6 +1788,17 @@ class Executor:
                     stream_outcomes = chunk_outcomes
 
             duration_ms = int((time.perf_counter() - start) * 1000)
+
+            # RFC-105: Snapshot skill_activation from graph state back into LoopState
+            if loop_state is not None:
+                try:
+                    graph_state = await self.core_agent.graph.aget_state(
+                        config={"configurable": {"thread_id": fork_thread_id}},
+                    )
+                    if graph_state and graph_state.values:
+                        self._snapshot_skill_activation(graph_state.values, loop_state)
+                except Exception:  # noqa: BLE001
+                    logger.debug("[Skill] Failed to snapshot skill_activation from graph state")
 
             # Note: tool_call_ids are now in unified format within messages chunks
             # No separate binding events needed (IG-416 simplified design)

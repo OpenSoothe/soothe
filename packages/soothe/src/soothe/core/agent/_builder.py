@@ -23,7 +23,6 @@ from soothe.core.resolver import (
     resolve_tools,
 )
 from soothe.middleware import build_soothe_middleware_stack
-from soothe.skills import get_built_in_skills_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -195,10 +194,9 @@ class AgentBuilder:
         )
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
-        # Merge built-in skills with user-provided skills
-        all_skills = get_built_in_skills_paths()
-        if self._config.skills:
-            all_skills.extend(self._config.skills)
+        # RFC-105: Skill emission is owned by SystemPromptOptimizationMiddleware via
+        # ProgressiveSkillRegistry. Deepagents' SkillsMiddleware must not also emit.
+        # Pass skills=None so the middleware is never installed.
 
         # Create deep_agent graph
         deep_agent_start = time.perf_counter()
@@ -208,7 +206,7 @@ class AgentBuilder:
             system_prompt=self._config.resolve_system_prompt(),
             middleware=all_middleware,
             subagents=all_subagents or None,
-            skills=all_skills or None,
+            skills=None,
             memory=self._config.memory or None,
             checkpointer=checkpointer,
             store=store,

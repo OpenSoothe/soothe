@@ -457,6 +457,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 if tool_section:
                     semi_static_sections.append(tool_section.strip())
 
+        # RFC-105: Progressive skill loading blocks
+        avail_block, skill_ctx_blocks = self._compose_skills_block(state)
+        if avail_block:
+            static_sections.append(avail_block)
+        semi_static_sections.extend(skill_ctx_blocks)
+
         # ── Assemble: static + semi-static (no date line, no execution hints) ──
         parts = ["\n\n".join(static_sections)]
         if semi_static_sections:
@@ -559,6 +565,77 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         # No specific scenario guidance
         return None
+
+    def _compose_skills_block(self, state: dict[str, Any] | None) -> tuple[str | None, list[str]]:
+        """RFC-105: Compose <AVAILABLE_SKILLS> static block + <SKILL_CONTEXT> semi-static blocks.
+
+        Args:
+            state: Request state dict (may contain ``skill_activation``).
+
+        Returns:
+            Tuple of (available_skills_block_or_None, list_of_skill_context_blocks).
+        """
+        if not state:
+            return None, []
+        activation = state.get("skill_activation")
+        if not isinstance(activation, dict):
+            return None, []
+
+        activation.setdefault("sent", set())
+        activated = activation.get("activated", set())
+        invoked = activation.get("invoked", set())
+        just_invoked = activation.get("just_invoked", set())
+        bodies = activation.get("invoked_bodies", {})
+
+        # Build candidate entries via SkillIndex
+        from soothe.skills.index import SkillIndex
+        from soothe.skills.registry import ProgressiveSkillRegistry
+
+        skill_index = SkillIndex()
+        entries = skill_index.rebuild_if_stale()
+
+        registry = ProgressiveSkillRegistry()
+        unconditional, _ = registry.partition(entries)
+        activated_entries = [e for e in entries if e.name in activated]
+        # Merge: unconditional + activated, dedup by name (activated wins for overlap)
+        by_name = {e.name: e for e in unconditional}
+        by_name.update({e.name: e for e in activated_entries})
+        candidates = sorted(by_name.values(), key=lambda e: e.name.lower())
+
+        new_entries = registry.new_for_thread(activation, candidates)
+
+        available_block: str | None = None
+        if new_entries:
+            ctx_limit = int(self._config.agent.loop.context_window_limit)
+            budget_pct = float(self._config.progressive_skills.budget_pct)
+            budget_chars = max(0, int(ctx_limit * budget_pct))
+            per_entry_cap = int(self._config.progressive_skills.max_listing_chars_per_entry)
+            min_per_entry = int(self._config.progressive_skills.min_listing_chars_per_entry)
+
+            from soothe.skills.budget import format_skills_within_budget
+
+            text, _telemetry = format_skills_within_budget(
+                new_entries,
+                budget_chars=budget_chars,
+                per_entry_cap_chars=per_entry_cap,
+                min_per_entry_chars=min_per_entry,
+            )
+            if text:
+                available_block = f"<AVAILABLE_SKILLS>\n{text}\n</AVAILABLE_SKILLS>"
+                registry.mark_sent(activation, [e.name for e in new_entries])
+
+        skill_context_blocks: list[str] = []
+        for name in sorted(invoked - just_invoked):
+            body = bodies.get(name)
+            if not body:
+                continue
+            skill_context_blocks.append(f'<SKILL_CONTEXT name="{name}">\n{body}\n</SKILL_CONTEXT>')
+
+        # Clear transient just_invoked at end of compose
+        activation["just_invoked"] = set()
+        state["skill_activation"] = activation
+
+        return available_block, skill_context_blocks
 
     def _build_agent_loop_output_contract_section(
         self, config: SootheConfig | None = None

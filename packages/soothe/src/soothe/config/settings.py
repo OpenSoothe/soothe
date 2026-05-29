@@ -23,6 +23,7 @@ from soothe.config.models import (
     OptimizationConfig,
     PersistenceConfig,
     PluginConfig,
+    ProgressiveSkillsConfig,
     ReportOutputConfig,
     SecurityConfig,
     SubagentConfig,
@@ -270,6 +271,9 @@ class SootheConfig(BaseSettings):
 
     skills: list[str] = Field(default_factory=list)
     """SKILL.md source paths passed to deepagents SkillsMiddleware."""
+
+    progressive_skills: ProgressiveSkillsConfig = Field(default_factory=ProgressiveSkillsConfig)
+    """RFC-105: Progressive skill listing budget and per-entry caps."""
 
     memory: list[str] = Field(default_factory=list)
     """AGENTS.md file paths passed to deepagents MemoryMiddleware."""

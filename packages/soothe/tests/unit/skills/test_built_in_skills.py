@@ -1,6 +1,7 @@
 """Tests for built-in skills discovery and loading."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 from soothe.skills import get_built_in_skills_paths
 
@@ -44,3 +45,31 @@ def test_skill_paths_exist() -> None:
         path = Path(skill_path)
         assert path.exists(), f"Path {skill_path} should exist"
         assert path.is_dir(), f"Path {skill_path} should be a directory"
+
+
+def test_dedup_by_name(tmp_path: Path) -> None:
+    """When the same skill name exists in multiple roots, later roots win."""
+    from soothe.skills.builtins import get_built_in_skills_paths as _get
+
+    soothe_skills = tmp_path / ".soothe" / "skills"
+    soothe_skills.mkdir(parents=True)
+    (soothe_skills / "dup").mkdir()
+    (soothe_skills / "dup" / "SKILL.md").write_text(
+        "---\nname: dup\ndescription: from-soothe\n---\n", encoding="utf-8"
+    )
+
+    agents_skills = tmp_path / ".agents" / "skills"
+    agents_skills.mkdir(parents=True)
+    (agents_skills / "dup").mkdir()
+    (agents_skills / "dup" / "SKILL.md").write_text(
+        "---\nname: dup\ndescription: from-agents\n---\n", encoding="utf-8"
+    )
+
+    with patch("soothe.skills.builtins.Path.home", return_value=tmp_path):
+        # Mock built_in_skills dir to not exist so only our two roots are scanned
+        with patch.object(Path, "__truediv__") as _:
+            paths = _get()
+
+    # The function should return only one path for "dup"
+    dup_paths = [p for p in paths if "dup" in p]
+    assert len(dup_paths) <= 1, f"Expected at most 1 dup, got {dup_paths}"

@@ -1,6 +1,7 @@
 """Mtime-based skill index for fast daemon-level skill discovery.
 
-Indexes skills under ~/.soothe/skills only.
+Indexes skills under ``~/.soothe/skills``, ``~/.agents/skills``, and
+the package-bundled ``built_in_skills/`` directory.
 Uses stat-only invalidation: re-parses SKILL.md only when mtime changes.
 Persists cache to ~/.soothe/cache/skill_index.json for fast restarts.
 """
@@ -17,7 +18,16 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _CACHE_FILE = Path.home() / ".soothe" / "cache" / "skill_index.json"
-_SKILL_ROOTS = (Path.home() / ".soothe" / "skills",)
+
+# Package-bundled built-in skills directory
+_BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent.parent / "built_in_skills"
+
+# (root_path, source_label) — order matters: later roots win on name collision
+_SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
+    (_BUILTIN_SKILLS_DIR, "builtin"),
+    (Path.home() / ".soothe" / "skills", "user"),
+    (Path.home() / ".agents" / "skills", "user"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,13 +40,17 @@ class SkillIndexEntry:
     source: str  # "user"
     path: str
     mtime: float
+    paths: tuple[str, ...] | None = None  # RFC-105: conditional activation patterns
+    when_to_use: str | None = None  # RFC-105: multi-line guidance for listing
 
 
 @dataclass
 class SkillIndex:
     """Mtime-aware skill index that avoids re-parsing unchanged SKILL.md files.
 
-    The index scans only the global user skill directory (~/.soothe/skills).
+    The index scans built-in, user, and community skill directories.
+    When a skill name appears in multiple roots, the later root wins
+    (``~/.agents/skills`` > ``~/.soothe/skills`` > built-ins).
     Workspace/project skills are resolved by the loop at runtime.
     """
 
@@ -62,13 +76,13 @@ class SkillIndex:
         changed = False
 
         new_entries: dict[str, SkillIndexEntry] = {}
-        for skill_dir, mtime in current_skills.items():
+        for skill_dir, (mtime, source) in current_skills.items():
             key = skill_dir.name.lower()
             existing = self._entries.get(key)
             if existing and existing.mtime >= mtime and existing.path == str(skill_dir):
                 new_entries[key] = existing
             else:
-                entry = self._parse_skill_dir(skill_dir, mtime)
+                entry = self._parse_skill_dir(skill_dir, mtime, source=source)
                 if entry:
                     new_entries[entry.name.lower()] = entry
                     changed = True
@@ -84,17 +98,21 @@ class SkillIndex:
 
         return self.entries()
 
-    def wire_entries(self) -> list[dict[str, str]]:
+    def wire_entries(self) -> list[dict[str, Any]]:
         """Return wire-safe dicts (no path) for RPC serialization."""
-        result: list[dict[str, str]] = []
+        result: list[dict[str, Any]] = []
         for entry in self.entries():
-            d: dict[str, str] = {
+            d: dict[str, Any] = {
                 "name": entry.name,
                 "description": entry.description,
                 "source": entry.source,
             }
             if entry.tags:
                 d["tags"] = entry.tags
+            if entry.paths is not None:
+                d["paths"] = list(entry.paths)
+            if entry.when_to_use is not None:
+                d["when_to_use"] = entry.when_to_use
             result.append(d)
         return result
 
@@ -107,10 +125,15 @@ class SkillIndex:
             self._load_cache()
             self.rebuild_if_stale()
 
-    def _discover_skill_dirs(self) -> dict[Path, float]:
-        """Stat SKILL.md in each candidate dir; return path → mtime."""
-        result: dict[Path, float] = {}
-        for root in _SKILL_ROOTS:
+    def _discover_skill_dirs(self) -> dict[Path, tuple[float, str]]:
+        """Stat SKILL.md in each candidate dir; return path → (mtime, source).
+
+        When the same skill name exists in multiple roots, the later root wins
+        (last-wins dedup). ``~/.agents/skills`` overrides ``~/.soothe/skills``
+        which overrides built-ins.
+        """
+        by_name: dict[str, tuple[Path, float, str]] = {}
+        for root, source in _SKILL_ROOTS:
             if not root.is_dir():
                 continue
             try:
@@ -126,10 +149,16 @@ class SkillIndex:
                         st = skill_md.stat()
                     except OSError:
                         continue
-                    result[Path(dir_entry.path).resolve()] = st.st_mtime
-        return result
+                    by_name[dir_entry.name.lower()] = (
+                        Path(dir_entry.path).resolve(),
+                        st.st_mtime,
+                        source,
+                    )
+        return {path: (mtime, source) for path, mtime, source in by_name.values()}
 
-    def _parse_skill_dir(self, skill_dir: Path, mtime: float) -> SkillIndexEntry | None:
+    def _parse_skill_dir(
+        self, skill_dir: Path, mtime: float, *, source: str = "user"
+    ) -> SkillIndexEntry | None:
         """Parse SKILL.md frontmatter and build an index entry."""
         md_file = skill_dir / "SKILL.md"
         try:
@@ -157,9 +186,11 @@ class SkillIndex:
             name=name,
             description=description,
             tags=fm.get("tags", ""),
-            source="user",
+            source=source,
             path=str(skill_dir),
             mtime=mtime,
+            paths=tuple(fm["paths"]) if "paths" in fm and isinstance(fm["paths"], list) else None,
+            when_to_use=fm.get("when_to_use") or None,
         )
 
     def _load_cache(self) -> None:
@@ -174,6 +205,9 @@ class SkillIndex:
 
         for raw in data:
             try:
+                # Tolerate old cache rows missing RFC-105 fields
+                raw.setdefault("paths", None)
+                raw.setdefault("when_to_use", None)
                 entry = SkillIndexEntry(**raw)
                 self._entries[entry.name.lower()] = entry
             except (TypeError, KeyError):
@@ -201,4 +235,8 @@ def _make_wire_entry(entry: SkillIndexEntry) -> dict[str, Any]:
     }
     if entry.tags:
         d["tags"] = entry.tags
+    if entry.paths is not None:
+        d["paths"] = list(entry.paths)
+    if entry.when_to_use is not None:
+        d["when_to_use"] = entry.when_to_use
     return d

@@ -57,13 +57,11 @@ def test_execute_envelope_slash_skill_skill_context_after_user_query() -> None:
 def test_plan_context_envelope_slash_skill_surfaces_primary_query() -> None:
     envelope = build_plan_context_envelope(
         goal="Skill: x\n\n" + "y" * 30,
-        iteration=1,
-        max_iterations=8,
         goal_user_submission="/skill:x fix the bug in auth",
     )
     assert "<USER_PRIMARY_QUERY>" in envelope
     assert "fix the bug in auth" in envelope
-    assert "Execute iteration: 1/8" in envelope
+    assert "Execute iteration" not in envelope
     assert "<FULL_GOAL_AND_SKILL_CONTEXT>" in envelope
     assert envelope.startswith("<GOAL_PROGRESS>\n<USER_PRIMARY_QUERY>")
 
@@ -71,8 +69,6 @@ def test_plan_context_envelope_slash_skill_surfaces_primary_query() -> None:
 def test_plan_context_envelope_includes_response_language_hint() -> None:
     envelope = build_plan_context_envelope(
         goal="Résumé demandé",
-        iteration=1,
-        max_iterations=5,
     )
     assert "<response_language_hint>" in envelope
     assert "same natural language as the user's goal" in envelope

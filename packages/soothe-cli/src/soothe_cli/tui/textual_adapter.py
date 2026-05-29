@@ -1752,10 +1752,18 @@ async def execute_task_textual(
                                     captured_input_tokens = max(
                                         captured_input_tokens, input_toks + output_toks
                                     )
+                                    # Record per-step token usage
+                                    active_step = adapter._step_by_namespace.get(ns_key)
+                                    if active_step is not None:
+                                        active_step.record_token_usage(input_toks, output_toks)
                                 elif total_toks:
                                     # Fallback: model gives only total (no split)
                                     turn_stats.record_request(active_model, total_toks, 0)
                                     captured_input_tokens = max(captured_input_tokens, total_toks)
+                                    # Record per-step token usage (total only, no split)
+                                    active_step = adapter._step_by_namespace.get(ns_key)
+                                    if active_step is not None:
+                                        active_step.record_token_usage(total_toks, 0)
 
                         touched_tool_ids = tool_ids_touched_by_stream_message(message)
                         if touched_tool_ids:

@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-05-29
-**Total RFCs**: 61
+**Total RFCs**: 62
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 43 |
+| Draft | 44 |
 | Implemented | 18 |
 
 ---
@@ -57,6 +57,12 @@ This index reflects the canonical RFC set and defines which files are active for
   - Kind: Implementation Interface Design
   - Status: Implemented
   - Created: 2026-04-09
+
+- **RFC-105**: [Progressive Skill Loading](RFC-105-progressive-skill-loading.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-05-29
+  - Depends On: RFC-100, RFC-104, RFC-214, RFC-600
 
 ### AgentLoop & Cognition (2xx)
 

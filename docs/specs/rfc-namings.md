@@ -137,6 +137,25 @@ This document defines the terminology and naming conventions used in this projec
 | INSTRUCTIONS | Top-level XML container holding output format specification and execution rules. Defines how LLM should respond to the task. | RFC-206 |
 | Fragment Composition | Modular prompt construction from XML fragment files stored in `src/soothe/prompts/fragments/`. Each fragment has single responsibility (e.g., environment.xml, goal.xml). Internal implementation detail, not user-configurable. | RFC-206 |
 
+### Progressive Skill Loading Terms (RFC-105)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Progressive Skill Loading | Three-stage progressive disclosure pipeline replacing deepagents' always-emit-all skill listing: budgeted turn-0 metadata listing, path-driven conditional activation, lazy body injection on invocation. | RFC-105 |
+| Stage 1 Disclosure | Budgeted, delta-only metadata listing rendered as `<AVAILABLE_SKILLS>` on every turn. Cap is `progressive_skills.budget_pct` of `AgentLoopConfig.context_window_limit`. | RFC-105 |
+| Stage 2 Disclosure | Path-driven conditional activation triggered when a file-op tool call's argument matches a conditional skill's `paths:` patterns (gitignore semantics). | RFC-105 |
+| Stage 3 Disclosure | Lazy SKILL.md body injection rendered as `<SKILL_CONTEXT>` only on/after invocation (`/skill:<name>`). | RFC-105 |
+| Unconditional Skill | Skill whose frontmatter has no `paths:` field (or `paths: []` / `paths: ["**"]`); appears in every `<AVAILABLE_SKILLS>` listing subject to budget. | RFC-105 |
+| Conditional Skill | Skill whose frontmatter has a non-empty `paths:` field; held back from listings until a file-op tool touches a matching path. | RFC-105 |
+| `<AVAILABLE_SKILLS>` Block | Static-tier system-prompt block carrying the delta-only skill listing. Emitted by `SystemPromptOptimizationMiddleware._compose_skills_block`. | RFC-105 |
+| `<SKILL_CONTEXT>` Block | Semi-static-tier system-prompt block carrying invoked skill bodies. One block per invoked skill name. | RFC-105 |
+| Skill Activation State | The per-thread dict at `state["skill_activation"]` with keys `sent`, `activated`, `invoked`, `invoked_bodies`, `just_invoked`. Snapshotted to `LoopState` at iteration boundaries. | RFC-105 |
+| `ProgressiveSkillRegistry` | Stateless helper that partitions catalog entries into unconditional/conditional, computes turn-0/turn-N deltas, and matches file-op paths against conditional skills' patterns. | RFC-105 |
+| `SkillActivationMiddleware` | Middleware that intercepts file-op tool calls, extracts paths, matches against conditional skills, and mutates `state["skill_activation"]["activated"]`. | RFC-105 |
+| `ProgressiveSkillsConfig` | Config block (`SootheConfig.progressive_skills`) with `budget_pct`, `max_listing_chars_per_entry`, `min_listing_chars_per_entry`. | RFC-105 |
+| `SkillActivatedEvent` | Public event (`soothe.skill.activated`) emitted when a conditional skill becomes active on a thread; carries `skill_name`, `matched_path`, `pattern`, `thread_id`. | RFC-105 |
+| `SkillBodyLoadedEvent` | Public event (`soothe.skill.body.loaded`) emitted when a SKILL.md body enters context via Stage 3; carries `skill_name`, `body_chars`, `thread_id`. | RFC-105 |
+
 ## Naming Conventions
 
 ### General Principles

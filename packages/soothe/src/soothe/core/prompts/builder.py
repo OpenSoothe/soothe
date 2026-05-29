@@ -257,19 +257,6 @@ class PromptBuilder:
 
         return "\n".join(parts)
 
-    @staticmethod
-    def _format_goal_progress_footer(goal: str, state: LoopState) -> str:
-        """``<GOAL_PROGRESS>`` block for plan-context user message (RFC-214, IG-376)."""
-        cur_iter = state.iteration if state.iteration is not None else 0
-        max_iter = state.max_iterations if state.max_iterations is not None else "?"
-        cycle_one_based = int(cur_iter) + 1
-        return (
-            "<GOAL_PROGRESS>\n"
-            f"Goal: {goal}\n"
-            f"Execute iteration: {cycle_one_based}/{max_iter}\n"
-            "</GOAL_PROGRESS>\n"
-        )
-
     def _build_human_message(
         self,
         goal: str,
@@ -384,8 +371,6 @@ class PromptBuilder:
         # Build envelope with timestamp (RFC-214)
         return build_plan_context_envelope(
             goal=goal,
-            iteration=state.iteration + 1 if state.iteration is not None else None,
-            max_iterations=state.max_iterations,
             dag_context=dag_context,
             step_id_hint=step_id_hint,
             project_instructions=project_instructions,

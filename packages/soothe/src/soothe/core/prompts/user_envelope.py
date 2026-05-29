@@ -137,8 +137,6 @@ def build_execute_step_envelope(
 def build_plan_context_envelope(
     goal: str,
     *,
-    iteration: int | None = None,
-    max_iterations: int | None = None,
     dag_context: str | None = None,
     step_id_hint: str | None = None,
     project_instructions: str | None = None,
@@ -153,8 +151,6 @@ def build_plan_context_envelope(
 
     Args:
         goal: Current goal text.
-        iteration: Current iteration number (1-based for display).
-        max_iterations: Maximum iterations allowed.
         dag_context: Optional DAG planning context XML.
         step_id_hint: Optional next step ID hint text.
         project_instructions: Optional ``<project_instructions>`` XML from workspace
@@ -170,7 +166,6 @@ def build_plan_context_envelope(
     timestamp = now.isoformat()
 
     # Build <GOAL_PROGRESS>
-    iter_display = f"{iteration}/{max_iterations}" if iteration and max_iterations else "?/?"
     goal_display = _goal_text_for_execute_step_envelope(goal)
     skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
     if skill_tail is not None:
@@ -180,14 +175,13 @@ def build_plan_context_envelope(
             "<USER_PRIMARY_QUERY>\n"
             f"{focus}\n"
             "</USER_PRIMARY_QUERY>\n"
-            f"Execute iteration: {iter_display}\n"
             "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
             f"{goal_display}\n"
             "</FULL_GOAL_AND_SKILL_CONTEXT>\n"
             "</GOAL_PROGRESS>"
         )
     else:
-        goal_progress = f"<GOAL_PROGRESS>\nGoal: {goal_display}\nExecute iteration: {iter_display}\n</GOAL_PROGRESS>"
+        goal_progress = f"<GOAL_PROGRESS>\nGoal: {goal_display}\n</GOAL_PROGRESS>"
 
     # Optional hints
     extra_parts: list[str] = []

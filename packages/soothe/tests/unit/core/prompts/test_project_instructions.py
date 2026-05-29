@@ -60,8 +60,6 @@ def test_envelopes_embed_project_instructions_in_context_info() -> None:
     )
     plan = build_plan_context_envelope(
         goal="g",
-        iteration=1,
-        max_iterations=3,
         project_instructions=snippet,
     )
     assert snippet in execute
