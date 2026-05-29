@@ -1,10 +1,10 @@
 <PLAN_GENERATE>
 Output: plan_action, type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
 
-Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal and iteration are in ``<GOAL_PROGRESS>``. When ``<USER_PRIMARY_QUERY>`` exists, prefer that over ``<FULL_GOAL_AND_SKILL_CONTEXT>``.
+Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in ``<USER_QUERY>``.
 
 **Language lock**:
-- Use the same natural language as the current goal statement in ``<GOAL_PROGRESS>``.
+- Use the same natural language as the current goal statement in ``<USER_QUERY>``.
 - Apply this consistently to ``steps[].description``, ``steps[].expected_output``, ``reasoning``, and ``next_action``.
 - Do not switch output language unless the user explicitly requests another language.
 - Keep code, file paths, identifiers, and quoted literals unchanged.

@@ -17,7 +17,6 @@ from soothe.core.loop.engine.scenario_classifier import ScenarioClassification
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
 from soothe.core.prompts.user_envelope import (
-    _EMPTY_SKILL_USER_TEXT_PLACEHOLDER,
     _goal_text_for_execute_step_envelope,
 )
 
@@ -63,8 +62,8 @@ def _extract_xml_block(text: str, tag: str) -> str | None:
 def flatten_execute_human_content(content: str) -> str:
     """Extract task-focused text from an execute-step human envelope.
 
-    When the message uses the RFC-214 envelope, returns ``<USER_QUERY>`` or
-    ``<USER_PRIMARY_QUERY>`` body only. Otherwise returns the raw content unchanged.
+    When the message uses the RFC-214 envelope, returns ``<USER_QUERY>``
+    body only. Otherwise returns the raw content unchanged.
     """
     text = (content or "").strip()
     if not text:
@@ -73,10 +72,6 @@ def flatten_execute_human_content(content: str) -> str:
     user_query = _extract_xml_block(text, "USER_QUERY")
     if user_query:
         return user_query
-
-    primary = _extract_xml_block(text, "USER_PRIMARY_QUERY")
-    if primary and primary != _EMPTY_SKILL_USER_TEXT_PLACEHOLDER:
-        return primary
 
     return text
 
