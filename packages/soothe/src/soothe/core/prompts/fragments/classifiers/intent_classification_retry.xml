@@ -5,13 +5,12 @@ intent_type: "quiz" (greeting/thanks/static trivia answerable without tools) or 
 NOT quiz: real-time/time-sensitive, web/tools/files needed, not answerable from training knowledge alone, or follow-ups → "agentic".
 
 When "quiz": quiz_response (concise direct answer).
-When "agentic": goal_description (5-15 words).
+When "agentic": task_complexity only.
 task_complexity: minimal|simple|medium|complex.
 
 JSON schema:
 {{
   "intent_type": "quiz"|"agentic",
-  "goal_description": string|null,
   "task_complexity": "minimal"|"simple"|"medium"|"complex",
   "quiz_response": string|null
 }}

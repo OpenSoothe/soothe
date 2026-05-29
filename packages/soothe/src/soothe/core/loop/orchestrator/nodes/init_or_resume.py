@@ -25,7 +25,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             {
                 "intent_type": getattr(intent, "intent_type", ""),
                 "task_complexity": getattr(intent, "task_complexity", ""),
-                "goal_description": getattr(intent, "goal_description", None),
             },
         )
 
