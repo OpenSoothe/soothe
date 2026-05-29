@@ -4,6 +4,7 @@ This package provides the client-side WebSocket connection,
 session management, and daemon communication helpers.
 """
 
+from soothe_sdk.client.autopilot_http import AutopilotHttpClient, http_rest_url_from_config
 from soothe_sdk.client.helpers import (
     check_daemon_status,
     fetch_config_section,
@@ -21,10 +22,12 @@ from soothe_sdk.client.wire import envelope_langchain_message_dict, messages_fro
 from soothe_sdk.core.types import VerbosityLevel
 
 __all__ = [
+    "AutopilotHttpClient",
     "WebSocketClient",
     "VerbosityLevel",
     "bootstrap_loop_session",
     "connect_websocket_with_retries",
+    "http_rest_url_from_config",
     "websocket_url_from_config",
     "check_daemon_status",
     "is_daemon_live",

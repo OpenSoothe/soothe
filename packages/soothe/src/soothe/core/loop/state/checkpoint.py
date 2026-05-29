@@ -58,6 +58,7 @@ class ThreadHealthMetrics(BaseModel):
 
     # Execution health
     consecutive_goal_failures: int = 0
+    consecutive_rate_limit_errors: int = 0
     last_goal_status: Literal["completed", "failed", "cancelled"] | None = None
 
     # Checkpoint health
@@ -89,6 +90,7 @@ class ThreadSwitchPolicy(BaseModel):
     # Quantitative triggers
     message_history_token_threshold: int | None = 100000
     consecutive_goal_failure_threshold: int | None = 3
+    consecutive_rate_limit_threshold: int | None = 3
     checkpoint_error_threshold: int | None = 2
     subagent_timeout_threshold: int | None = 2
 
@@ -213,7 +215,7 @@ class AgentLoopCheckpoint(BaseModel):
     updated_at: datetime
 
     # Metadata (informational only, no migration logic)
-    schema_version: str = "3.2"  # RFC-225 enrichment
+    schema_version: str = "3.3"  # Rate limit circuit breaker
 
 
 def normalize_checkpoint_data(
@@ -255,7 +257,7 @@ def normalize_checkpoint_data(
     out.setdefault("total_duration_ms", 0)
     out.setdefault("total_tokens_used", 0)
     out.setdefault("thread_switch_pending", False)
-    out.setdefault("schema_version", "3.2")
+    out.setdefault("schema_version", "3.3")
 
     status = out.get("status")
     if status not in _AGENT_LOOP_CHECKPOINT_STATUSES:

@@ -248,6 +248,10 @@ class MessageRouter:
             await self._handle_models_list(client_id, msg)
             return
 
+        if msg_type == "mcp_status":
+            await self._handle_mcp_status(client_id, msg)
+            return
+
         if msg_type == "loop_messages":
             await self._handle_loop_messages(client_id, msg)
             return
@@ -337,6 +341,49 @@ class MessageRouter:
                 "type": "models_list_response",
                 "models": payload["models"],
                 "default_model": payload.get("default_model"),
+                "request_id": msg.get("request_id"),
+            },
+        )
+
+    async def _handle_mcp_status(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Return MCP server status for the TUI MCP viewer."""
+        d = self._daemon
+        registry = d._mcp_registry
+        if registry is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "mcp_status_response",
+                    "servers": [],
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        servers: list[dict[str, Any]] = []
+        try:
+            for name, conn in registry.connection_status().items():
+                tools: list[dict[str, str]] = []
+                for td in registry._tool_descriptors.get(name, []):
+                    tools.append({"name": td.name, "description": td.description or ""})
+                servers.append(
+                    {
+                        "name": name,
+                        "transport": conn.transport.value
+                        if hasattr(conn.transport, "value")
+                        else str(conn.transport),
+                        "connected": conn.connected,
+                        "tools": tools,
+                    }
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "mcp_status_response",
+                "servers": servers,
                 "request_id": msg.get("request_id"),
             },
         )

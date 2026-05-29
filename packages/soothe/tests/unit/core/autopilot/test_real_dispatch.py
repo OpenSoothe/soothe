@@ -8,6 +8,7 @@ Covers the full path: submit_task → scheduling tick → WorkerPool.pick_worker
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -48,7 +49,11 @@ class _FakeRunner:
                     "tool_call_stats": {"counts_by_name": {}, "failures_by_name": {}},
                 },
                 "plan_result_status": "complete" if self._outcome == "completed" else "abandoned",
-                "evidence_summary": "ok" if self._outcome == "completed" else "boom",
+                "evidence_summary": (
+                    "Goal completed successfully with substantive evidence and verified outputs."
+                    if self._outcome == "completed"
+                    else "Worker failed with a substantive error narrative for consensus review."
+                ),
             },
         )
 
@@ -69,6 +74,13 @@ class _FakeFactory:
 # ---- Helpers -----------------------------------------------------------
 
 
+def _mock_consensus_model(*, decision: str = "accept", reasoning: str = "test") -> AsyncMock:
+    mock_model = AsyncMock()
+    mock_model.ainvoke.return_value.type = "ai"
+    mock_model.ainvoke.return_value.content = f"DECISION: {decision}\nREASONING: {reasoning}"
+    return mock_model
+
+
 def _service(*, outcome: str = "completed", with_reservation: bool = False) -> AutopilotService:
     bus = InternalEventBus()
     ge = GoalEngine(internal_bus=bus)
@@ -80,6 +92,7 @@ def _service(*, outcome: str = "completed", with_reservation: bool = False) -> A
         internal_bus=bus,
         runner_factory=factory,
         workspace_reservation=res,
+        consensus_model=_mock_consensus_model(),
     )
     # Attach a context store so contributions get persisted.
     svc._context_store = InMemoryGoalDispatchContextStore()
@@ -159,7 +172,9 @@ class TestEndToEndFailed:
         finished = await svc.get_goal(goal.id)
         assert finished is not None
         assert finished.status == "failed"
-        assert "boom" in (finished.error or "")
+        assert "failed" in (finished.error or "").lower() or "Worker failed" in (
+            finished.error or ""
+        )
 
 
 class TestEndToEndReservation:

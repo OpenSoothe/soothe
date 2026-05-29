@@ -1,17 +1,41 @@
 """Autopilot CLI subcommands for RFC-204.
 
-CLI is a control surface — no streaming output. Users submit tasks
-and check status; real-time monitoring is via TUI/daemon.
+Daemon-backed control surface: submit tasks and manage goals via HTTP REST.
+Requires ``soothed start``. Real-time monitoring is via TUI ``/autopilot``.
 """
 
 from __future__ import annotations
 
+import asyncio
+import sys
+import time
 from pathlib import Path
 
 import typer
+from soothe_sdk.client import (
+    AutopilotHttpClient,
+    http_rest_url_from_config,
+    is_daemon_live,
+    websocket_url_from_config,
+)
 from soothe_sdk.client.protocol import preview_first
 
 app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
+
+
+def _require_daemon_http() -> AutopilotHttpClient:
+    """Return a live HTTP client or exit."""
+    from soothe_cli.runtime import load_config
+
+    cfg = load_config()
+    ws_url = websocket_url_from_config(cfg)
+    if not asyncio.run(is_daemon_live(ws_url, timeout=5.0)):
+        typer.echo(
+            "Error: Daemon not running. Start with 'soothed start'.",
+            err=True,
+        )
+        sys.exit(1)
+    return AutopilotHttpClient(http_rest_url_from_config(cfg))
 
 
 @app.command("run")
@@ -19,24 +43,43 @@ def run(
     prompt: str = typer.Argument(..., help="Task for autonomous execution."),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to configuration file."),
     max_iterations: int | None = typer.Option(
-        None, "--max-iterations", help="Maximum autonomous iterations."
+        None,
+        "--max-iterations",
+        help="Ignored — use daemon config agent.autonomous.max_iterations.",
     ),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="Poll until the goal completes."),
 ) -> None:
-    """Run autonomous agent loop for complex tasks.
+    """Submit a task to the daemon autopilot and optionally wait for completion.
 
-    Autopilot mode executes tasks autonomously without requiring user interaction.
-    The agent operates in headless mode (no TUI) and outputs progress to stdout.
+    Requires the daemon (``soothed start``). This is the production autopilot
+    path — distinct from a one-shot agentic query via ``soothe -p``.
     """
-    from soothe_cli.cli.commands.run_cmd import run_impl
+    del config, max_iterations  # daemon owns config for autopilot dispatch
+    client = _require_daemon_http()
+    result = client.submit(prompt)
+    if result.get("transport") != "live":
+        typer.echo(
+            "Warning: daemon fell back to file-based submit; autopilot service may be down.",
+            err=True,
+        )
+    goal_id = result.get("goal_id", "")
+    typer.echo(f"Submitted goal: {goal_id}")
+    if not wait or not goal_id:
+        return
 
-    run_impl(
-        prompt=prompt,
-        resume_loop_id=None,
-        no_tui=True,
-        autonomous=True,
-        max_iterations=max_iterations,
-        config_path=config,
-    )
+    deadline = time.time() + 600
+    while time.time() < deadline:
+        detail = client.get_goal(goal_id)
+        goal = detail.get("goal") or {}
+        status = goal.get("status", "unknown")
+        if status in ("completed", "failed", "suspended"):
+            typer.echo(f"Goal {goal_id[:8]}: {status}")
+            if status == "failed":
+                sys.exit(1)
+            return
+        time.sleep(1.0)
+    typer.echo(f"Timed out waiting for goal {goal_id}", err=True)
+    sys.exit(1)
 
 
 @app.command("submit")
@@ -44,68 +87,32 @@ def submit(
     task: str = typer.Argument(..., help="Task description."),
     priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
 ) -> None:
-    """Submit a new task to autopilot.
-
-    Writes a markdown task file to the autopilot inbox.
-    """
-    from datetime import UTC, datetime
-
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
-    filename = f"TASK-{timestamp}.md"
-    fpath = inbox_dir / filename
-
-    fpath.write_text(f"---\ntype: task_submit\npriority: {priority}\n---\n\n{task}\n")
-    typer.echo(f"Task submitted: {fpath}")
+    """Submit a new task to the daemon autopilot."""
+    client = _require_daemon_http()
+    result = client.submit(task, priority=priority)
+    goal_id = result.get("goal_id", "?")
+    typer.echo(f"Task submitted (goal_id={goal_id}, transport={result.get('transport', '?')})")
     typer.echo(f"  Priority: {priority}")
 
 
 @app.command("status")
 def status() -> None:
-    """Show overall autopilot state."""
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    autopilot_dir = SOOTHE_HOME / "autopilot"
-    state_file = autopilot_dir / "status.json"
-
-    if not autopilot_dir.exists():
-        typer.echo("Autopilot not configured. Run 'soothe autopilot submit' to start.")
-        return
-
-    if state_file.exists():
-        import json
-
-        data = json.loads(state_file.read_text())
-        state = data.get("state", "unknown")
-        typer.echo(f"Autopilot state: {state}")
-
-        if "active_goals" in data:
-            typer.echo(f"Active goals: {len(data['active_goals'])}")
-    else:
-        typer.echo("Autopilot: idle (no status file)")
-
-    # Check inbox for pending tasks
-    inbox_dir = autopilot_dir / "inbox"
-    if inbox_dir.exists():
-        pending = list(inbox_dir.glob("*.md"))
-        if pending:
-            typer.echo(f"Pending inbox tasks: {len(pending)}")
+    """Show overall autopilot state from the daemon."""
+    client = _require_daemon_http()
+    data = client.status()
+    typer.echo(f"Autopilot state: {data.get('state', data.get('status', 'unknown'))}")
+    if "active_goals" in data:
+        typer.echo(f"Active goals: {len(data['active_goals'])}")
 
 
 @app.command("list")
 def list_goals(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
-    """List all goals."""
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    autopilot_dir = SOOTHE_HOME / "autopilot"
-    goals = _discover_goals(autopilot_dir)
-
+    """List goals from the live daemon autopilot DAG."""
+    client = _require_daemon_http()
+    payload = client.list_goals()
+    goals = payload.get("goals") or []
     if not goals:
         typer.echo("No goals found.")
         return
@@ -125,17 +132,9 @@ def show_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to show details for."),
 ) -> None:
     """Show details for a specific goal."""
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    autopilot_dir = SOOTHE_HOME / "autopilot"
-    goals = _discover_goals(autopilot_dir)
-
-    found = None
-    for g in goals:
-        if g.get("id", "").startswith(goal_id) or goal_id in g.get("id", ""):
-            found = g
-            break
-
+    client = _require_daemon_http()
+    payload = client.get_goal(goal_id)
+    found = payload.get("goal")
     if not found:
         typer.echo(f"Goal '{goal_id}' not found.")
         raise typer.Exit(1)
@@ -154,26 +153,10 @@ def show_goal(
 def cancel_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to cancel."),
 ) -> None:
-    """Cancel a goal (remove from inbox if pending)."""
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-    if not inbox_dir.exists():
-        typer.echo("No inbox to cancel from.")
-        return
-
-    # Remove matching inbox file
-    removed = 0
-    for f in inbox_dir.glob("*.md"):
-        if goal_id in f.stem:
-            f.unlink()
-            removed += 1
-            typer.echo(f"Removed: {f.name}")
-
-    if removed == 0:
-        typer.echo(f"No matching inbox tasks for '{goal_id}'.")
-    else:
-        typer.echo(f"Cancelled {removed} task(s).")
+    """Cancel a goal via the daemon."""
+    client = _require_daemon_http()
+    result = client.cancel_goal(goal_id)
+    typer.echo(f"Cancel result: {result.get('status', result)}")
 
 
 @app.command("approve")
@@ -183,32 +166,13 @@ def approve_goal(
     ),
 ) -> None:
     """Approve a MUST-confirmation goal."""
-    import json
-
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    confirmations_file = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
-    if not confirmations_file.exists():
-        typer.echo("No pending goal confirmations.")
-        return
-
+    client = _require_daemon_http()
     try:
-        confirmations = json.loads(confirmations_file.read_text())
-    except (json.JSONDecodeError, OSError):
-        typer.echo("Failed to read pending confirmations.")
-        return
-
-    for i, c in enumerate(confirmations):
-        if c.get("id") == goal_id:
-            c["status"] = "approved"
-            confirmations[i] = c
-            confirmations_file.write_text(json.dumps(confirmations, indent=2))
-            typer.echo(
-                f"Confirmation {goal_id} approved. Goal will be created on next runner poll."
-            )
-            return
-
-    typer.echo(f"Confirmation {goal_id} not found. Run 'soothe autopilot inbox' to list pending.")
+        result = client.approve(goal_id)
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"Confirmation approved: {result.get('goal_id', goal_id)}")
 
 
 @app.command("reject")
@@ -216,61 +180,36 @@ def reject_goal(
     goal_id: str = typer.Argument(..., help="Confirmation ID to reject."),
 ) -> None:
     """Reject a proposed goal."""
-    import json
-
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    confirmations_file = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
-    if not confirmations_file.exists():
-        typer.echo("No pending goal confirmations.")
-        return
-
+    client = _require_daemon_http()
     try:
-        confirmations = json.loads(confirmations_file.read_text())
-    except (json.JSONDecodeError, OSError):
-        typer.echo("Failed to read pending confirmations.")
-        return
-
-    remaining = [c for c in confirmations if c.get("id") != goal_id]
-    if len(remaining) == len(confirmations):
-        typer.echo(f"Confirmation {goal_id} not found.")
-        return
-
-    confirmations_file.write_text(json.dumps(remaining, indent=2))
-    typer.echo(f"Confirmation {goal_id} rejected.")
+        result = client.reject(goal_id)
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"Confirmation rejected: {result.get('goal_id', goal_id)}")
 
 
 @app.command("wake")
 def wake() -> None:
     """Exit dreaming mode — resume active execution."""
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
-
-    signal = inbox_dir / "WAKE.md"
-    signal.write_text("---\ntype: signal_resume\n---\n\nWake signal.\n")
-    typer.echo("Wake signal sent. Autopilot will exit dreaming mode.")
+    client = _require_daemon_http()
+    result = client.wake()
+    typer.echo(f"Wake signal sent ({result.get('transport', 'live')}).")
 
 
 @app.command("dream")
 def dream() -> None:
     """Force enter dreaming mode."""
-    from soothe_sdk.client.config import SOOTHE_HOME
-
-    inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
-
-    signal = inbox_dir / "DREAM.md"
-    signal.write_text("---\ntype: signal_interrupt\n---\n\nDream signal.\n")
-    typer.echo("Dream signal sent. Autopilot will enter dreaming mode.")
+    client = _require_daemon_http()
+    result = client.dream()
+    typer.echo(f"Dream signal sent ({result.get('transport', 'live')}).")
 
 
 @app.command("inbox")
 def view_inbox(
     limit: int = typer.Option(10, "--limit", "-n", help="Max tasks to show."),
 ) -> None:
-    """View pending inbox tasks."""
+    """View pending inbox tasks (file-based channel fallback)."""
     from soothe_sdk.client.config import SOOTHE_HOME
 
     inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
@@ -286,7 +225,6 @@ def view_inbox(
     typer.echo(f"Pending tasks ({len(tasks)}):")
     for f in tasks[:limit]:
         content = f.read_text()
-        # Extract description from body
         desc = ""
         for line in content.splitlines():
             stripped = line.strip()
@@ -307,22 +245,17 @@ def view_inbox(
 
 
 def _discover_goals(autopilot_dir: Path) -> list[dict]:
-    """Parse goals from GOAL.md/GOALS.md files for CLI display.
-
-    This is a simple parser for CLI use — not the full engine.
-    """
+    """Parse goals from GOAL.md/GOALS.md files for offline CLI display."""
     import re
 
-    goals = []
+    goals: list[dict] = []
 
-    # Check GOAL.md
     goal_file = autopilot_dir / "GOAL.md"
     if goal_file.exists():
         g = _parse_single_goal(goal_file.read_text(), str(goal_file))
         if g:
             return [g]
 
-    # Check GOALS.md
     goals_file = autopilot_dir / "GOALS.md"
     if goals_file.exists():
         text = goals_file.read_text()
@@ -331,7 +264,6 @@ def _discover_goals(autopilot_dir: Path) -> list[dict]:
             if g:
                 goals.append(g)
 
-    # Check goals/ subdirectories
     goals_dir = autopilot_dir / "goals"
     if goals_dir.exists():
         for subdir in sorted(goals_dir.iterdir()):

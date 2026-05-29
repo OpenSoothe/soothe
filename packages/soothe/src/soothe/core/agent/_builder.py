@@ -176,6 +176,12 @@ class AgentBuilder:
                 all_tools.extend(mcp_tools)
                 logger.debug("[Init] MCP tools: %d always-loaded", len(mcp_tools))
 
+            # Synthetic MCP resource tools (list + read)
+            from soothe.mcp.tools import create_mcp_resource_tools
+
+            all_tools.extend(create_mcp_resource_tools(registry))
+            logger.debug("[Init] MCP resource tools added")
+
         # Filter out deepagents' execute tool when sandbox is disabled (IG-sandbox)
         before = len(all_tools)
         all_tools = without_execute_tool_when_sandbox_disabled(

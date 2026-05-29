@@ -244,13 +244,26 @@ class _ModelMixin:
         """Show read-only MCP server/tool viewer as a modal screen."""
         from soothe_cli.tui.widgets.mcp_viewer import MCPViewerScreen
 
-        screen = MCPViewerScreen(server_info=self._mcp_server_info or [])
+        server_info = self._mcp_server_info
+        if server_info is None:
+            server_info = await self._fetch_mcp_status()
+        screen = MCPViewerScreen(server_info=server_info or [])
 
         def handle_result(result: None) -> None:  # noqa: ARG001
             if self._chat_input:
                 self._chat_input.focus_input()
 
         self.push_screen(screen, handle_result)
+
+    async def _fetch_mcp_status(self) -> list[dict[str, Any]] | None:
+        """Fetch MCP server status from daemon for the viewer."""
+        if self._daemon_session is None:
+            return None
+        try:
+            resp = await self._daemon_session.get_mcp_status()
+        except Exception:  # noqa: BLE001
+            return None
+        return resp.get("servers")
 
     async def _show_autopilot_dashboard(self) -> None:
         """Show autopilot dashboard as a screen overlay."""

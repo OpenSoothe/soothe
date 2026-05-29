@@ -212,6 +212,9 @@ class SQLitePersistStore:
         Returns:
             The stored data, or None if not found.
         """
+        # Ensure schema exists before reader pool queries (fresh databases).
+        await self._ensure_writer_connection()
+
         # Use reader connection from pool
         async with self._pool_semaphore:  # Limit concurrent reads
             conn = await self._get_reader_connection()

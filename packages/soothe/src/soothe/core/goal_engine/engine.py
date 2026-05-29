@@ -418,9 +418,52 @@ class GoalEngine:
             raise KeyError(msg)
         old = goal.status
         goal.status = "suspended"
+        goal.assigned_loop_id = None
         goal.updated_at = datetime.now(UTC)
         logger.warning("Suspended goal %s: %s", goal_id, reason)
         await self._emit_state_change(goal, old, reason=reason or "suspended")
+        return goal
+
+    async def send_back_goal(self, goal_id: str, *, reason: str = "") -> Goal:
+        """RFC-204: Return a goal to pending after consensus rejection.
+
+        Increments ``send_back_count``. When the budget is exhausted the goal
+        is suspended instead of re-queued.
+
+        Args:
+            goal_id: Goal to send back.
+            reason: Consensus reasoning for the send-back.
+
+        Returns:
+            The updated Goal.
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
+
+        goal.send_back_count += 1
+        if goal.send_back_count >= goal.max_send_backs:
+            return await self.suspend_goal(
+                goal_id,
+                reason=reason or "send_back budget exhausted",
+            )
+
+        old = goal.status
+        goal.status = "pending"
+        goal.assigned_loop_id = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "Sent goal %s back for rework (send_back %d/%d): %s",
+            goal_id,
+            goal.send_back_count,
+            goal.max_send_backs,
+            reason,
+        )
+        await self._emit_state_change(goal, old, reason=reason or "consensus_send_back")
         return goal
 
     async def block_goal(self, goal_id: str, *, reason: str = "") -> Goal:
