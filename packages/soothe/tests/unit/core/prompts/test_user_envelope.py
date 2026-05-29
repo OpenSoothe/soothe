@@ -25,7 +25,6 @@ def test_execute_envelope_plain_goal_layout() -> None:
     )
     assert envelope.startswith("<USER_QUERY>")
     assert "<SKILL_CONTEXT>" not in envelope
-    assert "<USER_PRIMARY_QUERY>" not in envelope
     assert "--- Context ---" in envelope
     assert envelope.index("</USER_QUERY>") < envelope.index("--- Context ---")
 
@@ -42,8 +41,6 @@ def test_execute_envelope_slash_skill_skill_context_after_user_query() -> None:
         "Run the planned step",
         skill_context=skill_ref,
     )
-    assert "<USER_PRIMARY_QUERY>" not in envelope
-    assert "<FULL_GOAL_AND_SKILL_CONTEXT>" not in envelope
     assert "<SKILL_CONTEXT>" in envelope
     assert "Skill: demo" in envelope
     assert "Skill folder: /skills/demo" in envelope
@@ -54,16 +51,18 @@ def test_execute_envelope_slash_skill_skill_context_after_user_query() -> None:
     assert uq < sk < ctx
 
 
-def test_plan_context_envelope_slash_skill_surfaces_primary_query() -> None:
+def test_plan_context_envelope_uses_user_query_tag() -> None:
+    """Plan envelope uses <USER_QUERY> (not <GOAL_PROGRESS> nesting)."""
     envelope = build_plan_context_envelope(
-        goal="Skill: x\n\n" + "y" * 30,
+        goal="write a image understanding pipeline",
         goal_user_submission="/skill:x fix the bug in auth",
     )
-    assert "<USER_PRIMARY_QUERY>" in envelope
-    assert "fix the bug in auth" in envelope
+    assert "<USER_QUERY>" in envelope
+    assert "write a image understanding pipeline" in envelope
+    assert "<GOAL_PROGRESS>" not in envelope
+    assert "<USER_PRIMARY_QUERY>" not in envelope
+    assert "<FULL_GOAL_AND_SKILL_CONTEXT>" not in envelope
     assert "Execute iteration" not in envelope
-    assert "<FULL_GOAL_AND_SKILL_CONTEXT>" in envelope
-    assert envelope.startswith("<GOAL_PROGRESS>\n<USER_PRIMARY_QUERY>")
 
 
 def test_plan_context_envelope_includes_response_language_hint() -> None:
@@ -75,17 +74,17 @@ def test_plan_context_envelope_includes_response_language_hint() -> None:
 
 
 def test_plan_context_envelope_skill_reference_when_skill_context_provided() -> None:
-    """skill_context param emits <SKILL_REFERENCE> block after GOAL_PROGRESS."""
+    """skill_context param emits <SKILL_REFERENCE> block after USER_QUERY."""
     envelope = build_plan_context_envelope(
         goal="shanghai tomorrow",
         skill_context="Skill: weather\nSkill folder: /skills/weather\n\nWeather skill body here",
     )
     assert "<SKILL_REFERENCE>" in envelope
     assert "Weather skill body here" in envelope
-    # SKILL_REFERENCE appears after GOAL_PROGRESS
-    gp_idx = envelope.index("</GOAL_PROGRESS>")
+    # SKILL_REFERENCE appears after USER_QUERY
+    uq_idx = envelope.index("</USER_QUERY>")
     sr_idx = envelope.index("<SKILL_REFERENCE>")
-    assert gp_idx < sr_idx
+    assert uq_idx < sr_idx
 
 
 def test_plan_context_envelope_no_skill_reference_when_absent() -> None:

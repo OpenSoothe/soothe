@@ -1,5 +1,5 @@
 <PLAN_ASSESS>
-Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal and execute-iteration values in the <GOAL_PROGRESS> block in the following user message (after the ledger when present). When <GOAL_PROGRESS> contains <USER_PRIMARY_QUERY>, treat that short text as the user's main ask; long skill or goal context in <FULL_GOAL_AND_SKILL_CONTEXT> is supporting reference.
+Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal in the <USER_QUERY> block in the following user message (after the ledger when present).
 
 Output MUST match the structured schema only: status, goal_progress, require_goal_completion.
 
@@ -21,6 +21,6 @@ Use "low" when little or nothing toward the goal has been produced.
 **require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 
 **Guards**
-- When <GOAL_PROGRESS> shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
+- When <USER_QUERY> shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
 - Never set status="done" without ledger evidence that matches the goal.
 </PLAN_ASSESS>

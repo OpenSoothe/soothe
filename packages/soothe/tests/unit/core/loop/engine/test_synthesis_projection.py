@@ -26,7 +26,7 @@ def test_flatten_execute_envelope_extracts_user_query() -> None:
     )
     flat = flatten_execute_human_content(envelope)
     assert flat == "Search the repo for *.yml config"
-    assert "GOAL_PROGRESS" not in flat
+    assert "USER_QUERY" not in flat
     assert "EXECUTION_HINTS" not in flat
 
 
@@ -55,7 +55,7 @@ def test_projection_excludes_plan_phases() -> None:
         loop_messages=[plan_human, execute_human, execute_ai],
     )
     ctx = project_synthesis_user_context(state)
-    assert "GOAL_PROGRESS" not in ctx.evidence_body
+    assert "USER_QUERY" not in ctx.evidence_body
     assert "Execute iteration" not in ctx.evidence_body
     assert "README documents" in ctx.evidence_body
     assert "read README" in ctx.evidence_body or "Execute:" in ctx.evidence_body
