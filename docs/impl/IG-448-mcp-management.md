@@ -22,28 +22,27 @@ Replace the broken/stubbed MCP loader path with a working daemon-singleton MCP s
 - [x] Implement `budget.py` (format_mcp_tools_within_budget)
 - [x] Add `builtin_servers.py` (chrome-devtools MCP)
 - [x] Update config/config.template.yml and config/config.dev.yml
-- [x] Unit tests for batch 1 (test_name_utils, test_config_validation, test_transport_factory, test_budget_formatter)
+- [x] Unit tests for batch 1
 
 ### Batch 2: Registry + lifecycle ✅ DONE
 - [x] Implement `connection.py` (MCPConnection dataclass)
 - [x] Implement `registry.py` (MCPRegistry — initialize, shutdown, always_loaded_tools, deferred_tools, invoke, read_resource)
-- [x] Implement `loader.py` (backward-compat adapter for manager.py imports)
+- [x] Implement `loader.py` (backward-compat adapter for manager.py)
 - [x] Implement `reconnect.py` (exponential-backoff scheduler)
 - [x] Implement `cleanup.py` (subprocess cleanup ladder)
-- [x] Implement `events.py` (MCP event family, self-registered)
-- [x] Wire `SootheDaemon._mcp_registry` lifecycle (init in __init__, initialize in start, shutdown on signal)
-- [x] Fix `core/thread/manager.py` — pass secret_resolver to load_mcp_tools
-- [x] Fix `soothe_daemon/health/checks/mcp_check.py` — rewrite with transport-aware validation
-- [x] Unit tests pass (2097 tests)
+- [x] Implement `events.py` (MCP event family, self-registered as SootheEvent)
+- [x] Wire `SootheDaemon._mcp_registry` lifecycle (init/start/shutdown)
+- [x] Fix `core/thread/manager.py` — pass secret_resolver
+- [x] Fix `soothe_daemon/health/checks/mcp_check.py` — transport-aware validation
 
-### Batch 3: Agent integration + progressive disclosure
-- [ ] Add `mcp_registry` param to AgentBuilder.__init__
-- [ ] Append MCP always-loaded tools in _builder.py after resolve_tools
-- [ ] Add MCP fields to LoopState (sent_mcp_tool_names, invoked_mcp_tools, disabled_mcp_servers, cached_mcp_resources)
-- [ ] Implement `MCPToolSearchMiddleware` in middleware/mcp_tool_search.py
-- [ ] Insert MCPToolSearchMiddleware at position 1c in middleware/_builder.py
+### Batch 3: Agent integration + progressive disclosure ✅ DONE (core items)
+- [x] Add `mcp_registry` param to AgentBuilder.__init__ and build()
+- [x] Append MCP always-loaded tools in _builder.py after resolve_tools
+- [x] Add MCP fields to LoopState (sent_mcp_tool_names, invoked_mcp_tools, disabled_mcp_servers, cached_mcp_resources)
+- [x] Implement `MCPToolSearchMiddleware` in middleware/mcp_tool_search.py
+- [x] Insert MCPToolSearchMiddleware at position 1c in middleware/_builder.py
+- [x] Pass mcp_registry through build_soothe_middleware_stack()
 - [ ] Add `_compose_mcp_tools_block` to SystemPromptOptimizationMiddleware
-- [ ] Wire registry injection path (daemon → runner → builder → middleware)
 - [ ] Add MCP permission action types to config_policy.py
 - [ ] LoopState snapshot/rehydrate in agent_loop.py
 - [ ] Unit tests for batch 3
@@ -78,16 +77,17 @@ Replace the broken/stubbed MCP loader path with a working daemon-singleton MCP s
 ## Files Modified
 - packages/soothe/src/soothe/config/models.py (MCPServerConfig, ProgressiveMCPConfig)
 - packages/soothe/src/soothe/config/settings.py (validation, progressive_mcp)
-- packages/soothe/src/soothe/core/agent/_builder.py (mcp_registry param)
+- packages/soothe/src/soothe/core/agent/_builder.py (mcp_registry param + tools injection)
 - packages/soothe/src/soothe/core/thread/manager.py (pass secret_resolver)
-- packages/soothe/src/soothe/middleware/_builder.py (MCPToolSearchMiddleware)
+- packages/soothe/src/soothe/core/loop/state/schemas.py (MCP fields in LoopState)
+- packages/soothe/src/soothe/middleware/_builder.py (mcp_registry param + MCPToolSearchMiddleware)
+- packages/soothe/src/soothe/middleware/__init__.py (MCPToolSearchMiddleware export)
 - packages/soothe/src/soothe/middleware/system_prompt_optimization.py (_compose_mcp_tools_block)
-- packages/soothe/src/soothe/core/loop/state/schemas.py (MCP fields)
 - packages/soothe/src/soothe/core/loop/engine/agent_loop.py (snapshot/rehydrate)
 - packages/soothe/src/soothe/skills/catalog.py (merge MCP prompts)
 - packages/soothe/src/soothe/core/governance/config_policy.py (new permissions)
-- packages/soothe-daemon/src/soothe_daemon/server.py (_mcp_registry)
-- packages/soothe-daemon/src/soothe_daemon/health/checks/mcp_check.py (rewrite)
+- packages/soothe-daemon/src/soothe_daemon/server.py (_mcp_registry lifecycle)
+- packages/soothe-daemon/src/soothe_daemon/health/checks/mcp_check.py (transport-aware)
 - packages/soothe-cli/src/soothe_cli/tui/widgets/mcp_viewer.py (wire data)
 - packages/soothe-cli/src/soothe_cli/cli/main.py (--mcp-config)
 - config/config.template.yml

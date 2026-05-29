@@ -141,6 +141,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         config: SootheConfig,
         tool_trigger_registry: ToolTriggerRegistry | None = None,
         tool_context_registry: ToolContextRegistry | None = None,
+        mcp_registry: Any | None = None,
     ) -> None:
         """Initialize the system prompt optimization middleware.
 
@@ -148,10 +149,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             config: Soothe configuration instance.
             tool_trigger_registry: Optional registry for tool→section triggers.
             tool_context_registry: Optional registry for tool→context fragments.
+            mcp_registry: Optional MCPRegistry for MCP tool listing (RFC-412).
         """
         self._config = config
         self._tool_trigger_registry = tool_trigger_registry
         self._tool_context_registry = tool_context_registry
+        self._mcp_registry = mcp_registry
 
     @staticmethod
     def _langfuse_system_hint_push(request: ModelRequest[ContextT]) -> Token | None:
@@ -469,6 +472,11 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             static_sections.append(avail_block)
         semi_static_sections.extend(skill_ctx_blocks)
 
+        # RFC-412: MCP deferred tool listing
+        mcp_block = self._compose_mcp_tools_block(state)
+        if mcp_block:
+            static_sections.append(mcp_block)
+
         # ── Assemble: static + semi-static (no date line, no execution hints) ──
         parts = ["\n\n".join(static_sections)]
         if semi_static_sections:
@@ -649,6 +657,68 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         state["skill_activation"] = activation
 
         return available_block, skill_context_blocks
+
+    def _compose_mcp_tools_block(self, state: dict[str, Any] | None) -> str | None:
+        """RFC-412: Compose <AVAILABLE_MCP_TOOLS> block for deferred MCP tools.
+
+        Only deferred tools (defer=True) need listing — always-loaded tools
+        are already in the tool array.
+
+        Args:
+            state: Request state dict (may contain ``sent_mcp_tool_names``).
+
+        Returns:
+            XML block string, or None if no MCP tools or registry.
+        """
+        if not self._mcp_registry or not state:
+            return None
+
+        sent = state.get("sent_mcp_tool_names", set())
+        if not isinstance(sent, set):
+            sent = set()
+
+        descriptors = self._mcp_registry.deferred_tools()
+        if not descriptors:
+            return None
+
+        # Filter out already-sent tools
+        new_descriptors = [d for d in descriptors if d.name not in sent]
+        if not new_descriptors:
+            return None
+
+        ctx_limit = int(self._config.agent.loop.context_window_limit)
+        budget_pct = (
+            float(self._config.progressive_mcp.budget_pct) if self._config.progressive_mcp else 0.02
+        )
+        budget_chars = max(0, int(ctx_limit * budget_pct))
+        per_entry_cap = (
+            int(self._config.progressive_mcp.max_listing_chars_per_entry)
+            if self._config.progressive_mcp
+            else 250
+        )
+        min_per_entry = (
+            int(self._config.progressive_mcp.min_listing_chars_per_entry)
+            if self._config.progressive_mcp
+            else 20
+        )
+
+        from soothe.mcp.budget import format_mcp_tools_within_budget
+
+        text, _telemetry = format_mcp_tools_within_budget(
+            new_descriptors,
+            budget_chars=budget_chars,
+            per_entry_cap_chars=per_entry_cap,
+            min_per_entry_chars=min_per_entry,
+        )
+        if not text:
+            return None
+
+        # Mark as sent
+        for d in new_descriptors:
+            sent.add(d.name)
+        state["sent_mcp_tool_names"] = sent
+
+        return f"<AVAILABLE_MCP_TOOLS>\n{text}\n</AVAILABLE_MCP_TOOLS>"
 
     def _build_agent_loop_output_contract_section(
         self, config: SootheConfig | None = None
