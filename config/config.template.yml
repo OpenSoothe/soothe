@@ -350,7 +350,31 @@ subagents:
 # ============================================================
 # MCP SERVERS, PLUGINS, SKILLS, MEMORY
 # ============================================================
+
+# MCP server configurations (RFC-412). Each server requires a unique name.
+# Supports four transports: stdio, sse, streamable_http, websocket.
+# Example stdio server:
+#   mcp_servers:
+#     - name: filesystem
+#       transport: stdio
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#       defer: true              # progressive disclosure (default)
+# Example remote server with auth:
+#   mcp_servers:
+#     - name: linear
+#       transport: streamable_http
+#       url: https://mcp.linear.app/sse
+#       auth:
+#         headers:
+#           Authorization: "Bearer ${LINEAR_MCP_TOKEN}"
+#       defer: true
 mcp_servers: []
+progressive_mcp:
+  budget_pct: 0.01                  # fraction of context_window_limit for <AVAILABLE_MCP_TOOLS> listing
+  max_listing_chars_per_entry: 250  # hard per-entry tool description cap
+  min_listing_chars_per_entry: 20   # below this, non-essential entries become names-only
+
 plugins: []
 skills: []
 progressive_skills:

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class UIConfig(BaseModel):
@@ -162,18 +163,75 @@ class PluginConfig(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
-class MCPServerConfig(BaseModel):
-    """Configuration for a single MCP server.
+class MCPTransport(StrEnum):
+    """Transport types for MCP server connections."""
 
-    Supports both stdio (command + args) and HTTP/SSE (url + transport).
-    Compatible with Claude Desktop ``.mcp.json`` format.
+    STDIO = "stdio"
+    SSE = "sse"
+    STREAMABLE_HTTP = "streamable_http"
+    WEBSOCKET = "websocket"
+
+
+class MCPAuthHeaders(BaseModel):
+    """Bearer tokens / API keys via headers. Supports ${ENV_VAR} interpolation."""
+
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class MCPServerConfig(BaseModel):
+    """Configuration for a single MCP server (RFC-412).
+
+    Supports four transports via MCPTransport enum. Compatible with
+    `langchain_mcp_adapters` connection types.
+
+    Args:
+        name: Required unique server identifier.
+        transport: Transport type (stdio, sse, streamable_http, websocket).
+        command: Subprocess command for stdio transport.
+        args: Command arguments for stdio transport.
+        env: Environment variables for stdio (supports ${ENV_VAR} interpolation).
+        url: Server URL for remote transports.
+        auth: Bearer/header auth configuration (v1; OAuth deferred).
+        enabled: Per-server on/off toggle.
+        defer: When True, tools are progressive (not in default tool array).
+        tool_filter: Allowlist glob patterns for tool names (fnmatch).
+        timeout_seconds: Connection timeout.
+        request_timeout_seconds: Per-RPC timeout.
+        tool_timeout_seconds: Tool-call hard cap.
     """
 
+    name: str
+    transport: MCPTransport = MCPTransport.STDIO
+    # stdio
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+    # remote
     url: str | None = None
-    transport: str = "stdio"
+    auth: MCPAuthHeaders | None = None
+    # behavior
+    enabled: bool = True
+    defer: bool = True
+    tool_filter: list[str] | None = None
+    timeout_seconds: float = 30.0
+    request_timeout_seconds: float = 60.0
+    tool_timeout_seconds: float = 600.0
+
+    @model_validator(mode="after")
+    def _validate_transport_fields(self) -> MCPServerConfig:
+        if self.transport == MCPTransport.STDIO:
+            if not self.command:
+                raise ValueError(f"Server '{self.name}': stdio requires 'command'")
+            if self.url:
+                raise ValueError(f"Server '{self.name}': stdio cannot have 'url'")
+        else:
+            if not self.url:
+                raise ValueError(f"Server '{self.name}': {self.transport.value} requires 'url'")
+            if self.command:
+                raise ValueError(
+                    f"Server '{self.name}': {self.transport.value} cannot have 'command'"
+                )
+        return self
 
 
 class ComplexityThresholds(BaseModel):
@@ -1522,6 +1580,30 @@ class ProgressiveSkillsConfig(BaseModel):
         default=20,
         ge=0,
         description="Below this, non-builtin entries fall back to names-only mode.",
+    )
+
+
+class ProgressiveMCPConfig(BaseModel):
+    """RFC-412: Tunables for progressive MCP tool listing budget."""
+
+    budget_pct: float = Field(
+        default=0.01,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Fraction of AgentLoopConfig.context_window_limit (chars, not tokens) "
+            "available for the <AVAILABLE_MCP_TOOLS> listing per turn."
+        ),
+    )
+    max_listing_chars_per_entry: int = Field(
+        default=250,
+        ge=0,
+        description="Hard per-entry character cap for tool description in the listing.",
+    )
+    min_listing_chars_per_entry: int = Field(
+        default=20,
+        ge=0,
+        description="Below this, non-essential entries fall back to names-only mode.",
     )
 
 

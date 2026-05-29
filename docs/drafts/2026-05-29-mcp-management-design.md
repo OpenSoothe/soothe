@@ -1,10 +1,10 @@
 # MCP Management
 
 **Date:** 2026-05-29
-**Status:** Draft
+**Status:** Draft (revised)
 **Builds on:** RFC-100 (CoreAgent Runtime), RFC-101 (Tool Interface), RFC-406 (Policy Protocol Architecture), RFC-600 (Plugin Extension System)
-**Companion:** [Progressive Skill Loading](2026-05-29-progressive-skill-loading-design.md) — both drafts share the "defer-by-default + budgeted listing" pattern.
-**Scope:** Replace the broken/stubbed MCP loader path with a working daemon-singleton MCP subsystem: per-server connection sharing across threads, progressive MCP tool surfacing via a `ToolSearchMiddleware`, MCP prompts as slash commands, MCP resources as `@server:uri` attachments, bearer-token/headers auth (OAuth deferred to a follow-on RFC).
+**Parallel:** [Progressive Skill Loading](2026-05-29-progressive-skill-loading-design.md) — **implemented** (RFC-105). This draft shares the "defer-by-default + budgeted listing" pattern and reuses the budget-formatter shape (separate function, same algorithm).
+**Scope:** Replace the broken/stubbed MCP loader path with a working daemon-singleton MCP subsystem: per-server connection sharing across threads, progressive MCP tool surfacing via `MCPToolSearchMiddleware`, MCP prompts as slash commands, MCP resources as `@server:uri` attachments, bearer-token/headers auth (OAuth deferred to a follow-on RFC).
 
 ---
 
@@ -12,24 +12,23 @@
 
 MCP support in soothe today is effectively zero functional surface:
 
-- `MCPServerConfig` schema exists (`config/models.py:165`) but is missing `name`, transport enum, `headers`, `env` interpolation, per-server tool filters, and timeouts; daemon health check (`soothe-daemon/.../mcp_check.py:28`) already calls `server.name` which doesn't exist on the model
-- `soothe.mcp` package **does not exist** — `core/thread/manager.py:24,553` does `from soothe.mcp.loader import …` which raises `ImportError` on every thread create/resume; the exception is silently swallowed
-- `langchain-mcp-adapters>=0.2.0` is declared in `pyproject.toml:37` and installed in `.venv` but **never imported** in any `packages/` source
-- Data path is severed in three places: `_resolver_tools.py:resolve_tools` ignores `config.mcp_servers`; `_builder.py:create_deep_agent` never receives MCP tools; the `_ensure_mcp_session` return value is discarded (`_, manager = await load_mcp_tools(...)`)
-- TUI `/mcp` viewer always renders `"No MCP servers configured"` because `mcp_server_info` is never wired into `run_textual_tui`
+- `MCPServerConfig` schema exists (`config/models.py:165`) but is missing `name`, transport enum, `headers`, `env` interpolation, per-server tool filters, and timeouts; daemon health check (`soothe_daemon/health/checks/mcp_check.py:28`) already calls `server.name` which doesn't exist on the model
+- `soothe.mcp` package **does not exist** — `core/thread/manager.py:24` does `from soothe.mcp.loader import …` (inside `TYPE_CHECKING`); line 553 runtime import in `_ensure_mcp_session` raises `ImportError` on every thread create/resume; the exception is silently swallowed
+- `langchain-mcp-adapters>=0.2.0` is declared in `pyproject.toml` and installed in `.venv` but **never imported** in any `packages/` source
+- Data path is severed in three places: `_resolver_tools.py:resolve_tools` (line 153) ignores `config.mcp_servers`; `_builder.py:158` never receives MCP tools; the `_ensure_mcp_session` return value is discarded
+- TUI `/mcp` viewer always renders `"No MCP servers configured"` because `mcp_server_info` is never wired into the TUI app
 - `--mcp-config` CLI flag is referenced in user-facing hint text but **not implemented** anywhere in `soothe-cli`
-- `docs/user_guide.md:67` links to `docs/wiki/mcp-servers.md` which **does not exist**
+- `docs/user_guide.md` links to `docs/wiki/mcp-servers.md` which **does not exist**
 
 Meanwhile Claude Code has a mature MCP stack (`src/services/mcp/` ~5K LOC across `config.ts`, `client.ts`, `auth.ts`, `useManageMCPConnections.ts`) with patterns directly applicable to soothe:
 
 - **Single connection per `(server_name, config)`** memoized across the process (`client.ts:595`), with concurrent batch-spawn at startup (3 stdio / 20 remote)
-- **Six transports**: stdio, SSE, HTTP (streamable), WebSocket, plus internal SDK and in-process pairs
-- **Two-phase discovery**: `Promise.all([fetchTools, fetchPrompts, fetchSkills, fetchResources])` per server, LRU-cached per server name
+- **Four transports**: stdio, SSE, streamable HTTP, WebSocket (soothe uses `langchain_mcp_adapters` which provides the same four via `StdioConnection`, `SSEConnection`, `StreamableHttpConnection`, `WebsocketConnection`)
+- **Two-phase discovery**: `Promise.all([fetchTools, fetchPrompts, fetchResources])` per server, LRU-cached per server name
 - **`list_changed` notifications** invalidate the LRU and push fresh entries into AppState
 - **16ms batched AppState writes** coalesce server-state churn
 - **Progressive disclosure for MCP tools**: `isDeferredTool` (`tools/ToolSearchTool/prompt.ts:62`) keeps MCP tools out of the default tool array; model uses `ToolSearchTool` to surface them on demand; servers opt out via `_meta['anthropic/alwaysLoad']`
-- **MCP prompts → slash commands** named `mcp__<server>__<prompt>`; **MCP skills → Skill tool** (feature-gated)
-- **MCP resources → `@server:uri` attachments** + two synthetic `ListMcpResourcesTool`/`ReadMcpResourceTool` once a resource-capable server connects
+- **MCP prompts → slash commands** named `mcp__<server>__<prompt>`; **MCP resources → `@server:uri` attachments** + two synthetic `ListMcpResourcesTool`/`ReadMcpResourceTool` once a resource-capable server connects
 - **Per-server reconnect with exponential backoff** (max 5 attempts, 30s cap) for remote transports only — stdio never auto-reconnects
 - **OAuth with PKCE + dynamic client registration + step-up + XAA** (~2.4K LOC in `auth.ts`) — out of scope for v1
 
@@ -39,13 +38,16 @@ This draft specifies the soothe-side replacement: a clean, working baseline with
 
 ## 2. Design decisions
 
-Three choices were settled before drafting:
+Three choices were settled before drafting; two refined during review:
 
 | Decision | Resolution | Reason |
 |---|---|---|
 | Connection scope | **Daemon singleton** — one connection per `(name, config)` shared across all threads; per-thread views are filters over the shared registry | Matches Claude Code's memoized `connectToServer`; aligns with `langchain_mcp_adapters.MultiServerMCPClient`'s shape; fixes the current N×M subprocess explosion; per-thread auth scoping can land later as a refinement without re-architecting |
-| Tool surfacing | **Progressive (defer-by-default)** — MCP tools not in `tools=` by default; surface via a new `ToolSearchMiddleware` analogous to the progressive-skill-loading registry | Same context-budget rationale as the companion draft; mirrors `isDeferredTool` (Claude Code `src/tools/ToolSearchTool/prompt.ts:62`); per-server `defer: bool` field provides escape hatch for must-always-load cases |
+| Tool surfacing | **Progressive (defer-by-default)** — MCP tools not in `tools=` by default; surface via a new `MCPToolSearchMiddleware` analogous to the progressive-skill-loading registry (RFC-105) | Same context-budget rationale as the skill system; mirrors `isDeferredTool` (Claude Code `src/tools/ToolSearchTool/prompt.ts:62`); per-server `defer: bool` field provides escape hatch for must-always-load cases |
 | Auth in v1 | **Bearer tokens + headers + env interpolation** | Covers ~80% of remote MCP servers (API-key-style auth); OAuth is the largest single piece of Claude Code's MCP stack and warrants its own RFC; this draft carves out token-storage and refresh hooks to keep v2 additive |
+| Budget formatter | **Separate `format_mcp_tools_within_budget`** (not a rename/generalization of the skill budget formatter) | `format_skills_within_budget` is typed to `SkillIndexEntry`; MCP tool descriptors have a different shape (name + description + server). A separate function avoids coupling and breakage risk; the algorithm is identical (full → truncated → names_only) |
+| Middleware naming | **`MCPToolSearchMiddleware`** (not `ToolSearchMiddleware`) | Disambiguates from skill-system progressive disclosure; the two systems are independent and the model gets separate search surfaces |
+| Search UX | **Separate search tools** — `mcp_tool_search` for MCP tools, skill listing for skills | Clear separation of concerns; no coupling between skill and MCP discovery paths; model can search each independently |
 
 ---
 
@@ -63,13 +65,14 @@ Enterprise scope (`<managed-dir>/managed-mcp.json`), when present, **exclusively
 
 ### Transports
 
-Single if/else chain in `connectToServer()` (`client.ts:619-961`) dispatches to:
-- `stdio` → `StdioClientTransport` (subprocess; default for `command` configs)
-- `sse`, `sse-ide` → `SSEClientTransport`
-- `http` → `StreamableHTTPClientTransport`
-- `ws`, `ws-ide` → `WebSocketTransport`
-- `sdk` → in-process `SdkControlClientTransport`
-- Chrome MCP / Computer Use → `createLinkedTransportPair()` for in-process
+`langchain_mcp_adapters` provides four connection types that map directly to soothe's `MCPTransport` enum:
+
+| `MCPTransport` | `langchain_mcp_adapters` class | Key fields |
+|---|---|---|
+| `stdio` | `StdioConnection` | `command`, `args`, `env`, `cwd` (derived from daemon workspace) |
+| `sse` | `SSEConnection` | `url`, `headers`, `timeout` (float, seconds), `auth` (httpx.Auth) |
+| `streamable_http` | `StreamableHttpConnection` | `url`, `headers`, `timeout` (timedelta — factory converts from MCPServerConfig.timeout_seconds), `auth` (httpx.Auth) |
+| `websocket` | `WebsocketConnection` | `url` |
 
 ### Connection lifecycle
 
@@ -89,13 +92,12 @@ Promise.all([fetchToolsForClient, fetchPromptsForClient,
 ```
 Each is `memoizeWithLRU(20)` keyed by `client.name`, invalidated on `list_changed` and `onclose`. Results pushed via `onConnectionAttempt` → `updateServer` (`useManageMCPConnections.ts:297`), batched with `setTimeout(16ms)` to coalesce churn.
 
-Name mangling: `buildMcpToolName()` (`mcpStringUtils.ts:50`) → `mcp__<sanitizedServer>__<sanitizedTool>`. `normalizeNameForMCP()` (`normalization.ts:17`) strips non-`[a-zA-Z0-9_-]` chars.
+Name mangling: `buildMcpToolName()` (`mcpStringUtils.ts:50`) → `mcp__<sanitizedServer>__<sanitizedTool>`. `normalizeNameForMCP()` (`normalization.ts:17`) strips non-`[a-zA-Z0-9_-]` chars. Note: `langchain_mcp_adapters` applies its own `mcp__` prefix via `tool_name_prefix=True` on `MultiServerMCPClient` and `load_mcp_tools`; soothe must coordinate with this to avoid double-prefixing.
 
 ### Surfacing to the model
 
 - **Tools**: merged into the tool pool by `assembleToolPool()` (`tools.ts:345`) — built-ins sorted first, then MCP sorted, contiguous partitions to preserve cache breakpoints. **Default: deferred** via `isDeferredTool` (`tools/ToolSearchTool/prompt.ts:62`) — model uses `ToolSearchTool` to discover them. Servers opt out per-tool via `_meta['anthropic/alwaysLoad']` (read at `client.ts:1785`).
 - **Prompts**: become slash commands `/mcp__<server>__<prompt>` (`client.ts:2054-2096`)
-- **Skills** (feature-gated `MCP_SKILLS`): become Skill-tool-invocable commands with `loadedFrom='mcp'`; never get inline shell execution (`loadSkillsDir.ts:374`)
 - **Resources**: via `@server:uri` extractor (`attachments.ts:2792`), resolved by `processMcpResourceAttachments` (`attachments.ts:1995`); two synthetic tools `ListMcpResourcesTool` + `ReadMcpResourceTool` injected once any resource-capable server connects
 
 ### Permissions
@@ -117,19 +119,22 @@ For stdio (`client.ts:1404-1500`): detach stderr handler → `SIGINT` → poll e
 
 ```
 Daemon startup
-  SootheDaemon.__init__:
-    self._mcp_registry = MCPRegistry(config.mcp_servers)
-    await self._mcp_registry.initialize()         # phase 1: connect all enabled servers concurrently
-                                                  #   uses langchain_mcp_adapters.MultiServerMCPClient
-                                                  #   batched: 3 stdio / 20 remote
-    self._mcp_registry.subscribe_list_changed()   # arms list_changed handlers
+  SootheDaemon.__init__ (server.py:102):
+    self._mcp_registry = MCPRegistry(config.mcp_servers)     # parallel to self._skill_index (line 116)
+    # initialize() called in start() after event loop is running
+  SootheDaemon.start() (server.py:192):
+    await self._mcp_registry.initialize()                    # phase 1: connect all enabled servers concurrently
+                                                              #   wraps langchain_mcp_adapters.MultiServerMCPClient
+                                                              #   batched: 3 stdio / 20 remote
+    self._mcp_registry.subscribe_list_changed()               # arms list_changed handlers
 
 MCPRegistry (process singleton, daemon-owned)
-  connections : dict[str, MCPConnection]           # keyed by server name
-  tools       : dict[str, list[BaseTool]]          # per server, langchain BaseTool instances
-  prompts     : dict[str, list[PromptCommand]]     # per server, soothe Command objects
-  resources   : dict[str, list[ResourceDescriptor]] # per server
-  defer       : dict[str, bool]                    # per server, from config.defer
+  _client       : MultiServerMCPClient | None                # langchain_mcp_adapters singleton
+  connections   : dict[str, MCPConnection]                    # keyed by server name
+  tools         : dict[str, list[BaseTool]]                   # per server, langchain BaseTool instances
+  prompts       : dict[str, list[MCPPromptDescriptor]]        # per server, lightweight descriptors
+  resources     : dict[str, list[MCPResourceDescriptor]]      # per server
+  defer         : dict[str, bool]                             # per server, from config.defer
 
   on list_changed(server, kind):
     invalidate cache, re-fetch, update dict, emit MCPListChangedEvent
@@ -143,28 +148,28 @@ Per-thread view (no per-thread connections — just filtered views)
   ThreadContextManager.get_mcp_tools(thread_id) -> list[BaseTool]:
     returns tools across all enabled servers, applying:
       - workspace policy (PolicyProtocol denies for current workspace)
-      - per-server enabled flag (LoopState.disabled_mcp_servers override)
+      - per-server enabled flag
       - defer filter (only include tools where defer=False; deferred tools
-        are reachable only via ToolSearchMiddleware)
+        are reachable only via MCPToolSearchMiddleware)
 
-Tool assembly at agent build time (core/agent/_builder.py)
-  always_tools = resolve_tools(config.tools, workspace)        # existing
-  mcp_always   = mcp_registry.always_loaded_tools(workspace)   # defer=False set
-  graph = create_deep_agent(tools = always_tools + mcp_always, ...)
+Tool assembly at agent build time (core/agent/_builder.py:153-158)
+  config_tools = resolve_tools(config.tools, ...)
+  mcp_always   = mcp_registry.always_loaded_tools(workspace) if mcp_registry else []  # defer=False set
+  all_tools    = list(config_tools) + mcp_always
 
-Progressive surfacing during a turn (middleware stack)
-  ToolSearchMiddleware.modify_request (new, mirrors progressive-skill registry):
+Progressive surfacing during a turn (middleware stack, position 1c)
+  MCPToolSearchMiddleware.modify_request (new, parallels SkillActivationMiddleware at position 1b):
     - On every turn, emit a budgeted <AVAILABLE_MCP_TOOLS> block (static tier)
       with name + description for deferred MCP tools the model hasn't been told
       about yet (delta-tracked on LoopState.sent_mcp_tool_names)
     - Token budget: 1% of context_window_limit (same constant as skills)
-    - When model invokes `mcp_tool_search(query="...")` (new tool), search by
-      name/description across all deferred tools, return top-k matches
+    - When model invokes `mcp_tool_search(query="...")` (new built-in tool),
+      search by name/description across all deferred tools, return top-k matches
 
 Tool call dispatch
   When model calls mcp__server__tool:
-    MCPTool.call delegates to MCPRegistry.invoke(server, tool, args)
-      → langchain_mcp_adapters BaseTool.ainvoke(args)
+    MCPRegistry.invoke(server, tool, args)
+      → MultiServerMCPClient.get_tools(server_name=server) → BaseTool.ainvoke(args)
       → callback enforces PolicyProtocol.check("mcp_call", server, tool, args)
       → metric: soothe.mcp.tool_call.latency
 
@@ -217,10 +222,24 @@ Validation:
 - `transport == STDIO` requires `command`; remote transports require `url`
 - `${ENV_VAR}` interpolation happens in `MCPRegistry.initialize` via existing `config.secret_resolver` (same path used by `SootheConfig.propagate_env`); missing env → connect-time error
 - `tool_filter` patterns matched against the bare tool name (pre-mangling) via `fnmatch`
+- `name` must be unique across `config.mcp_servers` (validated at `SootheConfig` parse time)
 
 The `defer` default of **`True`** mirrors Claude Code's behavior; users who want a server always-loaded set `defer: false`.
 
-Config layering follows soothe's existing pattern: a single `mcp_servers: list[MCPServerConfig]` on `SootheConfig`. No multi-scope merging in v1 (Claude Code's enterprise/local/project/user model is overkill for daemon-owned soothe). Future: a `policy_settings.mcp_overrides` hook for daemon-admin-managed servers — out of scope here.
+Config layering follows soothe's existing pattern: a single `mcp_servers: list[MCPServerConfig]` on `SootheConfig`. No multi-scope merging in v1 (Claude Code's enterprise/local/project/user model is overkill for daemon-owned soothe). The `--mcp-config <path>` daemon-startup flag loads an extra `mcp_servers:` YAML/JSON, merged at config-resolution time before `SootheConfig` is constructed. This is a **daemon startup flag**, not a per-request override — the merged config is immutable for the daemon's lifetime.
+
+### Budget config
+
+A new `ProgressiveMCPConfig` (parallel to the existing `ProgressiveSkillsConfig` at `config/models.py:1504`):
+
+```python
+class ProgressiveMCPConfig(BaseModel):
+    budget_pct: float = Field(default=0.01, ge=0.0, le=1.0)
+    max_listing_chars_per_entry: int = Field(default=250, ge=0)
+    min_listing_chars_per_entry: int = Field(default=20, ge=0)
+```
+
+Referenced as `config.progressive_mcp`. Uses the same defaults as `ProgressiveSkillsConfig` since the budgeting algorithm is identical.
 
 ---
 
@@ -230,45 +249,60 @@ Config layering follows soothe's existing pattern: a single `mcp_servers: list[M
 
 | File | Role |
 |---|---|
-| `__init__.py` | Public re-exports |
-| `registry.py` | `MCPRegistry` — daemon-singleton; owns connections, tool/prompt/resource indices, list_changed handlers, reconnect logic |
-| `connection.py` | `MCPConnection` dataclass — per-server state (client, transport, status, last_error, reconnect_attempt) |
-| `loader.py` | **Replaces the missing module referenced by `core/thread/manager.py:24`.** Adapter over `langchain_mcp_adapters.MultiServerMCPClient` |
-| `transports.py` | Transport factory: maps `MCPTransport` enum to the langchain-mcp-adapters connection-spec dict |
-| `auth.py` | v1: header interpolation + bearer/API-key formatting. Hooks reserved for OAuth (`AuthProvider` protocol stub) |
-| `name_utils.py` | `build_mcp_tool_name(server, tool)` / `parse_mcp_tool_name(name)` — port of `mcpStringUtils.ts` |
+| `__init__.py` | Public re-exports (`MCPRegistry`, `MCPServerConfig`, `MCPTransport`, `build_mcp_tool_name`, `parse_mcp_tool_name`) |
+| `registry.py` | `MCPRegistry` — daemon-singleton; owns `MultiServerMCPClient`, tool/prompt/resource indices, list_changed handlers, reconnect logic |
+| `connection.py` | `MCPConnection` dataclass — per-server state (name, transport, status, last_error, reconnect_attempt) |
+| `loader.py` | **Replaces the missing module referenced by `core/thread/manager.py:24`.** Adapter over `langchain_mcp_adapters.MultiServerMCPClient`; provides `load_mcp_tools` and `MCPSessionManager` for backward compat with the existing import sites |
+| `transports.py` | Transport factory: maps `MCPTransport` enum to `langchain_mcp_adapters` connection dicts (`StdioConnection`, `SSEConnection`, `StreamableHttpConnection`, `WebsocketConnection`) |
+| `auth.py` | v1: header interpolation + bearer/API-key formatting. `AuthProvider` protocol stub reserved for OAuth |
+| `name_utils.py` | `build_mcp_tool_name(server, tool)` / `parse_mcp_tool_name(name)` — port of `mcpStringUtils.ts`. Coordinates with `langchain_mcp_adapters`' own `tool_name_prefix` to avoid double-prefixing |
 | `reconnect.py` | Exponential-backoff reconnect scheduler for remote transports |
 | `cleanup.py` | Subprocess cleanup ladder for stdio (`SIGINT` → poll → `SIGTERM` → failsafe), mirroring `client.ts:1404-1500` |
+| `events.py` | MCP event types, self-registered via `register_event()` (follows IG-052 pattern — not added to `core/events/catalog.py`) |
+| `budget.py` | `format_mcp_tools_within_budget` — same algorithm as `skills/budget.py:format_skills_within_budget` but typed to `MCPToolDescriptor` instead of `SkillIndexEntry` |
 
 ### New middleware: `packages/soothe/src/soothe/middleware/mcp_tool_search.py`
 
-`ToolSearchMiddleware(AgentMiddleware)`:
-- `modify_request`: injects budgeted `<AVAILABLE_MCP_TOOLS>` block (delta-only, per-thread, mirrors progressive-skill registry pattern)
+`MCPToolSearchMiddleware(AgentMiddleware)`:
+- `abefore_agent`: initialize `state["mcp_activation"]` dict (mirrors `state["skill_activation"]` pattern from `SkillActivationMiddleware`)
+- Does **not** use `modify_request` for the `<AVAILABLE_MCP_TOOLS>` block — instead delegates to `SystemPromptOptimizationMiddleware._compose_mcp_tools_block(state)` (same split as skills: `SkillActivationMiddleware` handles activation logic, `SystemPromptOptimizationMiddleware` handles the prompt block)
 - Registers a built-in tool `mcp_tool_search(query: str, limit: int = 10)` that returns the top-k matching deferred tools
-- On match-and-invoke, the matched tool gets promoted into the thread's "always available" set for the rest of the loop (LoopState.invoked_mcp_tools), so the model can call it without searching again
-- Token budget: same `context_window_limit * 0.01` constant the skill registry uses; defined in `config/models.py:ProgressiveSkillsConfig` (rename to `ProgressiveLoadingConfig` to cover both)
+- On match-and-invoke, the matched tool gets promoted into the thread's "always available" set for the rest of the loop (`LoopState.invoked_mcp_tools`), so the model can call it without searching again
+- Token budget: `config.progressive_mcp.budget_pct * context_window_limit` (same formula as skills)
 
 ### Modified files
 
 | File | Change |
 |---|---|
-| `packages/soothe/src/soothe/config/models.py:165` | Replace `MCPServerConfig` with the extended schema above |
-| `packages/soothe/src/soothe/config/settings.py:265` | No structural change; updated docstring referencing new fields |
-| `packages/soothe/src/soothe/core/thread/manager.py:24,547-573` | Drop the broken `from soothe.mcp.loader import …`; replace `_ensure_mcp_session` with `_register_thread_with_mcp(thread_id)` which calls `mcp_registry.register_thread(thread_id, workspace)` (no-op connection; just registers for cleanup tracking) |
-| `packages/soothe/src/soothe/core/resolver/_resolver_tools.py:134` | After `resolve_tools` returns, append `mcp_registry.always_loaded_tools(workspace)` |
-| `packages/soothe/src/soothe/core/agent/_builder.py` | Inject `MCPRegistry` instance from `RunnerState` into the middleware stack so `ToolSearchMiddleware` can read deferred tools |
-| `packages/soothe/src/soothe/middleware/_builder.py:59` | Insert `ToolSearchMiddleware` after `SkillActivationMiddleware` (from companion draft) |
+| `packages/soothe/src/soothe/config/models.py:165` | Replace `MCPServerConfig` with the extended schema above; add `ProgressiveMCPConfig` class (after `ProgressiveSkillsConfig` at line 1526) |
+| `packages/soothe/src/soothe/config/settings.py` | Add `mcp_servers` validation (unique names); add `progressive_mcp: ProgressiveMCPConfig` field |
+| `packages/soothe/src/soothe/core/thread/manager.py:24,547-559` | Drop the broken `from soothe.mcp.loader import …`; replace `_ensure_mcp_session` with `_register_thread_with_mcp(thread_id)` which calls `mcp_registry.register_thread(thread_id, workspace)` (no-op connection; just registers for cleanup tracking) |
+| `packages/soothe/src/soothe/core/agent/_builder.py` | Add `mcp_registry: MCPRegistry | None = None` parameter to `AgentBuilder.__init__`; after `resolve_tools` (line 153-158), append `mcp_registry.always_loaded_tools(workspace)` to `all_tools` if registry is provided; pass `mcp_registry` to `build_soothe_middleware_stack` |
+| `packages/soothe/src/soothe/middleware/_builder.py:142` | Insert `MCPToolSearchMiddleware` after `SkillActivationMiddleware` (position 1c, between skill activation and tool concurrency) |
+| `packages/soothe/src/soothe/core/loop/state/schemas.py:860` | Add `sent_mcp_tool_names: set[str]`, `invoked_mcp_tools: set[str]`, `disabled_mcp_servers: set[str]` — new fields alongside the existing RFC-105 skill fields |
+| `packages/soothe/src/soothe/middleware/system_prompt_optimization.py` | Add `_compose_mcp_tools_block(state)` method parallel to the existing `_compose_skills_block(state)` (line 569); emits `<AVAILABLE_MCP_TOOLS>` into the static tier |
 | `packages/soothe/src/soothe/skills/catalog.py:127` (`wire_entries_for_agent_config`) | Merge `mcp_registry.prompts` into the wire entries with `source="mcp"` so MCP prompts surface as `/mcp__server__prompt` slash commands |
-| `packages/soothe-daemon/src/soothe_daemon/server.py` | Daemon owns the `MCPRegistry` singleton (parallel to `_skill_index`); calls `await mcp_registry.initialize()` during startup, `await mcp_registry.shutdown()` on signal |
+| `packages/soothe-daemon/src/soothe_daemon/server.py:102-116` | Daemon owns the `MCPRegistry` singleton (parallel to `_skill_index` at line 116); calls `await mcp_registry.initialize()` during `start()`, `await mcp_registry.shutdown()` on signal |
 | `packages/soothe-daemon/src/soothe_daemon/health/checks/mcp_check.py` | Rewrite: use `server.name` (now a real field), validate command existence for stdio, ping URL for remote (HEAD with timeout); aggregate `MCPRegistry.connection_status()` |
-| `packages/soothe-cli/src/soothe_cli/tui/widgets/mcp_viewer.py` | Wire `mcp_server_info` end-to-end: daemon exposes `GET /mcp/status` via `protocol/router.py`; CLI calls it before mounting viewer |
-| `packages/soothe-cli/src/soothe_cli/main.py` | Implement the long-promised `--mcp-config <path>` flag: loads an extra `mcp_servers:` YAML/JSON, merged at config-resolution time |
-| `packages/soothe/src/soothe/core/events/catalog.py:567` | Register `soothe.mcp.*` event family (see §10) |
-| `config/config.template.yml`, `config/config.dev.yml` | Mirror the extended `mcp_servers:` schema (CLAUDE.md Rule #2) |
+| `packages/soothe-cli/src/soothe_cli/tui/widgets/mcp_viewer.py` | Wire `mcp_server_info` end-to-end: daemon exposes `GET /mcp/status` via router; CLI calls it before mounting viewer |
+| `packages/soothe-cli/src/soothe_cli/cli/main.py` | Implement `--mcp-config <path>` daemon-startup flag: loads extra `mcp_servers:` YAML/JSON, merged at config-resolution time |
+| `config/config.template.yml`, `config/config.dev.yml` | Mirror the extended `mcp_servers:` schema and `progressive_mcp:` section (CLAUDE.md Rule #2) |
+
+### Registry injection path
+
+`MCPRegistry` is daemon-owned but needs to reach the middleware stack. The path:
+
+1. `SootheDaemon.__init__` creates `self._mcp_registry = MCPRegistry(config.mcp_servers)`
+2. `SootheRunner` receives `mcp_registry` from the daemon at construction time
+3. `AgentBuilder.build()` receives `mcp_registry` via `RunnerState` (already passed through from runner)
+4. `build_soothe_middleware_stack(config, policy, mcp_registry=mcp_registry)` passes it to `MCPToolSearchMiddleware`
+5. `SystemPromptOptimizationMiddleware` accesses `mcp_registry` via a reference stored at construction time
+
+This mirrors how `_skill_index` flows: daemon → runner → builder → middleware.
 
 ### Removed / fixed
 
-- The broken `from soothe.mcp.loader import load_mcp_tools` lines disappear once the real module lands
+- The broken `from soothe.mcp.loader import load_mcp_tools` lines in `manager.py:553` are replaced by the real `soothe.mcp.loader` module
 - The buggy `server.name` reference in `mcp_check.py:28` becomes correct (the field now exists)
 - TUI viewer's perpetual `"No MCP servers configured"` empty state goes away
 - Empty-state hint text referencing `--mcp-config` becomes truthful once the flag is implemented
@@ -279,18 +313,20 @@ Config layering follows soothe's existing pattern: a single `mcp_servers: list[M
 
 | Need | API | Source |
 |---|---|---|
-| stdio / SSE / streamable-HTTP transport plumbing | `MultiServerMCPClient`, `get_tools()` | `langchain_mcp_adapters` (already in pyproject) |
-| Tool wrapping as `BaseTool` | `langchain_mcp_adapters.tools.load_mcp_tools` | same |
-| Prompt wrapping | `langchain_mcp_adapters.prompts.load_mcp_prompts` | same |
-| Budgeted listing formatter | `format_skills_within_budget` (rename to `format_entries_within_budget`) | companion draft, `skills/budget.py` |
-| Per-thread delta tracking | `LoopState` (extend with `sent_mcp_tool_names`, `invoked_mcp_tools`, `disabled_mcp_servers`) | `core/loop/state/schemas.py` (already extended by companion draft) |
+| stdio / SSE / streamable-HTTP / WebSocket transport plumbing | `MultiServerMCPClient`, `get_tools()`, `get_prompt()`, `get_resources()` | `langchain_mcp_adapters.client` (already in pyproject) |
+| Tool wrapping as `BaseTool` | `MCPTool` (which is `mcp.types.Tool` adapted to `StructuredTool`) | `langchain_mcp_adapters.tools` |
+| Prompt loading | `MultiServerMCPClient.get_prompt(server_name, prompt_name, *, arguments=None)` | `langchain_mcp_adapters.client` |
+| Resource loading | `MultiServerMCPClient.get_resources(server_name=None, *, uris=None)` → `list[Blob]` (needs Blob→str conversion) | `langchain_mcp_adapters.client` |
+| Budgeted listing algorithm | `format_mcp_tools_within_budget` (new, mirrors `format_skills_within_budget` in `skills/budget.py`) | same algorithm, typed to `MCPToolDescriptor` |
+| Per-thread delta tracking | `LoopState.sent_mcp_tool_names`, `invoked_mcp_tools`, `disabled_mcp_servers` (new fields alongside existing RFC-105 skill fields in `core/loop/state/schemas.py:860`) | `core/loop/state/schemas.py` |
 | Path-glob matching for `tool_filter` | `fnmatch` (stdlib) | n/a |
-| Event registration | `register_event`, `custom_event` | `core/events/catalog.py:567,116` |
+| Event registration | `register_event`, `custom_event` (called from `soothe/mcp/events.py`, not `core/events/catalog.py`) | `core/events/catalog.py` |
 | Internal pub/sub for `list_changed` propagation | `InternalEventBus.emit/subscribe` | `core/events/internal_bus.py:25` |
 | Policy check at invoke time | `PolicyProtocol.check("mcp", "call", target=...)` | `protocols/policy.py` (already grants `Permission("mcp","connect","*")` in built-in profiles) |
 | Env var interpolation | `config.secret_resolver` | `config/settings.py` |
-| System-prompt assembly hook | `SystemPromptOptimizationMiddleware._get_prompt_for_complexity` | `middleware/system_prompt_optimization.py:286` |
+| System-prompt assembly hook | `SystemPromptOptimizationMiddleware._compose_mcp_tools_block` (new, parallel to `_compose_skills_block`) | `middleware/system_prompt_optimization.py:569` |
 | Subprocess management | `asyncio.subprocess` + `signal` (no extra dep) | stdlib |
+| Budget config shape | `ProgressiveMCPConfig` (mirrors `ProgressiveSkillsConfig` at `config/models.py:1504`) | `config/models.py` |
 
 ---
 
@@ -302,19 +338,31 @@ Config layering follows soothe's existing pattern: a single `mcp_servers: list[M
 MCPRegistry.initialize():
   resolved = [resolve_env_vars(s) for s in config.mcp_servers if s.enabled]
   stdio, remote = partition(resolved, by=lambda s: s.transport == STDIO)
+
+  # Build connection specs for MultiServerMCPClient
+  connections = {s.name: make_connection_spec(s) for s in resolved}
+
+  self._client = MultiServerMCPClient(connections, tool_name_prefix=False)
+
+  # Batched connect (stdio=3, remote=20)
   await asyncio.gather(
     connect_batched(stdio, batch_size=3),
     connect_batched(remote, batch_size=20),
   )
+
+  # Fetch tools/prompts/resources per server
+  for name in self._client.sessions:
+    await self._fetch_server_capabilities(name)
+
   emit MCPRegistryInitializedEvent(connected=N, failed=M)
 ```
 
 `connect(server)` per server:
-1. Build transport via `transports.py:make_transport(server)`
-2. Open `langchain_mcp_adapters` client session
-3. Fetch tools, prompts, resources in parallel (`asyncio.gather`)
-4. Apply `tool_filter` (allowlist), apply name mangling (`build_mcp_tool_name`)
-5. Subscribe to `list_changed` notifications (per kind)
+1. Build connection spec via `transports.py:make_connection_spec(server)` — returns the appropriate `StdioConnection` / `SSEConnection` / `StreamableHttpConnection` / `WebsocketConnection` dict
+2. `MultiServerMCPClient` opens the session internally
+3. Fetch tools, prompts, resources via `client.get_tools(server_name=name)`, `client.get_prompt(name, ...)`, `client.get_resources(name)`
+4. Apply `tool_filter` (allowlist), apply name mangling (`build_mcp_tool_name`) — note: `tool_name_prefix=False` on the client means soothe controls the prefix convention
+5. Subscribe to `list_changed` notifications via the session's notification handler
 6. Store in `registry.connections[name]` and per-kind dicts
 7. Emit `soothe.mcp.server.connected` event
 
@@ -325,13 +373,13 @@ On failure: emit `soothe.mcp.server.connect_failed` with error class; for remote
 ```
 on tools/list_changed from server S:
   invalidate registry.tools[S]
-  tools = await fetch_tools(S)
+  tools = await client.get_tools(server_name=S)
   registry.tools[S] = [build_tool(t, server=S) for t in tools]
   emit soothe.mcp.list_changed(server=S, kind="tools", count=len(tools))
-  # ToolSearchMiddleware reads from registry on next turn — no push needed
+  # MCPToolSearchMiddleware reads from registry on next turn — no push needed
 ```
 
-Same for `prompts/list_changed` and `resources/list_changed`. Per-server LRU cache cleared and rebuilt; updates are coalesced via a 16ms debounce (port of `MCP_BATCH_FLUSH_MS`) using `asyncio.call_later`.
+Same for `prompts/list_changed` and `resources/list_changed`. Per-server cache cleared and rebuilt; updates are coalesced via a 16ms debounce (port of `MCP_BATCH_FLUSH_MS`) using `asyncio.call_later`.
 
 ### Reconnect
 
@@ -349,7 +397,9 @@ MCPRegistry.shutdown():
     if conn.transport == STDIO:
       await cleanup_subprocess(conn)   # SIGINT → poll → SIGTERM → failsafe
     else:
-      await conn.client.aclose()
+      await conn.session.close()
+  if self._client:
+    await self._client.__aexit__(None, None, None)
   emit MCPRegistryShutdownEvent
 ```
 
@@ -363,26 +413,26 @@ Called from daemon signal handler (`SIGTERM`, `SIGINT`), with a 5s aggregate dea
 
 `MCPRegistry.always_loaded_tools(workspace) -> list[BaseTool]`:
 - Returns tools from servers where `defer == False`, filtered by `PolicyProtocol.check("mcp", "call", server, tool)`
-- These join the `tools=` array passed to `create_deep_agent` at build time (same path as built-in tools)
+- These join the `all_tools` list at `core/agent/_builder.py:158`
 
 `MCPRegistry.deferred_tools(workspace) -> list[MCPToolDescriptor]`:
-- Returns descriptors (name + description + server + tags) for `defer == True` servers
-- Consumed by `ToolSearchMiddleware`
+- Returns descriptors (name + description + server) for `defer == True` servers
+- Consumed by `MCPToolSearchMiddleware`
 
-`ToolSearchMiddleware` flow per turn:
+`MCPToolSearchMiddleware` flow per turn:
 1. Compute `new = deferred_tools - LoopState.sent_mcp_tool_names`
-2. If `new`, render `<AVAILABLE_MCP_TOOLS>` block (budgeted) and append to static tier
+2. If `new`, render `<AVAILABLE_MCP_TOOLS>` block (budgeted via `format_mcp_tools_within_budget`) and append to static tier
 3. Mark new tools as `sent`
 4. On `mcp_tool_search(query)` invocation: rank by token-overlap (`description.lower()` contains query terms) + tag match; return top-k as a tool-result message
 5. On any `mcp__<server>__<tool>` call: add to `LoopState.invoked_mcp_tools` so the tool's full schema enters the tool list on subsequent turns
 
 ### Prompts (slash commands)
 
-`MCPRegistry.prompts[server]` is a list of `PromptCommand` instances. `wire_entries_for_agent_config` merges them with local skills, producing slash entries named `mcp__<sanitizedServer>__<sanitizedPrompt>`. The existing `/skill:` slash-command machinery handles invocation; the prompt body is fetched lazily via `connection.client.get_prompt(name, args)` on each invoke (not cached — prompts are cheap and arg-dependent).
+`MCPRegistry.prompts[server]` is a list of `MCPPromptDescriptor` instances. `wire_entries_for_agent_config` merges them with local skills, producing slash entries named `mcp__<sanitizedServer>__<sanitizedPrompt>`. The existing `/skill:` slash-command machinery handles invocation; the prompt body is fetched lazily via `MultiServerMCPClient.get_prompt(server_name, prompt_name, arguments=...)` on each invoke (not cached — prompts are cheap and arg-dependent).
 
 ### Resources (`@server:uri` attachments)
 
-New attachment extractor `extract_mcp_resource_mentions(content)` (parallel to `extract_at_mentioned_files`) yields `(server, uri)` tuples. Resolved by `MCPRegistry.read_resource(server, uri)` and wrapped in:
+New attachment extractor `extract_mcp_resource_mentions(content)` (parallel to `extract_at_mentioned_files`) yields `(server, uri)` tuples. Resolved by `MCPRegistry.read_resource(server, uri)` → `MultiServerMCPClient.get_resources(server_name, uris=uri)` and wrapped in:
 ```xml
 <MCP_RESOURCE server="..." uri="...">
 {contents}
@@ -394,7 +444,7 @@ Two synthetic built-in tools — `mcp_resources_list` and `mcp_resources_read` �
 
 ## 10. Telemetry & events
 
-Public event family (registered via `register_event` in `core/events/catalog.py`):
+Public event family (self-registered via `register_event()` in `soothe/mcp/events.py`, following IG-052's per-module pattern — not added to `core/events/catalog.py`):
 
 | Event type | Fields | Fired when |
 |---|---|---|
@@ -411,14 +461,14 @@ Public event family (registered via `register_event` in `core/events/catalog.py`
 
 Internal events (via `InternalEventBus`):
 - `InternalMCPServerStateChanged` — coordinates cache invalidation across middlewares without leaking to wire
-- `InternalMCPToolPromotedEvent` — `ToolSearchMiddleware` → tool-pool refresher
+- `InternalMCPToolPromotedEvent` — `MCPToolSearchMiddleware` → tool-pool refresher
 
 ---
 
 ## 11. Edge cases
 
 - **Server name collision** (two configs with `name="github"`) → validation error at `SootheConfig` parse time
-- **Tool name collision** between built-in soothe tool and `mcp__github__create_issue` → impossible by construction (mangling prefix `mcp__` is reserved); enforced in `name_utils.build_mcp_tool_name`
+- **Tool name collision** between built-in soothe tool and `mcp__github__create_issue` → impossible by construction (mangling prefix `mcp__` is reserved); enforced in `name_utils.build_mcp_tool_name`. Additionally, `langchain_mcp_adapters` applies its own `mcp__` prefix when `tool_name_prefix=True`; soothe sets `tool_name_prefix=False` on the client and handles prefixing itself, avoiding double-prefixing
 - **`tool_filter` evicts a tool that arrives via `list_changed`** → re-applied on every cache rebuild; never appears in registry
 - **Server returns malformed JSON in `tools/list`** → tool skipped, logged, `soothe.mcp.tools.malformed` counter incremented; other tools still loaded
 - **Subprocess hangs on shutdown** → cleanup ladder caps at 600ms then `kill -9`; logged as `soothe.mcp.cleanup.force_killed`
@@ -432,7 +482,7 @@ Internal events (via `InternalEventBus`):
 
 ## 12. Auth (v1: bearer + headers)
 
-`MCPAuthHeaders.headers` are passed verbatim to the transport's HTTP layer (`langchain_mcp_adapters` accepts a `headers` dict for SSE and streamable_http). `${ENV_VAR}` interpolation runs via `config.secret_resolver` at connect time.
+`MCPAuthHeaders.headers` are passed verbatim to the transport's `headers` field (`langchain_mcp_adapters` accepts a `headers` dict for `SSEConnection` and `StreamableHttpConnection`; `WebsocketConnection` does not support headers in v1). `${ENV_VAR}` interpolation runs via `config.secret_resolver` at connect time.
 
 ```yaml
 mcp_servers:
@@ -455,16 +505,18 @@ class AuthProvider(Protocol):
 
 This carve-out is the **only** code path OAuth needs to plug into. The OAuth RFC (deferred) adds `OAuthAuthProvider(AuthProvider)` with PKCE + DCR + refresh + step-up, mirroring Claude Code's `auth.ts`.
 
+For `SSEConnection` and `StreamableHttpConnection` that support `auth: httpx.Auth`, the `StaticHeadersProvider` populates the `headers` dict. Future OAuth support can use the `auth` parameter for `httpx.Auth`-based authentication.
+
 ---
 
 ## 13. Permissions integration
 
 `PolicyProtocol` already has `Permission("mcp", "connect", "*")` in built-in profiles. Extend with:
-- `Permission("mcp", "call", "<server>:<tool>")` — checked in `MCPTool.call` before dispatch
+- `Permission("mcp", "call", "<server>:<tool>")` — checked in `MCPRegistry.invoke` before dispatch
 - `Permission("mcp", "read_resource", "<server>:<uri-prefix>")` — checked in `MCPRegistry.read_resource`
 - `Permission("mcp", "invoke_prompt", "<server>:<prompt>")` — checked in slash-command dispatch
 
-Per-tool deny: a `denied_mcp_tools: list[str]` on `SootheConfig.policy` (or via the existing `ConfigDrivenPolicy` rules) blocks `mcp__<server>__<tool>` at invoke time. Matching follows the same `mcp__server__*` / `mcp__server` wildcard semantics Claude Code uses (`permissions.ts:236-269`).
+Per-tool deny: a `denied_mcp_tools: list[str]` on `SootheConfig.policy` (or via the existing `ConfigDrivenPolicy` rules) blocks `mcp__<server>__<tool>` at invoke time. Matching follows the same `mcp__server__*` / `mcp__server` wildcard semantics Claude Code uses.
 
 ---
 
@@ -472,17 +524,18 @@ Per-tool deny: a `denied_mcp_tools: list[str]` on `SootheConfig.policy` (or via 
 
 ### Unit tests (`packages/soothe/tests/unit/mcp/`)
 
-- `test_name_utils.py` — mangling, parsing, collision avoidance
-- `test_config_validation.py` — XOR command/url, transport-specific required fields, env interpolation
-- `test_transport_factory.py` — each transport maps to correct `langchain_mcp_adapters` connection spec
+- `test_name_utils.py` — mangling, parsing, collision avoidance, no double-prefixing with `langchain_mcp_adapters`
+- `test_config_validation.py` — XOR command/url, transport-specific required fields, env interpolation, unique name validation
+- `test_transport_factory.py` — each transport maps to correct `langchain_mcp_adapters` connection type with correct field mapping
 - `test_reconnect_backoff.py` — exponential backoff math, max attempts, jitter
 - `test_tool_filter.py` — fnmatch globs, allowlist semantics
 - `test_cleanup_ladder.py` — `SIGINT → SIGTERM → failsafe`, no double-close
+- `test_budget_formatter.py` — under-budget full, over-budget truncated, extreme names-only; builtin vs non-builtin distinction
 
 ### Middleware tests (`packages/soothe/tests/unit/middleware/`)
 
-- `test_tool_search_middleware_budget.py` — deferred tools fit budget, deltas suppress re-emission
-- `test_tool_search_middleware_promotion.py` — invoked deferred tool moves to `LoopState.invoked_mcp_tools`
+- `test_mcp_tool_search_middleware_budget.py` — deferred tools fit budget, deltas suppress re-emission
+- `test_mcp_tool_search_middleware_promotion.py` — invoked deferred tool moves to `LoopState.invoked_mcp_tools`
 - `test_mcp_resource_attachment.py` — `@server:uri` extraction, `<MCP_RESOURCE>` envelope
 
 ### Registry tests
@@ -521,10 +574,11 @@ soothe daemon start --config /tmp/mcp-test.yml   # uses --mcp-config under the h
 
 ## 15. Open questions
 
-1. **OAuth scope** — deferred to `RFC-NNN-mcp-oauth.md`. Token storage (OS keychain via `keyring` Python lib vs file with `0600` perms vs encrypted at rest via daemon-owned key) is the most contentious sub-decision.
+1. **OAuth scope** — deferred to a follow-on RFC. Token storage (OS keychain via `keyring` Python lib vs file with `0600` perms vs encrypted at rest via daemon-owned key) is the most contentious sub-decision.
 2. **Plugin-system integration (RFC-600)** — RFC-600 currently covers Tools and Subagents. Should MCP servers become a plugin extension point (so a plugin can ship its own MCP server config)? Recommendation: yes, but as a follow-on after this draft lands. Hook would be a new `MCPServerExtensionPoint` in `plugin/manifest.py` exposing the same `MCPServerConfig` shape.
 3. **Resource attachment caching scope** — per-thread (current proposal) vs per-loop vs per-process? Per-thread is the safest default but the same resource fetched across many threads burns server roundtrips. Recommend per-thread for v1, revisit if `soothe.mcp.resource.read` telemetry shows hot duplicates.
-4. **Multi-scope config (claude code's local/project/user/enterprise model)** — explicitly out of scope for v1. Soothe is daemon-owned, so per-user/per-project scoping has different semantics than Claude Code's per-CLI-invocation model. Worth its own RFC once a real multi-tenant use case appears.
+4. **Multi-scope config (Claude Code's local/project/user/enterprise model)** — explicitly out of scope for v1. Soothe is daemon-owned, so per-user/per-project scoping has different semantics than Claude Code's per-CLI-invocation model. Worth its own RFC once a real multi-tenant use case appears.
 5. **In-process MCP transport** (Claude Code's `InProcessTransport` for Chrome / Computer Use) — not needed v1. If soothe-internal tools ever want to expose themselves *as* MCP (e.g. for cross-language access), revisit.
 6. **`stdio` auto-reconnect** — Claude Code deliberately doesn't. Soothe inherits that choice; user must `/mcp reconnect <server>` after stdio crash. Re-evaluate if telemetry shows high stdio crash rate.
-7. **Cleanup of pre-existing broken code** — `core/thread/manager.py:24,553`, the buggy `server.name` reference in `mcp_check.py:28`, the orphaned TUI viewer empty-state, and the unimplemented `--mcp-config` hint — these are all addressed by this draft, but listed separately here so they don't get lost as "ambient cleanup".
+7. **Cleanup of pre-existing broken code** — `core/thread/manager.py:24,547-559`, the buggy `server.name` reference in `mcp_check.py:28`, the orphaned TUI viewer empty-state, and the unimplemented `--mcp-config` hint — these are all addressed by this draft, but listed separately here so they don't get lost as "ambient cleanup".
+8. **WebSocket auth** — `WebsocketConnection` in `langchain_mcp_adapters` does not support `headers` or `auth` in its current API. WebSocket servers requiring auth need a workaround (e.g. token in the URL query string) until upstream adds support. Document this limitation in v1.

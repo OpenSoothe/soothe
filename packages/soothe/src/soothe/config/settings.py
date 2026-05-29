@@ -23,6 +23,7 @@ from soothe.config.models import (
     OptimizationConfig,
     PersistenceConfig,
     PluginConfig,
+    ProgressiveMCPConfig,
     ProgressiveSkillsConfig,
     ReportOutputConfig,
     SecurityConfig,
@@ -230,6 +231,16 @@ class SootheConfig(BaseSettings):
         return data
 
     @model_validator(mode="after")
+    def _validate_mcp_server_names(self) -> SootheConfig:
+        """Ensure MCP server names are unique (RFC-412)."""
+        if self.mcp_servers:
+            names = [s.name for s in self.mcp_servers]
+            duplicates = [n for n in names if names.count(n) > 1]
+            if duplicates:
+                raise ValueError(f"MCP server names must be unique. Duplicates: {set(duplicates)}")
+        return self
+
+    @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
         # Built-in subagent entries merged before user YAML and plugin registry.
@@ -264,7 +275,10 @@ class SootheConfig(BaseSettings):
     """Tool group configurations. Each tool can be enabled/disabled and configured."""
 
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
-    """MCP server configurations (Claude Desktop JSON format)."""
+    """MCP server configurations (RFC-412). Server names must be unique."""
+
+    progressive_mcp: ProgressiveMCPConfig = Field(default_factory=ProgressiveMCPConfig)
+    """RFC-412: Progressive MCP tool listing budget tunables."""
 
     plugins: list[PluginConfig] = Field(default_factory=list)
     """Plugin configurations. Third-party plugins can be loaded via entry points, config, or filesystem."""
