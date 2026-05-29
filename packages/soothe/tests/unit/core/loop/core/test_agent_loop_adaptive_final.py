@@ -9,6 +9,19 @@ from soothe.core.loop import AgentLoop
 from soothe.core.loop.state.schemas import StatusAssessment
 
 
+def _make_mock_core_with_checkpointer() -> Mock:
+    """Create mock CoreAgent with graph.checkpointer as AsyncMock returning None.
+
+    Without this, node_iteration_start's anchor_manager.capture_iteration_start_anchor
+    tries to await checkpointer.aget_tuple(config), causing TypeError on regular Mock.
+    """
+    mock_core = Mock()
+    mock_graph = Mock()
+    mock_graph.checkpointer = AsyncMock(return_value=None)
+    mock_core.graph = mock_graph
+    return mock_core
+
+
 @pytest.mark.asyncio
 async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> None:
     """When synthesis is skipped, CoreAgent astream must not run for the final report."""
@@ -20,7 +33,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         if False:
             yield None
 
-    mock_core = Mock()
+    mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = counting_astream
 
     mock_gr = Mock()
@@ -42,6 +55,10 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
+    mock_anchor_mgr = Mock()
+    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.close = AsyncMock()
+
     with (
         patch(
             "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
@@ -50,6 +67,10 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         patch(
             "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
+        ),
+        patch(
+            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            return_value=mock_anchor_mgr,
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
@@ -84,7 +105,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         if False:
             yield None
 
-    mock_core = Mock()
+    mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = counting_astream
 
     mock_gr = Mock()
@@ -106,6 +127,10 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
+    mock_anchor_mgr = Mock()
+    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.close = AsyncMock()
+
     with (
         patch(
             "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
@@ -114,6 +139,10 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         patch(
             "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
+        ),
+        patch(
+            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            return_value=mock_anchor_mgr,
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
@@ -142,7 +171,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 @pytest.mark.asyncio
 async def test_completed_payload_for_summary_path() -> None:
     """Summary path is used when ledger is empty and synthesis produces no text."""
-    mock_core = Mock()
+    mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = AsyncMock()
 
     mock_gr = Mock()
@@ -164,6 +193,10 @@ async def test_completed_payload_for_summary_path() -> None:
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
+    mock_anchor_mgr = Mock()
+    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.close = AsyncMock()
+
     with (
         patch(
             "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
@@ -172,6 +205,10 @@ async def test_completed_payload_for_summary_path() -> None:
         patch(
             "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
+        ),
+        patch(
+            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            return_value=mock_anchor_mgr,
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
@@ -202,7 +239,7 @@ async def test_completed_payload_for_summary_path() -> None:
 @pytest.mark.asyncio
 async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
     """RFC-223: AgentLoop main thread id must align to loop_id."""
-    mock_core = Mock()
+    mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = AsyncMock()
 
     mock_gr = Mock()
@@ -227,6 +264,10 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
     mock_gcm = Mock()
     mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
+    mock_anchor_mgr = Mock()
+    mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
+    mock_anchor_mgr.close = AsyncMock()
+
     with (
         patch(
             "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
@@ -235,6 +276,10 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
         patch(
             "soothe.core.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
+        ),
+        patch(
+            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            return_value=mock_anchor_mgr,
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())

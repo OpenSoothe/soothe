@@ -15,6 +15,7 @@ from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.config import SootheDaemonConfig
+
 from ..daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
