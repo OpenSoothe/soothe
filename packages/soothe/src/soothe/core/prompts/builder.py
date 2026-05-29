@@ -226,6 +226,12 @@ class PromptBuilder:
                 "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
                 "</WORKSPACE_RULES>\n"
             )
+            # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable
+            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+            ws_instructions = load_workspace_project_instructions(context.workspace)
+            if ws_instructions:
+                parts.append(ws_instructions + "\n")
 
         # Prior conversation follow-up policy (static when prior conversation exists)
         if context.recent_messages:
@@ -362,19 +368,11 @@ class PromptBuilder:
                     "</PLAN_STEP_ID_HINT>"
                 )
 
-        project_instructions = None
-        if plan_phase == "generate":
-            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
-
-            workspace = context.workspace or state.workspace
-            project_instructions = load_workspace_project_instructions(workspace)
-
         # Build envelope with timestamp (RFC-214)
         return build_plan_context_envelope(
             goal=goal,
             dag_context=dag_context,
             step_id_hint=step_id_hint,
-            project_instructions=project_instructions,
             goal_user_submission=state.goal_user_submission,
             skill_context=state.skill_context,
         )

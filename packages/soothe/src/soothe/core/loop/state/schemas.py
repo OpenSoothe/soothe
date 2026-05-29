@@ -872,14 +872,6 @@ class LoopState(BaseModel):
         default=None,
         description="Skill body from /skill: expansion; seeded into skill_activation by executor.",
     )
-
-    project_instructions_execute_iteration: int | None = Field(
-        default=None,
-        description=(
-            "Iteration index where CLAUDE.md/AGENTS.md were injected into the first "
-            "CoreAgent execute human of that iteration (avoids duplicate per wave)."
-        ),
-    )
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
     routing_classification: Any | None = Field(
         default=None,

@@ -768,28 +768,6 @@ class Executor:
         self._config = config
         self._goal_context_manager = goal_context_manager
         self._loop_id = loop_id
-        self._project_instructions_lock = asyncio.Lock()
-
-    async def _claim_and_load_project_instructions_for_execute(
-        self,
-        state: LoopState,
-        *,
-        first_human_in_wave: bool,
-    ) -> str | None:
-        """Claim per-iteration injection slot and load project instruction XML."""
-        if not first_human_in_wave:
-            return None
-        async with self._project_instructions_lock:
-            if state.project_instructions_execute_iteration == state.iteration:
-                return None
-            from soothe.core.prompts.project_instructions import (
-                load_workspace_project_instructions,
-            )
-
-            block = load_workspace_project_instructions(state.workspace)
-            if block is not None:
-                state.project_instructions_execute_iteration = state.iteration
-            return block
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -1748,17 +1726,9 @@ class Executor:
                     ". ".join(hints_parts) + ". Consider using the suggested approach first."
                 )
 
-            project_instructions = None
-            if loop_state is not None:
-                project_instructions = await self._claim_and_load_project_instructions_for_execute(
-                    loop_state,
-                    first_human_in_wave=first_human_in_wave,
-                )
-
             envelope = build_execute_step_envelope(
                 step.description,
                 execution_hints=execution_hints,
-                project_instructions=project_instructions,
                 skill_context=loop_state.skill_context if loop_state else None,
             )
             logger.debug("[Human Message Envelope] %s", log_preview(envelope, chars=150))
@@ -2243,11 +2213,6 @@ class Executor:
         """
         from soothe.core.prompts.user_envelope import build_execute_step_envelope
 
-        project_instructions = await self._claim_and_load_project_instructions_for_execute(
-            state,
-            first_human_in_wave=True,
-        )
-
         wire_subagent = _wire_subagent_from_routing(getattr(state, "routing_classification", None))
         messages = []
         for step_index, step in enumerate(steps):
@@ -2266,7 +2231,6 @@ class Executor:
             envelope = build_execute_step_envelope(
                 step.description,
                 execution_hints=execution_hints,
-                project_instructions=project_instructions if step_index == 0 else None,
                 skill_context=state.skill_context,
             )
             msg = LoopHumanMessage(

@@ -405,6 +405,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
                 "</WORKSPACE_RULES>"
             )
+            # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable, changes infrequently
+            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+            ws_instructions = load_workspace_project_instructions(workspace)
+            if ws_instructions:
+                semi_static_sections.append(ws_instructions)
 
         # Workspace metadata
         if state and self._should_inject_workspace(state):

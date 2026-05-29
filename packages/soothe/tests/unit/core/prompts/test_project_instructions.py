@@ -1,4 +1,4 @@
-"""Tests for workspace CLAUDE.md / AGENTS.md CONTEXT_INFO loading."""
+"""Tests for workspace CLAUDE.md / AGENTS.md WORKSPACE_INSTRUCTIONS loading."""
 
 from __future__ import annotations
 
@@ -8,10 +8,6 @@ import pytest
 
 from soothe.core.loop.state.schemas import LoopState
 from soothe.core.prompts import PromptBuilder
-from soothe.core.prompts.user_envelope import (
-    build_execute_step_envelope,
-    build_plan_context_envelope,
-)
 
 
 def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Path) -> None:
@@ -24,13 +20,28 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
 
     block = load_workspace_project_instructions(tmp_path, max_lines=500)
     assert block is not None
-    assert "<project_instructions>" in block
+    assert "<WORKSPACE_INSTRUCTIONS>" in block
+    # AGENTS.md is preferred, so CLAUDE.md content should NOT appear
+    assert "claude line 0" not in block
+    assert "agents rule one" in block
+    assert "agents rule two" in block
+    assert 'truncated="false"' in block
+
+
+def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> None:
+    """CLAUDE.md is fallback when no AGENTS.md found."""
+    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+    claude = tmp_path / "CLAUDE.md"
+    claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
+
+    block = load_workspace_project_instructions(tmp_path, max_lines=500)
+    assert block is not None
+    assert "<WORKSPACE_INSTRUCTIONS>" in block
     assert "claude line 0" in block
     assert "claude line 499" in block
     assert "claude line 500" not in block
     assert 'truncated="true"' in block
-    assert "agents rule one" in block
-    assert 'truncated="false"' in block
 
 
 def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
@@ -46,29 +57,29 @@ def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Pa
     assert ".soothe/AGENTS.md" in block
 
 
-def test_envelopes_embed_project_instructions_in_context_info() -> None:
-    snippet = (
-        "<project_instructions>\n"
-        '<file name="CLAUDE.md" truncated="false">\n'
-        "<![CDATA[\nrule\n]]>\n"
-        "</file>\n"
-        "</project_instructions>"
+def test_envelope_functions_do_not_embed_project_instructions() -> None:
+    """Envelope builders no longer embed project_instructions (moved to system prompt)."""
+    from soothe.core.prompts.user_envelope import (
+        build_execute_step_envelope,
+        build_plan_context_envelope,
     )
+
+    # Envelope functions don't have project_instructions parameter anymore
     execute = build_execute_step_envelope(
         "step",
-        project_instructions=snippet,
+        execution_hints="hint text",
     )
     plan = build_plan_context_envelope(
         goal="g",
-        project_instructions=snippet,
     )
-    assert snippet in execute
-    assert execute.index("<CONTEXT_INFO>") < execute.index("<project_instructions>")
-    assert snippet in plan
-    assert plan.index("<CONTEXT_INFO>") < plan.index("<project_instructions>")
+    assert "<USER_QUERY>" in execute
+    assert "<USER_QUERY>" in plan
+    assert "<CONTEXT_INFO>" in execute
+    assert "<CONTEXT_INFO>" in plan
 
 
-def test_plan_generate_includes_project_instructions(tmp_path: Path) -> None:
+def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:
+    """Plan generate uses WORKSPACE_INSTRUCTIONS in system prompt, not envelope."""
     from soothe.protocols.planner import PlanContext
 
     (tmp_path / "CLAUDE.md").write_text("Plan must follow CLAUDE rules\n", encoding="utf-8")
@@ -80,15 +91,14 @@ def test_plan_generate_includes_project_instructions(tmp_path: Path) -> None:
 
     assess_human = assess[-1].content
     generate_human = generate[-1].content
-    assert "<project_instructions>" not in assess_human
-    assert "<project_instructions>" in generate_human
-    assert "Plan must follow CLAUDE rules" in generate_human
+    # No project_instructions in envelope - it's in system prompt
+    assert "<WORKSPACE_INSTRUCTIONS>" not in assess_human
+    assert "<WORKSPACE_INSTRUCTIONS>" not in generate_human
 
 
 @pytest.mark.asyncio
-async def test_executor_claims_project_instructions_once_per_iteration(
-    tmp_path: Path,
-) -> None:
+async def test_executor_envelope_without_project_instructions(tmp_path: Path) -> None:
+    """Executor envelope no longer embeds project_instructions (moved to system prompt)."""
     from unittest.mock import MagicMock
 
     from soothe.core.loop.engine.executor import Executor
@@ -105,11 +115,6 @@ async def test_executor_claims_project_instructions_once_per_iteration(
 
     messages = await executor._build_batch_human_messages(steps, state)
     assert len(messages) == 2
-    assert "<project_instructions>" in messages[0].content
-    assert "<project_instructions>" not in messages[1].content
-    assert state.project_instructions_execute_iteration == 2
-
-    state.iteration = 3
-    messages_again = await executor._build_batch_human_messages(steps, state)
-    assert "<project_instructions>" in messages_again[0].content
-    assert state.project_instructions_execute_iteration == 3
+    # No project_instructions in envelope - it's in system prompt
+    assert "<WORKSPACE_INSTRUCTIONS>" not in messages[0].content
+    assert "<WORKSPACE_INSTRUCTIONS>" not in messages[1].content

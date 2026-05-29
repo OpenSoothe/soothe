@@ -1,4 +1,4 @@
-"""Load workspace CLAUDE.md and AGENTS.md for user-message CONTEXT_INFO (RFC-214)."""
+"""Load workspace AGENTS.md (preferred) or CLAUDE.md for system-message WORKSPACE_INSTRUCTIONS (RFC-214)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROJECT_INSTRUCTION_MAX_LINES = 500
-_PROJECT_INSTRUCTION_FILENAMES = ("CLAUDE.md", "AGENTS.md")
 
 
 def _read_file_head_lines(path: Path, *, max_lines: int) -> tuple[str, bool]:
@@ -49,18 +48,22 @@ def load_workspace_project_instructions(
     *,
     max_lines: int = DEFAULT_PROJECT_INSTRUCTION_MAX_LINES,
 ) -> str | None:
-    """Load CLAUDE.md and AGENTS.md from the workspace for CONTEXT_INFO injection.
+    """Load AGENTS.md (preferred) or CLAUDE.md from the workspace for system message injection.
 
-    Reads the first ``max_lines`` of each file when present. AGENTS.md is resolved from
-    the workspace root, then ``.soothe/AGENTS.md`` when the root file is missing.
+    Priority order:
+    1. AGENTS.md in workspace root
+    2. .soothe/AGENTS.md
+    3. CLAUDE.md in workspace root (fallback when no AGENTS.md found)
+
+    Only ONE file is loaded - AGENTS.md takes priority, CLAUDE.md is fallback.
 
     Args:
         workspace: Thread workspace directory.
         max_lines: Per-file line cap (default 500).
 
     Returns:
-        XML fragment for embedding under ``<CONTEXT_INFO>``, or ``None`` when no files
-        were found or ``workspace`` is unset.
+        XML fragment ``<WORKSPACE_INSTRUCTIONS>`` for system message semi-static tier,
+        or ``None`` when no files were found or ``workspace`` is unset.
     """
     if not workspace:
         return None
@@ -68,31 +71,24 @@ def load_workspace_project_instructions(
     if not root.is_dir():
         return None
 
-    blocks: list[str] = []
+    # Try AGENTS.md first (preferred)
+    for candidate in _agents_md_candidates(root):
+        if candidate.is_file():
+            body, truncated = _read_file_head_lines(candidate, max_lines=max_lines)
+            if body.strip():
+                rel = candidate.relative_to(root).as_posix()
+                block = _format_instruction_block(rel, candidate, body, truncated=truncated)
+                return "<WORKSPACE_INSTRUCTIONS>\n" + block + "\n</WORKSPACE_INSTRUCTIONS>"
 
+    # Fallback to CLAUDE.md when no AGENTS.md found
     claude_path = root / "CLAUDE.md"
     if claude_path.is_file():
         body, truncated = _read_file_head_lines(claude_path, max_lines=max_lines)
         if body.strip():
-            blocks.append(
-                _format_instruction_block("CLAUDE.md", claude_path, body, truncated=truncated)
-            )
+            block = _format_instruction_block("CLAUDE.md", claude_path, body, truncated=truncated)
+            return "<WORKSPACE_INSTRUCTIONS>\n" + block + "\n</WORKSPACE_INSTRUCTIONS>"
 
-    agents_path: Path | None = None
-    for candidate in _agents_md_candidates(root):
-        if candidate.is_file():
-            agents_path = candidate
-            break
-    if agents_path is not None:
-        body, truncated = _read_file_head_lines(agents_path, max_lines=max_lines)
-        if body.strip():
-            rel = agents_path.relative_to(root).as_posix()
-            blocks.append(_format_instruction_block(rel, agents_path, body, truncated=truncated))
-
-    if not blocks:
-        return None
-
-    return "<project_instructions>\n" + "\n".join(blocks) + "\n</project_instructions>"
+    return None
 
 
 def _format_instruction_block(
