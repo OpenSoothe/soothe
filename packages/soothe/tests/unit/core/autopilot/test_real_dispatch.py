@@ -29,8 +29,10 @@ class _FakeRunner:
         self.loop_id = loop_id
         self._outcome = outcome
         self._cancelled = False
+        self.last_request = None
 
     async def run(self, request):  # noqa: ANN001
+        self.last_request = request
         # Simulate a couple of progress chunks first.
         yield ((), "custom", {"type": "soothe.internal.autopilot.progress.plan", "x": 1})
         # Terminal completion chunk.
@@ -158,6 +160,26 @@ class TestEndToEndCompleted:
         store_keys = await svc._context_store.all_goal_ids()
         assert goal.id in store_keys
 
+    @pytest.mark.asyncio
+    async def test_workspace_passed_in_loop_run_request(self, tmp_path) -> None:
+        svc = _service(outcome="completed")
+        ws = str(tmp_path.resolve())
+        goal = await svc.submit_task("list files", workspace=ws)
+
+        await svc._schedule_ready_goals()
+        await _wait_until(
+            lambda: not any(t for t in svc._dispatch_tasks.values() if not t.done())
+        )
+
+        runner = next(iter(svc._worker_pool._workers.values())).runner
+        assert runner.last_request is not None
+        assert runner.last_request.client_workspace == ws
+        assert runner.last_request.resolve_workspace_path() == ws
+
+        finished = await svc.get_goal(goal.id)
+        assert finished is not None
+        assert finished.status == "completed"
+
 
 class TestEndToEndFailed:
     @pytest.mark.asyncio
@@ -180,16 +202,11 @@ class TestEndToEndFailed:
 class TestEndToEndReservation:
     @pytest.mark.asyncio
     async def test_workspace_reservation_blocks_overlap(self) -> None:
-        """Manual reservation pre-acquired blocks autopilot from dispatching
-        a goal whose workspace overlaps.
-
-        Phase C scaffolding uses a per-goal sentinel for workspace, so to
-        exercise the gate we pre-reserve that exact path.
-        """
+        """Pre-acquired reservation on the goal workspace blocks dispatch."""
         svc = _service(outcome="completed", with_reservation=True)
         goal = await svc.submit_task("blocked")
 
-        # Pre-reserve the workspace path that AutopilotService will infer.
+        # Goals without workspace use a per-goal sentinel for reservation.
         svc._workspace_reservation.acquire("external-holder", f"$autopilot/goal/{goal.id}")
 
         await svc._schedule_ready_goals()

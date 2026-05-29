@@ -80,7 +80,8 @@ def run(
     """
     del config, max_iterations  # daemon owns config for autopilot dispatch
     client = _require_daemon_http()
-    result = client.submit(prompt)
+    submit_workspace = _resolve_submit_workspace(workspace)
+    result = client.submit(prompt, workspace=submit_workspace)
     if result.get("transport") != "live":
         typer.echo(
             "Warning: daemon fell back to file-based submit; autopilot service may be down.",
@@ -110,13 +111,21 @@ def run(
 def submit(
     task: str = typer.Argument(..., help="Task description."),
     priority: int = typer.Option(50, "--priority", "-p", help="Goal priority (0-100)."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="Filesystem workspace for the goal (default: current directory).",
+    ),
 ) -> None:
     """Submit a new task to the daemon autopilot."""
     client = _require_daemon_http()
-    result = client.submit(task, priority=priority)
+    submit_workspace = _resolve_submit_workspace(workspace)
+    result = client.submit(task, priority=priority, workspace=submit_workspace)
     goal_id = result.get("goal_id", "?")
     typer.echo(f"Task submitted (goal_id={goal_id}, transport={result.get('transport', '?')})")
     typer.echo(f"  Priority: {priority}")
+    typer.echo(f"  Workspace: {submit_workspace}")
 
 
 @app.command("status")
