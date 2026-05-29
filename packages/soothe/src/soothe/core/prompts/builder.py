@@ -375,4 +375,5 @@ class PromptBuilder:
             step_id_hint=step_id_hint,
             project_instructions=project_instructions,
             goal_user_submission=state.goal_user_submission,
+            skill_context=state.skill_context,
         )

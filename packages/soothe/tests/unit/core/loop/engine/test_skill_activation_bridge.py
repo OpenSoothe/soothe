@@ -28,6 +28,37 @@ class TestSeedSkillActivation:
         assert result is not None
         assert result["invoked_bodies"] == {"a": "body text"}
 
+    def test_slash_invocation_registers_via_mark_invoked(self) -> None:
+        """Slash invocation signal seeds skill_activation with mark_invoked."""
+        state = LoopState(goal="shanghai tomorrow", thread_id="t1")
+        state.slash_invoked_skill_name = "weather"
+        state.slash_invoked_skill_body = "Weather skill body text"
+        result = Executor._seed_skill_activation(state)
+        assert result is not None
+        assert "weather" in result["invoked"]
+        assert "weather" in result["just_invoked"]
+        assert result["invoked_bodies"]["weather"] == "Weather skill body text"
+
+    def test_slash_invocation_with_prior_activated(self) -> None:
+        """Slash invocation merges with existing activated skills."""
+        state = LoopState(goal="g", thread_id="t1")
+        state.activated_skill_names = {"py-skill"}
+        state.slash_invoked_skill_name = "weather"
+        state.slash_invoked_skill_body = "Weather body"
+        result = Executor._seed_skill_activation(state)
+        assert result is not None
+        assert "py-skill" in result["activated"]
+        assert "weather" in result["invoked"]
+        assert "weather" in result["just_invoked"]
+
+    def test_slash_invocation_missing_body_returns_none(self) -> None:
+        """Slash name without body does not trigger activation."""
+        state = LoopState(goal="g", thread_id="t1")
+        state.slash_invoked_skill_name = "weather"
+        # No slash_invoked_skill_body
+        result = Executor._seed_skill_activation(state)
+        assert result is None
+
 
 class TestSnapshotSkillActivation:
     def test_snapshots_activated(self) -> None:
@@ -60,6 +91,16 @@ class TestSnapshotSkillActivation:
         loop_state = LoopState(goal="g", thread_id="t1")
         Executor._snapshot_skill_activation({"skill_activation": "bad"}, loop_state)
         assert loop_state.activated_skill_names == set()
+
+    def test_clears_slash_invocation_signal(self) -> None:
+        """Snapshot clears slash invocation signal fields (consumed once)."""
+        loop_state = LoopState(goal="g", thread_id="t1")
+        loop_state.slash_invoked_skill_name = "weather"
+        loop_state.slash_invoked_skill_body = "body"
+        graph_output = {"skill_activation": {"sent": set(), "activated": set(), "invoked": set()}}
+        Executor._snapshot_skill_activation(graph_output, loop_state)
+        assert loop_state.slash_invoked_skill_name is None
+        assert loop_state.slash_invoked_skill_body is None
 
 
 class TestExecuteGraphInput:
