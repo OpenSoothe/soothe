@@ -49,6 +49,18 @@ class TestSubmitTask:
         with pytest.raises(ValueError, match="not found"):
             await svc.submit_task("orphan", parent_id="ghost-id")
 
+    @pytest.mark.asyncio
+    async def test_workspace_stored_when_provided(self, tmp_path) -> None:
+        svc = _service()
+        goal = await svc.submit_task("list files", workspace=str(tmp_path))
+        assert goal.workspace == str(tmp_path.resolve())
+
+    @pytest.mark.asyncio
+    async def test_workspace_none_when_omitted(self) -> None:
+        svc = _service()
+        goal = await svc.submit_task("no workspace")
+        assert goal.workspace is None
+
 
 class TestListAndGet:
     @pytest.mark.asyncio
