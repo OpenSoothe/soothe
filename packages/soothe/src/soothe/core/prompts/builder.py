@@ -84,7 +84,7 @@ class PromptBuilder:
         - Projected ``state.loop_messages`` ledger (IG-380): native ``LoopHumanMessage`` /
           ``LoopAIMessage`` turns, optionally tail-trimmed when ``agentic.plan_prompt_ledger`` caps
           are set; persisted ``loop_messages`` are never modified.
-        - LoopHumanMessage: ``<GOAL_PROGRESS>`` (goal + execute iteration) for both ``assess`` and
+        - LoopHumanMessage: ``<USER_QUERY>`` (goal) for both ``assess`` and
           ``generate``, plus optional ``<PRIOR_CONVERSATION>`` when ``recent_messages`` is set
           (IG-371: no WM block on this human), and optional ``<PLAN_DAG_CONTEXT>`` for generate phase.
 
@@ -189,8 +189,8 @@ class PromptBuilder:
         - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS (schema-aligned PlanGeneration
           only), then conditional blocks, ENVIRONMENT, WORKSPACE.
 
-        Goal and execute iteration are supplied in the plan-context user message
-        (``<GOAL_PROGRESS>``), not in the system prompt.
+        Goal is supplied in the plan-context user message
+        (``<USER_QUERY>``), not in the system prompt.
 
         Args:
             context: Planning context with workspace, capabilities
@@ -272,7 +272,7 @@ class PromptBuilder:
         """
         parts: list[str] = []
 
-        # Goal line for non-plan human paths (plan phase uses ``<GOAL_PROGRESS>`` on plan-context human).
+        # Goal line for non-plan human paths (plan phase uses ``<USER_QUERY>`` on plan-context human).
         parts.append(f"Goal: {goal}\n")
 
         # Working memory excerpt (RFC-203)
@@ -324,7 +324,8 @@ class PromptBuilder:
         Execute-step evidence lives in those ledger messages (IG-368).
 
         RFC-214: Uses the plan-context envelope which includes:
-        - <GOAL_PROGRESS> with goal and iteration
+        - <USER_QUERY> with goal
+        - Optional <SKILL_REFERENCE> when slash-skill invoked
         - Optional <PLAN_STEP_ID_HINT> (generate phase)
         - Optional <PLAN_DAG_CONTEXT> (generate phase)
         - <CONTEXT_INFO> with timestamp and date

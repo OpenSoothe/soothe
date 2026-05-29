@@ -31,38 +31,9 @@ _RESPONSE_LANGUAGE_HINT = (
 
 _EXECUTE_STEP_CONTEXT_SEPARATOR = "\n\n--- Context ---\n\n"
 
-# Shown inside <USER_PRIMARY_QUERY> when /skill: expanded but the user gave no trailing text.
-_EMPTY_SKILL_USER_TEXT_PLACEHOLDER = (
-    "(No free-text instruction after the skill selector — follow the full goal and skill "
-    "reference below.)"
-)
-
-
-def _slash_skill_trailing_user_text(goal_user_submission: str | None) -> str | None:
-    """Return trailing args for a ``/skill:`` submission, or ``None`` if not a skill line.
-
-    When this is not ``None`` (including empty string for ``/skill:name`` with no args),
-    envelope builders split primary user text from long expanded skill content.
-
-    Args:
-        goal_user_submission: Original user line saved on ``LoopState`` when a skill expands.
-
-    Returns:
-        ``None`` if ``submission`` is missing or not a slash-skill line; otherwise the
-        text after the skill token (may be empty).
-    """
-    if not goal_user_submission or not str(goal_user_submission).strip():
-        return None
-    from soothe.skills.catalog import parse_slash_skill_user_line
-
-    parsed = parse_slash_skill_user_line(str(goal_user_submission).strip())
-    if parsed is None:
-        return None
-    return parsed[1]
-
 
 def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
-    """Normalize goal string for slash-skill ``<FULL_GOAL_AND_SKILL_CONTEXT>`` (strip iteration suffix)."""
+    """Normalize goal string (strip iteration suffix)."""
     raw = (goal or "").strip()
     if not raw:
         return "No goal specified"
@@ -145,20 +116,18 @@ def build_plan_context_envelope(
 ) -> str:
     """Build the user message envelope for plan-assess/plan-generate (RFC-214).
 
-    Similar to execute-step envelope but tailored for plan phase:
-    - <GOAL_PROGRESS> instead of <CURRENT_GOAL>
-    - Optional <SKILL_REFERENCE> when slash-skill invoked (body injected once per turn)
-    - Optional <PLAN_STEP_ID_HINT>
-    - Optional <PLAN_DAG_CONTEXT>
+    Uses ``<USER_QUERY>`` for the goal — same tag as execute-step envelope,
+    avoiding redundant nesting now that ``state.goal`` carries only the user
+    instruction (not the full skill body).
 
     Args:
-        goal: Current goal text.
+        goal: Current goal text (user instruction only).
         dag_context: Optional DAG planning context XML.
         step_id_hint: Optional next step ID hint text.
         project_instructions: Optional ``<project_instructions>`` XML from workspace
             ``CLAUDE.md`` / ``AGENTS.md`` (plan-generate only at call sites).
-        goal_user_submission: Original ``/skill:`` line when applicable; used to surface
-            the short user query before long expanded skill content.
+        goal_user_submission: Original ``/skill:`` line when applicable; unused
+            since the goal split (kept for API compat).
         skill_context: Skill reference body for ``<SKILL_REFERENCE>`` when slash-skill
             invoked; injected once per turn so the body is not duplicated elsewhere.
 
@@ -169,23 +138,8 @@ def build_plan_context_envelope(
     date_str = now.strftime("%Y-%m-%d")
     timestamp = now.isoformat()
 
-    # Build <GOAL_PROGRESS>
     goal_display = _goal_text_for_execute_step_envelope(goal)
-    skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
-    if skill_tail is not None:
-        focus = skill_tail.strip() if skill_tail.strip() else _EMPTY_SKILL_USER_TEXT_PLACEHOLDER
-        goal_progress = (
-            "<GOAL_PROGRESS>\n"
-            "<USER_PRIMARY_QUERY>\n"
-            f"{focus}\n"
-            "</USER_PRIMARY_QUERY>\n"
-            "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
-            f"{goal_display}\n"
-            "</FULL_GOAL_AND_SKILL_CONTEXT>\n"
-            "</GOAL_PROGRESS>"
-        )
-    else:
-        goal_progress = f"<GOAL_PROGRESS>\nGoal: {goal_display}\n</GOAL_PROGRESS>"
+    user_query = f"<USER_QUERY>\n{goal_display}\n</USER_QUERY>"
 
     # Optional hints
     extra_parts: list[str] = []
@@ -206,5 +160,5 @@ def build_plan_context_envelope(
     _append_project_instructions_to_context_info(context_info_parts, project_instructions)
     context_info = "<CONTEXT_INFO>\n" + "\n".join(context_info_parts) + "\n</CONTEXT_INFO>"
 
-    parts = [goal_progress] + extra_parts + [context_info]
+    parts = [user_query] + extra_parts + [context_info]
     return "\n".join(parts)

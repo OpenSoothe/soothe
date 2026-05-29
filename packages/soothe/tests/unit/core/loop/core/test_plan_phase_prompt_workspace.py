@@ -21,7 +21,7 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     builder = PromptBuilder(config)
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    # Assess: system + optional ledger + plan-context human with <GOAL_PROGRESS>
+    # Assess: system + optional ledger + plan-context human with <USER_QUERY>
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], LoopHumanMessage)
@@ -30,16 +30,15 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     human_content = messages[1].content
 
     # RFC-207: SystemMessage has static context
-    # RFC-207: Removed SOOTHE_ prefix from all tags
     assert "<ENVIRONMENT" in system_content
     assert "<WORKSPACE" in system_content
     assert "/abs/path/to/repo" in system_content
     assert "<WORKSPACE_RULES>" in system_content
     assert "Do NOT ask the user" in system_content
 
-    assert "</GOAL_PROGRESS>" not in system_content
-    assert "</GOAL_PROGRESS>" in human_content
-    assert "Goal: analyze architecture" in human_content
+    assert "</USER_QUERY>" not in system_content
+    assert "<USER_QUERY>" in human_content
+    assert "analyze architecture" in human_content
 
 
 def test_build_loop_plan_messages_without_config_workspace_only() -> None:
@@ -53,15 +52,14 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     system_content = messages[0].content
     human_content = messages[1].content
 
-    # RFC-207: Removed SOOTHE_ prefix from all tags
     assert "<ENVIRONMENT" not in system_content
     assert "<WORKSPACE" in system_content
     assert "/abs/path/to/repo" in system_content
     assert "<WORKSPACE_RULES>" in system_content
 
-    assert "</GOAL_PROGRESS>" not in system_content
-    assert "</GOAL_PROGRESS>" in human_content
-    assert "Goal: analyze architecture" in human_content
+    assert "</USER_QUERY>" not in system_content
+    assert "<USER_QUERY>" in human_content
+    assert "analyze architecture" in human_content
 
 
 def test_build_loop_plan_messages_omits_workspace_rules_without_workspace() -> None:
@@ -72,7 +70,6 @@ def test_build_loop_plan_messages_omits_workspace_rules_without_workspace() -> N
     messages = builder.build_plan_messages("hi", state, ctx)
 
     system_content = messages[0].content
-    # RFC-207: WORKSPACE_RULES in SystemMessage when workspace present
     assert "<WORKSPACE_RULES>" not in system_content
 
 
@@ -94,7 +91,6 @@ def test_build_loop_plan_messages_omits_working_memory_in_plan_human_ig371() -> 
 def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     """Test build_plan_messages() converts prior conversation XML to native ledger turns (RFC-214)."""
     state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
-    # RFC-209: Prior conversation always available (same thread_id)
     ctx = PlanContext(
         workspace=None,
         recent_messages=[
@@ -107,22 +103,19 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
 
     system_content = messages[0].content
 
-    # RFC-214: PRIOR_CONVERSATION removed - prior messages are native ledger turns
     # Prior conversation now appears as native LoopHumanMessage/LoopAIMessage in message list
-    # (not as XML block in plan-context human)
-    assert "<PRIOR_CONVERSATION>" not in messages[-1].content  # Last message is plan-context human
+    assert "<PRIOR_CONVERSATION>" not in messages[-1].content
     # 4 messages: System + 2 prior thread messages (user+assistant) + plan-context human
     assert len(messages) == 4
-    # Prior thread messages are LoopHumanMessage and LoopAIMessage
     assert isinstance(messages[1], LoopHumanMessage)
     assert isinstance(messages[2], LoopAIMessage)
     # Infrastructure appears in the prior thread LoopAIMessage, not plan-context human
     assert "Infrastructure" in messages[2].content
     assert "Infrastructure" not in messages[-1].content
-    # Plan-context human starts with GOAL_PROGRESS
-    assert messages[-1].content.strip().startswith("<GOAL_PROGRESS>")
-    assert "</GOAL_PROGRESS>" not in system_content
-    assert "Goal: 翻译成中文" in messages[-1].content
+    # Plan-context human starts with USER_QUERY
+    assert messages[-1].content.strip().startswith("<USER_QUERY>")
+    assert "</USER_QUERY>" not in system_content
+    assert "翻译成中文" in messages[-1].content
     # CONTEXT_INFO with timestamp/date is now in plan-context human (RFC-214)
     assert "<CONTEXT_INFO>" in messages[-1].content
 
@@ -181,8 +174,8 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     assert "First lines of README" in messages[2].content
     system = messages[0].content
     plan_human = messages[3].content
-    assert "</GOAL_PROGRESS>" not in system
-    assert "</GOAL_PROGRESS>" in plan_human
-    assert "Goal: read readme" in plan_human
+    assert "</USER_QUERY>" not in system
+    assert "<USER_QUERY>" in plan_human
+    assert "read readme" in plan_human
     assert "Execute iteration" not in plan_human
     assert "<AGENTLOOP_HISTORY>" not in system
