@@ -606,23 +606,30 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         available_block: str | None = None
         if new_entries:
+            # Exclude just-invoked skills from listing — their body is in the
+            # user message this turn (via <SKILL_REFERENCE> or <SKILL_CONTEXT>).
+            listing_entries = [e for e in new_entries if e.name not in just_invoked]
+
             ctx_limit = int(self._config.agent.loop.context_window_limit)
             budget_pct = float(self._config.progressive_skills.budget_pct)
             budget_chars = max(0, int(ctx_limit * budget_pct))
             per_entry_cap = int(self._config.progressive_skills.max_listing_chars_per_entry)
             min_per_entry = int(self._config.progressive_skills.min_listing_chars_per_entry)
 
-            from soothe.skills.budget import format_skills_within_budget
+            if listing_entries:
+                from soothe.skills.budget import format_skills_within_budget
 
-            text, _telemetry = format_skills_within_budget(
-                new_entries,
-                budget_chars=budget_chars,
-                per_entry_cap_chars=per_entry_cap,
-                min_per_entry_chars=min_per_entry,
-            )
-            if text:
-                available_block = f"<AVAILABLE_SKILLS>\n{text}\n</AVAILABLE_SKILLS>"
-                registry.mark_sent(activation, [e.name for e in new_entries])
+                text, _telemetry = format_skills_within_budget(
+                    listing_entries,
+                    budget_chars=budget_chars,
+                    per_entry_cap_chars=per_entry_cap,
+                    min_per_entry_chars=min_per_entry,
+                )
+                if text:
+                    available_block = f"<AVAILABLE_SKILLS>\n{text}\n</AVAILABLE_SKILLS>"
+
+            # Mark ALL new entries as sent (including just-invoked ones excluded from listing)
+            registry.mark_sent(activation, [e.name for e in new_entries])
 
         skill_context_blocks: list[str] = []
         for name in sorted(invoked - just_invoked):
@@ -776,6 +783,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "_subagent_routing_directive": request.state.get("_subagent_routing_directive"),
                 "continue_loop_mode": request.state.get("continue_loop_mode"),
                 "synthesis_scenario": request.state.get("synthesis_scenario"),
+                "skill_activation": request.state.get("skill_activation"),
             }
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)

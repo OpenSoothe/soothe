@@ -141,11 +141,13 @@ def build_plan_context_envelope(
     step_id_hint: str | None = None,
     project_instructions: str | None = None,
     goal_user_submission: str | None = None,
+    skill_context: str | None = None,
 ) -> str:
     """Build the user message envelope for plan-assess/plan-generate (RFC-214).
 
     Similar to execute-step envelope but tailored for plan phase:
     - <GOAL_PROGRESS> instead of <CURRENT_GOAL>
+    - Optional <SKILL_REFERENCE> when slash-skill invoked (body injected once per turn)
     - Optional <PLAN_STEP_ID_HINT>
     - Optional <PLAN_DAG_CONTEXT>
 
@@ -157,6 +159,8 @@ def build_plan_context_envelope(
             ``CLAUDE.md`` / ``AGENTS.md`` (plan-generate only at call sites).
         goal_user_submission: Original ``/skill:`` line when applicable; used to surface
             the short user query before long expanded skill content.
+        skill_context: Skill reference body for ``<SKILL_REFERENCE>`` when slash-skill
+            invoked; injected once per turn so the body is not duplicated elsewhere.
 
     Returns:
         XML envelope string for the plan-context LoopHumanMessage.
@@ -185,6 +189,9 @@ def build_plan_context_envelope(
 
     # Optional hints
     extra_parts: list[str] = []
+    skill_ref_body = (skill_context or "").strip()
+    if skill_ref_body:
+        extra_parts.append(f"<SKILL_REFERENCE>\n{skill_ref_body}\n</SKILL_REFERENCE>")
     if step_id_hint:
         extra_parts.append(step_id_hint)
     if dag_context:

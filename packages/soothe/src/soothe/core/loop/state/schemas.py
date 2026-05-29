@@ -863,6 +863,16 @@ class LoopState(BaseModel):
     invoked_skill_names: set[str] = Field(default_factory=set)
     invoked_skill_bodies: dict[str, str] = Field(default_factory=dict)
 
+    # Slash invocation signal — consumed once by executor then cleared
+    slash_invoked_skill_name: str | None = Field(
+        default=None,
+        description="Skill name from /skill: expansion; seeded into skill_activation by executor.",
+    )
+    slash_invoked_skill_body: str | None = Field(
+        default=None,
+        description="Skill body from /skill: expansion; seeded into skill_activation by executor.",
+    )
+
     project_instructions_execute_iteration: int | None = Field(
         default=None,
         description=(
