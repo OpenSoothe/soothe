@@ -146,6 +146,7 @@ class GoalEngine:
         informs: list[str] | None = None,
         conflicts_with: list[str] | None = None,
         source_file: str | None = None,
+        workspace: str | None = None,
         goal_id: str | None = None,
         depends_on: list[str] | None = None,
         _validate_depth: bool = True,
@@ -162,6 +163,7 @@ class GoalEngine:
             informs: Soft dependency goal IDs (RFC-204).
             conflicts_with: Mutual exclusion goal IDs (RFC-204).
             source_file: Path to GOAL.md that defined this goal (RFC-204).
+            workspace: Optional absolute workspace path for autopilot execution.
             goal_id: Override default ID generation (for file-discovered goals).
             depends_on: Hard dependency goal IDs (alternative to post-creation add).
             _validate_depth: Whether to validate goal depth.
@@ -196,6 +198,7 @@ class GoalEngine:
             informs=informs or [],
             conflicts_with=conflicts_with or [],
             source_file=source_file,
+            workspace=workspace,
             depends_on=depends_on or [],
         )
         if goal_id:

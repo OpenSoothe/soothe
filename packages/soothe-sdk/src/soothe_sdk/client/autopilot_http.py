@@ -94,12 +94,21 @@ class AutopilotHttpClient:
             msg = f"HTTP {exc.code} for {path}: {detail}"
             raise RuntimeError(msg) from exc
 
-    def submit(self, description: str, *, priority: int = 50) -> dict[str, Any]:
+    def submit(
+        self,
+        description: str,
+        *,
+        priority: int = 50,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
         """Submit a new autopilot task."""
+        body: dict[str, Any] = {"description": description, "priority": priority}
+        if workspace is not None and str(workspace).strip():
+            body["workspace"] = str(workspace).strip()
         return self._request(
             "POST",
             "/api/v1/autopilot/submit",
-            body={"description": description, "priority": priority},
+            body=body,
         )
 
     def list_goals(self) -> dict[str, Any]:
