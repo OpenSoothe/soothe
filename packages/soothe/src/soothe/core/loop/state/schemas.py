@@ -863,6 +863,12 @@ class LoopState(BaseModel):
     invoked_skill_names: set[str] = Field(default_factory=set)
     invoked_skill_bodies: dict[str, str] = Field(default_factory=dict)
 
+    # RFC-412: MCP progressive disclosure durability snapshot
+    sent_mcp_tool_names: set[str] = Field(default_factory=set)
+    invoked_mcp_tools: dict[str, dict] = Field(default_factory=dict)
+    disabled_mcp_servers: set[str] = Field(default_factory=set)
+    cached_mcp_resources: dict[str, str] = Field(default_factory=dict)
+
     # Slash invocation signal — consumed once by executor then cleared
     slash_invoked_skill_name: str | None = Field(
         default=None,

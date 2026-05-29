@@ -117,6 +117,10 @@ def _extract_required_permission(action: ActionRequest) -> Permission | None:
         return Permission("subagent", "spawn", action.tool_name or "*")
     if action.action_type == "mcp_connect":
         return Permission("mcp", "connect", action.tool_name or "*")
+    if action.action_type == "mcp_tool_invoke":
+        return Permission("mcp", "invoke", action.tool_name or "*")
+    if action.action_type == "mcp_resource_read":
+        return Permission("mcp", "read_resource", action.tool_name or "*")
     return None
 
 
