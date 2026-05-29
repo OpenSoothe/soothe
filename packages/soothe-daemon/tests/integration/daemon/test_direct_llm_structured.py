@@ -20,7 +20,7 @@ from ..daemon_fixtures import (
     build_daemon_config,
     force_isolated_home,
 )
-from .daemon._structured_direct_llm_helpers import (
+from ._structured_direct_llm_helpers import (
     WORD_REPLY_SCHEMA,
     await_messages_assistant_content,
     parse_word_reply_json,

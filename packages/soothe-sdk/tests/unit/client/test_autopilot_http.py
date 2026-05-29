@@ -43,3 +43,16 @@ def test_ensure_http_rest_available_404() -> None:
         with pytest.raises(RuntimeError, match="HTTP REST is disabled"):
             ensure_http_rest_available("http://127.0.0.1:8765")
 
+
+def test_submit_includes_workspace_when_provided() -> None:
+    from soothe_sdk.client.autopilot_http import AutopilotHttpClient
+
+    client = AutopilotHttpClient("http://127.0.0.1:8765")
+    with patch.object(client, "_request", return_value={"goal_id": "abc"}) as mock_req:
+        client.submit("task", workspace="/tmp/proj")
+    mock_req.assert_called_once_with(
+        "POST",
+        "/api/v1/autopilot/submit",
+        body={"description": "task", "priority": 50, "workspace": "/tmp/proj"},
+    )
+
