@@ -17,6 +17,7 @@ from soothe.core.loop.state.checkpoint import AgentLoopCheckpoint, GoalExecution
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     PlanResult,
+    StatusAssessment,
     StepAction,
 )
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -247,11 +248,18 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 )
                 return {"assess_route": "skip_generate"}
             # action == "plan_generate": escalate to full planner.
+            # Build a StatusAssessment from the ContinuationAssessment so the
+            # downstream plan_generate node has the payload it requires.
             logger.info(
                 "[Plan] iter=0 continuation-assess: plan_generate (%s)",
                 reason_text[:120],
             )
-            ctx.scratch.plan_assessment = None
+            ctx.scratch.plan_assessment = StatusAssessment(
+                status="continue",
+                goal_progress=assessment.goal_progress,
+                assessment_reasoning=assessment.reasoning,
+                require_goal_completion=False,
+            )
             return {"assess_route": "continue_generate"}
 
     assessment = await agent_loop.plan_phase.assess_status(

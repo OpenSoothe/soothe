@@ -403,21 +403,6 @@ class AgenticMixin:
             shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
         ):
             if event_type == "intent_classified":
-                goal_desc = (
-                    event_data.get("goal_description") if isinstance(event_data, dict) else None
-                )
-                if isinstance(goal_desc, str) and goal_desc.strip():
-                    display_goal = goal_desc.strip()
-                    yield _custom(
-                        LoopAgentReasonEvent(
-                            status="",
-                            progress="",
-                            next_action="",
-                            assessment_reasoning=display_goal,
-                            iteration=0,
-                            plan_action="",
-                        ).to_dict()
-                    )
                 logger.info(
                     "[Intent] Classified in graph as %s",
                     event_data.get("intent_type") if isinstance(event_data, dict) else "unknown",
