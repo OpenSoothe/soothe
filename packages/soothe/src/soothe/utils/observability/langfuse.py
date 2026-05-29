@@ -165,6 +165,62 @@ def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
         return _HANDLERS[cache_key]
 
 
+def _create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
+    """Create a new Langfuse handler instance (not cached) for independent traces.
+
+    Used for LLM calls that should be standalone root traces, not nested under
+    subsequent graph invocations. Each call creates a fresh handler with its own
+    trace_id and OpenTelemetry context, preventing unwanted nesting.
+
+    Args:
+        soothe_config: Active Soothe configuration.
+
+    Returns:
+        New SootheLangfuseCallbackHandler instance, or None if Langfuse is disabled/unavailable.
+    """
+    global _LANGFUSE_NOT_INSTALLED_WARNED, _LANGFUSE_HANDLER_UNAVAILABLE_WARNED
+    lf = soothe_config.observability.langfuse
+    try:
+        import langfuse.langchain  # noqa: F401 - optional extra soothe[langfuse]
+    except ImportError:
+        if not _LANGFUSE_NOT_INSTALLED_WARNED:
+            logger.warning(
+                "observability.langfuse.enabled is true but langfuse is not installed; "
+                "install optional dependency (e.g. pip install 'soothe[langfuse]')"
+            )
+            _LANGFUSE_NOT_INSTALLED_WARNED = True
+        return None
+
+    _ensure_langfuse_client(soothe_config)
+
+    from soothe.utils.observability.langfuse_callback_handler import (
+        LANGFUSE_AVAILABLE,
+        SootheLangfuseCallbackHandler,
+    )
+
+    if not LANGFUSE_AVAILABLE:
+        if not _LANGFUSE_HANDLER_UNAVAILABLE_WARNED:
+            logger.warning(
+                "observability.langfuse.enabled is true but Langfuse callback handler "
+                "is unavailable; ensure langfuse and langchain are both installed"
+            )
+            _LANGFUSE_HANDLER_UNAVAILABLE_WARNED = True
+        return None
+
+    pub_resolved = _resolve_str(lf.public_key)
+    # Create fresh handler (not cached) - each call gets independent trace context
+    if pub_resolved:
+        try:
+            return SootheLangfuseCallbackHandler(public_key=pub_resolved)
+        except TypeError:
+            logger.warning(
+                "Langfuse callback handler does not accept public_key; "
+                "falling back to default constructor"
+            )
+            return SootheLangfuseCallbackHandler()
+    return SootheLangfuseCallbackHandler()
+
+
 def merge_langfuse_runnable_config(
     base: dict[str, Any],
     soothe_config: SootheConfig,
@@ -173,6 +229,7 @@ def merge_langfuse_runnable_config(
     run_name: str | None = None,
     loop_id: str | None = None,
     inherit_callbacks_from: dict[str, Any] | None = None,
+    fresh_handler: bool = False,
 ) -> dict[str, Any]:
     """Return Runnable config like ``base`` with Langfuse callbacks and session metadata merged in.
 
@@ -190,6 +247,9 @@ def merge_langfuse_runnable_config(
             instance as would be attached, skip appending the handler again so a later
             ``merge_configs(langgraph_parent, child)`` does not register duplicate Langfuse
             callbacks (goal-completion synthesis nested under the AgentLoop graph).
+        fresh_handler: When True, creates a new handler instance (not cached) to ensure
+            independent trace_id and avoid OpenTelemetry context nesting. Use for
+            standalone LLM calls that should not nest under subsequent graph traces.
 
     When ``observability.langfuse.tags`` / ``user_id`` are set, merges ``langfuse_tags`` /
     ``langfuse_user_id`` into metadata if those keys are not already present (Langfuse
@@ -200,7 +260,12 @@ def merge_langfuse_runnable_config(
     """
     if not soothe_config.observability.langfuse.enabled:
         return base
-    handler = _langfuse_callback_handler(soothe_config)
+    # Use fresh handler for independent traces (e.g., intent classification before agent-loop-graph)
+    handler = (
+        _create_fresh_langfuse_handler(soothe_config)
+        if fresh_handler
+        else _langfuse_callback_handler(soothe_config)
+    )
     if handler is None:
         return base
     skip_handler_append = False
@@ -275,6 +340,7 @@ def build_traced_config(
     run_name: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
     loop_id: str | None = None,
+    independent_trace: bool = False,
 ) -> dict[str, Any]:
     """Build a RunnableConfig with Langfuse callbacks and standardized call metadata.
 
@@ -291,6 +357,9 @@ def build_traced_config(
         run_name: Trace display name (e.g. ``soothe:intent-classify``).
         extra_metadata: Additional metadata fields to merge.
         loop_id: Optional loop identifier for trace correlation across sub-traces.
+        independent_trace: When True, creates a fresh handler with new trace_id to avoid
+            nesting under a prior trace's OpenTelemetry context. Use for LLM calls that
+            should be standalone root traces (e.g., intent classification before agent-loop-graph).
 
     Returns:
         RunnableConfig dict with callbacks and metadata ready for ``model.ainvoke(..., config=)``.
@@ -305,6 +374,16 @@ def build_traced_config(
 
     if soothe_config is None:
         return base
+
+    if independent_trace:
+        return merge_langfuse_runnable_config(
+            base,
+            soothe_config,
+            session_id=session_id,
+            run_name=run_name,
+            loop_id=loop_id,
+            fresh_handler=True,
+        )
 
     return merge_langfuse_runnable_config(
         base,

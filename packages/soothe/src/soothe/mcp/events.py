@@ -7,8 +7,9 @@ Events are defined here and registration happens at module load time.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+
+from soothe.core.events.catalog import register_event
+from soothe.foundation.base_events import SootheEvent
 
 logger = logging.getLogger(__name__)
 
@@ -51,126 +52,102 @@ EVENT_PROMPT_INVOKED = "soothe.mcp.prompt.invoked"
 EVENT_TOOL_SEARCH_QUERIED = "soothe.mcp.tool_search.queried"
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
-@dataclass(frozen=True)
-class MCPServerConnectedEvent:
+class MCPServerConnectedEvent(SootheEvent):
     """Event: MCP server connected successfully."""
 
+    type: str = EVENT_SERVER_CONNECTED
     server: str
     transport: str
     tool_count: int
     prompt_count: int
     resource_count: int
     latency_ms: float
-    type: str = EVENT_SERVER_CONNECTED
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPServerDisconnectedEvent:
+class MCPServerDisconnectedEvent(SootheEvent):
     """Event: MCP server disconnected."""
 
+    type: str = EVENT_SERVER_DISCONNECTED
     server: str
     reason: str
     was_clean: bool
-    type: str = EVENT_SERVER_DISCONNECTED
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPServerReconnectingEvent:
+class MCPServerReconnectingEvent(SootheEvent):
     """Event: MCP server reconnecting."""
 
+    type: str = EVENT_SERVER_RECONNECTING
     server: str
     attempt: int
     backoff_s: float
-    type: str = EVENT_SERVER_RECONNECTING
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPServerConnectFailedEvent:
+class MCPServerConnectFailedEvent(SootheEvent):
     """Event: MCP server connect failed."""
 
+    type: str = EVENT_SERVER_CONNECT_FAILED
     server: str
     transport: str
     error_class: str
     attempt: int
     is_terminal: bool
-    type: str = EVENT_SERVER_CONNECT_FAILED
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPListChangedEvent:
+class MCPListChangedEvent(SootheEvent):
     """Event: MCP server list_changed notification."""
 
+    type: str = EVENT_LIST_CHANGED
     server: str
     kind: str  # "tools" | "prompts" | "resources"
     old_count: int
     new_count: int
-    type: str = EVENT_LIST_CHANGED
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPToolInvokedEvent:
+class MCPToolInvokedEvent(SootheEvent):
     """Event: MCP tool invoked."""
 
+    type: str = EVENT_TOOL_INVOKED
     server: str
     tool: str
     latency_ms: float
     success: bool
     result_chars: int
-    type: str = EVENT_TOOL_INVOKED
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPToolTimeoutEvent:
+class MCPToolTimeoutEvent(SootheEvent):
     """Event: MCP tool timeout."""
 
+    type: str = EVENT_TOOL_TIMEOUT
     server: str
     tool: str
     timeout_s: float
-    type: str = EVENT_TOOL_TIMEOUT
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPResourceReadEvent:
+class MCPResourceReadEvent(SootheEvent):
     """Event: MCP resource read."""
 
+    type: str = EVENT_RESOURCE_READ
     server: str
     uri: str
     chars: int
     latency_ms: float
-    type: str = EVENT_RESOURCE_READ
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPPromptInvokedEvent:
+class MCPPromptInvokedEvent(SootheEvent):
     """Event: MCP prompt invoked."""
 
+    type: str = EVENT_PROMPT_INVOKED
     server: str
     prompt: str
     latency_ms: float
-    type: str = EVENT_PROMPT_INVOKED
-    timestamp: datetime = field(default_factory=_now)
 
 
-@dataclass(frozen=True)
-class MCPToolSearchQueriedEvent:
+class MCPToolSearchQueriedEvent(SootheEvent):
     """Event: MCP tool search queried."""
 
+    type: str = EVENT_TOOL_SEARCH_QUERIED
     query: str
     match_count: int
-    type: str = EVENT_TOOL_SEARCH_QUERIED
-    timestamp: datetime = field(default_factory=_now)
 
 
 # Internal event bus for cross-middleware coordination
@@ -180,8 +157,6 @@ _internal_subscribers: list = []
 def _register_events() -> None:
     """Register all MCP events with the core event catalog."""
     try:
-        from soothe.core.events.catalog import register_event
-
         register_event(
             MCPServerConnectedEvent,
             summary_template="MCP {server} connected ({tool_count} tools, {latency_ms:.0f}ms)",

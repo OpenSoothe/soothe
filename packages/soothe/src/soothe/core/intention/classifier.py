@@ -268,6 +268,7 @@ class IntentClassifier:
                 phase="pre-stream",
                 run_name="soothe:intent-classify",
                 extra_metadata=observability_metadata,
+                independent_trace=True,  # Ensure standalone root trace, not nested under agent-loop-graph
             )
         except Exception:
             from soothe.middleware._utils import create_llm_call_metadata
