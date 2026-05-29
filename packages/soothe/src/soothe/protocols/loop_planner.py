@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from soothe.core.loop.state.schemas import LoopState, PlanResult, StatusAssessment
+from soothe.core.loop.state.schemas import (
+    ContinuationAssessment,
+    LoopState,
+    PlanResult,
+    StatusAssessment,
+)
 from soothe.protocols.planner import PlanContext
 
 
@@ -58,4 +63,21 @@ class LoopPlannerProtocol(Protocol):
         plan_manager: Any = None,
     ) -> PlanResult:
         """Generate or keep an execution plan after assess determines work remains."""
+        ...
+
+    async def assess_continuation(
+        self,
+        *,
+        current_goal: str,
+        prior_goals: list[dict],
+        capabilities: list[str],
+        thread_id: str | None = None,
+    ) -> ContinuationAssessment:
+        """RFC-226: iter=0 discriminator for continuation queries.
+
+        Routes a follow-up agentic query in an existing loop to either a
+        terminal bootstrap (single execute step using prior context) or the
+        full ``plan_generate`` flow. Called from ``plan_assess`` when
+        ``continue_loop_mode`` is True and the loop has prior completed goals.
+        """
         ...

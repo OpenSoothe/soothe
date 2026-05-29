@@ -195,9 +195,14 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         final_output=final_output,
     )
 
+    # Goal_completion only runs when the goal is, in fact, done. Force status="done"
+    # so the runner emits the final answer to the wire (RFC-225/RFC-226: the bootstrap
+    # path arrives here with PlanResult.status="continue", which would otherwise
+    # suppress loop_assistant_messages_chunk emission).
     updated_result = plan_result.model_copy(
         update={
             "full_output": final_output,
+            "status": "done",
         }
     )
 

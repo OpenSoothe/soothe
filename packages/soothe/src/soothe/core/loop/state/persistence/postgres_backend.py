@@ -366,7 +366,16 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 return data
 
     async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
-        """Partially update loop metadata fields."""
+        """Partially update loop metadata fields.
+
+        RFC-225: ``status`` is owned by ``AgentLoop`` once the loop has any
+        ``goal_history``. Status writes from the daemon path (pre-query
+        bookkeeping) are silently dropped for established loops to avoid
+        clobbering ``finalize_goal``'s ``"idle"`` back to ``"running"``,
+        which would cause AgentLoop to take the invalid-index re-init path
+        and lose prior goal context. Status writes are honored only when
+        the loop has no goals yet (initial registration / bind).
+        """
         _allowed = {
             "status",
             "current_thread_id",
@@ -388,6 +397,34 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             return
 
         pool = await self._ensure_pool()
+
+        # RFC-225: drop ``status`` from external metadata writes when the loop
+        # already has goals. AgentLoop is the authoritative writer in that case.
+        if "status" in updates:
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        SELECT jsonb_array_length(
+                                   COALESCE(checkpoint_data->'goal_history', '[]'::jsonb)
+                               )
+                        FROM agentloop_checkpoints
+                        WHERE loop_id = %s
+                        """,
+                        (loop_id,),
+                    )
+                    row = await cur.fetchone()
+                    history_len = int(row[0]) if row and row[0] is not None else 0
+            if history_len > 0:
+                logger.debug(
+                    "Dropping external status write for loop=%s "
+                    "(goal_history len=%d; AgentLoop owns status)",
+                    loop_id,
+                    history_len,
+                )
+                updates.pop("status", None)
+                if not updates:
+                    return
 
         # Merge scalar fields into checkpoint_data JSONB blob and update top-level columns
         jsonb_updates = {k: v for k, v in updates.items()}

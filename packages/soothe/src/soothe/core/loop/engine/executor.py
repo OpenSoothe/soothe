@@ -47,6 +47,7 @@ from soothe.core.loop.engine.metadata_generator import (
 )
 from soothe.core.loop.engine.predecessor_branch_context import (
     predecessor_execute_messages_for_branch,
+    prior_loop_execute_messages,
     transitive_dependency_step_ids,
 )
 from soothe.core.loop.engine.thread_fork_manager import ThreadForkManager
@@ -1647,6 +1648,30 @@ class Executor:
                             step.id,
                             len(graph_input_messages),
                         )
+
+            # RFC-225: Loop-continuation bootstrap injection.
+            # The bootstrap step (iter=0, no deps, continue_loop=True) forks from the
+            # main loop thread, which has NO LangChain checkpoints (prior goal steps
+            # ran on their own forked threads). The seeded LoopState.loop_messages
+            # carries the prior goal's execute_step ledger; inject it so the agent
+            # actually sees the prior conversation it needs to address.
+            elif (
+                not direct_deps
+                and loop_state is not None
+                and getattr(loop_state, "continue_loop", False)
+                and loop_state.iteration == 0
+                and loop_state.loop_messages
+            ):
+                cap = self._branch_predecessor_message_cap()
+                graph_input_messages = prior_loop_execute_messages(
+                    loop_state.loop_messages, max_messages=cap
+                )
+                if graph_input_messages:
+                    logger.info(
+                        "[LoopContinuation] step=%s bootstrap injected %d prior-goal execute msgs",
+                        step.id,
+                        len(graph_input_messages),
+                    )
 
             hints_parts: list[str] = []
             if wire_subagent:

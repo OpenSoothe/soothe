@@ -204,14 +204,6 @@ class AgentLoop:
         # same TUI/daemon thread reuses one AgentLoop checkpoint across user turns.
         checkpoint = await state_manager.load()
 
-        # RFC-225: derive continue_loop_mode structurally from the loaded checkpoint
-        # BEFORE any branch reassigns it. Mode is True when the loop already has
-        # at least one goal in flight (running) or completed-and-paused (idle).
-        continue_loop_mode = (
-            checkpoint is not None
-            and len(checkpoint.goal_history) >= 1
-            and checkpoint.status in ("running", "idle")
-        )
         if checkpoint is not None:
             checkpoint_normalized = False
             if checkpoint.current_thread_id != main_thread_id:
@@ -243,6 +235,36 @@ class AgentLoop:
                     iteration,
                     goal_record.goal_id,
                 )
+            elif checkpoint.goal_history and any(
+                g.status in ("completed", "failed", "cancelled") for g in checkpoint.goal_history
+            ):
+                # RFC-225: daemon's pre-query metadata write can clobber `status`
+                # from "idle" back to "running" while `current_goal_index` stays
+                # at -1 (left by finalize_goal). Goal history still holds prior
+                # completed goals — treat as idle continuation: append a new goal,
+                # seed from prior, preserve history.
+                logger.info(
+                    "Checkpoint status=running but current_goal_index=%d with %d prior goal(s); "
+                    "treating as idle continuation (loop=%s)",
+                    current_goal_index,
+                    len(checkpoint.goal_history),
+                    state_manager.loop_id,
+                )
+                # Restore the logical "idle" status before calling start_new_goal
+                # (which refuses to start a goal when status=="running").
+                checkpoint.status = "idle"
+                checkpoint.current_thread_id = main_thread_id
+                if main_thread_id not in checkpoint.thread_ids:
+                    checkpoint.thread_ids.append(main_thread_id)
+                goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
+                checkpoint.goal_history.append(goal_record)
+                checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                checkpoint.status = "running"
+                if len(checkpoint.goal_history) >= 2:
+                    seed_loop_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
+                await state_manager.save(checkpoint)
+                iteration = 0
+                recovery_valid_resume = False
             else:
                 logger.warning(
                     "Checkpoint has invalid goal index %d (history length: %d), re-initializing",
@@ -301,6 +323,15 @@ class AgentLoop:
             )
 
             await state_manager.save(checkpoint)
+
+        # RFC-225: derive continue_loop_mode from the FINAL checkpoint state, AFTER
+        # branching has settled goal_history. True iff at least one prior goal exists
+        # alongside the active one (i.e., goal_history has 2+ entries). The valid-resume
+        # branch keeps goal_history unchanged, so this also covers resumes where the
+        # in-flight goal is not the first goal of the loop.
+        continue_loop_mode = len(checkpoint.goal_history) >= 2 or (
+            recovery_valid_resume and len(checkpoint.goal_history) >= 2
+        )
 
         state = LoopState(
             goal=execution_goal,
