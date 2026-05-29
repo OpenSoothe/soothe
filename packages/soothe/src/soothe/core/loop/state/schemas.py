@@ -856,6 +856,13 @@ class LoopState(BaseModel):
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals
+
+    # RFC-105: Progressive skill loading durability snapshot
+    sent_skill_names: set[str] = Field(default_factory=set)
+    activated_skill_names: set[str] = Field(default_factory=set)
+    invoked_skill_names: set[str] = Field(default_factory=set)
+    invoked_skill_bodies: dict[str, str] = Field(default_factory=dict)
+
     project_instructions_execute_iteration: int | None = Field(
         default=None,
         description=(

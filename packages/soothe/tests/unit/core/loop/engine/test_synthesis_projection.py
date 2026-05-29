@@ -32,7 +32,7 @@ def test_flatten_execute_envelope_extracts_user_query() -> None:
 
 def test_projection_excludes_plan_phases() -> None:
     plan_human = LoopHumanMessage(
-        content=build_plan_context_envelope("Analyze latency", iteration=1, max_iterations=3),
+        content=build_plan_context_envelope("Analyze latency"),
         thread_id="t",
         iteration=0,
         phase="plan_assess",

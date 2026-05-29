@@ -238,7 +238,7 @@ SLASH_COMMANDS: list[tuple[str, str, str]] = [
 
 
 def parse_skill_command(command: str) -> tuple[str, str]:
-    """Extract skill name and args from a `/skill:<name>` command.
+    """Extract skill name and args from a `/skill:<name>` or `/skills:<name>` command.
 
     Args:
         command: The full command string (e.g., `/skill:web-research find X`).
@@ -249,7 +249,8 @@ def parse_skill_command(command: str) -> tuple[str, str]:
             The skill name is normalized to lowercase. Both are empty strings
             when the command has no skill name after the prefix.
     """
-    after_prefix = command[len("/skill:") :].strip()
+    prefix = "/skills:" if command.lstrip().startswith("/skills:") else "/skill:"
+    after_prefix = command[len(prefix) :].strip()
     parts = after_prefix.split(maxsplit=1)
     if not parts or not parts[0]:
         return "", ""

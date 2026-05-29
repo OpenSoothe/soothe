@@ -137,3 +137,11 @@ vector_store_router:
 # ============================================================
 # Uses defaults from OptimizationConfig (IG-433).
 # All semantic features enabled with graceful keyword/regex fallback.
+
+# ============================================================
+# PROGRESSIVE SKILL LOADING (RFC-105)
+# ============================================================
+progressive_skills:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20

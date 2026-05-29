@@ -353,6 +353,10 @@ subagents:
 mcp_servers: []
 plugins: []
 skills: []
+progressive_skills:
+  budget_pct: 0.01                  # fraction of context_window_limit for <AVAILABLE_SKILLS> listing
+  max_listing_chars_per_entry: 250  # hard per-entry description cap
+  min_listing_chars_per_entry: 20   # below this, non-builtin entries become names-only
 memory: []
 
 # ============================================================

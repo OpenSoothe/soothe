@@ -1501,6 +1501,30 @@ class CodeInterpreterConfig(BaseModel):
     """Preserve interpreter state between conversation turns."""
 
 
+class ProgressiveSkillsConfig(BaseModel):
+    """RFC-105: Tunables for progressive skill listing budget."""
+
+    budget_pct: float = Field(
+        default=0.01,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Fraction of AgentLoopConfig.context_window_limit (chars, not tokens) "
+            "available for the <AVAILABLE_SKILLS> listing per turn."
+        ),
+    )
+    max_listing_chars_per_entry: int = Field(
+        default=250,
+        ge=0,
+        description="Hard per-entry character cap for description in the listing.",
+    )
+    min_listing_chars_per_entry: int = Field(
+        default=20,
+        ge=0,
+        description="Below this, non-builtin entries fall back to names-only mode.",
+    )
+
+
 class AgentConfig(BaseModel):
     """Unified agent configuration with progressive disclosure.
 

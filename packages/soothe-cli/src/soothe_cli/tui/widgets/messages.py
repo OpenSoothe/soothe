@@ -1140,6 +1140,8 @@ class CognitionStepMessage(Vertical):
         self._last_duration_ms: int = 0
         self._last_tool_call_count: int = 0
         self._last_summary: str = ""
+        self._input_tokens: int = 0
+        self._output_tokens: int = 0
         self._interrupt_message: str | None = None
         self._deferred_interrupted: str | None = None
         self._rows: list[_StepToolRow] = []
@@ -1233,6 +1235,22 @@ class CognitionStepMessage(Vertical):
             return
         self._description = text
         self._refresh_header_title()
+
+    def record_token_usage(self, input_tokens: int, output_tokens: int) -> None:
+        """Accumulate LLM token usage for this step."""
+        self._input_tokens += input_tokens
+        self._output_tokens += output_tokens
+
+    def _token_budget_suffix(self) -> str:
+        """Token budget suffix for status lines, e.g. ``in:1.2K out:345``."""
+        if not (self._input_tokens or self._output_tokens):
+            return ""
+        from soothe_cli.runtime.state.session_stats import format_token_count
+
+        parts: list[str] = []
+        parts.append(f"in:{format_token_count(self._input_tokens)}")
+        parts.append(f"out:{format_token_count(self._output_tokens)}")
+        return " · " + " ".join(parts)
 
     def _step_header_content(self) -> Content:
         return _assemble_card_header(
@@ -2606,7 +2624,7 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        line = f"{gutter}{g.circle_empty} Pending...{self._stats_title_suffix()}"
+        line = f"{gutter}{g.circle_empty} Pending...{self._stats_title_suffix()}{self._token_budget_suffix()}"
         self._status_widget.remove_class("queued")
         self._status_widget.add_class("pending")
         self._status_widget.update(Content.styled(line, colors.cognition))
@@ -2623,7 +2641,7 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        line = f"{gutter}{g.circle_empty} Queued...{self._stats_title_suffix()}"
+        line = f"{gutter}{g.circle_empty} Queued...{self._stats_title_suffix()}{self._token_budget_suffix()}"
         self._status_widget.remove_class("pending")
         self._status_widget.add_class("queued")
         self._status_widget.update(Content.styled(line, colors.cognition))
@@ -2687,7 +2705,8 @@ class CognitionStepMessage(Vertical):
         if has_collapsible:
             toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
         stats_suffix = self._stats_title_suffix()
-        line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{toggle_icon}"
+        token_suffix = self._token_budget_suffix()
+        line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{token_suffix}{toggle_icon}"
         clear_widget_text_selection(self._status_widget)
         self._status_widget.update(Content.styled(line, colors.cognition))
         if self._has_active_task_branch_animation():
@@ -2717,13 +2736,14 @@ class CognitionStepMessage(Vertical):
 
         dur_str = format_duration_ms(duration_ms)
         tool_part = self._status_tool_stats_suffix(tool_call_count)
+        token_suffix = self._token_budget_suffix()
 
         prose = self._execute_assistant_buffer.strip()
         self._last_completed_execute_prose = prose
         self._execute_assistant_buffer = ""
 
         if success:
-            status_body = f"Completed ({dur_str}){tool_part}"
+            status_body = f"Completed ({dur_str}){tool_part}{token_suffix}"
             self._update_step_footer_status_line(status_body, success=True)
             self._refresh_task_activity_display()
             if prose:
@@ -2735,7 +2755,7 @@ class CognitionStepMessage(Vertical):
             return
 
         err_text = summary.strip() or "Step failed"
-        self._update_step_footer_status_line(f"Failed · {dur_str}", success=False)
+        self._update_step_footer_status_line(f"Failed · {dur_str}{token_suffix}", success=False)
         if prose:
             err_text = f"{err_text}\n\n{prose}"
         self._detail_widget.update(self._step_branched_error_detail(err_text))
@@ -2761,7 +2781,10 @@ class CognitionStepMessage(Vertical):
         if self._last_success is not None:
             dur_str = format_duration_ms(self._last_duration_ms)
             tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
-            self._update_step_footer_status_line(f"Completed ({dur_str}){tool_part}", success=True)
+            token_suffix = self._token_budget_suffix()
+            self._update_step_footer_status_line(
+                f"Completed ({dur_str}){tool_part}{token_suffix}", success=True
+            )
         first_pv = True
         for ln in preview.splitlines():
             if not first_pv:

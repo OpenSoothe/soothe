@@ -25,7 +25,7 @@ def test_rebuild_discovers_skills(tmp_path: Path) -> None:
     _make_skill(root, "beta")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root,)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)):
         entries = index.rebuild_if_stale()
 
     assert len(entries) == 2
@@ -41,7 +41,7 @@ def test_rebuild_only_reparses_changed(tmp_path: Path) -> None:
     _make_skill(root, "changing")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root,)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)):
         index.rebuild_if_stale()
 
         # Update changing skill
@@ -64,7 +64,7 @@ def test_rebuild_removes_deleted_skills(tmp_path: Path) -> None:
     removable = _make_skill(root, "remove")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root,)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)):
         entries = index.rebuild_if_stale()
         assert len(entries) == 2
 
@@ -83,7 +83,7 @@ def test_resolve_case_insensitive(tmp_path: Path) -> None:
     _make_skill(root, "MySkill")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root,)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)):
         index.rebuild_if_stale()
 
     assert index.resolve("myskill") is not None
@@ -97,7 +97,7 @@ def test_wire_entries_excludes_path(tmp_path: Path) -> None:
     _make_skill(root, "wired")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root,)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)):
         index.rebuild_if_stale()
 
     wire = index.wire_entries()
@@ -116,7 +116,7 @@ def test_persist_and_load_cache(tmp_path: Path) -> None:
 
     index = SkillIndex()
     with (
-        patch("soothe.skills.index._SKILL_ROOTS", (root,)),
+        patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)),
         patch("soothe.skills.index._CACHE_FILE", cache_file),
     ):
         index.rebuild_if_stale()
@@ -126,7 +126,7 @@ def test_persist_and_load_cache(tmp_path: Path) -> None:
     # New index should load from cache
     index2 = SkillIndex()
     with (
-        patch("soothe.skills.index._SKILL_ROOTS", (root,)),
+        patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)),
         patch("soothe.skills.index._CACHE_FILE", cache_file),
     ):
         index2._load_cache()
@@ -144,7 +144,7 @@ def test_multiple_roots(tmp_path: Path) -> None:
     _make_skill(root2, "from-soothe")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root1, root2)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root1, "user"), (root2, "user"))):
         entries = index.rebuild_if_stale()
 
     names = [e.name for e in entries]
@@ -160,8 +160,62 @@ def test_entries_sorted_by_name(tmp_path: Path) -> None:
     _make_skill(root, "middle")
 
     index = SkillIndex()
-    with patch("soothe.skills.index._SKILL_ROOTS", (root,)):
+    with patch("soothe.skills.index._SKILL_ROOTS", ((root, "user"),)):
         entries = index.rebuild_if_stale()
 
     names = [e.name for e in entries]
     assert names == sorted(names, key=str.lower)
+
+
+def test_dedup_across_roots(tmp_path: Path) -> None:
+    """When the same skill name exists in multiple roots, the later root wins."""
+    soothe_skills = tmp_path / "soothe_skills"
+    soothe_skills.mkdir()
+    _make_skill(soothe_skills, "dup", description="from-soothe")
+
+    agents_skills = tmp_path / "agents_skills"
+    agents_skills.mkdir()
+    _make_skill(agents_skills, "dup", description="from-agents")
+
+    index = SkillIndex()
+    with patch(
+        "soothe.skills.index._SKILL_ROOTS",
+        ((soothe_skills, "user"), (agents_skills, "user")),
+    ):
+        entries = index.rebuild_if_stale()
+
+    assert len(entries) == 1
+    assert entries[0].description == "from-agents"
+
+
+def test_agents_skills_root_included(tmp_path: Path) -> None:
+    """Verify ~/.agents/skills and built_in_skills are in _SKILL_ROOTS."""
+    from soothe.skills.index import _BUILTIN_SKILLS_DIR, _SKILL_ROOTS
+
+    root_paths = [r for r, _ in _SKILL_ROOTS]
+    agents_root = Path.home() / ".agents" / "skills"
+    assert agents_root in root_paths
+    assert _BUILTIN_SKILLS_DIR in root_paths
+
+
+def test_source_builtin_vs_user(tmp_path: Path) -> None:
+    """Built-in skills get source='builtin'; user skills get source='user'."""
+    builtin_root = tmp_path / "built_in_skills"
+    builtin_root.mkdir()
+    _make_skill(builtin_root, "core-skill")
+
+    user_root = tmp_path / "user_skills"
+    user_root.mkdir()
+    _make_skill(user_root, "my-skill")
+
+    index = SkillIndex()
+    with patch(
+        "soothe.skills.index._SKILL_ROOTS",
+        ((builtin_root, "builtin"), (user_root, "user")),
+    ):
+        entries = index.rebuild_if_stale()
+
+    core = next(e for e in entries if e.name == "core-skill")
+    my = next(e for e in entries if e.name == "my-skill")
+    assert core.source == "builtin"
+    assert my.source == "user"

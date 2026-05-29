@@ -40,7 +40,6 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     assert "</GOAL_PROGRESS>" not in system_content
     assert "</GOAL_PROGRESS>" in human_content
     assert "Goal: analyze architecture" in human_content
-    assert "Execute iteration: 1/8" in human_content
 
 
 def test_build_loop_plan_messages_without_config_workspace_only() -> None:
@@ -185,5 +184,5 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     assert "</GOAL_PROGRESS>" not in system
     assert "</GOAL_PROGRESS>" in plan_human
     assert "Goal: read readme" in plan_human
-    assert "Execute iteration: 1/8" in plan_human
+    assert "Execute iteration" not in plan_human
     assert "<AGENTLOOP_HISTORY>" not in system

@@ -58,11 +58,10 @@ def test_assess_with_config_still_includes_environment_workspace() -> None:
     assert "</GOAL_PROGRESS>" not in system
     assert "</GOAL_PROGRESS>" in human
     assert "Goal: analyze" in human
-    assert "Execute iteration: 1/8" in human
 
 
 def test_assess_goal_progress_in_plan_context_user_message_ig376() -> None:
-    """Plan-assess puts Goal + Execute iteration in user <GOAL_PROGRESS>; system has no goal block."""
+    """Plan-assess puts Goal in user <GOAL_PROGRESS>; system has no goal block."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     state.previous_plan = PlanResult(
         status="continue",
@@ -79,23 +78,23 @@ def test_assess_goal_progress_in_plan_context_user_message_ig376() -> None:
     assert "</GOAL_PROGRESS>" not in system
     assert "</GOAL_PROGRESS>" in human
     assert "Goal: read readme" in human
-    assert "Execute iteration: 3/8" in human
+    assert "Execute iteration" not in human
     assert "Plan status:" not in system
 
 
 def test_assess_iteration_zero_goal_progress_footer() -> None:
-    """Assess iteration 0 maps to execute iteration 1/max in <GOAL_PROGRESS>."""
+    """Assess iteration 0 still produces <GOAL_PROGRESS> without iteration count."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=0, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext(), plan_phase="assess")
     assert len(messages) == 2
     human = messages[1].content
     assert "Goal: read readme" in human
-    assert "Execute iteration: 1/8" in human
+    assert "Execute iteration" not in human
 
 
 def test_generate_goal_progress_in_plan_context_user_message() -> None:
-    """Plan-generate puts Goal + Execute iteration in user <GOAL_PROGRESS>; system has no goal block."""
+    """Plan-generate puts Goal in user <GOAL_PROGRESS>; system has no goal block."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages(
@@ -108,7 +107,7 @@ def test_generate_goal_progress_in_plan_context_user_message() -> None:
     assert "</GOAL_PROGRESS>" not in system
     assert "</GOAL_PROGRESS>" in human
     assert "Goal: read readme" in human
-    assert "Execute iteration: 3/8" in human
+    assert "Execute iteration" not in human
 
 
 def test_generate_includes_plan_step_id_hint_after_prior_steps_ig388() -> None:

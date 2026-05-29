@@ -6,6 +6,7 @@ from pathlib import Path
 
 from soothe.config import SootheConfig
 from soothe.skills.catalog import (
+    _parse_frontmatter,
     build_skill_invocation_envelope,
     format_slash_skill_invoke_line,
     parse_slash_skill_user_line,
@@ -104,3 +105,47 @@ def test_try_expand_slash_skill_user_line(tmp_path: Path) -> None:
     assert "User instruction" not in env.skill_context
     assert "run it" not in env.skill_context
     assert try_expand_slash_skill_user_line("/skill:missing-skill x", cfg) is None
+
+
+class TestFrontmatterPathsAndWhenToUse:
+    def test_paths_block_list(self) -> None:
+        content = "---\nname: py-skill\ndescription: d\npaths:\n  - '*.py'\n  - '*.pyx'\n---\nbody"
+        fm = _parse_frontmatter(content)
+        assert fm.get("paths") == ["*.py", "*.pyx"]
+
+    def test_when_to_use_block_scalar(self) -> None:
+        content = "---\nname: x\ndescription: d\nwhen_to_use: |\n  Use for Python.\n  And also Jupyter.\n---\nbody"
+        fm = _parse_frontmatter(content)
+        assert "Python" in fm.get("when_to_use", "")
+
+    def test_no_paths_no_when_to_use(self) -> None:
+        content = "---\nname: plain\ndescription: d\n---\nbody"
+        fm = _parse_frontmatter(content)
+        assert fm.get("paths") is None
+        assert fm.get("when_to_use") is None
+
+    def test_skill_directory_returns_paths(self, tmp_path: Path) -> None:
+        d = tmp_path / "cond-skill"
+        d.mkdir()
+        (d / "SKILL.md").write_text(
+            "---\nname: cond-skill\ndescription: Conditional\npaths:\n  - '*.ts'\n---\nbody",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig()
+        cfg.skills = [str(d)]
+        meta = resolve_skill_directory(cfg, "cond-skill")
+        assert meta is not None
+        assert meta.get("paths") == ["*.ts"]
+
+    def test_skill_directory_returns_when_to_use(self, tmp_path: Path) -> None:
+        d = tmp_path / "wtu-skill"
+        d.mkdir()
+        (d / "SKILL.md").write_text(
+            "---\nname: wtu-skill\ndescription: D\nwhen_to_use: Use me for docs\n---\nbody",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig()
+        cfg.skills = [str(d)]
+        meta = resolve_skill_directory(cfg, "wtu-skill")
+        assert meta is not None
+        assert meta.get("when_to_use") == "Use me for docs"

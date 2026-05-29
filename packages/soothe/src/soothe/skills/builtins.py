@@ -25,7 +25,12 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     A valid skill directory contains a `SKILL.md` file. The search includes:
     - Package-bundled built-ins (`soothe/built_in_skills/`)
     - User skills in `~/.soothe/skills/`
+    - User skills in `~/.agents/skills/`
     - Project skills in `<workspace>/.soothe/skills/` (if workspace provided)
+
+    When the same skill name exists in multiple roots, later roots win
+    (last-wins dedup). Workspace overrides ``~/.agents`` which overrides
+    ``~/.soothe`` which overrides built-ins.
 
     Args:
         workspace: Optional workspace directory path for project-local skills.
@@ -37,6 +42,7 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     candidate_roots = [
         module_dir / "built_in_skills",
         Path.home() / ".soothe" / "skills",
+        Path.home() / ".agents" / "skills",
     ]
 
     # Add workspace .soothe/skills if provided
@@ -44,8 +50,8 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
         ws_path = Path(workspace).expanduser().resolve()
         candidate_roots.append(ws_path / ".soothe" / "skills")
 
-    discovered: list[str] = []
-    seen: set[str] = set()
+    # Last-wins dedup by skill directory name (case-insensitive)
+    by_name: dict[str, str] = {}
     for root in candidate_roots:
         if not root.exists() or not root.is_dir():
             continue
@@ -53,9 +59,6 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
         for skill_file in root.glob("*/SKILL.md"):
             skill_dir = skill_file.parent.resolve()
             skill_path = str(skill_dir)
-            if skill_path in seen:
-                continue
-            seen.add(skill_path)
-            discovered.append(skill_path)
+            by_name[skill_dir.name.lower()] = skill_path
 
-    return sorted(discovered)
+    return sorted(by_name.values())
