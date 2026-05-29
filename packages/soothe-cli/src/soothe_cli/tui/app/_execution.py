@@ -667,7 +667,7 @@ class _ExecutionMixin:
                     exclusive=True,
                     group="daemon-skills-catalog",
                 )
-        elif cmd.startswith("/skill:"):
+        elif cmd.startswith(("/skill:", "/skills:")):
             await self._handle_skill_command(command)
         # -- Hidden debug commands (not in COMMANDS / autocomplete) -----------
         elif cmd == "/debug-error":

@@ -39,7 +39,7 @@ Three choices were settled before drafting:
 
 | Decision | Resolution | Reason |
 |---|---|---|
-| Per-thread "activated skills" state location | Durable on `LoopState` | Survives daemon restart and reconnect; checkpointed alongside other loop state; matches durability story of memory/context |
+| Per-thread "activated skills" state location | Runtime on agent graph state (`state["skill_activation"]`); snapshotted to `LoopState` each iteration | Keeps middleware loop-agnostic; reuses the `goal_user_submission` snapshot pattern; LoopState snapshot still survives daemon restart, reconnect, and compaction |
 | Stage-2 activation triggers | File-op tools only | Same scope as Claude Code's FileRead/Edit/Write; clearer mental model than scanning exec-tool arg strings for path-like substrings; lower false-positive rate |
 | Rollout strategy | Replace existing skill loading entirely; no feature flag | Cleanest code path; avoids two competing skill-emission code paths; soothe owns the system-prompt assembly point (`SystemPromptOptimizationMiddleware`) so the replacement is local |
 
@@ -48,41 +48,53 @@ Three choices were settled before drafting:
 ## 3. Architecture
 
 ```
-Discovery (startup, lazy — unchanged)
-  SkillIndex scans built_in_skills/, ~/.soothe/skills/, <workspace>/.soothe/skills/
-  → SkillIndexEntry { name, description, paths?, when_to_use?, source, path, mtime }
+Discovery (startup, lazy — unchanged structure, extended fields)
+  catalog.wire_entries_for_agent_config(config) aggregates entries from:
+    1. Built-in skill paths via get_built_in_skills_paths()
+    2. User config via config.skills (covers ~/.soothe/skills and workspace .soothe/skills)
+    3. Optional ~/.soothe-cache via SkillIndex (mtime-cached, single-root today)
+  Each entry exposes the extended SkillIndexEntry:
+    { name, description, tags, paths?, when_to_use?, source, path, mtime }
 
 Partitioning (ProgressiveSkillRegistry, in-process singleton on daemon)
   unconditional = entries where paths is None or empty
   conditional   = entries where paths is non-empty (held back from listing)
 
+Skill-activation state lives on the agent graph state at runtime under
+state["skill_activation"] = { sent, activated, invoked, invoked_bodies }.
+AgentLoop snapshots this dict into LoopState fields at each iteration boundary
+(same pattern as goal_user_submission) so reconnect / resume / compaction restore
+the per-thread view. This keeps middleware loop-agnostic and LoopState durable.
+
 Stage 1: Budgeted metadata listing  (every turn, delta-only)
-  SystemPromptOptimizationMiddleware.modify_request
-    candidates = unconditional ∪ {entries activated for this thread}
-    new       = candidates - LoopState.sent_skill_names
+  SystemPromptOptimizationMiddleware._compose_skills_block (new private helper,
+  invoked from _get_prompt_for_complexity alongside workspace/thread blocks)
+    candidates = unconditional ∪ state["skill_activation"]["activated"]
+    new       = candidates - state["skill_activation"]["sent"]
     formatted = format_skills_within_budget(new, budget = ctx_window * 0.01)
-    inject as static-tier <AVAILABLE_SKILLS> block
-    mark new names into LoopState.sent_skill_names
+    emit as static-tier <AVAILABLE_SKILLS> block
+    mark new names into state["skill_activation"]["sent"]
 
 Stage 2: Path-based activation  (during file-op tool calls)
   SkillActivationMiddleware.awrap_tool_call
-    if tool_name in FILE_OP_TOOLS:
-      paths = extract_paths(tool_call.args)              # via _PATH_KEYS
-      for skill in registry.conditional_for_workspace(ws):
-        if skill.name in LoopState.activated_skill_names: continue
-        if any pathspec.match_file(p, skill.paths) for p in paths:
-          LoopState.activated_skill_names.add(skill.name)
-          await sync_specific_skill_to_workspace(config, ws, skill.name)
-          await internal_bus.emit(InternalSkillActivatedEvent(...))
-          yield custom_event(SkillActivatedEvent(skill_name, matched_path, pattern).to_dict())
+    if tool_name in FILE_OP_TOOLS:  # from BUILTIN_TOOL_TRIGGERS
+      paths = extract_paths(tool_call.args)              # via local _PATH_KEYS
+      async with self._activation_lock:                  # guards concurrent file-ops
+        for skill in registry.conditional_for_workspace(ws):
+          if skill.name in state["skill_activation"]["activated"]: continue
+          if any pathspec.match_file(p, skill.paths) for p in paths:
+            state["skill_activation"]["activated"].add(skill.name)
+            await sync_specific_skill_to_workspace(config, ws, skill.name)
+            await internal_bus.emit(InternalSkillActivatedEvent(...))
+            yield custom_event(SkillActivatedEvent(...).to_dict())
 
 Stage 3: Body on invocation  (two paths)
   Explicit (unchanged): /skill:<name> → try_expand_slash_skill_user_line → body wrapped in <SKILL_CONTEXT>
   Implicit (new):       model calls /skill:<name> OR a future invoke_skill tool
-                        → SystemPromptOptimizationMiddleware appends build_skill_context_text(meta, body)
-                          to semi-static tier for every name in LoopState.invoked_skill_names
-                        → body cached in LoopState.invoked_skill_bodies so re-emission after
-                          compaction doesn't re-read disk
+                        → _compose_skills_block appends build_skill_context_text(meta, body)
+                          to semi-static tier for every name in state["skill_activation"]["invoked"]
+                        → body cached in state["skill_activation"]["invoked_bodies"] so
+                          re-emission after compaction doesn't re-read disk
 ```
 
 The static/semi-static tiering follows RFC-214 volatility ordering so prompt-cache hits are preserved.
@@ -125,11 +137,12 @@ Semantics:
 ### New modules
 
 - **`packages/soothe/src/soothe/skills/registry.py`** — `ProgressiveSkillRegistry`
-  - `partition(entries) -> (unconditional, conditional)`
-  - `new_for_thread(loop_state, candidates) -> list[SkillIndexEntry]` returns entries not yet in `loop_state.sent_skill_names`
-  - `match_paths(loop_state, workspace, file_paths) -> list[str]` returns newly-activated skill names; idempotent
-  - `mark_sent`, `mark_activated`, `mark_invoked`, `cache_body`
+  - `partition(entries) -> (unconditional, conditional)` — splits aggregated catalog entries by `paths` presence
+  - `new_for_thread(activation_state, candidates) -> list[SkillIndexEntry]` returns entries whose names are not yet in `activation_state["sent"]` and still present in the index (handles deleted-skill case)
+  - `match_paths(activation_state, workspace, file_paths) -> list[str]` returns newly-activated skill names; idempotent against `activation_state["activated"]`
+  - Helpers: `mark_sent(activation_state, names)`, `mark_activated(activation_state, names)`, `mark_invoked(activation_state, name, body)`, `cache_body(activation_state, name, body)`
   - Path matching delegates to `pathspec.PathSpec.from_lines("gitwildmatch", patterns)`
+  - `activation_state` is the dict stored at `state["skill_activation"]`; registry never touches `LoopState` directly
 
 - **`packages/soothe/src/soothe/skills/budget.py`** — `format_skills_within_budget(entries, budget_chars, per_entry_cap_chars)`
   - Mirrors `src/tools/SkillTool/prompt.ts:formatCommandsWithinBudget`
@@ -139,28 +152,33 @@ Semantics:
   - Returns `(formatted_text, telemetry_dict)` where telemetry has `included_count`, `truncated_count`, `mode ∈ {"full", "truncated", "names_only"}`
 
 - **`packages/soothe/src/soothe/middleware/skill_activation.py`** — `SkillActivationMiddleware(AgentMiddleware)`
-  - Modeled on `middleware/file_lock.py:FileLockMiddleware` (already does file-op detection)
-  - `FILE_OP_TOOLS = {"read_file", "write_file", "edit_file", "glob", "grep", "delete_file", "insert_lines", "apply_diff", "file_info"}` — subset of `core/context/trigger_registry.py:BUILTIN_TOOL_TRIGGERS`
-  - `awrap_tool_call`: extracts paths from `_PATH_KEYS`, calls `registry.match_paths`, schedules `sync_specific_skill_to_workspace` (fire-and-forget — activation never blocks the tool call), emits events
+  - Pattern modeled on `middleware/file_lock.py:FileLockMiddleware` (path extraction shape) but with the canonical file-op set
+  - `FILE_OP_TOOLS` sourced from `core/context/trigger_registry.py:BUILTIN_TOOL_TRIGGERS` filtered to workspace-scoped tools: `{read_file, write_file, edit_file, glob, grep, delete_file, insert_lines, apply_diff, file_info}` (note: `FileLockMiddleware`'s narrower 3-tool set is for its lock semantics and is unwired today — RFC-222 Q1)
+  - `_PATH_KEYS = ("file_path", "path", "filepath", "file")` declared locally (small constant, avoids coupling to unwired middleware)
+  - `awrap_tool_call`: extracts paths from `_PATH_KEYS`, calls `registry.match_paths`, schedules `sync_specific_skill_to_workspace` (fire-and-forget — activation never blocks the tool call), emits events. An `asyncio.Lock` per `(thread_id, skill_name)` guards concurrent file-op tool calls so the workspace-sync and event-emit run exactly once per activation.
   - Reads `thread_id` and `workspace` from the request via the existing `_thread_id_from_request` / `_workspace_from_request` helpers in `middleware/policy.py`
+  - Reads/writes `state["skill_activation"]` (initialized to empty sets/dict in `before_agent` if missing)
 
 ### Modified modules
 
 | File | Change |
 |---|---|
-| `skills/catalog.py:28` (`_parse_frontmatter`) | Accept `paths: str \| list[str]` and `when_to_use: str` |
-| `skills/index.py:23` (`SkillIndexEntry`) | Add `paths: list[str] \| None`, `when_to_use: str \| None`; bump `wire_entries()` to include them |
-| `core/loop/state/schemas.py` (`LoopState`) | Add `sent_skill_names: set[str]`, `activated_skill_names: set[str]`, `invoked_skill_names: set[str]`, `invoked_skill_bodies: dict[str, str]` |
-| `middleware/system_prompt_optimization.py:606` (`modify_request`) | Strip deepagents' `SKILLS_SYSTEM_PROMPT` block; inject `<AVAILABLE_SKILLS>` (static tier) and active-skill bodies (semi-static tier) |
-| `middleware/_builder.py:59` (`build_soothe_middleware_stack`) | Insert `SkillActivationMiddleware` after `SoothePolicyMiddleware`, before `ToolConcurrencyMiddleware` |
-| `core/agent/_builder.py:198-211` | Stop passing `skills=all_skills` to `create_deep_agent` (soothe now owns emission); pop deepagents' `SkillsMiddleware` from the resulting middleware chain to avoid double-listing |
+| `skills/catalog.py:28` (`_parse_frontmatter`) | Accept `paths: str \| list[str]` and `when_to_use: str` (existing `tags: str` unchanged) |
+| `skills/index.py:23` (`SkillIndexEntry`) | Add `paths: tuple[str, ...] \| None`, `when_to_use: str \| None`; keep existing `tags: str`; bump `wire_entries()` to include them |
+| `core/loop/state/schemas.py` (`LoopState`) | Add `sent_skill_names: set[str]`, `activated_skill_names: set[str]`, `invoked_skill_names: set[str]`, `invoked_skill_bodies: dict[str, str]` — these are durable snapshots; runtime mutation happens on agent state |
+| `core/loop/engine/agent_loop.py` | At each iteration boundary, copy `state["skill_activation"]` dict into the four `LoopState` fields (mirrors the existing `goal_user_submission` snapshot pattern); on resume, rehydrate `state["skill_activation"]` from `LoopState` |
+| `middleware/system_prompt_optimization.py` | Add private `_compose_skills_block(state, config)` invoked from `_get_prompt_for_complexity` (around line 286–458); emits `<AVAILABLE_SKILLS>` into the static tier and `<SKILL_CONTEXT>` blocks for invoked skills into the semi-static tier |
+| `middleware/_builder.py:59` (`build_soothe_middleware_stack`) | Insert `SkillActivationMiddleware` after `SoothePolicyMiddleware`, before `ToolConcurrencyMiddleware` (actual stack order: SoothePolicy → SkillActivation (new) → ToolConcurrency → NetworkToolErrors → SystemPromptOptimization → …) |
+| `core/agent/_builder.py:199-211` | Pass `skills=None` to `create_deep_agent` so deepagents' `SkillsMiddleware` is never installed; soothe owns emission. No post-construction surgery on the deepagents middleware list. |
 | `core/events/catalog.py:567` | Register `SkillActivatedEvent` (type `soothe.skill.activated`) and `SkillBodyLoadedEvent` (type `soothe.skill.body.loaded`) |
+| `config/models.py:1001` (`AgentLoopConfig`) | `context_window_limit` already exists here — referenced for budget computation, no change needed |
 | `config/models.py` | Add `ProgressiveSkillsConfig { budget_pct=0.01, max_listing_chars_per_entry=250, min_listing_chars_per_entry=20 }`; reference from `SootheConfig.progressive_skills` |
 | `config/config.template.yml`, `config/config.dev.yml` | Mirror new `progressive_skills` section (CLAUDE.md Rule #2) |
+| `packages/soothe/pyproject.toml` | Add `pathspec` runtime dependency (gitignore-style glob matching) if not already present |
 
 ### Removed behavior
 
-- Deepagents' `SkillsMiddleware` always-emit listing is suppressed via the `_builder.py` change above. The middleware's body-loading helper (`read_file(path, limit=1000)`) is still available to the model — only the system-prompt injection is replaced.
+- Deepagents' `SkillsMiddleware` is never installed (we pass `skills=None`). The model still has access to `read_file` for explicitly named SKILL.md paths if a skill body is referenced — only the always-on system-prompt injection is replaced.
 - Slash-skill expansion (`try_expand_slash_skill_user_line`) is **kept** as the existing Stage-3 explicit path users already know.
 
 ---
@@ -169,18 +187,19 @@ Semantics:
 
 | Need | Existing API | File:Line |
 |---|---|---|
-| Skill metadata cache | `SkillIndex` | `skills/index.py:36` |
-| Wire-shape entries | `wire_entries_for_agent_config` | `skills/catalog.py:127` |
+| Skill metadata cache (single-root) | `SkillIndex` | `skills/index.py:36` |
+| Wire-shape entries (multi-root aggregated) | `wire_entries_for_agent_config` | `skills/catalog.py:127` |
 | Compose full body | `build_skill_context_text` | `skills/catalog.py:304` |
 | Materialize skill files for model | `sync_specific_skill_to_workspace` | `skills/workspace_sync.py:170` |
 | Token counting | `count_tokens` | `utils/token_counting.py` |
-| Context-window limit | `config.agent.loop.context_window_limit` | `config/models.py:1077` |
-| File-op tool detection template | `_FILE_OP_TOOLS`, `_PATH_KEYS` | `middleware/file_lock.py:85` |
-| Tool-triggered context activation precedent | `BUILTIN_TOOL_TRIGGERS` | `core/context/trigger_registry.py:12` |
+| Context-window limit | `AgentLoopConfig.context_window_limit` | `config/models.py:1001` |
+| Canonical file-op tool set | `BUILTIN_TOOL_TRIGGERS` | `core/context/trigger_registry.py:12` |
+| Path-key extraction pattern (reference only — middleware unwired) | `FileLockMiddleware._PATH_KEYS` | `middleware/file_lock.py:41` |
 | Public event registration | `register_event`, `custom_event` | `core/events/catalog.py:567,116` |
-| Internal pub/sub | `InternalEventBus.emit/subscribe` | `core/events/internal_bus.py:25` |
-| System-prompt assembly hook | `SystemPromptOptimizationMiddleware._get_prompt_for_complexity` | `middleware/system_prompt_optimization.py:286` |
-| Path-glob matching | `pathspec` (gitignore semantics) | external dep |
+| Internal pub/sub | `InternalEventBus.emit/subscribe` | `core/events/internal_bus.py:25,45,76` |
+| System-prompt assembly site | `SystemPromptOptimizationMiddleware._get_prompt_for_complexity` (private — extend in-place) | `middleware/system_prompt_optimization.py:286` |
+| Loop-state snapshot precedent | `goal_user_submission` mirrored from skill expansion | `core/loop/state/schemas.py` |
+| Path-glob matching | `pathspec` (gitignore semantics) | **new dep** — add to `packages/soothe/pyproject.toml` |
 
 ---
 
@@ -210,11 +229,12 @@ For a workspace with 60 skills (4 built-in unconditional, 56 conditional path-fi
 ## 9. Edge cases
 
 - **Skill with `paths: ["**"]`** → treated as unconditional (Claude Code parity); avoids the trap where a "match-all" pattern hides the skill from turn-0
-- **Workspace switch mid-loop** → `LoopState.activated_skill_names` is per-thread; if `workspace` changes via `RunnerState`, the next file-op call re-evaluates against the new workspace's conditional set
-- **Skill removed between sessions** → `sent_skill_names` may reference deleted skills; `new_for_thread` skips entries no longer in the index (idempotent)
-- **Two skills with the same name across roots** (built-in vs workspace) → existing `SkillIndex` precedence rules apply unchanged; registry inherits resolution
-- **Compaction** → `invoked_skill_bodies` is checkpointed on `LoopState`; post-compact restoration re-emits bodies into the next turn's semi-static tier without disk re-reads
-- **MCP-provided skills** → out of scope for this draft; `soothe.mcp.loader` module not yet present in the tree per Explore findings. A follow-up can extend the registry to ingest MCP prompt manifests once that subsystem lands.
+- **Workspace switch mid-loop** → activation state is per-thread; if `workspace` changes via `RunnerState`, the next file-op call re-evaluates against the new workspace's conditional set
+- **Skill removed between sessions** → `sent_skill_names` snapshot may reference deleted skills; `new_for_thread` skips entries no longer in the index (idempotent)
+- **Two skills with the same name across roots** (built-in vs workspace) → existing `SkillIndex` / catalog precedence rules apply unchanged; registry inherits resolution
+- **Compaction** → `invoked_skill_bodies` is snapshotted into `LoopState` each iteration; post-compact restoration rehydrates `state["skill_activation"]` and re-emits bodies into the next turn's semi-static tier without disk re-reads
+- **Concurrent file-op tool calls** → `ToolConcurrencyMiddleware` permits parallel tool invocations. `SkillActivationMiddleware` holds a per-`(thread_id, skill_name)` `asyncio.Lock`; the first call to match a skill's pattern wins activation, runs `sync_specific_skill_to_workspace`, and emits the event exactly once. Subsequent racing matches observe the skill already in `activated` and short-circuit.
+- **MCP-provided skills** → out of scope for this draft; `soothe.mcp.loader` module not yet present in the tree per Explore findings (broken imports in `core/thread/manager.py:24,553` reference it — separate cleanup). A follow-up can extend the registry to ingest MCP prompt manifests once that subsystem lands.
 
 ---
 

@@ -28,28 +28,80 @@ _FM_LINE_RE = re.compile(r"^(\w[\w_-]*):\s*(.+)$")
 def _parse_frontmatter(text: str) -> dict[str, Any]:
     """Parse YAML-like frontmatter from SKILL.md content.
 
+    Supports scalar keys, block-list ``paths:`` entries (``- pattern``), and
+    block-scalar ``when_to_use: |`` multi-line values (RFC-105).
+
     Args:
         text: Full SKILL.md content, possibly with ``---`` delimited header.
 
     Returns:
-        Dict of parsed key-value pairs (strings only; no list/tag parsing).
+        Dict of parsed key-value pairs.
     """
     m = _FM_RE.match(text)
     if not m:
         return {}
 
     result: dict[str, Any] = {}
-    for line in m.group(1).splitlines():
-        lm = _FM_LINE_RE.match(line.strip())
+    lines = m.group(1).splitlines()
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if not stripped or stripped.startswith("#"):
+            i += 1
+            continue
+
+        # Block-list: "key:" followed by indented "  - item" lines
+        if stripped.endswith(":") and i + 1 < len(lines) and _is_list_line(lines[i + 1]):
+            key = stripped[:-1].strip()
+            items: list[str] = []
+            j = i + 1
+            while j < len(lines) and _is_list_line(lines[j]):
+                item = lines[j].strip().lstrip("-").strip()
+                if (item.startswith('"') and item.endswith('"')) or (
+                    item.startswith("'") and item.endswith("'")
+                ):
+                    item = item[1:-1]
+                items.append(item)
+                j += 1
+            result[key] = items
+            i = j
+            continue
+
+        # Block-scalar: "key: |" or "key: >" followed by indented lines
+        lm = _FM_LINE_RE.match(stripped)
+        if lm and lm.group(2).strip() in ("|", ">"):
+            key = lm.group(1)
+            block_lines: list[str] = []
+            j = i + 1
+            while j < len(lines) and (lines[j].startswith(("  ", "\t")) or not lines[j].strip()):
+                if not lines[j].strip():
+                    block_lines.append("")
+                else:
+                    block_lines.append(
+                        lines[j][2:] if lines[j].startswith("  ") else lines[j].lstrip()
+                    )
+                j += 1
+            result[key] = "\n".join(block_lines).rstrip()
+            i = j
+            continue
+
+        # Scalar key: value
         if lm:
             key, val = lm.group(1), lm.group(2).strip()
-            # Strip surrounding quotes
-            if val.startswith('"') and val.endswith('"'):
-                val = val[1:-1]
-            elif val.startswith("'") and val.endswith("'"):
+            if (val.startswith('"') and val.endswith('"')) or (
+                val.startswith("'") and val.endswith("'")
+            ):
                 val = val[1:-1]
             result[key] = val
+
+        i += 1
     return result
+
+
+def _is_list_line(line: str) -> bool:
+    """Check if a line is a YAML list item (indented, starts with '-')."""
+    stripped = line.strip()
+    return stripped.startswith("- ") and (line.startswith("  ") or line.startswith("\t"))
 
 
 def _strip_frontmatter(text: str) -> str:
@@ -116,6 +168,8 @@ def _parse_skill_directory(skill_dir: str | Path) -> dict[str, Any] | None:
         "tools": fm.get("tools", None),
         "default_model": fm.get("default_model", None),
         "requires": fm.get("requires", None),
+        "paths": fm.get("paths", None),
+        "when_to_use": fm.get("when_to_use", None),
     }
 
 
@@ -163,13 +217,17 @@ def _wire_entries_from_index(
 
     # Global user skills from index (fast path)
     for idx_entry in skill_index.rebuild_if_stale():
-        entry: dict[str, str] = {
+        entry: dict[str, Any] = {
             "name": idx_entry.name,
             "description": idx_entry.description,
             "source": idx_entry.source,
         }
         if idx_entry.tags:
             entry["tags"] = idx_entry.tags
+        if idx_entry.paths is not None:
+            entry["paths"] = list(idx_entry.paths)
+        if idx_entry.when_to_use is not None:
+            entry["when_to_use"] = idx_entry.when_to_use
         seen_names.add(idx_entry.name)
         entries.append(entry)
 
@@ -195,6 +253,10 @@ def _wire_entries_from_index(
             }
             if meta.get("version"):
                 entry["version"] = meta["version"]
+            if meta.get("paths"):
+                entry["paths"] = meta["paths"]
+            if meta.get("when_to_use"):
+                entry["when_to_use"] = meta["when_to_use"]
             entries.append(entry)
 
     entries.sort(key=lambda e: e["name"].lower())
@@ -222,13 +284,17 @@ def _wire_entries_full_scan(
         else:
             source = "user"
 
-        entry: dict[str, str] = {
+        entry: dict[str, Any] = {
             "name": meta["name"],
             "description": meta["description"],
             "source": source,
         }
         if meta.get("version"):
             entry["version"] = meta["version"]
+        if meta.get("paths"):
+            entry["paths"] = meta["paths"]
+        if meta.get("when_to_use"):
+            entry["when_to_use"] = meta["when_to_use"]
 
         if meta["name"] in seen_names:
             entries = [e for e in entries if e["name"] != meta["name"]]

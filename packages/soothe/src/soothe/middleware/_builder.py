@@ -125,6 +125,22 @@ def build_soothe_middleware_stack(
         )
         logger.debug("[Middleware] Policy enforcement enabled")
 
+    # 1b. Skill activation (RFC-105: activates conditional skills on file-op path match)
+    from soothe.skills.index import SkillIndex
+    from soothe.skills.registry import ProgressiveSkillRegistry
+
+    from .skill_activation import SkillActivationMiddleware
+
+    _skill_index = SkillIndex()
+    stack.append(
+        SkillActivationMiddleware(
+            registry=ProgressiveSkillRegistry(),
+            catalog_provider=lambda: _skill_index.rebuild_if_stale(),
+            config=config,
+        )
+    )
+    logger.info("[Middleware] Skill activation (RFC-105) enabled")
+
     # 2. Tool concurrency limit (bounds parallel tool calls per thread)
     stack.append(ToolConcurrencyMiddleware())
     max_parallel_tools = config.agent.loop.limits.max_parallel_tools

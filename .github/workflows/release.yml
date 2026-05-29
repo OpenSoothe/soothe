@@ -21,7 +21,7 @@ jobs:
         submodules: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v4
+      uses: astral-sh/setup-uv@v7
       with:
         version: "latest"
 
@@ -93,7 +93,7 @@ jobs:
         submodules: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v4
+      uses: astral-sh/setup-uv@v7
       with:
         version: "latest"
 
@@ -166,7 +166,7 @@ jobs:
         submodules: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v4
+      uses: astral-sh/setup-uv@v7
       with:
         version: "latest"
 
