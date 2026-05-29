@@ -50,7 +50,7 @@ class HttpRestConfig(BaseModel):
     for binding (the WebSocket transport settings are authoritative).
 
     Args:
-        enabled: Enable HTTP REST server.
+        enabled: Enable HTTP REST server (default ``True``).
         host: Bind address (standalone HTTP-only; ignored when unified with WebSocket).
         port: Listen port (standalone; ignored when unified with WebSocket).
         tls_enabled: Enable TLS encryption.
@@ -59,7 +59,7 @@ class HttpRestConfig(BaseModel):
         cors_origins: Allowed CORS origins.
     """
 
-    enabled: bool = False
+    enabled: bool = True
     host: str = "127.0.0.1"
     port: int = 8765
     tls_enabled: bool = False
@@ -74,7 +74,7 @@ class TransportConfig(BaseModel):
     """Transport layer configuration.
 
     WebSocket is required for bidirectional streaming.
-    HTTP REST is optional for health checks and CRUD operations.
+    HTTP REST is enabled by default for health checks, autopilot CLI, and CRUD.
 
     Args:
         websocket: WebSocket configuration (required).

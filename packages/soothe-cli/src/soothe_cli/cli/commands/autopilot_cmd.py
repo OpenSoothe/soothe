@@ -14,6 +14,7 @@ from pathlib import Path
 import typer
 from soothe_sdk.client import (
     AutopilotHttpClient,
+    ensure_http_rest_available,
     http_rest_url_from_config,
     is_daemon_live,
     websocket_url_from_config,
@@ -35,7 +36,13 @@ def _require_daemon_http() -> AutopilotHttpClient:
             err=True,
         )
         sys.exit(1)
-    return AutopilotHttpClient(http_rest_url_from_config(cfg))
+    base_url = http_rest_url_from_config(cfg)
+    try:
+        ensure_http_rest_available(base_url)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    return AutopilotHttpClient(base_url)
 
 
 @app.command("run")

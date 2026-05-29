@@ -268,7 +268,6 @@ def build_daemon_config(
                 "port": ws_p,
                 "cors_origins": cors_origins or ["http://localhost:*", "http://127.0.0.1:*"],
             },
-            "http_rest": {"enabled": False},
         },
     }
 
