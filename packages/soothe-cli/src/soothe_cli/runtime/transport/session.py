@@ -337,6 +337,12 @@ class TuiDaemonSession:
             await self._ensure_rpc_connected()
             return await self._rpc_client.list_models(timeout=15.0)
 
+    async def get_mcp_status(self) -> dict[str, Any]:
+        """Return daemon ``mcp_status_response`` (MCP server info for TUI viewer)."""
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            return await self._rpc_client.get_mcp_status(timeout=15.0)
+
     async def invoke_skill(self, skill: str, args: str = "") -> dict[str, Any]:
         """Resolve ``SKILL.md`` on the daemon and receive UI echo before the turn streams.
 

@@ -809,6 +809,7 @@ class AgentLoopStateManager:
 
         # Update thread health (reset consecutive failures on success)
         checkpoint.thread_health_metrics.consecutive_goal_failures = 0
+        checkpoint.thread_health_metrics.consecutive_rate_limit_errors = 0
         checkpoint.thread_health_metrics.last_goal_status = "completed"
 
         # Reset loop state for next goal

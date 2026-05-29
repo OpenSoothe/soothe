@@ -18,6 +18,14 @@ logger = logging.getLogger(__name__)
 _STREAM_CHUNK_LEN = 3
 
 
+def _is_rate_limit_error(error: str | None) -> bool:
+    """Check if an error message indicates a rate limit (429) failure."""
+    if not error:
+        return False
+    lower = error.lower()
+    return "429" in lower or "rate limit" in lower or "throttling" in lower
+
+
 async def _record_and_emit_step_completed(
     ctx: LoopRuntimeContext,
     *,
@@ -156,6 +164,19 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
             },
         )
         return {"last_outcome": "fatal"}
+
+    # Rate limit circuit breaker: track consecutive 429 failures
+    _rate_limited = [r for r in step_results if _is_rate_limit_error(r.error)]
+    _succeeded = [r for r in step_results if r.success]
+    if _rate_limited and not _succeeded:
+        checkpoint.thread_health_metrics.consecutive_rate_limit_errors += len(_rate_limited)
+        logger.warning(
+            "[Rate limit] %d step(s) rate-limited (consecutive=%d)",
+            len(_rate_limited),
+            checkpoint.thread_health_metrics.consecutive_rate_limit_errors,
+        )
+    elif _succeeded:
+        checkpoint.thread_health_metrics.consecutive_rate_limit_errors = 0
 
     state.last_wave_tool_call_count = sum(r.tool_call_count for r in step_results)
     state.last_wave_subagent_task_count = sum(r.subagent_task_completions for r in step_results)

@@ -77,6 +77,17 @@ class ThreadSwitchPolicyManager:
                     f"threshold ({self.policy.consecutive_goal_failure_threshold})"
                 )
 
+        # Consecutive rate limit errors
+        if self.policy.consecutive_rate_limit_threshold:
+            if (
+                metrics.consecutive_rate_limit_errors
+                >= self.policy.consecutive_rate_limit_threshold
+            ):
+                reasons.append(
+                    f"Consecutive rate limit errors ({metrics.consecutive_rate_limit_errors}) >= "
+                    f"threshold ({self.policy.consecutive_rate_limit_threshold})"
+                )
+
         # Checkpoint errors
         if self.policy.checkpoint_error_threshold:
             if metrics.checkpoint_errors >= self.policy.checkpoint_error_threshold:

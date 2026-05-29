@@ -183,6 +183,7 @@ def wire_entries_for_agent_config(
     workspace: str | None = None,
     *,
     skill_index: SkillIndex | None = None,
+    mcp_registry: Any | None = None,
 ) -> list[dict[str, str]]:
     """Return wire-safe skill metadata sorted by name.
 
@@ -196,14 +197,21 @@ def wire_entries_for_agent_config(
         workspace: Optional workspace directory for project-local skills
             (scans `<workspace>/.soothe/skills/`). Falls back to cwd if not provided.
         skill_index: Optional ``SkillIndex`` instance for incremental loading.
+        mcp_registry: Optional ``MCPRegistry`` to include MCP server prompts.
 
     Returns:
         List of ``{name, description, source, version?}`` dicts sorted
         alphabetically by name. No ``path`` field is included.
     """
     if skill_index is not None:
-        return _wire_entries_from_index(config, workspace, skill_index)
-    return _wire_entries_full_scan(config, workspace)
+        entries = _wire_entries_from_index(config, workspace, skill_index)
+    else:
+        entries = _wire_entries_full_scan(config, workspace)
+
+    if mcp_registry is not None:
+        _merge_mcp_prompt_entries(entries, mcp_registry)
+
+    return entries
 
 
 def _wire_entries_from_index(
@@ -303,6 +311,31 @@ def _wire_entries_full_scan(
 
     entries.sort(key=lambda e: e["name"].lower())
     return entries
+
+
+def _merge_mcp_prompt_entries(
+    entries: list[dict[str, Any]],
+    mcp_registry: Any,
+) -> None:
+    """Append MCP server prompt descriptors into skill wire entries in-place."""
+    try:
+        server_prompts = mcp_registry.prompts()
+    except Exception:  # noqa: BLE001
+        return
+    seen = {e["name"] for e in entries}
+    for server_name, prompts in server_prompts.items():
+        for p in prompts:
+            name = p.get("name", "")
+            if not name or name in seen:
+                continue
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": p.get("description") or f"MCP prompt from {server_name}",
+                "source": f"mcp:{server_name}",
+            }
+            seen.add(name)
+            entries.append(entry)
+    entries.sort(key=lambda e: e["name"].lower())
 
 
 def resolve_skill_directory(

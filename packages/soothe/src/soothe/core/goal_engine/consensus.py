@@ -16,10 +16,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_RESPONSE_MIN_LENGTH = 50
-
 
 ConsensusDecision = Literal["accept", "send_back", "suspend"]
+
+
+class ConsensusEvaluationError(RuntimeError):
+    """Raised when consensus validation cannot run (missing model or LLM failure)."""
 
 
 async def evaluate_goal_completion(
@@ -29,7 +31,7 @@ async def evaluate_goal_completion(
     success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
 ) -> tuple[ConsensusDecision, str]:
-    """RFC-204: Holistic evaluation of goal completion.
+    """RFC-204: Holistic evaluation of goal completion via LLM.
 
     Goal manager reflection LLM evaluates whether the agentic loop's output truly
     satisfies the goal criteria.
@@ -39,14 +41,18 @@ async def evaluate_goal_completion(
         response_text: Agentic loop's response/output.
         evidence_summary: Accumulated evidence from execution.
         success_criteria: List of success criteria to check.
-        model: LLM for evaluation. If None, uses heuristic fallback.
+        model: LLM for evaluation (required).
 
     Returns:
         Tuple of (decision, reasoning).
         decision is "accept", "send_back", or "suspend".
+
+    Raises:
+        ConsensusEvaluationError: When ``model`` is missing or the LLM call fails.
     """
     if model is None:
-        return _heuristic_evaluation(response_text, evidence_summary, success_criteria)
+        msg = "Consensus model is required for goal completion validation"
+        raise ConsensusEvaluationError(msg)
 
     from soothe.utils.observability.langfuse import build_traced_config
 
@@ -69,51 +75,12 @@ async def evaluate_goal_completion(
         if "suspend" in content:
             return "suspend", _extract_reasoning(content)
         return "accept", _extract_reasoning(content)
-    except Exception:
-        logger.debug("Consensus LLM evaluation failed, falling back to heuristic")
-        return _heuristic_evaluation(response_text, evidence_summary, success_criteria)
-
-
-def _heuristic_evaluation(
-    response_text: str,
-    evidence_summary: str,
-    success_criteria: list[str] | None = None,
-) -> tuple[ConsensusDecision, str]:
-    """Fallback heuristic when LLM is unavailable.
-
-    Args:
-        response_text: Layer 2's response text.
-        evidence_summary: Evidence from execution.
-        success_criteria: Success criteria to check.
-
-    Returns:
-        Tuple of (decision, reasoning).
-    """
-    if not response_text or len(response_text.strip()) < _RESPONSE_MIN_LENGTH:
-        return "send_back", "Response too short, likely incomplete or error"
-
-    evidence = evidence_summary or response_text
-
-    # Check for common failure indicators
-    failure_indicators = [
-        "i could not",
-        "i was unable",
-        "i don't have access",
-        "i don't have the ability",
-        "unfortunately, i cannot",
-    ]
-    lower = evidence.lower()
-    for indicator in failure_indicators:
-        if indicator in lower:
-            return "send_back", f"Failure indicator detected: {indicator}"
-
-    # Check success criteria mentions
-    if success_criteria:
-        unmet = [c for c in success_criteria if c.lower() not in lower]
-        if len(unmet) > len(success_criteria) / 2:
-            return "send_back", f"Most success criteria not addressed: {unmet}"
-
-    return "accept", "Response appears substantive and relevant"
+    except ConsensusEvaluationError:
+        raise
+    except Exception as exc:
+        logger.exception("Consensus LLM evaluation failed")
+        msg = f"Consensus LLM evaluation failed: {exc}"
+        raise ConsensusEvaluationError(msg) from exc
 
 
 def _build_consensus_prompt(

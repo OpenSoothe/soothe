@@ -3,78 +3,11 @@
 import pytest
 
 from soothe.core.goal_engine.consensus import (
+    ConsensusEvaluationError,
     _build_consensus_prompt,
     _extract_reasoning,
-    _heuristic_evaluation,
     evaluate_goal_completion,
 )
-
-
-class TestHeuristicEvaluation:
-    """Tests for heuristic fallback evaluation."""
-
-    def test_accepts_substantive_response(self) -> None:
-        response = (
-            "The task has been completed. I analyzed the dataset and found 1,234 records. "
-            "The pipeline processed all records successfully and generated the output report."
-        )
-        decision, reasoning = _heuristic_evaluation(response, "", None)
-        assert decision == "accept"
-
-    def test_rejects_short_response(self) -> None:
-        decision, reasoning = _heuristic_evaluation("ok", "", None)
-        assert decision == "send_back"
-        assert "too short" in reasoning.lower()
-
-    def test_rejects_empty_response(self) -> None:
-        decision, reasoning = _heuristic_evaluation("", "", None)
-        assert decision == "send_back"
-
-    def test_detects_failure_indicators(self) -> None:
-        response = (
-            "I could not complete the task because I don't have the required access. "
-            "The data is locked and I was unable to proceed."
-        )
-        decision, reasoning = _heuristic_evaluation(response, "", None)
-        assert decision == "send_back"
-        assert "failure indicator" in reasoning.lower()
-
-    def test_accepts_despite_mixed_content(self) -> None:
-        response = (
-            "Here is the analysis you requested. I processed 500 files and generated the summary report. "
-            "The key findings include improved performance metrics and reduced error rates across all categories."
-        )
-        decision, reasoning = _heuristic_evaluation(response, "", None)
-        assert decision == "accept"
-
-    def test_success_criteria_met(self) -> None:
-        response = "Completed: data exported, charts generated, report delivered."
-        criteria = ["data exported", "charts generated"]
-        decision, reasoning = _heuristic_evaluation(response, "", criteria)
-        assert decision == "accept"
-
-    def test_success_criteria_mostly_unmet(self) -> None:
-        response = "I only managed to start the process. " + "X" * 80
-        criteria = ["data exported", "charts generated", "report delivered", "email sent"]
-        decision, reasoning = _heuristic_evaluation(response, "", criteria)
-        assert decision == "send_back"
-        assert "not addressed" in reasoning.lower()
-
-    def test_evidence_summary_used(self) -> None:
-        response = "I could not finish."
-        evidence = "The agent ran successfully but the results are inconclusive."
-        decision, reasoning = _heuristic_evaluation(response, evidence, None)
-        # Evidence doesn't have failure indicators, but response is too short
-        assert decision == "send_back"
-
-    def test_evidence_without_failure_accepts(self) -> None:
-        response = (
-            "I completed the task as requested. The analysis covers all required aspects "
-            "and the report is ready for review."
-        )
-        evidence = "All steps completed successfully."
-        decision, reasoning = _heuristic_evaluation(response, evidence, None)
-        assert decision == "accept"
 
 
 class TestConsensusPrompt:
@@ -192,21 +125,20 @@ class TestEvaluateGoalCompletion:
         )
         assert decision == "suspend"
 
-    async def test_fallback_on_llm_error(self) -> None:
+    async def test_raises_on_llm_error(self) -> None:
         from unittest.mock import AsyncMock
 
         mock_model = AsyncMock()
         mock_model.ainvoke.side_effect = RuntimeError("API error")
 
-        response = "I completed the full analysis and generated the report as requested."
-        decision, reasoning = await evaluate_goal_completion(
-            goal_description="Analyze data",
-            response_text=response,
-            model=mock_model,
-        )
-        assert decision == "accept"  # Falls back to heuristic with good response
+        with pytest.raises(ConsensusEvaluationError, match="Consensus LLM evaluation failed"):
+            await evaluate_goal_completion(
+                goal_description="Analyze data",
+                response_text="I completed the full analysis and generated the report.",
+                model=mock_model,
+            )
 
-    async def test_fallback_on_short_response(self) -> None:
+    async def test_trusts_llm_accept_decision(self) -> None:
         from unittest.mock import AsyncMock
 
         mock_model = AsyncMock()
@@ -218,22 +150,12 @@ class TestEvaluateGoalCompletion:
             response_text="ok",
             model=mock_model,
         )
-        # LLM says accept, but we trust the LLM since it returned
         assert decision == "accept"
 
-    async def test_no_model_uses_heuristic(self) -> None:
-        response = "I completed the task successfully with detailed results."
-        decision, reasoning = await evaluate_goal_completion(
-            goal_description="Test task",
-            response_text=response,
-            model=None,
-        )
-        assert decision == "accept"
-
-    async def test_heuristic_failure_indicator(self) -> None:
-        decision, reasoning = await evaluate_goal_completion(
-            goal_description="Test task",
-            response_text="I was unable to complete the task due to access restrictions.",
-            model=None,
-        )
-        assert decision == "send_back"
+    async def test_no_model_raises(self) -> None:
+        with pytest.raises(ConsensusEvaluationError, match="Consensus model is required"):
+            await evaluate_goal_completion(
+                goal_description="Test task",
+                response_text="I completed the task successfully with detailed results.",
+                model=None,
+            )

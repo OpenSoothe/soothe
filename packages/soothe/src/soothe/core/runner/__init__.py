@@ -169,7 +169,7 @@ class SootheRunner(
             self._model = self._config.create_chat_model("think")
             logger.debug("Consensus model initialized (role=think)")
         except Exception:
-            logger.debug("Consensus model unavailable, consensus will use heuristic fallback")
+            logger.debug("Consensus model unavailable; consensus validation will suspend goals")
 
         self._default_chat_model: Any | None = None
         try:
