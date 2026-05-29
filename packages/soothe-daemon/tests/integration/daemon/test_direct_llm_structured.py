@@ -14,18 +14,19 @@ from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
+
 from ..daemon_fixtures import (
     alloc_ephemeral_port,
     await_status_state,
     build_daemon_config,
     force_isolated_home,
 )
+from ..ws_loop_client import loop_new, subscribe_loop_stream
 from ._structured_direct_llm_helpers import (
     WORD_REPLY_SCHEMA,
     await_messages_assistant_content,
     parse_word_reply_json,
 )
-from ..ws_loop_client import loop_new, subscribe_loop_stream
 
 
 @pytest_asyncio.fixture

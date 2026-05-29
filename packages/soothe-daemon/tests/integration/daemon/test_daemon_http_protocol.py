@@ -15,6 +15,7 @@ from soothe_daemon import SootheDaemon
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import HttpRestConfig
 from soothe_daemon.transports.http_rest import HttpRestTransport
+
 from ..daemon_fixtures import (
     alloc_ephemeral_port,
     force_isolated_home,

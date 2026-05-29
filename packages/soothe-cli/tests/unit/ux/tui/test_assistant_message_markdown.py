@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -19,7 +19,11 @@ async def test_stop_stream_renders_content_to_body() -> None:
     body = MagicMock()
     msg._body = body
 
-    await msg.stop_stream()
+    with patch(
+        "soothe_cli.tui.widgets.messages._code_theme_for_app",
+        return_value="monokai",
+    ):
+        await msg.stop_stream()
 
     assert not msg._streaming_active
     body.update.assert_called_once()
@@ -71,7 +75,11 @@ async def test_flush_renders_rich_markdown_to_body() -> None:
     body = MagicMock()
     msg._body = body
 
-    await msg._flush_pending_content()
+    with patch(
+        "soothe_cli.tui.widgets.messages._code_theme_for_app",
+        return_value="monokai",
+    ):
+        await msg._flush_pending_content()
 
     from rich.markdown import Markdown as RichMarkdown
 
@@ -90,7 +98,11 @@ async def test_set_content_hydration_uses_rich_markdown() -> None:
     body = MagicMock()
     msg._body = body
 
-    await msg.set_content("# Hydrated\n\nContent here")
+    with patch(
+        "soothe_cli.tui.widgets.messages._code_theme_for_app",
+        return_value="monokai",
+    ):
+        await msg.set_content("# Hydrated\n\nContent here")
 
     from rich.markdown import Markdown as RichMarkdown
 
