@@ -56,6 +56,7 @@ class AgentBuilder:
     - Backend initialization
     - Plugin loading
     - Tools/subagents resolution
+    - MCP registry integration (RFC-412)
 
     This separates the complex construction logic from the simple CoreAgent
     interface, making both easier to understand and maintain.
@@ -65,14 +66,20 @@ class AgentBuilder:
         agent = builder.build(checkpointer=my_checkpointer)
     """
 
-    def __init__(self, config: SootheConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: SootheConfig | None = None,
+        mcp_registry: Any | None = None,
+    ) -> None:
         """Initialize builder with configuration.
 
         Args:
             config: Soothe configuration. If None, uses defaults.
+            mcp_registry: MCPRegistry instance for MCP tool integration (RFC-412).
         """
         self._config = config or SootheConfig()
         self._config.propagate_env()
+        self._mcp_registry = mcp_registry
 
     def build(
         self,
@@ -88,6 +95,7 @@ class AgentBuilder:
         memory_store: MemoryProtocol | None = None,
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
+        mcp_registry: Any | None = None,
     ) -> CoreAgent:
         """Build CoreAgent with all components.
 
@@ -115,6 +123,7 @@ class AgentBuilder:
             memory_store: Override MemoryProtocol implementation. None uses config.
             planner: Override PlannerProtocol implementation. None uses config.
             policy: Override PolicyProtocol implementation. None uses config.
+            mcp_registry: Override MCPRegistry. None uses builder's instance (RFC-412).
 
         Returns:
             CoreAgent instance wrapping CompiledStateGraph with typed properties.
@@ -159,6 +168,14 @@ class AgentBuilder:
         if tools:
             all_tools.extend(tools)
 
+        # RFC-412: Append MCP always-loaded tools (defer=False servers)
+        registry = mcp_registry or self._mcp_registry
+        if registry is not None:
+            mcp_tools = registry.always_loaded_tools()
+            if mcp_tools:
+                all_tools.extend(mcp_tools)
+                logger.debug("[Init] MCP tools: %d always-loaded", len(mcp_tools))
+
         # Filter out deepagents' execute tool when sandbox is disabled (IG-sandbox)
         before = len(all_tools)
         all_tools = without_execute_tool_when_sandbox_disabled(
@@ -187,10 +204,11 @@ class AgentBuilder:
         # Initialize backend
         resolved_backend = backend or self._initialize_backend(resolved_policy)
 
-        # Build middleware stack
+        # Build middleware stack (RFC-412: pass mcp_registry)
         default_middleware = build_soothe_middleware_stack(
             self._config,
             resolved_policy,
+            mcp_registry=registry,
         )
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 

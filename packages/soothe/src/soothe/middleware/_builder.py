@@ -11,7 +11,7 @@ in the correct order with proper dependency handling.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -59,6 +59,7 @@ def _build_tool_registries(
 def build_soothe_middleware_stack(
     config: SootheConfig,
     policy: PolicyProtocol | None,
+    mcp_registry: Any | None = None,
 ) -> tuple[AgentMiddleware, ...]:
     """Build Soothe middleware stack in correct order.
 
@@ -141,6 +142,13 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] Skill activation (RFC-105) enabled")
 
+    # 1c. MCP tool search (RFC-412: MCP progressive disclosure telemetry)
+    if mcp_registry is not None:
+        from .mcp_tool_search import MCPToolSearchMiddleware
+
+        stack.append(MCPToolSearchMiddleware(mcp_registry=mcp_registry))
+        logger.info("[Middleware] MCP tool search (RFC-412) enabled")
+
     # 2. Tool concurrency limit (bounds parallel tool calls per thread)
     stack.append(ToolConcurrencyMiddleware())
     max_parallel_tools = config.agent.loop.limits.max_parallel_tools
@@ -161,6 +169,7 @@ def build_soothe_middleware_stack(
             config=config,
             tool_trigger_registry=trigger_registry,
             tool_context_registry=context_registry,
+            mcp_registry=mcp_registry,
         )
     )
     logger.info("[Middleware] System prompt optimization enabled")

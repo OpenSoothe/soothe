@@ -10,6 +10,7 @@ This package provides middleware implementations that wrap deepagents:
 - SootheFilesystemMiddleware: Extended filesystem tools middleware
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
 - FileLockMiddleware: File lock conflict resolution for autopilot mode (RFC-222)
+- MCPToolSearchMiddleware: MCP progressive disclosure telemetry (RFC-412)
 
 Utility functions:
 - create_llm_call_metadata: Create standardized metadata for LLM calls
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from soothe.middleware.file_lock import FileLockMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
+    from soothe.middleware.mcp_tool_search import MCPToolSearchMiddleware
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
     from soothe.middleware.policy import SoothePolicyMiddleware
     from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
@@ -42,6 +44,7 @@ __all__ = [
     "ExecutionHintsMiddleware",
     "FileLockMiddleware",
     "LLMRateLimitMiddleware",
+    "MCPToolSearchMiddleware",
     "SootheFilesystemMiddleware",
     "SoothePolicyMiddleware",
     "SystemPromptOptimizationMiddleware",
@@ -65,6 +68,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "FileLockMiddleware": ("soothe.middleware.file_lock", "FileLockMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
     "LLMRateLimitMiddleware": ("soothe.middleware.llm_rate_limit", "LLMRateLimitMiddleware"),
+    "MCPToolSearchMiddleware": ("soothe.middleware.mcp_tool_search", "MCPToolSearchMiddleware"),
     "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
     "SoothePolicyMiddleware": ("soothe.middleware.policy", "SoothePolicyMiddleware"),
     "SystemPromptOptimizationMiddleware": (
