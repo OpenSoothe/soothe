@@ -130,7 +130,11 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     graph.add_conditional_edges(
         "record_iteration",
         route_after_record_iteration,
-        {"iteration_gate": "iteration_gate", END: END},
+        {
+            "iteration_gate": "iteration_gate",
+            "goal_completion": "goal_completion",  # RFC-226 terminal bootstrap fast-exit
+            END: END,
+        },
     )
 
     return graph.compile()

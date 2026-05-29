@@ -100,6 +100,18 @@ This document defines the terminology and naming conventions used in this projec
 | Tool Result Cache | File system cache for large tool results (>50KB) at `~/.soothe/runs/{thread_id}/tool_results/{tool_call_id}.json`. Optional, cleaned up after thread completion. | RFC-211 |
 | Minimal Data Contract | Design principle where Layer 2 receives only outcome metadata from Layer 1, not full tool result content. Layer 1 owns final report generation. | RFC-211 |
 
+### Continuation Discriminator Terms (RFC-226)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| `continuation_assess` | Iter=0 LLM call in `plan_assess` for continuation queries (`continue_loop_mode` AND `goal_history >= 2`). Reads the new query against persisted prior goals (RFC-225 enrichment) and emits a `ContinuationAssessment` that routes to either bootstrap or `plan_generate`. Replaces the structural `continue_loop_plan_bootstrap_allowed()` heuristic. | RFC-226 |
+| `ContinuationAssessment` | Pydantic structured output of the `continuation_assess` LLM call: `{action: "bootstrap" | "plan_generate", reasoning, goal_progress}`. | RFC-226 |
+| `LOOP_CONTINUATION_ASSESS_PROMPT` | Prompt template that surfaces prior goals (`goal_text`, `goal_completion` preview, `step_count`, `current_plan.next_action`) plus available capabilities to the discriminator LLM. | RFC-226 |
+| `PlanResult.terminal_after_execute` | Boolean field on `PlanResult` asserting that the plan's single step IS the goal completion. When True, `route_after_record_iteration` routes directly to `goal_completion`, skipping the iter=1 status check. Set by the bootstrap path; default False elsewhere. | RFC-226 |
+| Bootstrap action | `ContinuationAssessment.action == "bootstrap"` — the assess LLM judges that the new query can be answered using prior loop context with no new tools or steps. Triggers a single-step terminal plan via `build_continue_loop_bootstrap_plan(..., terminal_after_execute=True)`. | RFC-226 |
+| Plan-generate action | `ContinuationAssessment.action == "plan_generate"` — the assess LLM judges that the new query needs multiple steps, new tools, or cross-domain work. Routes to the standard `plan_generate` node. | RFC-226 |
+| Post-execute fast exit | The `record_iteration → goal_completion` conditional edge that fires when `ctx.scratch.plan_result.terminal_after_execute` is True. Eliminates the redundant iter=1 `plan_assess` LLM call on bootstrap paths. | RFC-226 |
+
 ### Loop Continuity & Goal Record Terms (RFC-225)
 
 | Term | Definition | Introduced In |

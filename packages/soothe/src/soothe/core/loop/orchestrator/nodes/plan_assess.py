@@ -1,22 +1,21 @@
 """Assess-only planning node (RFC-220 split plan flow).
 
-RFC-225 loop-continuation first-plan bootstrap integrated here.
-
-When ``continue_loop_mode`` is True and loop state is a true first plan for
-this run, skip the initial planner LLM and inject a single-step ``PlanResult``.
-Guards use execution/checkpoint structure only (no query heuristics).
+RFC-226: iter=0 dispatch for continuation queries calls a single
+LLM-driven discriminator (``LLMPlanner.assess_continuation``) that
+routes to either a terminal bootstrap (one step using prior context)
+or the full ``plan_generate`` flow. iter > 0 and fresh-goal iter=0
+keep the existing status-check assess.
 """
 
 from __future__ import annotations
 
 import logging
 import random
-from typing import Any
+from typing import Any, Literal
 
 from soothe.core.loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.core.loop.state.schemas import (
     AgentDecision,
-    LoopState,
     PlanResult,
     StepAction,
 )
@@ -38,42 +37,34 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
 ]
 
 
-def continue_loop_plan_bootstrap_allowed(
-    *,
-    continue_loop_mode: bool,
-    state: LoopState,
-    recovery_valid_resume: bool,
-    goal_record: GoalExecutionRecord | None,
-) -> bool:
-    """Return True when the first Plan call may use a synthetic bootstrap result.
+def _prior_goal_summaries(checkpoint: AgentLoopCheckpoint) -> list[dict]:
+    """Compact summary of completed prior goals for the continuation_assess prompt.
+
+    Excludes the active (new) goal at the end of ``goal_history`` and any
+    non-completed records. Data is drawn from RFC-225 enrichment fields.
 
     Args:
-        continue_loop_mode: True when this loop has prior goals (RFC-225).
-        state: Current loop state (iteration, step_results).
-        recovery_valid_resume: True when resuming a running checkpoint with a valid
-            ``GoalExecutionRecord`` (not the invalid-index re-init path).
-        goal_record: Active goal record when in recovery, else the new goal record
-            from ``start_new_goal`` on a fresh run.
+        checkpoint: Current AgentLoopCheckpoint with goal_history.
 
     Returns:
-        Whether bootstrap is structurally allowed.
+        List of dicts (one per completed prior goal) with keys:
+        ``goal_id``, ``goal_text``, ``completion``, ``step_count``,
+        ``current_plan_action``.
     """
-    if not continue_loop_mode:
-        return False
-    if state.iteration != 0:
-        return False
-    if state.step_results:
-        return False
-
-    if recovery_valid_resume:
-        if goal_record is None:
-            return False
-        if goal_record.iteration != 0:
-            return False
-        if goal_record.loop_messages:
-            return False
-
-    return True
+    out: list[dict] = []
+    for g in checkpoint.goal_history[:-1]:
+        if g.status != "completed":
+            continue
+        out.append(
+            {
+                "goal_id": g.goal_id,
+                "goal_text": g.goal_text,
+                "completion": g.goal_completion or "",
+                "step_count": len(g.step_results),
+                "current_plan_action": (g.current_plan.next_action if g.current_plan else ""),
+            }
+        )
+    return out
 
 
 def seed_loop_ledger_from_prior_goal(
@@ -125,14 +116,28 @@ def seed_loop_ledger_from_prior_goal(
     )
 
 
-def build_continue_loop_bootstrap_plan(_goal: str) -> PlanResult:
-    """Build a synthetic first ``PlanResult`` for loop continuation (RFC-225, RFC-214).
+def build_continue_loop_bootstrap_plan(
+    goal: str,
+    *,
+    terminal_after_execute: bool = False,
+    reasoning: str = "",
+    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low",
+) -> PlanResult:
+    """Build a synthetic first ``PlanResult`` for loop continuation (RFC-225, RFC-226).
 
-    The loop goal is the user's current request on ``LoopState.goal``; prior turns
-    are supplied via ``loop_messages`` ledger for Execute prompts (RFC-214).
+    The new user request is embedded in the step description so the agent knows
+    exactly what to address. The executor additionally prepends the prior goal's
+    execute_step ledger entries (seeded into ``LoopState.loop_messages`` by
+    ``seed_loop_ledger_from_prior_goal``) as graph_input_messages, giving the
+    agent the conversational context it needs to answer.
 
     Args:
-        _goal: Loop goal text (reserved for callers; body uses ``LoopState``).
+        goal: Loop goal text (the current user request).
+        terminal_after_execute: When True (RFC-226), the plan asserts its single
+            step IS the goal completion; ``record_iteration`` routes directly to
+            ``goal_completion`` without an iter=1 status check.
+        reasoning: One-sentence assessment reasoning from the discriminator LLM.
+        goal_progress: Initial progress estimate.
 
     Returns:
         ``PlanResult`` with ``status=continue`` and a single parallel step.
@@ -142,7 +147,10 @@ def build_continue_loop_bootstrap_plan(_goal: str) -> PlanResult:
         type="execute_steps",
         steps=[
             StepAction(
-                description="Address your request using prior conversation context.",
+                description=(
+                    "Address the user's request using prior conversation context "
+                    f"from earlier goals in this loop: {goal}"
+                ),
                 expected_output=(
                     "A response that addresses the current request while staying consistent "
                     "with earlier conversation context."
@@ -150,17 +158,20 @@ def build_continue_loop_bootstrap_plan(_goal: str) -> PlanResult:
             )
         ],
         execution_mode="parallel",
-        reasoning="Continue-thread first-plan bootstrap (no planner LLM).",
+        reasoning="Loop-continuation first-plan bootstrap (no planner LLM).",
     )
     return PlanResult(
         status="continue",
-        goal_progress="low",  # IG-399: descriptive level (initial bootstrap)
-        assessment_reasoning="Continue-thread bootstrap: initial planner call skipped.",
-        plan_reasoning="Single execute wave from thread context and loop goal.",
+        goal_progress=goal_progress,
+        assessment_reasoning=(
+            reasoning or "Loop-continuation bootstrap: initial planner call skipped."
+        ),
+        plan_reasoning="Single execute wave from prior loop context and current goal.",
         next_action=next_action,
         plan_action="new",
         decision=decision,
         require_goal_completion=False,
+        terminal_after_execute=terminal_after_execute,
     )
 
 
@@ -171,28 +182,77 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     plan_manager = ctx.plan_manager
     context = agent_loop._build_plan_context(state)
 
-    if continue_loop_plan_bootstrap_allowed(
-        continue_loop_mode=ctx.continue_loop_mode,
-        state=state,
-        recovery_valid_resume=ctx.recovery_valid_resume,
-        goal_record=ctx.goal_record,
-    ):
-        logger.info("[Plan] iter=0 loop-continuation bootstrap (no planner LLM)")
-        plan_result = build_continue_loop_bootstrap_plan(state.goal)
-        ctx.scratch.plan_result = plan_result
-        ctx.scratch.plan_assessment = None
-        await ctx.emit(
-            "plan",
-            {
-                "iteration": state.iteration,
-                "status": plan_result.status,
-                "progress": plan_result.goal_progress,
-                "next_action": plan_result.next_action,
-                "plan_reasoning": plan_result.plan_reasoning,
-                "plan_action": plan_result.plan_action,
-            },
+    # RFC-226: iter=0 continuation discriminator.
+    # Only fires when this loop already has at least one completed prior goal,
+    # state is a true first plan (no step results, recovery is clean), and
+    # the structural continue_loop_mode flag is set by AgentLoop.
+    if (
+        state.iteration == 0
+        and ctx.continue_loop_mode
+        and not state.step_results
+        and len(ctx.checkpoint.goal_history) >= 2
+        and (
+            not ctx.recovery_valid_resume
+            or (
+                ctx.goal_record is not None
+                and ctx.goal_record.iteration == 0
+                and not ctx.goal_record.loop_messages
+            )
         )
-        return {"assess_route": "skip_generate"}
+    ):
+        prior_goals = _prior_goal_summaries(ctx.checkpoint)
+        if prior_goals:
+            assessment = await agent_loop.loop_planner.assess_continuation(
+                current_goal=state.goal,
+                prior_goals=prior_goals,
+                capabilities=context.available_capabilities,
+                thread_id=state.thread_id,
+            )
+            # Surface the discriminator's reasoning to the TUI as an
+            # ``assess`` event so it renders as an AI-reasoning card before
+            # the plan / execute work begins (RFC-226).
+            reason_text = (assessment.reasoning or "").strip()
+            if reason_text:
+                await ctx.emit(
+                    "assess",
+                    {
+                        "assessment_reasoning": (f"{reason_text}"),
+                        "iteration": state.iteration,
+                    },
+                )
+            if assessment.action == "bootstrap":
+                logger.info(
+                    "[Plan] iter=0 continuation-assess: bootstrap (%s)",
+                    reason_text[:120],
+                )
+                plan_result = build_continue_loop_bootstrap_plan(
+                    state.goal,
+                    terminal_after_execute=True,
+                    reasoning=assessment.reasoning,
+                    goal_progress=assessment.goal_progress,
+                )
+                ctx.scratch.plan_result = plan_result
+                ctx.scratch.plan_assessment = None
+                await ctx.emit(
+                    "plan",
+                    {
+                        "iteration": state.iteration,
+                        "status": plan_result.status,
+                        "progress": plan_result.goal_progress,
+                        "next_action": plan_result.next_action,
+                        "assessment_reasoning": plan_result.assessment_reasoning,
+                        "plan_reasoning": plan_result.plan_reasoning,
+                        "plan_action": plan_result.plan_action,
+                    },
+                )
+                return {"assess_route": "skip_generate"}
+            # action == "plan_generate": escalate to full planner.
+            logger.info(
+                "[Plan] iter=0 continuation-assess: plan_generate (%s)",
+                reason_text[:120],
+            )
+            ctx.scratch.plan_assessment = None
+            return {"assess_route": "continue_generate"}
 
     assessment = await agent_loop.plan_phase.assess_status(
         goal=state.goal,

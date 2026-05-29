@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-05-29
-**Total RFCs**: 60
+**Total RFCs**: 61
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 42 |
+| Draft | 43 |
 | Implemented | 18 |
 
 ---
@@ -174,6 +174,13 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-05-29
   - Dependencies: RFC-201, RFC-214, RFC-216, RFC-218, RFC-220
   - Related: RFC-217, RFC-223, RFC-224
+
+- **RFC-226**: [Continuation-Aware plan_assess and Post-Execute Fast Exit](RFC-226-continuation-aware-plan-assess.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-05-29
+  - Dependencies: RFC-220, RFC-225
+  - Related: RFC-214, RFC-217, RFC-604
 
 ### Protocols (3xx)
 
@@ -360,7 +367,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 39 |
+| Architecture Design | 40 |
 | Implementation Interface Design | 10 |
 | Conceptual Design | 1 |
 | Not stated / ambiguous | 8 |
@@ -373,7 +380,7 @@ This index reflects the canonical RFC set and defines which files are active for
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 5 |
-| 2xx | AgentLoop & Cognition | 19 |
+| 2xx | AgentLoop & Cognition | 20 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
 | 5xx | CLI & TUI | 5 |
@@ -383,6 +390,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- **RFC-226**: Continuation-Aware plan_assess and Post-Execute Fast Exit (2026-05-29)
 - **RFC-225**: Loop Continuity and Goal Record Enrichment (2026-05-29)
 - **RFC-224**: Automatic Context Window Management (2026-05-27)
 - **RFC-223**: Thread Inheritance with LangGraph Checkpoint Forking (2026-05-27)

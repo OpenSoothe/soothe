@@ -683,6 +683,86 @@ class LLMPlanner:
         )
         return assessment
 
+    async def assess_continuation(
+        self,
+        *,
+        current_goal: str,
+        prior_goals: list[dict],
+        capabilities: list[str],
+        thread_id: str | None = None,
+    ) -> Any:
+        """RFC-226: discriminator LLM call routing continuations to bootstrap or plan_generate.
+
+        Invoked from ``plan_assess`` on iter=0 of any agentic query where
+        ``continue_loop_mode`` is True and the loop has at least one completed
+        prior goal. Returns a ``ContinuationAssessment`` Pydantic instance.
+
+        Args:
+            current_goal: The new user query (``LoopState.goal``).
+            prior_goals: Compact summary of completed prior goals
+                (from ``_prior_goal_summaries(checkpoint)``).
+            capabilities: Available tool + subagent names.
+            thread_id: Thread id for Langfuse session correlation.
+
+        Returns:
+            ``ContinuationAssessment`` with ``action``, ``reasoning``, ``goal_progress``.
+            On LLM failure or invalid output, falls back to ``action="plan_generate"``.
+        """
+        from langchain_core.messages import HumanMessage
+
+        from soothe.core.loop.planning.continuation_prompts import (
+            format_loop_continuation_assess_prompt,
+        )
+        from soothe.core.loop.state.schemas import ContinuationAssessment
+
+        prompt = format_loop_continuation_assess_prompt(
+            current_goal=current_goal,
+            prior_goals=prior_goals,
+            capabilities=capabilities,
+        )
+        structured_model = _plan_phase_chat_model(self._model).with_structured_output(
+            ContinuationAssessment
+        )
+        try:
+            lf_cfg = self._planner_langfuse_run_config(
+                thread_id=thread_id, phase="continuation-assess"
+            )
+            messages = [HumanMessage(content=prompt)]
+            if lf_cfg is not None:
+                result = await structured_model.ainvoke(messages, config=lf_cfg)
+            else:
+                result = await structured_model.ainvoke(messages)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[LLMPlanner] ContinuationAssessment failed: %s (fallback to plan_generate)",
+                str(exc)[:200],
+            )
+            return ContinuationAssessment(
+                action="plan_generate",
+                reasoning="LLM call failed; safe fallback to full planner.",
+                goal_progress="none",
+            )
+
+        if result is None or getattr(result, "action", None) not in ("bootstrap", "plan_generate"):
+            logger.warning(
+                "[LLMPlanner] ContinuationAssessment returned invalid action; "
+                "fallback to plan_generate"
+            )
+            return ContinuationAssessment(
+                action="plan_generate",
+                reasoning="Invalid LLM output; safe fallback to full planner.",
+                goal_progress="none",
+            )
+
+        logger.debug(
+            "[ContinuationAssess] action=%s reason=%s",
+            result.action,
+            (result.reasoning or "")[:120],
+        )
+        return result
+
     async def _generate_plan(
         self,
         messages: list[Any],

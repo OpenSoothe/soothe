@@ -90,6 +90,14 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
         )
     state.current_decision = decision
 
+    # RFC-226: terminal bootstrap fast-exit — when the plan asserts that its single
+    # step IS the goal completion (continuation bootstrap path), route straight to
+    # goal_completion and skip the iter=1 plan_assess status check.
+    terminal = bool(getattr(plan_result, "terminal_after_execute", False))
+
     # Both "continue" and "replan" status cycle back to iteration_gate for next iteration
     # The iteration_gate will check iteration limit and route accordingly
-    return {"last_outcome": "continue"}
+    return {
+        "last_outcome": "continue",
+        "after_record_route": "goal_completion" if terminal else "",
+    }

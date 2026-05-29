@@ -474,6 +474,14 @@ class PlanResult(BaseModel):
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
+    terminal_after_execute: bool = Field(default=False)
+    """RFC-226: when True, the plan asserts its single step IS the goal completion.
+
+    The Loop Graph routes from ``record_iteration`` directly to ``goal_completion``,
+    skipping the iter=1 ``plan_assess`` status check. Set by the continuation-aware
+    plan_assess for bootstrap actions; default False elsewhere.
+    """
+
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanResult:
         """Ensure keep/new and decision align when status requires execution.
@@ -521,6 +529,33 @@ class StatusAssessment(BaseModel):
     """Brief status justification."""
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
+
+
+class ContinuationAssessment(BaseModel):
+    """RFC-226: iter=0 routing decision for continuation queries.
+
+    Emitted by ``LLMPlanner.assess_continuation`` on iter=0 of any agentic query
+    where ``continue_loop_mode`` is True and the loop has at least one completed
+    prior goal. Routes the new query to either a terminal bootstrap (one step
+    using prior context) or the full ``plan_generate`` flow.
+
+    Attributes:
+        action: ``bootstrap`` for chat-like continuations answerable from prior
+            context; ``plan_generate`` when new steps or new tools are required.
+        reasoning: One-sentence justification (≤400 chars).
+        goal_progress: Initial progress estimate; mirrors ``PlanResult.goal_progress``.
+    """
+
+    action: Literal["bootstrap", "plan_generate"] = Field(
+        description=(
+            "bootstrap: a single execute step using prior loop context can answer "
+            "the query directly (no new tools needed). plan_generate: the query "
+            "requires multiple steps, new tools, or cross-domain work — escalate "
+            "to the full planner."
+        ),
+    )
+    reasoning: str = Field(default="", max_length=400)
+    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low"
 
 
 FIRST_WAVE_MAX_STEPS = 2
