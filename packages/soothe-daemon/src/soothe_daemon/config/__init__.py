@@ -2,6 +2,7 @@
 
 from soothe_daemon.config.env import apply_env_overrides
 from soothe_daemon.config.models import (
+    ChannelsConfig,
     DistributedConfig,
     HttpRestConfig,
     RayClusterConfig,
@@ -17,6 +18,7 @@ from soothe_daemon.config.settings import (
 )
 
 __all__ = [
+    "ChannelsConfig",
     "DistributedConfig",
     "HttpRestConfig",
     "RayClusterConfig",

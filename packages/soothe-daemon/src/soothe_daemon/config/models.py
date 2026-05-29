@@ -1,13 +1,12 @@
 """Nested config schemas for ``SootheDaemonConfig``.
 
 Holds ``WebSocketConfig`` / ``HttpRestConfig`` / ``TransportConfig`` (RFC-0013)
-plus ``WorkerPoolConfig`` / ``DistributedConfig`` / ``RayClusterConfig``
-(RFC-221) used by ``soothe_daemon.runner``.
+plus ``ChannelsConfig`` (RFC-620) for unified channel architecture.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WebSocketConfig(BaseModel):
@@ -93,6 +92,45 @@ class TransportConfig(BaseModel):
         if self.http_rest.enabled and self.websocket.enabled:
             return (self.websocket.host, self.websocket.port)
         return (self.http_rest.host, self.http_rest.port)
+
+
+class ChannelsConfig(BaseModel):
+    """Unified channel configuration (RFC-620).
+
+    Replaces TransportConfig with extensible channel architecture.
+    Built-in channels (websocket, http_rest) plus external plugins.
+
+    Global settings apply to all channels:
+    - transcription_provider: Audio transcription backend ("groq" or "openai")
+    - send_progress: Show progress indicators
+    - send_tool_hints: Show tool execution hints
+    - show_reasoning: Show model reasoning (where supported)
+    - send_max_retries: Retry attempts for outbound messages
+
+    Args:
+        websocket: WebSocket channel configuration (required).
+        http_rest: HTTP REST channel configuration.
+        transcription_provider: Transcription backend.
+        transcription_language: Optional transcription language.
+        send_progress: Show progress indicators.
+        send_tool_hints: Show tool hints.
+        show_reasoning: Show reasoning content.
+        send_max_retries: Maximum retry attempts.
+    """
+
+    model_config = ConfigDict(extra="allow")  # Allow per-channel plugin configs
+
+    # Built-in channels (alias to transport configs for backward compat)
+    websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
+    http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
+
+    # Global channel settings
+    transcription_provider: str = Field(default="groq", description="Audio transcription provider")
+    transcription_language: str | None = Field(default=None, description="Transcription language code")
+    send_progress: bool = Field(default=True, description="Show progress indicators")
+    send_tool_hints: bool = Field(default=False, description="Show tool execution hints")
+    show_reasoning: bool = Field(default=True, description="Show model reasoning content")
+    send_max_retries: int = Field(default=3, ge=1, description="Max retry attempts for outbound")
 
 
 class WorkerPoolConfig(BaseModel):

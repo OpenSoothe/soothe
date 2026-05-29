@@ -19,6 +19,7 @@ from soothe.logging import ThreadLogger
 from soothe_sdk.client.protocol import encode
 
 from soothe_daemon._handlers import DaemonHandlersMixin
+from soothe_daemon.channel_manager import ChannelManager
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.event import EventBus, EventSizeDistributionCollector, loop_event_topic
 from soothe_daemon.logging import set_client_id, set_loop_id
@@ -33,7 +34,6 @@ from soothe_daemon.singleton import (
     release_pid_lock,
 )
 from soothe_daemon.thread_state import ThreadStateRegistry
-from soothe_daemon.transport_manager import TransportManager
 
 logger = logging.getLogger(__name__)
 
@@ -42,26 +42,26 @@ _STOP_TIMEOUT_S = 8.0
 _HEARTBEAT_INTERVAL_S = 5.0  # Broadcast heartbeat every 5 seconds
 
 
-def _log_startup_banner(transport_manager: TransportManager | None) -> None:
-    """Log a clean startup banner with transport info.
+def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
+    """Log a clean startup banner with channel info.
 
     Args:
-        transport_manager: The transport manager with started transports.
+        channel_manager: The channel manager with started channels.
     """
     from soothe_daemon import __version__
 
-    # Get transport details
-    transports = transport_manager.get_transport_info() if transport_manager else []
-    if transports:
-        transport_str = " | ".join(f"{t['type']}: {t['client_count']} clients" for t in transports)
+    # Get channel details
+    channels = channel_manager.get_channel_info() if channel_manager else []
+    if channels:
+        channel_str = " | ".join(f"{c['type']}: {c['client_count']} clients" for c in channels)
     else:
-        transport_str = "none"
+        channel_str = "none"
 
     # Compact single-line banner
     logger.info(
-        "╭─ Soothe v%s ── transports: %s ──╯",
+        "╭─ Soothe v%s ── channels: %s ──╯",
         __version__,
-        transport_str,
+        channel_str,
     )
 
 
@@ -149,8 +149,8 @@ class SootheDaemon(DaemonHandlersMixin):
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # client_id -> Task
         self._thread_logger: ThreadLogger | None = None
         self._pid_lock_fd: int | None = None
-        # Transport manager for multi-transport support (RFC-0013)
-        self._transport_manager: TransportManager | None = None
+        # Channel manager for multi-channel support (RFC-620)
+        self._channel_manager: ChannelManager | None = None
         # Event bus architecture (RFC-0013, IG-047)
         self._event_size_stats: EventSizeDistributionCollector | None = None
         if self._daemon_config.event_size_stats_enabled:
@@ -414,16 +414,17 @@ class SootheDaemon(DaemonHandlersMixin):
             self._stop_event = asyncio.Event()
             self._running = True
 
-            self._transport_manager = TransportManager(
+            self._channel_manager = ChannelManager(
                 self._daemon_config,
+                event_bus=self._event_bus,
                 runner=self._runner,
                 soothe_config=self._config,
                 session_manager=self._session_manager,
                 autopilot_service=self._autopilot_service,
             )
-            self._transport_manager.set_message_handler(self._handle_transport_message)
-            self._transport_manager.set_handshake_callback(self._get_handshake_messages)
-            await self._transport_manager.start_all()
+            self._channel_manager.set_message_handler(self._handle_transport_message)
+            self._channel_manager.set_handshake_callback(self._get_handshake_messages)
+            await self._channel_manager.start_all()
 
             self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
             from soothe_daemon.persistence.pools import uses_postgresql_persistence
@@ -472,8 +473,8 @@ class SootheDaemon(DaemonHandlersMixin):
             self._readiness_state = "ready"
             self._readiness_message = None
 
-            # Log startup banner with transport info
-            _log_startup_banner(self._transport_manager)
+            # Log startup banner with channel info
+            _log_startup_banner(self._channel_manager)
         except Exception as exc:
             # Startup failed - cleanup and release PID lock
             self._readiness_state = "error"
@@ -481,8 +482,8 @@ class SootheDaemon(DaemonHandlersMixin):
             logger.exception("Daemon startup failed")
 
             # Stop any partially initialized resources
-            if self._transport_manager:
-                await self._transport_manager.stop_all()
+            if self._channel_manager:
+                await self._channel_manager.stop_all()
             if self._runner and hasattr(self._runner, "cleanup"):
                 with contextlib.suppress(Exception):
                     await asyncio.wait_for(self._runner.cleanup(), timeout=_CLEANUP_TIMEOUT_S)
@@ -658,9 +659,9 @@ class SootheDaemon(DaemonHandlersMixin):
         Supports both signal-based shutdown (main thread) and thread-safe
         shutdown via ``request_stop()`` (background thread).
         """
-        # With multi-transport architecture, we don't need self._server
-        # The transport manager handles all servers
-        if not self._transport_manager and not self._server:
+        # With multi-channel architecture, we don't need self._server
+        # The channel manager handles all servers
+        if not self._channel_manager and not self._server:
             return
 
         loop = asyncio.get_running_loop()
@@ -1023,9 +1024,9 @@ class SootheDaemon(DaemonHandlersMixin):
         cleanup_anonymous_workspaces()
         cleanup_legacy_per_loop_workspaces()
 
-        # Stop transport manager
-        if self._transport_manager:
-            await self._transport_manager.stop_all()
+        # Stop channel manager
+        if self._channel_manager:
+            await self._channel_manager.stop_all()
 
         # Cleanup clients
         for client in self._clients:
