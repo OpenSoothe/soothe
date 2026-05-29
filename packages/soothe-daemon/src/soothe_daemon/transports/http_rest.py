@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from soothe.utils.text_preview import preview_first
 
+from soothe_daemon import __version__
 from soothe_daemon.config.models import HttpRestConfig
 from soothe_daemon.transports.base import TransportServer
 
@@ -144,7 +145,7 @@ class HttpRestTransport(TransportServer):
         @self._app.get("/api/v1/version")
         async def get_version() -> dict[str, str]:
             """Get daemon version."""
-            return {"version": "1.0.0", "protocol": "soothe-rest-v1"}
+            return {"version": __version__, "protocol": "soothe-rest-v1"}
 
         # Configuration
         @self._app.get("/api/v1/config")

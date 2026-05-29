@@ -48,7 +48,7 @@ def _log_startup_banner(transport_manager: TransportManager | None) -> None:
     Args:
         transport_manager: The transport manager with started transports.
     """
-    from soothe import __version__
+    from soothe_daemon import __version__
 
     # Get transport details
     transports = transport_manager.get_transport_info() if transport_manager else []
