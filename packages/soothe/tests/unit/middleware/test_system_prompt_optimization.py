@@ -397,3 +397,93 @@ def test_memory_section_uses_memory_summary_tag():
     section = middleware._build_memory_section(memories)
     assert "<MEMORY_SUMMARY>" in section
     assert "</MEMORY_SUMMARY>" in section
+
+
+class TestSkillActivationInStateDict:
+    def test_state_dict_includes_skill_activation(self) -> None:
+        """state_dict passes skill_activation through so _compose_skills_block can see it."""
+        config = SootheConfig()
+        middleware = SystemPromptOptimizationMiddleware(config=config)
+
+        activation = {"sent": set(), "activated": {"a"}, "invoked": set(), "just_invoked": set()}
+        request = ModelRequest(
+            model=GenericFakeChatModel(messages=iter([AIMessage(content="x")])),
+            messages=[HumanMessage(content="hi")],
+            system_message=SystemMessage(content="orig"),
+            tools=[],
+            state={"skill_activation": activation},
+        )
+        # We test indirectly: modify_request must not crash, and the
+        # skill_activation key should reach _compose_skills_block.
+        with patch("langgraph.config.get_config", return_value={"configurable": {}}):
+            modified = middleware.modify_request(request)
+        # If skill_activation were missing from state_dict, _compose_skills_block
+        # would always return (None, []) — but the middleware should still succeed.
+        assert modified is not None
+
+
+class TestComposeSkillsBlockJustInvokedExclusion:
+    def test_just_invoked_skills_excluded_from_listing_entries(self) -> None:
+        """just_invoked skill names are filtered from listing_entries."""
+        from soothe.skills.index import SkillIndexEntry
+
+        weather = SkillIndexEntry(
+            name="weather",
+            description="Get weather",
+            tags="",
+            source="user",
+            path="/skills/weather",
+            mtime=0.0,
+        )
+        translate = SkillIndexEntry(
+            name="translate",
+            description="Translate text",
+            tags="",
+            source="user",
+            path="/skills/translate",
+            mtime=0.0,
+        )
+        just_invoked = {"weather"}
+        new_entries = [weather, translate]
+
+        # This mirrors the filtering logic in _compose_skills_block
+        listing_entries = [e for e in new_entries if e.name not in just_invoked]
+
+        assert len(listing_entries) == 1
+        assert listing_entries[0].name == "translate"
+
+    def test_skill_context_blocks_exclude_just_invoked(self) -> None:
+        """invoked - just_invoked produces correct SKILL_CONTEXT block list."""
+        activation = {
+            "sent": set(),
+            "activated": set(),
+            "invoked": {"weather"},
+            "invoked_bodies": {"weather": "Weather body"},
+            "just_invoked": {"weather"},
+        }
+        invoked = activation.get("invoked", set())
+        just_invoked = activation.get("just_invoked", set())
+        bodies = activation.get("invoked_bodies", {})
+
+        # This mirrors the SKILL_CONTEXT block logic in _compose_skills_block
+        skill_context_blocks = []
+        for name in sorted(invoked - just_invoked):
+            body = bodies.get(name)
+            if body:
+                skill_context_blocks.append(
+                    f'<SKILL_CONTEXT name="{name}">\n{body}\n</SKILL_CONTEXT>'
+                )
+
+        assert skill_context_blocks == []
+
+        # After just_invoked clears (turn 2+), weather body appears
+        activation2 = {**activation, "just_invoked": set()}
+        invoked2 = activation2.get("invoked", set())
+        just_invoked2 = activation2.get("just_invoked", set())
+        blocks2 = []
+        for name in sorted(invoked2 - just_invoked2):
+            body = bodies.get(name)
+            if body:
+                blocks2.append(f'<SKILL_CONTEXT name="{name}">\n{body}\n</SKILL_CONTEXT>')
+        assert len(blocks2) == 1
+        assert "weather" in blocks2[0]

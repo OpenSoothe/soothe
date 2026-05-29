@@ -145,9 +145,11 @@ class AgentLoop:
 
         goal_user_submission: str | None = None
         skill_context: str | None = None
+        slash_invoked_skill_name: str | None = None
+        slash_invoked_skill_body: str | None = None
         execution_goal = goal
 
-        # IG-XXX: Targeted skill sync - only sync the addressed skill
+        # Targeted skill sync - only sync the addressed skill
         parsed_skill = parse_slash_skill_user_line(goal)
         if workspace and filesystem_virtual_mode_from_soothe_config(self.config):
             if parsed_skill is not None:
@@ -162,8 +164,16 @@ class AgentLoop:
         )
         if skill_env is not None:
             goal_user_submission = goal
-            execution_goal = skill_env.prompt
             skill_context = skill_env.skill_context or None
+            # state.goal carries only user instruction; body goes via <SKILL_REFERENCE>
+            user_args = parsed_skill[1] if parsed_skill else ""
+            execution_goal = (
+                user_args.strip()
+                if user_args.strip()
+                else f"Execute skill: {parsed_skill[0] if parsed_skill else 'unknown'}"
+            )
+            slash_invoked_skill_name = parsed_skill[0] if parsed_skill else None
+            slash_invoked_skill_body = skill_env.skill_context
         elif parsed_skill is not None:
             logger.warning(
                 "[AgentLoop] /skill: user line did not expand (missing skill on this host "
@@ -337,6 +347,8 @@ class AgentLoop:
             goal=execution_goal,
             goal_user_submission=goal_user_submission,
             skill_context=skill_context,
+            slash_invoked_skill_name=slash_invoked_skill_name,
+            slash_invoked_skill_body=slash_invoked_skill_body,
             thread_id=main_thread_id,
             workspace=workspace,
             git_status=git_status,

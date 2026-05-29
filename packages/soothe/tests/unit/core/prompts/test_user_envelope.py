@@ -72,3 +72,25 @@ def test_plan_context_envelope_includes_response_language_hint() -> None:
     )
     assert "<response_language_hint>" in envelope
     assert "same natural language as the user's goal" in envelope
+
+
+def test_plan_context_envelope_skill_reference_when_skill_context_provided() -> None:
+    """skill_context param emits <SKILL_REFERENCE> block after GOAL_PROGRESS."""
+    envelope = build_plan_context_envelope(
+        goal="shanghai tomorrow",
+        skill_context="Skill: weather\nSkill folder: /skills/weather\n\nWeather skill body here",
+    )
+    assert "<SKILL_REFERENCE>" in envelope
+    assert "Weather skill body here" in envelope
+    # SKILL_REFERENCE appears after GOAL_PROGRESS
+    gp_idx = envelope.index("</GOAL_PROGRESS>")
+    sr_idx = envelope.index("<SKILL_REFERENCE>")
+    assert gp_idx < sr_idx
+
+
+def test_plan_context_envelope_no_skill_reference_when_absent() -> None:
+    """No <SKILL_REFERENCE> when skill_context is None or empty."""
+    envelope = build_plan_context_envelope(goal="plain goal")
+    assert "<SKILL_REFERENCE>" not in envelope
+    envelope_empty = build_plan_context_envelope(goal="plain goal", skill_context="  ")
+    assert "<SKILL_REFERENCE>" not in envelope_empty

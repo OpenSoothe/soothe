@@ -966,12 +966,19 @@ class Executor:
     def _seed_skill_activation(loop_state: LoopState) -> dict[str, Any] | None:
         """Rehydrate ``skill_activation`` from LoopState for graph input (RFC-105).
 
+        Also registers slash-invoked skills (``/skill:`` expansion) via
+        ``mark_invoked`` so the progressive loading registry tracks them.
+
         Returns ``None`` when no skill-activation data exists on the LoopState,
         so the middleware's ``abefore_agent`` will lazy-init a fresh dict.
         """
-        if not loop_state.activated_skill_names and not loop_state.invoked_skill_names:
+        has_prior = loop_state.activated_skill_names or loop_state.invoked_skill_names
+        has_slash = loop_state.slash_invoked_skill_name and loop_state.slash_invoked_skill_body
+
+        if not has_prior and not has_slash:
             return None
-        return {
+
+        activation: dict[str, Any] = {
             "sent": set(loop_state.sent_skill_names),
             "activated": set(loop_state.activated_skill_names),
             "invoked": set(loop_state.invoked_skill_names),
@@ -979,12 +986,27 @@ class Executor:
             "just_invoked": set(),
         }
 
+        if has_slash:
+            from soothe.skills.registry import ProgressiveSkillRegistry
+
+            registry = ProgressiveSkillRegistry()
+            registry.mark_invoked(
+                activation,
+                loop_state.slash_invoked_skill_name,  # type: ignore[arg-type]
+                loop_state.slash_invoked_skill_body,  # type: ignore[arg-type]
+            )
+
+        return activation
+
     @staticmethod
     def _snapshot_skill_activation(
         graph_output: dict[str, Any] | None,
         loop_state: LoopState,
     ) -> None:
         """Copy ``skill_activation`` from graph output back into LoopState (RFC-105).
+
+        Also clears slash invocation signal fields — they are consumed once by
+        ``_seed_skill_activation`` and should not persist across iterations.
 
         Best-effort: missing or malformed ``skill_activation`` is silently skipped.
         """
@@ -997,6 +1019,9 @@ class Executor:
         loop_state.activated_skill_names = set(activation.get("activated", ()))
         loop_state.invoked_skill_names = set(activation.get("invoked", ()))
         loop_state.invoked_skill_bodies = dict(activation.get("invoked_bodies", {}))
+        # Slash invocation signal consumed once — clear to prevent re-seeding
+        loop_state.slash_invoked_skill_name = None
+        loop_state.slash_invoked_skill_body = None
 
     def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
         """Extract token usage from last AIMessage response metadata.
@@ -1799,6 +1824,11 @@ class Executor:
                         self._snapshot_skill_activation(graph_state.values, loop_state)
                 except Exception:  # noqa: BLE001
                     logger.debug("[Skill] Failed to snapshot skill_activation from graph state")
+
+                # Clear skill_context after first execute wave — body now lives in
+                # system prompt <SKILL_CONTEXT> via progressive loading (RFC-105).
+                if loop_state.skill_context:
+                    loop_state.skill_context = None
 
             # Note: tool_call_ids are now in unified format within messages chunks
             # No separate binding events needed (IG-416 simplified design)
