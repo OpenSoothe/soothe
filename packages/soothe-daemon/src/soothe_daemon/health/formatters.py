@@ -127,7 +127,8 @@ def format_markdown(report: HealthReport) -> str:
     lines.append("# Soothe Health Check Report")
     lines.append("")
     lines.append(f"**Timestamp**: {report.timestamp}")
-    lines.append(f"**Version**: {report.soothe_version}")
+    lines.append(f"**Daemon**: {report.daemon_version}")
+    lines.append(f"**Framework**: {report.soothe_version}")
     if report.config_path:
         lines.append(f"**Config**: `{report.config_path}`")
     lines.append("")
