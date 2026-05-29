@@ -41,20 +41,11 @@ def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
     return stripped if stripped else "No goal specified"
 
 
-def _append_project_instructions_to_context_info(
-    context_info_parts: list[str],
-    project_instructions: str | None,
-) -> None:
-    if project_instructions:
-        context_info_parts.append(project_instructions)
-
-
 def build_execute_step_envelope(
     step_description: str,
     *,
     execution_hints: str | None = None,
     workspace_state: str | None = None,
-    project_instructions: str | None = None,
     skill_context: str | None = None,
 ) -> str:
     """Build the user message envelope for an execute-step (RFC-214).
@@ -66,8 +57,6 @@ def build_execute_step_envelope(
         step_description: The step's description (what to execute).
         execution_hints: Optional hints text from ExecutionHintsMiddleware.
         workspace_state: Optional lightweight workspace diff summary.
-        project_instructions: Optional ``<project_instructions>`` XML from workspace
-            ``CLAUDE.md`` / ``AGENTS.md`` (first N lines).
         skill_context: Skill reference only (SKILL.md); omitted when not a slash-skill turn.
 
     Returns:
@@ -97,7 +86,6 @@ def build_execute_step_envelope(
     ]
     if workspace_state:
         context_info_parts.append(f"<workspace_state>{workspace_state}</workspace_state>")
-    _append_project_instructions_to_context_info(context_info_parts, project_instructions)
     dynamic_parts.append("<CONTEXT_INFO>\n" + "\n".join(context_info_parts) + "\n</CONTEXT_INFO>")
 
     dynamic_context = "<DYNAMIC_CONTEXT>\n" + "\n".join(dynamic_parts) + "\n</DYNAMIC_CONTEXT>"
@@ -110,7 +98,6 @@ def build_plan_context_envelope(
     *,
     dag_context: str | None = None,
     step_id_hint: str | None = None,
-    project_instructions: str | None = None,
     goal_user_submission: str | None = None,
     skill_context: str | None = None,
 ) -> str:
@@ -124,8 +111,6 @@ def build_plan_context_envelope(
         goal: Current goal text (user instruction only).
         dag_context: Optional DAG planning context XML.
         step_id_hint: Optional next step ID hint text.
-        project_instructions: Optional ``<project_instructions>`` XML from workspace
-            ``CLAUDE.md`` / ``AGENTS.md`` (plan-generate only at call sites).
         goal_user_submission: Original ``/skill:`` line when applicable; unused
             since the goal split (kept for API compat).
         skill_context: Skill reference body for ``<SKILL_REFERENCE>`` when slash-skill
@@ -157,7 +142,6 @@ def build_plan_context_envelope(
         f"<date>{date_str}</date>",
         _RESPONSE_LANGUAGE_HINT,
     ]
-    _append_project_instructions_to_context_info(context_info_parts, project_instructions)
     context_info = "<CONTEXT_INFO>\n" + "\n".join(context_info_parts) + "\n</CONTEXT_INFO>"
 
     parts = [user_query] + extra_parts + [context_info]
