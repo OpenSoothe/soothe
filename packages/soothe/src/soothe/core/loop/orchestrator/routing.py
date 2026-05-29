@@ -61,7 +61,9 @@ def route_after_execute(state: dict[str, Any]) -> str:
 
 
 def route_after_record_iteration(state: dict[str, Any]) -> str:
-    """Continue outer iteration cycle or finish."""
+    """RFC-226: terminal bootstrap fast-exit, then continue outer iteration cycle or finish."""
+    if state.get("after_record_route") == "goal_completion":
+        return "goal_completion"
     if state.get("last_outcome") == "continue":
         return "iteration_gate"
     return END
