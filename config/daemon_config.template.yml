@@ -21,8 +21,8 @@ transports:
       - http://localhost:*
       - http://127.0.0.1:*
     max_frame_size: 10485760  # 10MB WebSocket frame limit
-  http_rest:  # Optional REST API (health checks, metrics)
-    enabled: false
+  http_rest:  # REST API (health checks, autopilot CLI, metrics)
+    enabled: true
     cors_origins:
       - http://localhost:*
       - http://127.0.0.1:*

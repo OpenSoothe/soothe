@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import Any
 
+from ..checkpointer import core_agent_checkpointer
 from ..phase_scratch import LoopPhaseScratch
 from ..runtime_context import LoopRuntimeContext
-
-logger = logging.getLogger(__name__)
 
 
 async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -27,16 +25,10 @@ async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         },
     )
 
-    try:
-        await ctx.anchor_manager.capture_iteration_start_anchor(
-            iteration=state.iteration,
-            thread_id=state.thread_id,
-            checkpointer=agent_loop.core_agent.graph.checkpointer,
-        )
-    except Exception:
-        logger.warning(
-            "Failed to capture iteration start anchor",
-            exc_info=True,
-        )
+    await ctx.anchor_manager.capture_iteration_start_anchor(
+        iteration=state.iteration,
+        thread_id=state.thread_id,
+        checkpointer=core_agent_checkpointer(agent_loop),
+    )
 
     return {"plan_route": None, "assess_route": None, "last_outcome": None}

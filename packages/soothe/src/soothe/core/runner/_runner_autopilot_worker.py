@@ -90,6 +90,10 @@ class AutopilotWorkerMixin:
             f"{job.deadline_seconds}s" if job.deadline_seconds else "none",
         )
 
+        # Lazy async checkpointer (PostgreSQL pool) must be wired before AgentLoop
+        # touches CoreAgent checkpoints for anchor capture / thread forks.
+        await self._ensure_checkpointer_initialized()  # type: ignore[attr-defined]
+
         # Build a fresh AgentLoop for this dispatch. The CoreAgent / planner
         # are shared (workers serve many jobs over their lifetime).
         agent_loop = AgentLoop(

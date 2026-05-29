@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Any
 
+from ..checkpointer import core_agent_checkpointer
 from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
@@ -59,18 +60,12 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
         "reasoning_decision": getattr(decision, "reasoning", None),
     }
 
-    try:
-        await anchor_manager.capture_iteration_end_anchor(
-            iteration=iteration_completed,
-            thread_id=state.thread_id,
-            checkpointer=agent_loop.core_agent.graph.checkpointer,
-            execution_summary=execution_summary,
-        )
-    except Exception:
-        logger.warning(
-            "Failed to capture iteration end anchor",
-            exc_info=True,
-        )
+    await anchor_manager.capture_iteration_end_anchor(
+        iteration=iteration_completed,
+        thread_id=state.thread_id,
+        checkpointer=core_agent_checkpointer(agent_loop),
+        execution_summary=execution_summary,
+    )
 
     await ctx.emit(
         "iteration_completed",

@@ -10,7 +10,7 @@ Covers the worker-side contract:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -57,6 +57,7 @@ class _BareMixin(AutopilotWorkerMixin):
         self._agent = MagicMock()
         self._planner = MagicMock()
         self._config = MagicMock()
+        self._ensure_checkpointer_initialized = AsyncMock()
 
 
 # ---- Helper-method tests (no AgentLoop involvement) -------------------
@@ -181,6 +182,25 @@ def _patch_agent_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeAgentLoop) -> 
         return fake
 
     monkeypatch.setattr(_runner_autopilot_worker, "AgentLoop", _factory)
+
+
+@pytest.mark.asyncio
+async def test_stream_initializes_checkpointer_before_agent_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr = _plan_result(is_done=True)
+    fake = _FakeAgentLoop().make_progress([("completed", {"result": pr})])
+    _patch_agent_loop(monkeypatch, fake)
+
+    mixin = _BareMixin()
+    _ = [
+        c
+        async for c in mixin._run_single_autopilot_goal(
+            _job(), thread_id="t1", workspace="/tmp", max_iterations=8
+        )
+    ]
+
+    mixin._ensure_checkpointer_initialized.assert_awaited_once()
 
 
 @pytest.mark.asyncio
