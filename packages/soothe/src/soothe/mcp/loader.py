@@ -8,35 +8,58 @@ TODO (Batch 2): Replace manager.py imports with registry registration.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+from soothe.config.models import MCPServerConfig
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["load_mcp_tools", "MCPSessionManager"]
 
 
 class MCPSessionManager:
-    """Stub for backward compat with manager.py imports (RFC-412 Batch 1).
+    """Backward-compat wrapper around MCPRegistry (RFC-412).
 
-    The real implementation in Batch 2 will delegate to MCPRegistry.
+    Provides cleanup() method expected by manager.py.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        pass
+    def __init__(self, registry: Any) -> None:
+        """Initialize wrapper.
+
+        Args:
+            registry: MCPRegistry instance to wrap.
+        """
+        self._registry = registry
 
     async def cleanup(self) -> None:
-        """Cleanup MCP session (stub)."""
-        pass
+        """Cleanup MCP session (delegates to registry shutdown)."""
+        if self._registry is not None:
+            try:
+                await self._registry.shutdown(deadline_seconds=5.0)
+            except Exception as e:
+                logger.warning("[MCP] Session cleanup error: %s", e)
 
 
-async def load_mcp_tools(servers: list) -> tuple:
-    """Stub load_mcp_tools for backward compat (RFC-412 Batch 1).
-
-    Returns empty tuple and stub manager. The real implementation
-    in Batch 2 will use MCPRegistry.
+async def load_mcp_tools(
+    servers: list[MCPServerConfig],
+    secret_resolver: callable | None = None,
+) -> tuple[list[Any], MCPSessionManager]:
+    """Load MCP tools via MCPRegistry (RFC-412).
 
     Args:
-        servers: list of MCPServerConfig (ignored in stub).
+        servers: List of MCPServerConfig from SootheConfig.
+        secret_resolver: Function to resolve ${ENV_VAR} placeholders.
 
     Returns:
-        (empty list, MCPSessionManager stub)
+        Tuple of (tool list, MCPSessionManager wrapper).
     """
-    return ([], MCPSessionManager())
+    from soothe.mcp.registry import MCPRegistry
+
+    registry = MCPRegistry(servers=servers, secret_resolver=secret_resolver)
+    await registry.initialize()
+
+    # Get always-loaded tools (defer=False servers)
+    tools = registry.always_loaded_tools()
+
+    return (tools, MCPSessionManager(registry))

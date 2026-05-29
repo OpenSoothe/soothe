@@ -24,17 +24,17 @@ Replace the broken/stubbed MCP loader path with a working daemon-singleton MCP s
 - [x] Update config/config.template.yml and config/config.dev.yml
 - [x] Unit tests for batch 1 (test_name_utils, test_config_validation, test_transport_factory, test_budget_formatter)
 
-### Batch 2: Registry + lifecycle
-- [ ] Implement `connection.py` (MCPConnection dataclass)
-- [ ] Implement `registry.py` (MCPRegistry — initialize, shutdown, always_loaded_tools, deferred_tools, invoke, read_resource)
-- [ ] Implement `loader.py` (backward-compat adapter for manager.py imports)
-- [ ] Implement `reconnect.py` (exponential-backoff scheduler)
-- [ ] Implement `cleanup.py` (subprocess cleanup ladder)
-- [ ] Implement `events.py` (MCP event family, self-registered)
-- [ ] Wire `SootheDaemon._mcp_registry` lifecycle (init in __init__, initialize in start, shutdown on signal)
-- [ ] Fix `core/thread/manager.py` — replace broken imports with registry registration
-- [ ] Fix `soothe_daemon/health/checks/mcp_check.py` — rewrite with server.name
-- [ ] Unit tests for batch 2
+### Batch 2: Registry + lifecycle ✅ DONE
+- [x] Implement `connection.py` (MCPConnection dataclass)
+- [x] Implement `registry.py` (MCPRegistry — initialize, shutdown, always_loaded_tools, deferred_tools, invoke, read_resource)
+- [x] Implement `loader.py` (backward-compat adapter for manager.py imports)
+- [x] Implement `reconnect.py` (exponential-backoff scheduler)
+- [x] Implement `cleanup.py` (subprocess cleanup ladder)
+- [x] Implement `events.py` (MCP event family, self-registered)
+- [x] Wire `SootheDaemon._mcp_registry` lifecycle (init in __init__, initialize in start, shutdown on signal)
+- [x] Fix `core/thread/manager.py` — pass secret_resolver to load_mcp_tools
+- [x] Fix `soothe_daemon/health/checks/mcp_check.py` — rewrite with transport-aware validation
+- [x] Unit tests pass (2097 tests)
 
 ### Batch 3: Agent integration + progressive disclosure
 - [ ] Add `mcp_registry` param to AgentBuilder.__init__
@@ -79,7 +79,7 @@ Replace the broken/stubbed MCP loader path with a working daemon-singleton MCP s
 - packages/soothe/src/soothe/config/models.py (MCPServerConfig, ProgressiveMCPConfig)
 - packages/soothe/src/soothe/config/settings.py (validation, progressive_mcp)
 - packages/soothe/src/soothe/core/agent/_builder.py (mcp_registry param)
-- packages/soothe/src/soothe/core/thread/manager.py (replace broken imports)
+- packages/soothe/src/soothe/core/thread/manager.py (pass secret_resolver)
 - packages/soothe/src/soothe/middleware/_builder.py (MCPToolSearchMiddleware)
 - packages/soothe/src/soothe/middleware/system_prompt_optimization.py (_compose_mcp_tools_block)
 - packages/soothe/src/soothe/core/loop/state/schemas.py (MCP fields)

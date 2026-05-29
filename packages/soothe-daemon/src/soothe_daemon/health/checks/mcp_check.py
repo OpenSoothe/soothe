@@ -1,6 +1,9 @@
-"""MCP server health check implementation."""
+"""MCP server health check implementation (RFC-412)."""
+
+from shutil import which
 
 from soothe.config import SootheConfig
+from soothe.config.models import MCPTransport
 
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
@@ -25,10 +28,23 @@ def _check_mcp_configs(config: SootheConfig | None) -> CheckResult:
     # Check each MCP server config
     invalid = []
     for server in config.mcp_servers:
+        # name is required in RFC-412
         if not server.name:
             invalid.append("server missing name")
-        if not server.command:
-            invalid.append(f"'{server.name}' missing command")
+            continue
+        # Validate transport-specific requirements
+        if server.transport == MCPTransport.STDIO:
+            if not server.command:
+                invalid.append(f"'{server.name}' missing command for stdio transport")
+        elif server.transport in (
+            MCPTransport.SSE,
+            MCPTransport.STREAMABLE_HTTP,
+            MCPTransport.WEBSOCKET,
+        ):
+            if not server.url:
+                invalid.append(
+                    f"'{server.name}' missing url for {server.transport.value} transport"
+                )
 
     if invalid:
         return CheckResult(
@@ -47,7 +63,7 @@ def _check_mcp_configs(config: SootheConfig | None) -> CheckResult:
 
 
 def _check_mcp_availability(config: SootheConfig | None) -> CheckResult:
-    """Check if MCP server executables are available."""
+    """Check if MCP server executables/URLs are available."""
     if config is None:
         return CheckResult(
             name="mcp_availability",
@@ -62,19 +78,22 @@ def _check_mcp_availability(config: SootheConfig | None) -> CheckResult:
             message="No MCP servers to check",
         )
 
-    # Check if each server's command exists
-    from shutil import which
-
+    # Check stdio server commands exist; remote servers marked as "remote"
     missing = []
     available = []
+    remote = []
 
     for server in config.mcp_servers:
-        cmd = server.command.split()[0] if server.command else None
-        if cmd:
-            if which(cmd):
-                available.append(server.name)
-            else:
-                missing.append(f"{server.name} ({cmd})")
+        if server.transport == MCPTransport.STDIO:
+            cmd = server.command.split()[0] if server.command else None
+            if cmd:
+                if which(cmd):
+                    available.append(server.name)
+                else:
+                    missing.append(f"{server.name} ({cmd})")
+        else:
+            # Remote transports: connectivity checked at runtime
+            remote.append(server.name)
 
     if missing:
         return CheckResult(
@@ -83,15 +102,24 @@ def _check_mcp_availability(config: SootheConfig | None) -> CheckResult:
             message=f"MCP servers not found: {', '.join(missing)}",
             details={
                 "missing": missing,
+                "available": available,
+                "remote": remote,
                 "remediation": "Install missing MCP servers or update config",
             },
         )
 
+    details = {"available": available, "remote": remote}
+    msg_parts = []
+    if available:
+        msg_parts.append(f"{len(available)} stdio command(s) found")
+    if remote:
+        msg_parts.append(f"{len(remote)} remote server(s)")
+
     return CheckResult(
         name="mcp_availability",
         status=CheckStatus.OK,
-        message=f"All {len(available)} MCP server command(s) found",
-        details={"available": available},
+        message="All MCP servers: " + ", ".join(msg_parts) if msg_parts else "No servers",
+        details=details,
     )
 
 

@@ -552,7 +552,10 @@ class ThreadContextManager:
         try:
             from soothe.mcp.loader import load_mcp_tools
 
-            _, manager = await load_mcp_tools(self._config.mcp_servers)
+            _, manager = await load_mcp_tools(
+                self._config.mcp_servers,
+                secret_resolver=self._config.secret_resolver,
+            )
             self._mcp_managers[thread_id] = manager
             logger.info("Loaded MCP sessions for thread %s", thread_id)
         except Exception:

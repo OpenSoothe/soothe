@@ -177,6 +177,8 @@ class SootheDaemon(DaemonHandlersMixin):
         self._global_history: Any = None  # GlobalInputHistory | None
         self._query_engine: QueryEngine = QueryEngine(self)
         self._message_router: MessageRouter = MessageRouter(self)
+        # MCP registry (RFC-412): daemon-singleton for MCP connections
+        self._mcp_registry: Any = None  # MCPRegistry | None
 
     async def _cancel_loop_for_session(self, loop_id: str) -> None:
         """Cancel in-flight work for a loop when a client disconnects (IG-408)."""
@@ -337,6 +339,24 @@ class SootheDaemon(DaemonHandlersMixin):
                     "Failed to pre-open shared PostgreSQL pools at startup",
                     exc_info=True,
                 )
+
+            # RFC-412: Initialize MCP registry (daemon-singleton)
+            if self._config.mcp_servers:
+                try:
+                    from soothe.mcp.registry import MCPRegistry
+
+                    self._mcp_registry = MCPRegistry(
+                        servers=self._config.mcp_servers,
+                        secret_resolver=self._config.secret_resolver,
+                    )
+                    await self._mcp_registry.initialize()
+                    logger.info(
+                        "[MCP] Registry initialized with %d server(s)",
+                        len(self._config.mcp_servers),
+                    )
+                except Exception:
+                    logger.warning("[MCP] Failed to initialize registry", exc_info=True)
+                    self._mcp_registry = None
 
             # QueryEngine is created in __init__; runner is now available for queries
             # Initialize global cross-thread input history
@@ -944,6 +964,14 @@ class SootheDaemon(DaemonHandlersMixin):
                 await self._runner_factory.shutdown_pool()
             except Exception:
                 logger.debug("Failed to shutdown runner pool", exc_info=True)
+
+        # RFC-412: Shutdown MCP registry
+        if self._mcp_registry is not None:
+            try:
+                await self._mcp_registry.shutdown(deadline_seconds=_CLEANUP_TIMEOUT_S)
+                logger.info("[MCP] Registry shutdown complete")
+            except Exception:
+                logger.warning("[MCP] Registry shutdown error", exc_info=True)
 
         try:
             from soothe_daemon.persistence import reap_stale_soothe_worker_processes
