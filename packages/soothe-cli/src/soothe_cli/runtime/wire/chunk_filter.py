@@ -14,7 +14,7 @@ _MSG_PAIR_LEN = 2
 
 
 def updates_chunk_is_noop(data: Any) -> bool:
-    """True when an ``updates`` chunk carries no HITL interrupt."""
+    """True when an ``updates`` chunk carries no LangGraph interrupt."""
     if not isinstance(data, dict):
         return True
     return "__interrupt__" not in data

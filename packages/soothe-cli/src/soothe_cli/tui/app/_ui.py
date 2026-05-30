@@ -1,20 +1,16 @@
-"""UI interaction mixin: status bar, tokens, scroll hydration, spinner, ask_user, interrupt/quit."""
+"""UI interaction mixin: status bar, tokens, scroll hydration, spinner, interrupt/quit."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import time
-import uuid
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from textual.containers import Container
     from textual.widget import Widget
     from textual.widgets._scrollbar import ScrollUp
-
-    from soothe_cli.tui._ask_user_types import AskUserWidgetResult, Question
-    from soothe_cli.tui.widgets.ask_user import AskUserMenu
 
 from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
@@ -31,7 +27,7 @@ _HYDRATION_CHECK_INTERVAL_SECONDS = 0.08
 
 
 class _UIMixin:
-    """UI interaction: status, tokens, hydration, spinner, ask_user, quit/interrupt."""
+    """UI interaction: status, tokens, hydration, spinner, quit/interrupt."""
 
     def on_scroll_up(self, _event: ScrollUp) -> None:
         """Handle scroll up to check if we need to hydrate older messages."""
@@ -328,108 +324,3 @@ class _UIMixin:
             self._loading_widget.set_status(status)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
-
-    async def _remove_ask_user_widget(  # noqa: PLR6301  # Shared helper used by ask_user event handlers
-        self,
-        widget: AskUserMenu,
-        *,
-        context: str,
-    ) -> None:
-        """Remove an ask_user widget without surfacing cleanup races.
-
-        Args:
-            widget: Ask-user widget instance to remove.
-            context: Short context string for diagnostics.
-        """
-        try:
-            await widget.remove()
-        except Exception:
-            logger.debug(
-                "Failed to remove ask-user widget during %s",
-                context,
-                exc_info=True,
-            )
-
-    async def _request_ask_user(
-        self,
-        questions: list[Question],
-    ) -> asyncio.Future[AskUserWidgetResult]:
-        """Display the ask_user widget and return a Future with user response.
-
-        Args:
-            questions: List of question dicts, each with `question`, `type`,
-                and optional `choices` and `required` keys.
-
-        Returns:
-            A Future that resolves to a dict with `'type'` (`'answered'` or
-                `'cancelled'`) and, when answered, an `'answers'` list.
-        """
-        loop = asyncio.get_running_loop()
-        result_future: asyncio.Future[AskUserWidgetResult] = loop.create_future()
-
-        if self._pending_ask_user_widget is not None:
-            deadline = _monotonic() + 30
-            while self._pending_ask_user_widget is not None:
-                if _monotonic() > deadline:
-                    logger.error(
-                        "Timed out waiting for previous ask-user widget to clear. Forcefully cleaning up."
-                    )
-                    old_widget = self._pending_ask_user_widget
-                    if old_widget is not None:
-                        old_widget.action_cancel()
-                        self._pending_ask_user_widget = None
-                        await self._remove_ask_user_widget(
-                            old_widget,
-                            context="ask-user timeout cleanup",
-                        )
-                    break
-                await asyncio.sleep(0.1)
-
-        from soothe_cli.tui.widgets.ask_user import AskUserMenu
-
-        unique_id = f"ask-user-menu-{uuid.uuid4().hex[:8]}"
-        menu = AskUserMenu(questions, id=unique_id)
-        menu.set_future(result_future)
-
-        self._pending_ask_user_widget = menu
-
-        try:
-            messages = self.query_one("#messages", Container)
-            await self._mount_before_queued(messages, menu)
-            self.call_after_refresh(menu.scroll_visible)
-            self.call_after_refresh(menu.focus_active)
-        except Exception as e:
-            logger.exception(
-                "Failed to mount ask-user menu (id=%s)",
-                unique_id,
-            )
-            self._pending_ask_user_widget = None
-            if not result_future.done():
-                result_future.set_exception(e)
-
-        return result_future
-
-    async def on_ask_user_menu_answered(
-        self,
-        event: Any,  # noqa: ARG002, ANN401
-    ) -> None:
-        """Handle ask_user menu answers - remove widget and refocus input."""
-        if self._pending_ask_user_widget:
-            widget = self._pending_ask_user_widget
-            self._pending_ask_user_widget = None
-            await self._remove_ask_user_widget(widget, context="ask-user answered")
-
-        if self._chat_input:
-            self.call_after_refresh(self._chat_input.focus_input)
-
-    async def on_ask_user_menu_cancelled(
-        self,
-        event: Any,  # noqa: ARG002, ANN401
-    ) -> None:
-        """Handle ask_user menu cancellation - remove widget and refocus input."""
-        if self._pending_ask_user_widget:
-            widget = self._pending_ask_user_widget
-            self._pending_ask_user_widget = None
-            await self._remove_ask_user_widget(widget, context="ask-user cancelled")
-        if self._chat_input:
-            self.call_after_refresh(self._chat_input.focus_input)

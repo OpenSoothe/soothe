@@ -38,7 +38,7 @@ Execution Surfaces
 Daemon (daemon/server.py + transports/*)
   └─ SootheDaemon lifecycle, event routing, DaemonClient connections
 SootheRunner (core/runner/*)
-  └─ Protocol orchestration, LangGraph astream() pass-through, HITL interrupt loop, thread lifecycle
+  └─ Protocol orchestration, LangGraph astream() pass-through, interrupt auto-resume, thread lifecycle
 create_soothe_agent() -> CompiledStateGraph
   └─ deepagents middleware stack, subagents, tools, skills, protocol instances
 Protocols (context, memory, planner, policy, durability)
@@ -54,7 +54,7 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 |------|-----------|---------|
 | `messages` | `()` (main) | LLM text tokens, tool calls |
 | `messages` | non-empty | Subagent text and tool calls |
-| `updates` | `()` (main) | HITL interrupts |
+| `updates` | `()` (main) | LangGraph interrupts (`__interrupt__`) |
 | `custom` | `()` or non-empty | Subagent progress (`soothe.subagent.*` wire events) |
 | `custom` | `()` (main) | Protocol orchestration events (`soothe.plan.*`, `soothe.policy.*`) |
 
@@ -100,7 +100,7 @@ When the agent loop emits `soothe.cognition.agent_loop.step.started` / `step.com
 Thread management → Context restoration → Policy check → Context projection → Memory recall → Plan creation → Enriched input assembly.
 
 **Phase 2: LangGraph Stream**
-`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. HITL interrupt loop: collect `__interrupt__`, auto-approve, resume with `Command(resume=...)`. See RFC-200 for StepScheduler multi-step execution.
+`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. Interrupt loop (AgentLoop executor): collect `__interrupt__`, auto-approve in-process, resume with `Command(resume=...)`. See RFC-200 for StepScheduler multi-step execution.
 
 **Phase 3: Protocol Post-processing**
 Context ingestion → Context persistence → Memory storage → Plan reflection → Thread persistence via `ThreadContextManager`.
@@ -216,7 +216,7 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 ## Security
 
-TUI inherits `PolicyProtocol` enforcement. HITL interrupts from `HumanInTheLoopMiddleware` handled in runner interrupt loop. Current: auto-approve. Future: approval prompts via TUI.
+TUI inherits `PolicyProtocol` enforcement (`deny` blocks tools; `need_approval` is advisory only). LangGraph tool interrupts are auto-resumed in the AgentLoop executor; the TUI does not block on approval menus.
 
 ## References
 

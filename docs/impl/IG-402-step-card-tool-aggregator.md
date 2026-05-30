@@ -16,7 +16,7 @@ When the agent loop emits `AGENT_LOOP_STEP_STARTED` / `AGENT_LOOP_STEP_COMPLETED
 - `packages/soothe-cli/src/soothe_cli/tui/tool_display.py` — `format_tool_call_row`
 - `packages/soothe-cli/src/soothe_cli/tui/widgets/messages.py` — `CognitionStepMessage` tool rows + collapse
 - `packages/soothe-cli/src/soothe_cli/tui/widgets/message_store.py` — `step_tool_calls_json`
-- `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` — routing, HITL, interrupt, spinner
+- `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` — routing, interrupt cleanup, spinner
 - `docs/specs/RFC-500-cli-tui-architecture.md`, `docs/specs/RFC-501-display-verbosity.md`
 - Tests under `packages/soothe-cli/tests/unit/`
 

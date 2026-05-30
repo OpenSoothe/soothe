@@ -136,7 +136,7 @@ Widgets render (ConversationPanel, StatusBar, PlanTree)
 | `model_selector.py` | 34KB | Model selection UI (not used in Soothe, optional) |
 | `autocomplete.py` | 23KB | Slash command autocomplete |
 | `message_store.py` | 22KB | Message state management |
-| `approval.py` | 17KB | Interactive HITL approval menu |
+| `approval.py` | 17KB | **Not migrated** — interactive approval menu removed; file previews are non-blocking |
 | `ask_user.py` | 14KB | User question prompts |
 | `status.py` | 12KB | Status bar (modified for protocol events) |
 | `welcome.py` | 12KB | Welcome banner |
