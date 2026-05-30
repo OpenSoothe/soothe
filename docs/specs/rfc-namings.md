@@ -75,8 +75,7 @@ This document defines the terminology and naming conventions used in this projec
 | Dreaming Mode | Persistent idle state where Soothe performs memory consolidation, indexing, goal anticipation, and health monitoring. | RFC-203 |
 | Consensus Loop | Layer 3 validation of Layer 2 completion judgment with send-back capability and budget. | RFC-203 |
 | Send-Back Budget | Per-goal limit on Layer 3 rejections (default: 3 rounds). Independent from Layer 2 iteration budget. | RFC-203 |
-| Channel Protocol | Message-centric protocol for user ↔ Soothe communication. Generic routing by type prefix. | RFC-203 |
-| ChannelMessage | Data structure with type, payload, timestamp, sender fields for channel communication. | RFC-203 |
+| Channel Protocol | Message-centric protocol for user ↔ Soothe communication. Autopilot control uses HTTP REST; platform channels use RFC-620. | RFC-203 |
 | CriticalityEvaluator | Module in GoalEngine that determines if a proposed goal requires user confirmation (MUST status). | RFC-203 |
 | SchedulerService | Independent service in `core/goal_engine/scheduled_tasks.py` for time-based task execution (delay, cron, recurrence). | RFC-203 |
 | Goal Relationship | Connection between goals: `depends_on` (hard), `informs` (soft), `conflicts_with` (mutual exclusion). | RFC-203 |

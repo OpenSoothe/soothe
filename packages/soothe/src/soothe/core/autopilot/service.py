@@ -60,7 +60,6 @@ class AutopilotService:
     - Spawn and manage AgentLoop workers (loop pool)
     - Schedule ready goals to available loops
     - Lineage-aware loop assignment (reuse parent's loop)
-    - Process ChannelInbox messages
     - Send webhook notifications
     - Enter dreaming mode when no goals active
 
@@ -149,7 +148,6 @@ class AutopilotService:
         self._scheduler: Any = None  # SchedulerService | None
         self._context_store: Any = None
         self._context_projector: Any = None
-        self._channel_inbox: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
         if runner_factory is not None:
             from soothe.core.autopilot.worker_pool import WorkerPool
@@ -364,8 +362,8 @@ class AutopilotService:
     ) -> Goal:
         """Create a goal in this service's GoalEngine (RFC-222 revised).
 
-        Public entry point for callers (HTTP ``/autopilot/submit``,
-        ``ChannelInbox`` consumer, future programmatic clients) to add a
+        Public entry point for callers (HTTP ``/autopilot/submit`` and other
+        programmatic clients) to add a
         new goal to the DAG. The scheduling loop will pick it up on its
         next tick when ``self._running`` is True.
 
@@ -519,26 +517,23 @@ class AutopilotService:
 
         while self._running:
             try:
-                # 1. Process channel inbox (if configured)
-                await self._process_inbox()
-
-                # 2. Check scheduled tasks (if enabled)
+                # 1. Check scheduled tasks (if enabled)
                 await self._check_scheduled_tasks()
 
-                # 3. Schedule ready goals
+                # 2. Schedule ready goals
                 await self._schedule_ready_goals()
 
-                # 4. Monitor active loops
+                # 3. Monitor active loops
                 await self._monitor_loop_health()
 
-                # 5. Release idle loops past timeout
+                # 4. Release idle loops past timeout
                 await self._release_idle_loops()
 
-                # 6. Check for dreaming transition
+                # 5. Check for dreaming transition
                 if self._goal_engine.is_complete():
                     await self._enter_dreaming_mode()
 
-                # 7. Sleep for next tick
+                # 6. Sleep for next tick
                 await asyncio.sleep(
                     self._config.dreaming_poll_interval if self._dreaming else poll_interval
                 )
@@ -549,112 +544,6 @@ class AutopilotService:
             except Exception:
                 logger.exception("Scheduling loop error")
                 await asyncio.sleep(poll_interval)
-
-    async def _process_inbox(self) -> None:
-        """Drain channel inbox files into goals (RFC-222 Phase C).
-
-        Each ``task_submit`` message becomes a new goal via ``submit_task``.
-        ``signal_resume`` / ``signal_interrupt`` messages are deferred to a
-        future enhancement (currently logged and skipped). Failures on a
-        single file are isolated — never break the scheduling loop.
-        """
-        try:
-            inbox = self._get_or_init_inbox()
-        except Exception:
-            logger.debug("Inbox initialization failed", exc_info=True)
-            return
-        if inbox is None:
-            return
-
-        try:
-            messages = inbox.read_pending()
-        except Exception:
-            logger.warning("Failed to read pending inbox messages", exc_info=True)
-            return
-
-        for msg in messages:
-            try:
-                if msg.type == "signal_resume":
-                    await self.wake_from_dreaming(trigger="wake_signal")
-                    continue
-                if msg.type == "signal_interrupt":
-                    await self.force_dream()
-                    continue
-                if msg.type != "task_submit":
-                    logger.debug(
-                        "Inbox: skipping unsupported message type=%s",
-                        msg.type,
-                    )
-                    continue
-                payload = msg.payload or {}
-                description = str(payload.get("description") or "").strip()
-                if not description:
-                    logger.warning("Inbox: skipping message with empty description")
-                    continue
-                priority_raw = payload.get("priority", 50)
-                try:
-                    priority = int(priority_raw)
-                except (TypeError, ValueError):
-                    priority = 50
-                workspace_raw = payload.get("workspace")
-                workspace = (
-                    str(workspace_raw).strip()
-                    if isinstance(workspace_raw, str) and workspace_raw.strip()
-                    else None
-                )
-                goal = await self.submit_task(
-                    description,
-                    priority=priority,
-                    workspace=workspace,
-                )
-                logger.info(
-                    "[Autopilot] inbox → goal %s (priority=%d): %s",
-                    goal.id,
-                    priority,
-                    description[:80],
-                )
-            except Exception:
-                logger.warning("Inbox: failed to process message", exc_info=True)
-
-        try:
-            archived = inbox.archive_processed()
-            if archived:
-                logger.debug("Inbox: archived %d processed files", archived)
-        except Exception:
-            logger.debug("Inbox: archive_processed raised", exc_info=True)
-
-    def _get_or_init_inbox(self) -> Any:
-        """Lazily construct the ChannelInbox bound to ``config.inbox_dir``.
-
-        Returns the inbox instance, or ``None`` when the configured path is
-        empty / cannot be created.
-        """
-        existing = getattr(self, "_channel_inbox", None)
-        if existing is not None:
-            return existing
-
-        inbox_dir_raw = getattr(self._config, "inbox_dir", "") or ""
-        if not inbox_dir_raw:
-            self._channel_inbox = None
-            return None
-
-        import os
-        from pathlib import Path
-
-        from soothe.core.channel.inbox import ChannelInbox
-
-        expanded = os.path.expandvars(inbox_dir_raw)
-        path = Path(expanded).expanduser()
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            logger.warning("Inbox: unable to create %s", path, exc_info=True)
-            self._channel_inbox = None
-            return None
-        inbox = ChannelInbox(path)
-        self._channel_inbox = inbox
-        logger.info("[Autopilot] channel inbox bound to %s", path)
-        return inbox
 
     async def _check_scheduled_tasks(self) -> None:
         """Check scheduled tasks and create goals for due tasks."""
@@ -1318,18 +1207,10 @@ class AutopilotService:
         if not self._config.scheduler_enabled:
             return None
 
-        import os
-        from pathlib import Path
-
+        from soothe.config import SOOTHE_HOME
         from soothe.core.goal_engine.scheduled_tasks import SchedulerService
 
-        inbox_dir_raw = getattr(self._config, "inbox_dir", "") or ""
-        base = Path(os.path.expandvars(inbox_dir_raw)).expanduser().parent
-        if not str(base) or str(base) == ".":
-            from soothe.config import SOOTHE_HOME
-
-            base = SOOTHE_HOME / "autopilot"
-        persist_path = base / "scheduled_tasks.json"
+        persist_path = SOOTHE_HOME / "autopilot" / "scheduled_tasks.json"
         self._scheduler = SchedulerService(persist_path=persist_path)
         return self._scheduler
 

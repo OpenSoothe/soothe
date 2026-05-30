@@ -634,15 +634,6 @@ class AutonomousConfig(BaseModel):
             "None disables deadline enforcement."
         ),
     )
-    inbox_dir: str = Field(
-        default="$SOOTHE_HOME/autopilot/inbox",
-        description="Path to autopilot channel inbox (RFC-222)",
-    )
-    outbox_dir: str = Field(
-        default="$SOOTHE_HOME/autopilot/outbox",
-        description="Path to autopilot channel outbox (RFC-222)",
-    )
-
     # === Context projection (RFC-222 revised) ===
     # Bounds the GoalDispatchContextBundle that the daemon's ContextProjector
     # builds for each dispatched goal. Keeps cross-process IPC bounded and

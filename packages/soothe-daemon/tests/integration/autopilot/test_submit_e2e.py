@@ -102,7 +102,7 @@ async def test_autopilot_http_submit_to_completion(isolated_daemon_with_fake_run
         )
         assert submit_resp.status == 200
         submit_data = await submit_resp.json()
-        assert submit_data["transport"] == "live"
+        assert submit_data["status"] == "submitted"
         goal_id = submit_data["goal_id"]
 
         # Nudge scheduling once (loop also ticks on poll_interval).

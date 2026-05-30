@@ -36,7 +36,6 @@ This benchmark evaluates daemon endpoint behavior for:
 | `/api/v1/autopilot/goals/{goal_id}/reject` | POST | Reject goal |
 | `/api/v1/autopilot/wake` | POST | Wake autopilot |
 | `/api/v1/autopilot/dream` | POST | Dream autopilot |
-| `/api/v1/autopilot/inbox` | GET | Get inbox items |
 
 ---
 

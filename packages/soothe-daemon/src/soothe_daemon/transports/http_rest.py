@@ -14,7 +14,6 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from soothe.utils.text_preview import preview_first
 
 from soothe_daemon import __version__
 from soothe_daemon.config.models import HttpRestConfig
@@ -68,10 +67,8 @@ class HttpRestTransport(TransportServer):
             unified_app: When set, routes and middleware attach to this shared ASGI app
                 and this transport does not start its own uvicorn process.
             autopilot_service: Optional daemon-owned AutopilotService. When
-                provided (RFC-222 revised, Phase C), the ``/api/v1/autopilot/*``
-                endpoints route through it instead of the legacy file-based
-                inbox. When ``None``, endpoints fall back to writing files
-                under ``$SOOTHE_HOME/autopilot/inbox/`` for backward compat.
+                provided, the ``/api/v1/autopilot/*`` endpoints route through
+                it. When ``None``, autopilot endpoints return 503.
         """
         self._config = config
         self._runner = runner
@@ -92,6 +89,15 @@ class HttpRestTransport(TransportServer):
 
         self._setup_middleware()
         self._setup_routes()
+
+    def _require_autopilot_service(self) -> Any:
+        """Return the daemon-owned AutopilotService or raise HTTP 503."""
+        if self._autopilot_service is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Autopilot service unavailable; ensure autopilot is enabled and the daemon started cleanly",
+            )
+        return self._autopilot_service
 
     def _setup_middleware(self) -> None:
         """Setup CORS middleware."""
@@ -203,95 +209,38 @@ class HttpRestTransport(TransportServer):
             return {"status": "shutting_down"}
 
         # ----------------------------------------------------------------
-        # Autopilot endpoints (RFC-204)
+        # Autopilot endpoints (RFC-204 / RFC-222)
         # ----------------------------------------------------------------
 
         @self._app.get("/api/v1/autopilot/status")
         async def autopilot_status() -> dict[str, Any]:
-            """Get overall autopilot state.
-
-            Returns:
-                JSON with state, goals count, inbox count, scheduler tasks.
-            """
-            from soothe.config import SOOTHE_HOME
-
-            autopilot_dir = SOOTHE_HOME / "autopilot"
-            result: dict[str, Any] = {"state": "idle"}
-
-            if not autopilot_dir.exists():
-                return result
-
-            # Check status.json
-            state_file = autopilot_dir / "status.json"
-            if state_file.exists():
-                try:
-                    import json
-
-                    result.update(json.loads(state_file.read_text()))
-                except (json.JSONDecodeError, OSError):
-                    pass
-
-            # Count inbox files
-            inbox_dir = autopilot_dir / "inbox"
-            if inbox_dir.exists():
-                result["pending_tasks"] = len(list(inbox_dir.glob("*.md")))
-
-            return result
+            """Get overall autopilot state."""
+            service = self._require_autopilot_service()
+            status = service.status()
+            return {
+                "state": "dreaming" if status.get("dreaming") else "active",
+                "running": status.get("running", False),
+                "dreaming": status.get("dreaming", False),
+                "loop_pool": status.get("loop_pool", {}),
+            }
 
         @self._app.get("/api/v1/autopilot/goals")
         async def autopilot_list_goals() -> dict[str, Any]:
-            """List all goals.
-
-            Returns:
-                JSON with list of goals and their statuses.
-            """
-            # RFC-222 revised (Phase C): prefer the daemon-owned AutopilotService.
-            if self._autopilot_service is not None:
-                goals = await self._autopilot_service.list_goals()
-                return {
-                    "goals": [g.model_dump(mode="json") for g in goals],
-                    "source": "autopilot_service",
-                }
-
-            # Legacy: per-runner GoalEngine (autonomous-mode DAG).
-            engine = getattr(self._runner, "_goal_engine", None)
-            if engine:
-                goals = await engine.list_goals()
-                return {
-                    "goals": [g.model_dump(mode="json") for g in goals],
-                    "source": "runner_engine",
-                }
-
-            # Fallback: parse goal files directly
-            from soothe.config import SOOTHE_HOME
-            from soothe.utils.goal_parsing import parse_autopilot_goals
-
-            autopilot_dir = SOOTHE_HOME / "autopilot"
-            goals = parse_autopilot_goals(autopilot_dir)
-            return {"goals": goals, "source": "files"}
+            """List all goals."""
+            service = self._require_autopilot_service()
+            goals = await service.list_goals()
+            return {
+                "goals": [g.model_dump(mode="json") for g in goals],
+                "source": "autopilot_service",
+            }
 
         @self._app.get("/api/v1/autopilot/goals/{goal_id}")
         async def autopilot_get_goal(goal_id: str) -> dict[str, Any]:
-            """Get details for a specific goal.
-
-            Args:
-                goal_id: Goal identifier.
-
-            Returns:
-                JSON with goal details.
-            """
-            # RFC-222 revised (Phase C): prefer the daemon-owned AutopilotService.
-            if self._autopilot_service is not None:
-                goal = await self._autopilot_service.get_goal(goal_id)
-                if goal:
-                    return {"goal": goal.model_dump(mode="json"), "source": "autopilot_service"}
-
-            engine = getattr(self._runner, "_goal_engine", None)
-            if engine:
-                goal = await engine.get_goal(goal_id)
-                if goal:
-                    return {"goal": goal.model_dump(mode="json"), "source": "runner_engine"}
-
+            """Get details for a specific goal."""
+            service = self._require_autopilot_service()
+            goal = await service.get_goal(goal_id)
+            if goal:
+                return {"goal": goal.model_dump(mode="json"), "source": "autopilot_service"}
             raise HTTPException(status_code=404, detail="Goal not found")
 
         @self._app.post("/api/v1/autopilot/submit")
@@ -300,11 +249,6 @@ class HttpRestTransport(TransportServer):
 
             Request body:
                 {"description": "task text", "priority": 50, "workspace": "/path/to/project"}
-
-            Phase C: when the daemon-owned AutopilotService is available,
-            calls ``submit_task`` directly so the goal lands in the live DAG
-            and gets dispatched on the next scheduling tick. Falls back to
-            the legacy file-based inbox if the service is unavailable.
             """
             body = await request.json()
             description = body.get("description", "")
@@ -322,170 +266,61 @@ class HttpRestTransport(TransportServer):
             if not description:
                 raise HTTPException(status_code=400, detail="description is required")
 
-            # RFC-222 revised (Phase C): live submit via AutopilotService.
-            if self._autopilot_service is not None:
-                goal = await self._autopilot_service.submit_task(
-                    description,
-                    priority=priority,
-                    workspace=workspace,
-                )
-                return {
-                    "status": "submitted",
-                    "goal_id": goal.id,
-                    "transport": "live",
-                }
-
-            # Fallback: legacy file-based inbox (backward compat).
-            from datetime import UTC, datetime
-
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            inbox_dir.mkdir(parents=True, exist_ok=True)
-
-            timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
-            filename = f"TASK-{timestamp}.md"
-            fpath = inbox_dir / filename
-            fpath.write_text(
-                f"---\ntype: task_submit\npriority: {priority}\n---\n\n{description}\n"
+            service = self._require_autopilot_service()
+            goal = await service.submit_task(
+                description,
+                priority=priority,
+                workspace=workspace,
             )
-            return {"status": "submitted", "file": filename, "transport": "file"}
+            return {
+                "status": "submitted",
+                "goal_id": goal.id,
+            }
 
         @self._app.delete("/api/v1/autopilot/goals/{goal_id}")
         async def autopilot_cancel_goal(goal_id: str) -> dict[str, Any]:
-            """Cancel a goal.
-
-            Phase C: when the daemon-owned AutopilotService is available,
-            calls ``cancel_goal`` which transitions the goal to ``failed``
-            and releases its workspace reservation. Falls back to inbox
-            file deletion otherwise.
-            """
-            if self._autopilot_service is not None:
-                cancelled = await self._autopilot_service.cancel_goal(goal_id, reason="http_delete")
-                if cancelled is None:
-                    return {"status": "not_found", "transport": "live"}
-                return {
-                    "status": "cancelled",
-                    "goal_id": cancelled.id,
-                    "new_status": cancelled.status,
-                    "transport": "live",
-                }
-
-            # Fallback: legacy file-based behavior.
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            if not inbox_dir.exists():
-                return {"status": "not_found", "transport": "file"}
-
-            removed = 0
-            for f in inbox_dir.glob("*.md"):
-                if goal_id in f.stem:
-                    f.unlink()
-                    removed += 1
+            """Cancel a goal."""
+            service = self._require_autopilot_service()
+            cancelled = await service.cancel_goal(goal_id, reason="http_delete")
+            if cancelled is None:
+                raise HTTPException(status_code=404, detail="Goal not found")
             return {
-                "status": "cancelled" if removed else "not_found",
-                "removed": removed,
-                "transport": "file",
+                "status": "cancelled",
+                "goal_id": cancelled.id,
+                "new_status": cancelled.status,
             }
 
         @self._app.post("/api/v1/autopilot/goals/{goal_id}/approve")
         async def autopilot_approve_goal(goal_id: str) -> dict[str, Any]:
-            """Approve a MUST-confirmation goal.
-
-            Args:
-                goal_id: Goal identifier.
-            """
-            if self._autopilot_service is not None:
-                approved = await self._autopilot_service.approve_confirmation(goal_id)
-                if approved:
-                    return {"status": "approved", "goal_id": goal_id, "transport": "live"}
-                raise HTTPException(status_code=404, detail="Confirmation not found")
-
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            inbox_dir.mkdir(parents=True, exist_ok=True)
-            approval = inbox_dir / f"APPROVE-{goal_id}.md"
-            approval.write_text(f"---\ntype: approve\ngoal_id: {goal_id}\n---\n\nApproved.\n")
-            return {"status": "approved", "goal_id": goal_id, "transport": "file"}
+            """Approve a MUST-confirmation goal."""
+            service = self._require_autopilot_service()
+            approved = await service.approve_confirmation(goal_id)
+            if approved:
+                return {"status": "approved", "goal_id": goal_id}
+            raise HTTPException(status_code=404, detail="Confirmation not found")
 
         @self._app.post("/api/v1/autopilot/goals/{goal_id}/reject")
         async def autopilot_reject_goal(goal_id: str) -> dict[str, Any]:
-            """Reject a proposed goal.
-
-            Args:
-                goal_id: Goal identifier.
-            """
-            if self._autopilot_service is not None:
-                rejected = await self._autopilot_service.reject_confirmation(goal_id)
-                if rejected:
-                    return {"status": "rejected", "goal_id": goal_id, "transport": "live"}
-                raise HTTPException(status_code=404, detail="Confirmation not found")
-
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            inbox_dir.mkdir(parents=True, exist_ok=True)
-            rejection = inbox_dir / f"REJECT-{goal_id}.md"
-            rejection.write_text(f"---\ntype: reject\ngoal_id: {goal_id}\n---\n\nRejected.\n")
-            return {"status": "rejected", "goal_id": goal_id, "transport": "file"}
+            """Reject a proposed goal."""
+            service = self._require_autopilot_service()
+            rejected = await service.reject_confirmation(goal_id)
+            if rejected:
+                return {"status": "rejected", "goal_id": goal_id}
+            raise HTTPException(status_code=404, detail="Confirmation not found")
 
         @self._app.post("/api/v1/autopilot/wake")
         async def autopilot_wake() -> dict[str, Any]:
             """Exit dreaming mode — resume active execution."""
-            if self._autopilot_service is not None:
-                await self._autopilot_service.wake_from_dreaming(trigger="wake_signal")
-                return {"status": "wake_sent", "transport": "live"}
-
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            inbox_dir.mkdir(parents=True, exist_ok=True)
-            signal = inbox_dir / "WAKE.md"
-            signal.write_text("---\ntype: signal_resume\n---\n\nWake signal.\n")
-            return {"status": "wake_sent", "transport": "file"}
+            service = self._require_autopilot_service()
+            await service.wake_from_dreaming(trigger="wake_signal")
+            return {"status": "wake_sent"}
 
         @self._app.post("/api/v1/autopilot/dream")
         async def autopilot_dream() -> dict[str, Any]:
             """Force enter dreaming mode."""
-            if self._autopilot_service is not None:
-                await self._autopilot_service.force_dream()
-                return {"status": "dream_sent", "transport": "live"}
-
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            inbox_dir.mkdir(parents=True, exist_ok=True)
-            signal = inbox_dir / "DREAM.md"
-            signal.write_text("---\ntype: signal_interrupt\n---\n\nDream signal.\n")
-            return {"status": "dream_sent", "transport": "file"}
-
-        @self._app.get("/api/v1/autopilot/inbox")
-        async def autopilot_inbox(
-            limit: int = 10,
-        ) -> dict[str, Any]:
-            """View pending inbox tasks.
-
-            Args:
-                limit: Maximum tasks to return.
-
-            Returns:
-                JSON with list of pending inbox tasks.
-            """
-            from soothe.config import SOOTHE_HOME
-
-            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-            if not inbox_dir.exists():
-                return {"tasks": []}
-
-            tasks = []
-            for f in sorted(inbox_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[
-                :limit
-            ]:
-                content = f.read_text()
-                tasks.append({"file": f.name, "content_preview": preview_first(content, 200)})
-            return {"tasks": tasks}
+            service = self._require_autopilot_service()
+            await service.force_dream()
+            return {"status": "dream_sent"}
 
     async def start(
         self,
