@@ -61,8 +61,8 @@ async def test_websocket_cors_validation(
     daemon, ws_port, ws_port = websocket_daemon_fixture
     _ = ws_port  # Would be used for WebSocket client testing
 
-    assert daemon._transport_manager is not None
-    assert daemon._transport_manager.client_count == 0
+    assert daemon._channel_manager is not None
+    assert daemon._channel_manager.client_count == 0
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()

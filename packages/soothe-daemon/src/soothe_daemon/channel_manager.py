@@ -1,10 +1,7 @@
 """Channel manager for coordinating all communication channels (RFC-620).
 
-Evolved from TransportManager, with added responsibilities:
-- Inbound routing: Channel calls handle_inbound() → publish to EventBus
-- Outbound routing: Subscribe to loop topics → translate → dispatch to channel
-- Streaming: Coalesce deltas, buffer for non-streaming channels
-- Retry policy: Exponential backoff on send failures
+Coordinates inbound routing, outbound dispatch, streaming, and retry policy
+for WebSocket, HTTP REST, and plugin channels.
 """
 
 from __future__ import annotations
@@ -85,7 +82,9 @@ class ChannelManager:
         self._channel_to_loop: dict[tuple[str, str], str] = {}  # (channel, chat_id) → loop_id
 
         # Streaming state
-        self._stream_buffers: dict[tuple[str, str], list[Any]] = {}  # (channel, chat_id) → delta list
+        self._stream_buffers: dict[
+            tuple[str, str], list[Any]
+        ] = {}  # (channel, chat_id) → delta list
         self._stream_coalesce_lock = asyncio.Lock()
 
         # Outbound dispatch
@@ -97,7 +96,7 @@ class ChannelManager:
         self._unified_server: uvicorn.Server | None = None
         self._unified_serve_task: asyncio.Task[None] | None = None
 
-        # Message handler for compatibility with TransportServer interface
+        # Message handler wired before start_all(); channels read it from manager state.
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
 
@@ -311,14 +310,11 @@ class ChannelManager:
 
         self._build_channels()
 
-        # Start each channel with message handler
+        # Start each channel (handlers are read from manager by built-in channels)
         start_tasks = []
         for name, channel in self._channels.items():
-            # Channels need message_handler for compatibility
             if hasattr(channel, "start"):
-                start_tasks.append(
-                    channel.start(self._message_handler, self._handshake_callback)
-                )
+                start_tasks.append(channel.start())
 
         try:
             await asyncio.gather(*start_tasks)
@@ -377,7 +373,8 @@ class ChannelManager:
         logger.debug("Broadcasting to %d channels", len(self._channels))
 
         broadcast_tasks = [
-            channel.broadcast(message) for channel in self._channels.values()
+            channel.broadcast(message)
+            for channel in self._channels.values()
             if hasattr(channel, "broadcast")
         ]
 
@@ -413,7 +410,9 @@ class ChannelManager:
             logger.warning("Unknown channel: %s", channel_name)
             return
 
-        if not hasattr(channel, "supports_outbound") or not getattr(channel, "supports_outbound", True):
+        if not hasattr(channel, "supports_outbound") or not getattr(
+            channel, "supports_outbound", True
+        ):
             logger.debug("Channel %s doesn't support outbound", channel_name)
             return
 
@@ -511,9 +510,7 @@ class ChannelManager:
     @property
     def client_count(self) -> int:
         """Return total connected clients across all channels."""
-        return sum(
-            getattr(ch, "client_count", 0) for ch in self._channels.values()
-        )
+        return sum(getattr(ch, "client_count", 0) for ch in self._channels.values())
 
     @property
     def channel_count(self) -> int:
@@ -528,21 +525,11 @@ class ChannelManager:
         """
         return [
             {
-                "type": getattr(ch, "transport_type", getattr(ch, "name", "unknown")),
+                "type": getattr(ch, "name", "unknown"),
                 "client_count": getattr(ch, "client_count", 0),
             }
             for ch in self._channels.values()
         ]
-
-    # Compatibility aliases (for gradual migration)
-    @property
-    def transport_count(self) -> int:
-        """Alias for channel_count (compatibility with TransportManager)."""
-        return self.channel_count
-
-    def get_transport_info(self) -> list[dict[str, Any]]:
-        """Alias for get_channel_info (compatibility with TransportManager)."""
-        return self.get_channel_info()
 
     @property
     def channels(self) -> dict[str, Any]:

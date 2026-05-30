@@ -13,9 +13,11 @@ from collections.abc import Callable
 from typing import Any
 
 import uvicorn
+import websockets.exceptions
 from fastapi import FastAPI, WebSocket
 from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
-from starlette.websockets import WebSocketDisconnect
+from starlette.websockets import WebSocketDisconnect, WebSocketState
+from websockets.frames import Close
 
 from soothe_daemon.channels.base import Channel
 from soothe_daemon.channels.message import ChannelMessage
@@ -86,7 +88,7 @@ class WebSocketChannel(Channel):
             logger.info("[WS] Channel disabled")
             return
 
-        # Get handlers from manager (set via compatibility methods)
+        # Get handlers from manager (set before start_all)
         self._message_handler = getattr(self._manager, "_message_handler", None)
         self._handshake_callback = getattr(self._manager, "_handshake_callback", None)
 
@@ -168,35 +170,57 @@ class WebSocketChannel(Channel):
         self._running = False
         logger.info("[WS] Channel stopped")
 
-    async def send(self, chat_id: str, message: ChannelMessage) -> None:
-        """Send message to specific WebSocket client (chat_id = loop_id).
+    async def send(self, chat_id_or_client: Any, message: ChannelMessage | dict[str, Any]) -> None:
+        """Send to a WebSocket client (wire dict) or deliver a ChannelMessage by loop id.
 
-        Args:
-            chat_id: Loop ID identifying the client session.
-            message: ChannelMessage to deliver.
-
-        Raises:
-            ConnectionError: If send fails.
+        SessionManager uses ``send(websocket, wire_dict)``. ChannelManager uses
+        ``send(chat_id, ChannelMessage)``.
         """
-        # Find WebSocket client by chat_id (loop_id)
-        # In WebSocket, chat_id maps to client_id which maps to session
+        if isinstance(message, dict):
+            await self._send_wire(chat_id_or_client, message)
+            return
+
+        chat_id = str(chat_id_or_client)
         if self._session_manager:
             session = await self._session_manager.get_session(chat_id)
             if session:
-                # Send via session manager (handles the WebSocket connection)
                 await self._session_manager.send_to_client(
                     session,
                     self._channel_message_to_wire(message),
                 )
                 return
 
-        # Fallback: direct WebSocket send (for clients not in session manager)
         for ws, info in self._clients.items():
             if info.get("client_id") == chat_id:
                 await ws.send_text(encode_websocket_text(self._channel_message_to_wire(message)))
                 return
 
         logger.warning("[WS] No client found for chat_id %s", chat_id)
+
+    async def _send_wire(self, client: Any, message: dict[str, Any]) -> None:
+        """Send a wire-format dict to one WebSocket connection."""
+        websocket = client
+        try:
+            await websocket.send_text(encode_websocket_text(message))
+        except WebSocketDisconnect as e:
+            close = Close(e.code, e.reason or "")
+            if e.code == 1000:
+                logger.debug("WebSocket client disconnected normally: %s", e)
+                raise websockets.exceptions.ConnectionClosedOK(rcvd=close, sent=None) from e
+            logger.warning("WebSocket client disconnected unexpectedly: %s", e)
+            raise websockets.exceptions.ConnectionClosedError(rcvd=close, sent=None) from e
+        except (
+            websockets.exceptions.ConnectionClosedOK,
+            websockets.exceptions.ConnectionClosed,
+            websockets.exceptions.ConnectionClosedError,
+        ):
+            raise
+        except (RuntimeError, OSError, ConnectionError) as e:
+            logger.warning("WebSocket client disconnected unexpectedly: %s", e)
+            raise ConnectionError(f"Failed to send: {e}") from e
+        except Exception as e:
+            logger.exception("Failed to send to WebSocket client")
+            raise ConnectionError(f"Failed to send: {e}") from e
 
     async def send_delta(
         self,
@@ -377,8 +401,17 @@ class WebSocketChannel(Channel):
                             await self._session_manager.send_to_client(session, msg)
                         else:
                             await websocket.send_text(encode_websocket_text(msg))
+                except (
+                    WebSocketDisconnect,
+                    websockets.exceptions.ConnectionClosedOK,
+                    websockets.exceptions.ConnectionClosed,
+                    websockets.exceptions.ConnectionClosedError,
+                ):
+                    return
                 except Exception:
                     logger.exception("Failed to send initial handshake to WebSocket client")
+                    if websocket.client_state != WebSocketState.CONNECTED:
+                        return
 
             while self._running:
                 try:
@@ -432,11 +465,6 @@ class WebSocketChannel(Channel):
                 remote,
                 len(self._clients),
             )
-
-    @property
-    def transport_type(self) -> str:
-        """Return transport type (compatibility alias)."""
-        return self.name
 
     @property
     def client_count(self) -> int:

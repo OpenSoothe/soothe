@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from soothe_daemon.channels.message import (
     META_PROGRESS,
     META_REASONING,

@@ -36,7 +36,7 @@ class Channel(ABC):
     display_name: str = "Base"
 
     # Capability flags
-    supports_inbound: bool = True   # Can receive messages from platform
+    supports_inbound: bool = True  # Can receive messages from platform
     supports_outbound: bool = True  # Can send messages to platform
     supports_streaming: bool = False  # Can handle incremental text deltas
 
@@ -261,11 +261,6 @@ class Channel(ABC):
 
     @property
     def client_count(self) -> int:
-        """Return number of connected clients (for compatibility with TransportServer)."""
+        """Return number of connected clients."""
         # Default implementation; override in subclasses
         return 0
-
-    @property
-    def transport_type(self) -> str:
-        """Return transport type (for compatibility with TransportServer)."""
-        return self.name

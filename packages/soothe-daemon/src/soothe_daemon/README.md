@@ -17,7 +17,8 @@ not re-implement orchestration logic.
 │  soothe.daemon                           │
 │                                          │
 │  SootheDaemon          process lifecycle │
-│  TransportManager      multi-transport   │
+│  ChannelManager        multi-channel     │
+│  channels/             WebSocket, HTTP, …│
 │  MessageRouter         JSON → runner API │
 │  QueryEngine           streaming + cancel│
 │  ThreadStateRegistry   per-thread state  │
@@ -41,8 +42,9 @@ daemon **never** duplicates protocol, memory, or planning logic.
 |----------------|----------------|
 | `server.py` | `SootheDaemon` — process lifecycle, WebSocket server |
 | `entrypoint.py` | `run_daemon()` — CLI entry point, signal handling |
-| `transport_manager.py` | Manages multiple transport servers (WebSocket, HTTP REST) |
-| `transports/` | `WebSocketTransport`, `HttpRestTransport`, `TransportServer` base |
+| `channel_manager.py` | Manages all channels (WebSocket, HTTP REST, plugins) |
+| `channels/` | RFC-620 channel implementations (`WebSocketChannel`, `HttpRestChannel`, …) |
+| `transports/` | Low-level transport helpers still used for HTTP autopilot route setup |
 | `message_router.py` | Routes incoming JSON messages to runner public APIs |
 | `query_engine.py` | `QueryEngine` — streams a single query, owns cancel / ownership |
 | `thread_state.py` | `ThreadStateRegistry` — per-thread draft, history, logger |
@@ -132,7 +134,7 @@ from soothe_daemon.health import HealthChecker
 
 ```
 Client connects (WebSocket / HTTP)
-  → TransportManager routes connection to handler
+  → ChannelManager routes connection to handler
   → MessageRouter.handle(msg) dispatches by msg["type"]
   → QueryEngine.stream(runner, query, thread_id, ...)
     → runner.astream(...)  yields (namespace, mode, data)

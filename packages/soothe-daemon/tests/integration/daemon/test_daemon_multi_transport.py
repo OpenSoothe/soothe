@@ -82,8 +82,8 @@ async def test_all_transports_simultaneous_lifecycle(
     multi_transport_daemon["http_port"]
 
     # Verify transports are running
-    assert daemon._transport_manager is not None
-    assert daemon._transport_manager.client_count == 0
+    assert daemon._channel_manager is not None
+    assert daemon._channel_manager.client_count == 0
 
     # Connect via WebSocket
     ws_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
@@ -91,7 +91,7 @@ async def test_all_transports_simultaneous_lifecycle(
     await asyncio.sleep(0.1)
 
     # Verify client count increases
-    assert daemon._transport_manager.client_count >= 1
+    assert daemon._channel_manager.client_count >= 1
 
     response = await request_loop_list(ws_client)
     assert response["type"] == "loop_list_response"
@@ -100,7 +100,7 @@ async def test_all_transports_simultaneous_lifecycle(
 
     # Verify client count decreases
     await asyncio.sleep(0.1)
-    assert daemon._transport_manager.client_count == 0
+    assert daemon._channel_manager.client_count == 0
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
         assert isinstance(loop_id, str)
 
         # Verify daemon reports correct client count
-        assert daemon._transport_manager.client_count >= 1
+        assert daemon._channel_manager.client_count >= 1
 
         archive_response = await request_loop_delete(unix_client, loop_id)
         assert archive_response.get("success") is True
@@ -226,29 +226,29 @@ async def test_multi_transport_client_count(multi_transport_daemon: dict) -> Non
 
     # Initial state: no clients
     await asyncio.sleep(0.2)
-    assert daemon._transport_manager.client_count == 0
+    assert daemon._channel_manager.client_count == 0
 
     # Connect first Unix client
     client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client1.connect()
     await asyncio.sleep(0.1)
-    assert daemon._transport_manager.client_count >= 1
+    assert daemon._channel_manager.client_count >= 1
 
     # Connect second Unix client
     client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client2.connect()
     await asyncio.sleep(0.1)
-    assert daemon._transport_manager.client_count >= 2
+    assert daemon._channel_manager.client_count >= 2
 
     # Disconnect first client
     await client1.close()
     await asyncio.sleep(0.1)
-    assert daemon._transport_manager.client_count >= 1
+    assert daemon._channel_manager.client_count >= 1
 
     # Disconnect second client
     await client2.close()
     await asyncio.sleep(0.1)
-    assert daemon._transport_manager.client_count == 0
+    assert daemon._channel_manager.client_count == 0
 
 
 @pytest.mark.asyncio
@@ -265,7 +265,7 @@ async def test_multi_transport_shutdown_order(multi_transport_daemon: dict) -> N
 
     try:
         # Verify connection
-        assert daemon._transport_manager.client_count >= 1
+        assert daemon._channel_manager.client_count >= 1
 
         response = await request_loop_list(client)
         assert response["type"] == "loop_list_response"

@@ -213,7 +213,11 @@ class HttpRestChannel(Channel):
 
         ssl_keyfile = None
         ssl_certfile = None
-        if self._http_config.tls_enabled and self._http_config.tls_cert and self._http_config.tls_key:
+        if (
+            self._http_config.tls_enabled
+            and self._http_config.tls_cert
+            and self._http_config.tls_key
+        ):
             ssl_certfile = self._http_config.tls_cert
             ssl_keyfile = self._http_config.tls_key
 
@@ -269,11 +273,6 @@ class HttpRestChannel(Channel):
         """
         # HTTP REST doesn't maintain persistent connections for broadcasting
         pass
-
-    @property
-    def transport_type(self) -> str:
-        """Return transport type (compatibility alias)."""
-        return self.name
 
     @property
     def client_count(self) -> int:

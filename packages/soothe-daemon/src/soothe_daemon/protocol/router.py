@@ -509,10 +509,11 @@ class MessageRouter:
         # Check daemon running state
         running = d._running
         port_live = False
-        if d._transport_manager is not None:
-            for transport in d._transport_manager.get_transport_info():
-                if transport.get("type") == "websocket":
-                    # Transports report client_count only; port is live when daemon is up.
+        channel_manager = d._channel_manager
+        if channel_manager is not None:
+            for channel in channel_manager.get_channel_info():
+                if channel.get("type") == "websocket":
+                    # Channels report client_count only; port is live when daemon is up.
                     port_live = bool(running)
                     break
 
