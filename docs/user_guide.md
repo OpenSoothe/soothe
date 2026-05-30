@@ -164,7 +164,7 @@ Technical documentation for developers and system architects.
 | [IG-409](impl/IG-409-loop-new-client-workspace.md) | Loop New Client Workspace |
 | [IG-410](impl/IG-410-loop-runner-protocol-and-subprocess-isolation.md) | Loop Runner Protocol and Subprocess Isolation |
 | [IG-411](impl/IG-411-worker-pool-robustness.md) | Worker Pool Robustness |
-| [IG-412](impl/IG-412-tui-coreagent-hitl.md) | TUI CoreAgent HITL |
+| [IG-412](impl/IG-412-tui-coreagent-hitl.md) | CoreAgent interrupt auto-resume (legacy HITL removed) |
 | [IG-413](impl/IG-413-plan-subagent-rfc-618.md) | Plan Subagent RFC-618 |
 | [IG-414](impl/IG-414-soothe-daemon-package-split.md) | Soothe Daemon Package Split |
 | [IG-415](impl/IG-415-optional-community-subagents.md) | Optional Community Subagents |

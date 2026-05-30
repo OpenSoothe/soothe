@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
     from soothe_cli.tui.skills.load import ExtendedSkillMetadata
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
-    from soothe_cli.tui.widgets.ask_user import AskUserMenu
 
 from textual.app import App
 from textual.binding import Binding, BindingType
@@ -96,7 +95,7 @@ class SootheApp(
         Binding(
             "shift+tab",
             "shift_tab",
-            "Previous filter / question",
+            "Previous filter",
             show=False,
             priority=True,
         ),
@@ -216,9 +215,7 @@ class SootheApp(
 
         self._ui_adapter: TextualUIAdapter | None = None
 
-        self._pending_ask_user_widget: AskUserMenu | None = None
         # Agent task tracking for interruption
-
         self._agent_worker: Worker[None] | None = None
 
         self._agent_running = False

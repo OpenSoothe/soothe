@@ -107,7 +107,7 @@ Canonical reference: **RFC-503** (Loop-First UX). Typical client flow:
 4. **`loop_input`** `{ loop_id, content, … }` for user turns (SDK `WebSocketClient.send_input` uses this shape).
 5. **`command_request`** may carry **`loop_id`**; if the client has already subscribed, the router can associate the client’s active loop and enqueue the request on that loop’s queue.
 
-**`resume_interrupts`** uses **`loop_id`** + `resume_payload` and checks subscription state before satisfying a pending interrupt future.
+**`resume_interrupts`** (removed): was loop-scoped interactive interrupt resume; AgentLoop now auto-resumes interrupts in-process.
 
 Legacy thread-oriented messages may still exist for admin/tooling paths; new client code should prefer the loop messages above.
 

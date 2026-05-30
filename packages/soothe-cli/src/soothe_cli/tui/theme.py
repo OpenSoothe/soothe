@@ -316,7 +316,7 @@ TOOL_BORDER = "bright_black"
 """Tool call card border."""
 
 TOOL_HEADER = "yellow"
-"""Tool call headers, slash-command tokens, and approval-menu commands."""
+"""Tool call headers and slash-command tokens."""
 
 # File listing colors
 FILE_PYTHON = "blue"
