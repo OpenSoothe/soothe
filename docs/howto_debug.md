@@ -13,7 +13,7 @@ Soothe maintains multiple log files in `~/.soothe/` for different purposes:
 | Log File | Purpose | Configured By |
 |----------|---------|---------------|
 | `~/.soothe/logs/soothed.log` | Daemon backend logs (agent execution, protocols, tools) | `config.yml` → `logging.file.level` |
-| `~/.soothe/logs/soothe-cli.log` | CLI client logs (connection, UI, event handling) | `soothe-cli.yml` → `logging_level` |
+| `~/.soothe/logs/soothe-cli.log` | CLI client logs (connection, UI, event handling) | `--log-level` (or `SOOTHE_LOG_LEVEL` env) |
 
 ### Data Directory Structure
 
@@ -84,29 +84,15 @@ logging:
 
 #### 2. Enable CLI Client Debug Logs
 
-Edit `~/.soothe/config/soothe-cli.yml`:
+Pass `--log-level DEBUG` when invoking the CLI (or set `SOOTHE_LOG_LEVEL=DEBUG`):
 
-```yaml
-# Client verbosity controls what events are DISPLAYED in TUI/CLI
-# This is a CLIENT-side preference, sent to daemon when subscribing to threads
-# Daemon filters events per-client before sending over WebSocket (RFC-401, RFC-501)
-#
-# Options:
-#   - quiet: Only errors and final answers
-#   - normal: Plan updates, tool summaries, subagent start/end (default)
-#   - detailed: Protocol events, tool calls, SUBAGENT INTERNALS/STEP PROGRESS
-#   - debug: Everything including thinking, heartbeats
-verbosity: debug
-
-# Python logging level for ~/.soothe/logs/soothe-cli.log only (does not change TUI
-# progress verbosity above). When omitted, level follows verbosity.
-# SOOTHE_LOG_LEVEL overrides this setting.
-logging_level: DEBUG
+```bash
+soothe --log-level DEBUG
 ```
 
 **Key distinction**:
-- `verbosity` controls **what you SEE in TUI** (event filtering)
-- `logging_level` controls **what gets written to CLI log file** (Python logging)
+- TUI progress verbosity is controlled by the subscription bootstrap level (not a config file).
+- `--log-level` / `SOOTHE_LOG_LEVEL` controls **what gets written to CLI log file** (Python logging).
 
 #### 3. Apply Configuration Changes
 
@@ -117,7 +103,7 @@ soothed stop
 soothed start
 ```
 
-CLI picks up `soothe-cli.yml` on every invocation, no restart needed.
+CLI picks up `--log-level` / `SOOTHE_LOG_LEVEL` on every invocation, no restart needed.
 
 ---
 
@@ -243,10 +229,6 @@ soothed start
 
 2. Run agent with verbose TUI:
 ```bash
-# Edit ~/.soothe/config/soothe-cli.yml
-verbosity: detailed
-
-# Run agent
 soothe "your query"
 ```
 
@@ -320,11 +302,11 @@ tail -f ~/.soothe/logs/soothe-cli.log | grep -i "websocket\|connection\|retry\|t
 
 4. Verify configuration:
 ```bash
-# Check daemon WebSocket config
-cat ~/.soothe/config/config.yml | grep -A 10 "websocket:"
+# Check daemon WebSocket config (daemon_config.yml)
+cat ~/.soothe/config/daemon_config.yml | grep -A 10 "websocket:"
 
-# Check CLI connection config
-cat ~/.soothe/config/soothe-cli.yml | grep -A 10 "websocket:"
+# CLI connection uses --daemon-host / --daemon-port (defaults: 127.0.0.1:8765)
+soothe --help | grep daemon
 ```
 
 ### Workflow 4: Debug Subagent Issues
@@ -333,16 +315,17 @@ cat ~/.soothe/config/soothe-cli.yml | grep -A 10 "websocket:"
 
 **Steps**:
 
-1. Enable debug logging and verbose TUI:
+1. Enable debug logging:
 ```yaml
 # ~/.soothe/config/config.yml
 debug: true
 logging:
   file:
     level: DEBUG
+```
 
-# ~/.soothe/config/soothe-cli.yml
-verbosity: detailed  # See subagent internals
+```bash
+soothe --log-level DEBUG
 ```
 
 2. Restart daemon:
@@ -473,14 +456,11 @@ performance:
   classification_mode: llm
 ```
 
-### In `~/.soothe/config/soothe-cli.yml`:
+### CLI flags (optional):
 
-```yaml
-# Client verbosity (TUI event display)
-verbosity: detailed  # or debug
-
-# Client file logging
-logging_level: DEBUG
+```bash
+soothe --log-level DEBUG          # CLI file logging
+soothe --daemon-host 127.0.0.1 --daemon-port 8765
 ```
 
 ### Environment variables (optional):

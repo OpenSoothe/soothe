@@ -7,9 +7,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from importlib.metadata import version  # noqa: E402
+from pathlib import Path  # noqa: E402
 from typing import Annotated  # noqa: E402
 
 import typer  # noqa: E402
+from soothe_sdk.client.config import SOOTHE_HOME  # noqa: E402
+
+from soothe_cli.config.cli_config import CLIConfig  # noqa: E402
+from soothe_cli.config.loader import set_runtime_config  # noqa: E402
 
 app = typer.Typer(
     name="soothe",
@@ -74,6 +79,32 @@ def main(
             help="With --prompt/-p, open the interactive TUI and auto-submit the prompt.",
         ),
     ] = False,
+    daemon_host: Annotated[
+        str,
+        typer.Option("--daemon-host", help="Daemon WebSocket host."),
+    ] = "127.0.0.1",
+    daemon_port: Annotated[
+        int,
+        typer.Option("--daemon-port", help="Daemon WebSocket port."),
+    ] = 8765,
+    log_level: Annotated[
+        str | None,
+        typer.Option(
+            "--log-level",
+            help="CLI log level (DEBUG, INFO, …). SOOTHE_LOG_LEVEL env overrides.",
+        ),
+    ] = None,
+    render_markdown: Annotated[
+        bool,
+        typer.Option(
+            "--render-markdown/--no-render-markdown",
+            help="Render assistant messages as Markdown in the TUI.",
+        ),
+    ] = True,
+    soothe_home: Annotated[
+        str | None,
+        typer.Option("--soothe-home", help="Soothe home directory (default: ~/.soothe)."),
+    ] = None,
     streaming: Annotated[
         bool | None,
         typer.Option("--streaming/--no-streaming", help="Enable/disable output streaming."),
@@ -109,6 +140,7 @@ def main(
         soothe                           # Interactive TUI mode
         soothe -p "Research AI advances" # One-shot headless (non-TUI) query
         soothe -p "Hello" --tui         # TUI with an auto-submitted prompt
+        soothe --daemon-port 9000 loop list  # Subcommands inherit global flags
         soothe loop list                 # List AgentLoop instances
     """
     # Handle -h/--help flag
@@ -121,6 +153,19 @@ def main(
         typer.echo(f"soothe {version('soothe-cli')}")
         raise typer.Exit
 
+    home_path = Path(soothe_home).expanduser() if soothe_home else Path(SOOTHE_HOME)
+    cli_cfg = CLIConfig(
+        daemon_host=daemon_host,
+        daemon_port=daemon_port,
+        logging_level=log_level,
+        render_markdown=render_markdown,
+        output_streaming_enabled=streaming,
+        output_streaming_mode=streaming_mode,
+        soothe_home=home_path,
+    )
+    set_runtime_config(cli_cfg)
+    ctx.obj = cli_cfg
+
     # Only run default behavior if no subcommand is being invoked
     if ctx.invoked_subcommand is None:
         from soothe_cli.cli.commands.run_cmd import run_impl
@@ -131,8 +176,6 @@ def main(
             no_tui=no_tui,
             autonomous=False,
             max_iterations=None,
-            streaming_enabled=streaming,
-            streaming_mode=streaming_mode,
             tui_with_prompt=tui_with_prompt,
             mcp_config=mcp_config,
         )
