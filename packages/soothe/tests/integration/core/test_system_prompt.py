@@ -5,7 +5,7 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
 from soothe.middleware import build_soothe_middleware_stack
-from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+from soothe.middleware.system_prompt import SystemPromptMiddleware
 
 
 @pytest.mark.integration
@@ -13,7 +13,7 @@ from soothe.middleware.system_prompt_optimization import SystemPromptOptimizatio
 async def test_end_to_end_prompt_optimization_enabled(test_config: SootheConfig):
     """System prompt optimization middleware is always present on the Soothe stack."""
     stack = build_soothe_middleware_stack(test_config, policy=None)
-    assert any(isinstance(m, SystemPromptOptimizationMiddleware) for m in stack)
+    assert any(isinstance(m, SystemPromptMiddleware) for m in stack)
 
     runner = SootheRunner(config=test_config)
 
@@ -29,7 +29,7 @@ async def test_end_to_end_prompt_optimization_enabled(test_config: SootheConfig)
 async def test_end_to_end_prompt_optimization_disabled(test_config: SootheConfig):
     """No config flag disables optimization; stack remains unchanged (regression guard)."""
     stack = build_soothe_middleware_stack(test_config, policy=None)
-    opt = [m for m in stack if isinstance(m, SystemPromptOptimizationMiddleware)]
+    opt = [m for m in stack if isinstance(m, SystemPromptMiddleware)]
     assert len(opt) == 1
 
     runner = SootheRunner(config=test_config)

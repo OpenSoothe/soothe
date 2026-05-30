@@ -5,7 +5,7 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
 from soothe.middleware import build_soothe_middleware_stack
-from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+from soothe.middleware.system_prompt import SystemPromptMiddleware
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
@@ -62,7 +62,7 @@ async def test_conditional_context_projection(test_config: SootheConfig, require
     try:
         assert hasattr(runner._agent, "config")
         stack = build_soothe_middleware_stack(test_config, policy=runner._policy)
-        assert any(isinstance(m, SystemPromptOptimizationMiddleware) for m in stack)
+        assert any(isinstance(m, SystemPromptMiddleware) for m in stack)
 
     finally:
         await runner.cleanup()

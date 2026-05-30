@@ -2,7 +2,7 @@
 
 This package provides middleware implementations that wrap deepagents:
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
-- SystemPromptOptimizationMiddleware: Dynamic prompt adjustment based on classification
+- SystemPromptMiddleware: Dynamic prompt adjustment based on classification
 - LLMRateLimitMiddleware: Rate limiting at LLM level, not thread level
 - ExecutionHintsMiddleware: AgentLoop → CoreAgent execution hints injection
 - WorkspaceContextMiddleware: Thread-aware workspace ContextVar management
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from soothe.middleware.mcp_tool_search import MCPToolSearchMiddleware
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
     from soothe.middleware.policy import SoothePolicyMiddleware
-    from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+    from soothe.middleware.system_prompt import SystemPromptMiddleware
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
@@ -47,7 +47,7 @@ __all__ = [
     "MCPToolSearchMiddleware",
     "SootheFilesystemMiddleware",
     "SoothePolicyMiddleware",
-    "SystemPromptOptimizationMiddleware",
+    "SystemPromptMiddleware",
     "PerTurnModelMiddleware",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
@@ -71,9 +71,9 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MCPToolSearchMiddleware": ("soothe.middleware.mcp_tool_search", "MCPToolSearchMiddleware"),
     "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
     "SoothePolicyMiddleware": ("soothe.middleware.policy", "SoothePolicyMiddleware"),
-    "SystemPromptOptimizationMiddleware": (
-        "soothe.middleware.system_prompt_optimization",
-        "SystemPromptOptimizationMiddleware",
+    "SystemPromptMiddleware": (
+        "soothe.middleware.system_prompt",
+        "SystemPromptMiddleware",
     ),
     "WorkspaceContextMiddleware": (
         "soothe.middleware.workspace_context",
