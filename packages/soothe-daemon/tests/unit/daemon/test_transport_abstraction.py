@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from soothe_daemon.channel_manager import ChannelManager
+from soothe_daemon.channels.websocket import WebSocketChannel
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import HttpRestConfig, TransportConfig, WebSocketConfig
 from soothe_daemon.protocol import (
@@ -14,7 +16,6 @@ from soothe_daemon.protocol import (
     validate_message,
     validate_message_size,
 )
-from soothe_daemon.transport_manager import TransportManager
 from soothe_daemon.transports.base import TransportClient, TransportServer
 from soothe_daemon.transports.websocket import WebSocketTransport
 
@@ -132,8 +133,8 @@ class TestWebSocketTransport:
         assert transport.client_count == 0
 
 
-class TestTransportManager:
-    """Tests for transport manager."""
+class TestChannelManager:
+    """Tests for channel manager."""
 
     @pytest.fixture
     def config(self) -> SootheDaemonConfig:
@@ -145,16 +146,20 @@ class TestTransportManager:
     @pytest.mark.asyncio
     async def test_manager_websocket_required(self, config: SootheDaemonConfig) -> None:
         """Manager fails when WebSocket is disabled."""
-        manager = TransportManager(config)
-        manager.set_message_handler(lambda msg: None)
+        from soothe_daemon.event import EventBus
 
-        with pytest.raises(RuntimeError, match="WebSocket transport is required"):
+        manager = ChannelManager(config, EventBus())
+        manager.set_message_handler(lambda _client_id, _msg: None)
+
+        with pytest.raises(RuntimeError, match="WebSocket channel is required"):
             await manager.start_all()
 
     @pytest.mark.asyncio
     async def test_manager_no_handler(self, config: SootheDaemonConfig) -> None:
         """Manager fails when no handler is set."""
-        manager = TransportManager(config)
+        from soothe_daemon.event import EventBus
+
+        manager = ChannelManager(config, EventBus())
 
         with pytest.raises(RuntimeError, match="Message handler not set"):
             await manager.start_all()
@@ -162,15 +167,16 @@ class TestTransportManager:
     @pytest.mark.asyncio
     async def test_manager_double_start(self) -> None:
         """Manager handles double start gracefully."""
+        from soothe_daemon.event import EventBus
+
         config = SootheDaemonConfig(
             transports=TransportConfig(websocket=WebSocketConfig(enabled=True, port=18766))
         )
 
-        manager = TransportManager(config)
-        manager.set_message_handler(lambda msg: None)
+        manager = ChannelManager(config, EventBus())
+        manager.set_message_handler(lambda _client_id, _msg: None)
 
-        # Mock transport to avoid actual socket creation
-        with patch.object(WebSocketTransport, "start", new_callable=AsyncMock):
+        with patch.object(WebSocketChannel, "start", new_callable=AsyncMock):
             await manager.start_all()
 
             # Second start should log warning but not fail
@@ -180,12 +186,14 @@ class TestTransportManager:
 
     def test_manager_properties(self) -> None:
         """Manager properties are correct."""
-        config = SootheDaemonConfig(transports=TransportConfig())
-        manager = TransportManager(config)
+        from soothe_daemon.event import EventBus
 
-        assert manager.transport_count == 0
+        config = SootheDaemonConfig(transports=TransportConfig())
+        manager = ChannelManager(config, EventBus())
+
+        assert manager.channel_count == 0
         assert manager.client_count == 0
-        assert manager.get_transport_info() == []
+        assert manager.get_channel_info() == []
 
 
 class TestTransportInterfaces:

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from soothe_daemon.channel_manager import ChannelManager
 from soothe_daemon.channels.message import (
     META_STREAM_DELTA,
     META_STREAM_END,
     META_STREAMED,
     ChannelMessage,
 )
-from soothe_daemon.channel_manager import ChannelManager
 
 
 class MockEventBus:
@@ -26,24 +26,36 @@ class MockEventBus:
 class MockDaemonConfig:
     """Mock daemon config for testing."""
 
-    channels = type("ChannelsConfig", (), {
-        "transcription_provider": "groq",
-        "send_max_retries": 3,
-        "send_progress": True,
-        "send_tool_hints": False,
-        "show_reasoning": True,
-    })()
+    channels = type(
+        "ChannelsConfig",
+        (),
+        {
+            "transcription_provider": "groq",
+            "send_max_retries": 3,
+            "send_progress": True,
+            "send_tool_hints": False,
+            "show_reasoning": True,
+        },
+    )()
 
-    transports = type("TransportsConfig", (), {
-        "websocket": type("WSConfig", (), {
-            "enabled": True,
-            "host": "127.0.0.1",
-            "port": 8765,
-            "tls_enabled": False,
-            "max_frame_size": 10485760,
-        })(),
-        "http_rest": type("HTTPConfig", (), {"enabled": False})(),
-    })()
+    transports = type(
+        "TransportsConfig",
+        (),
+        {
+            "websocket": type(
+                "WSConfig",
+                (),
+                {
+                    "enabled": True,
+                    "host": "127.0.0.1",
+                    "port": 8765,
+                    "tls_enabled": False,
+                    "max_frame_size": 10485760,
+                },
+            )(),
+            "http_rest": type("HTTPConfig", (), {"enabled": False})(),
+        },
+    )()
 
 
 class MockStreamingChannel:

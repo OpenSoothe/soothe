@@ -62,6 +62,7 @@ class TestChannelBase:
 
     def test_channel_custom_capability_flags(self):
         """Test custom capability flags."""
+
         class ReadOnlyChannel(MockChannel):
             supports_inbound = True
             supports_outbound = False
@@ -103,13 +104,6 @@ class TestChannelBase:
         channel = MockChannel({}, manager)
 
         assert channel.is_allowed("user123") is False
-
-    def test_transport_type_alias(self):
-        """Test transport_type alias for compatibility."""
-        manager = MockChannelManager()
-        channel = MockChannel({}, manager)
-
-        assert channel.transport_type == "mock"
 
     def test_client_count_default(self):
         """Test default client_count implementation."""
@@ -189,6 +183,7 @@ class TestChannelBase:
     @pytest.mark.asyncio
     async def test_handle_message_with_streaming_flag(self):
         """Test _handle_message adds streaming hint for streaming channels."""
+
         class StreamingChannel(MockChannel):
             supports_streaming = True
 

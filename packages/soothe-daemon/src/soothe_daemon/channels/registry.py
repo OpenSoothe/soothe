@@ -67,6 +67,7 @@ def load_channel_class(name: str) -> type[Channel] | None:
         if isinstance(attr, type):
             # Import Channel base here to avoid circular import
             from soothe_daemon.channels.base import Channel
+
             if issubclass(attr, Channel) and attr is not Channel:
                 return attr
 
@@ -167,6 +168,7 @@ def discover_all() -> dict[str, type[Channel]]:
     plugin_names: set[str] = set()
     try:
         from importlib.metadata import entry_points
+
         eps = entry_points(group="soothe.channels")
         plugin_names = {ep.name for ep in eps}
     except Exception:

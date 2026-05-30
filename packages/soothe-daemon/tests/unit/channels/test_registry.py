@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import importlib
-import sys
 from typing import Any
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from soothe_daemon.channels.base import Channel
 from soothe_daemon.channels.registry import (
@@ -224,9 +220,13 @@ class TestRegistryErrorHandling:
 
     def test_load_channel_class_no_channel_class(self):
         """Test load_channel_class returns None for module without Channel."""
+
         # Create a simple module-like object that has no Channel subclass
         class FakeModule:
-            some_function = lambda x: x
+            @staticmethod
+            def some_function(x):
+                return x
+
             _private = None
             __name__ = "fake_module"
 

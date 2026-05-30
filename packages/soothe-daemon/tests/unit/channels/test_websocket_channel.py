@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from soothe_daemon.channels.websocket import WebSocketChannel
 
 
@@ -31,14 +29,13 @@ class TestWebSocketChannelAttributes:
 class TestWebSocketChannelMethods:
     """Tests for WebSocketChannel methods."""
 
-    def test_transport_type_alias(self):
-        """Test transport_type returns channel name."""
+    def test_channel_name(self):
+        """Test channel name identifier."""
         config = MockWebSocketConfig()
         manager = MockManager()
         channel = WebSocketChannel(config, manager)
 
-        # transport_type is a property on the instance
-        assert channel.transport_type == "websocket"
+        assert channel.name == "websocket"
 
 
 class MockWebSocketConfig:
@@ -156,7 +153,7 @@ class TestWebSocketChannelMessageConversion:
 
     def test_channel_message_to_wire_with_streaming(self):
         """Test streaming message conversion."""
-        from soothe_daemon.channels.message import ChannelMessage, META_STREAM_DELTA
+        from soothe_daemon.channels.message import META_STREAM_DELTA, ChannelMessage
 
         config = MockWebSocketConfig()
         manager = MockManager()
