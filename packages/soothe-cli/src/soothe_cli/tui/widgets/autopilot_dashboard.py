@@ -150,7 +150,6 @@ class ControlsWidget(Static):
         ("soothe autopilot goal <id>", "Goal details"),
         ("soothe autopilot cancel <id>", "Cancel goal"),
         ("soothe autopilot wake", "Exit dreaming"),
-        ("soothe autopilot inbox", "View inbox"),
     ]
 
     DEFAULT_CSS = """
