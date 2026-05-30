@@ -398,10 +398,9 @@ class _MessagesMixin:
         Priority order:
         0. If text is selected, copy it (Textual screen.copy_text semantics)
         1. If shell command is running, kill it
-        2. If ask_user menu is active, cancel it
-        3. If agent is running, interrupt it (preserve input)
-        4. If double press (quit_pending), quit
-        5. Otherwise clear draft input and show quit hint
+        2. If agent is running, interrupt it (preserve input)
+        3. If double press (quit_pending), quit
+        4. Otherwise clear draft input and show quit hint
         """
         from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
 
@@ -411,12 +410,6 @@ class _MessagesMixin:
         # If shell command is running, cancel the worker
         if self._shell_running and self._shell_worker:
             self._cancel_worker(self._shell_worker)
-            self._quit_pending = False
-            return
-
-        # If ask_user menu is active, cancel it before cancelling the agent worker.
-        if self._pending_ask_user_widget:
-            self._pending_ask_user_widget.action_cancel()
             self._quit_pending = False
             return
 
@@ -460,9 +453,8 @@ class _MessagesMixin:
         2. If completion popup is open, dismiss it
         3. If input is in command/shell mode, exit to normal mode
         4. If shell command is running, kill it
-        5. If ask-user menu is active, cancel it
-        6. If queued messages exist, pop the last one (LIFO)
-        7. If agent is running, interrupt it
+        5. If queued messages exist, pop the last one (LIFO)
+        6. If agent is running, interrupt it
         """
         # If a modal screen is active, let it cancel itself (so it can
         # restore state, e.g. the theme selector reverts the previewed theme).
@@ -485,11 +477,6 @@ class _MessagesMixin:
         # If shell command is running, cancel the worker
         if self._shell_running and self._shell_worker:
             self._cancel_worker(self._shell_worker)
-            return
-
-        # If ask_user menu is active, cancel it before cancelling the agent worker.
-        if self._pending_ask_user_widget:
-            self._pending_ask_user_widget.action_cancel()
             return
 
         # If queued messages exist, pop the last one (LIFO) instead of
@@ -585,16 +572,11 @@ class _MessagesMixin:
         super().exit(result=result, return_code=return_code, message=message)
 
     def action_shift_tab(self) -> None:
-        """Shift+Tab: navigate loop selector filters or ask_user questions."""
+        """Shift+Tab: navigate loop selector filters."""
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
         if isinstance(self.screen, LoopSelectorScreen):
             self.screen.action_focus_previous_filter()
-            return
-        if self.screen.is_modal:
-            return
-        if self._pending_ask_user_widget is not None:
-            self._pending_ask_user_widget.action_previous_question()
 
     def action_toggle_tool_output(self) -> None:
         """Toggle expand/collapse of the most recent skill or tool card."""
@@ -654,7 +636,7 @@ class _MessagesMixin:
         """Route unfocused paste events to chat input for drag/drop reliability."""
         if not self._chat_input:
             return
-        if self._pending_ask_user_widget or self._is_input_focused():
+        if self._is_input_focused():
             return
         if self._chat_input.handle_external_paste(event.text):
             event.prevent_default()
@@ -672,16 +654,11 @@ class _MessagesMixin:
             return
         if self.screen.is_modal:
             return
-        if self._pending_ask_user_widget:
-            return
         self._chat_input.focus_input()
 
     def on_click(self, _event: Click) -> None:
         """Handle clicks anywhere in the terminal to focus on the command line."""
         if not self._chat_input:
-            return
-        # Don't steal focus from ask_user widgets
-        if self._pending_ask_user_widget:
             return
         # Preserve an active text selection (focus would clear highlight for copy).
         from soothe_cli.tui.widgets.clipboard import screen_has_text_selection

@@ -216,7 +216,7 @@ class PlanStep(BaseModel):
 Multi-step plans are executed inside **AgentLoop** (RFC-220): the compiled graph’s
 execute phase uses `StepScheduler` / `Executor` to respect DAG dependencies and
 optional parallelism. Each ready step is run as a **CoreAgent** `astream` turn with
-HITL handling in `Executor._core_agent_astream_with_hitl`.
+LangGraph interrupt auto-resume in `Executor._core_agent_astream_with_interrupt_resume`.
 
 ```
 AgentLoop graph (execute_steps)
@@ -227,7 +227,7 @@ ready_steps = scheduler.ready_steps(limit, parallelism)
     ↓
 Single step OR asyncio.gather for parallel steps
     ↓
-CoreAgent.astream(stream_input, ...)  (+ HITL resume loop)
+CoreAgent.astream(stream_input, ...)  (+ interrupt auto-resume loop)
     ↓
 PlanStepCompletedEvent / PlanStepFailedEvent (protocol events)
 ```
@@ -254,7 +254,7 @@ Execution: A + B parallel, then C
 ### CoreAgent streaming (execute phase)
 
 Execute steps stream the compiled LangGraph agent via `CoreAgent.astream` (see
-`Executor._core_agent_astream_with_hitl` for interrupt / resume). The graph input
+`Executor._core_agent_astream_with_interrupt_resume` for interrupt / resume). The graph input
 dict carries messages plus optional `workspace`, `git_status`,
 `routing_classification`, and related fields for middleware and system-prompt XML
 injection (RFC-104).
@@ -274,7 +274,7 @@ async for chunk in core_agent.astream(
     stream_mode=["messages", "updates", "custom"],
     subgraphs=True,
 ):
-    # HITL: on __interrupt__, wait for client resume or auto-approve
+    # On __interrupt__, Executor auto-resumes in-process (approve tools / empty ask_user)
     yield chunk
 ```
 

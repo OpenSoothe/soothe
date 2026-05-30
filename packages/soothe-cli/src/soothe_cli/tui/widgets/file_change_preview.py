@@ -1,7 +1,7 @@
 """Non-blocking file change preview widgets (write / edit / delete).
 
 Shown when a filesystem tool call is recognized so the user can see what will
-change. Unlike the removed HITL approval flow, these widgets do not block execution.
+change. These widgets are informational only and do not block execution.
 """
 
 from __future__ import annotations

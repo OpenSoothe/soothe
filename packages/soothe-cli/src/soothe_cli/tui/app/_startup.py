@@ -595,7 +595,6 @@ class _StartupMixin:
         # Widgets deferred from app.py module level — a failure here indicates
         # a packaging or code bug (same as the block above), so we let
         # exceptions propagate.
-        from soothe_cli.tui.widgets.ask_user import AskUserMenu  # noqa: F401
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen  # noqa: F401
         from soothe_cli.tui.widgets.model_selector import (
             ModelSelectorScreen,  # noqa: F401

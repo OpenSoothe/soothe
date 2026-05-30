@@ -315,7 +315,7 @@ class TuiDaemonSession:
                         continue
                     progress_seen = True
                     yield (namespace, mode, data)
-                    # Graph may auto-resume after HITL interrupts; keep consuming events.
+                    # Graph auto-resumes LangGraph interrupts server-side; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                         continue
             finally:

@@ -115,7 +115,7 @@ Synced in `config/config.template.yml` and `config/config.dev.yml`; model field 
 
 ### 2a. Drop noop `updates`
 
-In coalescer `ingest`: drop `mode == "updates"` unless `__interrupt__` is present (HITL).
+In coalescer `ingest`: drop `mode == "updates"` unless `__interrupt__` is present (LangGraph interrupt).
 
 ### 2b. Deduplicate tool-call wire
 
