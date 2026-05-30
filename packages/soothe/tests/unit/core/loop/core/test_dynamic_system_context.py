@@ -15,7 +15,7 @@ from soothe.core.prompts.context_xml import (
     build_soothe_thread_section,
     build_soothe_workspace_section,
 )
-from soothe.middleware import SystemPromptOptimizationMiddleware
+from soothe.middleware import SystemPromptMiddleware
 
 
 class TestKnowledgeCutoff:
@@ -230,17 +230,15 @@ class TestComplexityMapping:
     """Tests for complexity-to-sections mapping (middleware)."""
 
     @pytest.fixture
-    def middleware(self) -> SystemPromptOptimizationMiddleware:
+    def middleware(self) -> SystemPromptMiddleware:
         """Create middleware instance for testing."""
         config = MagicMock()
         config.resolve_model.return_value = "claude-opus-4-6"
         config.agent.name = "Soothe"
         config.agent.system_prompt = None
-        return SystemPromptOptimizationMiddleware(config)
+        return SystemPromptMiddleware(config)
 
-    def test_minimal_complexity_no_extra_sections(
-        self, middleware: SystemPromptOptimizationMiddleware
-    ) -> None:
+    def test_minimal_complexity_no_extra_sections(self, middleware: SystemPromptMiddleware) -> None:
         """Minimal task complexity gets minimal prompt with ENVIRONMENT (RFC-214: no date in system prompt)."""
         prompt = middleware._get_prompt_for_complexity("minimal", {})
 
@@ -249,9 +247,7 @@ class TestComplexityMapping:
         assert "Today's date is" not in prompt
         assert "<ENVIRONMENT" in prompt  # ENVIRONMENT is always included for minimal tier
 
-    def test_medium_gets_environment_only(
-        self, middleware: SystemPromptOptimizationMiddleware
-    ) -> None:
+    def test_medium_gets_environment_only(self, middleware: SystemPromptMiddleware) -> None:
         """Medium complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
@@ -271,9 +267,7 @@ class TestComplexityMapping:
         # RFC-214: Date is in user envelope, not system prompt
         assert "Today's date is" not in prompt
 
-    def test_complex_gets_environment_only(
-        self, middleware: SystemPromptOptimizationMiddleware
-    ) -> None:
+    def test_complex_gets_environment_only(self, middleware: SystemPromptMiddleware) -> None:
         """Complex complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
@@ -298,7 +292,7 @@ class TestComplexityMapping:
         assert "<SOOTHE_THREAD" not in prompt
         assert "<SOOTHE_PROTOCOLS" not in prompt
 
-    def test_base_prompt_preserved(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_base_prompt_preserved(self, middleware: SystemPromptMiddleware) -> None:
         """Base prompt content is preserved before context blocks."""
         state = {
             "workspace": Path("/project"),

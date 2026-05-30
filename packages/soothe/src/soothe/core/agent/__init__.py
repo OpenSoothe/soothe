@@ -16,7 +16,7 @@ This module defines the clear boundary between Soothe and deepagents:
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  Soothe Middleware Stack (5 middlewares):                   │    │
 │  │  1. SoothePolicyMiddleware - safety enforcement             │    │
-│  │  2. SystemPromptOptimizationMiddleware - dynamic prompts    │    │
+│  │  2. SystemPromptMiddleware - dynamic prompts                  │    │
 │  │  3. ExecutionHintsMiddleware - Layer 2 → Layer 1 hints      │    │
 │  │  4. WorkspaceContextMiddleware - thread workspace           │    │
 │  │  5. SubagentContextMiddleware - context briefing            │    │

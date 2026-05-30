@@ -1,4 +1,4 @@
-"""Tests for SystemPromptOptimizationMiddleware (RFC-214 volatility-tiered architecture)."""
+"""Tests for SystemPromptMiddleware (RFC-214 volatility-tiered architecture)."""
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from soothe.config import SootheConfig
 from soothe.core.intention import RoutingClassification
-from soothe.middleware import SystemPromptOptimizationMiddleware
+from soothe.middleware import SystemPromptMiddleware
 
 
 class MockModelRequest(ModelRequest[dict]):
@@ -70,7 +70,7 @@ class MockModelRequest(ModelRequest[dict]):
 def test_simple_query_gets_minimal_prompt():
     """Minimal task complexity (e.g. quiz path) should receive minimal system prompt (RFC-214)."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     # LLM routed with minimal complexity
     classification = RoutingClassification(
@@ -95,7 +95,7 @@ def test_simple_query_gets_minimal_prompt():
 def test_medium_query_gets_medium_prompt():
     """Medium queries (LLM-classified) should receive medium system prompt."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     # LLM classified this as "medium"
     classification = RoutingClassification(
@@ -120,7 +120,7 @@ def test_medium_query_gets_medium_prompt():
 def test_simple_query_gets_compact_prompt() -> None:
     """Simple task complexity should use compact system prompt tier."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(task_complexity="simple")
     request = MockModelRequest(
         state={"routing_classification": classification},
@@ -135,7 +135,7 @@ def test_simple_query_gets_compact_prompt() -> None:
 def test_complex_query_gets_full_prompt():
     """Complex queries (LLM-classified) should receive full system prompt."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     # LLM classified this as "complex"
     classification = RoutingClassification(
@@ -159,7 +159,7 @@ def test_complex_query_gets_full_prompt():
 def test_no_classification_uses_medium_optimized_prompt():
     """Requests without classification still get optimized medium-tier system prompt."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     request = MockModelRequest(
         state={},  # No classification
@@ -177,7 +177,7 @@ def test_no_classification_uses_medium_optimized_prompt():
 def test_execution_hints_extracted_to_state():
     """RFC-214: Execution hints extracted from state for user envelope, not merged into system."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(task_complexity="medium")
     hint_body = (
         "Suggested subagent: explore. Expected output: paths under src/. "
@@ -201,7 +201,7 @@ def test_custom_system_prompt_for_complex_queries():
     """Complex queries should use custom system prompt if configured."""
     config = SootheConfig()
     config.agent.system_prompt = "You are a custom assistant for {assistant_name}."
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     classification = RoutingClassification(
         task_complexity="complex",
@@ -223,7 +223,7 @@ def test_custom_system_prompt_for_complex_queries():
 def test_all_prompts_do_not_include_date():
     """RFC-214: Date line is NOT in system prompt - it's in user message envelope."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     # Test all complexity levels - none should have date in system prompt
     for complexity in ["minimal", "simple", "medium", "complex"]:
@@ -244,7 +244,7 @@ def test_all_prompts_do_not_include_date():
 def test_minimal_task_complexity_uses_compact_prompt():
     """Minimal task complexity should use compact system prompt tier."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     # Minimal complexity maps to simple prompt
     classification = RoutingClassification(
@@ -267,7 +267,7 @@ def test_minimal_task_complexity_uses_compact_prompt():
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     """Explicit slash-style routing narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
         preferred_subagent="tacitus",
@@ -292,7 +292,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
 def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     """After the first model reply, restore full tools and omit routing directive."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
         preferred_subagent="tacitus",
@@ -315,7 +315,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
 def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
     """AgentLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
         reasoning="test",
@@ -341,7 +341,7 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     """``soothe_step_subagent`` configurable wins over wire ``preferred_subagent`` on first hop."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
         preferred_subagent="tacitus",
@@ -367,7 +367,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
 def test_goal_synthesis_disables_all_tools() -> None:
     """Goal-completion synthesis must not expose tools (read-only ledger synthesis)."""
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
     request = ModelRequest(
@@ -388,7 +388,7 @@ def test_memory_section_uses_memory_summary_tag():
     from soothe.protocols.memory import MemoryItem
 
     config = SootheConfig()
-    middleware = SystemPromptOptimizationMiddleware(config=config)
+    middleware = SystemPromptMiddleware(config=config)
 
     memories = [
         MemoryItem(content="User prefers Python", source_thread="thread_123"),
@@ -403,7 +403,7 @@ class TestSkillActivationInStateDict:
     def test_state_dict_includes_skill_activation(self) -> None:
         """state_dict passes skill_activation through so _compose_skills_block can see it."""
         config = SootheConfig()
-        middleware = SystemPromptOptimizationMiddleware(config=config)
+        middleware = SystemPromptMiddleware(config=config)
 
         activation = {"sent": set(), "activated": {"a"}, "invoked": set(), "just_invoked": set()}
         request = ModelRequest(

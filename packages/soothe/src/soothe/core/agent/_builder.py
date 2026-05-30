@@ -218,7 +218,7 @@ class AgentBuilder:
         )
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
-        # RFC-105: Skill emission is owned by SystemPromptOptimizationMiddleware via
+        # RFC-105: Skill emission is owned by SystemPromptMiddleware via
         # ProgressiveSkillRegistry. Deepagents' SkillsMiddleware must not also emit.
         # Pass skills=None so the middleware is never installed.
 

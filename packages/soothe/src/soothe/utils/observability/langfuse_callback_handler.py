@@ -114,7 +114,7 @@ if LANGFUSE_AVAILABLE:
     class SootheLangfuseCallbackHandler(LangfuseCallbackHandler):
         """Extends Langfuse's handler so chat model traces include the effective system prompt.
 
-        ``SystemPromptOptimizationMiddleware`` registers the optimized system text (with
+        ``SystemPromptMiddleware`` registers the effective system text (with
         ``WORKSPACE_RULES`` / ``WORKSPACE_INSTRUCTIONS`` when applicable) before each model
         call. LangChain often passes only the shorter graph ``resolve_system_prompt()`` text;
         this handler replaces or prepends the effective prompt on the traced message batch and

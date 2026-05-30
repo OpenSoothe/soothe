@@ -53,7 +53,7 @@ No transport or UI dependencies.
 | `context/` | Context management — tool context registry, trigger registry for system message injection, and stream model override for per-async-task model swapping. |
 | `scheduling/` | Execution scheduling — concurrency control (hierarchical semaphores), DAG-based step scheduler, and tool caching utilities. |
 | `persistence/` | Persistence & policy — artifact store for run artifacts, and configuration-driven policy implementation. |
-| `middleware/` | `SoothePolicyMiddleware`, `SystemPromptOptimizationMiddleware`, `ExecutionHintsMiddleware`, `WorkspaceContextMiddleware`, `SubagentContextMiddleware`. |
+| `middleware/` | `SoothePolicyMiddleware`, `SystemPromptMiddleware`, `ExecutionHintsMiddleware`, `WorkspaceContextMiddleware`, `SubagentContextMiddleware`. |
 | `resolver/` | Wires protocols from config: checkpointer, durability, goal engine, tools. |
 | `prompts/` | System prompt building — `PromptBuilder`, context XML generation, prompt template loading. |
 | `event_replay/` | Event replay and state reconstruction utilities. |

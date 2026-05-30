@@ -1,6 +1,6 @@
 """Thread-local hint so Langfuse can record CoreAgent system prompts on generations (IG-385).
 
-``SystemPromptOptimizationMiddleware`` sets the effective system text before each model
+``SystemPromptMiddleware`` sets the effective system text before each model
 call; :class:`SootheLangfuseCallbackHandler` reads it and injects a ``SystemMessage``
 into LangChain's traced message list when the batch has no usable system content, so
 Langfuse generations show the same prompt the model received.

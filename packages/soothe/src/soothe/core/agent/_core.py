@@ -78,7 +78,7 @@ class CoreAgent:
     Layer 2 Contract:
         Layer 2 (SootheRunner/AgentLoop) provides:
         - Execution hints via config.configurable (subagent delegation enforcement + advisory text)
-        - Classification state (for SystemPromptOptimization)
+        - Classification state (for SystemPromptMiddleware)
         - Thread/workspace management
         - Goal-driven orchestration
 
