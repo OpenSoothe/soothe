@@ -122,7 +122,7 @@ This document defines the terminology and naming conventions used in this projec
 | Idle (loop status) | `AgentLoopCheckpoint.status == "idle"` — loop is alive between goals. Renamed from the legacy value `ready_for_next_goal`; legacy persisted values are coerced on load. | RFC-225 |
 | Goal Record | `GoalExecutionRecord` — durable per-goal log inside `AgentLoopCheckpoint.goal_history`. Carries the latest plan DAG (`current_plan`), accumulated `step_results`, `evidence_ledger`, `completed_step_ids`, `plan_revision_count`, the orchestration `loop_messages` ledger, and final output. Sufficient to recover the goal's plan DAG with execution overlay without external lookup. | RFC-216, RFC-225 |
 | Plan DAG Recoverability | Invariant that the full DAG of any persisted goal — nodes, edges, execution mode, planner metadata, done-node overlay, per-node outcomes — is recoverable from `GoalExecutionRecord` alone. | RFC-225 |
-| `_LOOP_CONTINUATION_GUIDE` | System-prompt section injected by `system_prompt_optimization` when `state["continue_loop_mode"]` is `True`. Renamed from `_THREAD_CONTINUATION_GUIDE`. | RFC-225 |
+| `_LOOP_CONTINUATION_GUIDE` | System-prompt section injected by `system_prompt` when `state["continue_loop_mode"]` is `True`. Renamed from `_THREAD_CONTINUATION_GUIDE`. | RFC-225 |
 | `seed_loop_ledger_from_prior_goal()` | Seeds a new goal's `loop_messages` from the immediately prior completed goal in the same loop. Runs unconditionally for any same-loop new goal. Renamed from `seed_continue_thread_ledger_from_prior_goal()`. | RFC-225 |
 
 ### Prompt Architecture Terms (RFC-206)
@@ -146,7 +146,7 @@ This document defines the terminology and naming conventions used in this projec
 | Stage 3 Disclosure | Lazy SKILL.md body injection rendered as `<SKILL_CONTEXT>` only on/after invocation (`/skill:<name>`). | RFC-105 |
 | Unconditional Skill | Skill whose frontmatter has no `paths:` field (or `paths: []` / `paths: ["**"]`); appears in every `<AVAILABLE_SKILLS>` listing subject to budget. | RFC-105 |
 | Conditional Skill | Skill whose frontmatter has a non-empty `paths:` field; held back from listings until a file-op tool touches a matching path. | RFC-105 |
-| `<AVAILABLE_SKILLS>` Block | Static-tier system-prompt block carrying the delta-only skill listing. Emitted by `SystemPromptOptimizationMiddleware._compose_skills_block`. | RFC-105 |
+| `<AVAILABLE_SKILLS>` Block | Static-tier system-prompt block carrying the delta-only skill listing. Emitted by `SystemPromptMiddleware._compose_skills_block`. | RFC-105 |
 | `<SKILL_CONTEXT>` Block | Semi-static-tier system-prompt block carrying invoked skill bodies. One block per invoked skill name. | RFC-105 |
 | Skill Activation State | The per-thread dict at `state["skill_activation"]` with keys `sent`, `activated`, `invoked`, `invoked_bodies`, `just_invoked`. Snapshotted to `LoopState` at iteration boundaries. | RFC-105 |
 | `ProgressiveSkillRegistry` | Stateless helper that partitions catalog entries into unconditional/conditional, computes turn-0/turn-N deltas, and matches file-op paths against conditional skills' patterns. | RFC-105 |

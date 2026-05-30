@@ -1,4 +1,4 @@
-"""System prompt optimization middleware based on LLM query classification."""
+"""System prompt middleware based on LLM query classification."""
 
 from __future__ import annotations
 
@@ -101,8 +101,8 @@ def _filter_tools_to_task_only(
     return kept
 
 
-class _OptimizationState(TypedDict):
-    """State schema for SystemPromptOptimizationMiddleware.
+class _SystemPromptState(TypedDict):
+    """State schema for SystemPromptMiddleware.
 
     LangGraph merges all middleware state schemas to build the final graph state.
     This schema declares ``routing_classification`` so it propagates correctly (IG-383).
@@ -121,7 +121,7 @@ class _OptimizationState(TypedDict):
     cached_mcp_resources: NotRequired[dict[str, str]]
 
 
-class SystemPromptOptimizationMiddleware(AgentMiddleware):
+class SystemPromptMiddleware(AgentMiddleware):
     """Dynamically adjust system prompts based on LLM query classification.
 
     Uses task_complexity from RoutingClassification (determined by fast LLM)
@@ -138,7 +138,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         config: Soothe configuration for resolving prompt templates.
     """
 
-    state_schema = _OptimizationState
+    state_schema = _SystemPromptState
 
     def __init__(
         self,
@@ -147,7 +147,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         tool_context_registry: ToolContextRegistry | None = None,
         mcp_registry: Any | None = None,
     ) -> None:
-        """Initialize the system prompt optimization middleware.
+        """Initialize the system prompt middleware.
 
         Args:
             config: Soothe configuration instance.

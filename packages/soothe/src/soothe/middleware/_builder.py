@@ -73,7 +73,7 @@ def build_soothe_middleware_stack(
        via semaphore. LangChain's ToolNode uses asyncio.gather without limits;
        this middleware bounds parallelism to prevent resource exhaustion.
 
-    3. **SystemPromptOptimizationMiddleware** - Modifies prompts BEFORE the
+    3. **SystemPromptMiddleware** - Modifies prompts BEFORE the
        LLM call. Requires ``routing_classification`` state injected by AgentLoop / runner
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
@@ -109,7 +109,7 @@ def build_soothe_middleware_stack(
     from .llm_rate_limit import LLMRateLimitMiddleware
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
-    from .system_prompt_optimization import SystemPromptOptimizationMiddleware
+    from .system_prompt import SystemPromptMiddleware
     from .tool_concurrency import ToolConcurrencyMiddleware
     from .tool_network_errors import NetworkToolErrorsMiddleware
     from .workspace_context import WorkspaceContextMiddleware
@@ -161,18 +161,18 @@ def build_soothe_middleware_stack(
     stack.append(NetworkToolErrorsMiddleware())
     logger.debug("[Middleware] Network tool error recovery enabled")
 
-    # 3. System prompt optimization (requires routing_classification from AgentLoop / runner)
+    # 3. System prompt assembly (requires routing_classification from AgentLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(
-        SystemPromptOptimizationMiddleware(
+        SystemPromptMiddleware(
             config=config,
             tool_trigger_registry=trigger_registry,
             tool_context_registry=context_registry,
             mcp_registry=mcp_registry,
         )
     )
-    logger.info("[Middleware] System prompt optimization enabled")
+    logger.info("[Middleware] System prompt middleware enabled")
 
     # 4. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
