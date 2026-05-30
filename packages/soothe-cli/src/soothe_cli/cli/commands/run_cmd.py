@@ -22,11 +22,8 @@ def run_impl(
     no_tui: bool,  # noqa: FBT001
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
-    streaming_enabled: bool | None = None,
-    streaming_mode: str | None = None,
     *,
     tui_with_prompt: bool = False,
-    config_path: str | None = None,
     mcp_config: str | None = None,
 ) -> None:
     """Core implementation for running Soothe agent.
@@ -39,15 +36,13 @@ def run_impl(
         no_tui: Require headless mode (must include a non-empty prompt)
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
-        streaming_enabled: Override daemon streaming enabled setting (RFC-614)
-        streaming_mode: Override daemon streaming mode ('streaming' or 'batch')
         tui_with_prompt: When True with a prompt, open the TUI instead of headless.
         mcp_config: Path to additional MCP server config (JSON/YAML) to merge.
     """
     startup_start = time.perf_counter()
 
     try:
-        cfg = load_config(config_path)
+        cfg = load_config()
 
         # Merge --mcp-config file into SootheConfig.mcp_servers
         if mcp_config:
@@ -61,12 +56,6 @@ def run_impl(
             checkpointer = getattr(cfg.protocols.durability, "checkpointer", None)
             if checkpointer == "postgresql":
                 logger.info("PostgreSQL checkpointer configured; ensure server is running.")
-
-        # Apply CLI streaming overrides (RFC-614)
-        if streaming_enabled is not None:
-            cfg.output_streaming_enabled = streaming_enabled
-        if streaming_mode is not None:
-            cfg.output_streaming_mode = streaming_mode
 
         startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
         logger.info("[Startup] ✓ Ready (%.1fms)", startup_elapsed_ms)

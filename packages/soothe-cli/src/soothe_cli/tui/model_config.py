@@ -74,9 +74,9 @@ async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
     try:
         from soothe_sdk.client import WebSocketClient, fetch_config_section
 
-        from soothe_cli.config.cli_config import CLIConfig
+        from soothe_cli.config.loader import load_config
 
-        cli_cfg = CLIConfig.from_config_file()
+        cli_cfg = load_config()
         ws_url = cli_cfg.websocket_url()
 
         client = WebSocketClient(url=ws_url)
@@ -452,9 +452,9 @@ def get_available_models() -> list[ModelProfileEntry]:
         from soothe_sdk.client import WebSocketClient, fetch_config_section
 
         # Use CLIConfig to get WebSocket URL
-        from soothe_cli.config.cli_config import CLIConfig
+        from soothe_cli.config.loader import load_config
 
-        cli_cfg = CLIConfig.from_config_file()
+        cli_cfg = load_config()
         ws_url = cli_cfg.websocket_url()
 
         # Fetch providers section from daemon
