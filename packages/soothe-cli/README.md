@@ -41,21 +41,30 @@ This package is the **client** component that communicates with the Soothe daemo
 
 ## Configuration
 
-CLI uses `cli_config.yml`:
+CLI client settings are passed as global flags on every `soothe` invocation:
 
-```yaml
-daemon:
-  transports:
-    websocket:
-      host: "127.0.0.1"
-      port: 8765
+```bash
+# Connect to a daemon on a non-default host/port
+soothe --daemon-host 127.0.0.1 --daemon-port 8765
 
-# Optional: logging_level for ~/.soothe/logs/soothe-cli.log (DEBUG, INFO, …)
-# logging_level: INFO
+# Enable debug logging for ~/.soothe/logs/cli.log
+soothe --log-level DEBUG
 
-tui:
-  theme: "default"
+# Disable Markdown rendering in the TUI
+soothe --no-render-markdown
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--daemon-host` | `127.0.0.1` | Daemon WebSocket host |
+| `--daemon-port` | `8765` | Daemon WebSocket port |
+| `--log-level` | `INFO` | CLI log level (`SOOTHE_LOG_LEVEL` env overrides) |
+| `--render-markdown` / `--no-render-markdown` | enabled | Markdown rendering in TUI |
+| `--soothe-home` | `~/.soothe` | Soothe home directory |
+| `--streaming` / `--no-streaming` | daemon default | Override output streaming |
+| `--streaming-mode` | daemon default | `streaming` or `batch` |
+
+Global flags apply to subcommands too, e.g. `soothe --daemon-port 9000 loop list`.
 
 ## Related Packages
 

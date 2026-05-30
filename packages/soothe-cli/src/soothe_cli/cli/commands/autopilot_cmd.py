@@ -59,7 +59,6 @@ def _require_daemon_http() -> AutopilotHttpClient:
 @app.command("run")
 def run(
     prompt: str = typer.Argument(..., help="Task for autonomous execution."),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to configuration file."),
     max_iterations: int | None = typer.Option(
         None,
         "--max-iterations",
@@ -78,7 +77,7 @@ def run(
     Requires the daemon (``soothed start``). This is the production autopilot
     path — distinct from a one-shot agentic query via ``soothe -p``.
     """
-    del config, max_iterations  # daemon owns config for autopilot dispatch
+    del max_iterations  # daemon owns config for autopilot dispatch
     client = _require_daemon_http()
     submit_workspace = _resolve_submit_workspace(workspace)
     result = client.submit(prompt, workspace=submit_workspace)
