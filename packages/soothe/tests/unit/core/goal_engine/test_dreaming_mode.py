@@ -1,5 +1,6 @@
 """Tests for Autopilot dreaming mode (soothe.cognition.dreaming)."""
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -51,41 +52,15 @@ class TestDreamingMode:
         assert data["state"] == "dreaming"
         assert "timestamp" in data
 
-    async def test_write_outbox_creates_message(self, tmp_path: Path) -> None:
+    async def test_run_exits_when_stopped(self, tmp_path: Path) -> None:
         mode = DreamingMode(soothe_home=tmp_path)
-        mode._write_outbox("dreaming_entered", {})
 
-        outbox_dir = tmp_path / "autopilot" / "outbox"
-        assert outbox_dir.exists()
-        files = list(outbox_dir.glob("*.json"))
-        assert len(files) == 1
+        async def stop_soon() -> None:
+            await asyncio.sleep(0.05)
+            mode.stop()
 
-    async def test_poll_inbox_empty(self, tmp_path: Path) -> None:
-        mode = DreamingMode(soothe_home=tmp_path)
-        result = mode._poll_inbox()
-        assert result is None
-
-    async def test_poll_inbox_with_task(self, tmp_path: Path) -> None:
-        inbox_dir = tmp_path / "autopilot" / "inbox"
-        inbox_dir.mkdir(parents=True)
-        inbox_dir.joinpath("task.md").write_text(
-            "---\ntype: task_submit\npriority: 80\n---\n\nDo something.\n"
-        )
-
-        mode = DreamingMode(soothe_home=tmp_path)
-        result = mode._poll_inbox()
-        assert result is not None
-        assert result["type"] == "task_submit"
-
-    async def test_poll_inbox_signal_resume(self, tmp_path: Path) -> None:
-        inbox_dir = tmp_path / "autopilot" / "inbox"
-        inbox_dir.mkdir(parents=True)
-        inbox_dir.joinpath("wake.md").write_text("---\ntype: signal_resume\n---\n\nWake up.\n")
-
-        mode = DreamingMode(soothe_home=tmp_path)
-        result = mode._poll_inbox()
-        assert result is not None
-        assert result["type"] == "signal_resume"
+        await asyncio.gather(mode.run(), stop_soon())
+        assert mode.state == "idle"
 
     async def test_run_consolidation_no_protocols(self, tmp_path: Path) -> None:
         mode = DreamingMode(soothe_home=tmp_path)

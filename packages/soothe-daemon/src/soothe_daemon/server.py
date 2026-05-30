@@ -342,8 +342,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 )
             except Exception:
                 # Construction must never block daemon startup. Log loudly;
-                # autopilot endpoints will degrade gracefully (return 503 /
-                # fall back to file-based behavior).
+                # autopilot endpoints will return 503.
                 logger.exception("[Autopilot] failed to construct daemon-owned AutopilotService")
                 self._autopilot_service = None
 

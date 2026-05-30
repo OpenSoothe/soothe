@@ -55,8 +55,6 @@ agent:
     loop_idle_timeout: 300
     poll_interval: 5
     dreaming_poll_interval: 60
-    inbox_dir: "$SOOTHE_HOME/autopilot/inbox"
-    outbox_dir: "$SOOTHE_HOME/autopilot/outbox"
 
     # Context projection (RFC-222 revised) — bounds for the
     # GoalDispatchContextBundle that the daemon's ContextProjector ships to

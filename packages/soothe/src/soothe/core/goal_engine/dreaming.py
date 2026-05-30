@@ -2,7 +2,7 @@
 
 When all goals are resolved, autopilot enters dreaming mode instead of
 terminating. The dreaming runner performs background maintenance tasks
-and monitors for new task submissions.
+until explicitly stopped.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ class DreamingMode:
     - Background indexing
     - Goal anticipation
     - Health monitoring
-    - Channel/inbox monitoring
 
     Args:
         soothe_home: Root SOOTHE_HOME directory.
@@ -69,45 +68,22 @@ class DreamingMode:
     async def run(self) -> None:
         """Main dreaming loop.
 
-        Runs background maintenance tasks and monitors the inbox
-        for new task submissions. Exits when a wake signal is detected.
+        Runs background maintenance tasks until ``stop()`` is called.
         """
         self._state = "dreaming"
         self._running = True
         self._write_status()
 
-        # Signal dreaming entered via channel
-        self._write_outbox("dreaming_entered", {})
-
         logger.info("Autopilot entered dreaming mode")
 
         try:
             while self._running:
-                # Check inbox for new tasks or signals
-                task = self._poll_inbox()
-                if task:
-                    task_type = task.get("type", "")
-                    if task_type == "task_submit":
-                        logger.info("Dreaming: received new task")
-                        self._state = "waking"
-                        self._write_status()
-                        return
-                    if task_type == "signal_resume":
-                        logger.info("Dreaming: wake signal received")
-                        self._state = "waking"
-                        self._write_status()
-                        return
-
-                # Run maintenance tasks
                 await self._run_consolidation()
                 await self._run_health_check()
-
-                # Sleep and check for signals
                 await asyncio.sleep(10)
         finally:
             self._state = "idle"
             self._write_status()
-            self._write_outbox("dreaming_exited", {"trigger": "normal"})
             logger.info("Autopilot exited dreaming mode")
 
     def stop(self) -> None:
@@ -154,35 +130,6 @@ class DreamingMode:
                 )
         except Exception:
             logger.debug("Health check failed", exc_info=True)
-
-    def _poll_inbox(self) -> dict[str, Any] | None:
-        """Check inbox for new messages.
-
-        Returns:
-            First new task dict, or None if inbox is empty.
-        """
-        from soothe.core.channel.inbox import ChannelInbox
-
-        inbox = ChannelInbox(self._soothe_home / "autopilot" / "inbox")
-        tasks = inbox.read_pending()
-        if tasks:
-            inbox.archive_processed()
-            return tasks[0].to_dict()
-        return None
-
-    def _write_outbox(self, event_type: str, data: dict[str, Any]) -> None:
-        """Write a message to the outbox.
-
-        Args:
-            event_type: Message type.
-            data: Message payload.
-        """
-        from soothe.core.channel.models import ChannelMessage
-        from soothe.core.channel.outbox import ChannelOutbox
-
-        outbox = ChannelOutbox(self._soothe_home / "autopilot" / "outbox")
-        msg = ChannelMessage(type=event_type, payload=data, sender="soothe")
-        outbox.send(msg)
 
     async def _anticipate_goals(self) -> None:
         """Analyze completed goals and generate candidate future tasks.

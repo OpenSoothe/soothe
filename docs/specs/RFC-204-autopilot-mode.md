@@ -8,7 +8,9 @@
 **Updated**: 2026-05-28
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
 
-> **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — channel inbox/outbox, file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
+> **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
+>
+> **Update (2026-05-30)**: The file-based inbox/outbox channel transport (`autopilot/inbox/`, `autopilot/outbox/`) has been removed. Task submission and control use HTTP REST (`/api/v1/autopilot/*`) and CLI commands backed by the daemon-owned `AutopilotService`.
 
 ## Abstract
 
@@ -123,8 +125,8 @@ Autopilot does not terminate—it transitions to dreaming mode:
 **Resource Limits**: No enforced limits. Dreaming runs freely; consolidation and indexing are lightweight operations. User monitors via health checks if concerned.
 
 **Dreaming Exit Triggers**:
-- New task submitted via inbox
-- User sends `wake` signal via channel
+- New task submitted via HTTP/CLI (`AutopilotService.submit_task`)
+- User sends `wake` signal via HTTP/CLI
 - Scheduled task becomes due
 
 ## 2. Goal Management Extensions
@@ -229,6 +231,8 @@ validated → completed      (reporting done)
 
 ## 3. Channel Protocol
 
+> **Removed (2026-05-30)**: The file-based inbox/outbox transport described in earlier drafts of this section is no longer implemented. User communication for autopilot uses HTTP REST endpoints (§5.3) and daemon platform channels (RFC-620). The message type taxonomy below remains useful for event payloads and future adapters.
+
 ### 3.1 Message Structure
 
 Message-centric protocol for user ↔ Soothe communication:
@@ -275,13 +279,9 @@ class ChannelMessage:
 
 ### 3.3 Transport
 
-**Initial Implementation**: File-based
-- Inbox: `autopilot/inbox/` — Accepts `.md` files only
-- Outbox: `autopilot/outbox/`
+**Current implementation**: HTTP REST via daemon-owned `AutopilotService` (`POST /api/v1/autopilot/submit`, `POST /api/v1/autopilot/wake`, etc.). Platform messaging adapters (RFC-620) are separate from autopilot task submission.
 
-**Inbox Format**: Markdown only. Keeps parsing simple and aligns with goal file format. Programmatic submissions should generate markdown files.
-
-**Future Extensions**: IM, email adapters via plugin system
+**Removed**: File-based inbox/outbox directories (`autopilot/inbox/`, `autopilot/outbox/`).
 
 ## 4. Scheduler Service
 
@@ -329,7 +329,6 @@ soothe autopilot approve <id>       # Approve MUST goal
 soothe autopilot reject <id>        # Reject proposed goal
 soothe autopilot wake               # Exit dreaming
 soothe autopilot dream              # Force enter dreaming
-soothe autopilot inbox              # View pending tasks
 ```
 
 **Output Behavior**: No streaming—submit and check status.
@@ -365,7 +364,6 @@ POST /autopilot/goals/{id}/approve
 POST /autopilot/goals/{id}/reject
 POST /autopilot/wake
 POST /autopilot/dream
-GET  /autopilot/inbox
 ```
 
 **WebSocket Events**:
@@ -426,8 +424,6 @@ SOOTHE_HOME/
 ├── autopilot/
 │   ├── GOAL.md                    # Single goal
 │   ├── GOALS.md                   # Multiple goals
-│   ├── inbox/                     # Incoming tasks
-│   ├── outbox/                    # Outgoing messages
 │   ├── goals/                     # Per-goal subdirs
 │   │   └── {goal-name}/
 │   │       └── GOAL.md
@@ -507,7 +503,7 @@ autopilot:
 
 ### Phase 4: Integration
 - Scheduler service
-- Channel protocol (file-based)
+- HTTP REST autopilot control surface
 - Webhook notifications
 - Dreaming mode
 

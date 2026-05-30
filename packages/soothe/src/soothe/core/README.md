@@ -59,7 +59,6 @@ No transport or UI dependencies.
 | `event_replay/` | Event replay and state reconstruction utilities. |
 | `loop/` | Plan–execute AgentLoop (RFC-201), persistence, branching, planner. |
 | `goal_engine/` | Autonomous goal lifecycle, proposals, webhooks, dreaming (RFC-200). |
-| `channel/` | In-process goal channel inbox/outbox (RFC-204). |
 | `intention/` | LLM intent classification for routing (RFC-217). |
 | `goal_engine/scheduled_tasks.py` | RFC-204 wall-clock scheduled tasks (`SchedulerService`); distinct from `scheduling/` (DAG concurrency). |
 

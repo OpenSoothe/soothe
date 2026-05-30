@@ -82,7 +82,6 @@ Layer 3: Autopilot (daemon process, singleton)
   │   • ContextProjector      — parents' GoalContexts → bundle   │
   │   • GoalDispatchContextStore      — durability-backed context store  │
   │   • InternalEventBus      — injected, not singleton          │
-  │   • ChannelInbox          — autopilot/inbox/*.md consumer    │
   │   • SchedulerService      — cron-style timed task triggers   │
   │                                                              │
   │ Lifecycle: daemon.start() → autopilot.start() →              │
@@ -111,7 +110,7 @@ Layer 1: CoreAgent (per AgentLoop)
 ### Service Boundary Definition
 
 **AutopilotService responsibilities (daemon-resident):**
-- Process channel inbox (user task submissions) and scheduled tasks
+- Accept task submissions via HTTP/CLI (`submit_task`) and scheduled tasks
 - Run the scheduling loop (peek → project → assign → claim → dispatch)
 - Manage `WorkerPool` (sticky affinity, idle release, deadline monitoring)
 - Compute `GoalDispatchContextBundle` per dispatch via `ContextProjector`
@@ -376,8 +375,8 @@ await self._autopilot_service.stop()       # graceful drain, then force
 every poll_interval seconds, until shutdown_event:
 
   1. INTAKE
-     drain channel_inbox.read_pending() → goal_engine.create_goal(...)
      drain scheduler.due_tasks() → goal_engine.create_goal(...)
+     (HTTP/CLI submissions arrive via submit_task outside the tick)
 
   2. SCHEDULE
      ready = goal_engine.peek_ready_goals(limit = max_parallel_goals)
@@ -398,7 +397,7 @@ every poll_interval seconds, until shutdown_event:
      release workers idle past loop_idle_timeout
 
   5. DREAMING
-     if goal_engine.is_complete() and inbox is empty:
+     if goal_engine.is_complete():
          enter dreaming mode (poll less frequently until woken)
 ```
 
@@ -569,8 +568,6 @@ agent:
     loop_idle_timeout: 300
     poll_interval: 5
     dreaming_poll_interval: 60
-    inbox_dir: "$SOOTHE_HOME/autopilot/inbox"
-    outbox_dir: "$SOOTHE_HOME/autopilot/outbox"
 
     # Context projection (RFC-222 revised) — bounds GoalDispatchContextBundle size.
     context_projection:
@@ -601,8 +598,8 @@ agent:
 7. Daemon-side `AutopilotService` constructed in `SootheDaemon.start()` but `enabled=False` by default. Scheduling loop runs but no goals exist in its DAG.
 
 **Phase C — cutover endpoint-by-endpoint**
-8. HTTP `/autopilot/submit` calls `autopilot.submit_task` instead of writing inbox files. Other `/autopilot/*` endpoints rewire to live service.
-9. Channel inbox processing turns on. Goals submitted via HTTP flow through daemon's autopilot, get dispatched to workers via `LoopRunRequest(autopilot_job=…)`.
+8. HTTP `/autopilot/submit` and related endpoints route through live `AutopilotService`.
+9. Goals submitted via HTTP flow through daemon's autopilot, get dispatched to workers via `LoopRunRequest(autopilot_job=…)`.
 10. Run both paths in parallel for one release. Gather telemetry.
 
 **Phase D — destructive cleanup**
@@ -652,7 +649,7 @@ These were debated in the brainstorming session and locked as defaults:
 | H4 — No crash recovery for in-flight goals | Reset `active` → `pending` on daemon start; hydrate from `GoalDispatchContextContribution`. |
 | H5 — No deadline / hang detection | `AutopilotJob.deadline_seconds` + monitor tick. |
 | H8 — Goal cancellation not wired | `autopilot.cancel_goal()` + existing RFC-221 `cancel_event`. |
-| M1 — Channel inbox disconnected | `ChannelInbox` consumer + `/autopilot/submit` cutover. |
+| M1 — Channel inbox disconnected | Resolved: file-based inbox removed; `/autopilot/submit` and related endpoints require live `AutopilotService`. |
 | M9 — No integration tests | Phase C end-to-end test required before cutover. |
 
 Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope and tracked for future RFCs.
