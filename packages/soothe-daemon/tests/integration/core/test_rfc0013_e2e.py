@@ -654,14 +654,14 @@ async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
 
     # Initial state
     await asyncio.sleep(0.2)
-    initial_count = daemon._transport_manager.client_count
+    initial_count = daemon._channel_manager.client_count
 
     # Connect Unix socket client
     client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client1.connect()
     await asyncio.sleep(0.1)
 
-    count_after_1 = daemon._transport_manager.client_count
+    count_after_1 = daemon._channel_manager.client_count
     assert count_after_1 >= initial_count + 1
 
     # Connect second Unix socket client
@@ -669,21 +669,21 @@ async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
     await client2.connect()
     await asyncio.sleep(0.1)
 
-    count_after_2 = daemon._transport_manager.client_count
+    count_after_2 = daemon._channel_manager.client_count
     assert count_after_2 >= count_after_1 + 1
 
     # Disconnect first client
     await client1.close()
     await asyncio.sleep(0.1)
 
-    count_after_disconnect = daemon._transport_manager.client_count
+    count_after_disconnect = daemon._channel_manager.client_count
     assert count_after_disconnect < count_after_2
 
     # Disconnect second client
     await client2.close()
     await asyncio.sleep(0.1)
 
-    final_count = daemon._transport_manager.client_count
+    final_count = daemon._channel_manager.client_count
     assert final_count >= initial_count
 
 

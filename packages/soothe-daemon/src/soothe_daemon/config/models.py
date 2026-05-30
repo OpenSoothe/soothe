@@ -120,13 +120,15 @@ class ChannelsConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")  # Allow per-channel plugin configs
 
-    # Built-in channels (alias to transport configs for backward compat)
+    # Built-in channel configs (WebSocket + HTTP REST)
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
     http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
 
     # Global channel settings
     transcription_provider: str = Field(default="groq", description="Audio transcription provider")
-    transcription_language: str | None = Field(default=None, description="Transcription language code")
+    transcription_language: str | None = Field(
+        default=None, description="Transcription language code"
+    )
     send_progress: bool = Field(default=True, description="Show progress indicators")
     send_tool_hints: bool = Field(default=False, description="Show tool execution hints")
     show_reasoning: bool = Field(default=True, description="Show model reasoning content")

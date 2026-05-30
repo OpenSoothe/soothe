@@ -21,9 +21,9 @@ async def test_create_session():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
-    client_id = await manager.create_session(transport=transport, transport_client=None)
+    client_id = await manager.create_session(channel=transport, transport_client=None)
 
     assert client_id is not None
     session = await manager.get_session(client_id)
@@ -43,7 +43,7 @@ async def test_subscribe_loop():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     client_id = await manager.create_session(transport, None)
 
@@ -65,7 +65,7 @@ async def test_subscribe_loop_preserves_stream_delivery_when_omitted():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     client_id = await manager.create_session(transport, None)
 
@@ -85,7 +85,7 @@ async def test_unsubscribe_loop():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     client_id = await manager.create_session(transport, None)
     subscribe_result = await manager.subscribe_loop(client_id, "loop-abc123")
@@ -130,7 +130,7 @@ async def test_remove_session():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     client_id = await manager.create_session(transport, None)
     result = await manager.subscribe_loop(client_id, "loop-abc123")
@@ -152,7 +152,7 @@ async def test_sender_loop_sends_events():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
@@ -186,7 +186,7 @@ async def test_sender_loop_stops_on_error():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock(side_effect=Exception("Connection error"))
 
     client_id = await manager.create_session(transport, None)
@@ -216,7 +216,7 @@ async def test_sender_loop_treats_connection_error_as_disconnect(caplog: pytest.
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock(side_effect=ConnectionError("peer closed"))
 
     client_id = await manager.create_session(transport, None)
@@ -249,7 +249,7 @@ async def test_subscribe_loop_replaces_prior_subscription():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     client_id = await manager.create_session(transport, None)
 
@@ -273,7 +273,7 @@ async def test_subscribe_loop_accepts_normal_verbosity() -> None:
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     client_id = await manager.create_session(transport, None)
     result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="normal")
@@ -293,7 +293,7 @@ async def test_sender_loop_filters_detailed_event_for_normal_verbosity() -> None
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
@@ -326,7 +326,7 @@ async def test_sender_loop_filters_verbose_events_even_at_debug_verbosity() -> N
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
@@ -359,7 +359,7 @@ async def test_send_to_client_serializes_concurrent_sends() -> None:
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     in_flight = 0
     max_in_flight = 0
     send_lock = asyncio.Lock()
@@ -395,7 +395,7 @@ async def test_wake_senders_for_loop_restarts_dead_sender() -> None:
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
@@ -430,7 +430,7 @@ async def test_session_count():
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
 
     assert manager.session_count == 0
 
@@ -529,7 +529,7 @@ async def test_sender_loop_flushes_high_priority_immediately() -> None:
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
@@ -580,7 +580,7 @@ async def test_sender_loop_batches_normal_priority() -> None:
     manager = ClientSessionManager(bus, config=config)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
@@ -618,7 +618,7 @@ async def test_await_loop_delivery_drained_with_high_priority() -> None:
     manager = ClientSessionManager(bus)
 
     transport = MagicMock()
-    transport.transport_type = "test"
+    transport.name = "test"
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)

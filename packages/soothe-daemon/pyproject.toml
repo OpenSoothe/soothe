@@ -35,6 +35,23 @@ dependencies = [
     "typer>=0.9.0,<1.0.0",
     "uvicorn[standard]>=0.24.0",
     "websockets>=12.0",
+    # External channel dependencies (migrated from nanoBot)
+    "python-telegram-bot[socks,webhooks]>=22.6,<23.0",
+    "slack-sdk>=3.39.0,<4.0.0",
+    "slackify-markdown>=0.2.0,<1.0.0",
+    "lark-oapi>=1.5.0,<2.0.0",
+    "dingtalk-stream>=0.24.0,<1.0.0",
+    "qq-botpy>=1.2.0,<2.0.0",
+    "httpx>=0.28.0,<1.0.0",
+    "discord.py>=2.5.2,<3.0.0",
+    "matrix-nio>=0.25.2; sys_platform != 'win32'",  # e2e extra requires python-olm which has CMake issues
+    "mistune>=3.0.0,<4.0.0",
+    "nh3>=0.2.17,<1.0.0",
+    "wecom-aibot-sdk-python>=0.1.5",
+    "qrcode[pil]>=8.0",
+    "pycryptodome>=3.20.0",
+    "PyJWT>=2.0,<3.0",
+    "cryptography>=41.0",
 ]
 
 [project.optional-dependencies]

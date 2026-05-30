@@ -23,8 +23,8 @@ if TYPE_CHECKING:
     from soothe.config.models import OutputStreamingConfig
     from soothe.core.events import EventMeta
 
+    from soothe_daemon.channels.base import Channel
     from soothe_daemon.event import EventBus
-    from soothe_daemon.transports.base import TransportServer
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +82,8 @@ class ClientSession:
 
     Attributes:
         client_id: Unique identifier for this client
-        transport: Transport server instance
-        transport_client: Transport-specific client object
+        transport: Channel instance handling wire I/O
+        transport_client: Channel-specific client handle (e.g. WebSocket)
         subscriptions: Set of loop_ids this client receives events for
         event_queue: Queue for delivering events to the client
         sender_task: Background task that sends events to the client
@@ -94,8 +94,8 @@ class ClientSession:
     """
 
     client_id: str
-    transport: TransportServer
-    transport_client: Any  # Transport-specific client object
+    transport: Channel
+    transport_client: Any  # WebSocket connection or channel-specific handle
     subscriptions: set[str] = field(default_factory=set)
     event_queue: asyncio.Queue[dict[str, Any]] = field(
         default_factory=lambda: asyncio.Queue(maxsize=10000)
@@ -164,7 +164,7 @@ class ClientSessionManager:
 
     async def create_session(
         self,
-        transport: TransportServer,
+        channel: Channel,
         transport_client: Any,
         client_id: str | None = None,
     ) -> str:
@@ -173,7 +173,7 @@ class ClientSessionManager:
 
         session = ClientSession(
             client_id=client_id,
-            transport=transport,
+            transport=channel,
             transport_client=transport_client,
         )
 
@@ -186,7 +186,7 @@ class ClientSessionManager:
 
         # Set client_id in logging context for full ID in daemon.log
         set_client_id(client_id)
-        logger.info("[Session] Client %s connected (%s)", client_id, transport.transport_type)
+        logger.info("[Session] Client %s connected (%s)", client_id, channel.name)
 
         return client_id
 

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_daemon.channel_manager import ChannelManager, _SEND_RETRY_DELAYS
+from soothe_daemon.channel_manager import _SEND_RETRY_DELAYS, ChannelManager
 from soothe_daemon.channels.message import ChannelMessage
 
 
@@ -21,14 +20,13 @@ class MockChannel:
     supports_outbound = True
     supports_streaming = False
     client_count = 0
-    transport_type = "mock"
 
     def __init__(self, config, **kwargs):
         self.config = config
         self._messages: list[ChannelMessage] = []
         self._running = False
 
-    async def start(self, message_handler, handshake_callback):
+    async def start(self):
         self._running = True
 
     async def stop(self):
@@ -39,9 +37,6 @@ class MockChannel:
 
     async def send(self, chat_id: str, message: ChannelMessage):
         self._messages.append(message)
-
-    def get_transport_info(self):
-        return {"type": self.name, "client_count": self.client_count}
 
 
 class MockEventBus:
@@ -381,14 +376,6 @@ class TestChannelManagerProperties:
 
         assert manager.channel_count == 2
 
-    def test_transport_count_alias(self):
-        """Test transport_count is alias for channel_count."""
-        config = MockDaemonConfig()
-        event_bus = MockEventBus()
-        manager = ChannelManager(config, event_bus)
-
-        assert manager.transport_count == manager.channel_count
-
     def test_enabled_channels(self):
         """Test enabled_channels returns channel names."""
         config = MockDaemonConfig()
@@ -415,24 +402,6 @@ class TestChannelManagerProperties:
         assert len(info) == 1
         assert info[0]["type"] == "mock"
         assert info[0]["client_count"] == 5
-
-
-class TestChannelManagerCompatibility:
-    """Tests for TransportManager compatibility aliases."""
-
-    def test_get_transport_info_alias(self):
-        """Test get_transport_info aliases get_channel_info."""
-        config = MockDaemonConfig()
-        event_bus = MockEventBus()
-        manager = ChannelManager(config, event_bus)
-
-        ch1 = MockChannel({})
-        manager._channels["ch1"] = ch1
-
-        transport_info = manager.get_transport_info()
-        channel_info = manager.get_channel_info()
-
-        assert transport_info == channel_info
 
     def test_channels_property(self):
         """Test channels property returns _channels dict."""
