@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from deepagents.backends.protocol import EditResult, LsResult
 
-from soothe.core.workspace.refactored_backend import (
+from soothe.core.workspace.normalized_backend import (
     NormalizedPathBackend,
     WorkspaceAwareBackend,
 )

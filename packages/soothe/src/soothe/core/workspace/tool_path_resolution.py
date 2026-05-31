@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.core.workspace.refactored_backend import NormalizedPathBackend
+from soothe.core.workspace.normalized_backend import NormalizedPathBackend
 from soothe.core.workspace.resolution import resolve_daemon_workspace
 
 

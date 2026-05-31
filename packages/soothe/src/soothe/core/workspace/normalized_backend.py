@@ -1,7 +1,7 @@
-"""Refactored workspace backend using UnifiedFilesystem.
+"""Normalized path backend for workspace filesystem operations.
 
 This module provides workspace-aware filesystem operations using the native
-Soothe UnifiedFilesystem interface instead of external dependencies.
+Soothe UnifiedFilesystem interface with deepagents compatibility.
 """
 
 from __future__ import annotations
@@ -436,32 +436,40 @@ class NormalizedPathBackend:
         ]
 
     def glob(self, pattern: str, path: str = "/") -> Any:
-        """Glob pattern matching."""
-        from soothe.core.filesystem.protocol import GlobResult
+        """Glob pattern matching.
+
+        Returns deepagents-compatible GlobResult with FileInfo dicts.
+        """
+        from deepagents.backends.protocol import GlobResult as DaGlobResult
 
         normalized = self._normalize_path(path)
         result = self._fs.glob(pattern, path=normalized)
 
-        # Convert to GlobResult format
-        return GlobResult(
-            matches=result.matches,
-            truncated=result.truncated,
-            total_count=result.total_count,
+        # Convert string matches to FileInfo dicts for deepagents compatibility
+        # deepagents expects matches: list[FileInfo] where FileInfo is a TypedDict with "path" key
+        file_infos = [{"path": p, "is_dir": False} for p in (result.matches or [])]
+
+        return DaGlobResult(
             error=result.error,
+            matches=file_infos,
         )
 
     async def aglob(self, pattern: str, path: str = "/") -> Any:
-        """Async glob pattern matching."""
-        from soothe.core.filesystem.protocol import GlobResult
+        """Async glob pattern matching.
+
+        Returns deepagents-compatible GlobResult with FileInfo dicts.
+        """
+        from deepagents.backends.protocol import GlobResult as DaGlobResult
 
         normalized = self._normalize_path(path)
         result = await self._fs.aglob(pattern, path=normalized)
 
-        return GlobResult(
-            matches=result.matches,
-            truncated=result.truncated,
-            total_count=result.total_count,
+        # Convert string matches to FileInfo dicts for deepagents compatibility
+        file_infos = [{"path": p, "is_dir": False} for p in (result.matches or [])]
+
+        return DaGlobResult(
             error=result.error,
+            matches=file_infos,
         )
 
     def grep(
@@ -469,36 +477,85 @@ class NormalizedPathBackend:
         pattern: str,
         path: str = ".",
         output_mode: str = "files_with_matches",
-        include: str | None = None,
-    ) -> str:
-        """Search for pattern in files."""
-        normalized = self._normalize_path(path)
-        result = self._fs.grep(pattern, path=normalized, glob=include, output_mode=output_mode)
+        glob: str | None = None,
+    ) -> Any:
+        """Search for pattern in files.
 
-        if isinstance(result, str):
-            return result
-        if isinstance(result, list):
-            return "\n".join(result)
-        return ""
+        Returns deepagents-compatible GrepResult.
+
+        Args:
+            pattern: Search pattern.
+            path: Directory to search.
+            output_mode: Output format.
+            glob: Glob pattern to filter files (deepagents parameter name).
+        """
+        from deepagents.backends.protocol import GrepResult
+
+        normalized = self._normalize_path(path)
+        try:
+            result = self._fs.grep(pattern, path=normalized, glob=glob, output_mode=output_mode)
+
+            # Convert to GrepResult format with GrepMatch dicts
+            matches = []
+            if isinstance(result, str) and result:
+                # For files_with_matches, result is newline-separated paths
+                for line in result.split("\n"):
+                    if line:
+                        matches.append({"path": line, "line": 0, "text": ""})
+            elif isinstance(result, list):
+                for item in result:
+                    if isinstance(item, dict):
+                        matches.append(item)
+                    elif isinstance(item, str):
+                        matches.append({"path": item, "line": 0, "text": ""})
+
+            return GrepResult(error=None, matches=matches)
+        except Exception as e:
+            logger.warning("grep error for %s: %s", path, e)
+            return GrepResult(error=str(e), matches=None)
 
     async def agrep(
         self,
         pattern: str,
         path: str = ".",
         output_mode: str = "files_with_matches",
-        include: str | None = None,
-    ) -> str:
-        """Async search for pattern in files."""
-        normalized = self._normalize_path(path)
-        result = await self._fs.agrep(
-            pattern, path=normalized, glob=include, output_mode=output_mode
-        )
+        glob: str | None = None,
+    ) -> Any:
+        """Async search for pattern in files.
 
-        if isinstance(result, str):
-            return result
-        if isinstance(result, list):
-            return "\n".join(result)
-        return ""
+        Returns deepagents-compatible GrepResult.
+
+        Args:
+            pattern: Search pattern.
+            path: Directory to search.
+            output_mode: Output format.
+            glob: Glob pattern to filter files (deepagents parameter name).
+        """
+        from deepagents.backends.protocol import GrepResult
+
+        normalized = self._normalize_path(path)
+        try:
+            result = await self._fs.agrep(
+                pattern, path=normalized, glob=glob, output_mode=output_mode
+            )
+
+            # Convert to GrepResult format with GrepMatch dicts
+            matches = []
+            if isinstance(result, str) and result:
+                for line in result.split("\n"):
+                    if line:
+                        matches.append({"path": line, "line": 0, "text": ""})
+            elif isinstance(result, list):
+                for item in result:
+                    if isinstance(item, dict):
+                        matches.append(item)
+                    elif isinstance(item, str):
+                        matches.append({"path": item, "line": 0, "text": ""})
+
+            return GrepResult(error=None, matches=matches)
+        except Exception as e:
+            logger.warning("agrep error for %s: %s", path, e)
+            return GrepResult(error=str(e), matches=None)
 
     def delete(self, path: str) -> str:
         """Delete file or directory."""
@@ -702,20 +759,20 @@ class WorkspaceAwareBackend:
         pattern: str,
         path: str = ".",
         output_mode: str = "files_with_matches",
-        include: str | None = None,
-    ) -> str:
+        glob: str | None = None,
+    ) -> Any:
         """Search for pattern in files."""
-        return self._get_backend().grep(pattern, path, output_mode, include)
+        return self._get_backend().grep(pattern, path, output_mode, glob)
 
     async def agrep(
         self,
         pattern: str,
         path: str = ".",
         output_mode: str = "files_with_matches",
-        include: str | None = None,
-    ) -> str:
+        glob: str | None = None,
+    ) -> Any:
         """Async search for pattern in files."""
-        return await self._get_backend().agrep(pattern, path, output_mode, include)
+        return await self._get_backend().agrep(pattern, path, output_mode, glob)
 
     def delete(self, path: str) -> str:
         """Delete file or directory."""
