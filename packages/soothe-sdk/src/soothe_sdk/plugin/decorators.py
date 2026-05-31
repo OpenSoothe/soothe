@@ -296,7 +296,7 @@ def subagent(
 
     This decorator attaches metadata to a method that identifies it as a
     subagent factory. The method should create and return a subagent
-    compatible with deepagents (SubAgent or CompiledSubAgent).
+    compatible with Soothe (SubAgent or CompiledSubAgent).
 
     Display names are automatically generated from snake_case to PascalCase
     (e.g., "my_agent" → "MyAgent").
