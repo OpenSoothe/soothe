@@ -40,6 +40,7 @@ def run_impl(
         mcp_config: Path to additional MCP server config (JSON/YAML) to merge.
     """
     startup_start = time.perf_counter()
+    use_headless: bool | None = None  # Track execution mode for exit tip
 
     try:
         cfg = load_config()
@@ -92,8 +93,29 @@ def run_impl(
         run_elapsed_s = time.perf_counter() - run_start
         typer.echo(f"Total running time: {run_elapsed_s:.2f}s", err=True)
 
+        # Show tip to continue the loop after TUI exits normally
+        if use_headless is False:
+            from soothe_cli.cli.execution.launcher import get_last_app_result
+
+            result = get_last_app_result()
+            if result is not None and result.loop_id:
+                typer.echo(
+                    f"💡 To continue this loop: soothe loop continue {result.loop_id}",
+                    err=True,
+                )
+
     except KeyboardInterrupt:
         typer.echo("\nInterrupted. (daemon query cancelled)")
+        # Also show loop continuation tip on Ctrl+C exit
+        if use_headless is False:
+            from soothe_cli.cli.execution.launcher import get_last_app_result
+
+            result = get_last_app_result()
+            if result is not None and result.loop_id:
+                typer.echo(
+                    f"💡 To continue this loop: soothe loop continue {result.loop_id}",
+                    err=True,
+                )
         sys.exit(130)
     except Exception as e:
         logger.exception("CLI run error")

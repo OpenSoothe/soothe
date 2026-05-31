@@ -690,6 +690,11 @@ def continue_loop(
     ws_url = websocket_url_from_config(config)
     _require_daemon(ws_url)
     resolved_loop_id = _resolve_continue_loop_id(ws_url, loop_id)
+
+    # Show explicit message when user specified a loop_id
+    if loop_id:
+        console.print(f"[info]Continuing loop: {resolved_loop_id}[/info]")
+
     from soothe_cli.cli.commands.run_cmd import run_impl
 
     run_impl(
