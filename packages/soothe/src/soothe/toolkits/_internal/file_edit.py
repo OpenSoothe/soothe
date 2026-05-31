@@ -14,7 +14,7 @@ _MIN_PATH_SEGMENTS = 2
 def _detect_stripped_absolute_path(file_path: str) -> str | None:
     """Detect if a relative path looks like a stripped absolute path.
 
-    Some model/tool chains or the deepagents backend drop the leading "/" from
+    Some model/tool chains or the backend drop the leading "/" from
     absolute paths. This function detects common patterns and returns the
     corrected absolute path.
 
@@ -79,7 +79,7 @@ def _detect_stripped_absolute_path(file_path: str) -> str | None:
 def _normalize_workspace_relative_input(file_path: str, work_dir: str) -> str:
     """Normalize stripped-absolute inputs into workspace-relative paths.
 
-    Some model/tool chains or deepagents backend may drop the leading "/" from
+    Some model/tool chains or backend may drop the leading "/" from
     absolute paths, producing values like ``Users/name/workspace/project/tests/out.md``.
 
     Strategy:

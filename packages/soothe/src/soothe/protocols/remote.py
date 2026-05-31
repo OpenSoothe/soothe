@@ -14,7 +14,7 @@ class RemoteAgentProtocol(Protocol):
 
     Current implementations are accessed through `RemoteAgentProtocol`
     directly. Future remote backends may additionally be wrapped as
-    deepagents `CompiledSubAgent` instances for uniform task-tool access.
+    `CompiledSubAgent` instances for uniform task-tool access.
     """
 
     async def invoke(self, task: str, context: dict[str, Any] | None = None) -> str:

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# deepagents / Soothe main graph: subagents are invoked only via this tool name.
+# Soothe main graph: subagents are invoked only via this tool name.
 _TASK_TOOL_NAME = "task"
 # Layer 2 ``ExecutionHintsMiddleware`` appends using this prefix (must stay in sync).
 _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
@@ -161,6 +161,17 @@ class SystemPromptMiddleware(AgentMiddleware):
         self._mcp_registry = mcp_registry
 
     @staticmethod
+    def _langfuse_runnable_config() -> dict[str, Any] | None:
+        """Best-effort RunnableConfig for Langfuse hint registration (execute-step forks)."""
+        try:
+            from langgraph.config import get_config
+
+            cfg = get_config()
+            return cfg if isinstance(cfg, dict) else None
+        except Exception:
+            return None
+
+    @staticmethod
     def _langfuse_system_hint_push(request: ModelRequest[ContextT]) -> Token | None:
         """Push effective system prompt for Langfuse generation input (IG-385).
 
@@ -182,7 +193,10 @@ class SystemPromptMiddleware(AgentMiddleware):
             text = sm.content.strip()
         if not text:
             return None
-        return publish_langfuse_system_prompt_hint(text)
+        return publish_langfuse_system_prompt_hint(
+            text,
+            runnable_config=SystemPromptMiddleware._langfuse_runnable_config(),
+        )
 
     def _build_environment_section(self) -> str:
         """Build <ENVIRONMENT> section (static, always present for medium/complex).
@@ -919,10 +933,11 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         modified_request = self.modify_request(request)
         tok = self._langfuse_system_hint_push(modified_request)
+        runnable_config = self._langfuse_runnable_config()
         try:
             return handler(modified_request)
         finally:
-            clear_langfuse_system_prompt_hint(tok)
+            clear_langfuse_system_prompt_hint(tok, runnable_config=runnable_config)
 
     async def awrap_model_call(
         self,
@@ -944,7 +959,8 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         modified_request = self.modify_request(request)
         tok = self._langfuse_system_hint_push(modified_request)
+        runnable_config = self._langfuse_runnable_config()
         try:
             return await handler(modified_request)
         finally:
-            clear_langfuse_system_prompt_hint(tok)
+            clear_langfuse_system_prompt_hint(tok, runnable_config=runnable_config)

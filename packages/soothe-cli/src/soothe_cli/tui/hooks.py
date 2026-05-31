@@ -1,4 +1,4 @@
-"""Hook system for TUI events (stub implementation from deepagents-cli migration).
+"""Hook system for TUI events.
 
 This module provides hook dispatch functionality for TUI events.
 Full implementation should integrate with Soothe's event system.

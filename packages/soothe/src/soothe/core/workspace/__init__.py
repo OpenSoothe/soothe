@@ -1,7 +1,7 @@
 """Workspace management package - unified workspace resolution, validation, and backend.
 
-Heavy backends (``deepagents``) load only when accessed via attribute lookup, so
-daemon startup can import resolution helpers without pulling LangChain providers.
+This package provides workspace-aware filesystem operations using the native
+Soothe UnifiedFilesystem interface.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ __all__ = [
     "resolve_workspace_for_stream",
     "set_virtual_mode_context",
     "validate_client_workspace",
+    "get_workspace_backend",
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
@@ -47,9 +48,11 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "get_git_status": (".resolution", "get_git_status"),
     "ResolvedWorkspace": (".stream_resolution", "ResolvedWorkspace"),
     "resolve_workspace_for_stream": (".stream_resolution", "resolve_workspace_for_stream"),
-    "WorkspaceAwareBackend": (".backend", "WorkspaceAwareBackend"),
-    "NormalizedPathBackend": (".backend", "NormalizedPathBackend"),
-    "FrameworkFilesystem": (".framework_filesystem", "FrameworkFilesystem"),
+    # Refactored backend
+    "WorkspaceAwareBackend": (".refactored_backend", "WorkspaceAwareBackend"),
+    "NormalizedPathBackend": (".refactored_backend", "NormalizedPathBackend"),
+    "FrameworkFilesystem": (".refactored_backend", "FrameworkFilesystem"),
+    "get_workspace_backend": (".refactored_backend", "get_workspace_backend"),
     "get_virtual_home": (".virtual_home", "get_virtual_home"),
     "get_virtual_mode": (".virtual_home", "get_virtual_mode"),
     "set_virtual_mode_context": (".virtual_home", "set_virtual_mode_context"),

@@ -3,7 +3,7 @@
 Self-contained module wrapping CompiledStateGraph with typed protocol properties.
 Pure execution runtime - NO goal infrastructure (Layer 2/3 responsibility).
 
-This module defines the clear boundary between Soothe and deepagents:
+Architecture:
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Soothe CoreAgent (Layer 1)                                         │
@@ -14,19 +14,19 @@ This module defines the clear boundary between Soothe and deepagents:
 │  └─────────────────────────────────────────────────────────────┘    │
 │                              ↓                                      │
 │  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Soothe Middleware Stack (5 middlewares):                   │    │
+│  │  Soothe Middleware Stack:                                 │    │
 │  │  1. SoothePolicyMiddleware - safety enforcement             │    │
-│  │  2. SystemPromptMiddleware - dynamic prompts                  │    │
-│  │  3. ExecutionHintsMiddleware - Layer 2 → Layer 1 hints      │    │
+│  │  2. SystemPromptMiddleware - dynamic prompts                │    │
+│  │  3. ExecutionHintsMiddleware - Layer 2 → Layer 1 hints    │    │
 │  │  4. WorkspaceContextMiddleware - thread workspace           │    │
 │  │  5. SubagentContextMiddleware - context briefing            │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  deepagents (create_deep_agent)                                     │
-│  - CompiledStateGraph runtime                                       │
-│  - Built-in middleware: TodoList, Filesystem, SubAgent, etc.       │
+│  LangGraph CompiledStateGraph                                       │
+│  - State graph runtime                                              │
+│  - Built-in middleware: TodoList, Filesystem, SubAgent, etc.        │
 │  - Tool parallelism via asyncio.gather                              │
 │  - BackendProtocol for file/execution operations                    │
 └─────────────────────────────────────────────────────────────────────┘

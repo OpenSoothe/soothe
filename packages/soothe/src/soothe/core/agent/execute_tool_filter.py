@@ -1,4 +1,4 @@
-"""Remove deepagents ``execute`` when command sandbox is off.
+"""Remove ``execute`` when command sandbox is off.
 
 ``create_deep_agent`` registers ``execute`` only when a sandbox-capable backend is
 available. ``security.sandbox`` gates whether that tool is advertised to the model.
