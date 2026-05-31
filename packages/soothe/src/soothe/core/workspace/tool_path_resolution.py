@@ -65,7 +65,10 @@ def resolve_backend_os_path(
         virtual_mode=virtual_mode,
         max_file_size_mb=max_file_size_mb,
     )
-    return backend._resolve_path(path)
+    # Use _normalize_path (internal method) to get workspace-relative path
+    normalized = backend._normalize_path(path)
+    # Return the full resolved path
+    return backend._root_dir / normalized
 
 
 def filesystem_virtual_mode_from_soothe_config(config: SootheConfig) -> bool:
