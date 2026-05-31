@@ -1,12 +1,11 @@
-"""Tests for workspace glob gitignore filtering (deepagents glob API)."""
+"""Tests for workspace glob gitignore filtering (WorkspaceFilesystem glob API)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from deepagents.backends.utils import truncate_if_too_long
-
-from soothe.core.workspace.refactored_backend import NormalizedPathBackend
+from soothe.core.filesystem.protocol import GlobResult
+from soothe.core.filesystem.workspace import WorkspaceFilesystem
 
 
 def test_glob_api_respects_gitignore_and_essential_excludes(tmp_path: Path) -> None:
@@ -20,14 +19,16 @@ def test_glob_api_respects_gitignore_and_essential_excludes(tmp_path: Path) -> N
     (ws / "node_modules" / "pkg").mkdir()
     (ws / "node_modules" / "pkg" / "index.js").write_text("x", encoding="utf-8")
 
-    backend = NormalizedPathBackend(root_dir=str(ws), virtual_mode=True, max_file_size_mb=10)
-    result = backend.glob("**/*", "/")
+    # WorkspaceFilesystem has gitignore support
+    fs = WorkspaceFilesystem(workspace=str(ws), virtual_mode=True)
+    result = fs.glob("**/*")
+    assert isinstance(result, GlobResult)
     assert result.error is None
-    paths = [m.get("path", "") for m in result.matches or [] if not m.get("truncated")]
+    paths = result.matches or []
+    # Essential excludes filter out .git and node_modules
     assert not any(".git" in p for p in paths)
     assert not any("node_modules" in p for p in paths)
     assert any("README.md" in p for p in paths)
-    assert len(paths) <= backend.DEFAULT_GLOB_MAX_RESULTS
 
 
 def test_glob_respects_root_gitignore_patterns(tmp_path: Path) -> None:
@@ -40,23 +41,28 @@ def test_glob_respects_root_gitignore_patterns(tmp_path: Path) -> None:
     (ws / "secret_dir" / "hidden.txt").write_text("no", encoding="utf-8")
     (ws / "noise.log").write_text("no", encoding="utf-8")
 
-    backend = NormalizedPathBackend(root_dir=str(ws), virtual_mode=True, max_file_size_mb=10)
-    result = backend.glob("**/*", "/")
-    paths = [m.get("path", "") for m in result.matches or [] if not m.get("truncated")]
+    # WorkspaceFilesystem has gitignore support
+    fs = WorkspaceFilesystem(workspace=str(ws), virtual_mode=True)
+    result = fs.glob("**/*")
+    assert isinstance(result, GlobResult)
+    paths = result.matches or []
     assert any("visible.txt" in p for p in paths)
     assert not any("secret_dir" in p for p in paths)
     assert not any(".log" in p for p in paths)
 
 
 def test_glob_api_output_size_matches_filtered_cap(tmp_path: Path) -> None:
-    """Large workspaces return at most ``DEFAULT_GLOB_MAX_RESULTS`` entries."""
+    """Large workspaces return at most DEFAULT_GLOB_MAX_RESULTS entries."""
     ws = tmp_path / "repo"
     ws.mkdir()
     for i in range(200):
         (ws / f"file_{i}.txt").write_text("x", encoding="utf-8")
 
-    backend = NormalizedPathBackend(root_dir=str(ws), virtual_mode=True, max_file_size_mb=10)
-    filtered = backend.glob("**/*", "/")
-    filtered_paths = [m.get("path", "") for m in filtered.matches or [] if not m.get("truncated")]
-    assert len(filtered_paths) <= backend.DEFAULT_GLOB_MAX_RESULTS
-    assert len(str(truncate_if_too_long(filtered_paths))) < 200 * 20
+    # WorkspaceFilesystem has output size caps
+    fs = WorkspaceFilesystem(workspace=str(ws), virtual_mode=True)
+    result = fs.glob("**/*")
+    assert isinstance(result, GlobResult)
+    paths = result.matches or []
+    # WorkspaceFilesystem caps results at DEFAULT_GLOB_MAX_RESULTS (50)
+    assert len(paths) <= WorkspaceFilesystem.DEFAULT_GLOB_MAX_RESULTS
+    assert result.truncated is True
