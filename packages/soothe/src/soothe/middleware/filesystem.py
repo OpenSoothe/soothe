@@ -298,9 +298,15 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         """Map logical tool path to OS path using the same rules as ``FilesystemBackend``."""
         try:
             rb = self._backend_for_tools(runtime)
-            # Use _normalize_path to get workspace-relative path, then resolve to full path
-            normalized = rb._normalize_path(logical_path)
-            return rb._root_dir / normalized, None
+            # NormalizedPathBackend has _normalize_path and _root_dir
+            if hasattr(rb, "_normalize_path") and hasattr(rb, "_root_dir"):
+                normalized = rb._normalize_path(logical_path)
+                return rb._root_dir / normalized, None
+            # Standard FilesystemBackend: use _resolve_path for proper path handling
+            if hasattr(rb, "_resolve_path"):
+                return rb._resolve_path(logical_path), None
+            # Fallback: treat as relative to current working directory
+            return Path(logical_path), None
         except (ValueError, RuntimeError) as e:
             return None, str(e)
 

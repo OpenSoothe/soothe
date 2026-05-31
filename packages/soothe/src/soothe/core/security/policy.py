@@ -217,18 +217,36 @@ class SecurityPolicy:
                 )
             )
 
-        # Check absolute path
+        # Check absolute path (skip if path is in allowed_paths whitelist)
         if path.startswith("/") and not self.allow_absolute:
-            violations.append(
-                PolicyViolation(
-                    policy_name=self.name,
-                    violation_type="absolute_path_not_allowed",
-                    message="Absolute paths are not allowed",
-                    path=path,
-                    operation=operation,
-                    severity="high",
+            # Whitelist bypass: if allowed_paths is set, check if path is whitelisted
+            if self.allowed_paths is not None:
+                is_whitelisted = any(
+                    path.startswith(allowed_path) or allowed_path in path
+                    for allowed_path in self.allowed_paths
                 )
-            )
+                if not is_whitelisted:
+                    violations.append(
+                        PolicyViolation(
+                            policy_name=self.name,
+                            violation_type="absolute_path_not_allowed",
+                            message="Absolute paths are not allowed",
+                            path=path,
+                            operation=operation,
+                            severity="high",
+                        )
+                    )
+            else:
+                violations.append(
+                    PolicyViolation(
+                        policy_name=self.name,
+                        violation_type="absolute_path_not_allowed",
+                        message="Absolute paths are not allowed",
+                        path=path,
+                        operation=operation,
+                        severity="high",
+                    )
+                )
 
         # Check traversal
         if ".." in path and not self.allow_traversal:
@@ -366,7 +384,6 @@ class SecurityPolicy:
         # Determine final decision
         if violations:
             critical = any(v.severity == "critical" for v in violations)
-            high = any(v.severity == "high" for v in violations)
 
             if critical:
                 return PolicyDecision(
@@ -375,18 +392,19 @@ class SecurityPolicy:
                     reason="Critical policy violations detected",
                     violations=violations,
                 )
-            elif high and self.on_violation == PolicyAction.DENY:
+            elif self.on_violation == PolicyAction.DENY:
+                # on_violation=DENY denies all violations (high or medium)
                 return PolicyDecision(
                     allowed=False,
                     action=PolicyAction.DENY,
-                    reason="High severity policy violations detected",
+                    reason="Policy violations detected and denied by policy",
                     violations=violations,
                 )
             else:
                 return PolicyDecision(
                     allowed=True,
                     action=self.on_suspicious,
-                    reason="Policy violations detected but not critical",
+                    reason="Policy violations detected but not denied",
                     violations=violations,
                 )
 
