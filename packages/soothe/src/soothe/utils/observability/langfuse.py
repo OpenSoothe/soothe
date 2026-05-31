@@ -282,6 +282,8 @@ def merge_langfuse_runnable_config(
     meta = dict(out.get("metadata") or {})
     if session_id:
         meta.setdefault("langfuse_session_id", session_id)
+        # Align callback metadata with configurable.thread_id for system-prompt hints (IG-385).
+        meta.setdefault("thread_id", session_id)
     if loop_id:
         meta.setdefault("loop_id", loop_id)
     tags_cfg = _resolved_langfuse_tags(soothe_config)

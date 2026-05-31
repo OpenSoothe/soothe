@@ -7,13 +7,10 @@ with LangChain-based applications.
 Example:
     >>> from soothe.core.filesystem import create_filesystem
     >>> from soothe.core.filesystem.langchain_adapter import LangChainAdapter
-    >>> 
     >>> # Create underlying filesystem
     >>> fs = create_filesystem("/workspace")
-    >>> 
     >>> # Wrap with LangChain adapter
     >>> langchain_fs = LangChainAdapter(fs)
-    >>> 
     >>> # Use with LangChain tools
     >>> from langchain_community.tools.file_management import ReadFileTool
     >>> tool = ReadFileTool(fs=langchain_fs)
@@ -24,27 +21,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .exceptions import (
-    DirectoryNotEmptyError,
-    FilesystemError,
-    InvalidPathError,
-    NotADirectoryError,
-    NotAFileError,
-    PathNotFoundError,
-    PathTraversalError,
-    PermissionDeniedError,
-)
+from .local import LocalFilesystem
 from .protocol import (
     DeleteResult,
     EditResult,
     FileInfo,
     GlobResult,
-    GrepMatch,
     GrepResult,
     ReadResult,
     WriteResult,
 )
-from .local import LocalFilesystem
 from .unified import UnifiedFilesystem
 
 
@@ -68,17 +54,15 @@ class LangChainAdapter(UnifiedFilesystem):
     Example:
         >>> from soothe.core.filesystem import LocalFilesystem
         >>> from soothe.core.filesystem.langchain_adapter import LangChainAdapter
-        >>> 
         >>> underlying = LocalFilesystem("/workspace")
         >>> adapter = LangChainAdapter(underlying)
-        >>> 
         >>> # Use UnifiedFilesystem methods
         >>> result = adapter.read("config.json")
         >>> print(result.content)
-        
+
         >>> # LangChain-compatible properties
         >>> print(adapter.root_dir)
-        
+
         >>> # Check if LangChain tools are available
         >>> if adapter.has_langchain_tools:
         ...     tool = adapter.get_read_file_tool()
@@ -135,8 +119,9 @@ class LangChainAdapter(UnifiedFilesystem):
         if not self._enable_langchain_tools:
             return False
         try:
-            import langchain_community.tools.file_management
-            return True
+            import importlib.util
+
+            return importlib.util.find_spec("langchain_community.tools.file_management") is not None
         except ImportError:
             return False
 
@@ -312,9 +297,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See read() for details.
         """
-        return await self._underlying.aread(
-            path, offset=offset, limit=limit, encoding=encoding
-        )
+        return await self._underlying.aread(path, offset=offset, limit=limit, encoding=encoding)
 
     # ========================================================================
     # Write Operations (delegated to underlying)
@@ -357,9 +340,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See write() for details.
         """
-        return await self._underlying.awrite(
-            path, content, encoding=encoding, backup=backup
-        )
+        return await self._underlying.awrite(path, content, encoding=encoding, backup=backup)
 
     # ========================================================================
     # Edit Operations (delegated to underlying)
@@ -402,9 +383,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See edit() for details.
         """
-        return await self._underlying.aedit(
-            path, old_string, new_string, backup=backup
-        )
+        return await self._underlying.aedit(path, old_string, new_string, backup=backup)
 
     def edit_lines(
         self,
@@ -431,9 +410,7 @@ class LangChainAdapter(UnifiedFilesystem):
             PathNotFoundError: If file does not exist.
             FilesystemError: If line range invalid.
         """
-        return self._underlying.edit_lines(
-            path, start_line, end_line, new_content, backup=backup
-        )
+        return self._underlying.edit_lines(path, start_line, end_line, new_content, backup=backup)
 
     async def aedit_lines(
         self,
@@ -485,9 +462,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See insert_lines() for details.
         """
-        return await self._underlying.ainsert_lines(
-            path, line, content, backup=backup
-        )
+        return await self._underlying.ainsert_lines(path, line, content, backup=backup)
 
     def delete_lines(
         self,
@@ -522,9 +497,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See delete_lines() for details.
         """
-        return await self._underlying.adelete_lines(
-            path, start_line, end_line, backup=backup
-        )
+        return await self._underlying.adelete_lines(path, start_line, end_line, backup=backup)
 
     def apply_diff(
         self,
@@ -631,9 +604,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See mkdir() for details.
         """
-        return await self._underlying.amkdir(
-            path, recursive=recursive, exist_ok=exist_ok
-        )
+        return await self._underlying.amkdir(path, recursive=recursive, exist_ok=exist_ok)
 
     def rmdir(
         self,
@@ -668,9 +639,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See rmdir() for details.
         """
-        return await self._underlying.armdir(
-            path, recursive=recursive, backup=backup
-        )
+        return await self._underlying.armdir(path, recursive=recursive, backup=backup)
 
     # ========================================================================
     # File Operations (delegated to underlying)
@@ -828,9 +797,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See glob() for details.
         """
-        return await self._underlying.aglob(
-            pattern, path=path, include_ignored=include_ignored
-        )
+        return await self._underlying.aglob(pattern, path=path, include_ignored=include_ignored)
 
     def grep(
         self,
@@ -851,9 +818,7 @@ class LangChainAdapter(UnifiedFilesystem):
         Returns:
             GrepResult, list of files, or count string depending on mode.
         """
-        return self._underlying.grep(
-            pattern, path=path, glob=glob, output_mode=output_mode
-        )
+        return self._underlying.grep(pattern, path=path, glob=glob, output_mode=output_mode)
 
     async def agrep(
         self,
@@ -867,9 +832,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         See grep() for details.
         """
-        return await self._underlying.agrep(
-            pattern, path=path, glob=glob, output_mode=output_mode
-        )
+        return await self._underlying.agrep(pattern, path=path, glob=glob, output_mode=output_mode)
 
     # ========================================================================
     # LangChain Tool Factory Methods
@@ -890,6 +853,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         try:
             from langchain_community.tools.file_management import ReadFileTool
+
             return ReadFileTool(fs=self)
         except ImportError as e:
             raise ImportError(
@@ -912,6 +876,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         try:
             from langchain_community.tools.file_management import WriteFileTool
+
             return WriteFileTool(fs=self)
         except ImportError as e:
             raise ImportError(
@@ -934,6 +899,7 @@ class LangChainAdapter(UnifiedFilesystem):
 
         try:
             from langchain_community.tools.file_management import ListDirectoryTool
+
             return ListDirectoryTool(fs=self)
         except ImportError as e:
             raise ImportError(

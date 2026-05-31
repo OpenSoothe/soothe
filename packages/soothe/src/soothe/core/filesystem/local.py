@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from .exceptions import (
     DirectoryNotEmptyError,
@@ -318,7 +318,7 @@ class LocalFilesystem(UnifiedFilesystem):
             raise PathNotFoundError(f"File not found: {path}", path=path)
 
         # Read current content
-        with open(resolved, "r", encoding="utf-8") as f:
+        with open(resolved, encoding="utf-8") as f:
             content = f.read()
 
         old_hash = self._compute_hash(content)
@@ -386,7 +386,7 @@ class LocalFilesystem(UnifiedFilesystem):
         if not resolved.exists():
             raise PathNotFoundError(f"File not found: {path}", path=path)
 
-        with open(resolved, "r", encoding="utf-8") as f:
+        with open(resolved, encoding="utf-8") as f:
             lines = f.readlines()
 
         if start_line < 1 or end_line > len(lines) or start_line > end_line:
@@ -506,7 +506,7 @@ class LocalFilesystem(UnifiedFilesystem):
 
         # Use patch command
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["patch", "-u", str(resolved)],
                 input=diff,
                 capture_output=True,
@@ -752,7 +752,7 @@ class LocalFilesystem(UnifiedFilesystem):
             else:
                 shutil.copy2(src_resolved, dst_resolved)
         except PermissionError as e:
-            raise PermissionDeniedError(f"Permission denied", path=src) from e
+            raise PermissionDeniedError("Permission denied", path=src) from e
 
         return self._get_file_info(dst_resolved)
 
@@ -786,7 +786,7 @@ class LocalFilesystem(UnifiedFilesystem):
         try:
             shutil.move(str(src_resolved), str(dst_resolved))
         except PermissionError as e:
-            raise PermissionDeniedError(f"Permission denied", path=src) from e
+            raise PermissionDeniedError("Permission denied", path=src) from e
 
         return self._get_file_info(dst_resolved)
 
@@ -817,19 +817,14 @@ class LocalFilesystem(UnifiedFilesystem):
         if not resolved.is_dir():
             return GlobResult(matches=[], error=f"Not a directory: {path}")
 
-        import fnmatch
-
         matches = []
-        for root, dirs, files in __import__("os").walk(resolved):
-            root_path = Path(root)
-            rel_root = root_path.relative_to(resolved)
-
-            for name in files + dirs:
-                full_path = root_path / name
-                rel_path = str(rel_root / name) if rel_root != Path(".") else name
-
-                if fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(rel_path, pattern):
-                    matches.append(rel_path)
+        # Use pathlib's glob for proper ** handling
+        try:
+            for match in resolved.glob(pattern):
+                rel_path = str(match.relative_to(resolved))
+                matches.append(rel_path)
+        except OSError:
+            pass
 
         return GlobResult(matches=matches)
 
@@ -871,7 +866,7 @@ class LocalFilesystem(UnifiedFilesystem):
                 rel_path = str(file_path.relative_to(self.workspace))
 
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    with open(file_path, encoding="utf-8", errors="ignore") as f:
                         content = f.read()
                 except (OSError, UnicodeDecodeError):
                     continue

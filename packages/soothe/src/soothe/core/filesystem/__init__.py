@@ -9,12 +9,23 @@ from __future__ import annotations
 
 from .audit_logger import (
     AuditContext,
+    AuditedFilesystem,
     AuditEvent,
     AuditEventType,
     AuditLevel,
     AuditLogger,
     AuditLoggerConfig,
-    AuditedFilesystem,
+)
+from .exceptions import (
+    DirectoryNotEmptyError,
+    FilesystemError,
+    FileTooLargeError,
+    InvalidPathError,
+    NotADirectoryError,
+    NotAFileError,
+    PathNotFoundError,
+    PathTraversalError,
+    PermissionDeniedError,
 )
 from .factory import (
     FilesystemConfig,
@@ -36,27 +47,16 @@ from .protocol import (
     ReadResult,
     WriteResult,
 )
-from .workspace import WorkspaceFilesystem
 from .rate_limiter import (
     OperationRateLimiter,
     RateLimitConfig,
-    RateLimitExceeded,
     RateLimiter,
+    RateLimitExceeded,
     RateLimitStatus,
     RateLimitStrategy,
 )
-from .exceptions import (
-    DirectoryNotEmptyError,
-    FilesystemError,
-    InvalidPathError,
-    NotADirectoryError,
-    NotAFileError,
-    PathNotFoundError,
-    PathTraversalError,
-    PermissionDeniedError,
-    FileTooLargeError,
-)
 from .unified import UnifiedFilesystem
+from .workspace import WorkspaceFilesystem
 
 __all__ = [
     # Core interface

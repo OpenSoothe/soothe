@@ -9,14 +9,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -162,10 +161,7 @@ class RateLimiter:
         now = time.monotonic()
         elapsed = now - bucket.last_request
         tokens_to_add = elapsed * self._config.requests_per_second
-        bucket.tokens = min(
-            self._config.burst_size,
-            bucket.tokens + tokens_to_add
-        )
+        bucket.tokens = min(self._config.burst_size, bucket.tokens + tokens_to_add)
         bucket.last_request = now
 
     async def acquire(
@@ -338,7 +334,8 @@ class RateLimiter:
 
         async with self._lock:
             stale_keys = [
-                key for key, bucket in self._buckets.items()
+                key
+                for key, bucket in self._buckets.items()
                 if now - bucket.last_request > stale_threshold
             ]
             for key in stale_keys:
@@ -357,7 +354,7 @@ class RateLimiter:
         await self.stop()
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceededError(Exception):
     """Exception raised when rate limit is exceeded."""
 
     def __init__(
@@ -380,6 +377,10 @@ class RateLimitExceeded(Exception):
 
     def __str__(self) -> str:
         return f"{super().__str__()} (retry after {self.retry_after:.2f}s)"
+
+
+# Backwards compatibility alias
+RateLimitExceeded = RateLimitExceededError
 
 
 class OperationRateLimiter:
@@ -428,6 +429,7 @@ class OperationRateLimiter:
         Returns:
             Decorator function.
         """
+
         def decorator(func: Callable) -> Callable:
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 path = kwargs.get(path_arg) if path_arg else None
@@ -440,6 +442,7 @@ class OperationRateLimiter:
                     self._limiter.release(operation, path=path, user=user)
 
             return wrapper
+
         return decorator
 
     async def __aenter__(self) -> OperationRateLimiter:

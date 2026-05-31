@@ -10,31 +10,18 @@ from __future__ import annotations
 import asyncio
 import os
 import subprocess
-from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import wcmatch.glob as wcglob
 from pathspec import PathSpec
 
 from ..workspace.resolution import resolve_daemon_workspace
-from .exceptions import (
-    DirectoryNotEmptyError,
-    FilesystemError,
-    InvalidPathError,
-    NotADirectoryError,
-    NotAFileError,
-    PathNotFoundError,
-    PathTraversalError,
-    PermissionDeniedError,
-)
 from .local import LocalFilesystem
 from .protocol import (
     DeleteResult,
     EditResult,
     FileInfo,
     GlobResult,
-    GrepMatch,
     GrepResult,
     ReadResult,
     WriteResult,
@@ -145,8 +132,7 @@ class WorkspaceFilesystem(UnifiedFilesystem):
             return self._gitignore_spec
 
         patterns = [
-            f"{name}/" if "/" not in name else name
-            for name in self.ESSENTIAL_GLOB_EXCLUDES
+            f"{name}/" if "/" not in name else name for name in self.ESSENTIAL_GLOB_EXCLUDES
         ]
         patterns.extend(self._load_gitignore_lines())
         self._gitignore_spec = PathSpec.from_lines("gitignore", patterns)
@@ -210,17 +196,13 @@ class WorkspaceFilesystem(UnifiedFilesystem):
                 d
                 for d in dirs
                 if not self._is_ignored(
-                    f"{rel_root_posix}/{d}".removeprefix("./")
-                    if rel_root_posix != "."
-                    else d
+                    f"{rel_root_posix}/{d}".removeprefix("./") if rel_root_posix != "." else d
                 )
             )
 
             for name in files:
                 rel_posix = (
-                    name
-                    if rel_root_posix == "."
-                    else f"{rel_root_posix}/{name}".removeprefix("./")
+                    name if rel_root_posix == "." else f"{rel_root_posix}/{name}".removeprefix("./")
                 )
                 if self._is_ignored(rel_posix):
                     continue
@@ -633,9 +615,7 @@ class WorkspaceFilesystem(UnifiedFilesystem):
         results: list[str] = []
         for rel_posix in candidates:
             if search_prefix != ".":
-                if rel_posix != search_prefix and not rel_posix.startswith(
-                    f"{search_prefix}/"
-                ):
+                if rel_posix != search_prefix and not rel_posix.startswith(f"{search_prefix}/"):
                     continue
                 match_rel = (
                     rel_posix[len(search_prefix) + 1 :]
@@ -700,9 +680,7 @@ class WorkspaceFilesystem(UnifiedFilesystem):
         Returns:
             GrepResult, list of files, or count string depending on mode.
         """
-        return self._local_fs.grep(
-            pattern, path=path, glob=glob, output_mode=output_mode
-        )
+        return self._local_fs.grep(pattern, path=path, glob=glob, output_mode=output_mode)
 
     async def agrep(
         self,
@@ -713,9 +691,7 @@ class WorkspaceFilesystem(UnifiedFilesystem):
         output_mode: str = "files_with_matches",
     ) -> GrepResult | list[str] | str:
         """Async search for pattern in files."""
-        return await self._local_fs.agrep(
-            pattern, path=path, glob=glob, output_mode=output_mode
-        )
+        return await self._local_fs.agrep(pattern, path=path, glob=glob, output_mode=output_mode)
 
     # ========================================================================
     # Framework Integration

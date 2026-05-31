@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from .enforcement import SecurityEnforcer, SecurityError
 from .policy import PolicyAction, PolicyDecision, SecurityPolicy
-from .validator import PathValidationError, PathValidator, ValidationResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,33 +43,58 @@ class SecureFilesystemWrapper:
     """
 
     # Operations that require path validation
-    PATH_OPERATIONS = frozenset({
-        "read", "aread",
-        "write", "awrite",
-        "edit", "aedit",
-        "delete", "adelete",
-        "ls", "als",
-        "ls_info", "als_info",
-        "glob", "aglob",
-        "grep", "agrep",
-        "grep_raw", "agrep_raw",
-        "exists", "aexists",
-        "mkdir", "amkdir",
-        "download_files", "adownload_files",
-    })
+    PATH_OPERATIONS = frozenset(
+        {
+            "read",
+            "aread",
+            "write",
+            "awrite",
+            "edit",
+            "aedit",
+            "delete",
+            "adelete",
+            "ls",
+            "als",
+            "ls_info",
+            "als_info",
+            "glob",
+            "aglob",
+            "grep",
+            "agrep",
+            "grep_raw",
+            "agrep_raw",
+            "exists",
+            "aexists",
+            "mkdir",
+            "amkdir",
+            "download_files",
+            "adownload_files",
+        }
+    )
 
     # Operations that take path as first argument
-    PATH_FIRST_ARG = frozenset({
-        "read", "aread",
-        "write", "awrite",
-        "edit", "aedit",
-        "delete", "adelete",
-        "ls", "als",
-        "ls_info", "als_info",
-        "glob", "aglob",
-        "exists", "aexists",
-        "mkdir", "amkdir",
-    })
+    PATH_FIRST_ARG = frozenset(
+        {
+            "read",
+            "aread",
+            "write",
+            "awrite",
+            "edit",
+            "aedit",
+            "delete",
+            "adelete",
+            "ls",
+            "als",
+            "ls_info",
+            "als_info",
+            "glob",
+            "aglob",
+            "exists",
+            "aexists",
+            "mkdir",
+            "amkdir",
+        }
+    )
 
     def __init__(
         self,
@@ -163,7 +187,10 @@ class SecureFilesystemWrapper:
 
                 # Replace path in args/kwargs
                 args, kwargs = self._replace_path(
-                    operation, args, kwargs, normalized,
+                    operation,
+                    args,
+                    kwargs,
+                    normalized,
                 )
 
             return func(*args, **kwargs)
@@ -331,6 +358,7 @@ def secure_operation(
             if path is None and args:
                 # Try to get from positional args
                 import inspect
+
                 sig = inspect.signature(func)
                 params = list(sig.parameters.keys())
                 if path_arg in params:
@@ -366,6 +394,7 @@ def _get_workspace_from_context(func: Callable[..., Any]) -> Path | None:
 
     # Try module
     import inspect
+
     module = inspect.getmodule(func)
     if module and hasattr(module, "SECURITY_WORKSPACE"):
         return Path(module.SECURITY_WORKSPACE)
@@ -411,9 +440,16 @@ def patch_backend_security(
 
     # Wrap path-based methods
     path_methods = [
-        "read", "write", "edit", "delete",
-        "ls", "ls_info", "glob", "grep",
-        "exists", "mkdir",
+        "read",
+        "write",
+        "edit",
+        "delete",
+        "ls",
+        "ls_info",
+        "glob",
+        "grep",
+        "exists",
+        "mkdir",
     ]
 
     for method_name in path_methods:
