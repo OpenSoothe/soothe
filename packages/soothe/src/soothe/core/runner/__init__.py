@@ -1,7 +1,7 @@
 """SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0008).
 
 Wraps `create_soothe_agent()` with protocol pre/post-processing and
-yields the deepagents-canonical ``(namespace, mode, data)`` stream
+yields the canonical ``(namespace, mode, data)`` stream
 extended with ``soothe.*`` custom events for protocol observability.
 
 RFC-0008 adds agentic loop: default execution mode with Reason → Act
@@ -13,8 +13,7 @@ not as a separate runner mixin.
 RFC-222 Phase D: the legacy in-process autonomous multi-goal loop has
 been removed. Autopilot is daemon-owned; goals dispatched by the daemon
 arrive through ``LoopRunRequest.autopilot_job`` and route to the
-single-goal worker path. The ``autonomous`` flag on ``astream`` is kept
-for backward compatibility with existing callers but is now a no-op.
+single-goal worker path.
 
 Implementation is decomposed into mixins:
 
@@ -74,7 +73,7 @@ class SootheRunner(
     """Protocol-orchestrated agent runner.
 
     Wraps ``create_soothe_agent()`` with pre/post protocol steps and
-    provides ``astream()`` that yields the deepagents-canonical stream
+    provides ``astream()`` that yields the canonical stream
     format extended with ``soothe.*`` protocol custom events.
 
     Args:
@@ -497,7 +496,6 @@ class SootheRunner(
         *,
         thread_id: str | None = None,
         workspace: str | None = None,
-        autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
         client_loop_id: str | None = None,
@@ -506,7 +504,7 @@ class SootheRunner(
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
-        Yields ``(namespace, mode, data)`` tuples in the deepagents-canonical
+        Yields ``(namespace, mode, data)`` tuples in the canonical
         format.  Protocol events are emitted as ``custom`` events with
         ``soothe.*`` type prefix.
 
@@ -523,11 +521,6 @@ class SootheRunner(
             workspace: Thread-specific workspace path (RFC-103). When omitted, resolved via
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
-            autonomous: **Deprecated no-op (RFC-222 Phase D).** The legacy
-                in-process multi-goal autonomous loop has been removed. Autopilot
-                is daemon-owned; HTTP-submitted goals flow through it and arrive
-                here via ``autopilot_job``. The flag is preserved on the signature
-                only for backward compatibility with existing daemon/CLI callers.
             max_iterations: Override max iterations from config.
             preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
             client_loop_id: Daemon client loop scope for logging and stream correlation.
@@ -576,15 +569,6 @@ class SootheRunner(
                 ):
                     yield chunk
                 return
-
-            # RFC-222 Phase D: ``autonomous`` is a deprecated no-op. Legacy
-            # multi-goal scheduling is gone; queries always run the agentic
-            # loop. The daemon-owned autopilot dispatches via autopilot_job.
-            if autonomous:
-                logger.debug(
-                    "astream: autonomous=True is a no-op since RFC-222 Phase D; "
-                    "running agentic loop"
-                )
 
             # Default: agentic loop (RFC-0008)
             async for chunk in self._run_agentic_loop(

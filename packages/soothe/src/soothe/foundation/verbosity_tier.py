@@ -68,7 +68,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     """Classify an event directly to a VerbosityTier.
 
     For soothe.* events, queries the event registry for the registered tier.
-    For non-soothe events (from subagents like deepagents), uses heuristics.
+    For non-soothe events (from subagents), uses heuristics.
 
     Args:
         event_type: The event type string (e.g., "soothe.cognition.agent_loop.started").

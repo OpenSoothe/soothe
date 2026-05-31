@@ -248,7 +248,7 @@ class SootheTokenUsageChatModel(BaseChatModel):
 def bind_llm_token_observability(model: BaseChatModel | None) -> BaseChatModel | None:
     """Wrap a chat model so token stats run on every LLM call (idempotent).
 
-    Uses a ``BaseChatModel`` subclass so downstream code (e.g. deepagents profile lookup)
+    Uses a ``BaseChatModel`` subclass so downstream code (e.g. profile lookup)
     still receives a real chat model, not a ``RunnableBinding``.
     """
     if model is None:

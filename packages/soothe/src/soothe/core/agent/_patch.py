@@ -1,7 +1,7 @@
-"""Deepagents compatibility patches.
+"""Runtime compatibility patches.
 
 Patches are applied at import time and isolated from CoreAgent logic.
-These patches fix upstream issues in deepagents that affect Soothe's execution.
+These patches fix upstream issues that affect Soothe's execution.
 
 Note: Do not enable PEP 563 (``from __future__ import annotations``) in this module.
 ``StructuredTool._injected_args_keys`` uses ``inspect.signature`` and
@@ -23,13 +23,13 @@ except ImportError:  # pragma: no cover - optional at lint import time
 
 
 def _patch_summarization_overwrite_handling() -> None:
-    """Patch deepagents SummarizationMiddleware for Overwrite wrapper handling.
+    """Patch SummarizationMiddleware for Overwrite wrapper handling.
 
-    deepagents' SummarizationMiddleware._apply_event_to_messages does not
+    SummarizationMiddleware._apply_event_to_messages does not
     handle langgraph's Overwrite wrapper that PatchToolCallsMiddleware may
     leave in request.messages. This patch unwraps it so ``list(messages)`` succeeds.
 
-    This is a temporary workaround until fixed upstream in deepagents.
+    This is a temporary workaround until fixed upstream.
     """
     try:
         from deepagents.middleware.summarization import SummarizationMiddleware
@@ -51,7 +51,7 @@ def _patch_summarization_overwrite_handling() -> None:
 def _patch_task_tool_propagates_parent_runnable_config() -> None:
     """Propagate parent ``ToolRuntime.config`` into subagent ``invoke`` / ``ainvoke``.
 
-    Upstream ``deepagents`` ``task`` tool calls ``subagent.ainvoke(subagent_state)``
+    Upstream ``task`` tool calls ``subagent.ainvoke(subagent_state)``
     without config. Nested compiled graphs then get LangGraph's no-op
     ``stream_writer``, so ``get_stream_writer()`` in subagent nodes does not
     forward ``emit_progress()`` custom events to the main agent stream.

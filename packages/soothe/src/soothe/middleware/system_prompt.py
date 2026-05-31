@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# deepagents / Soothe main graph: subagents are invoked only via this tool name.
+# Soothe main graph: subagents are invoked only via this tool name.
 _TASK_TOOL_NAME = "task"
 # Layer 2 ``ExecutionHintsMiddleware`` appends using this prefix (must stay in sync).
 _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"

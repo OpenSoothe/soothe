@@ -1,4 +1,4 @@
-"""SootheFilesystemMiddleware -- surgical file operations extending deepagents."""
+"""SootheFilesystemMiddleware -- surgical file operations."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def coerce_provider_safe_tool_message(
     return message.model_copy(update={"content": safe_blocks})
 
 
-# Tool schemas (following deepagents pattern)
+# Tool schemas
 class DeleteFileSchema(BaseModel):
     """Input schema for the `delete_file` tool."""
 
@@ -145,7 +145,7 @@ class ApplyDiffSchema(BaseModel):
     diff: str = Field(description="Unified diff content to apply. Must be in standard diff format.")
 
 
-# Tool descriptions (following deepagents pattern)
+# Tool descriptions
 DELETE_FILE_TOOL_DESCRIPTION = """Delete a file with optional backup before deletion.
 
 Usage:
@@ -195,7 +195,7 @@ Usage:
 class SootheFilesystemMiddleware(FilesystemMiddleware):
     """Extended filesystem middleware with surgical file operations.
 
-    Inherits from deepagents FilesystemMiddleware and adds:
+    Inherits from FilesystemMiddleware and adds:
     - delete_file: Delete files with optional backup
     - file_info: Get file metadata (size, mtime, permissions)
     - edit_file_lines: Replace specific line ranges (surgical edit)
@@ -203,7 +203,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
     - delete_lines: Delete specific line ranges from a file
     - apply_diff: Apply unified diff patches
 
-    All tools follow deepagents patterns:
+    All tools follow standard patterns:
     - Schema validation with XxxSchema(BaseModel)
     - ToolRuntime injection for backend access
     - Path validation with validate_path()
@@ -238,7 +238,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         self._backup_dir = backup_dir
         self._workspace_root = workspace_root
 
-        # Add surgical file tools following deepagents pattern
+        # Add surgical file tools
         self.tools.extend(
             [
                 self._create_delete_file_tool(),

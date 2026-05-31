@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from soothe.core.workspace.backend import NormalizedPathBackend, get_workspace_backend
+from soothe.core.workspace.refactored_backend import NormalizedPathBackend, get_workspace_backend
 from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ def get_explore_tools(
     """Get explore tools: read-only filesystem surface only.
 
     Exposed tools (mutation and shell tools from middleware are filtered out):
-    - glob, grep, ls, read_file: deepagents (via middleware base)
+    - glob, grep, ls, read_file: via middleware base
     - file_info: Soothe (metadata)
 
     IG-328: Backend is callable so workspace resolves from thread state at runtime,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from deepagents.backends.utils import truncate_if_too_long
 
-from soothe.core.workspace.backend import NormalizedPathBackend
+from soothe.core.workspace.refactored_backend import NormalizedPathBackend
 
 
 def test_glob_api_respects_gitignore_and_essential_excludes(tmp_path: Path) -> None:
