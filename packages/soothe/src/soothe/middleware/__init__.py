@@ -1,6 +1,6 @@
 """Soothe middleware modules.
 
-This package provides middleware implementations that wrap deepagents:
+This package provides middleware implementations:
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
 - SystemPromptMiddleware: Dynamic prompt adjustment based on classification
 - LLMRateLimitMiddleware: Rate limiting at LLM level, not thread level

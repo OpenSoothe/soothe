@@ -81,7 +81,7 @@ def test_handler_thread_key_hint_registry() -> None:
     handler = object.__new__(SootheLangfuseCallbackHandler)
     handler._system_hint_by_thread = {}
     handler._generation_traced_inputs = {}
-    handler._runs = {}
+    handler.runs = {}
 
     cfg = {"configurable": {"thread_id": "fork-thread-1"}}
     handler.register_system_prompt_hint_for_config(cfg, "<WORKSPACE_RULES>x</WORKSPACE_RULES>")
@@ -100,7 +100,7 @@ def test_on_chat_model_start_stores_traced_input_when_hint_set() -> None:
     handler = object.__new__(SootheLangfuseCallbackHandler)
     handler._system_hint_by_thread = {}
     handler._generation_traced_inputs = {}
-    handler._runs = {}
+    handler.runs = {}
 
     run_id = uuid4()
     cfg = {"configurable": {"thread_id": "t-trace"}}
@@ -124,6 +124,30 @@ def test_on_chat_model_start_stores_traced_input_when_hint_set() -> None:
         assert isinstance(patched_batches[0][0], SystemMessage)
         assert patched_batches[0][0].content == effective
     assert run_id in handler._generation_traced_inputs
+
+
+def test_on_llm_end_passes_traced_input_to_parent() -> None:
+    """Parent on_llm_end must receive patched inputs so Langfuse keeps the system message."""
+    pytest.importorskip("langfuse")
+    from unittest.mock import MagicMock, patch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler.runs = {}
+
+    run_id = uuid4()
+    traced = [{"role": "system", "content": "<WORKSPACE_RULES>x</WORKSPACE_RULES>"}]
+    handler._generation_traced_inputs[run_id] = traced
+
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with patch.object(langchain_handler, "on_llm_end", return_value=None) as parent:
+        handler.on_llm_end(MagicMock(), run_id=run_id, inputs=[{"role": "user", "content": "hi"}])
+        parent.assert_called_once()
+        assert parent.call_args.kwargs["inputs"] == traced
+    assert run_id not in handler._generation_traced_inputs
 
 
 def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:

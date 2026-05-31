@@ -1,9 +1,9 @@
-"""Unified path display conversion for deepagents workspace paths.
+"""Unified path display conversion for workspace paths.
 
-This module handles the conversion between deepagents' workspace-rooted paths
+This module handles the conversion between workspace-rooted paths
 (where `/` represents the workspace root) and actual OS paths for display.
 
-The deepagents convention:
+The convention:
 - `/` = workspace root (not filesystem root)
 - `/foo/bar` = workspace_root/foo/bar
 
@@ -42,7 +42,7 @@ def get_workspace_root() -> str | None:
 
 
 def convert_display_path(path: str) -> str:
-    """Convert deepagents workspace path to OS display path.
+    """Convert workspace path to OS display path.
 
     Deepagents convention:
     - `/` = workspace root
@@ -52,7 +52,7 @@ def convert_display_path(path: str) -> str:
     - Paths matching real OS patterns (e.g., /Users/..., /home/...) are passed through
 
     Args:
-        path: Path from deepagents tool call
+        path: Path from tool call
 
     Returns:
         Converted path for display (OS absolute or original if no conversion needed)
@@ -224,7 +224,7 @@ def convert_and_abbreviate_path(path: str, max_length: int = 30) -> str:
     Combines convert_display_path() and abbreviate_path() for convenience.
 
     Args:
-        path: Path from deepagents tool call (may be workspace-relative).
+        path: Path from tool call (may be workspace-relative).
         max_length: Maximum desired display length.
 
     Returns:

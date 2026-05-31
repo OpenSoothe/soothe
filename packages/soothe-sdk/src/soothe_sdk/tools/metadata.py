@@ -4,7 +4,7 @@ Every tool that appears in the CLI/TUI must have a `ToolMeta` entry here.
 Adding a new tool requires adding exactly one `ToolMeta` instance;
 all downstream display logic derives from the registry.
 
-Follows the deepagents pattern of Schema + description constants: each tool's
+Follows the pattern of Schema + description constants: each tool's
 display metadata (names, arg keys, aliases, category) is declared in one place
 and consumed everywhere.
 """

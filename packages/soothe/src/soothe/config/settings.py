@@ -284,13 +284,13 @@ class SootheConfig(BaseSettings):
     """Plugin configurations. Third-party plugins can be loaded via entry points, config, or filesystem."""
 
     skills: list[str] = Field(default_factory=list)
-    """SKILL.md source paths passed to deepagents SkillsMiddleware."""
+    """SKILL.md source paths passed to SkillsMiddleware."""
 
     progressive_skills: ProgressiveSkillsConfig = Field(default_factory=ProgressiveSkillsConfig)
     """RFC-105: Progressive skill listing budget and per-entry caps."""
 
     memory: list[str] = Field(default_factory=list)
-    """AGENTS.md file paths passed to deepagents MemoryMiddleware."""
+    """AGENTS.md file paths passed to MemoryMiddleware."""
 
     debug: bool = False
     """Enable debug mode for the underlying LangGraph agent."""

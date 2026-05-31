@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
 
-# Import and apply deepagents patches
+# Import and apply runtime patches
 from soothe.core.agent._patch import *  # noqa: F403
 from soothe.core.agent.execute_tool_filter import without_execute_tool_when_sandbox_disabled
 from soothe.core.resolver import (
@@ -118,8 +118,8 @@ class AgentBuilder:
             middleware: Additional middleware appended after the standard stack.
             checkpointer: LangGraph checkpointer for persistence.
             store: LangGraph store for persistent storage.
-            backend: deepagents backend for file/execution operations.
-            interrupt_on: Optional tool interrupt configuration for deepagents.
+            backend: Backend for file/execution operations.
+            interrupt_on: Optional tool interrupt configuration.
             memory_store: Override MemoryProtocol implementation. None uses config.
             planner: Override PlannerProtocol implementation. None uses config.
             policy: Override PolicyProtocol implementation. None uses config.
@@ -182,13 +182,13 @@ class AgentBuilder:
             all_tools.extend(create_mcp_resource_tools(registry))
             logger.debug("[Init] MCP resource tools added")
 
-        # Filter out deepagents' execute tool when sandbox is disabled (IG-sandbox)
+        # Filter out execute tool when sandbox is disabled (IG-sandbox)
         before = len(all_tools)
         all_tools = without_execute_tool_when_sandbox_disabled(
             all_tools, security_sandbox_enabled=self._config.security.sandbox
         )
         if len(all_tools) < before:
-            logger.debug("Sandbox disabled: deepagents execute tool filtered out")
+            logger.debug("Sandbox disabled: execute tool filtered out")
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 
@@ -378,8 +378,8 @@ def create_soothe_agent(
         middleware: Additional middleware after standard stack.
         checkpointer: LangGraph checkpointer for persistence.
         store: LangGraph store for persistent storage.
-        backend: deepagents backend for file/execution operations.
-        interrupt_on: Optional tool interrupt configuration for deepagents.
+        backend: Backend for file/execution operations.
+        interrupt_on: Optional tool interrupt configuration.
         memory_store: Override MemoryProtocol implementation.
         planner: Override PlannerProtocol implementation.
         policy: Override PolicyProtocol implementation.

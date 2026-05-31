@@ -2029,7 +2029,7 @@ class Executor:
             stream_chunk_count += 1
             stream_ns: tuple[str, ...] = ()
 
-            # Handle tuple format (namespace, mode, data) - deepagents canonical
+            # Handle tuple format (namespace, mode, data) - canonical format
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 _ns_chunk, mode_chunk, data_chunk = chunk
                 stream_ns = _ns_chunk if _ns_chunk else ()
@@ -2095,7 +2095,7 @@ class Executor:
                     text_out = extract_text_from_message_content(content)
                     if text_out:
                         # Truncate large tool outputs in aggregated stream text; full payloads
-                        # remain in CoreAgent graph state (and deepagents eviction when enabled).
+                        # remain in CoreAgent graph state (and LangGraph eviction when enabled).
                         max_tool_output_chars = 10_000
                         if len(text_out) > max_tool_output_chars:
                             truncated = preview(

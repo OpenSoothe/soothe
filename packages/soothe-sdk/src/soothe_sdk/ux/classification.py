@@ -57,7 +57,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         domain = segments[1] if len(segments) >= 2 else "unknown"
         return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
 
-    # Non-soothe events (from deepagents subagents) — not curated soothe.subagent.*
+    # Non-soothe events (from subagents) — not curated soothe.subagent.*
     if namespace or (".subagent." in event_type and not event_type.startswith("soothe.subagent.")):
         return VerbosityTier.DETAILED
 

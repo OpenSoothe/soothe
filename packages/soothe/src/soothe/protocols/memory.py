@@ -37,7 +37,7 @@ class MemoryProtocol(Protocol):
 
     Memory is explicitly populated (not auto-memorized) and semantically
     queryable. Separate from ContextProtocol (within-thread) and
-    deepagents' MemoryMiddleware (static AGENTS.md files).
+    MemoryMiddleware (static AGENTS.md files).
     """
 
     async def remember(self, item: MemoryItem) -> str:

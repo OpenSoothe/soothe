@@ -1,10 +1,10 @@
 """Wizsearch toolkit -- enhanced multi-engine search and headless crawl.
 
-Provides advanced web search and crawl capabilities beyond deepagents' basic web_search/fetch_url:
+Provides advanced web search and crawl capabilities:
 - wizsearch_search: Multi-engine search (tavily, duckduckgo, brave, etc.)
 - wizsearch_crawl: Headless browser crawl via wizsearch PageCrawler
 
-Tool names are prefixed with `wizsearch_` to avoid collision with deepagents' tools.
+Tool names are prefixed with `wizsearch_` to avoid collision with base tools.
 """
 
 from __future__ import annotations
