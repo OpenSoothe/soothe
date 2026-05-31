@@ -48,11 +48,11 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "get_git_status": (".resolution", "get_git_status"),
     "ResolvedWorkspace": (".stream_resolution", "ResolvedWorkspace"),
     "resolve_workspace_for_stream": (".stream_resolution", "resolve_workspace_for_stream"),
-    # Refactored backend
-    "WorkspaceAwareBackend": (".refactored_backend", "WorkspaceAwareBackend"),
-    "NormalizedPathBackend": (".refactored_backend", "NormalizedPathBackend"),
-    "FrameworkFilesystem": (".refactored_backend", "FrameworkFilesystem"),
-    "get_workspace_backend": (".refactored_backend", "get_workspace_backend"),
+    # Normalized backend
+    "WorkspaceAwareBackend": (".normalized_backend", "WorkspaceAwareBackend"),
+    "NormalizedPathBackend": (".normalized_backend", "NormalizedPathBackend"),
+    "FrameworkFilesystem": (".normalized_backend", "FrameworkFilesystem"),
+    "get_workspace_backend": (".normalized_backend", "get_workspace_backend"),
     "get_virtual_home": (".virtual_home", "get_virtual_home"),
     "get_virtual_mode": (".virtual_home", "get_virtual_mode"),
     "set_virtual_mode_context": (".virtual_home", "set_virtual_mode_context"),

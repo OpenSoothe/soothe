@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from soothe.core.workspace.refactored_backend import NormalizedPathBackend, get_workspace_backend
+from soothe.core.workspace.normalized_backend import NormalizedPathBackend, get_workspace_backend
 from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
 logger = logging.getLogger(__name__)
