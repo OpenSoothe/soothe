@@ -172,7 +172,7 @@ def resolve_tools(
     ]
 
     # Host-execution tools (run_command, run_python, etc.) do not require a
-    # sandbox — they run on the host via subprocess. The deepagents `execute`
+    # sandbox — they run on the host via subprocess. The `execute`
     # tool (which needs a SandboxBackendProtocol) is filtered separately in
     # execute_tool_filter.py.
 
@@ -459,7 +459,7 @@ def _resolve_single_tool_group_uncached(
         all_tools = [t for t in middleware.tools if t.name in surgical_tool_names]
         tool_map = {tool.name: tool for tool in all_tools}
 
-        # For read_file/write_file/edit_file/search_files/list_files, these come from deepagents
+        # For read_file/write_file/edit_file/search_files/list_files, these come from the middleware
         # so we need to get them from the middleware's full tools list
         if name in ("read_file", "write_file", "edit_file", "search_files", "list_files"):
             full_tool_map = {tool.name: tool for tool in middleware.tools}
@@ -577,7 +577,7 @@ def resolve_subagents(
             pool for faster startup.
 
     Returns:
-        List of subagent specs for deepagents.
+        List of subagent specs for the runtime.
     """
     import time
 

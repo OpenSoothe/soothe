@@ -28,7 +28,7 @@ class FrameworkFilesystem:
     - Framework operations (reports, checkpoints, manifests)
     - CLI operations (final reports, health checks)
 
-    Uses deepagents FilesystemBackend directly with proper virtual_mode semantics.
+    Uses FilesystemBackend directly with proper virtual_mode semantics.
     No wrapper or path conversion workarounds needed.
     """
 
@@ -51,7 +51,7 @@ class FrameworkFilesystem:
         Returns:
             Initialized FilesystemBackend instance (workspace-aware wrapper).
         """
-        from soothe.core.workspace.backend import WorkspaceAwareBackend
+        from soothe.core.workspace.refactored_backend import WorkspaceAwareBackend
         from soothe.core.workspace.resolution import resolve_daemon_workspace
 
         # Use daemon workspace (TEMP unless SOOTHE_WORKSPACE set) as default

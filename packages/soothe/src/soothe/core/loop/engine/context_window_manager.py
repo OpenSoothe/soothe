@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Summarization prompt template (inspired by deepagents SummarizationMiddleware)
+# Summarization prompt template
 _SUMMARY_PROMPT = """<role>
 Context Extraction Assistant
 </role>

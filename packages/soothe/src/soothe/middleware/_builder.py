@@ -1,6 +1,6 @@
 """Middleware stack construction for CoreAgent.
 
-Defines the Soothe middleware layer that wraps deepagents.
+Defines the Soothe middleware layer.
 Note: ParallelToolsMiddleware removed - langchain handles tool parallelism
 via asyncio.gather in ToolNode.
 

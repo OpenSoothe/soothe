@@ -1,4 +1,4 @@
-"""Resolve tool paths using the same backend rules as deepagents (IG-316).
+"""Resolve tool paths using the same backend rules as the runtime (IG-316).
 
 ``strict_workspace_path`` in ``path_normalization`` is for real OS paths under a
 workspace. Virtual absolute paths (for example ``/src/foo.py`` under
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.core.workspace.backend import NormalizedPathBackend
+from soothe.core.workspace.refactored_backend import NormalizedPathBackend
 from soothe.core.workspace.resolution import resolve_daemon_workspace
 
 
@@ -49,7 +49,7 @@ def resolve_backend_os_path(
     callers.
 
     Args:
-        path: Path string (typically after ``validate_path`` from deepagents).
+        path: Path string (typically after ``validate_path`` from the middleware).
         workspace: Workspace root directory.
         virtual_mode: Same semantics as ``FilesystemBackend.virtual_mode``.
         max_file_size_mb: Passed to the backend constructor.

@@ -120,7 +120,7 @@ def custom_event(data: dict[str, Any]) -> StreamChunk:
         data: Event data dict with 'type' key.
 
     Returns:
-        Stream chunk in deepagents-canonical format.
+        Stream chunk in canonical (namespace, mode, data) format.
     """
     return ((), "custom", data)
 
