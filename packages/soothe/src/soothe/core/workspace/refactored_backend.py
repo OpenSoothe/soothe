@@ -11,6 +11,8 @@ from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from deepagents.backends.protocol import EditResult, LsResult
+
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.protocols.policy import PolicyProtocol
@@ -255,22 +257,41 @@ class NormalizedPathBackend:
         old_string: str | None = None,
         new_string: str | None = None,
         edits: list[dict[str, Any]] | None = None,
-    ) -> str:
-        """Apply edits to file."""
+        *,
+        replace_all: bool = False,
+    ) -> EditResult:
+        """Apply edits to file.
+
+        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        """
         normalized = self._normalize_path(path)
 
-        if edits:
-            # Handle edits list format
-            for edit in edits:
-                old = edit.get("old_string", "")
-                new = edit.get("new_string", "")
-                # Exceptions are raised directly by the filesystem
-                self._fs.edit(normalized, old, new)
-        elif old_string is not None and new_string is not None:
-            # Exceptions are raised directly by the filesystem
-            self._fs.edit(normalized, old_string, new_string)
-
-        return normalized
+        try:
+            if edits:
+                # Handle edits list format
+                total_occurrences = 0
+                for edit_item in edits:
+                    old = edit_item.get("old_string", "")
+                    new = edit_item.get("new_string", "")
+                    result = self._fs.edit(normalized, old, new)
+                    # Soothe filesystem returns EditResult without error field,
+                    # deepagents returns EditResult with error field
+                    if hasattr(result, "error") and result.error:
+                        return EditResult(error=result.error)
+                    total_occurrences += 1
+                return EditResult(path=normalized, occurrences=total_occurrences)
+            elif old_string is not None and new_string is not None:
+                result = self._fs.edit(normalized, old_string, new_string)
+                # Check if result has error attribute (deepagents style)
+                if hasattr(result, "error") and result.error:
+                    return EditResult(error=result.error)
+                # Soothe EditResult has path and lines_changed
+                return EditResult(path=normalized, occurrences=1)
+            else:
+                return EditResult(error="No edits provided")
+        except Exception as e:
+            logger.warning("edit error for %s: %s", path, e)
+            return EditResult(error=str(e))
 
     async def aedit(
         self,
@@ -278,40 +299,97 @@ class NormalizedPathBackend:
         old_string: str | None = None,
         new_string: str | None = None,
         edits: list[dict[str, Any]] | None = None,
-    ) -> str:
-        """Async apply edits to file."""
+        *,
+        replace_all: bool = False,
+    ) -> EditResult:
+        """Async apply edits to file.
+
+        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        """
         normalized = self._normalize_path(path)
 
-        if edits:
-            for edit in edits:
-                old = edit.get("old_string", "")
-                new = edit.get("new_string", "")
-                result = await self._fs.aedit(normalized, old, new)
-                if result.error:
-                    raise OSError(f"Error editing {path}: {result.error}")
-        elif old_string is not None and new_string is not None:
-            result = await self._fs.aedit(normalized, old_string, new_string)
-            if result.error:
-                raise OSError(f"Error editing {path}: {result.error}")
+        try:
+            if edits:
+                total_occurrences = 0
+                for edit_item in edits:
+                    old = edit_item.get("old_string", "")
+                    new = edit_item.get("new_string", "")
+                    result = await self._fs.aedit(normalized, old, new)
+                    if hasattr(result, "error") and result.error:
+                        return EditResult(error=result.error)
+                    total_occurrences += 1
+                return EditResult(path=normalized, occurrences=total_occurrences)
+            elif old_string is not None and new_string is not None:
+                result = await self._fs.aedit(normalized, old_string, new_string)
+                if hasattr(result, "error") and result.error:
+                    return EditResult(error=result.error)
+                return EditResult(path=normalized, occurrences=1)
+            else:
+                return EditResult(error="No edits provided")
+        except Exception as e:
+            logger.warning("aedit error for %s: %s", path, e)
+            return EditResult(error=str(e))
 
-        return normalized
+    def ls(self, path: str = ".") -> LsResult:
+        """List directory contents.
 
-    def ls(self, path: str = ".") -> list[str]:
-        """List directory contents."""
+        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        """
         normalized = self._normalize_path(path)
-        result = self._fs.ls(normalized)
-        if isinstance(result, list) and result and isinstance(result[0], str):
-            return result
-        # Handle FileInfo list
-        return [item.path for item in result]
+        try:
+            # Use include_info=True to get is_dir information
+            result = self._fs.ls(normalized, include_info=True)
+            if isinstance(result, list) and result:
+                # Handle FileInfo list - convert to dicts
+                entries = [
+                    {
+                        "path": item.path if hasattr(item, "path") else str(item),
+                        "is_dir": item.is_dir if hasattr(item, "is_dir") else False,
+                        "size": item.size if hasattr(item, "size") else 0,
+                        "modified_at": (
+                            item.modified_at.isoformat()
+                            if hasattr(item, "modified_at") and item.modified_at
+                            else None
+                        ),
+                    }
+                    for item in result
+                ]
+            else:
+                entries = []
+            return LsResult(entries=entries)
+        except Exception as e:
+            logger.warning("ls error for %s: %s", path, e)
+            return LsResult(error=str(e), entries=[])
 
-    async def als(self, path: str = ".") -> list[str]:
-        """Async list directory contents."""
+    async def als(self, path: str = ".") -> LsResult:
+        """Async list directory contents.
+
+        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        """
         normalized = self._normalize_path(path)
-        result = await self._fs.als(normalized)
-        if isinstance(result, list) and result and isinstance(result[0], str):
-            return result
-        return [item.path for item in result]
+        try:
+            # Use include_info=True to get is_dir information
+            result = await self._fs.als(normalized, include_info=True)
+            if isinstance(result, list) and result:
+                entries = [
+                    {
+                        "path": item.path if hasattr(item, "path") else str(item),
+                        "is_dir": item.is_dir if hasattr(item, "is_dir") else False,
+                        "size": item.size if hasattr(item, "size") else 0,
+                        "modified_at": (
+                            item.modified_at.isoformat()
+                            if hasattr(item, "modified_at") and item.modified_at
+                            else None
+                        ),
+                    }
+                    for item in result
+                ]
+            else:
+                entries = []
+            return LsResult(entries=entries)
+        except Exception as e:
+            logger.warning("als error for %s: %s", path, e)
+            return LsResult(error=str(e), entries=[])
 
     def ls_info(self, path: str = ".") -> list[dict[str, Any]]:
         """List directory with file info."""
@@ -557,11 +635,18 @@ class WorkspaceAwareBackend:
         edits: list[dict[str, Any]] | None = None,
         old_string: str | None = None,
         new_string: str | None = None,
-    ) -> str:
-        """Apply edits to file."""
+        *,
+        replace_all: bool = False,
+    ) -> EditResult:
+        """Apply edits to file.
+
+        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        """
         if edits:
-            return self._get_backend().edit(path, edits=edits)
-        return self._get_backend().edit(path, old_string=old_string, new_string=new_string)
+            return self._get_backend().edit(path, edits=edits, replace_all=replace_all)
+        return self._get_backend().edit(
+            path, old_string=old_string, new_string=new_string, replace_all=replace_all
+        )
 
     async def aedit(
         self,
@@ -569,18 +654,31 @@ class WorkspaceAwareBackend:
         edits: list[dict[str, Any]] | None = None,
         old_string: str | None = None,
         new_string: str | None = None,
-    ) -> str:
-        """Async apply edits to file."""
-        if edits:
-            return await self._get_backend().aedit(path, edits=edits)
-        return await self._get_backend().aedit(path, old_string=old_string, new_string=new_string)
+        *,
+        replace_all: bool = False,
+    ) -> EditResult:
+        """Async apply edits to file.
 
-    def ls(self, path: str = ".") -> list[str]:
-        """List directory contents."""
+        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        """
+        if edits:
+            return await self._get_backend().aedit(path, edits=edits, replace_all=replace_all)
+        return await self._get_backend().aedit(
+            path, old_string=old_string, new_string=new_string, replace_all=replace_all
+        )
+
+    def ls(self, path: str = ".") -> LsResult:
+        """List directory contents.
+
+        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        """
         return self._get_backend().ls(path)
 
-    async def als(self, path: str = ".") -> list[str]:
-        """Async list directory contents."""
+    async def als(self, path: str = ".") -> LsResult:
+        """Async list directory contents.
+
+        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        """
         return await self._get_backend().als(path)
 
     def ls_info(self, path: str = ".") -> list[dict[str, Any]]:
