@@ -7,15 +7,10 @@ providing a consistent API across different backends and implementations.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 from .exceptions import (
-    FilesystemError,
     InvalidPathError,
-    PathNotFoundError,
-    PermissionDeniedError,
     PathTraversalError,
 )
 from .protocol import (
@@ -23,7 +18,6 @@ from .protocol import (
     EditResult,
     FileInfo,
     GlobResult,
-    GrepMatch,
     GrepResult,
     ReadResult,
     WriteResult,
@@ -44,10 +38,11 @@ class UnifiedFilesystem(ABC):
 
     Example:
         >>> class MyFilesystem(UnifiedFilesystem):
-        ...     def read(self, path: str, *, offset: int = 0, limit: int | None = None) -> ReadResult:
+        ...     def read(
+        ...         self, path: str, *, offset: int = 0, limit: int | None = None
+        ...     ) -> ReadResult:
         ...         # Implementation
         ...         pass
-        ...
         >>> fs = MyFilesystem(workspace="/workspace")
         >>> result = fs.read("config.json")
         >>> print(result.content)

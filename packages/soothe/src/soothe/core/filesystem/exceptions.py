@@ -8,7 +8,9 @@ from typing import Any
 class FilesystemError(Exception):
     """Base exception for filesystem operations."""
 
-    def __init__(self, message: str, *, path: str | None = None, details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, message: str, *, path: str | None = None, details: dict[str, Any] | None = None
+    ) -> None:
         """Initialize filesystem error.
 
         Args:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
@@ -11,7 +10,6 @@ import pytest
 from soothe.core.security.validator import (
     PathValidationError,
     PathValidator,
-    ValidationResult,
     ValidationSeverity,
     create_permissive_validator,
     create_strict_validator,
@@ -128,9 +126,7 @@ class TestPathValidator:
         # Should be blocked either by absolute path or blocked path
         assert result.is_valid is False
 
-    def test_permissive_validator_allows_absolute(
-        self, workspace: Path
-    ) -> None:
+    def test_permissive_validator_allows_absolute(self, workspace: Path) -> None:
         """Test that permissive validator allows absolute paths within workspace."""
         validator = create_permissive_validator(workspace)
 
@@ -142,9 +138,7 @@ class TestPathValidator:
 
         assert result.is_valid is True
 
-    def test_permissive_validator_blocks_outside_workspace(
-        self, workspace: Path
-    ) -> None:
+    def test_permissive_validator_blocks_outside_workspace(self, workspace: Path) -> None:
         """Test that permissive validator still blocks paths outside workspace."""
         validator = create_permissive_validator(workspace)
 
@@ -215,9 +209,7 @@ class TestPathValidator:
         assert result.is_valid is False
         assert result.violation_type == "dangerous_component"
 
-    def test_symlink_escape_detection(
-        self, validator: PathValidator, workspace: Path
-    ) -> None:
+    def test_symlink_escape_detection(self, validator: PathValidator, workspace: Path) -> None:
         """Test detection of symlink pointing outside workspace."""
         # Create a symlink pointing outside
         outside = tempfile.mkdtemp()

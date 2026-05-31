@@ -6,13 +6,12 @@ import pytest
 
 from soothe.core.security.policy import (
     PERMISSIVE_POLICY,
-    PolicyAction,
-    PolicyDecision,
-    PolicyScope,
-    PolicyViolation,
     READONLY_POLICY,
     SANDBOX_POLICY,
     STRICT_POLICY,
+    PolicyAction,
+    PolicyDecision,
+    PolicyViolation,
     SecurityPolicy,
 )
 
@@ -59,10 +58,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("../etc/passwd", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "traversal_not_allowed"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "traversal_not_allowed" for v in decision.violations)
 
     def test_policy_traversal_allowed(self) -> None:
         """Test that traversal can be allowed."""
@@ -72,8 +68,7 @@ class TestSecurityPolicy:
 
         # Should be allowed (other checks may still block)
         assert decision.allowed is True or any(
-            v.violation_type != "traversal_not_allowed"
-            for v in decision.violations
+            v.violation_type != "traversal_not_allowed" for v in decision.violations
         )
 
     def test_policy_absolute_blocked(self) -> None:
@@ -83,10 +78,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("/etc/passwd", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "absolute_path_not_allowed"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "absolute_path_not_allowed" for v in decision.violations)
 
     def test_policy_blocked_extension(self) -> None:
         """Test blocking by file extension."""
@@ -98,10 +90,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("malware.exe", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "blocked_extension"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "blocked_extension" for v in decision.violations)
 
     def test_policy_blocked_pattern(self) -> None:
         """Test blocking by pattern."""
@@ -113,10 +102,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("credentials.secret", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "blocked_pattern"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "blocked_pattern" for v in decision.violations)
 
     def test_policy_blocked_path(self) -> None:
         """Test blocking by path prefix."""
@@ -128,10 +114,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("/etc/passwd", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "blocked_path"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "blocked_path" for v in decision.violations)
 
     def test_policy_allowed_paths_whitelist(self) -> None:
         """Test whitelist mode with allowed_paths."""
@@ -147,10 +130,7 @@ class TestSecurityPolicy:
         # Path not in allowed list
         decision_blocked = policy.evaluate("/other/file.txt", "read")
         assert decision_blocked.allowed is False
-        assert any(
-            v.violation_type == "path_not_allowed"
-            for v in decision_blocked.violations
-        )
+        assert any(v.violation_type == "path_not_allowed" for v in decision_blocked.violations)
 
     def test_policy_read_only_violation(self) -> None:
         """Test read-only path violation."""
@@ -162,10 +142,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("/config/settings.txt", "write")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "read_only_violation"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "read_only_violation" for v in decision.violations)
 
     def test_policy_no_delete_violation(self) -> None:
         """Test no-delete path violation."""
@@ -177,10 +154,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("/important/file.txt", "delete")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "delete_not_allowed"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "delete_not_allowed" for v in decision.violations)
 
     def test_policy_path_too_long(self) -> None:
         """Test path length restriction."""
@@ -192,10 +166,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("very/long/path/name.txt", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "path_too_long"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "path_too_long" for v in decision.violations)
 
     def test_policy_home_expansion_blocked(self) -> None:
         """Test home expansion blocking."""
@@ -207,10 +178,7 @@ class TestSecurityPolicy:
         decision = policy.evaluate("~/.ssh/id_rsa", "read")
 
         assert decision.allowed is False
-        assert any(
-            v.violation_type == "home_expansion_not_allowed"
-            for v in decision.violations
-        )
+        assert any(v.violation_type == "home_expansion_not_allowed" for v in decision.violations)
 
     def test_policy_with_restrictions(self) -> None:
         """Test creating restricted policy variant."""
@@ -370,6 +338,7 @@ class TestPolicyCustomValidators:
 
     def test_custom_validator_blocks(self) -> None:
         """Test that custom validators can block operations."""
+
         def block_secret_files(path: str, operation: str) -> PolicyDecision | None:
             if "secret" in path.lower():
                 return PolicyDecision(
@@ -391,6 +360,7 @@ class TestPolicyCustomValidators:
 
     def test_custom_validator_allows(self) -> None:
         """Test that custom validators can allow operations."""
+
         def allow_specific_file(path: str, operation: str) -> PolicyDecision | None:
             if path == "allowed.txt":
                 return PolicyDecision(

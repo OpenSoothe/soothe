@@ -14,12 +14,12 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +235,7 @@ class FileBackend(AuditLogBackend):
                     for line in self._buffer:
                         f.write(line + "\n")
                 self._buffer.clear()
-            except IOError as e:
+            except OSError as e:
                 logger.error(f"Failed to write audit log: {e}")
 
     async def _maybe_flush(self) -> None:
@@ -339,11 +339,13 @@ class AuditLogger:
 
         # Initialize backends
         if self._config.log_file:
-            self._backends.append(FileBackend(
-                self._config.log_file,
-                self._config.max_file_size_mb,
-                self._config.max_backup_files,
-            ))
+            self._backends.append(
+                FileBackend(
+                    self._config.log_file,
+                    self._config.max_file_size_mb,
+                    self._config.max_backup_files,
+                )
+            )
 
         # Always add structured logging backend
         self._backends.append(StructuredLoggingBackend())
@@ -368,7 +370,7 @@ class AuditLogger:
         if self._worker_task:
             try:
                 await asyncio.wait_for(self._worker_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._worker_task.cancel()
 
         # Cancel flush task
@@ -461,6 +463,7 @@ class AuditLogger:
             }
             if self._config.include_stacktrace:
                 import traceback
+
                 error_dict["stacktrace"] = traceback.format_exc()
 
         event = AuditEvent(
@@ -697,8 +700,10 @@ class AuditedFilesystem:
             result = await self._fs.read(path, offset=offset, limit=limit)
             duration = (time.monotonic() - start) * 1000
             await self._audit.log_read(
-                path, True, duration,
-                size_bytes=len(result.content) if hasattr(result, 'content') else None,
+                path,
+                True,
+                duration,
+                size_bytes=len(result.content) if hasattr(result, "content") else None,
                 offset=offset,
                 limit=limit,
             )
@@ -716,7 +721,9 @@ class AuditedFilesystem:
             duration = (time.monotonic() - start) * 1000
             size = len(content) if isinstance(content, (str, bytes)) else 0
             await self._audit.log_write(
-                path, True, duration,
+                path,
+                True,
+                duration,
                 size_bytes=size,
                 is_new_file=not await self._fs.exists(path),
             )
