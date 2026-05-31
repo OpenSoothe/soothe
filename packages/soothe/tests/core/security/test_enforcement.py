@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from soothe.core.security.enforcement import (
-    OperationRecord,
     RateLimiter,
     SecurityContext,
     SecurityEnforcer,
@@ -18,11 +17,10 @@ from soothe.core.security.enforcement import (
 )
 from soothe.core.security.policy import (
     PERMISSIVE_POLICY,
+    STRICT_POLICY,
     PolicyAction,
     PolicyDecision,
     PolicyViolation,
-    READONLY_POLICY,
-    STRICT_POLICY,
 )
 
 
@@ -239,10 +237,7 @@ class TestSecurityEnforcer:
         d3 = enforcer.check_access("file3.txt", "read")
 
         assert d3.is_denied is True
-        assert any(
-            v.violation_type == "rate_limit_exceeded"
-            for v in d3.violations
-        )
+        assert any(v.violation_type == "rate_limit_exceeded" for v in d3.violations)
 
     def test_enforcer_violation_callback(self, workspace: Path) -> None:
         """Test violation callback."""
@@ -291,9 +286,7 @@ class TestSecurityContext:
         # Policy should be restored after context
         assert enforcer.policy.name == original_policy
 
-    def test_security_context_restores_on_exception(
-        self, enforcer: SecurityEnforcer
-    ) -> None:
+    def test_security_context_restores_on_exception(self, enforcer: SecurityEnforcer) -> None:
         """Test that policy is restored even if exception occurs."""
         original_policy = enforcer.policy.name
 
@@ -349,9 +342,7 @@ class TestCreateEnforcer:
 
         assert enforcer.policy.name == "sandbox"
 
-    def test_create_enforcer_unknown_policy_defaults_to_strict(
-        self, workspace: Path
-    ) -> None:
+    def test_create_enforcer_unknown_policy_defaults_to_strict(self, workspace: Path) -> None:
         """Test that unknown policy name defaults to strict."""
         enforcer = create_enforcer(workspace, policy_name="unknown")
 

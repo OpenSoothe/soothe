@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from soothe.core.filesystem import (
     DirectoryNotEmptyError,
+    FilesystemError,
+    GrepResult,
     InvalidPathError,
-    NotADirectoryError,
     NotAFileError,
     PathNotFoundError,
     PathTraversalError,
-    PermissionDeniedError,
 )
 from soothe.core.filesystem.local import LocalFilesystem
 
@@ -172,7 +173,7 @@ class TestUnifiedFilesystem:
     def test_edit_lines(self, temp_workspace: LocalFilesystem) -> None:
         """Test line range edit."""
         temp_workspace.write("lines.txt", "Line 1\nLine 2\nLine 3\nLine 4")
-        result = temp_workspace.edit_lines("lines.txt", 2, 3, "New Line 2\nNew Line 3")
+        temp_workspace.edit_lines("lines.txt", 2, 3, "New Line 2\nNew Line 3")
 
         content = temp_workspace.read("lines.txt").content
         assert "Line 1" in content

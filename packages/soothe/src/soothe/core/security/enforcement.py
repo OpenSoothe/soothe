@@ -16,11 +16,10 @@ from typing import TYPE_CHECKING, Any
 from .policy import (
     PolicyAction,
     PolicyDecision,
-    PolicyScope,
     PolicyViolation,
     SecurityPolicy,
 )
-from .validator import PathValidationError, PathValidator, ValidationResult
+from .validator import PathValidator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,18 +77,14 @@ class RateLimiter:
         cutoff = now - self.window_seconds
 
         # Clean old entries
-        self.operations[operation] = [
-            t for t in self.operations[operation] if t > cutoff
-        ]
+        self.operations[operation] = [t for t in self.operations[operation] if t > cutoff]
 
         count = len(self.operations[operation])
         if count >= max_count:
             return False, count
 
         if path:
-            self.path_operations[path] = [
-                t for t in self.path_operations[path] if t > cutoff
-            ]
+            self.path_operations[path] = [t for t in self.path_operations[path] if t > cutoff]
             path_count = len(self.path_operations[path])
             if path_count >= max_count:
                 return False, path_count
@@ -103,8 +98,7 @@ class RateLimiter:
 
         return {
             "operations": {
-                op: len([t for t in times if t > cutoff])
-                for op, times in self.operations.items()
+                op: len([t for t in times if t > cutoff]) for op, times in self.operations.items()
             },
             "paths": {
                 path: len([t for t in times if t > cutoff])
@@ -295,7 +289,7 @@ class SecurityEnforcer:
 
         # Trim audit log if too large
         if len(self.audit_log) > self.max_audit_entries:
-            self.audit_log = self.audit_log[-self.max_audit_entries:]
+            self.audit_log = self.audit_log[-self.max_audit_entries :]
 
         # Log to standard logger
         if decision.is_denied:
@@ -358,9 +352,7 @@ class SecurityEnforcer:
         decision = self.check_access(path, operation)
 
         if decision.is_denied:
-            violations = ", ".join(
-                v.violation_type for v in decision.violations
-            )
+            violations = ", ".join(v.violation_type for v in decision.violations)
             raise SecurityError(
                 f"Access denied for {operation} on {path}: {decision.reason}",
                 violations=violations,

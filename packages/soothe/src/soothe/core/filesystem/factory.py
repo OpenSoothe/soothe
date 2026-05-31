@@ -118,9 +118,7 @@ class FilesystemConfig:
     def __post_init__(self) -> None:
         """Validate and normalize configuration."""
         # Ensure workspace is absolute and resolved
-        object.__setattr__(
-            self, "workspace", Path(self.workspace).expanduser().resolve()
-        )
+        object.__setattr__(self, "workspace", Path(self.workspace).expanduser().resolve())
 
         # Ensure backup_dir is relative to workspace if not absolute
         backup = Path(self.backup_dir)
@@ -177,9 +175,7 @@ class FilesystemConfig:
 
         security = SecurityConfig(
             virtual_mode=security_data.get("virtual_mode", True),
-            enforce_workspace_boundary=security_data.get(
-                "enforce_workspace_boundary", True
-            ),
+            enforce_workspace_boundary=security_data.get("enforce_workspace_boundary", True),
             require_explicit_paths=security_data.get("require_explicit_paths", False),
             audit_logging=security_data.get("audit_logging", False),
             max_file_size_mb=security_data.get("max_file_size_mb", 10),
@@ -335,9 +331,7 @@ class FilesystemFactory:
             elif self._config.filesystem_type == FilesystemType.REMOTE:
                 return self._create_remote_filesystem()
             else:
-                raise FilesystemError(
-                    f"Unknown filesystem type: {self._config.filesystem_type}"
-                )
+                raise FilesystemError(f"Unknown filesystem type: {self._config.filesystem_type}")
         except Exception as e:
             if isinstance(e, FilesystemError):
                 raise
@@ -428,12 +422,8 @@ class FilesystemFactory:
         workspace = os.environ.get(f"{prefix}WORKSPACE", os.getcwd())
         virtual_mode = os.environ.get(f"{prefix}VIRTUAL_MODE", "true").lower() == "true"
         max_file_size = int(os.environ.get(f"{prefix}MAX_FILE_SIZE_MB", "10"))
-        backup_enabled = (
-            os.environ.get(f"{prefix}BACKUP_ENABLED", "true").lower() == "true"
-        )
-        audit_logging = (
-            os.environ.get(f"{prefix}AUDIT_LOGGING", "false").lower() == "true"
-        )
+        backup_enabled = os.environ.get(f"{prefix}BACKUP_ENABLED", "true").lower() == "true"
+        audit_logging = os.environ.get(f"{prefix}AUDIT_LOGGING", "false").lower() == "true"
 
         security = SecurityConfig(
             virtual_mode=virtual_mode,
