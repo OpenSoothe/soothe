@@ -60,6 +60,7 @@ def test_merge_adds_callback_and_metadata(monkeypatch) -> None:
     assert out is not base
     assert out["callbacks"][-1] is handler
     assert out["metadata"]["langfuse_session_id"] == "sess-1"
+    assert out["metadata"]["thread_id"] == "sess-1"
     assert out["run_name"] == "soothe-test"
     assert out["configurable"]["thread_id"] == "t1"
 

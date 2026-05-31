@@ -5,10 +5,10 @@ tools (delete_file, file_info, edit_file_lines, insert_lines, delete_lines, appl
 
 All tools are created via `SootheFilesystemMiddleware` from `soothe.middleware.filesystem`,
 which implements them using `StructuredTool.from_function()` with proper Schema classes
-for validation. This approach extends deepagents rather than reinventing file operations.
+for validation. This approach extends the base functionality rather than reinventing file operations.
 
 The plugin extracts only surgical tools (not basic read/write/list/search operations)
-from the middleware, as those are provided by deepagents' FilesystemMiddleware.
+from the middleware, as those are provided by FilesystemMiddleware.
 """
 
 from __future__ import annotations

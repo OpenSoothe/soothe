@@ -46,9 +46,9 @@ class CoreAgent:
     protocol properties. Pure execution runtime for tools, subagents, and
     middlewares - NO goal infrastructure (Layer 2/3 responsibility).
 
-    This class defines the clear boundary between Soothe and deepagents:
-    - deepagents provides: create_deep_agent(), CompiledStateGraph, built-in
-      middleware stack, BackendProtocol, SubAgent/task tool
+    This class wraps LangGraph CompiledStateGraph with Soothe-specific features:
+    - LangGraph provides: CompiledStateGraph, built-in middleware stack,
+      BackendProtocol, SubAgent/task tool
     - Soothe adds: typed protocol properties, execution hints processing,
       policy enforcement layer, context briefing injection
 
@@ -114,7 +114,7 @@ class CoreAgent:
         """Initialize CoreAgent with graph and protocol instances.
 
         Args:
-            graph: CompiledStateGraph from deepagents create_deep_agent().
+            graph: CompiledStateGraph from LangGraph runtime.
             config: SootheConfig used for agent creation.
             memory: MemoryProtocol instance (or None if disabled).
             planner: PlannerProtocol instance (or None if disabled).

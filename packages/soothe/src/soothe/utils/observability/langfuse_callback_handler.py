@@ -200,15 +200,10 @@ if LANGFUSE_AVAILABLE:
         def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:
             traced_input = self._generation_traced_inputs.pop(run_id, None)
             if traced_input is not None:
-                observation = self._runs.get(run_id)
-                if observation is not None and hasattr(observation, "update"):
-                    try:
-                        observation.update(input=traced_input)
-                    except Exception:
-                        logger.debug(
-                            "Langfuse: generation input reaffirm failed (non-fatal)",
-                            exc_info=True,
-                        )
+                # Parent handler overwrites generation input with kwargs["inputs"], which
+                # lacks middleware-built system text. Inject the patched batch here.
+                kwargs = dict(kwargs)
+                kwargs["inputs"] = traced_input
             return super().on_llm_end(response, run_id=run_id, **kwargs)
 
 

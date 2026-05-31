@@ -20,7 +20,7 @@ def test_resolve_backend_os_path_virtual_mode_maps_absolute(tmp_path: Path) -> N
 
 def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Path) -> None:
     """Host-absolute paths inside the workspace resolve with ``virtual_mode=True`` (IG-300)."""
-    from soothe.core.workspace.backend import NormalizedPathBackend
+    from soothe.core.workspace.refactored_backend import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -42,7 +42,7 @@ def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Pa
 
 def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path: Path) -> None:
     """``WorkspaceAwareBackend.ls_info`` accepts host-absolute dirs when ``virtual_mode=True`` (IG-300)."""
-    from soothe.core.workspace.backend import WorkspaceAwareBackend
+    from soothe.core.workspace.refactored_backend import WorkspaceAwareBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()

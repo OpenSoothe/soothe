@@ -1,6 +1,6 @@
 """CodeInterpreterMiddleware -- embedded QuickJS interpreter for programmatic tool calling.
 
-IG-423: Integrates deepagents CodeInterpreterMiddleware for stateful code execution
+IG-423: Integrates CodeInterpreterMiddleware for stateful code execution
 within the agent loop. Enables programmatic tool calling (PTC) pattern where agents
 write code that calls tools directly, reducing token usage and enabling better
 control flow.
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class CodeInterpreterMiddleware(AgentMiddleware):
     """Embedded QuickJS interpreter for programmatic tool calling.
 
-    This middleware wraps the deepagents CodeInterpreterMiddleware (via
+    This middleware wraps the CodeInterpreterMiddleware (via
     langchain_quickjs) to provide:
 
     - Stateful code execution: Variables persist across eval calls (REPL-like)
@@ -150,7 +150,7 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         except ImportError:
             logger.warning(
                 "[CodeInterpreter] langchain_quickjs not installed. "
-                "Install with: uv add 'deepagents[quickjs]'"
+                "Install with: uv add 'soothe[quickjs]'"
             )
             return None
 
