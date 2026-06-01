@@ -241,20 +241,17 @@ class _StartupMixin:
             group="startup-model-prewarm",
         )
 
-        # Auto-submit initial prompt or skill if provided via -m / --skill.
-        # This check must come first so an elif after the loop-history branch
-        # would not skip initial submission.
-        # When connecting, defer until the ready message handler fires.
-        # NOTE: _schedule_initial_submission() has a side effect (queues a
-        # task via call_after_refresh); short-circuit ensures it only runs
-        # when not connecting — the deferred path handles the connecting case.
-        if (
-            not self._connecting
-            and not self._schedule_initial_submission()
-            and self._lc_loop_id
-            and self._runtime_backend_ready()
-        ):
+        # Resume sessions always load prior conversation, even when a startup
+        # prompt is queued — otherwise the user sees their new turn on an
+        # empty transcript. History load is scheduled first so it runs before
+        # the initial prompt's response begins streaming.
+        if not self._connecting and self._lc_loop_id and self._runtime_backend_ready():
             self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
+
+        # Auto-submit initial prompt or skill if provided via -m / --skill.
+        # When connecting, defer until the ready message handler fires.
+        if not self._connecting:
+            self._schedule_initial_submission()
 
     async def _init_session_state(self) -> None:
         """Create session state in a thread (imports soothe.sessions)."""
@@ -490,8 +487,11 @@ class _StartupMixin:
                 group="daemon-event-reader",
             )
 
-        if not self._schedule_initial_submission() and self._lc_loop_id:
+        # Resume sessions must load prior conversation regardless of whether a
+        # startup prompt is also queued — see _post_mount for the rationale.
+        if self._lc_loop_id:
             self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
+        self._schedule_initial_submission()
 
         if self._deferred_actions and not self._agent_running:
 

@@ -209,18 +209,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 capabilities=context.available_capabilities,
                 thread_id=state.thread_id,
             )
-            # Surface the discriminator's reasoning to the TUI as an
-            # ``assess`` event so it renders as an AI-reasoning card before
-            # the plan / execute work begins (RFC-226).
             reason_text = (assessment.reasoning or "").strip()
-            if reason_text:
-                await ctx.emit(
-                    "assess",
-                    {
-                        "assessment_reasoning": (f"{reason_text}"),
-                        "iteration": state.iteration,
-                    },
-                )
             if assessment.action == "bootstrap":
                 logger.info(
                     "[Plan] iter=0 continuation-assess: bootstrap (%s)",
@@ -248,6 +237,15 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 )
                 return {"assess_route": "skip_generate"}
             # action == "plan_generate": escalate to full planner.
+            # Surface discriminator reasoning before plan_generate (RFC-226).
+            if reason_text:
+                await ctx.emit(
+                    "assess",
+                    {
+                        "assessment_reasoning": reason_text,
+                        "iteration": state.iteration,
+                    },
+                )
             # Build a StatusAssessment from the ContinuationAssessment so the
             # downstream plan_generate node has the payload it requires.
             logger.info(

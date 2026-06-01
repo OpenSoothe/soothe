@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -334,9 +333,15 @@ class _HistoryMixin:
                 limit=10000,
                 include_events=True,
             )
-            # Filter for event types (tool calls, tool results, events).
-            # Daemon rows expose a `kind` discriminator.
-            return [m for m in messages if m.get("kind") in ("event", "tool_call", "tool_result")]
+            # Daemon rows expose a `kind` discriminator. `conversation` rows
+            # carry the user/assistant text written by ThreadLogger and are the
+            # only source of those bubbles when checkpoint state is empty and
+            # recovery did not run.
+            return [
+                m
+                for m in messages
+                if m.get("kind") in ("event", "tool_call", "tool_result", "conversation")
+            ]
         except Exception:
             logger.debug("Failed to read persisted activity events for %s", loop_id, exc_info=True)
             return []
@@ -381,6 +386,25 @@ class _HistoryMixin:
         parsed_ts = _HistoryMixin._parse_loop_event_timestamp(event.get("timestamp"))
 
         event_timestamp = parsed_ts.timestamp() if parsed_ts is not None else time.time()
+
+        if kind == "conversation":
+            role = str(event.get("role") or metadata.get("role") or "").strip().lower()
+            content = str(event.get("content") or metadata.get("text") or "").strip()
+            if not content:
+                return None
+            if role == "user":
+                return MessageData(
+                    type=MessageType.USER,
+                    content=content,
+                    timestamp=event_timestamp,
+                )
+            if role == "assistant":
+                return MessageData(
+                    type=MessageType.ASSISTANT,
+                    content=content,
+                    timestamp=event_timestamp,
+                )
+            return None
 
         if kind == "tool_call":
             tool_name = str(event.get("tool_name") or metadata.get("tool_name") or "unknown")
@@ -430,9 +454,29 @@ class _HistoryMixin:
                 event_type = str(event_data.get("type") or "").strip()
                 summary = str(event_data.get("summary") or "").strip()
                 if event_type == "soothe.cognition.agent_loop.completed":
-                    # Final answer is replayed from checkpoint AIMessage
-                    # (``phase=goal_completion``); avoid duplicate app-line noise.
-                    return None
+                    # Render a concise completion report so resumed transcripts
+                    # have a clear endpoint marker (the live transcript reads
+                    # this from streamed progress; replay needs an explicit
+                    # row). The final assistant text is still recovered
+                    # separately from the checkpoint ``phase=goal_completion``
+                    # AIMessage.
+                    status = str(event_data.get("status") or "").strip() or "completed"
+                    goal_progress = str(event_data.get("goal_progress") or "").strip()
+                    total_steps = int(event_data.get("total_steps") or 0)
+                    completion_summary = str(event_data.get("completion_summary") or "").strip()
+                    parts = [f"Goal {status}"]
+                    if goal_progress:
+                        parts.append(f"progress={goal_progress}")
+                    if total_steps:
+                        parts.append(f"{total_steps} step{'s' if total_steps != 1 else ''}")
+                    line = " · ".join(parts)
+                    if completion_summary:
+                        line = f"{line} — {completion_summary}"
+                    return MessageData(
+                        type=MessageType.APP,
+                        content=line,
+                        timestamp=event_timestamp,
+                    )
                 if event_type == "soothe.cognition.agent_loop.reasoned":
                     assessment = str(event_data.get("assessment_reasoning") or "").strip()
                     plan_reasoning = str(event_data.get("plan_reasoning") or "").strip()
@@ -452,19 +496,11 @@ class _HistoryMixin:
                         cognition_plan_strategy=plan_reasoning,
                     )
                 if event_type == "soothe.cognition.agent_loop.started":
-                    goal_snapshot = {
-                        "goal": str(event_data.get("goal") or "").strip(),
-                        "max_iterations": int(event_data.get("max_iterations") or 0),
-                        "steps": [],
-                        "footer_visible": False,
-                        "footer_text": "",
-                    }
-                    return MessageData(
-                        type=MessageType.COGNITION_GOAL_TREE,
-                        content="",
-                        timestamp=event_timestamp,
-                        cognition_goal_snapshot_json=json.dumps(goal_snapshot),
-                    )
+                    # The goal-tree pin (📍 goal · iter<=N) is suppressed on
+                    # history replay: it only adds value while the loop is
+                    # actively planning. Replayed transcripts already show the
+                    # user prompt, step cards, and the completion summary.
+                    return None
                 if event_type == "soothe.cognition.agent_loop.step.started":
                     step_id = str(event_data.get("step_id") or "").strip()
                     if not step_id:
@@ -517,6 +553,13 @@ class _HistoryMixin:
     def _collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageData]:
         """Build cognition card replay rows for TUI parity with live streaming.
 
+        Live streaming mutates a single ``CognitionStepMessage`` widget per
+        ``step_id`` (started → completed transitions the same card in place),
+        so the replay must collapse the started/completed event pair to one
+        card too. We keep the latest state per ``step_id`` — completed when
+        present (it carries duration, summary, tool-count), otherwise the
+        started card so the step still appears in the transcript.
+
         Args:
             events: Raw conversation-log rows (``kind=event`` with cognition
                 payloads).
@@ -534,6 +577,7 @@ class _HistoryMixin:
             ),
         )
         cards: list[MessageData] = []
+        step_card_position: dict[str, int] = {}
         for event in sorted_events:
             if str(event.get("kind") or "").strip() != "event":
                 continue
@@ -546,8 +590,49 @@ class _HistoryMixin:
                 MessageType.STEP_PROGRESS,
             ):
                 continue
+            if msg_data.type == MessageType.STEP_PROGRESS and msg_data.step_progress_id:
+                step_id = msg_data.step_progress_id
+                existing = step_card_position.get(step_id)
+                if existing is not None:
+                    # Mirror live in-place mutation of CognitionStepMessage:
+                    # transition phase/duration/tools to the later event but
+                    # preserve the description (the schema for
+                    # AgenticStepCompletedEvent omits ``description`` — only
+                    # ``step.started`` carries it).
+                    cards[existing] = _HistoryMixin._merge_step_progress(cards[existing], msg_data)
+                    continue
+                step_card_position[step_id] = len(cards)
             cards.append(msg_data)
         return cards
+
+    @staticmethod
+    def _merge_step_progress(prior: MessageData, later: MessageData) -> MessageData:
+        """Combine two ``STEP_PROGRESS`` cards (typically started → completed)."""
+        # Prefer the later event's status / metrics / summary, but keep the
+        # description from whichever card has one (started has it; completed
+        # doesn't and falls back to the placeholder "(step)").
+        prior_desc = (prior.step_progress_description or "").strip()
+        later_desc = (later.step_progress_description or "").strip()
+        description = (
+            later_desc
+            if later_desc and later_desc != "(step)"
+            else (prior_desc if prior_desc and prior_desc != "(step)" else later_desc or prior_desc)
+        )
+        merged = MessageData(
+            type=MessageType.STEP_PROGRESS,
+            content=later.content,
+            timestamp=later.timestamp,
+            step_progress_id=later.step_progress_id or prior.step_progress_id,
+            step_progress_description=description or "(step)",
+            step_progress_phase=later.step_progress_phase or prior.step_progress_phase,
+            step_success=later.step_success
+            if later.step_success is not None
+            else prior.step_success,
+            step_duration_ms=later.step_duration_ms or prior.step_duration_ms,
+            step_tool_call_count=later.step_tool_call_count or prior.step_tool_call_count,
+            step_summary=later.step_summary or prior.step_summary,
+        )
+        return merged
 
     def _convert_loop_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
         """Convert persisted activity-event rows into stable TUI cards.
@@ -558,6 +643,10 @@ class _HistoryMixin:
 
         data: list[MessageData] = []
         pending_tool_indices: dict[str, list[int]] = {}
+        # Track step_progress card index per step_id so a later `completed`
+        # event mutates the same card instead of mounting a second one — see
+        # _collect_cognition_card_replay for the same rationale.
+        step_card_position: dict[str, int] = {}
 
         sorted_events = sorted(
             events,
@@ -587,6 +676,14 @@ class _HistoryMixin:
                 else:
                     data.append(msg_data)
                 continue
+
+            if msg_data.type == MessageType.STEP_PROGRESS and msg_data.step_progress_id:
+                step_id = msg_data.step_progress_id
+                existing = step_card_position.get(step_id)
+                if existing is not None:
+                    data[existing] = _HistoryMixin._merge_step_progress(data[existing], msg_data)
+                    continue
+                step_card_position[step_id] = len(data)
 
             data.append(msg_data)
 

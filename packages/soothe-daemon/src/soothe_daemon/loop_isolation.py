@@ -12,7 +12,6 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.runner._types import generate_thread_id
 from soothe.core.workspace import resolve_daemon_workspace, resolve_loop_workspace
 
 from soothe_daemon.logging import set_loop_id
@@ -24,14 +23,21 @@ logger = logging.getLogger(__name__)
 
 
 async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
-    """Ensure runner and thread registry match ``loop_id`` metadata; return CoreAgent thread id.
+    """Bind the loop's checkpoint thread and return its id.
+
+    Per RFC-223, the main AgentLoop checkpoint thread id is the ``loop_id``
+    itself — the runtime in ``soothe.core.loop.engine.agent_loop`` normalizes
+    any caller-supplied id back to ``loop_id`` before saving. Returning a
+    distinct UUID here causes read RPCs (``loop_state_get``, ``loop_messages``)
+    to query the wrong LangGraph checkpoint and surface an empty conversation
+    on resume.
 
     Args:
         daemon: ``SootheDaemon`` instance.
         loop_id: AgentLoop identifier.
 
     Returns:
-        Active durability thread id for this loop.
+        Checkpoint thread id for this loop (always equals ``loop_id``).
 
     Raises:
         RuntimeError: If loop metadata is missing or invalid.
@@ -45,19 +51,16 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
         msg = f"Loop {loop_id} not found"
         raise RuntimeError(msg)
 
-    thread_id = str(metadata.get("current_thread_id") or "").strip()
+    # RFC-223: main thread id == loop id. Keep ``thread_ids`` history intact
+    # (fork threads use the ``{loop_id}__step_<id>`` naming scheme and stay
+    # listed) but ensure the main id is recorded and is the current one.
+    thread_id = loop_id
     thread_ids = [str(t) for t in (metadata.get("thread_ids") or []) if str(t).strip()]
-    # loop_id scopes AgentLoop persistence; thread_id is the LangGraph/durability conversation id.
-    if not thread_id or thread_id == loop_id:
-        if thread_id == loop_id:
-            logger.info(
-                "Loop %s: replacing legacy thread_id=loop_id alias with a new thread",
-                loop_id,
-            )
-            thread_ids = [t for t in thread_ids if t != loop_id]
-        thread_id = generate_thread_id()
-        if thread_id not in thread_ids:
-            thread_ids.append(thread_id)
+    if thread_id not in thread_ids:
+        thread_ids.append(thread_id)
+    if str(metadata.get("current_thread_id") or "").strip() != thread_id or thread_ids != list(
+        metadata.get("thread_ids") or []
+    ):
         try:
             await daemon._persistence_manager.update_loop_metadata(
                 loop_id,

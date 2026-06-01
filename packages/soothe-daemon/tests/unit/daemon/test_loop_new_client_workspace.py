@@ -231,7 +231,8 @@ async def test_bind_execution_thread_prefers_client_workspace(
 
         checkpoint_thread_id = await bind_execution_thread_for_loop(bind_daemon, loop_id)
 
-        assert checkpoint_thread_id != loop_id
+        # RFC-223: main checkpoint thread id equals loop_id.
+        assert checkpoint_thread_id == loop_id
         assert set_workspace_calls, "set_workspace must be invoked"
         assert set_workspace_calls[0] == project.resolve()
     finally:
@@ -239,10 +240,10 @@ async def test_bind_execution_thread_prefers_client_workspace(
 
 
 @pytest.mark.asyncio
-async def test_bind_execution_thread_generates_distinct_thread_id(
+async def test_bind_execution_thread_uses_loop_id_as_checkpoint_thread(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """First bind mints a LangGraph thread id separate from the client loop_id."""
+    """RFC-223: the main AgentLoop checkpoint thread id equals the loop id."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
@@ -267,7 +268,8 @@ async def test_bind_execution_thread_generates_distinct_thread_id(
 
             def set_thread_loop(self, thread_id: str, bound_loop_id: str) -> None:
                 assert bound_loop_id == loop_id
-                assert thread_id != loop_id
+                # RFC-223: registry key for the main thread IS loop_id.
+                assert thread_id == loop_id
 
         bind_daemon = SimpleNamespace(
             _persistence_manager=daemon._persistence_manager,
@@ -276,22 +278,26 @@ async def test_bind_execution_thread_generates_distinct_thread_id(
         )
 
         checkpoint_thread_id = await bind_execution_thread_for_loop(bind_daemon, loop_id)
-        assert checkpoint_thread_id != loop_id
+        assert checkpoint_thread_id == loop_id
 
         metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
         assert metadata is not None
-        assert metadata.get("current_thread_id") == checkpoint_thread_id
-        assert checkpoint_thread_id in (metadata.get("thread_ids") or [])
-        assert loop_id not in (metadata.get("thread_ids") or [])
+        assert metadata.get("current_thread_id") == loop_id
+        assert loop_id in (metadata.get("thread_ids") or [])
     finally:
         await daemon.close()
 
 
 @pytest.mark.asyncio
-async def test_bind_execution_thread_replaces_legacy_loop_id_alias(
+async def test_bind_execution_thread_preserves_existing_loop_id_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Loops that incorrectly stored thread_id=loop_id get a fresh thread on re-bind."""
+    """RFC-223: a stored ``current_thread_id == loop_id`` is the bound state, not a stale alias.
+
+    Earlier code treated this as a legacy alias and minted a fresh thread,
+    which silently abandoned the loop's checkpoint and conversation history
+    on every continue. Bind must now leave the binding intact.
+    """
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
@@ -324,12 +330,12 @@ async def test_bind_execution_thread_replaces_legacy_loop_id_alias(
         )
 
         checkpoint_thread_id = await bind_execution_thread_for_loop(bind_daemon, loop_id)
-        assert checkpoint_thread_id != loop_id
+        assert checkpoint_thread_id == loop_id
 
         metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
         assert metadata is not None
-        assert metadata.get("current_thread_id") == checkpoint_thread_id
-        assert loop_id not in (metadata.get("thread_ids") or [])
+        assert metadata.get("current_thread_id") == loop_id
+        assert metadata.get("thread_ids") == [loop_id]
     finally:
         await daemon.close()
 

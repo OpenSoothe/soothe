@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from deepagents.backends.protocol import EditResult, LsResult
+from deepagents.backends.protocol import EditResult, LsResult, WriteResult
 
 from soothe.core.workspace.normalized_backend import (
     NormalizedPathBackend,
@@ -64,6 +64,58 @@ class TestNormalizedPathBackendReadResult:
         assert (sync_result.file_data or {}).get("content") == (async_result.file_data or {}).get(
             "content"
         )
+
+
+class TestNormalizedPathBackendWriteResult:
+    """Test that write/awrite return deepagents WriteResult per BackendProtocol.
+
+    deepagents.middleware.filesystem._aprocess_large_message reads
+    ``result.error`` to decide whether to evict a large tool result. Returning
+    a bare ``str`` (the old behaviour) crashes that codepath with
+    ``AttributeError: 'str' object has no attribute 'error'``.
+    """
+
+    @pytest.fixture
+    def backend(self, tmp_path: Path) -> NormalizedPathBackend:
+        return NormalizedPathBackend(root_dir=tmp_path, virtual_mode=True)
+
+    def test_write_returns_write_result_on_success(self, backend: NormalizedPathBackend) -> None:
+        result = backend.write("/note.txt", "hello world")
+        assert isinstance(result, WriteResult)
+        assert result.error is None
+        assert result.path and result.path.endswith("note.txt")
+
+    @pytest.mark.asyncio
+    async def test_awrite_returns_write_result_on_success(
+        self, backend: NormalizedPathBackend
+    ) -> None:
+        result = await backend.awrite("/async-note.txt", "hi")
+        assert isinstance(result, WriteResult)
+        assert result.error is None
+        assert result.path and result.path.endswith("async-note.txt")
+
+    def test_workspace_aware_backend_write_returns_write_result(self, tmp_path: Path) -> None:
+        backend = WorkspaceAwareBackend(
+            default_root_dir=tmp_path,
+            virtual_mode=True,
+            max_file_size_mb=10,
+        )
+        result = backend.write("/file.txt", "payload")
+        assert isinstance(result, WriteResult)
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_workspace_aware_backend_awrite_returns_write_result(
+        self, tmp_path: Path
+    ) -> None:
+        backend = WorkspaceAwareBackend(
+            default_root_dir=tmp_path,
+            virtual_mode=True,
+            max_file_size_mb=10,
+        )
+        result = await backend.awrite("/async-file.txt", "payload")
+        assert isinstance(result, WriteResult)
+        assert result.error is None
 
 
 class TestNormalizedPathBackendLsResult:
