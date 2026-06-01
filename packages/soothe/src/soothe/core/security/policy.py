@@ -17,6 +17,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _path_is_under(path: str, prefix: str) -> bool:
+    """True if ``path`` equals ``prefix`` or sits beneath it as a path-component prefix.
+
+    Used in place of substring (``in``) matching, which produced false positives
+    like treating ``/tmp/x/etc/foo`` as being under ``/etc``.
+    """
+    if not path or not prefix:
+        return False
+    prefix_norm = prefix.rstrip("/") or "/"
+    if path == prefix_norm:
+        return True
+    return path.startswith(prefix_norm + "/")
+
+
 class PolicyAction(enum.Enum):
     """Actions that can be taken when a policy violation is detected."""
 
@@ -217,15 +231,41 @@ class SecurityPolicy:
                 )
             )
 
-        # Check absolute path (skip if path is in allowed_paths whitelist)
+        # Check absolute path (skip if path is in allowed_paths whitelist).
+        # When the caller passes ``context["workspace"]``, a leading-'/' path
+        # whose first segment is not a known UNIX host root (e.g. ``/CHANGELOG.md``
+        # vs. ``/etc/passwd``) is treated as a workspace-virtual path and not
+        # rejected — otherwise virtual_mode tools could never call this policy.
         if path.startswith("/") and not self.allow_absolute:
-            # Whitelist bypass: if allowed_paths is set, check if path is whitelisted
-            if self.allowed_paths is not None:
-                is_whitelisted = any(
-                    path.startswith(allowed_path) or allowed_path in path
-                    for allowed_path in self.allowed_paths
+            ws = (context or {}).get("workspace")
+            is_virtual_under_workspace = False
+            if ws is not None:
+                from pathlib import Path as _Path
+
+                from soothe.core.workspace.tool_path_resolution import (
+                    should_use_virtual_path_resolution,
                 )
-                if not is_whitelisted:
+
+                is_virtual_under_workspace = should_use_virtual_path_resolution(path, _Path(ws))
+
+            if not is_virtual_under_workspace:
+                # Whitelist bypass: if allowed_paths is set, check if path is whitelisted
+                if self.allowed_paths is not None:
+                    is_whitelisted = any(
+                        _path_is_under(path, allowed_path) for allowed_path in self.allowed_paths
+                    )
+                    if not is_whitelisted:
+                        violations.append(
+                            PolicyViolation(
+                                policy_name=self.name,
+                                violation_type="absolute_path_not_allowed",
+                                message="Absolute paths are not allowed",
+                                path=path,
+                                operation=operation,
+                                severity="high",
+                            )
+                        )
+                else:
                     violations.append(
                         PolicyViolation(
                             policy_name=self.name,
@@ -236,17 +276,6 @@ class SecurityPolicy:
                             severity="high",
                         )
                     )
-            else:
-                violations.append(
-                    PolicyViolation(
-                        policy_name=self.name,
-                        violation_type="absolute_path_not_allowed",
-                        message="Absolute paths are not allowed",
-                        path=path,
-                        operation=operation,
-                        severity="high",
-                    )
-                )
 
         # Check traversal
         if ".." in path and not self.allow_traversal:
@@ -307,9 +336,10 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check blocked paths
+        # Check blocked paths (component-prefix match — avoid substring false positives
+        # like "/etc" matching "/tmp/x/etc/foo").
         for blocked in self.blocked_paths:
-            if path.startswith(blocked) or blocked in path:
+            if _path_is_under(path, blocked):
                 violations.append(
                     PolicyViolation(
                         policy_name=self.name,
@@ -322,12 +352,9 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check allowed paths (whitelist mode)
+        # Check allowed paths (whitelist mode) — same component-prefix semantics.
         if self.allowed_paths is not None:
-            allowed = any(
-                path.startswith(allowed_path) or allowed_path in path
-                for allowed_path in self.allowed_paths
-            )
+            allowed = any(_path_is_under(path, allowed_path) for allowed_path in self.allowed_paths)
             if not allowed:
                 violations.append(
                     PolicyViolation(
@@ -340,10 +367,10 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check read-only paths for write operations
+        # Check read-only paths for write operations (component-prefix match).
         if operation in ("write", "edit", "delete"):
             for ro_path in self.read_only_paths:
-                if path.startswith(ro_path):
+                if _path_is_under(path, ro_path):
                     violations.append(
                         PolicyViolation(
                             policy_name=self.name,
@@ -355,10 +382,10 @@ class SecurityPolicy:
                         )
                     )
 
-        # Check no-delete paths
+        # Check no-delete paths (component-prefix match).
         if operation == "delete":
             for nd_path in self.no_delete_paths:
-                if path.startswith(nd_path):
+                if _path_is_under(path, nd_path):
                     violations.append(
                         PolicyViolation(
                             policy_name=self.name,

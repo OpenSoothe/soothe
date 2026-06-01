@@ -93,10 +93,11 @@ class NormalizedPathBackend:
         self._virtual_mode = virtual_mode
         self._max_file_size_mb = max_file_size_mb
 
-        # Create underlying UnifiedFilesystem
-        from soothe.core.filesystem import LocalFilesystem
+        # Use WorkspaceFilesystem (not bare LocalFilesystem) so glob gets
+        # gitignore filtering, result caps, and host-absolute path output.
+        from soothe.core.filesystem.workspace import WorkspaceFilesystem
 
-        self._fs = LocalFilesystem(
+        self._fs = WorkspaceFilesystem(
             workspace=root_dir,
             virtual_mode=virtual_mode,
             max_file_size_mb=max_file_size_mb,

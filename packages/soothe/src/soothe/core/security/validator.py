@@ -321,6 +321,18 @@ class PathValidator:
 
         # Handle absolute paths
         if expanded.is_absolute():
+            # Virtual workspace paths (e.g. ``/CHANGELOG.md`` under virtual_mode)
+            # are not host-absolute; treat them as workspace-relative even when
+            # allow_absolute=False, so sandbox modes don't reject every virtual
+            # filesystem-tool path.
+            from soothe.core.workspace.tool_path_resolution import (
+                should_use_virtual_path_resolution,
+            )
+
+            if should_use_virtual_path_resolution(path, self.workspace):
+                virtual_rel = str(expanded).lstrip("/")
+                return os.path.normpath(virtual_rel) if virtual_rel else "."
+
             if not self.allow_absolute:
                 raise PathValidationError(
                     "Absolute paths not allowed",
@@ -360,10 +372,13 @@ class PathValidator:
         return None
 
     def _check_blocked_paths(self, path: str) -> ValidationResult | None:
-        """Check against blocked system paths."""
+        """Check against blocked system paths (component-prefix, not substring)."""
         path_lower = path.lower()
         for blocked in self.blocked_paths:
-            if path_lower.startswith(blocked.lower()) or blocked.lower() in path_lower:
+            blocked_lower = blocked.lower().rstrip("/")
+            if not blocked_lower:
+                continue
+            if path_lower == blocked_lower or path_lower.startswith(blocked_lower + "/"):
                 return ValidationResult(
                     is_valid=False,
                     violation_type="blocked_system_path",
@@ -374,10 +389,20 @@ class PathValidator:
         return None
 
     def _check_workspace_boundary(self, path: str) -> ValidationResult | None:
-        """Verify path stays within workspace boundary."""
+        """Verify path stays within workspace boundary.
+
+        ``(workspace / abs_path)`` discards the workspace when ``abs_path`` is
+        absolute, so we resolve absolute and relative inputs differently. Any
+        absolute path that does not resolve under the workspace is a boundary
+        violation; relative paths are joined onto the workspace first.
+        """
         try:
-            full_path = (self.workspace / path).resolve()
-            # Check if resolved path is still within workspace
+            candidate = Path(path)
+            full_path = (
+                candidate.resolve()
+                if candidate.is_absolute()
+                else (self.workspace / candidate).resolve()
+            )
             full_path.relative_to(self.workspace.resolve())
         except (ValueError, RuntimeError) as e:
             return ValidationResult(
