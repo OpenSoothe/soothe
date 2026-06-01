@@ -6,7 +6,48 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe_cli.tui.widgets.messages import AssistantMessage, _SelectableMarkdownBody
+from soothe_cli.tui.widgets.messages import (
+    AssistantMessage,
+    _rich_style_with_textual_selection,
+    _SelectableMarkdownBody,
+)
+
+
+def test_rich_style_with_textual_selection_blends_backgrounds() -> None:
+    """Markdown selection must alpha-blend, not replace code-block backgrounds."""
+    from rich.style import Style as RichStyle
+    from textual.color import Color
+
+    code_bg = RichStyle(bgcolor="#282a36")
+    selection_bg = Color(1, 120, 212, 0.5)
+
+    merged = _rich_style_with_textual_selection(code_bg, selection_bg)
+    naive = code_bg + RichStyle(bgcolor="#094472")
+
+    assert merged.bgcolor is not None
+    assert naive.bgcolor is not None
+    assert merged.bgcolor != naive.bgcolor
+
+
+@pytest.mark.asyncio
+async def test_constructor_render_markdown_override_disables_rich_markdown() -> None:
+    """Explicit ``render_markdown=False`` renders plain text even when config enables MD."""
+    msg = AssistantMessage(
+        "I will complete this request directly: read file",
+        id="asst-test",
+        render_markdown=False,
+    )
+    assert msg._render_markdown is False
+    body = MagicMock()
+    msg._body = body
+
+    await msg.stop_stream()
+
+    body.update.assert_called_with("I will complete this request directly: read file")
+    from rich.markdown import Markdown as RichMarkdown
+
+    for call in body.update.call_args_list:
+        assert not isinstance(call.args[0], RichMarkdown)
 
 
 @pytest.mark.asyncio
