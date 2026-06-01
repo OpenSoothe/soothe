@@ -37,7 +37,10 @@ except ImportError:  # pragma: no cover - optional at static analysis time
 from pydantic import BaseModel, Field
 from soothe_sdk.plugin import plugin
 
-from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
+from soothe.config.constants import (
+    DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_EXECUTE_TIMEOUT,
+)
 from soothe.core.governance.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.utils import expand_path
@@ -154,7 +157,7 @@ class RunCommandShellTool(ShellTool):
 
     workspace_root: str = Field(default="", description="Working directory fallback")
     timeout: int = Field(default=DEFAULT_EXECUTE_TIMEOUT, description="Command timeout in seconds")
-    max_output_length: int = Field(default=10000)
+    max_output_length: int = Field(default=DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS)
     security_config: Any = Field(default=None, description="Security configuration object")
 
     def _get_effective_workspace(self, tool_runtime: Any = None) -> str | None:

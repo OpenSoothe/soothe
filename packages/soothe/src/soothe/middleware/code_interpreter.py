@@ -18,6 +18,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse, ToolCallRequest
 from langchain_core.messages import ToolMessage
 
+from soothe.config.constants import DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentState
     from langgraph.runtime import Runtime
@@ -52,7 +54,7 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         memory_limit_mb: Memory limit (default: 128)
         timeout_seconds: Per-eval timeout (default: 30)
         max_ptc_calls: Max programmatic tool calls per eval (default: 50)
-        max_result_size: Max result size in chars (default: 10000)
+        max_result_size: Max result size in chars (default: 100000)
         console_capture: Capture console.log output (default: True)
         snapshot_between_turns: Preserve state between turns (default: False)
 
@@ -77,7 +79,7 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         memory_limit_mb: int = 128,
         timeout_seconds: int = 30,
         max_ptc_calls: int = 50,
-        max_result_size: int = 10000,
+        max_result_size: int = DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
         console_capture: bool = True,
         snapshot_between_turns: bool = False,
     ) -> None:

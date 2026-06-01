@@ -27,6 +27,12 @@ DEFAULT_AUTONOMOUS_MAX_ITERATIONS = 10
 # Used by execution tools (run_command) and TUI display logic
 DEFAULT_EXECUTE_TIMEOUT = 60  # seconds
 
+# Max chars for shell/code tool stdout (run_command) and code_exec aggregation in AgentLoop execute.
+DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS = 100_000
+
+# Max chars for non-code_exec tool output in AgentLoop execute-stream aggregation.
+DEFAULT_TOOL_OUTPUT_CHARS = 10_000
+
 # ============================================================================
 # Early Termination Thresholds
 # ============================================================================

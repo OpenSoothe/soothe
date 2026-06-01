@@ -377,10 +377,8 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         base_core = self._get_base_prompt_core(complexity)
 
-        # ── Static Tier (session-stable) ──────────────────────────────
-        static_sections: list[str] = [base_core]
-
-        # ENVIRONMENT is part of the static tier for every complexity.
+        # Build ENVIRONMENT once; placed mid-prelude (after the workspace
+        # rules and project instructions, before the WORKSPACE metadata).
         # `build_context_sections_for_complexity` returns an empty list for
         # the minimal tier, so fall back to the direct ENVIRONMENT builder.
         env_sections = build_context_sections_for_complexity(
@@ -396,7 +394,54 @@ class SystemPromptMiddleware(AgentMiddleware):
                 break
         if env_section is None:
             env_section = self._build_environment_section()
+
+        workspace = state.get("workspace") if state else None
+
+        # ── Workspace prelude ─────────────────────────────────────────
+        # Block order (RFC-214 cache-friendly; all workspace-stable):
+        #   1. base_core
+        #   2. <WORKSPACE_RULES>           (when workspace bound)
+        #   3. <WORKSPACE_INSTRUCTIONS>    (when AGENTS.md/CLAUDE.md present)
+        #   4. <ENVIRONMENT>               (always)
+        #   5. <WORKSPACE>                 (when workspace bound)
+        # Everything that follows is gated (context/memory/directive/contract)
+        # or semi-static (thread/protocols/scenarios/skills/MCP).
+        static_sections: list[str] = [base_core]
+
+        if workspace:
+            static_sections.append(
+                "<WORKSPACE_RULES>\n"
+                "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
+                "Rules:\n"
+                "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
+                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
+                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
+                "a different project outside this directory.\n"
+                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
+                '- If a tool result reports `truncated=true` (or ends with a "...truncated" marker), '
+                "do NOT paste its body as data into another tool (e.g. as a Python list literal for run_python). "
+                "The body is incomplete and downstream analysis will be wrong. Instead, re-query the filesystem "
+                "directly with a narrower glob/grep filter or a shell pipeline "
+                "(`find . -type f | awk ... | sort | uniq -c`) so the count or analysis runs over the live tree.\n"
+                "</WORKSPACE_RULES>"
+            )
+            # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable.
+            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+            ws_instructions = load_workspace_project_instructions(workspace)
+            if ws_instructions:
+                static_sections.append(ws_instructions)
+
         static_sections.append(env_section)
+
+        if state and self._should_inject_workspace(state):
+            ws_section = self._build_workspace_section(
+                state.get("workspace"), state.get("git_status")
+            )
+            if ws_section:
+                static_sections.append(ws_section)
+
+        # ── Gated static blocks (after the workspace prelude) ─────────
 
         # Context projection (static — changes infrequently)
         if state and self._tool_trigger_registry:
@@ -446,43 +491,6 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         # ── Semi-Static Tier (goal-stable) ────────────────────────────
         semi_static_sections: list[str] = []
-
-        # Workspace rules
-        workspace = state.get("workspace") if state else None
-        if workspace:
-            semi_static_sections.append(
-                "<WORKSPACE_RULES>\n"
-                "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
-                "Rules:\n"
-                "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
-                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
-                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
-                "a different project outside this directory.\n"
-                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
-                '- If a tool result reports `truncated=true` (or ends with a "...truncated" marker), '
-                "do NOT paste its body as data into another tool (e.g. as a Python list literal for run_python). "
-                "The body is incomplete and downstream analysis will be wrong. Instead, re-query the filesystem "
-                "directly with a narrower glob/grep filter or a shell pipeline "
-                "(`find . -type f | awk ... | sort | uniq -c`) so the count or analysis runs over the live tree.\n"
-                "</WORKSPACE_RULES>"
-            )
-            # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable, changes infrequently
-            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
-
-            ws_instructions = load_workspace_project_instructions(workspace)
-            if ws_instructions:
-                semi_static_sections.append(ws_instructions)
-
-        # Workspace metadata
-        if state and self._should_inject_workspace(state):
-            ws_section = self._build_workspace_section(
-                state.get("workspace"), state.get("git_status")
-            )
-            if ws_section:
-                semi_static_sections.append(ws_section)
-
-        # Environment section (already added to static above for minimal tier;
-        # for semi-static tier we include workspace-related context)
 
         # Thread context (complex only)
         if complexity == "complex" and state and self._should_inject_thread(state):

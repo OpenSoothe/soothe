@@ -218,7 +218,7 @@ agent:
     memory_limit_mb: 128
     timeout_seconds: 30
     max_ptc_calls: 50
-    max_result_size: 10000
+    max_result_size: 100000
     console_capture: true
     snapshot_between_turns: false
 
