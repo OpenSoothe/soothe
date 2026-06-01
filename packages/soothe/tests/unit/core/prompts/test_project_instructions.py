@@ -25,23 +25,31 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
     assert "claude line 0" not in block
     assert "agents rule one" in block
     assert "agents rule two" in block
-    assert 'truncated="false"' in block
+    # Small AGENTS.md inlines fully; no read_file note.
+    assert 'inlined="full"' in block
+    assert 'truncated_lines="false"' in block
+    assert "<note>" not in block
 
 
 def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> None:
-    """CLAUDE.md is fallback when no AGENTS.md found."""
+    """CLAUDE.md is fallback when no AGENTS.md found; 600 lines triggers headline+note."""
     from soothe.core.prompts.project_instructions import load_workspace_project_instructions
 
     claude = tmp_path / "CLAUDE.md"
+    # 600 lines of `claude line N\n` is ~7.5 KB — far above the 2000-char headline cap.
     claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
 
     block = load_workspace_project_instructions(tmp_path, max_lines=500)
     assert block is not None
     assert "<WORKSPACE_INSTRUCTIONS>" in block
     assert "claude line 0" in block
-    assert "claude line 499" in block
+    # Content past the headline cap is suppressed; the note points at read_file.
+    assert "claude line 499" not in block
     assert "claude line 500" not in block
-    assert 'truncated="true"' in block
+    assert 'inlined="partial"' in block
+    assert "<note>" in block
+    assert "read_file" in block
+    assert str(claude) in block
 
 
 def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
@@ -118,3 +126,100 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
     # No project_instructions in envelope - it's in system prompt
     assert "<WORKSPACE_INSTRUCTIONS>" not in messages[0].content
     assert "<WORKSPACE_INSTRUCTIONS>" not in messages[1].content
+
+
+def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
+    """Files under the headline cap inline verbatim with no read_file hint."""
+    from soothe.core.prompts.project_instructions import (
+        PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
+        load_workspace_project_instructions,
+    )
+
+    body = "# Project Rules\n\nBe terse.\n"
+    assert len(body) <= PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS
+    (tmp_path / "AGENTS.md").write_text(body, encoding="utf-8")
+
+    block = load_workspace_project_instructions(tmp_path)
+    assert block is not None
+    assert "Be terse." in block
+    assert 'inlined="full"' in block
+    assert "<note>" not in block
+
+
+def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
+    """Files above the headline cap emit a paragraph-clean prefix + read_file hint."""
+    from soothe.core.prompts.project_instructions import (
+        PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
+        load_workspace_project_instructions,
+    )
+
+    # Build a body that exceeds the headline cap with clear paragraph boundaries
+    # so the truncator backs off to a "\n\n" cut rather than mid-sentence.
+    paragraphs = [f"Paragraph {i}: " + ("rule. " * 30) for i in range(60)]
+    body = "\n\n".join(paragraphs) + "\n"
+    assert len(body) > PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text(body, encoding="utf-8")
+
+    block = load_workspace_project_instructions(tmp_path)
+    assert block is not None
+    assert 'inlined="partial"' in block
+    assert "<note>" in block
+    assert f'read_file("{agents}")' in block
+    # CDATA payload should be smaller than the body and end on a paragraph
+    # boundary (the last visible char before `]]>` is not mid-sentence).
+    cdata_start = block.index("<![CDATA[") + len("<![CDATA[\n")
+    cdata_end = block.index("\n]]>")
+    payload = block[cdata_start:cdata_end]
+    assert len(payload) <= PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS
+    assert payload.rstrip().endswith(".")
+
+
+def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
+    """Second load with unchanged mtime hits the cache; no second disk read."""
+    from soothe.core.prompts import project_instructions
+    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+    (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
+    # Reset the LRU cache so neighboring tests don't pollute the counter.
+    project_instructions._build_block_cached.cache_clear()
+
+    calls = {"n": 0}
+    original = project_instructions._read_file_head_lines
+
+    def counting_read(path, *, max_lines):
+        calls["n"] += 1
+        return original(path, max_lines=max_lines)
+
+    monkeypatch.setattr(project_instructions, "_read_file_head_lines", counting_read)
+
+    first = load_workspace_project_instructions(tmp_path)
+    second = load_workspace_project_instructions(tmp_path)
+    assert first == second
+    assert calls["n"] == 1
+
+
+def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
+    """Editing the file (advancing mtime) returns updated content on next load."""
+    import os
+
+    from soothe.core.prompts import project_instructions
+    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text("original rule\n", encoding="utf-8")
+    project_instructions._build_block_cached.cache_clear()
+
+    first = load_workspace_project_instructions(tmp_path)
+    assert first is not None
+    assert "original rule" in first
+
+    # Rewrite with new content and advance mtime past the original.
+    agents.write_text("updated rule\n", encoding="utf-8")
+    new_mtime_ns = agents.stat().st_mtime_ns + 1_000_000_000  # +1s
+    os.utime(agents, ns=(new_mtime_ns, new_mtime_ns))
+
+    second = load_workspace_project_instructions(tmp_path)
+    assert second is not None
+    assert "updated rule" in second
+    assert "original rule" not in second

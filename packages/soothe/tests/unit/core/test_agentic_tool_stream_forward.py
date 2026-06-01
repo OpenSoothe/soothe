@@ -96,6 +96,18 @@ def test_loop_assistant_chunk_is_forwarded() -> None:
     assert _forward_messages_chunk(chunk) is True
 
 
+def test_plan_direct_chunk_is_forwarded() -> None:
+    msg = LoopAIMessageChunk(
+        content="I will complete this request directly: count readmes",
+        phase="plan_direct",
+        thread_id="t-1",
+        iteration=0,
+    )
+    chunk: tuple[tuple[str, ...], str, tuple[object, dict]] = ((), "messages", (msg, {}))
+    assert loop_message_assistant_output_phase(msg) == "plan_direct"
+    assert _forward_messages_chunk(chunk) is True
+
+
 def test_human_message_not_forwarded() -> None:
     chunk = ((), "messages", (HumanMessage(content="hi"), {}))
     assert _forward_messages_chunk(chunk) is False

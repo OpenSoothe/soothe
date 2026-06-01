@@ -19,7 +19,7 @@ from typing import Any
 
 # Phases whose assistant text is forwarded as ``mode="messages"`` chunks (not custom).
 LOOP_ASSISTANT_OUTPUT_PHASES: frozenset[str] = frozenset(
-    {"goal_completion", "quiz", "autonomous_goal", "direct_model"}
+    {"goal_completion", "quiz", "autonomous_goal", "direct_model", "plan_direct"}
 )
 
 
