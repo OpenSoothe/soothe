@@ -46,7 +46,7 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
     ]
 
     assert len(rows) == 1
-    output, _, tool_count, _msgs, _df, outcomes = rows[0]
+    output, _, tool_count, _msgs, _df, outcomes, _has_error = rows[0]
     assert tool_count == 2
     assert budget.hit_tool_budget is True
     assert "alpha" in output and "beta" in output

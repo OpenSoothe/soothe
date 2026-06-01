@@ -6,7 +6,9 @@ from pathlib import Path
 
 from soothe.core.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
+    join_workspace_normalized_path,
     resolve_backend_os_path,
+    should_use_virtual_path_resolution,
 )
 
 
@@ -16,6 +18,39 @@ def test_resolve_backend_os_path_virtual_mode_maps_absolute(tmp_path: Path) -> N
     ws.mkdir()
     resolved = resolve_backend_os_path("/nested/file.txt", workspace=ws, virtual_mode=True)
     assert resolved == ws / "nested" / "file.txt"
+
+
+def test_resolve_backend_os_path_virtual_mode_host_absolute_under_workspace(
+    tmp_path: Path,
+) -> None:
+    """Host-absolute paths inside the workspace resolve under the root (virtual mode)."""
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    target = ws / "README.md"
+    target.write_text("hello", encoding="utf-8")
+
+    resolved = resolve_backend_os_path(str(target.resolve()), workspace=ws, virtual_mode=True)
+    assert resolved.resolve() == target.resolve()
+
+
+def test_should_use_virtual_path_resolution(tmp_path: Path) -> None:
+    """Virtual absolutes use sandbox resolution; host roots do not."""
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    assert should_use_virtual_path_resolution("/README.md", ws) is True
+    assert should_use_virtual_path_resolution("/", ws) is True
+    assert should_use_virtual_path_resolution("/tmp/outside", ws) is False
+    assert should_use_virtual_path_resolution("README.md", ws) is False
+
+
+def test_join_workspace_normalized_path_handles_absolute(tmp_path: Path) -> None:
+    """Absolute normalized paths must not be joined with workspace prefix."""
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    host = ws / "README.md"
+    host.write_text("hi", encoding="utf-8")
+    resolved = join_workspace_normalized_path(ws, str(host.resolve()))
+    assert resolved.resolve() == host.resolve()
 
 
 def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Path) -> None:

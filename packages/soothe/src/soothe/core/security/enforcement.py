@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.core.workspace.tool_path_resolution import join_workspace_normalized_path
+
 from .policy import (
     PolicyAction,
     PolicyDecision,
@@ -359,9 +361,9 @@ class SecurityEnforcer:
                 decision=decision,
             )
 
-        # Return the normalized path
+        # Return the normalized path on disk (avoid ``workspace / absolute`` pitfall).
         normalized = self.validator.sanitize(path)
-        return self.workspace / normalized
+        return join_workspace_normalized_path(self.workspace, normalized)
 
     def get_audit_log(
         self,
