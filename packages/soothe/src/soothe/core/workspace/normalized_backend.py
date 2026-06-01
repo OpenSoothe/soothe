@@ -7,146 +7,63 @@ Soothe UnifiedFilesystem interface with deepagents compatibility.
 from __future__ import annotations
 
 import logging
-from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from deepagents.backends.protocol import EditResult, LsResult
+from deepagents.backends.protocol import EditResult, FileData, LsResult, ReadResult
 
 if TYPE_CHECKING:
-    from soothe.config import SootheConfig
-    from soothe.protocols.policy import PolicyProtocol
+    pass
 
 logger = logging.getLogger(__name__)
 
-# Thread-safe workspace context for async execution (RFC-103)
-_current_workspace: ContextVar[Path | None] = ContextVar("soothe_workspace", default=None)
+_DEFAULT_READ_LINE_LIMIT = 2000
 
 
-class FrameworkFilesystem:
-    """Singleton filesystem backend for all framework operations.
+def _read_result_for_path(
+    fs: Any,
+    normalized: str,
+    *,
+    offset: int,
+    limit: int,
+    display_path: str,
+) -> ReadResult:
+    """Build deepagents ``ReadResult`` using line-based offset/limit semantics."""
+    from soothe.core.filesystem.exceptions import (
+        FilesystemError,
+        NotAFileError,
+        PathNotFoundError,
+    )
 
-    Provides consistent path resolution and security across:
-    - Tool operations (via middleware)
-    - Framework operations (reports, checkpoints, manifests)
-    - CLI operations (final reports, health checks)
+    try:
+        raw = fs.read(normalized)
+    except PathNotFoundError:
+        return ReadResult(error=f"File '{display_path}' not found")
+    except NotAFileError:
+        return ReadResult(error=f"File '{display_path}' not found")
+    except FilesystemError as exc:
+        return ReadResult(error=str(exc))
 
-    Uses native UnifiedFilesystem.
-    """
-
-    _instance: Any | None = None
-    _root_dir: Path | None = None
-    _policy: PolicyProtocol | None = None
-
-    @classmethod
-    def initialize(
-        cls,
-        config: SootheConfig,
-        policy: PolicyProtocol | None = None,
-    ) -> Any:
-        """Initialize the singleton filesystem backend.
-
-        Args:
-            config: Soothe configuration.
-            policy: Optional security policy for access control.
-
-        Returns:
-            Initialized WorkspaceFilesystem instance.
-        """
-        from soothe.core.filesystem import WorkspaceFilesystem
-        from soothe.core.workspace.resolution import resolve_daemon_workspace
-
-        # Use daemon workspace (TEMP unless SOOTHE_WORKSPACE set) as default
-        resolved_workspace = resolve_daemon_workspace()
-
-        virtual_mode = not config.security.allow_paths_outside_workspace
-
-        max_file_size_mb = 10
-        if hasattr(config, "filesystem_middleware") and hasattr(
-            config.filesystem_middleware, "max_file_size_mb"
-        ):
-            max_file_size_mb = config.filesystem_middleware.max_file_size_mb
-
-        cls._instance = WorkspaceFilesystem(
-            workspace=resolved_workspace,
-            virtual_mode=virtual_mode,
-            max_file_size_mb=max_file_size_mb,
-        )
-        cls._root_dir = resolved_workspace
-        cls._policy = policy
-
-        logger.info(
-            "FrameworkFilesystem initialized: root=%s virtual_mode=%s",
-            resolved_workspace,
-            virtual_mode,
+    if raw.is_binary:
+        return ReadResult(
+            file_data=FileData(content=raw.content, encoding="base64"),
         )
 
-        return cls._instance
+    content = raw.content
+    if not content:
+        return ReadResult(file_data=FileData(content="", encoding="utf-8"))
 
-    @classmethod
-    def get(cls) -> Any:
-        """Get the singleton filesystem backend.
+    lines = content.splitlines(keepends=True)
+    start_idx = max(offset, 0)
+    end_idx = min(start_idx + limit, len(lines))
+    if start_idx >= len(lines):
+        return ReadResult(
+            error=f"Line offset {offset} exceeds file length ({len(lines)} lines)",
+        )
 
-        Returns:
-            WorkspaceFilesystem instance.
-
-        Raises:
-            RuntimeError: If backend not initialized.
-        """
-        if cls._instance is None:
-            raise RuntimeError(
-                "FrameworkFilesystem not initialized. Call FrameworkFilesystem.initialize() first."
-            )
-        return cls._instance
-
-    @classmethod
-    def is_initialized(cls) -> bool:
-        """Check if the backend has been initialized."""
-        return cls._instance is not None
-
-    @classmethod
-    def get_root_dir(cls) -> Path:
-        """Get the root workspace directory.
-
-        Returns:
-            Path to the root workspace.
-
-        Raises:
-            RuntimeError: If backend not initialized.
-        """
-        if cls._root_dir is None:
-            raise RuntimeError("FrameworkFilesystem not initialized")
-        return cls._root_dir
-
-    @classmethod
-    def get_current_workspace(cls) -> Path | None:
-        """Get the current workspace from context variable.
-
-        Returns:
-            Current workspace path or None if not set.
-        """
-        return _current_workspace.get()
-
-    @classmethod
-    def set_current_workspace(cls, workspace: Path | str) -> Token:
-        """Set the current workspace for the current context.
-
-        Args:
-            workspace: Workspace directory path.
-
-        Returns:
-            Token for restoring previous value.
-        """
-        return _current_workspace.set(Path(workspace))
-
-    @classmethod
-    def reset_workspace(cls, token: Token) -> None:
-        """Reset workspace to previous value using token.
-
-        Args:
-            token: Token from set_current_workspace.
-        """
-        _current_workspace.reset(token)
+    return ReadResult(
+        file_data=FileData(content="".join(lines[start_idx:end_idx]), encoding="utf-8"),
+    )
 
 
 class NormalizedPathBackend:
@@ -228,19 +145,39 @@ class NormalizedPathBackend:
         normalized = self._normalize_path(path)
         return self._fs.resolve_path(normalized)
 
-    def read(self, path: str, offset: int = 0, limit: int | None = None) -> str:
-        """Read file contents."""
+    def read(
+        self,
+        path: str,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> ReadResult:
+        """Read file contents for a line range (deepagents BackendProtocol)."""
         normalized = self._normalize_path(path)
-        # Exceptions are raised directly by the filesystem
-        result = self._fs.read(normalized, offset=offset, limit=limit)
-        return result.content
+        line_limit = limit if limit is not None else _DEFAULT_READ_LINE_LIMIT
+        return _read_result_for_path(
+            self._fs,
+            normalized,
+            offset=offset,
+            limit=line_limit,
+            display_path=path,
+        )
 
-    async def aread(self, path: str, offset: int = 0, limit: int | None = None) -> str:
-        """Async read file contents."""
+    async def aread(
+        self,
+        path: str,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> ReadResult:
+        """Async read file contents for a line range (deepagents BackendProtocol)."""
         normalized = self._normalize_path(path)
-        # Exceptions are raised directly by the filesystem
-        result = await self._fs.aread(normalized, offset=offset, limit=limit)
-        return result.content
+        line_limit = limit if limit is not None else _DEFAULT_READ_LINE_LIMIT
+        return _read_result_for_path(
+            self._fs,
+            normalized,
+            offset=offset,
+            limit=line_limit,
+            display_path=path,
+        )
 
     def write(self, path: str, content: str | bytes) -> str:
         """Write content to file."""
@@ -635,27 +572,16 @@ class WorkspaceAwareBackend:
         Returns:
             NormalizedPathBackend for the tool's workspace.
         """
-        # Try to get workspace from runtime.config
-        if hasattr(runtime, "config") and runtime.config:
-            configurable = runtime.config.get("configurable", {})
-            workspace = configurable.get("workspace")
-            if workspace:
-                return NormalizedPathBackend(
-                    root_dir=Path(workspace),
-                    virtual_mode=self._virtual_mode,
-                    max_file_size_mb=self._max_file_size_mb,
-                )
+        from soothe.core.workspace.runtime_resolution import resolve_workspace_for_tool_execution
 
-        # Fallback to ContextVar
-        current_workspace = FrameworkFilesystem.get_current_workspace()
-        if current_workspace:
+        workspace = resolve_workspace_for_tool_execution(runtime=runtime)
+        if workspace is not None:
             return NormalizedPathBackend(
-                root_dir=current_workspace,
+                root_dir=workspace,
                 virtual_mode=self._virtual_mode,
                 max_file_size_mb=self._max_file_size_mb,
             )
 
-        # Use default
         return self._default_backend
 
     def _get_backend(self) -> NormalizedPathBackend:
@@ -664,6 +590,8 @@ class WorkspaceAwareBackend:
         Returns:
             NormalizedPathBackend for current context.
         """
+        from soothe.core.workspace.framework_filesystem import FrameworkFilesystem
+
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:
             return NormalizedPathBackend(
@@ -675,12 +603,22 @@ class WorkspaceAwareBackend:
 
     # Delegate all methods to the resolved backend
 
-    def read(self, path: str, offset: int = 0, limit: int | None = None) -> str:
-        """Read file contents."""
+    def read(
+        self,
+        path: str,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> ReadResult:
+        """Read file contents for a line range (deepagents BackendProtocol)."""
         return self._get_backend().read(path, offset, limit)
 
-    async def aread(self, path: str, offset: int = 0, limit: int | None = None) -> str:
-        """Async read file contents."""
+    async def aread(
+        self,
+        path: str,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> ReadResult:
+        """Async read file contents for a line range (deepagents BackendProtocol)."""
         return await self._get_backend().aread(path, offset, limit)
 
     def write(self, path: str, content: str | bytes) -> str:

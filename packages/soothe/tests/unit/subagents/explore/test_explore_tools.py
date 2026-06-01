@@ -38,12 +38,12 @@ def test_read_file_accepts_host_absolute_and_virtual_paths() -> None:
         allow_paths_outside_workspace=False,
     )(None)
     host = str(Path(td) / "note.txt")
-    # NormalizedPathBackend.read returns content directly (string), not result object
     r1 = backend.read(host)
-    assert "hello" in r1
-    # Virtual path "/note.txt" should also resolve within workspace
+    assert r1.error is None and r1.file_data is not None
+    assert "hello" in r1.file_data["content"]
     r2 = backend.read("/note.txt")
-    assert "hello" in r2
+    assert r2.error is None and r2.file_data is not None
+    assert "hello" in r2.file_data["content"]
 
 
 def test_mutating_and_shell_tools_not_exposed() -> None:
