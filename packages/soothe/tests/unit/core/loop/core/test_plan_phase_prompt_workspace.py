@@ -13,13 +13,17 @@ from soothe.protocols.planner import PlanContext
 
 
 def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
-    """Test build_plan_messages() with config includes ENVIRONMENT and WORKSPACE."""
+    """plan-generate with config includes ENVIRONMENT, WORKSPACE, and WORKSPACE_RULES."""
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
     config = MagicMock()
     config.resolve_model.return_value = "claude-opus-4-6"
     builder = PromptBuilder(config)
-    messages = builder.build_plan_messages("analyze architecture", state, ctx)
+    # WORKSPACE_RULES/WORKSPACE_INSTRUCTIONS are emitted for plan-generate only
+    # (assess is a meta-decision and doesn't need them).
+    messages = builder.build_plan_messages(
+        "analyze architecture", state, ctx, plan_phase="generate"
+    )
 
     # Assess: system + optional ledger + plan-context human with <USER_QUERY>
     assert len(messages) == 2
@@ -42,11 +46,13 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
 
 
 def test_build_loop_plan_messages_without_config_workspace_only() -> None:
-    """Test build_plan_messages() without config includes WORKSPACE but not ENVIRONMENT."""
+    """plan-generate without config still includes WORKSPACE + WORKSPACE_RULES."""
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
     builder = PromptBuilder()
-    messages = builder.build_plan_messages("analyze architecture", state, ctx)
+    messages = builder.build_plan_messages(
+        "analyze architecture", state, ctx, plan_phase="generate"
+    )
 
     assert len(messages) == 2
     system_content = messages[0].content

@@ -108,6 +108,40 @@ def _configurable_thread_key(runnable_config: dict[str, Any] | None) -> str | No
     return text or None
 
 
+_EXECUTE_STEP_NAME = "execute-step"
+
+
+def _is_execute_step_run_name(name: str | None) -> bool:
+    """True when a chain run_name marks an Execute phase wave (``...:execute-step``)."""
+    if not name:
+        return False
+    text = str(name).strip()
+    return text == _EXECUTE_STEP_NAME or text.endswith(f":{_EXECUTE_STEP_NAME}")
+
+
+def _patch_chain_input_with_system_message(
+    inputs: Any,
+    system_prompt: str,
+) -> Any:
+    """Prepend a SystemMessage to the chain's ``messages`` list so Langfuse renders it.
+
+    Mirrors ``_apply_effective_system_prompt_to_batches`` semantics: replace the leading
+    SystemMessage when present, otherwise prepend. Returns ``inputs`` unchanged when it
+    is not a dict carrying a ``messages`` list (no safe place to inject).
+    """
+    if not isinstance(inputs, dict):
+        return inputs
+    msgs = inputs.get("messages")
+    if not isinstance(msgs, list):
+        return inputs
+    out = dict(inputs)
+    if msgs and isinstance(msgs[0], SystemMessage):
+        out["messages"] = [SystemMessage(content=system_prompt), *msgs[1:]]
+    else:
+        out["messages"] = [SystemMessage(content=system_prompt), *msgs]
+    return out
+
+
 # Only define the handler class when langfuse is available
 if LANGFUSE_AVAILABLE:
 
@@ -125,6 +159,10 @@ if LANGFUSE_AVAILABLE:
             super().__init__(*args, **kwargs)
             self._system_hint_by_thread: dict[str, str] = {}
             self._generation_traced_inputs: dict[UUID, list[Any]] = {}
+            # Execute-step CHAIN spans we may want to mirror the system prompt onto.
+            # Populated in on_chain_start, consumed in on_chain_end / on_chain_error.
+            self._execute_step_chain_inputs: dict[UUID, Any] = {}
+            self._execute_step_chain_prompts: dict[UUID, str] = {}
 
         def register_system_prompt_hint_for_config(
             self,
@@ -169,6 +207,44 @@ if LANGFUSE_AVAILABLE:
                 return self._system_hint_by_thread.get(thread_key)
             return None
 
+        def _find_execute_step_ancestor(self, parent_run_id: UUID | None) -> UUID | None:
+            """Walk up ``_child_to_parent_run_id_map`` to the nearest tracked execute-step run."""
+            cur = parent_run_id
+            seen: set[UUID] = set()
+            while cur is not None and cur not in seen:
+                seen.add(cur)
+                if cur in self._execute_step_chain_inputs:
+                    return cur
+                cur = self._child_to_parent_run_id_map.get(cur)
+            return None
+
+        def on_chain_start(
+            self,
+            serialized: dict[str, Any] | None,
+            inputs: dict[str, Any],
+            *,
+            run_id: UUID,
+            parent_run_id: UUID | None = None,
+            tags: list[str] | None = None,
+            metadata: dict[str, Any] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            try:
+                name = self.get_langchain_run_name(serialized, **kwargs)
+            except Exception:
+                name = ""
+            if _is_execute_step_run_name(name):
+                self._execute_step_chain_inputs[run_id] = inputs
+            return super().on_chain_start(
+                serialized,
+                inputs,
+                run_id=run_id,
+                parent_run_id=parent_run_id,
+                tags=tags,
+                metadata=metadata,
+                **kwargs,
+            )
+
         def on_chat_model_start(
             self,
             serialized: dict[str, Any] | None,
@@ -187,6 +263,11 @@ if LANGFUSE_AVAILABLE:
                 traced_input = _serialize_message_batches_for_langfuse(patched)
                 if traced_input is not None:
                     self._generation_traced_inputs[run_id] = traced_input
+                # Mirror the effective prompt onto the nearest execute-step CHAIN span,
+                # so Langfuse shows the workspace-aware system text at the chain level too.
+                ancestor = self._find_execute_step_ancestor(parent_run_id)
+                if ancestor is not None:
+                    self._execute_step_chain_prompts[ancestor] = hint
             return super().on_chat_model_start(
                 serialized,
                 patched,
@@ -195,6 +276,41 @@ if LANGFUSE_AVAILABLE:
                 tags=tags,
                 metadata=metadata,
                 **kwargs,
+            )
+
+        def on_chain_end(
+            self,
+            outputs: dict[str, Any],
+            *,
+            run_id: UUID,
+            parent_run_id: UUID | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            if run_id in self._execute_step_chain_inputs:
+                original = self._execute_step_chain_inputs.pop(run_id)
+                hint = self._execute_step_chain_prompts.pop(run_id, None)
+                if hint:
+                    # Parent on_chain_end calls span.update(input=kwargs.get("inputs")); pass
+                    # the patched dict so the chain observation gets the SystemMessage too.
+                    kwargs = dict(kwargs)
+                    kwargs["inputs"] = _patch_chain_input_with_system_message(original, hint)
+            return super().on_chain_end(
+                outputs, run_id=run_id, parent_run_id=parent_run_id, **kwargs
+            )
+
+        def on_chain_error(
+            self,
+            error: BaseException,
+            *,
+            run_id: UUID,
+            parent_run_id: UUID | None = None,
+            tags: list[str] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            self._execute_step_chain_inputs.pop(run_id, None)
+            self._execute_step_chain_prompts.pop(run_id, None)
+            return super().on_chain_error(
+                error, run_id=run_id, parent_run_id=parent_run_id, tags=tags, **kwargs
             )
 
         def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:

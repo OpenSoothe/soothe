@@ -867,3 +867,29 @@ class TestEventProcessorHeadlessSubgraph:
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 1
         assert "Hello" in assistant_calls[0][1][0]
+
+    def test_headless_emits_phased_plan_direct_main_graph(self) -> None:
+        """Simple-bypass plan lines tag ``phase=plan_direct`` (runner); headless shows them."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, headless_output=True)
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "messages",
+                "namespace": [],
+                "data": [
+                    {
+                        "type": "ai",
+                        "id": "plan-direct",
+                        "content": "I will complete this request directly: count readmes",
+                        "phase": "plan_direct",
+                    },
+                    {},
+                ],
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert len(assistant_calls) == 1
+        assert "complete this request directly" in assistant_calls[0][1][0]

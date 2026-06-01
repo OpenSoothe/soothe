@@ -212,9 +212,12 @@ class PromptBuilder:
             parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
             parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
 
-        # Conditional static sections (present based on context)
-        # Workspace rules (static when workspace present)
-        if context.workspace:
+        # Conditional static sections (present based on context).
+        # Workspace rules + WORKSPACE_INSTRUCTIONS apply only to plan-generate:
+        # plan-assess is a meta-decision (status/progress/next_action) that does
+        # not author steps touching the workspace, so the rules/conventions
+        # blocks are wasted tokens and pollute the cache key.
+        if context.workspace and plan_phase == "generate":
             parts.append(
                 "<WORKSPACE_RULES>\n"
                 "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"

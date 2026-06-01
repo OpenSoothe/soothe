@@ -105,6 +105,20 @@ class TestIntentClassificationPrompts:
         assert "continue_thread" not in INTENT_CLASSIFICATION_RETRY_PROMPT
         assert "new_goal" not in INTENT_CLASSIFICATION_RETRY_PROMPT
 
+    def test_primary_prompt_excludes_runtime_state_from_quiz(self) -> None:
+        """Runtime-state questions (workspace, cwd, env) must route to agentic.
+
+        Regression: trace fe0d/d414... classified "what is your workspace" as
+        quiz and returned a hallucinated Anthropic-assistant boilerplate.
+        """
+        assert "runtime state" in INTENT_CLASSIFICATION_PROMPT
+        assert "workspace" in INTENT_CLASSIFICATION_PROMPT
+        assert "cwd" in INTENT_CLASSIFICATION_PROMPT
+
+    def test_retry_prompt_excludes_runtime_state_from_quiz(self) -> None:
+        assert "runtime state" in INTENT_CLASSIFICATION_RETRY_PROMPT
+        assert "workspace" in INTENT_CLASSIFICATION_RETRY_PROMPT
+
 
 @pytest.mark.asyncio
 class TestIntentClassifier:

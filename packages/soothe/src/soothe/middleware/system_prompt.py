@@ -30,6 +30,13 @@ _TASK_TOOL_NAME = "task"
 _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
 _VALID_TASK_COMPLEXITY = frozenset({"minimal", "simple", "medium", "complex"})
 
+# `_extract_recent_tool_calls` window/cap.
+# Window must absorb a parallel-wave step (1 AIMessage + N ToolMessages) plus
+# loop-continuation bootstrap injects without dropping older tool signals.
+# Cap >= number of distinct sections in the trigger registry, with headroom.
+RECENT_TOOL_MESSAGE_WINDOW = 25
+RECENT_TOOL_NAME_CAP = 10
+
 
 def _configurable_goal_synthesis() -> bool:
     """Return True when CoreAgent is running goal-completion synthesis (read-only).
@@ -105,7 +112,20 @@ class _SystemPromptState(TypedDict):
     """State schema for SystemPromptMiddleware.
 
     LangGraph merges all middleware state schemas to build the final graph state.
-    This schema declares ``routing_classification`` so it propagates correctly (IG-383).
+    Keys that no middleware declares are silently dropped on every state-update
+    merge, so consumer-side reads (``modify_request``) see ``None`` even when
+    upstream code wrote a value. Declaring keys here is the only way to make
+    them survive across nodes.
+
+    Declares:
+      - ``routing_classification`` so AgentLoop's complexity hint reaches the
+        prompt builder (IG-383).
+      - ``workspace`` and ``git_status`` so the executor's ``_execute_graph_input``
+        and ``WorkspaceContextMiddleware.abefore_agent`` writes propagate to
+        ``modify_request``. Without this declaration, ``state.get("workspace")``
+        returns ``None`` and WORKSPACE_RULES / WORKSPACE_INSTRUCTIONS / the
+        <WORKSPACE> block all disappear from the execute-step system prompt.
+      - Four MCP keys for cross-call MCP state.
 
     The ``messages`` key MUST use ``Annotated[..., add_messages]`` to preserve
     the reducer from the base ``AgentState``.  A plain ``list`` annotation
@@ -115,6 +135,8 @@ class _SystemPromptState(TypedDict):
 
     messages: Annotated[list[AnyMessage], add_messages]
     routing_classification: NotRequired[Any]  # Type: RoutingClassification
+    workspace: NotRequired[str | None]
+    git_status: NotRequired[dict[str, Any] | None]
     sent_mcp_tool_names: NotRequired[set[str]]
     invoked_mcp_tools: NotRequired[dict[str, dict]]
     disabled_mcp_servers: NotRequired[set[str]]
@@ -209,58 +231,65 @@ class SystemPromptMiddleware(AgentMiddleware):
         model = self._config.resolve_model("default")
         return build_soothe_environment_section(model=model)
 
-    def _extract_recent_tool_calls(self, messages: list[AnyMessage], window: int = 10) -> list[str]:
-        """Extract unique tool names from recent ToolMessages.
+    def _extract_recent_tool_calls(
+        self,
+        messages: list[AnyMessage],
+        window: int = RECENT_TOOL_MESSAGE_WINDOW,
+    ) -> list[str]:
+        """Extract unique tool names from recent tool activity.
+
+        Inspects both ``ToolMessage.name`` (the result) AND
+        ``AIMessage.tool_calls[*].name`` (the invocation). The invocation side
+        matters for loop-continuation bootstrap: the predecessor-branch
+        replay preserves Human/AI envelopes but strips ToolMessage rows, so
+        the AIMessage's structured ``tool_calls`` is the only surviving
+        signal of prior tool use.
 
         Args:
             messages: Conversation message history.
             window: Number of recent messages to inspect.
 
         Returns:
-            Unique tool names from tool calls, most recent first.
+            Unique tool names, most recent first, capped at
+            ``RECENT_TOOL_NAME_CAP``.
         """
         if not messages:
             return []
 
         recent_messages = messages[-window:] if len(messages) > window else messages
-        tool_names = []
 
+        def _names_from(msg: AnyMessage) -> list[str]:
+            out: list[str] = []
+            if isinstance(msg, ToolMessage) and msg.name:
+                out.append(msg.name)
+            for tc in getattr(msg, "tool_calls", None) or []:
+                name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
+                if name:
+                    out.append(name)
+            return out
+
+        ordered_names: list[str] = []
         for msg in reversed(recent_messages):
-            if isinstance(msg, ToolMessage):
-                # Extract tool name from ToolMessage
-                tool_name = msg.name
-                if tool_name and tool_name not in tool_names:
-                    tool_names.append(tool_name)
+            ordered_names.extend(_names_from(msg))
 
-        # Limit to prevent bloat
-        return tool_names[:5]
+        # Dedup preserves most-recent-first insertion order; cap as a final guard.
+        return list(dict.fromkeys(ordered_names))[:RECENT_TOOL_NAME_CAP]
 
     def _should_inject_workspace(self, state: dict[str, Any]) -> bool:
         """Determine if WORKSPACE section should be injected.
 
-        Conditions:
-        1. Workspace tools were recently used
-        2. Workspace is actually set
+        Always inject when a workspace is bound to the request. The companion
+        WORKSPACE_RULES block is already unconditional on the same predicate;
+        gating WORKSPACE on prior tool use produced hallucinated paths when the
+        user asked about the workspace before any tool ran (trace fe0d).
 
         Args:
             state: Request state.
 
         Returns:
-            True if WORKSPACE should be injected.
+            True when ``state["workspace"]`` is set.
         """
-        if not self._tool_trigger_registry:
-            return False
-
-        messages = state.get("messages", [])
-        recent_tools = self._extract_recent_tool_calls(messages)
-        triggered = self._tool_trigger_registry.get_triggered_sections(recent_tools)
-
-        if "WORKSPACE" not in triggered:
-            return False
-
-        # Check if workspace is set
-        workspace = state.get("workspace")
-        return workspace is not None
+        return bool(state.get("workspace"))
 
     def _should_inject_thread(self, state: dict[str, Any]) -> bool:
         """Determine if THREAD section should be injected.
@@ -320,8 +349,8 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Agent loop output contract (execute-step only)
 
         Semi-Static Tier (goal-stable, changes infrequently):
-        - Workspace rules
-        - Workspace metadata
+        - Workspace rules, workspace metadata, workspace instructions
+          (always-on when ``state['workspace']`` is set, including ``minimal``)
         - Environment
         - Memory summary (long-term persona/preferences)
         - Context projection
@@ -336,7 +365,9 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
 
         Args:
-            complexity: One of "minimal", "simple", "medium", "complex".
+            complexity: One of "minimal", "simple", "medium", "complex". All
+                tiers share the same assembly; gated sections (thread,
+                protocols, tool-triggered) opt themselves in independently.
             state: Request state with context information.
 
         Returns:
@@ -346,26 +377,26 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         base_core = self._get_base_prompt_core(complexity)
 
-        # Minimal: only base + ENVIRONMENT (no date line — date is in user envelope)
-        complexity_str = str(complexity) if hasattr(complexity, "value") else complexity
-        if complexity_str == "minimal":
-            env_section = self._build_environment_section()
-            return f"{base_core}\n\n{env_section}"
-
         # ── Static Tier (session-stable) ──────────────────────────────
         static_sections: list[str] = [base_core]
 
-        # ENVIRONMENT in static tier when not using the minimal-only branch above
+        # ENVIRONMENT is part of the static tier for every complexity.
+        # `build_context_sections_for_complexity` returns an empty list for
+        # the minimal tier, so fall back to the direct ENVIRONMENT builder.
         env_sections = build_context_sections_for_complexity(
             config=self._config,
             complexity=complexity,  # type: ignore[arg-type]
             state=state or {},
             include_workspace_extras=False,
         )
+        env_section: str | None = None
         for section in env_sections:
             if section.strip().startswith("<ENVIRONMENT"):
-                static_sections.append(section)
+                env_section = section
                 break
+        if env_section is None:
+            env_section = self._build_environment_section()
+        static_sections.append(env_section)
 
         # Context projection (static — changes infrequently)
         if state and self._tool_trigger_registry:
@@ -428,6 +459,11 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
                 "a different project outside this directory.\n"
                 "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
+                '- If a tool result reports `truncated=true` (or ends with a "...truncated" marker), '
+                "do NOT paste its body as data into another tool (e.g. as a Python list literal for run_python). "
+                "The body is incomplete and downstream analysis will be wrong. Instead, re-query the filesystem "
+                "directly with a narrower glob/grep filter or a shell pipeline "
+                "(`find . -type f | awk ... | sort | uniq -c`) so the count or analysis runs over the live tree.\n"
                 "</WORKSPACE_RULES>"
             )
             # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable, changes infrequently
