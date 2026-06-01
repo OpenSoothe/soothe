@@ -712,6 +712,19 @@ _TUPLE_LEN = 3
 # ``task`` tool return text cap per invocation before joining (delegate finals).
 _DELEGATE_FINAL_PER_TASK_CAP = 80_000
 
+
+def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
+    """Return the first tool error preview from RFC-211 outcome metadata."""
+    for outcome in outcomes:
+        if outcome.get("has_error"):
+            preview = outcome.get("error_preview")
+            if preview:
+                return str(preview)[:200]
+            tool_name = outcome.get("tool_name") or "tool"
+            return f"{tool_name} failed"
+    return "Tool execution error"
+
+
 # Type for stream events yielded during execution
 StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
 
@@ -1811,6 +1824,7 @@ class Executor:
             messages: list[BaseMessage] = []
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
+            has_tool_error = False  # IG-454: Track tool errors for StepResult.success
             async for (
                 final_output,
                 event,
@@ -1818,6 +1832,7 @@ class Executor:
                 msg_list,
                 df,
                 chunk_outcomes,
+                stream_has_error,
             ) in self._stream_and_collect(
                 stream,
                 budget=budget,
@@ -1833,6 +1848,7 @@ class Executor:
                     messages = msg_list
                     delegate_final = df
                     stream_outcomes = chunk_outcomes
+                    has_tool_error = stream_has_error
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -1867,21 +1883,36 @@ class Executor:
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
-            logger.info(
-                "Step %s completed successfully in %dms (tool_calls: %d, subagent_cap_hit=%s, tool_budget_hit=%s)",
-                step.id,
-                duration_ms,
-                tool_call_count,
-                budget.hit_subagent_cap,
-                budget.hit_tool_budget,
-            )
+            # IG-454: Determine step success based on tool errors
+            step_success = not has_tool_error
+            step_error = _first_tool_error_message(stream_outcomes) if has_tool_error else None
+
+            if step_success:
+                logger.info(
+                    "Step %s completed successfully in %dms (tool_calls: %d, subagent_cap_hit=%s, tool_budget_hit=%s)",
+                    step.id,
+                    duration_ms,
+                    tool_call_count,
+                    budget.hit_subagent_cap,
+                    budget.hit_tool_budget,
+                )
+            else:
+                # Include error info in outcome for planner visibility
+                primary_outcome["has_tool_error"] = True
+                logger.warning(
+                    "Step %s completed with tool errors in %dms (tool_calls: %d)",
+                    step.id,
+                    duration_ms,
+                    tool_call_count,
+                )
 
             return (
                 events,
                 StepResult(
                     step_id=step.id,
-                    success=True,
+                    success=step_success,
                     outcome=primary_outcome,  # RFC-211: outcome metadata
+                    error=step_error,
                     duration_ms=duration_ms,
                     thread_id=thread_id,
                     tool_call_count=tool_call_count,
@@ -1949,7 +1980,9 @@ class Executor:
         step_description: str = "",
         step_subagent: str | None = None,
     ) -> AsyncGenerator[
-        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str, list[dict[str, Any]]],
+        tuple[
+            str | None, StreamEvent | None, int, list[BaseMessage], str, list[dict[str, Any]], bool
+        ],
         None,
     ]:
         """Stream events immediately while accumulating output and counting tool calls.
@@ -1964,6 +1997,7 @@ class Executor:
         subgraph AIMessages are not folded into root-graph act aggregation.
         IG-416: Rewrites root-graph AI and ``ToolMessage`` ``tool_call_id`` values to unified
         ``{step_id}:s:{tool_fragment}`` so streamed tool rows and tool results share stable ids.
+        IG-454: Tracks ToolMessage.status="error" to mark step failures.
 
         Args:
             stream: Async iterator from agent.astream()
@@ -1975,11 +2009,12 @@ class Executor:
             step_subagent: Optional planner subagent hint for ``subagent_type``.
 
         Yields:
-            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, outcomes)``:
-            - When event is not None: immediate display chunk (outcomes empty).
+            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, outcomes, has_error)``:
+            - When event is not None: immediate display chunk (outcomes empty, has_error False).
             - At end: combined_output, ``tool_call_count`` (root graph plus namespaced
               subgraph ``ToolMessage`` totals), root AIMessages list, joined ``task``
-              tool bodies (ordered, capped), and RFC-211 outcome metadata per tool.
+              tool bodies (ordered, capped), RFC-211 outcome metadata per tool, and
+              ``has_error`` flag True if any ToolMessage had status="error".
         """
         from langchain_core.messages import AIMessage, AIMessageChunk
 
@@ -2075,9 +2110,9 @@ class Executor:
                         )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
-                yield None, emit_chunk, 0, [], "", []
+                yield None, emit_chunk, 0, [], "", [], False
                 for tool_ev in tool_update_events:
-                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], "", []
+                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], "", [], False
                 chunk = emit_chunk
 
             stop_act_stream = False
@@ -2087,11 +2122,12 @@ class Executor:
                     tool_call_id = msg.tool_call_id
                     tool_name = msg.name or "unknown"
 
+                    content = msg.content
+                    msg_status = getattr(msg, "status", None)
+
                     if _maybe_cap_subagent_tasks(msg):
                         stop_act_stream = True
                         break
-
-                    content = msg.content
                     text_out = extract_text_from_message_content(content)
                     if text_out:
                         # Truncate large tool outputs in aggregated stream text; full payloads
@@ -2116,9 +2152,18 @@ class Executor:
                         content,
                         tool_call_id,
                         registry_config=tool_meta_cfg,
+                        tool_status=msg_status,
                     )
 
                     outcomes.append(outcome)
+
+                    if outcome.get("has_error"):
+                        logger.warning(
+                            "[Tool#%d] %s returned error: %s",
+                            tool_call_count,
+                            tool_name,
+                            log_preview(str(outcome.get("error_preview", content))[:100], 80),
+                        )
 
                     if tool_name == "task" and text_out.strip():
                         tc_id = tool_call_id or ""
@@ -2199,7 +2244,7 @@ class Executor:
                     if tool_ev is not None:
                         subgraph_tool_updates.append((ns_tuple, tool_ev))
             for ns_tuple, tool_ev in subgraph_tool_updates:
-                yield None, (ns_tuple, "custom", tool_ev), 0, [], "", []
+                yield None, (ns_tuple, "custom", tool_ev), 0, [], "", [], False
 
             for task_msg in iter_messages_for_delegate_task_scan(chunk):
                 text_out = extract_text_from_message_content(task_msg.content)
@@ -2235,8 +2280,10 @@ class Executor:
                 delegate_final_text = delegate_final_text[:DELEGATE_FINAL_WAVE_CAP]
 
         total_tool_calls = tool_call_count + subgraph_tool_call_count
+        has_tool_error = any(o.get("has_error") for o in outcomes)
         # Final yield with combined output and tool call count
         # IG-416: No longer return tool_call_ids set - IDs are now in unified format in messages
+        # IG-454: Include has_tool_error flag for StepResult.success detection
         yield (
             join_text_fragments(chunks),
             None,
@@ -2244,6 +2291,7 @@ class Executor:
             messages,
             delegate_final_text,
             outcomes,
+            has_tool_error,
         )
 
     async def _build_batch_human_messages(

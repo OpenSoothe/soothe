@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.core.workspace.tool_path_resolution import join_workspace_normalized_path
+
 if TYPE_CHECKING:
     pass
 
@@ -439,7 +441,7 @@ class PathValidator:
                 result.violation_type or "validation_failed",
                 path,
             )
-        return self.workspace / result.normalized_path
+        return join_workspace_normalized_path(self.workspace, result.normalized_path)
 
     def sanitize(self, path: str) -> str:
         """Sanitize path by removing dangerous components."""

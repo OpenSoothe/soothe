@@ -295,18 +295,14 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
     def _try_resolve_os_path(
         self, logical_path: str, runtime: ToolRuntime | None
     ) -> tuple[Path | None, str | None]:
-        """Map logical tool path to OS path using the same rules as ``FilesystemBackend``."""
+        """Map logical tool path to OS path via unified filesystem resolution."""
         try:
             rb = self._backend_for_tools(runtime)
-            # NormalizedPathBackend has _normalize_path and _root_dir
-            if hasattr(rb, "_normalize_path") and hasattr(rb, "_root_dir"):
-                normalized = rb._normalize_path(logical_path)
-                return rb._root_dir / normalized, None
-            # Standard FilesystemBackend: use _resolve_path for proper path handling
+            if hasattr(rb, "resolve_os_path"):
+                return rb.resolve_os_path(logical_path), None
             if hasattr(rb, "_resolve_path"):
                 return rb._resolve_path(logical_path), None
-            # Fallback: treat as relative to current working directory
-            return Path(logical_path), None
+            return Path(logical_path).expanduser().resolve(), None
         except (ValueError, RuntimeError) as e:
             return None, str(e)
 

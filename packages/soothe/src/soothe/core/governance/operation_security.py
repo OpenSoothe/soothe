@@ -6,7 +6,10 @@ import fnmatch
 import re
 from pathlib import Path
 
-from soothe.core.workspace.tool_path_resolution import resolve_backend_os_path
+from soothe.core.workspace.tool_path_resolution import (
+    resolve_backend_os_path,
+    should_use_virtual_path_resolution,
+)
 from soothe.protocols.operation_security import (
     OperationSecurityContext,
     OperationSecurityDecision,
@@ -40,66 +43,6 @@ _SENSITIVE_SYSTEM_PATH_PATTERNS: tuple[str, ...] = (
     "/private/etc/**",
 )
 
-# First path segment after ``/`` for absolute POSIX paths that usually denote host
-# roots (not virtual sandbox paths like ``/README.md``). Used in IG-366 policy
-# alignment so ``/tmp/outside`` is not remapped into the workspace.
-_UNIX_HOST_ROOT_TOP_NAMES: frozenset[str] = frozenset(
-    {
-        "Applications",
-        "bin",
-        "cores",
-        "dev",
-        "etc",
-        "home",
-        "Library",
-        "opt",
-        "private",
-        "sbin",
-        "sys",
-        "System",
-        "tmp",
-        "usr",
-        "Users",
-        "var",
-        "Volumes",
-    }
-)
-
-
-def _posix_first_segment_name(expanded: Path) -> str | None:
-    """Return first path segment for a POSIX absolute path, or None."""
-    parts = expanded.parts
-    if not parts or parts[0] != "/":
-        return None
-    if len(parts) < 2:
-        return None
-    return parts[1]
-
-
-def _should_resolve_virtual_for_policy(
-    file_path: str,
-    expanded: Path,
-    workspace_root: Path,
-) -> bool:
-    """True when *file_path* should use backend virtual_mode resolution for policy.
-
-    Host-style absolutes outside the workspace (for example ``/tmp/other``) must
-    not be remapped into the workspace for policy checks; virtual absolutes
-    (``/README.md``, ``/``) must align with ``FilesystemBackend`` (IG-366).
-    """
-    if not file_path.strip().startswith("/"):
-        return False
-    try:
-        expanded.resolve().relative_to(workspace_root.resolve())
-    except ValueError:
-        pass
-    else:
-        return False
-    first = _posix_first_segment_name(expanded)
-    if first is None:
-        return True
-    return first not in _UNIX_HOST_ROOT_TOP_NAMES
-
 
 class WorkspaceToolOperationSecurity(OperationSecurityProtocol):
     """Evaluate workspace filesystem and execution command security."""
@@ -123,7 +66,7 @@ class WorkspaceToolOperationSecurity(OperationSecurityProtocol):
         if (
             workspace_root is not None
             and not security.allow_paths_outside_workspace
-            and _should_resolve_virtual_for_policy(file_path, resolved_path, workspace_root)
+            and should_use_virtual_path_resolution(file_path, workspace_root)
         ):
             try:
                 resolved_path = resolve_backend_os_path(

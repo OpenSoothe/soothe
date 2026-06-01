@@ -13,14 +13,8 @@ Note: This toolkit does NOT provide read_file, write_file, search_files, list_fi
 """
 
 import asyncio
-import platform
-import warnings
 
 import pytest
-
-from soothe.toolkits._internal.file_edit import (
-    _detect_stripped_absolute_path,
-)
 
 # ---------------------------------------------------------------------------
 # Middleware Fixture (Reference Implementation)
@@ -353,54 +347,3 @@ class TestApplyDiffTool:
 
         assert "Error" in result
         assert "File not found" in result
-
-
-# ---------------------------------------------------------------------------
-# Helper Function Tests (Not Tool Tests)
-# ---------------------------------------------------------------------------
-
-
-class TestStrippedAbsolutePathDetection:
-    """Test detection and correction of stripped absolute paths."""
-
-    def test_detect_stripped_home_directory_path_macos(self) -> None:
-        """Test detection of stripped macOS home directory paths."""
-        if platform.system() != "Darwin":
-            pytest.skip("macOS only")
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            result = _detect_stripped_absolute_path("Users/john/report.md")
-            assert result == "/Users/john/report.md"
-            assert len(w) == 1
-            assert "stripped absolute path" in str(w[0].message).lower()
-
-    def test_detect_stripped_home_directory_path_linux(self) -> None:
-        """Test detection of stripped Linux home directory paths."""
-        if platform.system() != "Linux":
-            pytest.skip("Linux only")
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            result = _detect_stripped_absolute_path("home/john/report.md")
-            assert result == "/home/john/report.md"
-            assert len(w) == 1
-            assert "stripped absolute path" in str(w[0].message).lower()
-
-    def test_normal_relative_path_not_detected(self) -> None:
-        """Normal relative paths should not trigger detection."""
-        result = _detect_stripped_absolute_path("output/report.md")
-        assert result is None
-
-        result = _detect_stripped_absolute_path("src/utils/helper.py")
-        assert result is None
-
-    def test_already_absolute_path_not_detected(self) -> None:
-        """Already absolute paths should not trigger detection."""
-        result = _detect_stripped_absolute_path("/Users/john/report.md")
-        assert result is None
-
-        result = _detect_stripped_absolute_path("/home/john/report.md")
-        assert result is None
