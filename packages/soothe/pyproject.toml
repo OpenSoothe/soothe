@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Soothe - Goal-driven multi-agent orchestration framework"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.11,<3.15"
 keywords = ["soothe", "agents", "ai", "llm", "langgraph", "langchain", "multi-agent", "subagents"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -55,7 +55,8 @@ dependencies = [
     "pathspec>=0.12.0,<2.0.0",
     "requests>=2.32.3,<3.0.0",
     "psycopg[binary,pool]>=3.2.0,<4.0.0",
-    "langgraph-checkpoint-postgres>=2.0.0,<3.0.0",
+    # 3.1+ aligns with langgraph-checkpoint 4.x; 2.x/3.0.x require checkpoint <4
+    "langgraph-checkpoint-postgres>=3.1.0,<4.0.0",
 ]
 
 [project.optional-dependencies]
