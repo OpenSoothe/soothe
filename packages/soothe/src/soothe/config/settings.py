@@ -893,26 +893,45 @@ class SootheConfig(BaseSettings):
 
         Examines providers and sets conventional env vars
         (``OPENAI_API_KEY``, ``OLLAMA_HOST``, etc.) if not already present.
+
+        NOTE: Only sets env vars for providers using the standard OpenAI endpoint.
+        Custom OpenAI-compatible providers (DashScope, Coding-Plan, etc.) should
+        rely on explicit configuration, not environment variables.
         """
         for provider in self.providers:
             # Limited OpenAI providers use OpenAI API format
             provider_type = provider.provider_type
             if provider_type in ("openai", "limited_openai") and provider.api_key:
-                resolved_key = _resolve_provider_env(
-                    provider.api_key,
-                    provider_name=provider.name,
-                    field_name="api_key",
-                )
-                if resolved_key:
-                    os.environ.setdefault("OPENAI_API_KEY", resolved_key)
+                # Resolve api_base_url first to check if this is a custom endpoint
+                api_base_url = None
                 if provider.api_base_url:
                     resolved_base_url = _resolve_provider_env(
                         provider.api_base_url,
                         provider_name=provider.name,
                         field_name="api_base_url",
                     )
-                    if resolved_base_url:
-                        os.environ.setdefault("OPENAI_BASE_URL", resolved_base_url)
+                    api_base_url = resolved_base_url
+
+                # Only set OPENAI_* env vars for standard OpenAI endpoint
+                # Custom providers (DashScope, Coding-Plan, etc.) should use explicit config
+                is_standard_openai = (
+                    api_base_url is None or
+                    api_base_url.startswith("https://api.openai.com")
+                )
+
+                if is_standard_openai:
+                    # Standard OpenAI provider - set env vars for downstream libs
+                    resolved_key = _resolve_provider_env(
+                        provider.api_key,
+                        provider_name=provider.name,
+                        field_name="api_key",
+                    )
+                    if resolved_key:
+                        os.environ.setdefault("OPENAI_API_KEY", resolved_key)
+                    if api_base_url:
+                        os.environ.setdefault("OPENAI_BASE_URL", api_base_url)
+                # else: Custom OpenAI-compatible endpoint - do NOT set env vars
+
             elif provider_type == "ollama" and provider.api_base_url:
                 resolved_base_url = _resolve_provider_env(
                     provider.api_base_url,

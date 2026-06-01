@@ -60,16 +60,17 @@ setup:
 	@echo "Workspace ready (.venv created if needed)"
 
 # Reset all state: docker volumes + ~/.soothe/ (keeps config), then restart services
+# Uses development compose file (docker-compose.dev.yml) with Langfuse + pgvector
 reset-the-world:
 	@echo "Resetting the world..."
 	@echo "Stopping docker containers and removing volumes..."
-	docker compose down -v 2>/dev/null || echo "No docker compose services running"
+	docker compose -f docker-compose.dev.yml down -v 2>/dev/null || echo "No docker compose services running"
 	@echo "Cleaning ~/.soothe/ (keeping config/)..."
 	@if [ -d ~/.soothe ]; then \
 		find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; \
 	fi
 	@echo "Starting docker containers..."
-	docker compose up -d 2>/dev/null || echo "No docker compose services to start"
+	docker compose -f docker-compose.dev.yml up -d 2>/dev/null || echo "No docker compose services to start"
 	@echo "World reset complete"
 
 # ============================================================================

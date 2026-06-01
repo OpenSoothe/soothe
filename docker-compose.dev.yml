@@ -2,13 +2,13 @@
 # RFC-612: Multi-database PostgreSQL architecture
 #
 # Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) starts with the default stack:
-#   docker compose up -d
+#   docker compose -f docker-compose.dev.yml up -d
 # UI/API: http://localhost:3300 — set soothe observability.langfuse.host to match.
 # Stack: langfuse-web + langfuse-worker + Postgres + ClickHouse + Redis + MinIO (Python SDK 3.x).
 # Langfuse app images are pulled from ghcr.io (not Docker Hub) to avoid registry-1.docker.io / auth.docker.io token EOF on some networks.
 # Headless init provisions org + soothe-dev project + API keys + a dev UI user (override via LANGFUSE_INIT_*).
 # Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
-# Fresh Langfuse DB/volumes: docker compose down -v (removes Langfuse + soothe-pgvector volumes — use selective volume rm to keep soothe-pgvector).
+# Fresh Langfuse DB/volumes: docker compose -f docker-compose.dev.yml down -v (removes Langfuse + soothe-pgvector volumes — use selective volume rm to keep soothe-pgvector).
 services:
   soothe-pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
