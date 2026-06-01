@@ -2,7 +2,8 @@
 name = "soothe-workspace"
 version = "0.0.0"
 description = "Soothe monorepo workspace (meta-package, no dependencies)"
-requires-python = ">=3.11,<4.0"
+# Cap below 3.15 until upstream wheels/markers are validated (uv resolves all supported versions).
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "soothe-sdk",
     "soothe-cli",
@@ -12,7 +13,7 @@ dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "community"]
 
 # Pin the default package index to PyPI so `uv sync` / `make all-sync` work even when the
 # environment sets UV_INDEX_URL or UV_DEFAULT_INDEX to a broken or unreachable mirror.
@@ -26,7 +27,7 @@ soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
 soothe-daemon = { workspace = true }
-soothe-community = { path = "community" }
+soothe-community = { workspace = true }
 
 [dependency-groups]
 dev = [

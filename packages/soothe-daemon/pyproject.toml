@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Soothe daemon server - long-running agent runtime with WebSocket/HTTP transports"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.11,<3.15"
 keywords = ["soothe", "daemon", "server", "websocket", "agent", "ai", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
