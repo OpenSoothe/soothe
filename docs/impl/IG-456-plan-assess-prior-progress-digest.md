@@ -86,6 +86,24 @@ Execute calls saw 9k–15k input tokens of tool output; assess calls saw
    `"high"`.
 4. Else → `"medium"`.
 
+### Where the digest sources its data (production-accurate)
+
+- **Tool names** come from `AIMessage.tool_calls` on assistant turns in
+  `step_messages`. `Executor._stream_and_collect` does NOT append
+  `ToolMessage` instances to the messages list it returns (they're routed
+  into `outcomes`/`budget`/`tool_args` accounting), so walking the list
+  for `ToolMessage` would miss every call.
+- **Tool head** is `_first_arg_head_for_tool_call(call)` — the first
+  non-empty argument value, single-line, stripped, capped at 120 chars.
+  Gives `<PRIOR_PROGRESS>` a concrete handle on what was requested
+  (e.g. `run_command: "find . -name '*.py' | wc -l"`) without depending
+  on tool-result text being in `step_messages`.
+- **Evidence excerpt** reuses `Executor._ledger_execute_ai_content`,
+  which already handles the production case where the final `AIMessage`
+  has empty content and assistant text lives in earlier
+  `AIMessageChunk` entries; it also appends the `<LAST_TOOL_RESULT>`
+  block when a `ToolMessage` IS present.
+
 ### Rendered block
 
 ```
