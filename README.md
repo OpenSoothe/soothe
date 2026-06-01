@@ -73,22 +73,41 @@ Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the 
 
 ### Installation
 
-Monorepo packages:
+**Requirements:** Python 3.11+
 
-| Package | Purpose |
-|---------|---------|
-| `soothe` | Core agent framework + daemon server |
-| `soothe-daemon` | Standalone daemon (WebSocket/HTTP) |
-| `soothe-cli` | CLI client + TUI |
-| `soothe-sdk` | SDK for plugins & custom clients |
-| `soothe-community` | Community plugins ([separate repo](https://github.com/mirasoth/soothe-community)) |
+For everyday use you install three PyPI packages: **core** (`soothe`), **CLI** (`soothe-cli`), and **daemon** (`soothe-daemon`). `soothe-sdk` is pulled in automatically; you only need it directly when building plugins or custom clients.
+
+| Package | Install when | Provides |
+|---------|--------------|----------|
+| `soothe` | Always | Agent runtime, protocols, backends, tools |
+| `soothe-cli` | Daily TUI / prompts | `soothe` command |
+| `soothe-daemon` | Background / 24×7 runs | `soothed` command (WebSocket, HTTP REST) |
+| `soothe-sdk` | Plugins & custom clients | Shared protocol types and decorators |
+| `soothe-community` | Optional extras | Community plugins ([separate repo](https://github.com/mirasoth/soothe-community)) |
+
+**Recommended — full daily stack** (core + all optional capability groups + CLI + daemon):
 
 ```bash
-# Full install
-pip install -U 'soothe[all]'
+pip install -U 'soothe[all]' soothe-cli soothe-daemon
+```
 
-# Or minimal
+- `soothe[all]` — research, documents, tabular data, media, GitHub, semantic search, Langfuse, DashScope, and related tool dependencies
+- `soothe-cli` — interactive TUI and one-shot prompts (`soothe`, `soothe -p "…"`)
+- `soothe-daemon` — long-running server and lifecycle commands (`soothed start`, `soothed doctor`)
+
+**Minimal** — core + CLI only (lighter install; add `soothe-daemon` when you need background mode):
+
+```bash
 pip install soothe soothe-cli
+```
+
+Install the daemon later with `pip install soothe-daemon`. Pick optional capability groups instead of `[all]` when you want a smaller footprint, for example `pip install 'soothe[research,document]' soothe-cli soothe-daemon`.
+
+**Verify:**
+
+```bash
+soothe --help
+soothed doctor
 ```
 
 ### Quick Start
