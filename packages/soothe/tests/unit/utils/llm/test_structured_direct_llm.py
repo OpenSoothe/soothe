@@ -92,6 +92,50 @@ async def test_invoke_structured_chat_retries_json_schema_after_thinking_tool_ch
 
 
 @pytest.mark.asyncio
+async def test_invoke_structured_chat_caches_working_method_per_chat() -> None:
+    """Second invoke on the same chat skips the previously-failing method."""
+    chat = MagicMock()
+    method_calls: list[str | None] = []
+    fc_runnable = MagicMock()
+    fc_runnable.ainvoke = AsyncMock(
+        side_effect=RuntimeError(
+            "tool_choice parameter does not support being set to required in thinking mode"
+        )
+    )
+    json_schema_runnable = MagicMock()
+    json_schema_runnable.ainvoke = AsyncMock(return_value={"word": "OK"})
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **_kwargs: object
+    ) -> MagicMock:
+        method_calls.append(method)
+        if method == "json_schema":
+            return json_schema_runnable
+        return fc_runnable
+
+    chat.with_structured_output = MagicMock(side_effect=_with_structured_output)
+
+    out1 = await invoke_structured_chat(
+        chat, [HumanMessage(content="hi")], json_schema=_WORD_SCHEMA, schema_name="WordReply"
+    )
+    assert out1 == {"word": "OK"}
+    # First call: function_calling tried (and failed) before json_schema succeeded.
+    assert "function_calling" in method_calls
+    assert "json_schema" in method_calls
+
+    method_calls.clear()
+    fc_awaits_after_first = fc_runnable.ainvoke.await_count
+    out2 = await invoke_structured_chat(
+        chat, [HumanMessage(content="hi")], json_schema=_WORD_SCHEMA, schema_name="WordReply"
+    )
+    assert out2 == {"word": "OK"}
+    # Second call: json_schema is tried first and succeeds; no failing-method round-trip.
+    assert method_calls[0] == "json_schema"
+    assert "function_calling" not in method_calls
+    assert fc_runnable.ainvoke.await_count == fc_awaits_after_first
+
+
+@pytest.mark.asyncio
 async def test_invoke_structured_chat_json_mode_omits_strict_at_bind() -> None:
     """json_mode bind must not pass strict= (LangChain ValueError); strict applies post-parse."""
     chat = MagicMock()
