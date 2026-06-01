@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-29
-**Total RFCs**: 62
+**Last Updated**: 2026-06-01
+**Total RFCs**: 63
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 44 |
+| Draft | 45 |
 | Implemented | 18 |
 
 ---
@@ -187,6 +187,13 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-05-29
   - Dependencies: RFC-220, RFC-225
   - Related: RFC-214, RFC-217, RFC-604
+
+- **RFC-227**: [Plan-Assess Prior-Progress Digest](RFC-227-plan-assess-prior-progress-digest.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-01
+  - Dependencies: RFC-214, RFC-220
+  - Related: RFC-201, RFC-206, RFC-219, RFC-604, RFC-226
 
 ### Protocols (3xx)
 
@@ -386,7 +393,7 @@ This index reflects the canonical RFC set and defines which files are active for
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 5 |
-| 2xx | AgentLoop & Cognition | 20 |
+| 2xx | AgentLoop & Cognition | 21 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
 | 5xx | CLI & TUI | 5 |
@@ -396,6 +403,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- **RFC-227**: Plan-Assess Prior-Progress Digest (2026-06-01)
 - **RFC-226**: Continuation-Aware plan_assess and Post-Execute Fast Exit (2026-05-29)
 - **RFC-225**: Loop Continuity and Goal Record Enrichment (2026-05-29)
 - **RFC-224**: Automatic Context Window Management (2026-05-27)

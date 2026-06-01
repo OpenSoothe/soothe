@@ -16,6 +16,7 @@ from typing import Any, Literal
 from soothe.core.loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.core.loop.state.schemas import (
     AgentDecision,
+    LoopState,
     PlanResult,
     StatusAssessment,
     StepAction,
@@ -26,6 +27,35 @@ from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_GOAL_DONE
 
 logger = logging.getLogger(__name__)
+
+
+# Ordered progress buckets shared by the digest hint and StatusAssessment.goal_progress.
+# Used by `_log_prior_progress_disagreement` to compare across the two signals.
+_PROGRESS_BUCKETS: tuple[str, ...] = ("none", "low", "medium", "high", "complete")
+
+
+def _log_prior_progress_disagreement(state: LoopState, assessment: StatusAssessment) -> None:
+    """Emit an INFO log when the per-wave digest hint and the LLM disagree.
+
+    Disagreement is defined as the two values being more than one bucket apart
+    on the ordered ``_PROGRESS_BUCKETS`` scale. Telemetry only — never overrides
+    the assessment.
+    """
+    digest = state.prior_progress
+    if digest is None:
+        return
+    try:
+        hint_idx = _PROGRESS_BUCKETS.index(digest.derived_progress_hint)
+        llm_idx = _PROGRESS_BUCKETS.index(assessment.goal_progress)
+    except ValueError:
+        return
+    if abs(hint_idx - llm_idx) > 1:
+        logger.info(
+            "[Plan] prior_progress hint=%s vs LLM goal_progress=%s (iter=%d)",
+            digest.derived_progress_hint,
+            assessment.goal_progress,
+            state.iteration,
+        )
 
 
 # First-person action descriptions for continue-thread bootstrap (< 15 words each)
@@ -266,6 +296,8 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         context=context,
     )
     ctx.scratch.plan_assessment = assessment
+
+    _log_prior_progress_disagreement(state, assessment)
 
     if assessment.assessment_reasoning:
         await ctx.emit(
