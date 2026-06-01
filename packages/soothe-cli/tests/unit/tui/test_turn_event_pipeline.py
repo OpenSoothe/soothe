@@ -117,6 +117,41 @@ def test_prepare_turn_chunk_skips_noop_updates_only() -> None:
     assert prepared.mode == "messages"
 
 
+def test_loop_assistant_output_message_gets_high_priority() -> None:
+    """`plan_direct` / `goal_completion` text chunks must run at HIGH priority.
+
+    Loop-tagged assistant output is interleaved with high-priority loop progress
+    events (e.g. `plan_decision`, `step_started`). With default LOW priority the
+    text card lands behind the step card even though the daemon emitted it first.
+    Regression for: 'I will complete this...' appearing after the step card.
+    """
+    from soothe.core.loop.utils.messages import LoopAIMessage
+
+    from soothe_cli.runtime.presentation.engine import PresentationEngine
+    from soothe_cli.runtime.state.session_stats import TurnEventStats
+
+    state = TurnPrepareState(
+        ev_stats=TurnEventStats(),
+        presentation=PresentationEngine(),
+    )
+
+    plan_direct_msg = LoopAIMessage(
+        content="I will complete this request directly: read file",
+        thread_id="t",
+        iteration=0,
+        phase="plan_direct",
+    )
+    prepared = prepare_turn_chunk(state, ((), "messages", (plan_direct_msg, {})))
+    assert prepared is not None
+    assert prepared.priority == PRIORITY_HIGH
+
+    # Plain assistant text (no loop phase tag) stays LOW so it can't preempt
+    # tool / progress events.
+    plain = prepare_turn_chunk(state, ((), "messages", (AIMessage(content="hi"), {})))
+    assert plain is not None
+    assert plain.priority == PRIORITY_LOW
+
+
 @pytest.mark.asyncio
 async def test_pipeline_propagates_processor_errors() -> None:
     """Processor exceptions surface to the applier coroutine."""

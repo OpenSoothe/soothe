@@ -20,6 +20,7 @@ from soothe_sdk.core.events import (
 )
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
+from soothe_sdk.ux.loop_stream import assistant_output_phase
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
 from soothe_cli.runtime.presentation.engine import PresentationEngine
@@ -83,6 +84,13 @@ def _message_priority(message: Any, *, is_summarization: bool) -> int:
         return PRIORITY_NORMAL
     if is_summarization:
         return PRIORITY_NORMAL
+    # Loop-tagged assistant output (plan_direct, goal_completion, etc.) is interleaved
+    # with high-priority loop progress events (plan_decision, step_started). Default LOW
+    # priority bumps them behind progress events even when emitted first, so e.g. the
+    # plan_direct prose lands after the step card. Match progress priority so FIFO
+    # sequence wins within the priority class.
+    if assistant_output_phase(message) is not None:
+        return PRIORITY_HIGH
     return PRIORITY_LOW
 
 
