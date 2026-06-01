@@ -318,9 +318,9 @@ soothe thread delete abc123
 
 **Solution**:
 
-1. Start infrastructure:
+1. Start infrastructure (development stack):
 ```bash
-docker compose up -d
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 2. Configure connection:
