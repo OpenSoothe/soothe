@@ -70,7 +70,9 @@ def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Pa
     )
     host_path = str(target)
     out = backend.read(host_path)
-    text = out if isinstance(out, str) else getattr(out, "content", str(out))
+    assert out.error is None, out.error
+    assert out.file_data is not None
+    text = out.file_data["content"]
     assert "Error: File" not in text
     assert "hello" in text
 

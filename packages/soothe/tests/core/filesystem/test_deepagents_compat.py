@@ -19,6 +19,53 @@ from soothe.core.workspace.normalized_backend import (
 )
 
 
+class TestNormalizedPathBackendReadResult:
+    """Test line-based read/aread returning deepagents ReadResult."""
+
+    @pytest.fixture
+    def backend(self, tmp_path: Path) -> NormalizedPathBackend:
+        """Create backend with a multi-line sample file."""
+        lines = [f"line {i}\n" for i in range(1, 31)]
+        (tmp_path / "sample.txt").write_text("".join(lines), encoding="utf-8")
+        return NormalizedPathBackend(root_dir=tmp_path, virtual_mode=True)
+
+    def test_read_returns_read_result(self, backend: NormalizedPathBackend) -> None:
+        """read() returns ReadResult with file_data."""
+        from deepagents.backends.protocol import ReadResult
+
+        result = backend.read("/sample.txt", offset=0, limit=5)
+        assert isinstance(result, ReadResult)
+        assert result.error is None
+        assert result.file_data is not None
+        assert result.file_data["content"].startswith("line 1")
+
+    def test_read_line_offset_and_limit(self, backend: NormalizedPathBackend) -> None:
+        """offset/limit are line-based (not byte-based)."""
+        result = backend.read("/sample.txt", offset=25, limit=5)
+        assert result.error is None
+        assert result.file_data is not None
+        content = result.file_data["content"]
+        assert "line 26" in content
+        assert "line 30" in content
+        assert "line 25" not in content
+
+    def test_read_offset_past_eof_returns_error(self, backend: NormalizedPathBackend) -> None:
+        """Line offset beyond EOF returns ReadResult.error (no seek crash)."""
+        result = backend.read("/sample.txt", offset=100, limit=20)
+        assert result.error is not None
+        assert "exceeds file length" in result.error
+
+    @pytest.mark.asyncio
+    async def test_aread_matches_read(self, backend: NormalizedPathBackend) -> None:
+        """aread() uses the same line semantics as read()."""
+        sync_result = backend.read("/sample.txt", offset=10, limit=3)
+        async_result = await backend.aread("/sample.txt", offset=10, limit=3)
+        assert sync_result.error == async_result.error
+        assert (sync_result.file_data or {}).get("content") == (async_result.file_data or {}).get(
+            "content"
+        )
+
+
 class TestNormalizedPathBackendLsResult:
     """Test that NormalizedPathBackend.ls returns LsResult."""
 

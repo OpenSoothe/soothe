@@ -81,7 +81,15 @@ def backend_read_file(path: Path, config: Any = None) -> str:
         virtual_path = _to_virtual_home_path(path)
         if backend is not None and virtual_path is not None:
             try:
-                return backend.read(virtual_path)
+                result = backend.read(virtual_path)
+                if isinstance(result, str):
+                    return result
+                if getattr(result, "error", None):
+                    raise OSError(result.error)
+                file_data = getattr(result, "file_data", None)
+                if file_data is not None:
+                    return str(file_data.get("content", ""))
+                return ""
             except Exception as e:
                 logger.debug("Backend read failed for %s, falling back: %s", virtual_path, e)
 
