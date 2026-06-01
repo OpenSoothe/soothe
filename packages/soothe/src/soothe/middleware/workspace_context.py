@@ -58,42 +58,45 @@ class WorkspaceContextMiddleware(AgentMiddleware):
 
         from soothe.core import FrameworkFilesystem
         from soothe.core.workspace import set_virtual_mode_context
+        from soothe.core.workspace.runtime_resolution import resolve_workspace_for_tool_execution
 
-        # Get config from langgraph context
+        config: dict[str, Any] = {}
         try:
-            config = get_config()
-            configurable = config.get("configurable", {})
+            raw_config = get_config()
+            if isinstance(raw_config, dict):
+                config = raw_config
         except Exception:
-            configurable = {}
+            pass
 
-        workspace = configurable.get("workspace")
-        soothe_config = configurable.get("soothe_config")
+        configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+        config_workspace = configurable.get("workspace") if isinstance(configurable, dict) else None
+        state_workspace = state.get("workspace") if isinstance(state, dict) else None
 
-        if workspace:
-            self._workspace_token = FrameworkFilesystem.set_current_workspace(workspace)
-
-            # Determine virtual mode from config (IG-405)
-            virtual_mode = False
-            if soothe_config is not None and hasattr(soothe_config, "security"):
-                virtual_mode = not soothe_config.security.allow_paths_outside_workspace
-
-            set_virtual_mode_context(virtual_mode, Path(workspace))
-
-            # Mirror in state for explicit access
-            return {"workspace": workspace}
-        # Try to get workspace from state if available
-        if "workspace" in state:
-            ws = state["workspace"]
-            self._workspace_token = FrameworkFilesystem.set_current_workspace(ws)
-            # Also set virtual mode context from state if available
-            soothe_config = state.get("soothe_config")
-            virtual_mode = False
-            if soothe_config is not None and hasattr(soothe_config, "security"):
-                virtual_mode = not soothe_config.security.allow_paths_outside_workspace
-            set_virtual_mode_context(virtual_mode, Path(ws))
+        workspace_path = resolve_workspace_for_tool_execution(
+            config=config or None,
+            state=state,
+            use_langgraph_config=False,
+        )
+        if workspace_path is None:
             return None
 
-        return None
+        soothe_config = configurable.get("soothe_config")
+        if soothe_config is None and isinstance(state, dict):
+            soothe_config = state.get("soothe_config")
+
+        self._workspace_token = FrameworkFilesystem.set_current_workspace(workspace_path)
+
+        virtual_mode = False
+        if soothe_config is not None and hasattr(soothe_config, "security"):
+            virtual_mode = not soothe_config.security.allow_paths_outside_workspace
+
+        set_virtual_mode_context(virtual_mode, Path(workspace_path))
+
+        if config_workspace is not None:
+            return {"workspace": str(workspace_path)}
+        if state_workspace is not None:
+            return None
+        return {"workspace": str(workspace_path)}
 
     async def aafter_agent(
         self,

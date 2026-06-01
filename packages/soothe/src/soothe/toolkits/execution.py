@@ -46,96 +46,15 @@ logger = logging.getLogger(__name__)
 _ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 
-def _workspace_from_tool_runtime(tool_runtime: Any) -> str | None:
-    """Resolve workspace from injected ``ToolRuntime`` (config + graph state).
-
-    ``ToolNode`` supplies ``runtime.config`` and ``runtime.state``. For sync tools
-    executed on a worker thread, ``langgraph.config.get_config()`` may be empty while
-    ``configurable["workspace"]`` is still missing from the per-call copy. Prefer
-    ``state["workspace"]`` for subgraphs (e.g. explore), else the latest human message
-    ``workspace`` in ``state["messages"]`` (RFC-103, IG-300).
-
-    Args:
-        tool_runtime: LangGraph ``ToolRuntime`` (or compatible duck-typed object).
-
-    Returns:
-        Absolute or raw workspace string, or ``None`` if not found.
-    """
-    if tool_runtime is None:
-        return None
-    cfg = getattr(tool_runtime, "config", None)
-    if isinstance(cfg, dict):
-        configurable = cfg.get("configurable")
-        if isinstance(configurable, dict):
-            workspace = configurable.get("workspace")
-            if isinstance(workspace, str) and workspace.strip():
-                return workspace.strip()
-
-    state = getattr(tool_runtime, "state", None)
-    if not isinstance(state, dict):
-        return None
-    # Subgraphs (e.g. explore) set ``state["workspace"]`` without LoopHumanMessage rows.
-    direct_ws = state.get("workspace")
-    if isinstance(direct_ws, str) and direct_ws.strip():
-        return direct_ws.strip()
-    messages = state.get("messages")
-    if not isinstance(messages, (list, tuple)):
-        return None
-    for msg in reversed(messages):
-        ws = getattr(msg, "workspace", None)
-        if isinstance(ws, str) and ws.strip():
-            return ws.strip()
-        if isinstance(msg, dict):
-            ak = msg.get("additional_kwargs")
-            if isinstance(ak, dict):
-                cand = ak.get("workspace")
-                if isinstance(cand, str) and cand.strip():
-                    return cand.strip()
-            top = msg.get("workspace")
-            if isinstance(top, str) and top.strip():
-                return top.strip()
-    return None
-
-
 def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | None:
-    """Resolve effective workspace for shell tools (RFC-103, IG-300).
+    """Resolve effective workspace for shell tools (RFC-103, IG-300)."""
+    from soothe.core.workspace.runtime_resolution import resolve_workspace_for_tool_execution
 
-    Priority:
-        1. ``ToolRuntime.config["configurable"]["workspace"]`` when set
-        2. ``ToolRuntime.state["workspace"]`` (e.g. explore subgraph thread workspace)
-        3. Latest ``LoopHumanMessage`` / message ``workspace`` in ``state["messages"]``
-        4. LangGraph ``get_config()`` configurable
-        5. ContextVar / ``workspace_root`` static fallback
-
-    Args:
-        workspace_root: Daemon-configured default workspace.
-        tool_runtime: Optional injected LangGraph tool runtime.
-
-    Returns:
-        Effective workspace path or ``None``.
-    """
-    from_runtime = _workspace_from_tool_runtime(tool_runtime)
-    if from_runtime:
-        return str(from_runtime)
-
-    try:
-        from langgraph.config import get_config
-
-        config = get_config()
-        configurable = config.get("configurable", {})
-        workspace = configurable.get("workspace")
-        if workspace:
-            return str(workspace)
-    except Exception:  # noqa: S110
-        pass
-
-    from soothe.core import FrameworkFilesystem
-
-    dynamic_workspace = FrameworkFilesystem.get_current_workspace()
-    if dynamic_workspace:
-        return str(dynamic_workspace)
-
-    return workspace_root or None
+    resolved = resolve_workspace_for_tool_execution(
+        runtime=tool_runtime,
+        fallback=workspace_root or None,
+    )
+    return str(resolved) if resolved is not None else None
 
 
 class RunCommandInput(BaseModel):

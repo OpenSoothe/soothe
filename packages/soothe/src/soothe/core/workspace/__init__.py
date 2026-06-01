@@ -29,6 +29,7 @@ __all__ = [
     "resolve_user_workspace",
     "resolve_virtual_path",
     "resolve_workspace_for_stream",
+    "resolve_workspace_for_tool_execution",
     "set_virtual_mode_context",
     "validate_client_workspace",
     "get_workspace_backend",
@@ -48,10 +49,14 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "get_git_status": (".resolution", "get_git_status"),
     "ResolvedWorkspace": (".stream_resolution", "ResolvedWorkspace"),
     "resolve_workspace_for_stream": (".stream_resolution", "resolve_workspace_for_stream"),
+    "resolve_workspace_for_tool_execution": (
+        ".runtime_resolution",
+        "resolve_workspace_for_tool_execution",
+    ),
     # Normalized backend
     "WorkspaceAwareBackend": (".normalized_backend", "WorkspaceAwareBackend"),
     "NormalizedPathBackend": (".normalized_backend", "NormalizedPathBackend"),
-    "FrameworkFilesystem": (".normalized_backend", "FrameworkFilesystem"),
+    "FrameworkFilesystem": (".framework_filesystem", "FrameworkFilesystem"),
     "get_workspace_backend": (".normalized_backend", "get_workspace_backend"),
     "get_virtual_home": (".virtual_home", "get_virtual_home"),
     "get_virtual_mode": (".virtual_home", "get_virtual_mode"),
