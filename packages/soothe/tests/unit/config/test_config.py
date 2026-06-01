@@ -366,7 +366,50 @@ class TestResolveEnv:
 
 
 class TestPropagateEnv:
-    def test_propagate_openai_provider(self, monkeypatch) -> None:
+    def test_propagate_openai_provider_standard_endpoint(self, monkeypatch) -> None:
+        """Standard OpenAI endpoint (no custom base_url) sets OPENAI_* env vars."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="openai",
+                    api_key="test-key",
+                    provider_type="openai",
+                    # No api_base_url = standard OpenAI endpoint
+                ),
+            ]
+        )
+        cfg.propagate_env()
+        import os
+
+        assert os.environ["OPENAI_API_KEY"] == "test-key"
+        # OPENAI_BASE_URL should not be set for standard endpoint
+        assert "OPENAI_BASE_URL" not in os.environ
+
+    def test_propagate_openai_provider_explicit_standard_endpoint(self, monkeypatch) -> None:
+        """Explicit standard OpenAI endpoint sets OPENAI_* env vars."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="openai",
+                    api_base_url="https://api.openai.com/v1",
+                    api_key="test-key",
+                    provider_type="openai",
+                ),
+            ]
+        )
+        cfg.propagate_env()
+        import os
+
+        assert os.environ["OPENAI_API_KEY"] == "test-key"
+        # Explicit api.openai.com URL should still set OPENAI_BASE_URL
+        assert os.environ["OPENAI_BASE_URL"] == "https://api.openai.com/v1"
+
+    def test_propagate_custom_endpoint_no_env_vars(self, monkeypatch) -> None:
+        """Custom OpenAI-compatible endpoint should NOT set OPENAI_* env vars."""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         cfg = SootheConfig(
@@ -382,10 +425,12 @@ class TestPropagateEnv:
         cfg.propagate_env()
         import os
 
-        assert os.environ["OPENAI_API_KEY"] == "test-key"
-        assert os.environ["OPENAI_BASE_URL"] == "https://test.example.com"
+        # Custom endpoint should NOT set OPENAI_* env vars
+        assert "OPENAI_API_KEY" not in os.environ
+        assert "OPENAI_BASE_URL" not in os.environ
 
-    def test_propagate_openai_provider_base_url_from_env(self, monkeypatch) -> None:
+    def test_propagate_custom_endpoint_from_env_no_env_vars(self, monkeypatch) -> None:
+        """Custom OpenAI-compatible endpoint from env var should NOT set OPENAI_* env vars."""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "https://proxy.example.com/v1")
@@ -402,8 +447,9 @@ class TestPropagateEnv:
         cfg.propagate_env()
         import os
 
-        assert os.environ["OPENAI_API_KEY"] == "test-key"
-        assert os.environ["OPENAI_BASE_URL"] == "https://proxy.example.com/v1"
+        # Custom endpoint should NOT set OPENAI_* env vars
+        assert "OPENAI_API_KEY" not in os.environ
+        assert "OPENAI_BASE_URL" not in os.environ
 
     def test_propagate_openai_provider_missing_api_key_warns(self, monkeypatch, caplog) -> None:
         import logging

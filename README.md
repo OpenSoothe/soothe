@@ -36,8 +36,6 @@ Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the 
   <img src="assets/logical-arch.png" alt="Arch" width="800" />
 </div>
 
-**Core Stack**: CLI → Daemon → Agent Loop → Goal Engine → Protocols → Backends → Capabilities (tools/subagents/MCP)
-
 ## Design Philosophy
 
 | Principle | Description |
