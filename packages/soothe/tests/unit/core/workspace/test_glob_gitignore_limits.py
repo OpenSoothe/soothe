@@ -2,10 +2,68 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from soothe.core.filesystem.protocol import GlobResult
 from soothe.core.filesystem.workspace import WorkspaceFilesystem
+from soothe.core.workspace.normalized_backend import NormalizedPathBackend
+
+
+def test_normalized_backend_glob_uses_workspace_filesystem(tmp_path: Path) -> None:
+    """``NormalizedPathBackend`` must route glob through ``WorkspaceFilesystem``.
+
+    Regression: production glob previously delegated to ``LocalFilesystem.glob``,
+    which lacks gitignore filtering, has no result cap, and emits bare
+    workspace-relative names. Tools that surface the result to the LLM (and any
+    follow-up shell command using those paths) were misled by the mismatch.
+    """
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    (ws / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
+    (ws / "README.md").write_text("hello", encoding="utf-8")
+    (ws / "ignored.txt").write_text("nope", encoding="utf-8")
+    # Essential excludes should still apply.
+    (ws / ".git").mkdir()
+    (ws / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+    backend = NormalizedPathBackend(root_dir=ws, virtual_mode=True)
+    result = backend.glob("**/*", path="/")
+    matches = [m["path"] for m in (result.matches or [])]
+
+    assert matches, "expected at least one match"
+    assert any("README.md" in p for p in matches)
+    # gitignore must be applied via WorkspaceFilesystem
+    assert not any("ignored.txt" in p for p in matches)
+    # essential excludes (.git) must be honored
+    assert not any(".git" in p for p in matches)
+    # paths must be host-absolute (not virtual /-prefixed, not workspace-relative)
+    for p in matches:
+        assert os.path.isabs(p), f"path not host-absolute: {p!r}"
+        assert p.startswith(str(ws.resolve())), f"path not under workspace: {p!r}"
+
+
+def test_glob_emits_host_absolute_paths_in_virtual_mode(tmp_path: Path) -> None:
+    """Glob output must be host-absolute even when virtual_mode is on.
+
+    Virtual-prefixed paths (e.g. ``/README.md``) mislead the LLM into reusing
+    them in shell commands, where ``/`` is the host filesystem root. Returning
+    host-absolute paths keeps the output usable in both filesystem and shell
+    tools.
+    """
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    (ws / "README.md").write_text("hello", encoding="utf-8")
+
+    fs = WorkspaceFilesystem(workspace=str(ws), virtual_mode=True)
+    result = fs.glob("**/*.md")
+    paths = result.matches or []
+
+    assert paths, "expected at least one match"
+    for p in paths:
+        assert os.path.isabs(p), f"path not host-absolute: {p!r}"
+        assert p.startswith(str(ws.resolve())), f"path not under workspace: {p!r}"
+        assert not p.startswith("/README"), f"virtual '/'-prefix leaked into output: {p!r}"
 
 
 def test_glob_api_respects_gitignore_and_essential_excludes(tmp_path: Path) -> None:

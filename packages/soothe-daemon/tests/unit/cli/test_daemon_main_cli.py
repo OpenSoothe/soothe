@@ -27,6 +27,9 @@ def test_status_reports_stopped(monkeypatch) -> None:
 
 def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.SOOTHE_HOME", str(tmp_path))
+    # Redirect pid_path so the test doesn't pick up a real daemon's PID file
+    # from the host's ``~/.soothe/soothe.pid`` and skip the mocked find_pid().
+    monkeypatch.setattr("soothe_daemon.cli.daemon_main.pid_path", lambda: tmp_path / "soothe.pid")
     monkeypatch.setattr(
         "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(lambda: True)
     )
