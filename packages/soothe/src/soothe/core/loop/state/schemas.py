@@ -558,6 +558,48 @@ class ContinuationAssessment(BaseModel):
     goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low"
 
 
+class ToolCallHead(BaseModel):
+    """One tool invocation captured from the most recent execute wave (RFC-227).
+
+    Attributes:
+        name: Tool name (e.g. ``run_command``, ``read_file``).
+        head: First non-empty line of the tool message content, stripped and
+            truncated at 120 chars. Empty string preserves the tool-name
+            signal when the output is empty or unparseable.
+    """
+
+    name: str = Field(max_length=64)
+    head: str = Field(default="", max_length=120)
+
+
+class PriorProgressDigest(BaseModel):
+    """Compact, truthful snapshot of the most recent execute wave (RFC-227).
+
+    Refreshed by the executor at the end of every wave (parallel or sequential).
+    Consumed by ``plan_assess`` and ``plan_generate`` via the
+    ``<PRIOR_PROGRESS>`` envelope block. Never used as a code-side override
+    for the LLM's structured output — the deterministic ``derived_progress_hint``
+    is shown verbatim so the LLM can disagree.
+
+    Attributes:
+        iteration: Iteration that produced the wave.
+        wave_index: 0-based wave within that iteration.
+        steps_completed: Number of successful steps in the wave.
+        steps_failed: Number of failed steps in the wave.
+        tool_calls: Up to 8 ``ToolCallHead`` rows in arrival order.
+        evidence_excerpts: Up to 3 deduplicated AI-text excerpts, each ≤200 chars.
+        derived_progress_hint: Pure-function classification over wave outputs.
+    """
+
+    iteration: int
+    wave_index: int = 0
+    steps_completed: int = 0
+    steps_failed: int = 0
+    tool_calls: list[ToolCallHead] = Field(default_factory=list, max_length=8)
+    evidence_excerpts: list[str] = Field(default_factory=list, max_length=3)
+    derived_progress_hint: Literal["none", "low", "medium", "high"] = "low"
+
+
 FIRST_WAVE_MAX_STEPS = 2
 """Maximum plan steps on the first execute cycle (``state.iteration == 0``)."""
 
@@ -796,6 +838,7 @@ class LoopState(BaseModel):
             (``task_tool_aggregate`` provenance), not root-graph assistant stream (IG-355).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
         continue_loop: RFC-225 flag — True when this loop has prior goals (carrier for executor wiring).
+        prior_progress: RFC-227 per-wave digest produced by executor, consumed by plan-assess/plan-generate.
     """
 
     goal: str
@@ -856,6 +899,12 @@ class LoopState(BaseModel):
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals
+
+    # RFC-227: per-wave digest produced by executor, consumed by plan-assess/plan-generate.
+    prior_progress: PriorProgressDigest | None = Field(
+        default=None,
+        description="Most-recent execute wave snapshot for plan-phase grounding.",
+    )
 
     # RFC-105: Progressive skill loading durability snapshot
     sent_skill_names: set[str] = Field(default_factory=set)

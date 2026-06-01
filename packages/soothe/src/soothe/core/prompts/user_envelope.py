@@ -14,8 +14,12 @@ maximizing prompt cache hits.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from soothe.core.loop.state.schemas import PriorProgressDigest
 
 # Strip legacy AgentLoop suffix accidentally baked into goal text or stored checkpoints.
 _GOAL_ITERATION_SUFFIX_RE = re.compile(
@@ -136,6 +140,49 @@ def build_execute_step_envelope(
     return "\n\n".join(body_parts) + _EXECUTE_STEP_CONTEXT_SEPARATOR + dynamic_context
 
 
+# Hard cap on the rendered <PRIOR_PROGRESS> block (RFC-227). Evidence lines
+# are dropped first when the budget is exceeded, then tool lines.
+PRIOR_PROGRESS_MAX_CHARS = 600
+
+
+def _render_prior_progress_block(
+    digest: PriorProgressDigest,
+) -> str:
+    """Render a PriorProgressDigest as the <PRIOR_PROGRESS> envelope block.
+
+    Hard-capped at ``PRIOR_PROGRESS_MAX_CHARS``; trailing evidence lines drop
+    first, then trailing tool lines.
+    """
+    header = (
+        f"iter={digest.iteration} wave={digest.wave_index} "
+        f"done={digest.steps_completed} failed={digest.steps_failed} "
+        f"hint={digest.derived_progress_hint}"
+    )
+    tool_lines = [
+        f"- {t.name}: {json.dumps(t.head, ensure_ascii=False)}" for t in digest.tool_calls
+    ]
+    evidence_lines = [f"- {json.dumps(e, ensure_ascii=False)}" for e in digest.evidence_excerpts]
+
+    def _assemble(tools: list[str], evidence: list[str]) -> str:
+        parts = [header]
+        if tools:
+            parts.append("tools:")
+            parts.extend(tools)
+        if evidence:
+            parts.append("evidence:")
+            parts.extend(evidence)
+        return "<PRIOR_PROGRESS>\n" + "\n".join(parts) + "\n</PRIOR_PROGRESS>"
+
+    rendered = _assemble(tool_lines, evidence_lines)
+    while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and evidence_lines:
+        evidence_lines.pop()
+        rendered = _assemble(tool_lines, evidence_lines)
+    while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and tool_lines:
+        tool_lines.pop()
+        rendered = _assemble(tool_lines, evidence_lines)
+    return rendered
+
+
 def build_plan_context_envelope(
     goal: str,
     *,
@@ -143,6 +190,8 @@ def build_plan_context_envelope(
     step_id_hint: str | None = None,
     goal_user_submission: str | None = None,
     skill_context: str | None = None,
+    prior_progress: PriorProgressDigest | None = None,
+    current_iteration: int | None = None,
 ) -> str:
     """Build the user message envelope for plan-assess/plan-generate (RFC-214).
 
@@ -158,6 +207,12 @@ def build_plan_context_envelope(
             since the goal split (kept for API compat).
         skill_context: Skill reference body for ``<SKILL_REFERENCE>`` when slash-skill
             invoked; injected once per turn so the body is not duplicated elsewhere.
+        prior_progress: RFC-227 per-wave digest. When present and not stale
+            (``digest.iteration >= current_iteration - 1``), rendered as a
+            ``<PRIOR_PROGRESS>`` block before ``<CONTEXT_INFO>``. Omitted
+            otherwise; never raises.
+        current_iteration: Current loop iteration used for the prior-progress
+            staleness check. When ``None``, the digest is treated as fresh.
 
     Returns:
         XML envelope string for the plan-context LoopHumanMessage.
@@ -178,6 +233,12 @@ def build_plan_context_envelope(
         extra_parts.append(step_id_hint)
     if dag_context:
         extra_parts.append(dag_context)
+    if prior_progress is not None:
+        is_stale = (
+            current_iteration is not None and prior_progress.iteration < current_iteration - 1
+        )
+        if not is_stale:
+            extra_parts.append(_render_prior_progress_block(prior_progress))
 
     # <CONTEXT_INFO>
     context_info_parts = [

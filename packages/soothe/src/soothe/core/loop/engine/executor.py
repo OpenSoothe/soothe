@@ -65,8 +65,10 @@ from soothe.core.loop.engine.tool_call_args import (
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     LoopState,
+    PriorProgressDigest,
     StepAction,
     StepResult,
+    ToolCallHead,
 )
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
@@ -1471,6 +1473,124 @@ class Executor:
                     response_metadata=meta,
                 )
             )
+
+        # RFC-227: refresh per-wave digest for plan-assess / plan-generate grounding.
+        self._update_prior_progress(state, steps, gather_results)
+
+    _PROGRESS_HINT_KEYWORDS = ("done", "completed", "total", "count", "finished")
+    _PROGRESS_HINT_GLYPHS = ("|",)
+
+    def _update_prior_progress(
+        self,
+        state: LoopState,
+        steps: list[StepAction],
+        gather_results: list[Any],
+    ) -> None:
+        """Refresh ``state.prior_progress`` from the wave just appended to the ledger.
+
+        Pure-function over wave outputs; no I/O. Always overwrites
+        ``state.prior_progress`` so the digest reflects the most recent wave.
+        Wave index increments within the same iteration; resets to 0 on a new
+        iteration. See RFC-227 §5.3 for the derivation rules.
+        """
+        from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
+
+        steps_completed = 0
+        steps_failed = 0
+        tool_calls: list[ToolCallHead] = []
+        evidence_excerpts: list[str] = []
+        excerpt_prefixes: set[str] = set()
+
+        for i, _step in enumerate(steps):
+            raw = gather_results[i] if i < len(gather_results) else None
+            if raw is None or isinstance(raw, Exception):
+                steps_failed += 1
+                continue
+            _events, step_result, step_messages, delegate_final = raw
+            if step_result.success:
+                steps_completed += 1
+            else:
+                steps_failed += 1
+
+            # Tool call heads: each ToolMessage in arrival order.
+            for msg in step_messages:
+                if len(tool_calls) >= 8:
+                    break
+                if isinstance(msg, ToolMessage):
+                    name = (getattr(msg, "name", "") or "tool").strip()[:64]
+                    body = extract_text_from_message_content(getattr(msg, "content", "")).strip()
+                    head = body.splitlines()[0].strip() if body else ""
+                    tool_calls.append(ToolCallHead(name=name, head=head[:120]))
+
+            # Evidence excerpt: prefer final AI text; fall back to delegate_final.
+            ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
+            final_ai = ai_messages[-1] if ai_messages else None
+            excerpt_src = ""
+            if final_ai is not None:
+                excerpt_src = extract_text_from_message_content(
+                    getattr(final_ai, "content", "")
+                ).strip()
+            if not excerpt_src and delegate_final:
+                excerpt_src = (delegate_final or "").strip()
+            if not excerpt_src:
+                continue
+            excerpt = excerpt_src[:200]
+            prefix = excerpt[:64]
+            if prefix in excerpt_prefixes:
+                continue
+            excerpt_prefixes.add(prefix)
+            evidence_excerpts.append(excerpt)
+
+        # Keep last 3 excerpts (most recent steps).
+        if len(evidence_excerpts) > 3:
+            evidence_excerpts = evidence_excerpts[-3:]
+
+        hint = self._derive_progress_hint(
+            steps_completed=steps_completed,
+            steps_failed=steps_failed,
+            tool_calls=tool_calls,
+            evidence_excerpts=evidence_excerpts,
+        )
+
+        prev = state.prior_progress
+        wave_index = 0
+        if prev is not None and prev.iteration == state.iteration:
+            wave_index = prev.wave_index + 1
+
+        state.prior_progress = PriorProgressDigest(
+            iteration=state.iteration,
+            wave_index=wave_index,
+            steps_completed=steps_completed,
+            steps_failed=steps_failed,
+            tool_calls=tool_calls,
+            evidence_excerpts=evidence_excerpts,
+            derived_progress_hint=hint,
+        )
+
+    @classmethod
+    def _derive_progress_hint(
+        cls,
+        *,
+        steps_completed: int,
+        steps_failed: int,
+        tool_calls: list[ToolCallHead],
+        evidence_excerpts: list[str],
+    ) -> Literal["none", "low", "medium", "high"]:
+        """Deterministic progress hint over wave outputs. See RFC-227 §5.3."""
+        if steps_failed > 0:
+            return "low"
+        if not tool_calls and not evidence_excerpts:
+            return "none"
+        if tool_calls and evidence_excerpts:
+            for excerpt in evidence_excerpts:
+                low = excerpt.lower()
+                if any(g in excerpt for g in cls._PROGRESS_HINT_GLYPHS):
+                    return "high"
+                if any(c.isdigit() for c in excerpt):
+                    return "high"
+                if any(k in low for k in cls._PROGRESS_HINT_KEYWORDS):
+                    return "high"
+        return "medium"
 
     async def _execute_parallel(
         self,
