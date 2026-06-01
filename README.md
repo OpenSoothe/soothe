@@ -1,5 +1,3 @@
-# ✨ Soothe — Beyond Yet-Another Agent
-
 <div align="center">
   <img src="assets/soothe-logo.png" alt="Soothe Logo" width="280" />
 
@@ -13,11 +11,12 @@
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)
 </div>
 
-Soothe is an **agent-harnessing framework**—an *Agentic OS* that pushes humans **out of the execution loop**.
+✨ Soothe is an **agent-harnessing framework**—an *Agentic OS* that pushes humans **out of the execution loop**.
+Built on LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that maintains context across sessions, sustains long-running goals, coordinates multiple objectives, and autonomously steers complex tasks. Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the system handle execution.
 
-Built on LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that maintains context across sessions, sustains long-running goals, coordinates multiple objectives, and autonomously steers complex tasks.
-
-Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the system handle execution.
+<div align="center">
+  <img src="assets/logical-arch.png" alt="Arch" width="800" />
+</div>
 
 ---
 
@@ -29,12 +28,6 @@ Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the 
 - 🔒 **Stays Secure** — Least-privilege, local-first architecture
 - 🔌 **Extends Easily** — Decorator-based plugins, custom tools, subagents
 - 🌐 **Works Anywhere** — Multi-transport daemon (WebSocket, HTTP REST)
-
-## Architecture
-
-<div align="center">
-  <img src="assets/logical-arch.png" alt="Arch" width="800" />
-</div>
 
 ## Design Philosophy
 
