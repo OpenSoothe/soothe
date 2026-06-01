@@ -1,7 +1,7 @@
 # ✨ Soothe — Beyond Yet-Another Agent
 
 <div align="center">
-  <img src="assets/soothe-logo.png" alt="Soothe Logo" width="350" />
+  <img src="assets/soothe-logo.png" alt="Soothe Logo" width="280" />
 
   #
 
