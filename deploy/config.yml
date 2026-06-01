@@ -1,0 +1,42 @@
+# Minimal production config — PostgreSQL persistence + pgvector.
+# Unlisted keys use Soothe Pydantic defaults (see config/config.template.yml).
+#
+# Required env vars:
+#   OPENAI_API_KEY                  LLM provider credential
+#   SOOTHE_POSTGRES_BASE_DSN        e.g. postgresql://USER:PASSWORD@HOST:5432
+#                                   (no database; RFC-612 appends database names)
+#   SOOTHE_POSTGRES_VECTORS_DSN     e.g. postgresql://USER:PASSWORD@HOST:5432/soothe_vectors
+#
+# Companion stack: deploy/docker-compose.yml provisions Postgres + pgvector
+# and runs config/init-db.sql to create soothe_checkpoints / soothe_metadata /
+# soothe_vectors / soothe_memory.
+
+providers:
+  - name: openai
+    provider_type: openai
+    api_key: "${OPENAI_API_KEY}"
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - text-embedding-3-small
+
+router:
+  default: "openai:gpt-4o-mini"
+  fast: "openai:gpt-4o-mini"
+  think: "openai:gpt-4o"
+  embedding: "openai:text-embedding-3-small"
+
+embedding_dims: 1536
+
+persistence:
+  default_backend: postgresql
+  postgres_base_dsn: "${SOOTHE_POSTGRES_BASE_DSN}"
+
+vector_stores:
+  - name: pgvector
+    provider_type: pgvector
+    dsn: "${SOOTHE_POSTGRES_VECTORS_DSN}"
+    pool_size: 4
+
+vector_store_router:
+  default: "pgvector:soothe_default"
