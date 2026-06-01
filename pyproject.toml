@@ -9,11 +9,10 @@ dependencies = [
     "soothe-cli",
     "soothe",
     "soothe-daemon",
-    "soothe-community",
 ]
 
 [tool.uv.workspace]
-members = ["packages/*", "community"]
+members = ["packages/*"]
 
 # Pin the default package index to PyPI so `uv sync` / `make all-sync` work even when the
 # environment sets UV_INDEX_URL or UV_DEFAULT_INDEX to a broken or unreachable mirror.
@@ -27,7 +26,6 @@ soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
 soothe-daemon = { workspace = true }
-soothe-community = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -39,5 +37,5 @@ dev = [
 
 [tool.pytest.ini_options]
 # Use importlib import mode to handle duplicate module names in monorepo
-testpaths = ["packages", "community", "tests"]
+testpaths = ["packages", "tests"]
 addopts = "--import-mode=importlib"

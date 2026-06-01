@@ -98,8 +98,15 @@ langfuse = [
 dashscope = [
     "dashscope>=1.20.0",
 ]
+browser_use = [
+    "browser-use>=0.11.0,<0.13.0",
+]
+claude = [
+    "anthropic>=0.96.0,<1.0.0",
+    "claude-agent-sdk>=0.1.0,<1.0.0",
+]
 all = [
-    "soothe[research,tabular,document,media,video,github,dashscope,semantic,langfuse]",
+    "soothe[research,tabular,document,media,video,github,dashscope,semantic,langfuse,browser_use,claude]",
 ]
 dev = [
     "pytest>=8.0.0",
@@ -108,8 +115,11 @@ dev = [
     "ruff>=0.12.0",
     "mypy>=1.0.0",
     "soothe[langfuse]",
-    "soothe-community>=0.2.5,<1.0.0",
 ]
+
+[project.entry-points."soothe.plugins"]
+browser_use = "soothe.subagents.browser_use:BrowserUsePlugin"
+claude = "soothe.subagents.claude:ClaudePlugin"
 
 [project.urls]
 Homepage = "https://github.com/mirasoth/soothe"
