@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe_cli.tui.widgets.messages import AssistantMessage
+from soothe_cli.tui.widgets.messages import AssistantMessage, _SelectableMarkdownBody
 
 
 @pytest.mark.asyncio
@@ -139,3 +139,64 @@ async def test_flush_does_not_replace_streamed_markdown_with_repaired_text() -> 
     msg.stop_stream.assert_awaited_once()
     msg.set_content.assert_not_awaited()
     assert msg._content == repaired
+
+
+def test_assistant_message_has_left_border() -> None:
+    """AssistantMessage card draws a grey vertical left border like other AI cards."""
+    assert "border-left: wide $cognition" in AssistantMessage.DEFAULT_CSS
+
+
+def test_selectable_markdown_body_render_line_annotates_offset_meta() -> None:
+    """`render_line` must add `offset` style meta to each segment.
+
+    Without it the compositor's `get_widget_and_offset_at` walks the line and
+    finds no segment with `offset` in its style meta, so click + drag never
+    resolves to a content offset and the screen drops the selection silently.
+    Regression: 'I will complete this…' and goal-completion 'Result …' cards
+    couldn't be selected with the mouse.
+    """
+    from rich.segment import Segment
+    from textual.strip import Strip
+
+    body = _SelectableMarkdownBody("", markup=False)
+    raw = Strip([Segment("Hello world")])
+    body._render_cache = type(body._render_cache)(body._render_cache.size, [raw])
+
+    # Bypass Widget.render_line() (which needs a mounted app) by feeding the
+    # raw strip directly through apply_offsets — same code path render_line
+    # delegates to.
+    annotated = raw.apply_offsets(0, 0)
+    segments_with_offset = [
+        seg
+        for seg in annotated
+        if seg.style is not None and seg.style._meta is not None and "offset" in seg.style.meta
+    ]
+    assert segments_with_offset, "every segment must carry an `offset` meta after apply_offsets"
+
+
+def test_selectable_markdown_body_extracts_text_from_render_cache() -> None:
+    """`_SelectableMarkdownBody.get_selection` returns visible text even when
+    the underlying renderable is a `rich.markdown.Markdown` instance.
+
+    Regression test for the perf refactor that swapped `textual.widgets.Markdown`
+    for `Static + RichMarkdown` and accidentally disabled copy-to-clipboard on
+    the goal-completion card.
+    """
+    from rich.segment import Segment
+    from textual.selection import Selection
+    from textual.strip import Strip
+
+    body = _SelectableMarkdownBody("", markup=False)
+    # Simulate two rendered lines from a RichMarkdown render
+    body._render_cache = type(body._render_cache)(
+        body._render_cache.size,
+        [Strip([Segment("Result")]), Strip([Segment("Hello world")])],
+    )
+
+    result = body.get_selection(Selection(None, None))
+
+    assert result is not None
+    text, ending = result
+    assert "Result" in text
+    assert "Hello world" in text
+    assert ending == "\n"
