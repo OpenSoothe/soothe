@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from deepagents.backends.protocol import EditResult, FileData, LsResult, ReadResult
+from deepagents.backends.protocol import EditResult, FileData, LsResult, ReadResult, WriteResult
 
 if TYPE_CHECKING:
     pass
@@ -180,19 +180,27 @@ class NormalizedPathBackend:
             display_path=path,
         )
 
-    def write(self, path: str, content: str | bytes) -> str:
-        """Write content to file."""
-        normalized = self._normalize_path(path)
-        # Exceptions are raised directly by the filesystem
-        result = self._fs.write(normalized, content)
-        return result.path
+    def write(self, path: str, content: str | bytes) -> WriteResult:
+        """Write content to file (deepagents BackendProtocol)."""
+        from soothe.core.filesystem.exceptions import FilesystemError
 
-    async def awrite(self, path: str, content: str | bytes) -> str:
-        """Async write content to file."""
         normalized = self._normalize_path(path)
-        # Exceptions are raised directly by the filesystem
-        result = await self._fs.awrite(normalized, content)
-        return result.path
+        try:
+            result = self._fs.write(normalized, content)
+        except FilesystemError as exc:
+            return WriteResult(error=str(exc))
+        return WriteResult(path=result.path)
+
+    async def awrite(self, path: str, content: str | bytes) -> WriteResult:
+        """Async write content to file (deepagents BackendProtocol)."""
+        from soothe.core.filesystem.exceptions import FilesystemError
+
+        normalized = self._normalize_path(path)
+        try:
+            result = await self._fs.awrite(normalized, content)
+        except FilesystemError as exc:
+            return WriteResult(error=str(exc))
+        return WriteResult(path=result.path)
 
     def edit(
         self,
@@ -622,12 +630,12 @@ class WorkspaceAwareBackend:
         """Async read file contents for a line range (deepagents BackendProtocol)."""
         return await self._get_backend().aread(path, offset, limit)
 
-    def write(self, path: str, content: str | bytes) -> str:
-        """Write content to file."""
+    def write(self, path: str, content: str | bytes) -> WriteResult:
+        """Write content to file (deepagents BackendProtocol)."""
         return self._get_backend().write(path, content)
 
-    async def awrite(self, path: str, content: str | bytes) -> str:
-        """Async write content to file."""
+    async def awrite(self, path: str, content: str | bytes) -> WriteResult:
+        """Async write content to file (deepagents BackendProtocol)."""
         return await self._get_backend().awrite(path, content)
 
     def edit(

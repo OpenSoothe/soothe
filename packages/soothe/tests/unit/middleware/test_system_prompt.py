@@ -547,6 +547,35 @@ class TestWorkspaceInjection:
         assert "do NOT paste" in prompt
         assert "run_python" in prompt
 
+    def test_workspace_prelude_block_order(self, tmp_path) -> None:
+        """Execute-step system prompt order must be:
+        base_core, WORKSPACE_RULES, WORKSPACE_INSTRUCTIONS, ENVIRONMENT, WORKSPACE.
+
+        Workspace context grounds the model before host/env details and before
+        the dynamic <WORKSPACE> metadata block.
+        """
+        (tmp_path / "AGENTS.md").write_text("# Rules\n\nBe terse.\n", encoding="utf-8")
+        mw = self._middleware()
+        prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
+
+        idx_rules = prompt.find("<WORKSPACE_RULES>")
+        idx_instr = prompt.find("<WORKSPACE_INSTRUCTIONS>")
+        idx_env = prompt.find("<ENVIRONMENT")
+        # `<WORKSPACE>\n<root>` matches the metadata block specifically;
+        # bare `<WORKSPACE>` also occurs inside the WORKSPACE_RULES text
+        # (`...is under <WORKSPACE><root> above`).
+        idx_ws = prompt.find("<WORKSPACE>\n<root>")
+
+        assert idx_rules >= 0
+        assert idx_instr >= 0
+        assert idx_env >= 0
+        assert idx_ws >= 0
+        assert idx_rules < idx_instr < idx_env < idx_ws, (
+            "Expected order: WORKSPACE_RULES < WORKSPACE_INSTRUCTIONS < "
+            f"ENVIRONMENT < <WORKSPACE>; got rules={idx_rules}, "
+            f"instr={idx_instr}, env={idx_env}, ws={idx_ws}"
+        )
+
     def test_state_schema_declares_workspace_channel(self) -> None:
         """LangGraph drops undeclared keys between nodes — `workspace` and
         `git_status` MUST be declared in ``_SystemPromptState`` so the

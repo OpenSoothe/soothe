@@ -9,6 +9,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from soothe_cli.tui.app import SootheApp
+from soothe_cli.tui.app._history import _HistoryMixin
 from soothe_cli.tui.widgets.message_store import MessageData, MessageType, ToolStatus
 
 
@@ -190,19 +191,28 @@ def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() 
     assert MessageType.COGNITION_REASON in types
 
 
-def test_agent_loop_completed_event_yields_no_message_data() -> None:
-    """Persisted completion event must not duplicate the goal-completion assistant line."""
+def test_agent_loop_completed_event_yields_app_summary() -> None:
+    """Persisted completion event becomes a concise summary row on resume.
+
+    Earlier behaviour was to drop this event entirely, which left the
+    transcript without a visible end-of-goal marker on history replay even
+    when the streamed assistant text had successfully been recovered.
+    """
     event = {
         "kind": "event",
         "timestamp": "2026-04-20T15:41:28.000+00:00",
         "metadata": {
             "data": {
                 "type": "soothe.cognition.agent_loop.completed",
+                "status": "completed",
                 "summary": "Goal done",
             }
         },
     }
-    assert SootheApp._convert_event_to_message_data(event) is None
+    msg = SootheApp._convert_event_to_message_data(event)
+    assert msg is not None
+    assert msg.type == MessageType.APP
+    assert "Goal completed" in msg.content
 
 
 def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> None:
@@ -250,15 +260,234 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
 
     data = app._convert_loop_events_to_data(events)
 
+    # The goal-tree pin (📍) is intentionally suppressed on history replay.
     assert [m.type for m in data] == [
-        MessageType.COGNITION_GOAL_TREE,
         MessageType.COGNITION_REASON,
         MessageType.STEP_PROGRESS,
     ]
-    assert data[1].cognition_plan_next_action == ""
-    assert data[1].cognition_plan_assessment == "Current plan is effective."
-    assert data[2].step_progress_id == "S_3"
-    assert data[2].step_progress_phase == "running"
+    assert data[0].cognition_plan_next_action == ""
+    assert data[0].cognition_plan_assessment == "Current plan is effective."
+    assert data[1].step_progress_id == "S_3"
+    assert data[1].step_progress_phase == "running"
+
+
+def test_convert_event_to_message_data_handles_conversation_user_row() -> None:
+    """Fallback path must render persisted user text from `kind=conversation` rows."""
+    event = {
+        "kind": "conversation",
+        "role": "user",
+        "content": "translate to chinese",
+        "timestamp": "2026-04-20T15:41:25.000+00:00",
+    }
+    msg = SootheApp._convert_event_to_message_data(event)
+    assert msg is not None
+    assert msg.type == MessageType.USER
+    assert msg.content == "translate to chinese"
+
+
+def test_convert_event_to_message_data_handles_conversation_assistant_via_metadata() -> None:
+    """Assistant text can arrive via the metadata envelope (older daemon writers)."""
+    event = {
+        "kind": "conversation",
+        "metadata": {"role": "assistant", "text": "Sure, here it is."},
+        "timestamp": "2026-04-20T15:41:26.000+00:00",
+    }
+    msg = SootheApp._convert_event_to_message_data(event)
+    assert msg is not None
+    assert msg.type == MessageType.ASSISTANT
+    assert msg.content == "Sure, here it is."
+
+
+def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
+    """Replay must merge step.started + step.completed into one card per step_id.
+
+    Live mode mutates the same CognitionStepMessage widget in place (see
+    textual_adapter.py:`AGENT_LOOP_STEP_COMPLETED`). Two separate cards on
+    replay leave the started card stuck at "Running..." while a duplicate
+    "(step) Completed" card appears next to it. The merge must also keep
+    the description from ``step.started`` — the
+    ``AgenticStepCompletedEvent`` schema does not include ``description``.
+    """
+    events = [
+        {
+            "kind": "event",
+            "timestamp": "2026-04-20T15:41:25.000+00:00",
+            "metadata": {
+                "data": {
+                    "type": "soothe.cognition.agent_loop.step.started",
+                    "step_id": "S_1",
+                    "description": "Scan project directory",
+                }
+            },
+        },
+        {
+            "kind": "event",
+            "timestamp": "2026-04-20T15:41:30.000+00:00",
+            "metadata": {
+                "data": {
+                    "type": "soothe.cognition.agent_loop.step.completed",
+                    "step_id": "S_1",
+                    # NOTE: no `description` here, mirroring the production schema.
+                    "success": True,
+                    "duration_ms": 5000,
+                    "tool_call_count": 3,
+                    "summary": "Found 70k files",
+                }
+            },
+        },
+    ]
+    cards = _HistoryMixin._collect_cognition_card_replay(events)
+    step_cards = [c for c in cards if c.type == MessageType.STEP_PROGRESS]
+    assert len(step_cards) == 1
+    assert step_cards[0].step_progress_id == "S_1"
+    assert step_cards[0].step_progress_description == "Scan project directory"
+    assert step_cards[0].step_progress_phase == "success"
+    assert step_cards[0].step_duration_ms == 5000
+    assert step_cards[0].step_tool_call_count == 3
+    assert step_cards[0].step_summary == "Found 70k files"
+
+
+def test_collect_cognition_card_replay_drops_goal_tree_pin() -> None:
+    """Goal-tree pin (📍 goal · iter<=N) must not render on resume."""
+    events = [
+        {
+            "kind": "event",
+            "timestamp": "2026-04-20T15:41:20.000+00:00",
+            "metadata": {
+                "data": {
+                    "type": "soothe.cognition.agent_loop.started",
+                    "goal": "count all file types",
+                    "max_iterations": 99,
+                }
+            },
+        }
+    ]
+    cards = _HistoryMixin._collect_cognition_card_replay(events)
+    assert not any(c.type == MessageType.COGNITION_GOAL_TREE for c in cards)
+
+
+def test_convert_event_emits_completion_summary_card() -> None:
+    """agent_loop.completed must render a concise summary line on resume."""
+    event = {
+        "kind": "event",
+        "timestamp": "2026-04-20T15:43:00.000+00:00",
+        "metadata": {
+            "data": {
+                "type": "soothe.cognition.agent_loop.completed",
+                "status": "completed",
+                "goal_progress": "complete",
+                "total_steps": 3,
+                "goal": "count all file types",
+                "completion_summary": "Counted 70,609 files across 80 extensions.",
+                "evidence_summary": "",
+            }
+        },
+    }
+    msg = SootheApp._convert_event_to_message_data(event)
+    assert msg is not None
+    assert msg.type == MessageType.APP
+    assert "Goal completed" in msg.content
+    assert "3 steps" in msg.content
+    assert "70,609" in msg.content
+
+
+def test_collect_cognition_card_replay_keeps_started_when_completed_missing() -> None:
+    """If only step.started is persisted (loop crashed mid-step), keep the running card."""
+    events = [
+        {
+            "kind": "event",
+            "timestamp": "2026-04-20T15:41:25.000+00:00",
+            "metadata": {
+                "data": {
+                    "type": "soothe.cognition.agent_loop.step.started",
+                    "step_id": "S_orphan",
+                    "description": "Half-finished work",
+                }
+            },
+        },
+    ]
+    cards = _HistoryMixin._collect_cognition_card_replay(events)
+    assert len(cards) == 1
+    assert cards[0].step_progress_id == "S_orphan"
+    assert cards[0].step_progress_phase == "running"
+
+
+def test_convert_loop_events_dedupes_step_progress_pair() -> None:
+    """Fallback path also merges step.started + step.completed into one card."""
+    app = object.__new__(SootheApp)
+    events = [
+        {
+            "kind": "event",
+            "timestamp": "2026-04-20T15:41:25.000+00:00",
+            "metadata": {
+                "data": {
+                    "type": "soothe.cognition.agent_loop.step.started",
+                    "step_id": "S_2",
+                    "description": "Aggregate counts",
+                }
+            },
+        },
+        {
+            "kind": "event",
+            "timestamp": "2026-04-20T15:41:32.000+00:00",
+            "metadata": {
+                "data": {
+                    "type": "soothe.cognition.agent_loop.step.completed",
+                    "step_id": "S_2",
+                    "description": "Aggregate counts",
+                    "success": True,
+                    "duration_ms": 7000,
+                    "tool_call_count": 1,
+                }
+            },
+        },
+    ]
+    data = app._convert_loop_events_to_data(events)
+    step_cards = [c for c in data if c.type == MessageType.STEP_PROGRESS]
+    assert len(step_cards) == 1
+    assert step_cards[0].step_progress_phase == "success"
+    assert step_cards[0].step_duration_ms == 7000
+
+
+def test_convert_loop_events_renders_interleaved_conversation_rows() -> None:
+    """Fallback rendering should include user/assistant bubbles next to tool cards."""
+    app = object.__new__(SootheApp)
+    events = [
+        {
+            "kind": "conversation",
+            "role": "user",
+            "content": "find the bug",
+            "timestamp": "2026-04-20T15:41:25.000+00:00",
+        },
+        {
+            "kind": "tool_call",
+            "timestamp": "2026-04-20T15:41:26.000+00:00",
+            "metadata": {"tool_name": "grep", "args_preview": "{'pattern': 'TODO'}"},
+        },
+        {
+            "kind": "tool_result",
+            "timestamp": "2026-04-20T15:41:27.000+00:00",
+            "content": "no matches",
+            "metadata": {"tool_name": "grep"},
+        },
+        {
+            "kind": "conversation",
+            "role": "assistant",
+            "content": "All clean.",
+            "timestamp": "2026-04-20T15:41:28.000+00:00",
+        },
+    ]
+
+    data = app._convert_loop_events_to_data(events)
+
+    assert [m.type for m in data] == [
+        MessageType.USER,
+        MessageType.TOOL,
+        MessageType.ASSISTANT,
+    ]
+    assert data[0].content == "find the bug"
+    assert data[1].tool_status == ToolStatus.SUCCESS
+    assert data[2].content == "All clean."
 
 
 @pytest.mark.asyncio

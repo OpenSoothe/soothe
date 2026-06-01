@@ -78,7 +78,7 @@ class TestRunCommandShellToolInitialization:
 
         assert tool.name == "run_command"
         assert tool.timeout == 60
-        assert tool.max_output_length == 10000
+        assert tool.max_output_length == 100_000
         assert tool.workspace_root == ""
         assert isinstance(tool, ShellTool)
 

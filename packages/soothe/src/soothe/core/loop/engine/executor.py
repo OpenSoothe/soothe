@@ -27,12 +27,17 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.types import Command, Interrupt
+from soothe_sdk.utils import get_outcome_type
 from soothe_sdk.ux.task_namespace import (
     _shorten_tool_call_id,
     normalize_unified_tool_call_id,
     parse_unified_tool_call_id,
 )
 
+from soothe.config.constants import (
+    DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_TOOL_OUTPUT_CHARS,
+)
 from soothe.core.context.model_override import (
     attach_stream_model_override,
     reset_stream_model_override,
@@ -2162,7 +2167,11 @@ class Executor:
                     if text_out:
                         # Truncate large tool outputs in aggregated stream text; full payloads
                         # remain in CoreAgent graph state (and LangGraph eviction when enabled).
-                        max_tool_output_chars = 10_000
+                        max_tool_output_chars = (
+                            DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+                            if get_outcome_type(tool_name) == "code_exec"
+                            else DEFAULT_TOOL_OUTPUT_CHARS
+                        )
                         if len(text_out) > max_tool_output_chars:
                             truncated = preview(
                                 text_out,

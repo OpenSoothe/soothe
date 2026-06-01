@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from soothe.config.constants import DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+
 
 class UIConfig(BaseModel):
     """Configuration for UI preferences.
@@ -1540,8 +1542,12 @@ class CodeInterpreterConfig(BaseModel):
     max_ptc_calls: int = 50
     """Maximum programmatic tool calls per eval."""
 
-    max_result_size: int = 10000
-    """Maximum result size in characters."""
+    max_result_size: int = Field(
+        default=DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+        ge=1000,
+        le=1_000_000,
+    )
+    """Maximum result size in characters (code_exec / interpreter)."""
 
     console_capture: bool = True
     """Capture console.log output from interpreter."""

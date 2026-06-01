@@ -160,3 +160,30 @@ async def test_continuation_bootstrap_still_sets_plan_result() -> None:
     assert result.get("assess_route") == "skip_generate"
     assert ctx.scratch.plan_assessment is None
     assert ctx.scratch.plan_result is not None
+
+
+@pytest.mark.asyncio
+async def test_continuation_bootstrap_emits_single_combined_reason_card() -> None:
+    """Bootstrap surfaces reasoning only on the plan event (no duplicate assess card)."""
+    emitted: list[tuple[str, dict[str, object]]] = []
+    ctx = _make_ctx(goal="translate the result to chinese")
+    continuation = ContinuationAssessment(
+        action="bootstrap",
+        reasoning="Pure translation; no new tools needed.",
+        goal_progress="low",
+    )
+    ctx.agent_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
+
+    async def emit(event_type: str, event_data: object) -> None:
+        if isinstance(event_data, dict):
+            emitted.append((event_type, event_data))
+
+    ctx.emit = emit  # type: ignore[method-assign]
+
+    await node_plan_assess(ctx, {})
+
+    assert [t for t, _ in emitted if t == "assess"] == []
+    plan_events = [d for t, d in emitted if t == "plan"]
+    assert len(plan_events) == 1
+    assert plan_events[0]["assessment_reasoning"] == "Pure translation; no new tools needed."
+    assert plan_events[0]["plan_reasoning"]
