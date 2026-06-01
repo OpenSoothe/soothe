@@ -528,29 +528,43 @@ class SootheDaemon(DaemonHandlersMixin):
     def _is_port_live(host: str, port: int) -> bool:
         """Check if a WebSocket server is accepting connections.
 
-        Uses a simple TCP connection check without sending WebSocket upgrade.
-        This avoids corrupting the WebSocket server state.
+        Uses lsof to check if the port is bound by a listening process.
+        This avoids sending incomplete HTTP requests that corrupt WebSocket server state.
 
         Args:
-            host: Host address to check.
+            host: Host address to check (unused, for API consistency).
             port: TCP port number.
 
         Returns:
-            True if server is accepting TCP connections, False otherwise.
+            True if port is bound by a listening process, False otherwise.
         """
-        import socket as sock_mod
+        # Use lsof to check if port is bound (avoids WebSocket handshake corruption)
+        import subprocess
 
         try:
-            s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
-            s.settimeout(1.0)
-            s.connect((host, port))
-            # Just close immediately - we only need to verify the port is open
-            # Sending a WebSocket upgrade request without proper close corrupts server state
-            s.close()
-        except (ConnectionRefusedError, OSError, TimeoutError):
-            return False
-        else:
-            return True
+            result = subprocess.run(
+                ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
+                capture_output=True,
+                text=True,
+                timeout=1.0,
+                check=False,
+            )
+            # If lsof finds a process, port is bound
+            return result.returncode == 0 and result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            # Fallback: simple socket connect test (can cause handshake errors but works)
+            import socket as sock_mod
+
+            try:
+                s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect((host, port))
+                # Close gracefully to minimize WebSocket server impact
+                s.shutdown(sock_mod.SHUT_RDWR)
+                s.close()
+                return True
+            except (ConnectionRefusedError, OSError, TimeoutError):
+                return False
 
     def request_stop(self) -> None:
         """Thread-safe method to request daemon shutdown from any thread."""
