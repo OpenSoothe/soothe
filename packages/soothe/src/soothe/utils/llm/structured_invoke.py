@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import jsonschema
 from langchain_core.language_models import BaseChatModel
@@ -21,6 +22,30 @@ _STRUCTURED_METHODS: tuple[str | None, ...] = (
     "json_schema",
     "json_mode",
 )
+
+# Per-chat-model cache of the structured-output method that last produced a result.
+# Lets thinking-mode providers skip the function_calling round-trip on every call.
+# WeakKeyDictionary so cached entries don't pin chat models the caller has discarded.
+_MISSING: Any = object()
+_METHOD_CACHE: WeakKeyDictionary[BaseChatModel, str | None] = WeakKeyDictionary()
+
+
+def _ordered_structured_methods(chat: BaseChatModel) -> tuple[str | None, ...]:
+    """Return ``_STRUCTURED_METHODS`` with the cached working method moved to the front."""
+    cached = _METHOD_CACHE.get(chat, _MISSING)
+    if cached is _MISSING or cached == _STRUCTURED_METHODS[0]:
+        return _STRUCTURED_METHODS
+    if cached not in _STRUCTURED_METHODS:
+        return _STRUCTURED_METHODS
+    return (cached, *(m for m in _STRUCTURED_METHODS if m != cached))
+
+
+def _remember_structured_method(chat: BaseChatModel, method: str | None) -> None:
+    """Record the method that just produced a result; tolerate non-weakrefable objects."""
+    try:
+        _METHOD_CACHE[chat] = method
+    except TypeError:
+        pass
 
 
 class StructuredOutputError(Exception):
@@ -135,8 +160,11 @@ async def invoke_structured_chat(
     schema_with_title = _schema_with_title(schema, name)
     invoke_cfg = config or {}
 
+    methods = _ordered_structured_methods(chat)
+    last_method = methods[-1]
+
     last_exc: Exception | None = None
-    for method in _STRUCTURED_METHODS:
+    for method in methods:
         try:
             structured = _try_create_structured_runnable(
                 chat,
@@ -158,16 +186,16 @@ async def invoke_structured_chat(
             raise
         except Exception as exc:
             last_exc = exc
-            if method != _STRUCTURED_METHODS[-1] and _is_retriable_structured_invoke_error(exc):
+            if method != last_method and _is_retriable_structured_invoke_error(exc):
                 logger.debug(
-                    "structured invoke retrying after method=%s failure",
+                    "structured invoke: method=%s rejected by provider, falling back",
                     method,
-                    exc_info=True,
                 )
                 continue
             msg = f"structured model invoke failed: {exc}"
             raise StructuredOutputError(msg) from exc
 
+        _remember_structured_method(chat, method)
         data = normalize_structured_result(result)
         if strict:
             post_validate_structured_dict(data, schema)
