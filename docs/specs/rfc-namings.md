@@ -99,6 +99,18 @@ This document defines the terminology and naming conventions used in this projec
 | Tool Result Cache | File system cache for large tool results (>50KB) at `~/.soothe/runs/{thread_id}/tool_results/{tool_call_id}.json`. Optional, cleaned up after thread completion. | RFC-211 |
 | Minimal Data Contract | Design principle where Layer 2 receives only outcome metadata from Layer 1, not full tool result content. Layer 1 owns final report generation. | RFC-211 |
 
+### Prior-Progress Digest Terms (RFC-227)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| `PriorProgressDigest` | Compact, typed snapshot of the most recent execute wave (`iteration`, `wave_index`, `steps_completed`, `steps_failed`, `tool_calls`, `evidence_excerpts`, `derived_progress_hint`). Produced once per wave by the executor, stashed on `LoopState.prior_progress`, consumed by `plan_assess` and `plan_generate` as grounding. Overwrite-only (K=1). | RFC-227 |
+| `ToolCallHead` | One tool invocation captured from the most recent wave: `{name, head}` where `head` is the first non-empty line of the tool message content, stripped and truncated at 120 chars. | RFC-227 |
+| `<PRIOR_PROGRESS>` | XML block appended to the plan-context envelope when `state.prior_progress` is present and not stale; renders `iter/wave/done/failed/hint`, up to 8 `tools` lines, and up to 3 `evidence` lines. Hard-capped at 600 chars. | RFC-227 |
+| `derived_progress_hint` | Deterministic `"none"\|"low"\|"medium"\|"high"` label computed by `_update_prior_progress` from wave success/failure counts and evidence-text heuristics (digits, table glyphs, completion keywords). Shown verbatim inside `<PRIOR_PROGRESS>`; never overrides `StatusAssessment.goal_progress` in code. | RFC-227 |
+| `_update_prior_progress()` | Executor helper invoked from `_append_parallel_wave_ledger`. Reads the just-finished wave's `steps`, `gather_results`, and `step_messages`; writes `state.prior_progress`. Pure-function over wave outputs; no I/O. | RFC-227 |
+| Digest staleness | The envelope omits `<PRIOR_PROGRESS>` when `prior_progress.iteration < state.iteration - 1`. Prevents showing a snapshot from a long-past iteration as if it described the current state. | RFC-227 |
+| Assessment-reasoning contract | The `plan_assess_instructions.xml` paragraph requiring `StatusAssessment.assessment_reasoning` to (a) summarize `<PRIOR_PROGRESS>` evidence when present and (b) never restate the user query. Closes the RFC-227 prompt gap. | RFC-227 |
+
 ### Continuation Discriminator Terms (RFC-226)
 
 | Term | Definition | Introduced In |

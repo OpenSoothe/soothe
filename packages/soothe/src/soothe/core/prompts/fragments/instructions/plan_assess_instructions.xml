@@ -1,7 +1,7 @@
 <PLAN_ASSESS>
-Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal in the <USER_QUERY> block in the following user message (after the ledger when present).
+Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any), the optional <PRIOR_PROGRESS> block in the following user message, and the goal in the <USER_QUERY> block (after the ledger when present).
 
-Output MUST match the structured schema only: status, goal_progress, require_goal_completion.
+Output MUST match the structured schema only: status, goal_progress, assessment_reasoning, require_goal_completion.
 
 **status**
 - "done": The ledger already contains concrete evidence that the stated goal is satisfied (e.g. requested file lines, command output, or subagent result matching the ask). Prefer "done" when the user’s literal request is visibly fulfilled in tool/subagent content.
@@ -20,7 +20,13 @@ Use "low" when little or nothing toward the goal has been produced.
 
 **require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 
+**assessment_reasoning** (≤2 sentences, ≤500 chars)
+- Sentence 1: summarize what `<PRIOR_PROGRESS>` (when present) shows about progress toward the goal — cite a tool that ran, an evidence excerpt, or both. Do NOT restate the user's request; that is what `<USER_QUERY>` is for.
+- Sentence 2: justify your `status` choice given that evidence.
+- If `<PRIOR_PROGRESS>` is absent (first assess of the goal), say so plainly and base reasoning on `<USER_QUERY>` only.
+
 **Guards**
 - When <USER_QUERY> shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
 - Never set status="done" without ledger evidence that matches the goal.
+- Do NOT restate the user's request in `assessment_reasoning`. Cite ledger or `<PRIOR_PROGRESS>` evidence instead.
 </PLAN_ASSESS>

@@ -377,11 +377,14 @@ class PromptBuilder:
                     "</PLAN_STEP_ID_HINT>"
                 )
 
-        # Build envelope with timestamp (RFC-214)
+        # Build envelope with timestamp (RFC-214). prior_progress threads
+        # through for both phases; envelope omits the block when absent or stale.
         return build_plan_context_envelope(
             goal=goal,
             dag_context=dag_context,
             step_id_hint=step_id_hint,
             goal_user_submission=state.goal_user_submission,
             skill_context=state.skill_context,
+            prior_progress=getattr(state, "prior_progress", None),
+            current_iteration=state.iteration,
         )
