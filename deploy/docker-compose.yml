@@ -1,8 +1,8 @@
 # Soothe runtime stack (production-ready)
 # Multi-database PostgreSQL + pgvector for checkpoints, metadata, vectors, memory.
 #
-# Usage:
-#   docker compose up -d
+# Usage (production deployment):
+#   docker compose -f deploy/docker-compose.yml up -d
 #
 # Override secrets via environment or a .env file next to this compose file:
 #   POSTGRES_PASSWORD=...   # required in production
