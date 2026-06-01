@@ -6,10 +6,6 @@
   #
 
   [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
-  [![soothe](https://img.shields.io/pypi/v/soothe?label=soothe)](https://pypi.org/project/soothe/)
-  [![soothe-daemon](https://img.shields.io/pypi/v/soothe-daemon?label=soothe-daemon)](https://pypi.org/project/soothe-daemon/)
-  [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=soothe-cli)](https://pypi.org/project/soothe-cli/)
-  [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=soothe-sdk)](https://pypi.org/project/soothe-sdk/)
   [![License](https://img.shields.io/github/license/mirasoth/soothe)](https://github.com/mirasoth/soothe/blob/main/LICENSE)
   [![GitHub Stars](https://img.shields.io/github/stars/mirasoth/soothe)](https://github.com/mirasoth/soothe)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mirasoth/soothe)
@@ -77,13 +73,13 @@ Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the 
 
 For everyday use you install three PyPI packages: **core** (`soothe`), **CLI** (`soothe-cli`), and **daemon** (`soothe-daemon`). `soothe-sdk` is pulled in automatically; you only need it directly when building plugins or custom clients.
 
-| Package | Install when | Provides |
-|---------|--------------|----------|
-| `soothe` | Always | Agent runtime, protocols, backends, tools |
-| `soothe-cli` | Daily TUI / prompts | `soothe` command |
-| `soothe-daemon` | Background / 24×7 runs | `soothed` command (WebSocket, HTTP REST) |
-| `soothe-sdk` | Plugins & custom clients | Shared protocol types and decorators |
-| `soothe-community` | Optional extras | Community plugins ([separate repo](https://github.com/mirasoth/soothe-community)) |
+| Package | Version | Provides |
+|---------|---------|----------|
+| `soothe` | [![soothe](https://img.shields.io/pypi/v/soothe?label=%20)](https://pypi.org/project/soothe/) | Agent runtime, protocols, backends, tools |
+| `soothe-cli` | [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=%20)](https://pypi.org/project/soothe-cli/) | `soothe` command |
+| `soothe-daemon` | [![soothe-daemon](https://img.shields.io/pypi/v/soothe-daemon?label=%20)](https://pypi.org/project/soothe-daemon/) | `soothed` command (WebSocket, HTTP REST) |
+| `soothe-sdk` | [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=%20)](https://pypi.org/project/soothe-sdk/) | Shared protocol types and decorators |
+| `soothe-community` | [![soothe-community](https://img.shields.io/pypi/v/soothe-community?label=%20)](https://pypi.org/project/soothe-community/) | Community plugins ([separate repo](https://github.com/mirasoth/soothe-community)) |
 
 **Recommended — full daily stack** (core + all optional capability groups + CLI + daemon):
 
