@@ -157,7 +157,10 @@ class SecureFilesystemWrapper:
                 decision=decision,
             )
 
-        # Return sanitized path
+        # Unified filesystem backends resolve logical paths internally.
+        if hasattr(self._backend, "resolve_os_path"):
+            return path
+
         return self._enforcer.validator.sanitize(path)
 
     def __getattr__(self, name: str) -> Any:

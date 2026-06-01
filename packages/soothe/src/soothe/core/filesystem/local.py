@@ -389,7 +389,14 @@ class LocalFilesystem(UnifiedFilesystem):
         with open(resolved, encoding="utf-8") as f:
             lines = f.readlines()
 
-        if start_line < 1 or end_line > len(lines) or start_line > end_line:
+        insert_mode = end_line == start_line - 1
+        if insert_mode:
+            if start_line < 1 or start_line > len(lines) + 1:
+                raise FilesystemError(
+                    f"Invalid line number: {start_line} (file has {len(lines)} lines)",
+                    path=path,
+                )
+        elif start_line < 1 or end_line > len(lines) or start_line > end_line:
             raise FilesystemError(
                 f"Invalid line range: {start_line}-{end_line} (file has {len(lines)} lines)",
                 path=path,
@@ -403,19 +410,20 @@ class LocalFilesystem(UnifiedFilesystem):
         if backup:
             backup_path = self._create_backup(resolved)
 
-        # Replace lines
         new_lines = new_content.split("\n")
-        if new_lines[-1] == "":
+        if new_lines and new_lines[-1] == "":
             new_lines = new_lines[:-1]
 
-        result_lines = (
-            lines[: start_line - 1] + [line + "\n" for line in new_lines] + lines[end_line:]
-        )
+        formatted_new_lines = [line + "\n" for line in new_lines]
+        if insert_mode:
+            result_lines = lines[: start_line - 1] + formatted_new_lines + lines[start_line - 1 :]
+            lines_changed = len(formatted_new_lines)
+        else:
+            result_lines = lines[: start_line - 1] + formatted_new_lines + lines[end_line:]
+            lines_changed = end_line - start_line + 1
 
         new_full_content = "".join(result_lines)
         new_hash = self._compute_hash(new_full_content)
-
-        lines_changed = end_line - start_line + 1
 
         with open(resolved, "w", encoding="utf-8") as f:
             f.writelines(result_lines)
@@ -449,7 +457,6 @@ class LocalFilesystem(UnifiedFilesystem):
         backup: bool = True,
     ) -> EditResult:
         """Insert content at specific line number."""
-        # Insert is equivalent to replacing empty range
         return self.edit_lines(path, line, line - 1, content, backup=backup)
 
     async def ainsert_lines(

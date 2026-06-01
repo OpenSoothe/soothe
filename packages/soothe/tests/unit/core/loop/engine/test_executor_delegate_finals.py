@@ -32,7 +32,7 @@ async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_final
 
     executor = Executor(mock_agent)
     rows = [r async for r in executor._stream_and_collect(fake_stream(), budget=None)]
-    _evt, _ev, tc_total, _msgs, delegate_final, _outcomes = rows[-1]
+    _evt, _ev, tc_total, _msgs, delegate_final, _outcomes, _has_error = rows[-1]
     assert delegate_final.strip() == "Namespaced explore answer."
     assert tc_total == 1  # namespaced ``task`` ToolMessage counts toward wave tool total
 
@@ -61,7 +61,7 @@ async def test_stream_and_collect_joins_task_tool_returns_as_delegate_finals() -
     async for row in executor._stream_and_collect(fake_stream(), budget=None):
         results.append(row)
     assert len(results) == 2  # tuple passthrough + final aggregate
-    final_out, event, tc_count, msgs, delegate_final, _outcomes = results[-1]
+    final_out, event, tc_count, msgs, delegate_final, _outcomes, _has_error = results[-1]
     assert event is None
     assert tc_count == 1
     assert delegate_final == "Counted 3 README files."
@@ -217,7 +217,7 @@ async def test_stream_and_collect_rewrites_tool_call_id_to_unified() -> None:
 
     executor = Executor(mock_agent)
     rewritten_msg: AIMessageChunk | None = None
-    async for _out, event, _tc, _msgs, _df, _outcomes in executor._stream_and_collect(
+    async for _out, event, _tc, _msgs, _df, _outcomes, _has_error in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="GHT-01",
@@ -496,7 +496,7 @@ async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> 
     ):
         rows.append(row)
     assert len(rows) >= 2
-    _out, event, _tc, _msgs, _df, _outcomes = rows[0]
+    _out, event, _tc, _msgs, _df, _outcomes, _has_error = rows[0]
     assert isinstance(event, tuple) and len(event) == 3
     _ns, mode, data = event
     assert mode == "messages"
@@ -576,7 +576,7 @@ async def test_stream_and_collect_emits_late_tool_call_update_on_tool_message() 
 
     executor = Executor(MagicMock())
     custom_payloads: list[dict] = []
-    async for _out, event, _tc, _msgs, _df, _outcomes in executor._stream_and_collect(
+    async for _out, event, _tc, _msgs, _df, _outcomes, _has_error in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="YJH-01",

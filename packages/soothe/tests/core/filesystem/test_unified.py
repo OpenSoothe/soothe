@@ -180,7 +180,7 @@ class TestUnifiedFilesystem:
         assert "New Line 2" in content
         assert "New Line 3" in content
         assert "Line 4" in content
-        assert "Line 2\n" not in content
+        assert content.splitlines() == ["Line 1", "New Line 2", "New Line 3", "Line 4"]
 
     def test_insert_lines(self, temp_workspace: LocalFilesystem) -> None:
         """Test inserting lines."""

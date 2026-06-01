@@ -24,6 +24,7 @@ def generate_outcome_metadata(
     tool_call_id: str,
     *,
     registry_config: Any | None = None,
+    tool_status: str | None = None,
 ) -> dict[str, Any]:
     """Generate structured outcome metadata from tool result.
 
@@ -32,6 +33,7 @@ def generate_outcome_metadata(
         result: Tool execution result (string, dict, or list)
         tool_call_id: Unique identifier for this tool invocation
         registry_config: Optional tool result registry settings (IG-433).
+        tool_status: Optional LangChain ToolMessage status (e.g. ``"error"``).
 
     Returns:
         Structured metadata dict for Layer 2 reasoning with fields:
@@ -75,9 +77,15 @@ def generate_outcome_metadata(
     else:  # generic
         outcome.update(_extract_generic_metadata(result))
 
-    # Calculate size
+    # Detect tool failures for planner/executor (status flag or Error: prefix).
     content_str = result if isinstance(result, str) else str(result)
     outcome["size_bytes"] = len(content_str.encode("utf-8"))
+    if tool_status == "error":
+        outcome["has_error"] = True
+        outcome["error_preview"] = content_str[:100] if content_str else "tool error"
+    elif content_str.startswith("Error:"):
+        outcome["has_error"] = True
+        outcome["error_preview"] = content_str[:100]
 
     return outcome
 

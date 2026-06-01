@@ -218,10 +218,15 @@ class NormalizedPathBackend:
                 relative = abs_str.lstrip("/")
                 return relative or "."
             if self._virtual_mode:
-                return "/" + rel.as_posix()
+                return rel.as_posix()
             return abs_str
 
         return path.strip()
+
+    def resolve_os_path(self, path: str) -> Path:
+        """Resolve a logical path to an absolute on-disk path under the workspace."""
+        normalized = self._normalize_path(path)
+        return self._fs.resolve_path(normalized)
 
     def read(self, path: str, offset: int = 0, limit: int | None = None) -> str:
         """Read file contents."""

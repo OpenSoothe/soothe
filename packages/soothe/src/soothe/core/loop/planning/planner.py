@@ -48,6 +48,10 @@ from soothe.utils.token_counting import estimate_content_chars
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
+# IG-454: Stuck detection thresholds
+_STUCK_ACTION_REPEAT_THRESHOLD = 3  # Same action repeated N times = stuck
+_STUCK_ERROR_STEP_THRESHOLD = 3  # N consecutive error steps = stuck
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,6 +72,38 @@ _SIMPLE_PLANNER_HINT_MAP = {
     "web": "tool",
     "api": "tool",
 }
+
+
+def _detect_stuck_loop(state: LoopState) -> str | None:
+    """IG-454: Detect if the loop is stuck and should be terminated or replanned.
+
+    Checks for:
+    1. Repeated identical actions (same next_action N times consecutively)
+    2. Consecutive failed step results (N errors without success)
+
+    Args:
+        state: Current loop state with action_history and step_results.
+
+    Returns:
+        Reason string if stuck, None if not stuck.
+    """
+    # Check for repeated identical actions
+    if len(state.action_history) >= _STUCK_ACTION_REPEAT_THRESHOLD:
+        recent_actions = state.get_recent_actions(_STUCK_ACTION_REPEAT_THRESHOLD)
+        if len(recent_actions) == _STUCK_ACTION_REPEAT_THRESHOLD:
+            # All recent actions are identical
+            first_action = recent_actions[0]
+            if all(action == first_action for action in recent_actions):
+                return f"Repeated identical action {first_action[:50]} {_STUCK_ACTION_REPEAT_THRESHOLD} times"
+
+    # Check for consecutive failed steps
+    if len(state.step_results) >= _STUCK_ERROR_STEP_THRESHOLD:
+        recent_results = state.step_results[-_STUCK_ERROR_STEP_THRESHOLD:]
+        if all(not r.success for r in recent_results):
+            previews = [(r.error or "unknown")[:50] for r in recent_results[:2]]
+            return f"Consecutive step failures: {', '.join(previews)}"
+
+    return None
 
 
 class LLMPlanner:
@@ -1038,6 +1074,14 @@ class LLMPlanner:
                 len(str(human_msg.content)),
                 len(str(ai_msg.content)),
             )
+
+        # IG-454: Check for stuck loop patterns
+        stuck_reason = _detect_stuck_loop(state)
+        if stuck_reason:
+            logger.warning("[Plan] Stuck detected: %s, forcing replan", stuck_reason)
+            assessment.status = "replan"
+            assessment.goal_progress = "none"
+            assessment.assessment_reasoning = f"Loop stuck: {stuck_reason}"
 
         if assessment.status == "done":
             # Guard: always reject premature 'done' at iteration 0 with no execution
