@@ -752,6 +752,28 @@ class SkillMessage(Vertical):
             self.toggle_body()
 
 
+def _rich_style_with_textual_selection(
+    segment_style: Any,
+    selection_background: Any,
+) -> Any:
+    """Blend ``screen--selection`` over a Rich segment like Content visuals do.
+
+    Rich ``Style.__add__`` replaces ``bgcolor`` outright, which makes markdown
+    selections look like an opaque block over code blocks. Use the component
+    background Color (with alpha from ``$primary 50%``), not ``get_component_rich_style``,
+    which pre-multiplies alpha away.
+    """
+    from rich.style import Style as RichStyle
+    from textual.style import Style as TextualStyle
+
+    base = TextualStyle.from_rich_style(segment_style) if segment_style else TextualStyle.null()
+    if selection_background is None or getattr(selection_background, "a", 0) == 0:
+        return base.rich_style
+    selection = TextualStyle(selection_background, None)
+    merged: RichStyle = (base + selection).rich_style
+    return merged
+
+
 class _SelectableMarkdownBody(Static):
     """Static body that supports text selection over Rich renderables.
 
@@ -767,8 +789,9 @@ class _SelectableMarkdownBody(Static):
        the selection. We re-apply offsets with `Strip.apply_offsets(0, y)`.
     2. **Visual highlight.** `RichVisual.render_strips` ignores
        `options.selection` / `options.selection_style`, so even an active
-       selection is invisible on the card. We pull `self.text_selection` and
-       overlay the screen selection style on the spanned cells of the line.
+       selection is invisible on the card. For ``RichVisual`` we overlay
+       ``screen--selection`` with Textual alpha blending. Plain ``Content``
+       visuals already receive selection styling from ``Visual.to_strips``.
     3. **Copy extraction.** `Widget.get_selection` returns `None` for
        non-`Text`/`Content` visuals. We reconstruct visible text from the
        cached strips.
@@ -776,10 +799,14 @@ class _SelectableMarkdownBody(Static):
 
     def render_line(self, y: int) -> Strip:  # type: ignore[override]
         from rich.segment import Segment as _Segment
+        from textual.visual import RichVisual
 
         line = super().render_line(y).apply_offsets(0, y)
         selection = self.text_selection
         if selection is None:
+            return line
+        # Plain-string Content visuals already stylize selection in the cache.
+        if not isinstance(self.visual, RichVisual):
             return line
         span = selection.get_span(y)
         if span is None:
@@ -791,12 +818,16 @@ class _SelectableMarkdownBody(Static):
         end = max(start, min(end, line.cell_length))
         if start == end:
             return line
-        sel_style = self.screen.get_component_rich_style("screen--selection")
+        selection_bg = self.screen.get_component_styles("screen--selection").background
         left = line.crop(0, start)
         middle = line.crop(start, end)
         right = line.crop(end, line.cell_length)
         middle_segments = [
-            _Segment(text, (style + sel_style) if style else sel_style, control)
+            _Segment(
+                text,
+                _rich_style_with_textual_selection(style, selection_bg),
+                control,
+            )
             for text, style, control in middle
         ]
         return Strip(
@@ -847,11 +878,19 @@ class AssistantMessage(Vertical):
     # Default flush interval (can be overridden by config)
     DEFAULT_STREAM_FLUSH_INTERVAL: float = 0.2  # 200ms batching for streaming
 
-    def __init__(self, content: str = "", **kwargs: Any) -> None:
+    def __init__(
+        self,
+        content: str = "",
+        *,
+        render_markdown: bool | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize an assistant message.
 
         Args:
             content: Initial assistant text (rendered as Markdown if enabled).
+            render_markdown: When set, overrides CLI ``render_markdown`` config for
+                this card (e.g. simple-bypass ``plan_direct`` next-action lines).
             **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
@@ -870,12 +909,16 @@ class AssistantMessage(Vertical):
             from soothe_cli.config.loader import load_config
 
             config = load_config()
-            self._render_markdown = config.render_markdown
+            if render_markdown is not None:
+                self._render_markdown = render_markdown
+            else:
+                self._render_markdown = config.render_markdown
             if hasattr(config, "agent"):
                 streaming_cfg = config.agent.loop.output_streaming
                 self._stream_flush_interval = streaming_cfg.tui_flush_interval_ms / 1000.0
         except Exception:
-            pass  # Default to True if config unavailable
+            if render_markdown is not None:
+                self._render_markdown = render_markdown
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
         """Compose the assistant body as a single Static widget."""

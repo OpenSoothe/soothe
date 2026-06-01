@@ -914,9 +914,8 @@ class SootheConfig(BaseSettings):
 
                 # Only set OPENAI_* env vars for standard OpenAI endpoint
                 # Custom providers (DashScope, Coding-Plan, etc.) should use explicit config
-                is_standard_openai = (
-                    api_base_url is None or
-                    api_base_url.startswith("https://api.openai.com")
+                is_standard_openai = api_base_url is None or api_base_url.startswith(
+                    "https://api.openai.com"
                 )
 
                 if is_standard_openai:
