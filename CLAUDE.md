@@ -463,7 +463,7 @@ Implementation Guides (IGs) in `docs/impl/` track **substantial** implementation
 2. **No Duplicate Numbers**: Every IG must have unique number
 3. **Document Creation**: Create an IG before or during implementation when the change warrants tracked scope (not for every tiny fix)
 4. **Naming Format**: `IG-XXX-brief-title.md` (XXX = 3-digit number, brief-title = short description)
-5. **Reference Format**: Use `(IG-XXX)` in code comments, CHANGELOG.md, documentation
+5. **Reference Format**: Use `(IG-XXX)` in code comments, documentation
 6. **Archive Threshold**: Archive completed IG batches (e.g., IG-001-050.tar.gz) to maintain manageable file count
 
 **Current IG Range**: IG-001-276 (completed), IG-277-294 (renumbered duplicates), IG-295+ (available for new work)
@@ -471,7 +471,6 @@ Implementation Guides (IGs) in `docs/impl/` track **substantial** implementation
 **Example:**
 - Create: `docs/impl/IG-295-my-new-feature.md`
 - Reference in code: `# Implemented per IG-295`
-- Reference in CHANGELOG: `- Feature added (IG-295)`
 
 ---
 
