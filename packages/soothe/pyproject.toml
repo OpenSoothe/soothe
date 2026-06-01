@@ -23,10 +23,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "soothe-sdk>=0.5.12,<1.0.0",    # Subagent wire registry + community delegate types
-    "aiohttp>=3.9.0",
-    "aiosqlite>=0.22.1",
-    "anyio>=3.0.0",
+    "soothe-sdk>=0.5.25,<1.0.0",    # Subagent wire registry + community delegate types
+    "aiohttp>=3.9.0,<4.0.0",
+    "aiosqlite>=0.22.1,<1.0.0",
+    "anyio>=3.0.0,<5.0.0",
     "bubus>=1.5.6",
     "deepagents>=0.4.10,<1.0.0",
     "jinja2>=3.1.0",    # Prompt fragment template rendering
@@ -46,16 +46,16 @@ dependencies = [
     "langgraph-checkpoint>=4.0.0,<5.0.0",
     "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
     "sqlite-vec>=0.1.0",
-    "pexpect>=4.9.0",
+    "pexpect>=4.9.0,<5.0.0",
     "pydantic-settings>=2.0.0,<3.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "jsonschema>=4.0.0,<5.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
     "pathspec>=0.12.0,<2.0.0",
-    "requests>=2.32.3",
-    "psycopg[binary,pool]>=3.2.0",
-    "langgraph-checkpoint-postgres>=2.0.0",
+    "requests>=2.32.3,<3.0.0",
+    "psycopg[binary,pool]>=3.2.0,<4.0.0",
+    "langgraph-checkpoint-postgres>=2.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
