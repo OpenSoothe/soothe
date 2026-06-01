@@ -23,6 +23,8 @@ from textual.containers import Vertical
 from textual.content import Content
 from textual.events import Click
 from textual.reactive import var
+from textual.selection import Selection
+from textual.strip import Strip
 from textual.widgets import Static
 
 from soothe_cli.runtime.parse.message_processing import _normalize_tool_name_for_arg_map
@@ -750,6 +752,66 @@ class SkillMessage(Vertical):
             self.toggle_body()
 
 
+class _SelectableMarkdownBody(Static):
+    """Static body that supports text selection over Rich renderables.
+
+    `Static.update(RichMarkdown(...))` breaks selection in three independent
+    places, all rooted in `RichVisual.render_strips` rendering via plain
+    `console.render(...)` instead of going through `Content`/`Text`. We patch
+    each one in `render_line`:
+
+    1. **Selection capture.** `Compositor.get_widget_and_offset_at` walks
+       segments looking for an `offset` style meta. `Content.to_strip` adds it
+       via `rich_style_with_offset(x, y)`; `RichVisual` emits none, so click +
+       drag never resolves to a content offset and the screen silently drops
+       the selection. We re-apply offsets with `Strip.apply_offsets(0, y)`.
+    2. **Visual highlight.** `RichVisual.render_strips` ignores
+       `options.selection` / `options.selection_style`, so even an active
+       selection is invisible on the card. We pull `self.text_selection` and
+       overlay the screen selection style on the spanned cells of the line.
+    3. **Copy extraction.** `Widget.get_selection` returns `None` for
+       non-`Text`/`Content` visuals. We reconstruct visible text from the
+       cached strips.
+    """
+
+    def render_line(self, y: int) -> Strip:  # type: ignore[override]
+        from rich.segment import Segment as _Segment
+
+        line = super().render_line(y).apply_offsets(0, y)
+        selection = self.text_selection
+        if selection is None:
+            return line
+        span = selection.get_span(y)
+        if span is None:
+            return line
+        start, end = span
+        if end == -1:
+            end = line.cell_length
+        start = max(0, min(start, line.cell_length))
+        end = max(start, min(end, line.cell_length))
+        if start == end:
+            return line
+        sel_style = self.screen.get_component_rich_style("screen--selection")
+        left = line.crop(0, start)
+        middle = line.crop(start, end)
+        right = line.crop(end, line.cell_length)
+        middle_segments = [
+            _Segment(text, (style + sel_style) if style else sel_style, control)
+            for text, style, control in middle
+        ]
+        return Strip(
+            list(left) + middle_segments + list(right),
+            line.cell_length,
+        )
+
+    def get_selection(self, selection: Selection) -> tuple[str, str] | None:  # type: ignore[override]
+        lines = [strip.text for strip in self._render_cache.lines]
+        if lines:
+            text = "\n".join(lines)
+            return selection.extract(text), "\n"
+        return super().get_selection(selection)
+
+
 class AssistantMessage(Vertical):
     """Assistant reply card: markdown or plain text body (no title row).
 
@@ -768,6 +830,7 @@ class AssistantMessage(Vertical):
         padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
+        border-left: wide $cognition;
     }
 
     AssistantMessage .assistant-body {
@@ -777,7 +840,7 @@ class AssistantMessage(Vertical):
     }
 
     AssistantMessage:hover {
-        opacity: 0.95;
+        border-left: wide $cognition-hover;
     }
     """
 
@@ -816,7 +879,9 @@ class AssistantMessage(Vertical):
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
         """Compose the assistant body as a single Static widget."""
-        yield Static("", markup=False, classes="assistant-body", id="assistant-body")
+        yield _SelectableMarkdownBody(
+            "", markup=False, classes="assistant-body", id="assistant-body"
+        )
 
     def on_mount(self) -> None:
         """Wire child widget reference."""
