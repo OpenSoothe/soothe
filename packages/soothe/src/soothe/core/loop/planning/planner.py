@@ -1159,7 +1159,7 @@ class LLMPlanner:
                     reasoning="Simple-query bypass: skip plan-generate.",
                     steps=[
                         StepAction(
-                            description=direct_instruction,
+                            description=goal,
                             expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
                         )
                     ],
@@ -1367,7 +1367,7 @@ class LLMPlanner:
                                 reasoning="Simple-query bypass: skip plan-generate.",
                                 steps=[
                                     StepAction(
-                                        description=direct_instruction,
+                                        description=goal,
                                         expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
                                     )
                                 ],
