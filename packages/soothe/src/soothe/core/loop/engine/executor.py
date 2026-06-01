@@ -601,6 +601,124 @@ DELEGATE_FINAL_WAVE_CAP = 120_000
 LAST_TOOL_RESULT_HEAD_CHARS = 500
 
 
+def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
+    """Return a compact head string for a single AIMessage tool-call (RFC-227).
+
+    Picks the first non-empty argument value (in declaration order), stringifies
+    it on one line, strips, and caps at 120 chars. Returns ``""`` when no usable
+    arg exists. Used by ``_update_prior_progress`` to give ``<PRIOR_PROGRESS>``
+    a concrete handle on what the LLM asked the tool to do (e.g. the command
+    string for ``run_command``, the path for ``read_file``).
+    """
+    args = call.get("args") or {}
+    if not isinstance(args, dict):
+        return ""
+    for value in args.values():
+        if value is None:
+            continue
+        try:
+            text = str(value)
+        except Exception:  # noqa: BLE001
+            continue
+        first_line = text.strip().splitlines()[0] if text.strip() else ""
+        if first_line:
+            return first_line[:120]
+    return ""
+
+
+def _aggregate_tool_calls_from_step_messages(
+    messages: list[BaseMessage],
+) -> list[dict[str, Any]]:
+    """Aggregate tool calls across streamed AI message chunks (RFC-227).
+
+    The executor's stream collector appends raw ``AIMessageChunk`` deltas to
+    ``step_messages`` — each chunk's own ``tool_calls`` is partial: the first
+    chunk for a call carries ``name`` with empty ``args``, subsequent chunks
+    only carry JSON ``args`` deltas under ``tool_call_chunks``. Reading any
+    single chunk's ``.tool_calls`` therefore yields ``name="tool"`` placeholders
+    with empty ``args``.
+
+    This aggregator walks the full message list, groups deltas by tool-call id
+    (falling back to chunk ``index`` when id is missing), concatenates the
+    JSON args string, and resolves to a list of ``{name, args}`` dicts in
+    arrival order. Complete ``tool_calls`` on a fully-formed ``AIMessage``
+    (non-chunk) are honored verbatim and take precedence when present.
+    """
+    import json
+
+    by_key: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    # Continuation chunks often omit ``id``; we group them with the prior
+    # chunk that shares the same stream ``index`` (OpenAI streaming pattern).
+    tid_by_index: dict[int, str] = {}
+
+    for msg in messages:
+        # AIMessageChunk: aggregate streaming deltas. Skip Path 2 because
+        # AIMessageChunk.tool_calls is a derived view of this chunk's own
+        # tool_call_chunks (partial info) that would shadow the aggregated state.
+        if isinstance(msg, AIMessageChunk):
+            for tcc in getattr(msg, "tool_call_chunks", None) or ():
+                if not isinstance(tcc, dict):
+                    continue
+                tid_raw = tcc.get("id")
+                idx_raw = tcc.get("index")
+                tid: str
+                if tid_raw:
+                    tid = str(tid_raw).strip()
+                elif idx_raw is not None and idx_raw in tid_by_index:
+                    tid = tid_by_index[idx_raw]
+                else:
+                    tid = f"_idx_{idx_raw}" if idx_raw is not None else f"_pos_{len(order)}"
+                if idx_raw is not None and idx_raw not in tid_by_index:
+                    tid_by_index[idx_raw] = tid
+                if tid not in by_key:
+                    order.append(tid)
+                    by_key[tid] = {"name": "", "args_str": "", "args": None}
+                entry = by_key[tid]
+                if tcc.get("name") and not entry["name"]:
+                    entry["name"] = str(tcc["name"])
+                args_chunk = tcc.get("args")
+                if isinstance(args_chunk, str) and args_chunk:
+                    entry["args_str"] += args_chunk
+            continue
+
+        if not isinstance(msg, AIMessage):
+            continue
+
+        # Plain (non-chunk) AIMessage: fully-formed tool_calls take precedence.
+        for tc in getattr(msg, "tool_calls", None) or ():
+            if not isinstance(tc, dict):
+                continue
+            tid_raw = tc.get("id")
+            tid = str(tid_raw).strip() if tid_raw else f"_full_{len(order)}"
+            if tid not in by_key:
+                order.append(tid)
+                by_key[tid] = {"name": "", "args_str": "", "args": None}
+            entry = by_key[tid]
+            if tc.get("name"):
+                entry["name"] = str(tc["name"])
+            args_val = tc.get("args")
+            if isinstance(args_val, dict) and args_val:
+                entry["args"] = args_val
+
+    out: list[dict[str, Any]] = []
+    for tid in order:
+        entry = by_key[tid]
+        args = entry["args"]
+        if not args:
+            raw = entry["args_str"]
+            if raw:
+                try:
+                    parsed = json.loads(raw)
+                    args = parsed if isinstance(parsed, dict) else {}
+                except ValueError:
+                    args = {}
+            else:
+                args = {}
+        out.append({"name": entry["name"], "args": args})
+    return out
+
+
 def _last_tool_result_block(messages: list[BaseMessage]) -> str:
     """Return a ``<LAST_TOOL_RESULT>`` evidence block, or ``""`` when none.
 
@@ -1492,9 +1610,22 @@ class Executor:
         ``state.prior_progress`` so the digest reflects the most recent wave.
         Wave index increments within the same iteration; resets to 0 on a new
         iteration. See RFC-227 §5.3 for the derivation rules.
-        """
-        from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
 
+        Sourcing notes (production-accurate):
+        - Tool names come from ``AIMessage.tool_calls`` on assistant turns in
+          ``step_messages``. The executor's stream collector does not append
+          ``ToolMessage`` instances to that list (it routes them into
+          ``outcomes``/``budget`` accounting), so a ``ToolMessage`` walk would
+          miss every call.
+        - The tool ``head`` carries the first textual arg of the LLM tool call
+          (e.g. ``run_command(command="find . -name '*.py' | wc -l")``). It
+          gives the plan-assess prompt a concrete handle on what was run
+          without depending on tool-result text being in ``step_messages``.
+        - Evidence excerpts reuse ``_ledger_execute_ai_content``: the same
+          body the executor wrote into the ledger AI message, which already
+          handles the empty-final-AI/chunked-text case and appends the
+          ``<LAST_TOOL_RESULT>`` block when present.
+        """
         steps_completed = 0
         steps_failed = 0
         tool_calls: list[ToolCallHead] = []
@@ -1512,23 +1643,26 @@ class Executor:
             else:
                 steps_failed += 1
 
-            # Tool call heads: each ToolMessage in arrival order.
-            for msg in step_messages:
+            # Tool call heads: aggregate per-call across streamed chunks
+            # (per-chunk `tool_calls` is partial; real name/args live across
+            # `tool_call_chunks` deltas).
+            for call in _aggregate_tool_calls_from_step_messages(step_messages):
                 if len(tool_calls) >= 8:
                     break
-                if isinstance(msg, ToolMessage):
-                    name = (getattr(msg, "name", "") or "tool").strip()[:64]
-                    body = extract_text_from_message_content(getattr(msg, "content", "")).strip()
-                    head = body.splitlines()[0].strip() if body else ""
-                    tool_calls.append(ToolCallHead(name=name, head=head[:120]))
+                name = (call.get("name") or "tool").strip()[:64]
+                head = _first_arg_head_for_tool_call(call)
+                tool_calls.append(ToolCallHead(name=name, head=head[:120]))
 
-            # Evidence excerpt: prefer final AI text; fall back to delegate_final.
+            # Evidence excerpt: reuse the ledger body extractor so we pick up
+            # chunked-assistant-text and the <LAST_TOOL_RESULT> block.
             ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
             final_ai = ai_messages[-1] if ai_messages else None
             excerpt_src = ""
             if final_ai is not None:
-                excerpt_src = extract_text_from_message_content(
-                    getattr(final_ai, "content", "")
+                excerpt_src = self._ledger_execute_ai_content(
+                    messages=step_messages,
+                    final_ai_msg=final_ai,
+                    total_steps=1,
                 ).strip()
             if not excerpt_src and delegate_final:
                 excerpt_src = (delegate_final or "").strip()
