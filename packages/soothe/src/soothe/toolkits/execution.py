@@ -16,6 +16,7 @@ import os
 import re
 import signal
 import subprocess
+from pathlib import Path
 from typing import Annotated, Any
 
 from langchain_community.tools import ShellTool
@@ -45,6 +46,16 @@ logger = logging.getLogger(__name__)
 
 _ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
+# Match a leading-'/' path token bounded by shell separators. Excludes matches
+# that are followed by a quote (likely inside a string literal) and matches
+# that are preceded by anything other than the start of the command or a shell
+# separator (which would indicate it is part of a larger token like a URL).
+_VIRTUAL_PATH_TOKEN_RE = re.compile(
+    r"(?:(?<=^)|(?<=[\s;&|<>()=]))"
+    r"/(?:[A-Za-z0-9_.\-][A-Za-z0-9_./\-]*)?"
+    r"(?=$|[\s;&|<>():])"
+)
+
 
 def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | None:
     """Resolve effective workspace for shell tools (RFC-103, IG-300)."""
@@ -55,6 +66,54 @@ def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | N
         fallback=workspace_root or None,
     )
     return str(resolved) if resolved is not None else None
+
+
+def _virtual_mode_from_security(security_config: Any) -> bool:
+    """Return True when the workspace is sandboxed (paths outside denied)."""
+    if security_config is None:
+        return False
+    return not bool(getattr(security_config, "allow_paths_outside_workspace", True))
+
+
+def _translate_virtual_paths_in_command(
+    command: str, workspace: str | None, *, virtual_mode: bool
+) -> str:
+    """Rewrite virtual-workspace `/path` tokens to host-absolute paths.
+
+    Filesystem tools treat a leading '/' as the workspace root; shell commands
+    do not. When the LLM borrows a virtual path (e.g. `/CHANGELOG.md`) into a
+    shell command, the host shell would walk the real filesystem root instead.
+    This translator rewrites only path-shaped tokens whose first segment is not
+    a known host root (e.g. /etc, /tmp, /Users), leaving real host paths alone.
+
+    Args:
+        command: Raw shell command from the LLM.
+        workspace: Effective workspace root (host-absolute path) or None.
+        virtual_mode: True when paths-outside-workspace are denied.
+
+    Returns:
+        Command string with virtual workspace paths rewritten to host paths.
+    """
+    if not virtual_mode or not workspace or not command:
+        return command
+
+    from soothe.core.workspace.tool_path_resolution import should_use_virtual_path_resolution
+
+    workspace_path = Path(workspace).expanduser()
+    workspace_str = str(workspace_path).rstrip("/")
+    if not workspace_str:
+        return command
+
+    def _replace(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if not should_use_virtual_path_resolution(token, workspace_path):
+            return token
+        suffix = token[1:]  # strip leading '/'
+        rewritten = workspace_str if not suffix else f"{workspace_str}/{suffix}"
+        logger.debug("Rewrote virtual shell path %r → %r", token, rewritten)
+        return rewritten
+
+    return _VIRTUAL_PATH_TOKEN_RE.sub(_replace, command)
 
 
 class RunCommandInput(BaseModel):
@@ -137,6 +196,12 @@ class RunCommandShellTool(ShellTool):
         actual_timeout = timeout if timeout is not None else self.timeout
         cwd_raw = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(cwd_raw)) if cwd_raw else None
+
+        command = _translate_virtual_paths_in_command(
+            command,
+            cwd,
+            virtual_mode=_virtual_mode_from_security(self.security_config),
+        )
 
         try:
             completed = subprocess.run(
@@ -282,6 +347,12 @@ class RunBackgroundTool(BaseTool):
 
         effective = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(effective)) if effective else None
+
+        command = _translate_virtual_paths_in_command(
+            command,
+            cwd,
+            virtual_mode=_virtual_mode_from_security(self.security_config),
+        )
 
         try:
             proc = subprocess.Popen(

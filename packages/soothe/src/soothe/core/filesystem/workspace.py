@@ -634,11 +634,11 @@ class WorkspaceFilesystem(UnifiedFilesystem):
             if not full_path.is_file():
                 continue
 
-            # Return virtual paths if in virtual mode
-            if self.virtual_mode:
-                results.append("/" + rel_posix)
-            else:
-                results.append(str(full_path))
+            # Always return host-absolute paths so the LLM gets paths that work
+            # consistently across filesystem tools (which accept host-absolute
+            # paths under the workspace via _normalize_path) AND shell tools
+            # (which see '/' as the host root, not the workspace).
+            results.append(str(full_path))
 
         results.sort()
         limited_results, truncated = self._apply_glob_limits(results)
