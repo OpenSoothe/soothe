@@ -10,6 +10,10 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
+from soothe.core.loop.planning.simple_bypass import (
+    SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
+    format_simple_query_direct_next_action,
+)
 from soothe.core.loop.state.schemas import (
     FIRST_WAVE_MAX_STEPS,
     AgentDecision,
@@ -1142,7 +1146,7 @@ class LLMPlanner:
             )
 
         if task_complexity == "simple" and state.iteration == 0 and not state.step_results:
-            direct_instruction = f"I will complete this request directly: {goal}"
+            direct_instruction = format_simple_query_direct_next_action(goal)
             result = PlanResult(
                 status=assessment.status,
                 goal_progress=assessment.goal_progress,
@@ -1156,7 +1160,7 @@ class LLMPlanner:
                     steps=[
                         StepAction(
                             description=direct_instruction,
-                            expected_output="Task completed successfully",
+                            expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
                         )
                     ],
                 ),
@@ -1350,7 +1354,7 @@ class LLMPlanner:
                         and state.iteration == 0
                         and not state.step_results
                     ):
-                        direct_instruction = f"I will complete this request directly: {goal}"
+                        direct_instruction = format_simple_query_direct_next_action(goal)
                         result = PlanResult(
                             status=assessment.status,
                             goal_progress=assessment.goal_progress,
@@ -1364,7 +1368,7 @@ class LLMPlanner:
                                 steps=[
                                     StepAction(
                                         description=direct_instruction,
-                                        expected_output="Task completed successfully",
+                                        expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
                                     )
                                 ],
                             ),

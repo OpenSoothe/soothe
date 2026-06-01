@@ -21,6 +21,7 @@ from soothe.core.events import (
 )
 from soothe.core.intention import IntentHint, build_loop_routing_classification
 from soothe.core.loop import AgentLoop
+from soothe.core.loop.planning.simple_bypass import is_simple_query_direct_next_action
 from soothe.core.loop.utils.events import LoopAgentReasonEvent
 from soothe.core.loop.utils.messages import (
     loop_assistant_messages_chunk,
@@ -493,6 +494,14 @@ class AgenticMixin:
                     )
 
             elif event_type == "plan":
+                next_action = str(event_data.get("next_action", "")).strip()
+                if is_simple_query_direct_next_action(next_action):
+                    yield loop_assistant_messages_chunk(
+                        content=next_action,
+                        phase="plan_direct",
+                        thread_id=tid,
+                        iteration=int(event_data.get("iteration", 0)),
+                    )
                 assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
                 plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
                 if _should_emit_loop_reason_event(

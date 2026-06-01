@@ -9,6 +9,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.utils.observability.langfuse_callback_handler import (
     _apply_effective_system_prompt_to_batches,
+    _is_execute_step_run_name,
+    _patch_chain_input_with_system_message,
 )
 from soothe.utils.observability.langfuse_system_hint import (
     clear_langfuse_system_prompt_hint,
@@ -148,6 +150,181 @@ def test_on_llm_end_passes_traced_input_to_parent() -> None:
         parent.assert_called_once()
         assert parent.call_args.kwargs["inputs"] == traced
     assert run_id not in handler._generation_traced_inputs
+
+
+def test_is_execute_step_run_name_matches_prefixed_and_bare() -> None:
+    assert _is_execute_step_run_name("execute-step")
+    assert _is_execute_step_run_name("soothe-dev:execute-step")
+    assert _is_execute_step_run_name("soothe:execute-step")
+    assert not _is_execute_step_run_name("execute")
+    assert not _is_execute_step_run_name("plan-assess")
+    assert not _is_execute_step_run_name(":execute-step-ish")
+    assert not _is_execute_step_run_name(None)
+
+
+def test_patch_chain_input_prepends_system_message() -> None:
+    patched = _patch_chain_input_with_system_message(
+        {"messages": [HumanMessage(content="hi")], "workspace": "/w"},
+        "<WORKSPACE_RULES>x</WORKSPACE_RULES>",
+    )
+    assert isinstance(patched, dict)
+    assert patched["workspace"] == "/w"
+    msgs = patched["messages"]
+    assert isinstance(msgs[0], SystemMessage)
+    assert msgs[0].content == "<WORKSPACE_RULES>x</WORKSPACE_RULES>"
+    assert isinstance(msgs[1], HumanMessage)
+
+
+def test_patch_chain_input_replaces_existing_system_message() -> None:
+    patched = _patch_chain_input_with_system_message(
+        {"messages": [SystemMessage(content="short"), HumanMessage(content="hi")]},
+        "EFFECTIVE",
+    )
+    assert patched["messages"][0].content == "EFFECTIVE"
+    assert isinstance(patched["messages"][1], HumanMessage)
+
+
+def test_patch_chain_input_returns_unchanged_when_no_messages_list() -> None:
+    inp = {"workspace": "/w"}
+    out = _patch_chain_input_with_system_message(inp, "X")
+    assert out is inp
+    out2 = _patch_chain_input_with_system_message("scalar", "X")
+    assert out2 == "scalar"
+
+
+def test_on_chain_end_patches_input_for_execute_step_chain() -> None:
+    pytest.importorskip("langfuse")
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._execute_step_chain_inputs = {}
+    handler._execute_step_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    chain_run = uuid4()
+    chat_run = uuid4()
+    handler._execute_step_chain_inputs[chain_run] = {
+        "messages": [HumanMessage(content="step-1")],
+        "workspace": "/w",
+    }
+    handler._child_to_parent_run_id_map[chat_run] = chain_run
+
+    cfg = {"configurable": {"thread_id": "t-exec"}}
+    effective = "<WORKSPACE_RULES>walk-up</WORKSPACE_RULES>"
+    handler.register_system_prompt_hint_for_config(cfg, effective)
+
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_chat_model_start", return_value=None):
+        handler.on_chat_model_start(
+            {},
+            [[HumanMessage(content="step-1")]],
+            run_id=chat_run,
+            parent_run_id=chain_run,
+            metadata={"thread_id": "t-exec"},
+        )
+    assert handler._execute_step_chain_prompts[chain_run] == effective
+
+    with mpatch.object(langchain_handler, "on_chain_end", return_value=None) as parent:
+        handler.on_chain_end({"messages": []}, run_id=chain_run)
+        parent.assert_called_once()
+        forwarded = parent.call_args.kwargs["inputs"]
+        assert isinstance(forwarded, dict)
+        assert forwarded["workspace"] == "/w"
+        assert isinstance(forwarded["messages"][0], SystemMessage)
+        assert forwarded["messages"][0].content == effective
+    # Tracking entries cleaned up after end
+    assert chain_run not in handler._execute_step_chain_inputs
+    assert chain_run not in handler._execute_step_chain_prompts
+
+
+def test_on_chain_end_no_patch_when_no_hint_captured() -> None:
+    pytest.importorskip("langfuse")
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._execute_step_chain_inputs = {}
+    handler._execute_step_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    chain_run = uuid4()
+    handler._execute_step_chain_inputs[chain_run] = {"messages": []}
+
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_chain_end", return_value=None) as parent:
+        handler.on_chain_end({"messages": []}, run_id=chain_run)
+        # No prompt was captured; kwargs["inputs"] must not be set.
+        assert "inputs" not in parent.call_args.kwargs
+    assert chain_run not in handler._execute_step_chain_inputs
+
+
+def test_on_chain_error_cleans_up_tracking() -> None:
+    pytest.importorskip("langfuse")
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._execute_step_chain_inputs = {}
+    handler._execute_step_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    chain_run = uuid4()
+    handler._execute_step_chain_inputs[chain_run] = {"messages": []}
+    handler._execute_step_chain_prompts[chain_run] = "X"
+
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_chain_error", return_value=None) as parent:
+        handler.on_chain_error(RuntimeError("boom"), run_id=chain_run)
+        parent.assert_called_once()
+    assert chain_run not in handler._execute_step_chain_inputs
+    assert chain_run not in handler._execute_step_chain_prompts
+
+
+def test_on_chain_start_tracks_only_execute_step_chains() -> None:
+    pytest.importorskip("langfuse")
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._execute_step_chain_inputs = {}
+    handler._execute_step_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    exec_run = uuid4()
+    other_run = uuid4()
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_chain_start", return_value=None):
+        handler.on_chain_start(
+            None,
+            {"messages": [HumanMessage(content="hi")]},
+            run_id=exec_run,
+            name="soothe-dev:execute-step",
+        )
+        handler.on_chain_start(
+            None,
+            {"messages": [HumanMessage(content="hi")]},
+            run_id=other_run,
+            name="plan-assess",
+        )
+    assert exec_run in handler._execute_step_chain_inputs
+    assert other_run not in handler._execute_step_chain_inputs
 
 
 def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:

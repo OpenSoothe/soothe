@@ -487,3 +487,87 @@ class TestComposeSkillsBlockJustInvokedExclusion:
                 blocks2.append(f'<SKILL_CONTEXT name="{name}">\n{body}\n</SKILL_CONTEXT>')
         assert len(blocks2) == 1
         assert "weather" in blocks2[0]
+
+
+class TestWorkspaceInjection:
+    """`_should_inject_workspace` is unconditional on `state['workspace']`.
+
+    Regression for trace fe0d: workspace queries fired on the first execute
+    step (empty messages, no prior ToolMessages) and the gate suppressed the
+    WORKSPACE section, so the LLM hallucinated `/Users/user/ai-demo`.
+    """
+
+    def _middleware(self) -> SystemPromptMiddleware:
+        return SystemPromptMiddleware(config=SootheConfig())
+
+    def test_injects_when_workspace_set_with_empty_messages(self) -> None:
+        mw = self._middleware()
+        assert mw._should_inject_workspace({"workspace": "/abs/path", "messages": []}) is True
+
+    def test_skips_when_workspace_missing(self) -> None:
+        mw = self._middleware()
+        assert mw._should_inject_workspace({"messages": []}) is False
+        assert mw._should_inject_workspace({"workspace": None, "messages": []}) is False
+        assert mw._should_inject_workspace({"workspace": "", "messages": []}) is False
+
+    def test_injects_without_prior_tool_messages(self) -> None:
+        """Pre-fix, this returned False because no ToolMessage was in history."""
+        mw = self._middleware()
+        state = {
+            "workspace": "/abs/path",
+            "messages": [HumanMessage("what is your current workspace")],
+        }
+        assert mw._should_inject_workspace(state) is True
+
+    def test_minimal_complexity_still_emits_workspace_blocks(self, tmp_path) -> None:
+        """Minimal-complexity execute steps must include WORKSPACE_RULES, <WORKSPACE>,
+        and WORKSPACE_INSTRUCTIONS when a workspace is bound.
+
+        Regression for the trace fe0d follow-up: previously the minimal branch
+        in ``_get_prompt_for_complexity`` short-circuited before reaching the
+        semi-static tier, so direct-answer execute steps had no workspace
+        grounding and hallucinated paths.
+        """
+        (tmp_path / "AGENTS.md").write_text("# Rules\n\nBe concise.\n", encoding="utf-8")
+        mw = self._middleware()
+        prompt = mw._get_prompt_for_complexity("minimal", {"workspace": str(tmp_path)})
+        assert "<WORKSPACE_RULES>" in prompt
+        assert "<WORKSPACE>" in prompt
+        assert "<WORKSPACE_INSTRUCTIONS>" in prompt
+        assert "Be concise." in prompt
+
+    def test_workspace_rules_warn_against_pasting_truncated_tool_output(self, tmp_path) -> None:
+        """Rules must forbid re-pasting truncated tool bodies (trace 0e412f)."""
+        (tmp_path / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+        mw = self._middleware()
+        prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
+        # Anti-paste rule must mention the truncation signal AND a concrete
+        # re-query alternative so the model has actionable guidance.
+        assert "truncated=true" in prompt
+        assert "do NOT paste" in prompt
+        assert "run_python" in prompt
+
+    def test_state_schema_declares_workspace_channel(self) -> None:
+        """LangGraph drops undeclared keys between nodes — `workspace` and
+        `git_status` MUST be declared in ``_SystemPromptState`` so the
+        executor's input dict and ``WorkspaceContextMiddleware``'s updates
+        actually reach ``modify_request``. Trace 705623 regression: without
+        this declaration the workspace blocks silently vanish from the
+        execute-step system prompt even when state["workspace"] was set
+        upstream.
+        """
+        from soothe.middleware.system_prompt import _SystemPromptState
+
+        annotations = getattr(_SystemPromptState, "__annotations__", {})
+        assert "workspace" in annotations, (
+            "_SystemPromptState must declare `workspace` so LangGraph "
+            "preserves it across node boundaries; otherwise the execute-step "
+            "system prompt loses WORKSPACE_RULES, <WORKSPACE>, and "
+            "WORKSPACE_INSTRUCTIONS."
+        )
+        assert "git_status" in annotations
+        # Annotations are stringified by ``from __future__ import annotations``
+        # so we assert on the string form (NotRequired survives) rather than
+        # ``__required_keys__`` which loses the marker at runtime.
+        assert "NotRequired" in str(annotations["workspace"])
+        assert "NotRequired" in str(annotations["git_status"])

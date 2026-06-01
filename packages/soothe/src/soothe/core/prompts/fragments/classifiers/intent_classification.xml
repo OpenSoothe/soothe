@@ -10,6 +10,7 @@ NOT quiz (use "agentic" instead):
 - Anything requiring web search, external APIs, attached files, code execution, or tools to answer correctly.
 - Questions you cannot answer confidently from training knowledge alone.
 - Follow-ups on prior conversation or work.
+- Questions about this agent's runtime state — current workspace, cwd/pwd, the configured model, available tools or subagents, current loop/goal/thread, policies, or environment configuration. These require live runtime introspection, not training knowledge.
 
 When intent_type is "quiz", also provide:
 - quiz_response: concise, factual direct answer from training knowledge. For greetings/thanks, a brief polite reply. For factual questions, a direct answer.

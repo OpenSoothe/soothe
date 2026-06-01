@@ -37,4 +37,10 @@ async def test_simple_query_skips_plan_generate_on_first_cycle() -> None:
     assert result.plan_action == "new"
     assert result.decision is not None
     assert len(result.decision.steps) == 1
-    assert "I will complete this request directly" in result.decision.steps[0].description
+    step = result.decision.steps[0]
+    assert "I will complete this request directly" in step.description
+    # Bypass step must carry a concrete completion contract so the execute-step
+    # AI message lands a "## Result" block in the ledger for plan-assess.
+    assert step.expected_output is not None
+    assert "## Result" in step.expected_output
+    assert "MUST" in step.expected_output

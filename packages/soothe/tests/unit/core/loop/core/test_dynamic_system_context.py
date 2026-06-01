@@ -260,8 +260,9 @@ class TestComplexityMapping:
         assert "<ENVIRONMENT" in prompt
         # RFC-214: WORKSPACE_RULES is now semi-static tier (injected when workspace set)
         assert "<WORKSPACE_RULES>" in prompt
-        # WORKSPACE XML block is tool-triggered, not always included
-        assert "<SOOTHE_WORKSPACE>" not in prompt  # Actual WORKSPACE XML block not injected
+        # WORKSPACE XML block is always-on when state["workspace"] is set
+        # (trace fe0d fix: removed gating on prior tool use).
+        assert "<WORKSPACE>" in prompt
         assert "<SOOTHE_THREAD" not in prompt
         assert "<SOOTHE_PROTOCOLS" not in prompt
         # RFC-214: Date is in user envelope, not system prompt
@@ -286,8 +287,9 @@ class TestComplexityMapping:
         assert "<ENVIRONMENT" in prompt
         # RFC-214: WORKSPACE_RULES is semi-static tier (injected when workspace set)
         assert "<WORKSPACE_RULES>" in prompt
-        # WORKSPACE XML is tool-triggered, not always included
-        assert "<SOOTHE_WORKSPACE>" not in prompt
+        # WORKSPACE XML block is always-on when state["workspace"] is set
+        # (trace fe0d fix: removed gating on prior tool use).
+        assert "<WORKSPACE>" in prompt
         # THREAD is state-triggered (requires tool triggers)
         assert "<SOOTHE_THREAD" not in prompt
         assert "<SOOTHE_PROTOCOLS" not in prompt

@@ -588,6 +588,36 @@ ActWaveAnswerProvenance = Literal["root_assistant_stream", "task_tool_aggregate"
 # Cap for joined delegate text and for root assistant text stored on state (memory bound).
 DELEGATE_FINAL_WAVE_CAP = 120_000
 
+# Char budget for the <LAST_TOOL_RESULT> evidence block injected into the
+# execute-step ledger AI body. Plan-assess reads this to grade goal progress
+# on concrete tool output rather than only the AI's prose summary.
+LAST_TOOL_RESULT_HEAD_CHARS = 500
+
+
+def _last_tool_result_block(messages: list[BaseMessage]) -> str:
+    """Return a ``<LAST_TOOL_RESULT>`` evidence block, or ``""`` when none.
+
+    Walks ``messages`` in reverse for the most recent ``ToolMessage`` with
+    non-empty text content and emits a CDATA-wrapped head so plan-assess sees
+    the actual tool output (counts, listings, paths) in the ledger.
+    """
+    from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
+
+    for msg in reversed(messages):
+        if not isinstance(msg, ToolMessage):
+            continue
+        text = extract_text_from_message_content(getattr(msg, "content", None))
+        if not text or not text.strip():
+            continue
+        name = getattr(msg, "name", None) or "tool"
+        head = preview_first(text, LAST_TOOL_RESULT_HEAD_CHARS)
+        return (
+            f'<LAST_TOOL_RESULT name="{name}" bytes="{len(text)}">\n'
+            f"<![CDATA[\n{head}\n]]>\n"
+            f"</LAST_TOOL_RESULT>"
+        )
+    return ""
+
 
 @dataclass(frozen=True, slots=True)
 class ActWaveFinalizeSnapshot:
@@ -2360,23 +2390,33 @@ class Executor:
         assistant-visible text lives in earlier ``AIMessageChunk`` entries — same situation as
         ``_assemble_assistant_text_from_stream_messages`` / Act-wave finalize.
 
+        Appends a ``<LAST_TOOL_RESULT>`` evidence block built from the most
+        recent ``ToolMessage`` so plan-assess sees concrete tool output (a
+        count, a file listing, etc.) instead of only the AI's prose summary.
+        Without this, the assessor classifies tool-driven goals as
+        ``progress=none`` even when the answer is in the tool reply.
+
         Args:
             messages: Full message list from ``_stream_and_collect`` (AI + chunk entries).
             final_ai_msg: AIMessage chosen for this step's ledger entry.
             total_steps: Number of steps in this execute wave.
 
         Returns:
-            Non-empty string when any root assistant text exists; otherwise ``""``.
+            Non-empty string when any root assistant text or tool evidence
+            exists; otherwise ``""``.
         """
         from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
 
         direct = extract_text_from_message_content(getattr(final_ai_msg, "content", None)).strip()
-        if direct:
+        if not direct and total_steps == 1:
+            direct = self._assemble_assistant_text_from_stream_messages(messages).strip()
+
+        evidence = _last_tool_result_block(messages)
+        if not direct:
+            return evidence
+        if not evidence:
             return direct
-        if total_steps != 1:
-            return ""
-        assembled = self._assemble_assistant_text_from_stream_messages(messages).strip()
-        return assembled
+        return f"{direct}\n\n{evidence}"
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:
         """Extract meaningful error message from exception.
