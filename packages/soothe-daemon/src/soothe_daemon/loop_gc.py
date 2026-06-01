@@ -102,7 +102,7 @@ async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] |
     removed_threads = daemon._thread_registry.cleanup_loop(loop_id)
     if removed_threads:
         try:
-            from soothe_community.claude.session_bridge import cleanup_claude_sessions
+            from soothe.subagents.claude.session_bridge import cleanup_claude_sessions
         except ImportError:
             cleanup_claude_sessions = None  # type: ignore[assignment]
         if cleanup_claude_sessions is not None:
