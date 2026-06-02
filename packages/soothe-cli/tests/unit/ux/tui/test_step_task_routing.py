@@ -82,6 +82,56 @@ def test_multiple_active_steps_tracked_independently() -> None:
     assert not router.active_step_ids
 
 
+def test_parallel_step_completion_drain_routes_buffered_unified_tool() -> None:
+    """Buffered unified-id tools must drain to the right step card on completion.
+
+    Regression for the parallel-step bug where the completion handler popped a
+    step's widget from ``_current_step_messages`` before routing flushed pending
+    tools, leaving the card with ``· N tools`` (the daemon's count) but no
+    activity rows. The fix calls ``route_pending_main_tools`` *before*
+    ``on_step_completed`` so the widget is still reachable AND
+    ``active_step_ids`` still contains sibling steps (so the
+    single-active-step fallback can't misroute non-unified tools).
+    """
+    router = StepTaskRouter()
+    router.on_step_started("STP-A")
+    router.on_step_started("STP-B")
+
+    card_a = MagicMock()
+    card_a.has_tool_call_row.return_value = False
+    card_b = MagicMock()
+    card_b.has_tool_call_row.return_value = False
+    cards = {"STP-A": card_a, "STP-B": card_b}
+    tool_to_step: dict[str, object] = {}
+    display: dict[str, object] = {}
+
+    # A's tool came in before A's card was ready, got buffered.
+    router.buffer_main_tool("STP_A:s:bash:0", "bash", {"cmd": "ls"})
+    # A non-unified tool that we shouldn't misroute while siblings are active.
+    router.buffer_main_tool("legacy_call_xyz", "grep", {"pattern": "x"})
+
+    # Completion handler order: drain first (with both siblings still active),
+    # then mark A completed, then pop A's widget.
+    routed = router.route_pending_main_tools(cards, tool_to_step, display)
+
+    assert routed == 1
+    card_a.add_tool_call.assert_called_once_with(
+        "STP_A:s:bash:0", "bash", {"cmd": "ls"}, raw_args=""
+    )
+    card_b.add_tool_call.assert_not_called()
+    assert tool_to_step["STP_A:s:bash:0"] is card_a
+    # Non-unified tool stays buffered because >1 sibling is active.
+    assert router.pending_main_tool_count == 1
+
+    router.on_step_completed("STP-A")
+    cards.pop("STP-A", None)
+
+    # After A is popped and B remains, the legacy id would now hit the single
+    # active fallback. That's a separate ambiguity (unification is the daemon's
+    # job); the regression here is only that A's unified tool routed.
+    router.on_step_completed("STP-B")
+
+
 def test_register_task_spawn_is_idempotent_per_step_and_tool() -> None:
     router = StepTaskRouter()
     assert router.register_task_spawn("S1:s:task:0", "explore", step_id="S1") is True
