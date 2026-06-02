@@ -396,17 +396,14 @@ class _MessagesMixin:
         """Handle Ctrl+C - interrupt agent or quit on double press.
 
         Priority order:
-        0. If text is selected, copy it (Textual screen.copy_text semantics)
         1. If shell command is running, kill it
         2. If agent is running, interrupt it (preserve input)
         3. If double press (quit_pending), quit
         4. Otherwise clear draft input and show quit hint
-        """
-        from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
 
-        if copy_selection_to_clipboard(self):
-            self._quit_pending = False
-            return
+        Note: Copying selected text is bound to Ctrl+Y (`action_copy_selection`)
+        so Ctrl+C is reserved for interrupt/quit only.
+        """
         # If shell command is running, cancel the worker
         if self._shell_running and self._shell_worker:
             self._cancel_worker(self._shell_worker)
