@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.core.events import (
@@ -146,12 +146,20 @@ class PhasesMixin:
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
             return
 
-        quiz_prompt = f"""Answer this question accurately and concisely using only your training knowledge.
+        from soothe.core.quiz_messages import build_quiz_system_message
+
+        assistant_name = getattr(getattr(self._config, "agent", None), "name", None) or "Soothe"
+        quiz_user_prompt = f"""Answer this question accurately and concisely using only your training knowledge.
 
 Question: {user_input}
 
 Provide a direct, factual answer for static facts, greetings, or simple math.
 Do not use tools or search. If the question needs live/real-time data (weather, news, stocks, etc.), say you cannot provide current data and suggest checking an authoritative source."""
+
+        quiz_messages = [
+            SystemMessage(content=build_quiz_system_message(assistant_name)),
+            HumanMessage(content=quiz_user_prompt),
+        ]
 
         try:
             from soothe.utils.observability.langfuse import build_traced_config
@@ -165,7 +173,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 run_name="soothe:quiz",
                 independent_trace=True,  # Standalone trace, not nested under agent-loop-graph
             )
-            response = await quiz_model.ainvoke(quiz_prompt, config=quiz_config)
+            response = await quiz_model.ainvoke(quiz_messages, config=quiz_config)
             answer = response.content if hasattr(response, "content") else str(response)
 
             yield loop_assistant_messages_chunk(
