@@ -8,7 +8,6 @@ are re-exported here for convenience.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import TYPE_CHECKING
 
@@ -103,13 +102,6 @@ def resolve_planner(
                 planner_model = config.create_chat_model("default")
             except Exception:
                 logger.warning("Failed to create model for planner")
-
-    # Use fast model for planning (structured output generation)
-    fast_model = None
-    with contextlib.suppress(Exception):
-        fast_model = config.create_chat_model("fast")
-
-    planner_model = fast_model or planner_model
 
     from soothe.core.loop.planning.planner import LLMPlanner
 

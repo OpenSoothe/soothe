@@ -27,22 +27,63 @@ Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in 
   the user must answer before the goal can continue. Forbidden otherwise.
 
 <ASK_USER_STEP>
-Emit ``kind="ask_user"`` ONLY when continuing requires information that is not
-present in the goal, context, or recent step outputs and cannot be inferred —
-e.g. an unstated preference, an unknown constraint, an ambiguous reference
-that meaningfully changes the plan. The runtime answers the question through
-the configured clarification relay and resumes planning automatically; do NOT
-also produce prose like "Please tell me…" in ``description``.
+**CRITICAL**: Emit ``kind="ask_user"`` when continuing requires information that is
+not present in the goal, context, or recent step outputs and cannot be reasonably
+inferred. This is the PRIMARY mechanism for clarification — do NOT write prose
+like "Please tell me…" or "Ask the user…" in ``description`` and expect the executor
+to handle it. The executor will NOT ask the user for you. You MUST use the structured
+``ask_user`` step.
 
-Rules:
-- Emit AT MOST ONE ``ask_user`` step per wave; pair it with no other steps so
+**When to use ask_user (REQUIRED)**:
+- The goal is ambiguous and multiple valid approaches exist (e.g., "refine X" without
+  specifying which aspects, "improve Y" without constraints).
+- A key decision point requires user preference (e.g., target format, scope, priority).
+- Essential context is missing and cannot be inferred from available information.
+- On iteration 0 (first wave), if you cannot proceed WITHOUT clarification, emit
+  ``kind="ask_user"`` as your FIRST step — do NOT explore first and ask later.
+
+**When NOT to use ask_user**:
+- The goal is concrete and actionable (e.g., "add logging to module X").
+- Context already provides the needed information.
+- You could reasonably infer the user's intent from the goal statement.
+- To confirm a step you could just do — action speaks louder than asking.
+
+**Rules**:
+- Emit AT MOST ONE ``ask_user`` step per wave; pair it with NO other steps so
   later actions can use the answer.
-- Populate ``questions`` with one or more concrete questions. Each question
-  must end in ``?`` and be self-contained.
-- Set ``description`` to a short third-person summary (e.g. ``Ask which target
-  format the user wants``); the question text itself belongs in ``questions``.
-- Do NOT use ``ask_user`` to confirm a step you could just do, to surface a
-  status update, or when context already supplies the answer.
+- ``questions`` MUST be a non-empty list of concrete questions. Each question
+  must end in ``?`` and be self-contained (answerable without reading other questions).
+- ``description`` is a SHORT third-person summary (e.g., ``Ask which target format
+  the user wants``); the actual question text belongs in ``questions``.
+- The runtime answers automatically via the clarification relay and resumes
+  planning — you receive the answer in the next iteration's context.
+
+**EXAMPLE - CORRECT**:
+```json
+{
+  "id": "ASK-01",
+  "description": "Ask which aspect to prioritize",
+  "kind": "ask_user",
+  "questions": [
+    "Which aspect of the package structure should I focus on: organization, naming, or documentation?",
+    "Should I preserve backward compatibility or allow breaking changes?"
+  ],
+  "expected_output": "User provides prioritization guidance"
+}
+```
+
+**EXAMPLE - WRONG (DO NOT DO THIS)**:
+```json
+{
+  "id": "02",
+  "description": "Ask clarifying questions about refinement goals",
+  "kind": "action",
+  "questions": null,
+  "expected_output": "Step completed successfully"
+}
+```
+The WRONG example will execute as a normal action step — the model will write prose
+but NO ONE will see it or answer. Use ``kind="ask_user"`` with ``questions`` instead.
 </ASK_USER_STEP>
 
 **execution_mode** (required when ``type=execute_steps``): only ``parallel`` or ``dependency``.

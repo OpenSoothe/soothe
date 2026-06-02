@@ -197,14 +197,10 @@ async def run_direct_llm_turn(
     )
 
     if structured:
-        # Some providers (e.g. Dashscope) require the word "json" when using json response_format.
-        structured_prompt = stripped
-        if "json" not in stripped.lower():
-            structured_prompt = f"{stripped}\n\nRespond with JSON matching the provided schema."
         try:
             data = await invoke_structured_chat(
                 chat,
-                [HumanMessage(content=structured_prompt)],
+                [HumanMessage(content=stripped)],
                 json_schema=response_schema,
                 schema_name=response_schema_name,
                 strict=strict,
