@@ -17,7 +17,6 @@ import pytest
 from soothe.core.loop import AgentLoop
 from soothe.core.loop.clarification import (
     ClarificationAnswer,
-    ClarificationPolicy,
     ClarificationRequest,
 )
 from soothe.core.loop.state.schemas import (
