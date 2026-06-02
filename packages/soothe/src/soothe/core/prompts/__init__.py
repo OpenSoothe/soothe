@@ -20,6 +20,7 @@ from .system_templates import (
     _SIMPLE_SYSTEM_PROMPT,
     _SUBAGENT_GUIDE,
     _TOOL_ORCHESTRATION_GUIDE,
+    RESPONSE_LANGUAGE_HINT_FRAGMENT,
 )
 from .user_envelope import (
     build_execute_step_envelope,
@@ -28,6 +29,7 @@ from .user_envelope import (
 
 __all__ = [
     "PromptBuilder",
+    "RESPONSE_LANGUAGE_HINT_FRAGMENT",
     "_DATA_GUIDE",
     "_DEFAULT_SYSTEM_PROMPT",
     "_FILE_OPS_GUIDE",

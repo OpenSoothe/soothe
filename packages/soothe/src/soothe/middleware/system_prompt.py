@@ -400,13 +400,16 @@ class SystemPromptMiddleware(AgentMiddleware):
         # ── Workspace prelude ─────────────────────────────────────────
         # Block order (RFC-214 cache-friendly; all workspace-stable):
         #   1. base_core
-        #   2. <WORKSPACE_RULES>           (when workspace bound)
-        #   3. <WORKSPACE_INSTRUCTIONS>    (when AGENTS.md/CLAUDE.md present)
-        #   4. <ENVIRONMENT>               (always)
-        #   5. <WORKSPACE>                 (when workspace bound)
+        #   2. <RESPONSE_LANGUAGE_HINT>    (always — moved from user envelope)
+        #   3. <WORKSPACE_RULES>           (when workspace bound)
+        #   4. <WORKSPACE_INSTRUCTIONS>    (when AGENTS.md/CLAUDE.md present)
+        #   5. <ENVIRONMENT>               (always)
+        #   6. <WORKSPACE>                 (when workspace bound)
         # Everything that follows is gated (context/memory/directive/contract)
         # or semi-static (thread/protocols/scenarios/skills/MCP).
-        static_sections: list[str] = [base_core]
+        from soothe.core.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
+
+        static_sections: list[str] = [base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
 
         if workspace:
             static_sections.append(

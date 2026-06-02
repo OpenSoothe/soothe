@@ -135,6 +135,17 @@ Key rules:
 - Use run_command for shell execution, run_python for Python code.\
 """
 
+# Cache-stable directive about user-facing prose language. Lives in the system
+# prompt so the per-turn user envelope (which carries volatile timestamp /
+# evidence) stays small and the directive is recorded once in the prefix.
+RESPONSE_LANGUAGE_HINT_FRAGMENT = (
+    "<RESPONSE_LANGUAGE_HINT>\n"
+    "Prefer the same natural language as the user's goal for explanations, "
+    "summaries, and conclusions; keep code, file paths, identifiers, and "
+    "quoted literals unchanged.\n"
+    "</RESPONSE_LANGUAGE_HINT>"
+)
+
 _DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT + _TOOL_ORCHESTRATION_GUIDE
 
 _SIMPLE_SYSTEM_PROMPT = SIMPLE_SYSTEM_PROMPT_FRAGMENT

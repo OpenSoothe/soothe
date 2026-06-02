@@ -55,3 +55,20 @@ def test_stale_digest_omitted_from_both_phases() -> None:
     for phase in ("assess", "generate"):
         msgs = builder.build_plan_messages("g", state, ctx, plan_phase=phase)
         assert "<PRIOR_PROGRESS>" not in msgs[-1].content
+
+
+def test_response_language_hint_in_plan_system_prompt_not_user_envelope() -> None:
+    """Language hint lives in the plan-phase system prompt (cache-stable) with
+    an uppercase tag. The per-turn user envelope must NOT carry it."""
+    state = LoopState(goal="g", thread_id="t1", iteration=0)
+    ctx = PlanContext()
+    builder = PromptBuilder()
+    for phase in ("assess", "generate"):
+        msgs = builder.build_plan_messages("g", state, ctx, plan_phase=phase)
+        system_content = msgs[0].content
+        user_content = msgs[-1].content
+        assert "<RESPONSE_LANGUAGE_HINT>" in system_content
+        assert "same natural language as the user's goal" in system_content
+        assert "<response_language_hint>" not in system_content
+        assert "response_language_hint" not in user_content.lower()
+        assert "RESPONSE_LANGUAGE_HINT" not in user_content

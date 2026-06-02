@@ -202,6 +202,7 @@ class PromptBuilder:
             PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
             PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
         )
+        from soothe.core.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
         parts: list[str] = []
 
@@ -211,6 +212,9 @@ class PromptBuilder:
             # Plan generation: step policy + schema-aligned PlanGeneration only (IG-329)
             parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
             parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
+
+        # Language directive: cache-stable, applies to all phases.
+        parts.append(RESPONSE_LANGUAGE_HINT_FRAGMENT + "\n")
 
         # Conditional static sections (present based on context).
         # Workspace rules + WORKSPACE_INSTRUCTIONS apply only to plan-generate:
