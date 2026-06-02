@@ -301,8 +301,8 @@ async def test_websocket_parallel_broadcast_latency():
 
     Scenario: Broadcast to 100 clients with 10% slow clients (500ms delay)
     """
+    from soothe_daemon.channels.websocket import WebSocketChannel
     from soothe_daemon.config.models import WebSocketConfig
-    from soothe_daemon.transports.websocket import WebSocketTransport
 
     config = WebSocketConfig(
         enabled=True,
@@ -310,7 +310,8 @@ async def test_websocket_parallel_broadcast_latency():
         port=8765,
         cors_origins=["*"],
     )
-    transport = WebSocketTransport(config)
+    manager = MagicMock()
+    transport = WebSocketChannel(config, manager=manager)
     metrics = LoadTestMetrics()
     # broadcast() returns early when _server is unset; use a truthy placeholder
     transport._server = object()
@@ -543,13 +544,14 @@ async def test_sender_loop_batching():
       after unfolding ``event_batch`` envelopes (no drops).
     - Event ordering preserved across batches.
     """
+    from soothe_daemon.channels.websocket import WebSocketChannel
     from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.event import EventBus
     from soothe_daemon.session import ClientSessionManager
-    from soothe_daemon.transports.websocket import WebSocketTransport
 
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=8765)
-    transport = WebSocketTransport(config)
+    manager = MagicMock()
+    transport = WebSocketChannel(config, manager=manager)
 
     # Mock client to track sends
     mock_client = MockWebSocketClient("ws:0", delay=0.0)

@@ -1,19 +1,20 @@
-"""Integration tests for HTTP REST transport (RFC-0013 Phase 3)."""
+"""Integration tests for HTTP REST channel (RFC-620)."""
 
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
 
+from soothe_daemon.channels.http_rest import HttpRestChannel
 from soothe_daemon.config.models import HttpRestConfig
-from soothe_daemon.transports.http_rest import HttpRestTransport
 
 
 @pytest.mark.asyncio
-async def test_http_rest_transport_basic() -> None:
-    """Test basic HTTP REST transport lifecycle."""
+async def test_http_rest_channel_basic() -> None:
+    """Test basic HTTP REST channel lifecycle."""
     config = HttpRestConfig(
         enabled=True,
         host="127.0.0.1",
@@ -21,19 +22,13 @@ async def test_http_rest_transport_basic() -> None:
         tls_enabled=False,
     )
 
-    transport = HttpRestTransport(config)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
 
-    messages_received: list[dict] = []
+    await channel.start()
+    assert channel.name == "http_rest"
 
-    def message_handler(msg: dict) -> None:
-        messages_received.append(msg)
-
-    # Start transport
-    await transport.start(message_handler)
-    assert transport.transport_type == "http_rest"
-
-    # Stop transport
-    await transport.stop()
+    await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -46,15 +41,12 @@ async def test_http_rest_health_endpoint() -> None:
         tls_enabled=False,
     )
 
-    transport = HttpRestTransport(config)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
 
-    async def message_handler(msg: dict) -> None:
-        pass
-
-    await transport.start(message_handler)
+    await channel.start()
 
     try:
-        # Wait for server to start
         await asyncio.sleep(0.5)
 
         async with httpx.AsyncClient() as client:
@@ -64,7 +56,7 @@ async def test_http_rest_health_endpoint() -> None:
             assert data["status"] == "healthy"
             assert data["transport"] == "http_rest"
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -77,12 +69,10 @@ async def test_http_rest_status_endpoint() -> None:
         tls_enabled=False,
     )
 
-    transport = HttpRestTransport(config)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
 
-    async def message_handler(msg: dict) -> None:
-        pass
-
-    await transport.start(message_handler)
+    await channel.start()
 
     try:
         await asyncio.sleep(0.5)
@@ -94,7 +84,7 @@ async def test_http_rest_status_endpoint() -> None:
             assert data["status"] == "running"
             assert data["transport"] == "http_rest"
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -107,12 +97,10 @@ async def test_http_rest_version_endpoint() -> None:
         tls_enabled=False,
     )
 
-    transport = HttpRestTransport(config)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
 
-    async def message_handler(msg: dict) -> None:
-        pass
-
-    await transport.start(message_handler)
+    await channel.start()
 
     try:
         await asyncio.sleep(0.5)
@@ -124,7 +112,7 @@ async def test_http_rest_version_endpoint() -> None:
             assert "version" in data
             assert data["protocol"] == "soothe-rest-v1"
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -137,12 +125,10 @@ async def test_http_rest_docs_endpoint() -> None:
         tls_enabled=False,
     )
 
-    transport = HttpRestTransport(config)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
 
-    async def message_handler(msg: dict) -> None:
-        pass
-
-    await transport.start(message_handler)
+    await channel.start()
 
     try:
         await asyncio.sleep(0.5)
@@ -156,4 +142,4 @@ async def test_http_rest_docs_endpoint() -> None:
             response = await client.get("http://127.0.0.1:18775/redoc")
             assert response.status_code == 200
     finally:
-        await transport.stop()
+        await channel.stop()
