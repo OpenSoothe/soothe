@@ -25,10 +25,10 @@ from soothe_sdk.ux.stream_tool_wire import (
     extract_tool_call_updates_from_wire_message,
 )
 
-from soothe_daemon.image_understanding import enrich_user_text_with_vision
-from soothe_daemon.logging import set_client_id, set_loop_id
+from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
+from soothe_daemon.services.image_understanding import enrich_user_text_with_vision
 
 logger = logging.getLogger(__name__)
 

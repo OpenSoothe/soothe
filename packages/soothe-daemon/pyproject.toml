@@ -65,7 +65,7 @@ dev = [
 ]
 
 [project.scripts]
-soothed = "soothe_daemon.cli.daemon_main:app"
+soothed = "soothe_daemon.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/mirasoth/soothe"
@@ -92,7 +92,8 @@ select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/soothe_daemon/cli/daemon_main.py" = ["E402"]
+"src/soothe_daemon/cli.py" = ["E402"]
+"src/soothe_daemon/bootstrap/entrypoint.py" = ["E402"]
 
 [tool.ruff.format]
 docstring-code-format = true

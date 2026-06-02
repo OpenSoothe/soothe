@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from soothe_daemon.bootstrap_env import load_dotenv_adjacent_to_yaml
+from soothe_daemon.bootstrap.env import load_dotenv_adjacent_to_yaml
 
 
 def test_load_dotenv_adjacent_to_yaml_loads_sibling_env(tmp_path, monkeypatch) -> None:

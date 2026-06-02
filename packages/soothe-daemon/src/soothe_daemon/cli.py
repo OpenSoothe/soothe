@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_daemon.bootstrap_env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
+from soothe_daemon.bootstrap.env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
 
 bootstrap_dotenv()
 
@@ -16,12 +16,12 @@ from typing import Annotated
 import typer
 from soothe.config import SOOTHE_HOME, SootheConfig
 
+from soothe_daemon.bootstrap.entrypoint import run_daemon
+from soothe_daemon.bootstrap.paths import pid_path
 from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
-from soothe_daemon.entrypoint import run_daemon
 from soothe_daemon.health.checker import HealthChecker
 from soothe_daemon.health.formatters import format_json, format_markdown, format_text
 from soothe_daemon.health.models import CheckStatus
-from soothe_daemon.paths import pid_path
 from soothe_daemon.server import SootheDaemon
 
 app = typer.Typer(
@@ -62,7 +62,7 @@ def daemon_start(
     if foreground:
         from soothe.logging import setup_logging
 
-        from soothe_daemon.logging import (
+        from soothe_daemon.bootstrap.logging import (
             _daemon_log_level_from_soothe_config,
             default_daemon_log_path,
             setup_daemon_logging,

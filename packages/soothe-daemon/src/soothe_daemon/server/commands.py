@@ -45,7 +45,7 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
         checkpoint_thread_id = str(self._runner.current_thread_id or "").strip()
 
     if not checkpoint_thread_id:
-        from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
+        from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
         try:
             checkpoint_thread_id = await bind_execution_thread_for_loop(self, lid)

@@ -9,7 +9,7 @@ import pytest
 
 from soothe_daemon.event import loop_event_topic
 from soothe_daemon.event.bus import EventBus
-from soothe_daemon.session.manager import ClientSessionManager
+from soothe_daemon.server.session import ClientSessionManager
 
 
 @pytest.mark.asyncio

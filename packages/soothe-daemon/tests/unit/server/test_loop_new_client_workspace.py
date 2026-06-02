@@ -18,8 +18,8 @@ from soothe.core.loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
 
-from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
 from soothe_daemon.protocol import MessageRouter
+from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
 
 async def _read_metadata(loop_id: str, config: Any) -> dict[str, Any]:
