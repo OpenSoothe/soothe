@@ -299,6 +299,7 @@ class AgenticMixin:
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         preferred_subagent: str | None = None,
         intent_hint: IntentHint | None = None,
+        clarification_mode: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
@@ -311,6 +312,9 @@ class AgenticMixin:
             max_iterations: Maximum loop iterations (default: 8)
             preferred_subagent: Optional subagent hint for routing
             intent_hint: Suggested intent to bypass LLM classification
+            clarification_mode: RFC-622 mode for this goal (``"auto"`` /
+                ``"manual"``). ``None`` falls back to
+                ``config.agent.clarification.default_mode``.
 
         Yields:
             StreamChunk events during execution
@@ -372,6 +376,21 @@ class AgenticMixin:
         # IG-406: Get shared PostgreSQL pool for high-concurrency support
         shared_pool = await self.get_agentloop_shared_pool()
 
+        # RFC-622: build the clarification policy from per-request mode + config defaults.
+        # Constructed once per goal so the closed-over veritas chat model is reused
+        # across all clarifications inside this run.
+        from soothe.core.loop.clarification import build_clarification_policy_for_runner
+
+        try:
+            clarification_policy = build_clarification_policy_for_runner(
+                self._config, mode=clarification_mode
+            )
+        except Exception:
+            logger.exception(
+                "[Clarification] failed to build policy; loop will defer all clarifications"
+            )
+            clarification_policy = None
+
         git_status = None
         if workspace:
             from pathlib import Path
@@ -402,6 +421,7 @@ class AgenticMixin:
             intent_classifier=self._intent_classifier,
             preferred_subagent=preferred_subagent,
             shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
+            clarification_policy=clarification_policy,
         ):
             if event_type == "intent_classified":
                 logger.info(

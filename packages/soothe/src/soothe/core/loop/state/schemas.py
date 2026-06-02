@@ -35,12 +35,22 @@ class EvidenceEntry(BaseModel):
     kind: Literal["tool", "bootstrap", "ledger"] = "bootstrap"
 
 
+StepKind = Literal["action", "ask_user"]
+"""Step kind. ``action`` runs through CoreAgent; ``ask_user`` short-circuits
+into the clarification relay (RFC-622, IG-462)."""
+
+
 class PlanGenerateStep(BaseModel):
     """Single step in plan-generate structured output (RFC-604, IG-329).
 
     Separate from ``StepAction`` so the LLM schema omits executor-only fields
     (``subagent``, ``evidence_refs``). Converted to ``StepAction`` when building
     ``AgentDecision``.
+
+    When ``kind == "ask_user"`` the executor does NOT invoke CoreAgent for this
+    step — instead it routes ``questions`` through the configured
+    ``ClarificationPolicy`` (RFC-622) and records a synthesized successful step
+    result containing the answers.
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -50,6 +60,15 @@ class PlanGenerateStep(BaseModel):
     )
     expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None
+    kind: StepKind = "action"
+    questions: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _validate_ask_user(self) -> PlanGenerateStep:
+        if self.kind == "ask_user" and not self.questions:
+            msg = "ask_user step requires non-empty questions"
+            raise ValueError(msg)
+        return self
 
 
 def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[StepAction]:
@@ -60,6 +79,8 @@ def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[S
             description=s.description,
             expected_output=s.expected_output,
             dependencies=s.dependencies,
+            kind=s.kind,
+            questions=list(s.questions) if s.questions else None,
         )
         for s in steps
     ]
@@ -73,6 +94,8 @@ def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGen
             description=s.description,
             expected_output=s.expected_output,
             dependencies=s.dependencies,
+            kind=s.kind,
+            questions=list(s.questions) if s.questions else None,
         )
         for s in steps
     ]
@@ -82,12 +105,18 @@ class StepAction(BaseModel):
     """Single step in execution strategy.
 
     IG-264: Keep execution-critical fields (used by executor).
+    RFC-622 / IG-462: ``kind`` and ``questions`` carry planner-emitted
+    ``ask_user`` steps through to the clarification relay.
 
     Attributes:
         id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
         description: What this step does
         expected_output: Expected result for evidence accumulation
         dependencies: Step IDs this depends on (for DAG execution).
+        kind: ``action`` (normal CoreAgent execution) or ``ask_user``
+            (clarification relay short-circuit).
+        questions: When ``kind == "ask_user"``, the questions to surface to
+            the user (TUI manual mode) or veritas (auto mode).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -97,6 +126,15 @@ class StepAction(BaseModel):
     )
     expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None
+    kind: StepKind = "action"
+    questions: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _validate_ask_user(self) -> StepAction:
+        if self.kind == "ask_user" and not self.questions:
+            msg = "ask_user step requires non-empty questions"
+            raise ValueError(msg)
+        return self
 
 
 class AgentDecision(BaseModel):

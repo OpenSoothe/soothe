@@ -76,6 +76,8 @@ class LoopRunRequest:
     timeout_seconds: float | None = None
     # Intent hint to bypass LLM classification
     intent_hint: str | None = None
+    # RFC-622: per-request clarification mode ("auto" / "manual" / None for daemon default)
+    clarification_mode: str | None = None
     # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched
     # goals. None for solo-mode requests (default).
     autopilot_job: AutopilotJob | None = None

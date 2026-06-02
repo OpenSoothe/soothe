@@ -102,6 +102,20 @@ class AutopilotWorkerMixin:
             config=self._config,  # type: ignore[attr-defined]
         )
 
+        # RFC-622: autopilot is headless — always answer clarifications via veritas.
+        from soothe.core.loop.clarification import build_clarification_policy_for_runner
+
+        try:
+            clarification_policy = build_clarification_policy_for_runner(
+                self._config,  # type: ignore[attr-defined]
+                mode="auto",
+            )
+        except Exception:
+            logger.exception(
+                "[Autopilot worker] failed to build clarification policy; goal will defer on clarifications"
+            )
+            clarification_policy = None
+
         # Pre-iteration hint: tell observers a goal is starting.
         yield _custom(
             {
@@ -122,6 +136,7 @@ class AutopilotWorkerMixin:
                 if max_iterations
                 else DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
                 loop_id=tid,
+                clarification_policy=clarification_policy,
             ):
                 if event_type == "completed":
                     plan_result = self._extract_plan_result(event_data)

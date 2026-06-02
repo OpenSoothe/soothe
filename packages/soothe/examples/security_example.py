@@ -221,7 +221,7 @@ def example_rate_limiting() -> None:
         for i in range(5):
             decision = enforcer.check_access(f"file{i}.txt", "read")
             status = "allowed" if decision.allowed else "blocked"
-            print(f"Operation {i+1}: {status}")
+            print(f"Operation {i + 1}: {status}")
 
 
 def example_custom_policy() -> None:
@@ -232,6 +232,7 @@ def example_custom_policy() -> None:
         """Custom validator that blocks temp files."""
         if "temp" in path.lower():
             from soothe.core.security.policy import PolicyDecision, PolicyAction
+
             return PolicyDecision(
                 allowed=False,
                 action=PolicyAction.DENY,

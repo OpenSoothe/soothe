@@ -22,6 +22,28 @@ Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in 
 - ``description``: Milestone line (<20 words). Executor handles fine-grained work.
 - ``expected_output``: Checkable completion signal.
 - ``dependencies``: Optional; step ids this depends on.
+- ``kind``: ``action`` (default) or ``ask_user``. See <ASK_USER_STEP>.
+- ``questions``: REQUIRED when ``kind=ask_user``; list of plain-text questions
+  the user must answer before the goal can continue. Forbidden otherwise.
+
+<ASK_USER_STEP>
+Emit ``kind="ask_user"`` ONLY when continuing requires information that is not
+present in the goal, context, or recent step outputs and cannot be inferred —
+e.g. an unstated preference, an unknown constraint, an ambiguous reference
+that meaningfully changes the plan. The runtime answers the question through
+the configured clarification relay and resumes planning automatically; do NOT
+also produce prose like "Please tell me…" in ``description``.
+
+Rules:
+- Emit AT MOST ONE ``ask_user`` step per wave; pair it with no other steps so
+  later actions can use the answer.
+- Populate ``questions`` with one or more concrete questions. Each question
+  must end in ``?`` and be self-contained.
+- Set ``description`` to a short third-person summary (e.g. ``Ask which target
+  format the user wants``); the question text itself belongs in ``questions``.
+- Do NOT use ``ask_user`` to confirm a step you could just do, to surface a
+  status update, or when context already supplies the answer.
+</ASK_USER_STEP>
 
 **execution_mode** (required when ``type=execute_steps``): only ``parallel`` or ``dependency``.
 - ``parallel`` (default): independent steps; executor may run them concurrently (bounded by config).
