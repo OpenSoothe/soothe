@@ -298,6 +298,7 @@ class WebSocketClient:
         response_schema: dict[str, Any] | None = None,
         response_schema_name: str | None = None,
         response_schema_strict: bool | None = None,
+        clarification_mode: str | None = None,
     ) -> None:
         """Send user input to the daemon for a subscribed loop (``loop_input``).
 
@@ -318,6 +319,9 @@ class WebSocketClient:
                 ``default`` role (or ``model`` override) is used. ``response_schema``
                 requests strict JSON output for text-only turns. Deprecated alias
                 ``image_to_text`` (attachments required) is normalized to ``direct_llm``.
+            clarification_mode: RFC-622 clarification relay mode for this turn
+                (``"auto"`` / ``"manual"``). ``None`` lets the daemon fall back
+                to its configured default.
         """
         payload: dict[str, Any] = {
             "type": "loop_input",
@@ -344,6 +348,8 @@ class WebSocketClient:
             payload["response_schema_name"] = response_schema_name
         if response_schema_strict is not None:
             payload["response_schema_strict"] = response_schema_strict
+        if clarification_mode is not None:
+            payload["clarification_mode"] = clarification_mode
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:

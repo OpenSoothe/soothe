@@ -443,6 +443,7 @@ class QueryEngine:
         response_schema: dict[str, Any] | None = None,
         response_schema_name: str | None = None,
         response_schema_strict: bool | None = None,
+        clarification_mode: str | None = None,
     ) -> None:
         """Stream a query through subprocess workers and broadcast events."""
         d = self._daemon
@@ -662,6 +663,8 @@ class QueryEngine:
                         stream_kwargs["max_iterations"] = max_iterations
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
+                if clarification_mode is not None:
+                    stream_kwargs["clarification_mode"] = clarification_mode
 
                 # All queries use subprocess isolation via the runner factory.
                 _runner_key = effective_loop_id or thread_id
@@ -681,6 +684,7 @@ class QueryEngine:
                     model=model,
                     model_params=model_params or {},
                     intent_hint=intent_hint,
+                    clarification_mode=stream_kwargs.get("clarification_mode"),
                 )
                 run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)

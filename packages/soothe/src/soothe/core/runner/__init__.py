@@ -501,6 +501,7 @@ class SootheRunner(
         client_loop_id: str | None = None,
         intent_hint: IntentHint | None = None,
         autopilot_job: Any = None,  # AutopilotJob | None — see RFC-222 revised
+        clarification_mode: str | None = None,  # RFC-622 per-request override
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -531,6 +532,9 @@ class SootheRunner(
                 ``autopilot_job.goal_description``; ``user_input`` is ignored. Emits a
                 ``GoalCompletionChunk`` exactly once before the terminal chunk.
                 ``None`` (default) keeps today's behavior.
+            clarification_mode: RFC-622 per-request mode (``"auto"`` / ``"manual"``).
+                ``None`` falls back to ``config.agent.clarification.default_mode``.
+                Ignored when ``autopilot_job`` is set (autopilot forces ``"auto"``).
         """
         # Update thread_id for logging if one is provided
         from soothe.core.workspace import resolve_daemon_workspace
@@ -578,6 +582,7 @@ class SootheRunner(
                 max_iterations=max_iterations or self._config.agent.loop.max_iterations,
                 preferred_subagent=preferred_subagent,
                 intent_hint=intent_hint,
+                clarification_mode=clarification_mode,
             ):
                 yield chunk
         finally:

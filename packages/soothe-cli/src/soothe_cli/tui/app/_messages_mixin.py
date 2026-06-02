@@ -586,9 +586,10 @@ class _MessagesMixin:
     def toggle_clarification_mode(self) -> None:
         """Flip clarification mode between Auto and Manual and refresh the badge.
 
-        The new mode is held on the app (``self._clarification_mode``) so future
-        turn submissions can attach it to the wire payload once daemon-side
-        wiring lands. The status-bar badge updates immediately; no toast is
+        The new mode is held on the app (``self._clarification_mode``) and
+        attached to every subsequent ``send_turn`` via the
+        ``clarification_mode`` field of the daemon's ``loop_input`` payload
+        (RFC-622). The status-bar badge updates immediately; no toast is
         emitted because the badge itself is the visual feedback.
         """
         current = getattr(self, "_clarification_mode", "auto")

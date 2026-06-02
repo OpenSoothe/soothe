@@ -361,3 +361,81 @@ async def test_stream_synthesizes_thread_id_when_none(
     ]
     # Synthesized form per the spec.
     assert captured["thread_id"] == "autopilot__goal_g42__attempt_3"
+
+
+# ---- RFC-622: autopilot always forces auto-mode clarification policy --
+
+
+@pytest.mark.asyncio
+async def test_stream_forces_auto_clarification_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Autopilot is headless — the policy must be built with ``mode='auto'``
+    and forwarded to ``AgentLoop.run_with_progress``."""
+    captured: dict[str, Any] = {}
+
+    class _CapturingFake(_FakeAgentLoop):
+        async def run_with_progress(self, **kwargs: Any):
+            captured.update(kwargs)
+            yield ("completed", {"result": _plan_result(is_done=True)})
+
+    _patch_agent_loop(monkeypatch, _CapturingFake())
+
+    builder_calls: list[dict[str, Any]] = []
+    sentinel_policy = object()
+
+    def _stub_builder(_config: Any, *, mode: str) -> Any:
+        builder_calls.append({"mode": mode})
+        return sentinel_policy
+
+    monkeypatch.setattr(
+        "soothe.core.loop.clarification.build_clarification_policy_for_runner",
+        _stub_builder,
+        raising=True,
+    )
+
+    mixin = _BareMixin()
+    _ = [
+        c
+        async for c in mixin._run_single_autopilot_goal(
+            _job(), thread_id="t1", workspace="/tmp", max_iterations=8
+        )
+    ]
+
+    assert builder_calls == [{"mode": "auto"}]
+    assert captured["clarification_policy"] is sentinel_policy
+
+
+@pytest.mark.asyncio
+async def test_stream_continues_when_clarification_builder_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the policy factory raises, the worker passes ``None`` and continues
+    rather than failing the whole goal."""
+    captured: dict[str, Any] = {}
+
+    class _CapturingFake(_FakeAgentLoop):
+        async def run_with_progress(self, **kwargs: Any):
+            captured.update(kwargs)
+            yield ("completed", {"result": _plan_result(is_done=True)})
+
+    _patch_agent_loop(monkeypatch, _CapturingFake())
+
+    def _raising_builder(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("no model")
+
+    monkeypatch.setattr(
+        "soothe.core.loop.clarification.build_clarification_policy_for_runner",
+        _raising_builder,
+        raising=True,
+    )
+
+    mixin = _BareMixin()
+    chunks = [
+        c
+        async for c in mixin._run_single_autopilot_goal(
+            _job(), thread_id="t1", workspace="/tmp", max_iterations=8
+        )
+    ]
+    assert captured["clarification_policy"] is None
+    assert chunks[-1][2]["outcome"] == "completed"

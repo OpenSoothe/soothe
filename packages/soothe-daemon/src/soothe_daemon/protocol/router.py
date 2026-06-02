@@ -39,7 +39,8 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Keys to merge into the internal queue payload: ``autonomous``,
         ``max_iterations``, ``preferred_subagent``, ``model``,
-        ``model_params``, ``intent_hint`` (normalized to lowercase when set).
+        ``model_params``, ``intent_hint`` (normalized to lowercase when set),
+        ``clarification_mode`` (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``).
     """
     max_iterations = msg.get("max_iterations")
     parsed_max: int | None = (
@@ -49,6 +50,12 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     preferred_norm = (
         preferred_subagent.strip() or None if isinstance(preferred_subagent, str) else None
     )
+    raw_clar_mode = msg.get("clarification_mode")
+    if isinstance(raw_clar_mode, str):
+        candidate = raw_clar_mode.strip().lower()
+        clarification_mode_norm: str | None = candidate if candidate in ("auto", "manual") else None
+    else:
+        clarification_mode_norm = None
     raw_model = msg.get("model")
     model = raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
     raw_params = msg.get("model_params")
@@ -81,6 +88,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "response_schema": response_schema,
         "response_schema_name": response_schema_name,
         "response_schema_strict": response_schema_strict,
+        "clarification_mode": clarification_mode_norm,
     }
 
 
@@ -490,6 +498,7 @@ class MessageRouter:
                 "autonomous": False,
                 "max_iterations": None,
                 "preferred_subagent": None,
+                "clarification_mode": None,
                 "client_id": client_id,
             },
         )

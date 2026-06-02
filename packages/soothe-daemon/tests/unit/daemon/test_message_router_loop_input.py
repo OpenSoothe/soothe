@@ -50,7 +50,27 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "response_schema": None,
         "response_schema_name": None,
         "response_schema_strict": None,
+        "clarification_mode": None,
     }
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("auto", "auto"),
+        ("AUTO", "auto"),
+        ("  Manual  ", "manual"),
+        ("manual", "manual"),
+        ("", None),
+        ("   ", None),
+        ("turbo", None),
+        (None, None),
+        (42, None),
+    ],
+)
+def test_queue_options_clarification_mode_normalized(value: object, expected: str | None) -> None:
+    msg = {} if value is None else {"clarification_mode": value}
+    assert _queue_options_from_daemon_message(msg)["clarification_mode"] == expected
 
 
 def test_queue_options_from_daemon_message_response_schema() -> None:
