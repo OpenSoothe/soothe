@@ -7,9 +7,8 @@ direct answer (``quiz_response``) to avoid a second LLM call. Loop continuation
 is derived structurally inside ``AgentLoop`` from the checkpoint, not classified.
 
 Prompt bodies live as ``.xml`` fragments under
-``soothe.core.prompts.fragments.classifiers``; this module re-exports them
-under their established public names so callers (``intention.classifier``)
-remain unchanged.
+``soothe.core.prompts.fragments.classifiers``; this module loads them directly
+to avoid importing ``soothe.core.prompts`` (circular import with config).
 
 XML structure:
 - <intent_instructions>: Static content (classification rules, JSON schema)
@@ -19,16 +18,22 @@ XML structure:
 
 from __future__ import annotations
 
-from soothe.core.prompts.fragments import (
-    INTENT_CLASSIFICATION_PROMPT_FRAGMENT,
-    INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT,
+from pathlib import Path
+
+_CLASSIFIER_FRAGMENTS_DIR = (
+    Path(__file__).resolve().parent.parent / "prompts" / "fragments" / "classifiers"
 )
 
+
+def _read_classifier_fragment(name: str) -> str:
+    return (_CLASSIFIER_FRAGMENTS_DIR / name).read_text(encoding="utf-8")
+
+
 # Intent classification prompt (quiz detection only; continue/new_goal decided structurally)
-INTENT_CLASSIFICATION_PROMPT = INTENT_CLASSIFICATION_PROMPT_FRAGMENT
+INTENT_CLASSIFICATION_PROMPT = _read_classifier_fragment("intent_classification.xml")
 
 # Retry prompt (simplified)
-INTENT_CLASSIFICATION_RETRY_PROMPT = INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT
+INTENT_CLASSIFICATION_RETRY_PROMPT = _read_classifier_fragment("intent_classification_retry.xml")
 
 __all__ = [
     "INTENT_CLASSIFICATION_PROMPT",

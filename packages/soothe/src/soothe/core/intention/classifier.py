@@ -11,7 +11,10 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
+
+from soothe.core.quiz_messages import build_quiz_system_message
 
 from .models import (
     IntentClassification,
@@ -150,6 +153,7 @@ class IntentClassifier:
         prompt = prompt_template.format(
             query=query,
             current_time=current_time,
+            assistant_name=self._assistant_name,
         )
 
         config = self._build_invoke_config(
@@ -158,8 +162,13 @@ class IntentClassifier:
             observability_metadata=observability_metadata,
         )
 
+        messages = [
+            SystemMessage(content=build_quiz_system_message(self._assistant_name)),
+            HumanMessage(content=prompt),
+        ]
+
         try:
-            llm_result = await self._intent_model.ainvoke(prompt, config=config)
+            llm_result = await self._intent_model.ainvoke(messages, config=config)
         except Exception:
             logger.exception("LLM intent classification call failed")
             raise
