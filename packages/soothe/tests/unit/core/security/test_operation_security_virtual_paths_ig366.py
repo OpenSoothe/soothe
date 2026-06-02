@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from soothe.config.models import SecurityConfig
-from soothe.core.governance.operation_security import WorkspaceToolOperationSecurity
+from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext
 
 
