@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.workspace import resolve_daemon_workspace, resolve_loop_workspace
@@ -81,49 +82,29 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     client_ws = str(raw_client_ws).strip() if raw_client_ws else None
     client_ws_id = str(raw_client_ws_id).strip() if raw_client_ws_id else None
 
-    try:
-        loop_workspace = resolve_loop_workspace(
-            loop_id=loop_id,
-            client_workspace=client_ws,
-            user_id=user,
-            client_workspace_id=client_ws_id,
-        )
-    except ValueError as e:
-        logger.warning(
-            "Loop %s: workspace resolution failed (%s); falling back to daemon workspace",
-            loop_id,
-            e,
-        )
-        loop_workspace = resolve_daemon_workspace()
-
-    # RFC-621: translate client path to container path when workspace_mount configured.
-    # Only translate when client_workspace was provided — daemon-fallback workspaces
-    # are container-local and don't need translation.
-    if client_ws is not None:
-        mapping = metadata.get("workspace_mapping", {})
-        ws_host_root = mapping.get("host_root")
-        ws_container_root = mapping.get("container_root")
-        if ws_host_root and ws_container_root:
-            from soothe.core.workspace.resolution import translate_client_path_to_container
-
-            try:
-                loop_workspace = translate_client_path_to_container(
-                    loop_workspace,
-                    host_root=ws_host_root,
-                    container_root=ws_container_root,
-                )
-            except ValueError:
-                pass  # fallback to unresolved workspace
+    # Trust persisted current_workspace — already contains the container path
+    # from loop_new. Only re-resolve when the field is missing (legacy or corrupt).
+    persisted_workspace = metadata.get("current_workspace")
+    if persisted_workspace and str(persisted_workspace).strip():
+        loop_workspace = Path(str(persisted_workspace).strip())
+    else:
+        try:
+            loop_workspace = resolve_loop_workspace(
+                loop_id=loop_id,
+                client_workspace=client_ws,
+                user_id=user,
+                client_workspace_id=client_ws_id,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Loop %s: workspace resolution failed (%s); falling back to daemon workspace",
+                loop_id,
+                e,
+            )
+            loop_workspace = resolve_daemon_workspace()
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)
-
-    try:
-        await daemon._persistence_manager.update_loop_metadata(
-            loop_id, current_workspace=str(loop_workspace)
-        )
-    except Exception as e:
-        logger.warning("Failed to persist current_workspace for loop %s: %s", loop_id, e)
 
     # RFC-221: set_current_thread_id() removed — thread binding is passed via LoopRunRequest
     # and applied inside the per-loop subprocess. The utility _runner singleton is no longer

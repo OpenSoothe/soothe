@@ -4,6 +4,8 @@
 
 Implement prefix-based path mapping between client workspace paths and container paths for Docker deployments. When `workspace_mount` is configured, the daemon translates client paths at the `loop_new` boundary; the SDK translates container paths back for display. Non-container deployments are unaffected.
 
+Additionally, separate the persisted workspace directory from the Docker mount point, unify resolution chains under a shared core, consolidate ContextVar management, trust persisted `current_workspace` in loop isolation, and wire `WorkspaceAwareBackend` through the cache.
+
 **RFC**: RFC-621
 **Status**: In Progress
 
@@ -11,9 +13,15 @@ Implement prefix-based path mapping between client workspace paths and container
 
 - Add `workspace_mount` config model and YAML entries
 - Add path translation functions in `soothe.core.workspace.resolution`
-- Apply translation in daemon `loop_new` handler and loop isolation
-- Add `WorkspaceMapping` to SDK and apply in CLI event rendering
-- Update `deploy/docker-compose.yml` with workspace volume mount
+- Apply translation in daemon `loop_new` handler (guard: `client_workspace is not None`)
+- Trust persisted `current_workspace` in `bind_execution_thread_for_loop`
+- Move persisted workspaces from `$SOOTHE_HOME/workspaces/` to `$SOOTHE_HOME/data/workspaces/`
+- Add one-time migration for existing workspace directories
+- Add `WorkspaceMapping` to SDK with boundary-safe translation
+- Create shared resolution core with pluggable precedence (`WorkspacePrecedence`)
+- Create unified `WorkspaceContext` (single ContextVar replacing three)
+- Wire `WorkspaceAwareBackend` through `get_workspace_backend()` cache
+- Update deploy configs
 
 ## Implementation Steps
 
@@ -35,7 +43,9 @@ class WorkspaceMountConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_pair(self) -> WorkspaceMountConfig:
-        if bool(self.host_root) != bool(self.container_root):
+        has_host = bool(self.host_root and self.host_root.strip())
+        has_container = bool(self.container_root and self.container_root.strip())
+        if has_host != has_container:
             msg = (
                 "workspace_mount.host_root and workspace_mount.container_root "
                 "must both be set or both be unset"
@@ -45,7 +55,7 @@ class WorkspaceMountConfig(BaseModel):
 
     @property
     def is_configured(self) -> bool:
-        return self.host_root is not None and self.container_root is not None
+        return bool(self.host_root) and bool(self.container_root)
 ```
 
 **File**: `packages/soothe/src/soothe/config/settings.py`
@@ -57,401 +67,259 @@ workspace_mount: WorkspaceMountConfig = Field(default_factory=WorkspaceMountConf
 """Container workspace path mapping (RFC-621)."""
 ```
 
-Add import for `WorkspaceMountConfig` in the import block (lines 13-36).
+Add import for `WorkspaceMountConfig` in the import block.
 
 ### Step 2: YAML Config Files
 
 **File**: `config/config.template.yml`
 
-Add after the WORKSPACE CONFIGURATION comments (after line 532):
-
-```yaml
-# Workspace mount mapping for container deployments (RFC-621).
-# When the daemon runs inside a Docker container, client paths must be translated
-# to container paths. Set both fields to enable; leave both unset for local runs.
-# The Docker volume mount must match: -v <host_root>:<container_root>
-workspace_mount:
-  host_root: null           # e.g. /var/run/soothe/workspaces
-  container_root: null      # e.g. /workspaces
-```
+Add `workspace_mount` section with `host_root: null` and `container_root: null`.
 
 **File**: `config/config.dev.yml`
 
 Add the same section with both fields as `null` (disabled by default).
 
+**File**: `deploy/config.yml.example`
+
+Add `workspace_mount` with example values:
+```yaml
+workspace_mount:
+  host_root: /Users/xiamingchen/Workspace
+  container_root: /var/lib/soothe/workspaces
+```
+
 ### Step 3: Path Translation Functions
 
 **File**: `packages/soothe/src/soothe/core/workspace/resolution.py`
 
-Add two functions after `validate_client_workspace()` (after line ~191):
+Add `translate_client_path_to_container()` and `translate_container_path_to_client()` after `validate_client_workspace()` (per RFC-621 §4).
 
+### Step 4: Move Persisted Workspaces to `$SOOTHE_HOME/data/workspaces/`
+
+**File**: `packages/soothe/src/soothe/core/workspace/loop_workspace.py`
+
+In `resolve_persisted_loop_workspace()`, change:
 ```python
-def translate_client_path_to_container(
-    client_path: str | Path,
-    *,
-    host_root: str | Path | None = None,
-    container_root: str | Path | None = None,
-) -> Path:
-    """Translate a client-side path to its container-side equivalent (RFC-621).
-
-    When host_root/container_root are not configured, returns the path unchanged.
-    Raises ValueError if client_path is not under host_root.
-    """
-    if not host_root or not container_root:
-        return Path(client_path).resolve()
-
-    host = Path(host_root).resolve()
-    container = Path(container_root).resolve()
-    resolved = Path(client_path).resolve()
-
-    try:
-        relative = resolved.relative_to(host)
-    except ValueError:
-        msg = (
-            f"Client workspace {resolved} is not under configured "
-            f"host_root {host}. All workspaces must reside under the "
-            f"configured host_root for container deployments."
-        )
-        raise ValueError(msg) from None
-
-    return container / relative
-
-
-def translate_container_path_to_client(
-    container_path: str | Path,
-    *,
-    host_root: str | Path | None = None,
-    container_root: str | Path | None = None,
-) -> Path:
-    """Translate a container-side path to its client-side equivalent (RFC-621).
-
-    When host_root/container_root are not configured, returns the path unchanged.
-    If the path is not under container_root, returns it unchanged.
-    """
-    if not host_root or not container_root:
-        return Path(container_path).resolve()
-
-    host = Path(host_root).resolve()
-    container = Path(container_root).resolve()
-    resolved = Path(container_path).resolve()
-
-    try:
-        relative = resolved.relative_to(container)
-    except ValueError:
-        return resolved
-
-    return host / relative
+workspace_path = home / "workspaces" / normalized_user / ws_name
+```
+to:
+```python
+workspace_path = home / "data" / "workspaces" / normalized_user / ws_name
 ```
 
-### Step 4: Daemon `loop_new` Handler
+Update docstrings to reference `$SOOTHE_HOME/data/workspaces/`.
+
+**File**: `packages/soothe/src/soothe/core/workspace/resolution.py`
+
+In `cleanup_anonymous_workspaces()`, change:
+```python
+workspaces_dir = Path(SOOTHE_HOME) / "workspaces"
+```
+to:
+```python
+workspaces_dir = Path(SOOTHE_HOME) / "data" / "workspaces"
+```
+
+### Step 5: One-Time Migration
+
+**File**: `packages/soothe/src/soothe/core/workspace/migration.py` (NEW)
+
+```python
+def migrate_workspaces_to_data_dir() -> None:
+    """One-time migration: move persisted workspaces to $SOOTHE_HOME/data/workspaces/."""
+    from soothe.config import SOOTHE_HOME
+
+    home = Path(SOOTHE_HOME)
+    old_dir = home / "workspaces"
+    new_dir = home / "data" / "workspaces"
+
+    if not old_dir.exists() or new_dir.exists():
+        return  # nothing to migrate or already done
+
+    # Check if old_dir looks like a Docker mount (contains non-workspace content)
+    workspace_indicators = {"anonymous"} | {d for d in old_dir.iterdir() if d.name.startswith("ws_")}
+    has_non_workspace = any(d not in workspace_indicators for d in old_dir.iterdir() if d.is_dir())
+
+    if has_non_workspace:
+        logger.info("workspaces/ appears to be a Docker mount; skipping migration")
+        return
+
+    # Move anonymous/ and ws_* user dirs
+    new_dir.mkdir(parents=True, exist_ok=True)
+    moved = 0
+    for item in old_dir.iterdir():
+        if item.is_dir() and (item.name == "anonymous" or item.name.startswith("ws_")):
+            dest = new_dir / item.name
+            if not dest.exists():
+                shutil.move(str(item), str(dest))
+                moved += 1
+
+    if moved:
+        logger.info("Migrated %d workspace directories to %s", moved, new_dir)
+```
+
+Call from `server.py` daemon startup, before other initialization.
+
+### Step 6: Daemon `loop_new` Handler
 
 **File**: `packages/soothe-daemon/src/soothe_daemon/protocol/router.py`
 
-In `_handle_loop_new` (lines 1108-1227), after `resolved_workspace` is computed (line ~1181), add translation:
+In `_handle_loop_new`, after `resolved_workspace` is computed, add translation with guard:
 
 ```python
-# --- RFC-621: translate client path to container path ---
-from soothe.core.workspace.resolution import translate_client_path_to_container
-
-mount = d._config.workspace_mount
-host_root = mount.host_root if mount and mount.is_configured else None
-container_root = mount.container_root if mount and mount.is_configured else None
-
-try:
-    effective_workspace = translate_client_path_to_container(
-        resolved_workspace,
-        host_root=host_root,
-        container_root=container_root,
-    )
-except ValueError as e:
-    await d._send_client_message(client_id, {
-        "type": "error",
-        "error": str(e),
-        "request_id": request_id,
-    })
-    return
+effective_workspace = resolved_workspace
+if client_workspace is not None and host_root is not None:
+    try:
+        effective_workspace = translate_client_path_to_container(
+            resolved_workspace, host_root=host_root, container_root=container_root,
+        )
+    except ValueError as e:
+        # send error response and return
 ```
 
-Update `meta_updates` dict (line ~1197) — change `current_workspace` to use `effective_workspace` and add `workspace_mapping`:
+Update `meta_updates` to use `effective_workspace` for `current_workspace` and add `workspace_mapping` when `host_root is not None`. Include `workspace_mapping` in the `loop_new_response`.
 
-```python
-meta_updates: dict[str, Any] = {
-    "is_ephemeral": is_ephemeral,
-    "last_message_at": now,
-    "current_workspace": str(effective_workspace),   # was resolved_workspace
-}
-if client_workspace is not None:
-    meta_updates["client_workspace"] = client_workspace
-if host_root is not None:
-    meta_updates["workspace_mapping"] = {
-        "host_root": host_root,
-        "container_root": container_root,
-    }
-```
-
-Update `loop_new_response` (line ~1218) to include mapping:
-
-```python
-response_msg: dict[str, Any] = {
-    "type": "loop_new_response",
-    "loop_id": loop_id,
-    "success": True,
-    "is_ephemeral": is_ephemeral,
-    "request_id": request_id,
-}
-if host_root is not None:
-    response_msg["workspace_mapping"] = {
-        "host_root": host_root,
-        "container_root": container_root,
-        "client_workspace": client_workspace,
-        "container_workspace": str(effective_workspace),
-    }
-await d._send_client_message(client_id, response_msg)
-```
-
-### Step 5: Loop Isolation Re-resolution
+### Step 7: Trust Persisted `current_workspace` in Loop Isolation
 
 **File**: `packages/soothe-daemon/src/soothe_daemon/loop_isolation.py`
 
-In `bind_execution_thread_for_loop` (lines 25-112), after `loop_workspace` is resolved (line ~97), add translation:
+Replace the full re-resolution block in `bind_execution_thread_for_loop` with:
 
 ```python
-# --- RFC-621: re-apply container path translation ---
-from soothe.core.workspace.resolution import translate_client_path_to_container
-
-mapping = metadata.get("workspace_mapping", {})
-ws_host_root = mapping.get("host_root")
-ws_container_root = mapping.get("container_root")
-
-try:
-    loop_workspace = translate_client_path_to_container(
-        loop_workspace,
-        host_root=ws_host_root,
-        container_root=ws_container_root,
-    )
-except ValueError:
-    pass  # fallback to unresolved workspace
-```
-
-This goes before `daemon._thread_registry.set_workspace(thread_id, loop_workspace)` (line ~99).
-
-### Step 6: SDK WorkspaceMapping
-
-**File**: `packages/soothe-sdk/src/soothe_sdk/client/session.py`
-
-After extracting `loop_id` from `loop_new_response` (line ~108), parse the mapping:
-
-```python
-# --- RFC-621: store workspace mapping ---
-from soothe_sdk.client.protocol import WorkspaceMapping
-
-mapping_data = new_resp.get("workspace_mapping")
-if mapping_data and mapping_data.get("host_root"):
-    workspace_mapping = WorkspaceMapping(
-        host_root=mapping_data["host_root"],
-        container_root=mapping_data["container_root"],
-    )
+# Trust persisted current_workspace — already contains container path from loop_new
+persisted_workspace = metadata.get("current_workspace")
+if persisted_workspace and str(persisted_workspace).strip():
+    loop_workspace = Path(persisted_workspace)
 else:
-    workspace_mapping = WorkspaceMapping(host_root=None, container_root=None)
+    # Legacy/corrupt metadata — full re-resolution
+    loop_workspace = resolve_loop_workspace(
+        loop_id=loop_id,
+        client_workspace=client_ws,
+        user_id=user,
+        client_workspace_id=client_ws_id,
+    )
+
+daemon._thread_registry.set_workspace(thread_id, loop_workspace)
 ```
 
-Store on the session/client object so it's available for event translation. The exact storage location depends on the session architecture — likely as an attribute on the `DaemonSession` or `WebSocketClient`.
+Remove the `workspace_mapping` / `translate_client_path_to_container` block entirely. Translation is baked into `current_workspace` at `loop_new` time.
+
+### Step 8: Shared Resolution Core
+
+**File**: `packages/soothe/src/soothe/core/workspace/core_resolution.py` (NEW)
+
+```python
+class WorkspacePrecedence(Enum):
+    LOOP = "loop"
+    STREAM = "stream"
+    TOOL_EXECUTION = "tool"
+
+@dataclass(frozen=True, slots=True)
+class ResolvedWorkspace:
+    path: str
+    source: str
+
+def resolve_workspace(precedence: WorkspacePrecedence, **sources: Any) -> ResolvedWorkspace:
+    ...
+```
+
+Each precedence level has an ordered list of source checkers. The core iterates and returns the first match.
+
+**Existing functions become thin wrappers:**
+- `loop_workspace.py`: `resolve_loop_workspace` → `resolve_workspace(WorkspacePrecedence.LOOP, ...)`
+- `stream_resolution.py`: `resolve_workspace_for_stream` → `resolve_workspace(WorkspacePrecedence.STREAM, ...)`
+- `runtime_resolution.py`: `resolve_workspace_for_tool_execution` → `resolve_workspace(WorkspacePrecedence.TOOL_EXECUTION, ...)`
+
+Public API of existing functions does not change.
+
+### Step 9: WorkspaceContext — Unified ContextVar
+
+**File**: `packages/soothe/src/soothe/core/workspace/context.py` (NEW)
+
+```python
+@dataclass
+class WorkspaceContext:
+    workspace: Path | None = None
+    virtual_mode: bool = False
+    virtual_home: Path | None = None
+
+_workspace_context: ContextVar[WorkspaceContext] = ContextVar(
+    "soothe_workspace_context", default=WorkspaceContext()
+)
+
+def set_workspace_context(workspace: Path, virtual_mode: bool = False) -> None: ...
+def get_workspace_context() -> WorkspaceContext: ...
+def clear_workspace_context() -> None: ...
+```
+
+**Files to update:**
+- `framework_filesystem.py`: `set_current_workspace` / `get_current_workspace` / `clear_current_workspace` delegate to `WorkspaceContext`.
+- `virtual_home.py`: `set_virtual_mode_context` / `get_virtual_home` / `clear_virtual_mode_context` delegate to `WorkspaceContext`.
+
+### Step 10: WorkspaceAwareBackend Cache Wiring
+
+**File**: `packages/soothe/src/soothe/core/workspace/normalized_backend.py`
+
+In `WorkspaceAwareBackend.__call__` and `_get_backend`, replace `NormalizedPathBackend(...)` with `get_workspace_backend(...)`.
+
+### Step 11: SDK WorkspaceMapping
 
 **File**: `packages/soothe-sdk/src/soothe_sdk/client/protocol.py`
 
-Add `WorkspaceMapping` dataclass:
+Add `WorkspaceMapping` dataclass with boundary-safe `translate_to_client` and `translate_to_container` methods (per RFC-621 §9).
 
-```python
-from dataclasses import dataclass
+**File**: `packages/soothe-sdk/src/soothe_sdk/client/session.py`
 
-@dataclass
-class WorkspaceMapping:
-    """Bidirectional path mapping for container deployments (RFC-621)."""
+Parse `workspace_mapping` from `loop_new_response`, create `WorkspaceMapping`, store on session.
 
-    host_root: str | None
-    container_root: str | None
-
-    def translate_to_client(self, path: str) -> str:
-        """Translate a container path to a client path for display."""
-        if not self.host_root or not self.container_root:
-            return path
-        if path.startswith(self.container_root):
-            return self.host_root + path[len(self.container_root):]
-        return path
-
-    def translate_to_container(self, path: str) -> str:
-        """Translate a client path to a container path (outgoing messages)."""
-        if not self.host_root or not self.container_root:
-            return path
-        if path.startswith(self.host_root):
-            return self.container_root + path[len(self.host_root):]
-        return path
-```
-
-### Step 7: CLI Event Path Translation
+### Step 12: CLI Event Path Translation
 
 **File**: `packages/soothe-sdk/src/soothe_sdk/utils/formatting.py`
 
-In `convert_and_abbreviate_path()` (lines 50-89), add workspace mapping translation before the existing abbreviation logic. The mapping needs to be accessible — either passed as a parameter or stored in a module-level context variable.
-
-Simplest approach: add an optional `workspace_mapping` parameter:
-
-```python
-def convert_and_abbreviate_path(
-    path: str,
-    *,
-    base_dir: str | None = None,
-    workspace_mapping: WorkspaceMapping | None = None,
-) -> str:
-    if workspace_mapping and workspace_mapping.is_configured:
-        path = workspace_mapping.translate_to_client(path)
-    # ... existing abbreviation logic ...
-```
+Add optional `workspace_mapping` parameter to `convert_and_abbreviate_path()`.
 
 **File**: `packages/soothe-cli/src/soothe_cli/tui/tool_display.py`
 
-Where `convert_and_abbreviate_path` is called, pass the session's `workspace_mapping`.
+Pass the session's `workspace_mapping` to formatting calls.
 
-### Step 8: Docker Compose
+### Step 13: Docker Compose and Deploy Config
 
 **File**: `deploy/docker-compose.yml`
 
-Add workspace volume mount to `soothed` service:
-
+Add workspace volume mount:
 ```yaml
-soothed:
-  volumes:
-    - soothe_daemon_data:/var/lib/soothe
-    - ./config.yml:/var/lib/soothe/config/config.yml:ro
-    # RFC-621: Workspace host convention — mount host workspace root
-    # Adjust the host path to match workspace_mount.host_root in config.yml
-    # - /var/run/soothe/workspaces:/workspaces
+- /Users/xiamingchen/Workspace:/var/lib/soothe/workspaces
 ```
 
-The mount is commented out by default (not all deployments use it). Uncomment and set the host path when enabling `workspace_mount` in config.
+**File**: `deploy/config.yml.example`
 
-### Step 9: Tests
+Add `workspace_mount` section with `host_root` and `container_root`.
+
+### Step 14: Tests
 
 **File**: `packages/soothe/tests/unit/core/workspace/test_workspace_mount.py`
 
-```python
-"""Tests for workspace host convention path mapping (RFC-621, IG-458)."""
+Tests for translation functions, config model, boundary-safe prefix matching.
 
-import pytest
-from pathlib import Path
+**File**: `packages/soothe/tests/unit/core/workspace/test_workspace_context.py` (NEW)
 
-from soothe.core.workspace.resolution import (
-    translate_client_path_to_container,
-    translate_container_path_to_client,
-)
-from soothe.config.models import WorkspaceMountConfig
+Tests for `WorkspaceContext` set/get/clear.
 
+**File**: `packages/soothe/tests/unit/core/workspace/test_core_resolution.py` (NEW)
 
-class TestTranslateClientPathToContainer:
-    def test_identity_when_not_configured(self):
-        assert translate_client_path_to_container("/foo/bar") == Path("/foo/bar")
+Tests for `resolve_workspace()` with each precedence level.
 
-    def test_valid_mapping(self):
-        result = translate_client_path_to_container(
-            "/var/run/soothe/workspaces/project-a",
-            host_root="/var/run/soothe/workspaces",
-            container_root="/workspaces",
-        )
-        assert result == Path("/workspaces/project-a")
+**File**: `packages/soothe/tests/unit/core/workspace/test_migration.py` (NEW)
 
-    def test_nested_path(self):
-        result = translate_client_path_to_container(
-            "/var/run/soothe/workspaces/project-a/src/main.py",
-            host_root="/var/run/soothe/workspaces",
-            container_root="/workspaces",
-        )
-        assert result == Path("/workspaces/project-a/src/main.py")
+Tests for one-time directory migration: old layout → new layout, Docker mount no-op.
 
-    def test_workspace_outside_host_root_raises(self):
-        with pytest.raises(ValueError, match="not under configured host_root"):
-            translate_client_path_to_container(
-                "/other/path/project",
-                host_root="/var/run/soothe/workspaces",
-                container_root="/workspaces",
-            )
+**File**: `packages/soothe-sdk/tests/unit/test_workspace_mapping.py`
 
-    def test_host_root_itself(self):
-        result = translate_client_path_to_container(
-            "/var/run/soothe/workspaces",
-            host_root="/var/run/soothe/workspaces",
-            container_root="/workspaces",
-        )
-        assert result == Path("/workspaces")
+Tests for SDK `WorkspaceMapping` boundary-safe translation.
 
+**File**: existing workspace tests
 
-class TestTranslateContainerPathToClient:
-    def test_identity_when_not_configured(self):
-        assert translate_container_path_to_client("/foo/bar") == Path("/foo/bar")
-
-    def test_valid_mapping(self):
-        result = translate_container_path_to_client(
-            "/workspaces/project-a",
-            host_root="/var/run/soothe/workspaces",
-            container_root="/workspaces",
-        )
-        assert result == Path("/var/run/soothe/workspaces/project-a")
-
-    def test_path_outside_container_root_unchanged(self):
-        result = translate_container_path_to_client(
-            "/etc/config",
-            host_root="/var/run/soothe/workspaces",
-            container_root="/workspaces",
-        )
-        assert result == Path("/etc/config")
-
-
-class TestWorkspaceMountConfig:
-    def test_both_none_is_valid(self):
-        cfg = WorkspaceMountConfig()
-        assert not cfg.is_configured
-
-    def test_both_set_is_valid(self):
-        cfg = WorkspaceMountConfig(host_root="/host", container_root="/container")
-        assert cfg.is_configured
-
-    def test_only_one_set_raises(self):
-        with pytest.raises(ValueError, match="must both be set"):
-            WorkspaceMountConfig(host_root="/host")
-
-    def test_only_container_set_raises(self):
-        with pytest.raises(ValueError, match="must both be set"):
-            WorkspaceMountConfig(container_root="/container")
-```
-
-**File**: `packages/soothe-sdk/tests/test_workspace_mapping.py`
-
-```python
-"""Tests for SDK WorkspaceMapping (RFC-621, IG-458)."""
-
-from soothe_sdk.client.protocol import WorkspaceMapping
-
-
-class TestWorkspaceMapping:
-    def test_translate_to_client_when_not_configured(self):
-        m = WorkspaceMapping(host_root=None, container_root=None)
-        assert m.translate_to_client("/workspaces/foo") == "/workspaces/foo"
-
-    def test_translate_to_client_valid(self):
-        m = WorkspaceMapping(host_root="/host/ws", container_root="/workspaces")
-        assert m.translate_to_client("/workspaces/project-a/src/main.py") == "/host/ws/project-a/src/main.py"
-
-    def test_translate_to_client_path_outside_container_root(self):
-        m = WorkspaceMapping(host_root="/host/ws", container_root="/workspaces")
-        assert m.translate_to_client("/etc/config") == "/etc/config"
-
-    def test_translate_to_container_valid(self):
-        m = WorkspaceMapping(host_root="/host/ws", container_root="/workspaces")
-        assert m.translate_to_container("/host/ws/project-a") == "/workspaces/project-a"
-
-    def test_translate_to_container_path_outside_host_root(self):
-        m = WorkspaceMapping(host_root="/host/ws", container_root="/workspaces")
-        assert m.translate_to_container("/other/path") == "/other/path"
-```
+Update path expectations from `$SOOTHE_HOME/workspaces/` to `$SOOTHE_HOME/data/workspaces/`.
 
 ## Verification
 
@@ -470,3 +338,6 @@ Additionally, test with a Docker deployment:
 5. Verify `loop_new_response` contains `workspace_mapping`
 6. Verify file tools operate on container paths
 7. Verify TUI displays client paths (SDK translation)
+8. Verify `bind_execution_thread_for_loop` uses persisted `current_workspace` (no re-resolution)
+9. Verify persisted workspaces go to `$SOOTHE_HOME/data/workspaces/`
+10. Verify migration moves old workspace directories on startup
