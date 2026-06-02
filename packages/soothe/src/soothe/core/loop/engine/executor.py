@@ -38,10 +38,6 @@ from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
-from soothe.core.context.model_override import (
-    attach_stream_model_override,
-    reset_stream_model_override,
-)
 from soothe.core.loop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
     await_next_graph_stream_chunk,
@@ -1383,8 +1379,8 @@ class Executor:
         This method yields stream events (custom events from tool execution)
         during execution, then yields final StepResult objects.
 
-        IG-XXX: Uses fast model for tool-heavy execution phase to reduce latency.
-        IG-XXX: Bounds concurrent tool calls per thread via semaphore.
+        Uses router.default for tool-heavy execution phase.
+        Bounds concurrent tool calls per thread via semaphore.
 
         Args:
             decision: AgentDecision with steps to execute
@@ -1400,16 +1396,6 @@ class Executor:
             return
 
         max_parallel_tools = self._max_parallel_tools_limit()
-
-        # IG-XXX: Use fast model for execute phase (tool-heavy operations)
-        # The execute phase runs tools which benefit from a faster/cheaper model
-        # rather than the default heavy model used for planning/reasoning
-        model_override_token = None
-        if self._config is not None:
-            fast_model_spec = self._config.router.fast
-            if fast_model_spec:
-                model_override_token = attach_stream_model_override(fast_model_spec, {})
-                logger.info("[Execute] Using fast model override: %s", fast_model_spec)
 
         has_dependency_edges = any(step.dependencies for step in decision.steps)
         effective_execution_mode = "dependency" if has_dependency_edges else decision.execution_mode
@@ -1428,21 +1414,15 @@ class Executor:
             max_parallel_tools,
         )
 
-        try:
-            if effective_execution_mode == "parallel":
-                async for item in self._execute_parallel_waves(ready_steps, state):
-                    yield item
-            elif effective_execution_mode == "dependency":
-                async for item in self._execute_dependency(decision, state):
-                    yield item
-            else:
-                msg = f"Unknown execution mode: {decision.execution_mode}"
-                raise ValueError(msg)
-        finally:
-            # Reset model override after execute phase completes
-            if model_override_token is not None:
-                reset_stream_model_override(model_override_token)
-                logger.debug("[Execute] Fast model override reset")
+        if effective_execution_mode == "parallel":
+            async for item in self._execute_parallel_waves(ready_steps, state):
+                yield item
+        elif effective_execution_mode == "dependency":
+            async for item in self._execute_dependency(decision, state):
+                yield item
+        else:
+            msg = f"Unknown execution mode: {decision.execution_mode}"
+            raise ValueError(msg)
 
     def _max_parallel_tools_limit(self) -> int:
         """Configured concurrent tool-call cap for a single execute step stream."""
