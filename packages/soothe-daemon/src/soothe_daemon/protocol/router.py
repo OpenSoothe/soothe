@@ -1180,6 +1180,27 @@ class MessageRouter:
 
             resolved_workspace = resolve_daemon_workspace()
 
+        # RFC-621: translate client path to container path when workspace_mount configured
+        from soothe.core.workspace.resolution import translate_client_path_to_container
+
+        mount = d._config.workspace_mount
+        host_root = mount.host_root if mount and mount.is_configured else None
+        container_root = mount.container_root if mount and mount.is_configured else None
+
+        try:
+            effective_workspace = translate_client_path_to_container(
+                resolved_workspace,
+                host_root=host_root,
+                container_root=container_root,
+            )
+        except ValueError as e:
+            logger.warning("[loop_new] Loop %s workspace mount error: %s", loop_id, e)
+            await d._send_client_message(
+                client_id,
+                {"type": "error", "error": str(e), "request_id": request_id},
+            )
+            return
+
         now = datetime.now(UTC).isoformat()
 
         # Create loop directory (still needed for goals/ and working_memory/ subdirs)
@@ -1197,7 +1218,7 @@ class MessageRouter:
         meta_updates: dict[str, Any] = {
             "is_ephemeral": is_ephemeral,
             "last_message_at": now,
-            "current_workspace": str(resolved_workspace),
+            "current_workspace": str(effective_workspace),
         }
         if client_workspace is not None:
             meta_updates["client_workspace"] = client_workspace
@@ -1205,26 +1226,36 @@ class MessageRouter:
             meta_updates["user_id"] = user
         if client_workspace_id is not None:
             meta_updates["client_workspace_id"] = client_workspace_id
+        if host_root is not None:
+            meta_updates["workspace_mapping"] = {
+                "host_root": host_root,
+                "container_root": container_root,
+            }
         await d._persistence_manager.update_loop_metadata(loop_id, **meta_updates)
 
         logger.info(
             "Created new loop %s (ephemeral=%s workspace=%s)",
             loop_id,
             is_ephemeral,
-            resolved_workspace,
+            effective_workspace,
         )
 
         # Send response
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "loop_new_response",
-                "loop_id": loop_id,
-                "success": True,
-                "is_ephemeral": is_ephemeral,
-                "request_id": request_id,
-            },
-        )
+        response_msg: dict[str, Any] = {
+            "type": "loop_new_response",
+            "loop_id": loop_id,
+            "success": True,
+            "is_ephemeral": is_ephemeral,
+            "request_id": request_id,
+        }
+        if host_root is not None:
+            response_msg["workspace_mapping"] = {
+                "host_root": host_root,
+                "container_root": container_root,
+                "client_workspace": client_workspace,
+                "container_workspace": str(effective_workspace),
+            }
+        await d._send_client_message(client_id, response_msg)
 
     async def _handle_loop_input(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_input RPC: authorize, then enqueue to the loop's isolated input queue."""

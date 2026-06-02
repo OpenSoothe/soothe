@@ -530,3 +530,11 @@ optimization:
 # The anonymous workspace tree is removed on daemon shutdown.
 #
 # loop_new RPC fields: client_workspace (or legacy workspace), user_id, client_workspace_id.
+
+# Workspace mount mapping for container deployments (RFC-621).
+# When the daemon runs inside a Docker container, client paths must be translated
+# to container paths. Set both fields to enable; leave both unset for local runs.
+# The Docker volume mount must match: -v <host_root>:<container_root>
+workspace_mount:
+  host_root: null           # e.g. /var/run/soothe/workspaces
+  container_root: null      # e.g. /workspaces

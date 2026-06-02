@@ -87,6 +87,8 @@ async def bootstrap_loop_session(
     await client.request_daemon_ready()
     await client.wait_for_daemon_ready(ready_timeout_s=daemon_ready_timeout_s)
 
+    mapping_data: dict[str, Any] | None = None
+
     if resume_loop_id:
         loop_id = resume_loop_id
     else:
@@ -109,6 +111,19 @@ async def bootstrap_loop_session(
         loop_id = str(new_resp.get("loop_id") or "")
         if not loop_id:
             raise ValueError("loop_new_response missing loop_id")
+
+        # RFC-621: parse workspace mapping for container path translation
+        mapping_data = new_resp.get("workspace_mapping")
+        if mapping_data and mapping_data.get("host_root") and mapping_data.get("container_root"):
+            from soothe_sdk.client.protocol import WorkspaceMapping
+
+            workspace_mapping = WorkspaceMapping(
+                host_root=mapping_data["host_root"],
+                container_root=mapping_data["container_root"],
+            )
+            # Store on client for use in event path translation
+            if hasattr(client, "workspace_mapping"):
+                client.workspace_mapping = workspace_mapping
 
     # IG-441: three first-class modes (batch / adaptive / streaming). Unknown
     # values fall back to ``adaptive`` (the new bootstrap default).
@@ -134,7 +149,10 @@ async def bootstrap_loop_session(
         verbosity,
         delivery,
     )
-    return {"type": "session_ready", "loop_id": loop_id, "success": True}
+    result: dict[str, Any] = {"type": "session_ready", "loop_id": loop_id, "success": True}
+    if mapping_data and mapping_data.get("host_root"):
+        result["workspace_mapping"] = mapping_data
+    return result
 
 
 __all__ = [

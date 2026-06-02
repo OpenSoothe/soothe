@@ -1507,6 +1507,39 @@ class FilesystemMiddlewareConfig(BaseModel):
     """Token limit before evicting large tool results (inherited from FilesystemMiddleware)."""
 
 
+class WorkspaceMountConfig(BaseModel):
+    """Path mapping for containerized daemon deployments (RFC-621).
+
+    When the daemon runs inside a Docker container, client workspace paths
+    must be translated to container paths. Set both host_root and
+    container_root to enable; leave both unset for local runs.
+    """
+
+    host_root: str | None = None
+    """Parent directory on the host machine that is volume-mounted into the container."""
+
+    container_root: str | None = None
+    """Mount point inside the container where host_root is mounted."""
+
+    @model_validator(mode="after")
+    def _validate_pair(self) -> WorkspaceMountConfig:
+        """Both fields must be set together, or neither."""
+        has_host = bool(self.host_root and self.host_root.strip())
+        has_container = bool(self.container_root and self.container_root.strip())
+        if has_host != has_container:
+            msg = (
+                "workspace_mount.host_root and workspace_mount.container_root "
+                "must both be set or both be unset"
+            )
+            raise ValueError(msg)
+        return self
+
+    @property
+    def is_configured(self) -> bool:
+        """True when both host_root and container_root are non-empty."""
+        return bool(self.host_root) and bool(self.container_root)
+
+
 class CodeInterpreterConfig(BaseModel):
     """Configuration for CodeInterpreterMiddleware (IG-423).
 
