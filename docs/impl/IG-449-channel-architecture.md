@@ -3,7 +3,7 @@
 **IG**: 449
 **Title**: Unified Channel Architecture Implementation
 **RFC**: RFC-620
-**Status**: In Progress
+**Status**: Completed
 **Created**: 2026-05-29
 **Author**: Xiaming Chen
 
@@ -357,6 +357,7 @@ Run `./scripts/verify_finally.sh` after each phase:
 | 2.3 HttpRestChannel | ✅ Complete |
 | 2.4 Config | ✅ Complete |
 | 2.5 Server | ✅ Complete |
+| 2.6 Remove transports/ module | ✅ Complete |
 | 3.1 Telegram | Pending (external plugin) |
 | 4.1 Coalescing | ✅ Complete |
 | 4.2 Buffering | ✅ Complete |

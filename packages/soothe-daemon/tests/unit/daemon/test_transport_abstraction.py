@@ -1,8 +1,8 @@
-"""Tests for transport abstraction layer (RFC-0013)."""
+"""Tests for transport/channel abstraction layer (RFC-0013, RFC-620)."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -16,8 +16,6 @@ from soothe_daemon.protocol import (
     validate_message,
     validate_message_size,
 )
-from soothe_daemon.transports.base import TransportClient, TransportServer
-from soothe_daemon.transports.websocket import WebSocketTransport
 
 
 class TestProtocolV2:
@@ -116,8 +114,8 @@ class TestTransportConfig:
         assert cfg.effective_http_rest_listen() == ("127.0.0.1", 9999)
 
 
-class TestWebSocketTransport:
-    """Tests for WebSocket transport."""
+class TestWebSocketChannel:
+    """Tests for WebSocket channel."""
 
     @pytest.fixture
     def config(self) -> WebSocketConfig:
@@ -125,12 +123,13 @@ class TestWebSocketTransport:
         return WebSocketConfig(enabled=True, host="127.0.0.1", port=18765)
 
     @pytest.mark.asyncio
-    async def test_transport_properties(self, config: WebSocketConfig) -> None:
-        """Transport properties are correct."""
-        transport = WebSocketTransport(config)
+    async def test_channel_properties(self, config: WebSocketConfig) -> None:
+        """Channel properties are correct."""
+        manager = MagicMock()
+        channel = WebSocketChannel(config, manager=manager)
 
-        assert transport.transport_type == "websocket"
-        assert transport.client_count == 0
+        assert channel.name == "websocket"
+        assert channel.client_count == 0
 
 
 class TestChannelManager:
@@ -194,17 +193,3 @@ class TestChannelManager:
         assert manager.channel_count == 0
         assert manager.client_count == 0
         assert manager.get_channel_info() == []
-
-
-class TestTransportInterfaces:
-    """Tests for transport abstract interfaces."""
-
-    def test_transport_server_is_abstract(self) -> None:
-        """TransportServer is abstract and cannot be instantiated."""
-        with pytest.raises(TypeError):
-            TransportServer()  # type: ignore[abstract]
-
-    def test_transport_client_is_abstract(self) -> None:
-        """TransportClient is abstract and cannot be instantiated."""
-        with pytest.raises(TypeError):
-            TransportClient()  # type: ignore[abstract]

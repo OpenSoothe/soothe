@@ -14,9 +14,9 @@ from soothe.config import SootheConfig
 from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
+from soothe_daemon.channels.websocket import WebSocketChannel
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import WebSocketConfig
-from soothe_daemon.transports.websocket import WebSocketTransport
 
 from ..daemon_fixtures import (
     alloc_ephemeral_port,
@@ -50,7 +50,9 @@ async def websocket_daemon(tmp_path: Path):
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_websocket_transport_lifecycle_and_broadcast() -> None:
-    """Layer A: validate transport lifecycle and broadcast fanout for WebSocket."""
+    """Layer A: validate channel lifecycle and broadcast fanout for WebSocket."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = WebSocketConfig(
         enabled=True,
@@ -59,33 +61,37 @@ async def test_websocket_transport_lifecycle_and_broadcast() -> None:
         cors_origins=["*"],
         tls_enabled=False,
     )
-    transport = WebSocketTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     try:
         await client.connect()
         await asyncio.sleep(0.1)
-        assert transport.client_count == 1
+        assert channel.client_count == 1
 
-        await transport.broadcast({"type": "event", "scope": "integration", "origin": "websocket"})
+        await channel.broadcast({"type": "event", "scope": "integration", "origin": "websocket"})
         event = await await_event_type(client.read_event, "event")
         assert event["type"] == "event"
     finally:
         if client.is_connected:
             await client.close()
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_websocket_protocol_message_validation_returns_error() -> None:
     """Layer A: invalid protocol messages are surfaced as validation errors."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
-    transport = WebSocketTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
@@ -98,7 +104,7 @@ async def test_websocket_protocol_message_validation_returns_error() -> None:
     finally:
         if client.is_connected:
             await client.close()
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -170,6 +176,8 @@ async def test_websocket_daemon_shutdown_rpc_stops_server(tmp_path: Path) -> Non
 @pytest.mark.integration
 async def test_websocket_cors_rejects_disallowed_origin(tmp_path: Path) -> None:
     """Disallowed Origin header is rejected at WebSocket handshake stage."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = WebSocketConfig(
         enabled=True,
@@ -178,12 +186,13 @@ async def test_websocket_cors_rejects_disallowed_origin(tmp_path: Path) -> None:
         cors_origins=["https://allowed.example"],
         tls_enabled=False,
     )
-    transport = WebSocketTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
-        # The transport rejects disallowed origins at the WebSocket handshake
+        # The channel rejects disallowed origins at the WebSocket handshake
         # stage (Starlette returns HTTP 403 when close() is called before
         # accept()). The handshake itself raises InvalidStatus; a successful
         # connect followed by ConnectionClosed is no longer the contract.
@@ -194,13 +203,15 @@ async def test_websocket_cors_rejects_disallowed_origin(tmp_path: Path) -> None:
             ):
                 pass
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_websocket_cors_accepts_allowed_origin(tmp_path: Path) -> None:
     """Allowed Origin header is accepted."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = WebSocketConfig(
         enabled=True,
@@ -209,8 +220,9 @@ async def test_websocket_cors_accepts_allowed_origin(tmp_path: Path) -> None:
         cors_origins=["https://allowed.example"],
         tls_enabled=False,
     )
-    transport = WebSocketTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -218,9 +230,9 @@ async def test_websocket_cors_accepts_allowed_origin(tmp_path: Path) -> None:
             f"ws://127.0.0.1:{port}",
             origin="https://allowed.example",
         ):
-            assert transport.client_count == 1
+            assert channel.client_count == 1
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -273,10 +285,13 @@ async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
 )
 async def test_websocket_auth_message_should_return_auth_response() -> None:
     """Layer B: auth message contract expects an explicit auth response."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
-    transport = WebSocketTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
@@ -294,4 +309,4 @@ async def test_websocket_auth_message_should_return_auth_response() -> None:
     finally:
         if client.is_connected:
             await client.close()
-        await transport.stop()
+        await channel.stop()

@@ -1,6 +1,6 @@
 """HTTP REST channel implementation (RFC-620).
 
-HTTP REST channel for health checks, status, and autopilot endpoints.
+HTTP REST channel for health checks, status, autopilot, and auxiliary endpoints.
 Note: This channel only supports inbound (supports_outbound=False).
 """
 
@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -20,6 +20,12 @@ from soothe_daemon.channels.message import ChannelMessage
 from soothe_daemon.config.models import HttpRestConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _get_client_id(request: Request) -> str:
+    """Generate client ID from request."""
+    client_host = request.client.host if request.client else "unknown"
+    return f"http:{client_host}"
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -108,13 +114,21 @@ class HttpRestChannel(Channel):
             allow_headers=["*"],
         )
 
+    def _require_autopilot_service(self) -> Any:
+        """Return the daemon-owned AutopilotService or raise HTTP 503."""
+        if self._autopilot_service is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Autopilot service unavailable; ensure autopilot is enabled and the daemon started cleanly",
+            )
+        return self._autopilot_service
+
     def _setup_routes(self) -> None:
         """Setup all REST API routes."""
-        # Import routes from existing HttpRestTransport
-
-        # Use existing route setup but with channel context
         self._setup_health_routes()
         self._setup_config_routes()
+        self._setup_file_routes()
+        self._setup_system_routes()
         self._setup_autopilot_routes()
 
     def _setup_health_routes(self) -> None:
@@ -177,19 +191,143 @@ class HttpRestChannel(Channel):
             return {"schema": {}}
 
     def _setup_autopilot_routes(self) -> None:
-        """Setup autopilot REST API routes."""
-        # Delegate to existing implementation for complex autopilot routes
-        from soothe_daemon.transports.http_rest import HttpRestTransport
+        """Setup autopilot REST API routes (RFC-204 / RFC-222)."""
 
-        # Create transport to add routes to unified_app (side effect in constructor)
-        HttpRestTransport(
-            self._http_config,
-            runner=self._runner,
-            soothe_config=self._soothe_config,
-            session_manager=self._session_manager,
-            unified_app=self._app,  # Routes added to our app
-            autopilot_service=self._autopilot_service,
-        )
+        @self._app.get("/api/v1/autopilot/status")
+        async def autopilot_status() -> dict[str, Any]:
+            """Get overall autopilot state."""
+            service = self._require_autopilot_service()
+            status = service.status()
+            return {
+                "state": "dreaming" if status.get("dreaming") else "active",
+                "running": status.get("running", False),
+                "dreaming": status.get("dreaming", False),
+                "loop_pool": status.get("loop_pool", {}),
+            }
+
+        @self._app.get("/api/v1/autopilot/goals")
+        async def autopilot_list_goals() -> dict[str, Any]:
+            """List all goals."""
+            service = self._require_autopilot_service()
+            goals = await service.list_goals()
+            return {
+                "goals": [g.model_dump(mode="json") for g in goals],
+                "source": "autopilot_service",
+            }
+
+        @self._app.get("/api/v1/autopilot/goals/{goal_id}")
+        async def autopilot_get_goal(goal_id: str) -> dict[str, Any]:
+            """Get details for a specific goal."""
+            service = self._require_autopilot_service()
+            goal = await service.get_goal(goal_id)
+            if goal:
+                return {"goal": goal.model_dump(mode="json"), "source": "autopilot_service"}
+            raise HTTPException(status_code=404, detail="Goal not found")
+
+        @self._app.post("/api/v1/autopilot/submit")
+        async def autopilot_submit(request: Request) -> dict[str, Any]:
+            """Submit a new task to autopilot."""
+            body = await request.json()
+            description = body.get("description", "")
+            priority = int(body.get("priority", 50))
+            workspace_raw = body.get("workspace")
+            workspace: str | None = None
+            if isinstance(workspace_raw, str) and workspace_raw.strip():
+                from soothe.core.workspace import validate_client_workspace
+
+                try:
+                    workspace = str(validate_client_workspace(workspace_raw))
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+            if not description:
+                raise HTTPException(status_code=400, detail="description is required")
+
+            service = self._require_autopilot_service()
+            goal = await service.submit_task(
+                description,
+                priority=priority,
+                workspace=workspace,
+            )
+            return {
+                "status": "submitted",
+                "goal_id": goal.id,
+            }
+
+        @self._app.delete("/api/v1/autopilot/goals/{goal_id}")
+        async def autopilot_cancel_goal(goal_id: str) -> dict[str, Any]:
+            """Cancel a goal."""
+            service = self._require_autopilot_service()
+            cancelled = await service.cancel_goal(goal_id, reason="http_delete")
+            if cancelled is None:
+                raise HTTPException(status_code=404, detail="Goal not found")
+            return {
+                "status": "cancelled",
+                "goal_id": cancelled.id,
+                "new_status": cancelled.status,
+            }
+
+        @self._app.post("/api/v1/autopilot/goals/{goal_id}/approve")
+        async def autopilot_approve_goal(goal_id: str) -> dict[str, Any]:
+            """Approve a MUST-confirmation goal."""
+            service = self._require_autopilot_service()
+            approved = await service.approve_confirmation(goal_id)
+            if approved:
+                return {"status": "approved", "goal_id": goal_id}
+            raise HTTPException(status_code=404, detail="Confirmation not found")
+
+        @self._app.post("/api/v1/autopilot/goals/{goal_id}/reject")
+        async def autopilot_reject_goal(goal_id: str) -> dict[str, Any]:
+            """Reject a proposed goal."""
+            service = self._require_autopilot_service()
+            rejected = await service.reject_confirmation(goal_id)
+            if rejected:
+                return {"status": "rejected", "goal_id": goal_id}
+            raise HTTPException(status_code=404, detail="Confirmation not found")
+
+        @self._app.post("/api/v1/autopilot/wake")
+        async def autopilot_wake() -> dict[str, Any]:
+            """Exit dreaming mode — resume active execution."""
+            service = self._require_autopilot_service()
+            await service.wake_from_dreaming(trigger="wake_signal")
+            return {"status": "wake_sent"}
+
+        @self._app.post("/api/v1/autopilot/dream")
+        async def autopilot_dream() -> dict[str, Any]:
+            """Force enter dreaming mode."""
+            service = self._require_autopilot_service()
+            await service.force_dream()
+            return {"status": "dream_sent"}
+
+    def _setup_file_routes(self) -> None:
+        """Setup file operation routes."""
+
+        @self._app.post("/api/v1/files/upload")
+        async def upload_file(_request: Request) -> dict[str, Any]:
+            """Upload a file."""
+            return {"file_id": "file_001", "status": "uploaded"}
+
+        @self._app.get("/api/v1/files/{file_id}")
+        async def download_file(file_id: str) -> dict[str, Any]:
+            """Download a file."""
+            _ = file_id
+            raise HTTPException(status_code=404, detail="File not found")
+
+        @self._app.delete("/api/v1/files/{file_id}")
+        async def delete_file(file_id: str) -> dict[str, Any]:
+            """Delete a file."""
+            return {"file_id": file_id, "status": "deleted"}
+
+    def _setup_system_routes(self) -> None:
+        """Setup system routes."""
+
+        @self._app.post("/api/v1/system/shutdown")
+        async def shutdown_daemon(http_request: Request) -> dict[str, Any]:
+            """Request daemon shutdown."""
+            if self._message_handler:
+                client_id = _get_client_id(http_request)
+                self._message_handler(client_id, {"type": "command", "cmd": "/exit"})
+            return {"status": "shutting_down"}
 
     async def start(self) -> None:
         """Start the HTTP REST server.
