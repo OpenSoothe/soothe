@@ -9,8 +9,8 @@ except importlib.metadata.PackageNotFoundError:
 
 from soothe_sdk.client import WebSocketClient
 
-from soothe_daemon.entrypoint import run_daemon
-from soothe_daemon.paths import pid_path
+from soothe_daemon.bootstrap.entrypoint import run_daemon
+from soothe_daemon.bootstrap.paths import pid_path
 from soothe_daemon.server import SootheDaemon
 
 __all__ = ["SootheDaemon", "WebSocketClient", "__version__", "pid_path", "run_daemon"]

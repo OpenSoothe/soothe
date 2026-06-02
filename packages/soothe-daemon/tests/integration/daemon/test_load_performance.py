@@ -547,7 +547,7 @@ async def test_sender_loop_batching():
     from soothe_daemon.channels.websocket import WebSocketChannel
     from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.event import EventBus
-    from soothe_daemon.session import ClientSessionManager
+    from soothe_daemon.server.session import ClientSessionManager
 
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=8765)
     manager = MagicMock()

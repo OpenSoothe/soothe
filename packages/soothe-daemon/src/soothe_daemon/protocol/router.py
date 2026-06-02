@@ -12,8 +12,8 @@ from typing import Any
 from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
-from soothe_daemon.image_understanding import validate_and_normalize_image_attachments
-from soothe_daemon.logging import set_client_id
+from soothe_daemon.bootstrap.logging import set_client_id
+from soothe_daemon.services.image_understanding import validate_and_normalize_image_attachments
 
 logger = logging.getLogger(__name__)
 
@@ -888,7 +888,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id.
         """
-        from soothe_daemon.loop_gc import purge_loop_fully
+        from soothe_daemon.runtime.loop_gc import purge_loop_fully
 
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1501,7 +1501,7 @@ class MessageRouter:
             return
 
         try:
-            from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
+            from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
             checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
         except Exception as exc:
@@ -1571,7 +1571,7 @@ class MessageRouter:
             return
 
         try:
-            from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
+            from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
             checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
             values = await runner.get_thread_state_values(checkpoint_thread_id)
@@ -1628,7 +1628,7 @@ class MessageRouter:
             return
 
         try:
-            from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
+            from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
             checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
             await runner.update_thread_state_values(checkpoint_thread_id, dict(raw_values))

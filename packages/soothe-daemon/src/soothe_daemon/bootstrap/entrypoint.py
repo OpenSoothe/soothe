@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # Load environment variables from .env file BEFORE any langchain imports
 # so provider API keys and other env-backed config are visible at import time.
-from soothe_daemon.bootstrap_env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
+from soothe_daemon.bootstrap.env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
 
 bootstrap_dotenv()
 
@@ -60,7 +60,7 @@ def main() -> None:
     """CLI entry point for the daemon module."""
     from soothe.logging import setup_logging
 
-    from soothe_daemon.logging import (
+    from soothe_daemon.bootstrap.logging import (
         _daemon_log_level_from_soothe_config,
         default_daemon_log_path,
         setup_daemon_logging,

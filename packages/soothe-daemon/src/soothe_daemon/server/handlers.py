@@ -15,14 +15,14 @@ import websockets.exceptions
 from soothe.core.events import ERROR
 from soothe_sdk.client.protocol import decode, encode
 
-from soothe_daemon.logging import set_client_id, set_loop_id
+from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.protocol.router import (
     _coerce_loop_input_text,
     _queue_options_from_daemon_message,
 )
 
 # Import RPC command handlers (RFC-404)
-from soothe_daemon.rpc import (
+from soothe_daemon.server.commands import (
     _cmd_autopilot_dashboard,
     _cmd_cancel,
     _cmd_clear,
@@ -100,7 +100,7 @@ class DaemonHandlersMixin:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        from soothe_daemon.server import _ClientConn
+        from soothe_daemon.server.core import _ClientConn
 
         client = _ClientConn(reader=reader, writer=writer)
         self._clients.append(client)
@@ -152,7 +152,7 @@ class DaemonHandlersMixin:
         ``content``). Other types are ignored with a warning except ``command`` and
         ``command_request``, which are handled above.
         """
-        from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
+        from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
         # Set logging context for full loop_id and client_id in daemon.log
         set_loop_id(loop_id)

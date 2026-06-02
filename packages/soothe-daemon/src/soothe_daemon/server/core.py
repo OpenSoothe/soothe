@@ -18,22 +18,22 @@ from soothe.core.workspace import cleanup_anonymous_workspaces, cleanup_legacy_p
 from soothe.logging import ThreadLogger
 from soothe_sdk.client.protocol import encode
 
-from soothe_daemon._handlers import DaemonHandlersMixin
-from soothe_daemon.channel_manager import ChannelManager
-from soothe_daemon.config import SootheDaemonConfig
-from soothe_daemon.event import EventBus, EventSizeDistributionCollector, loop_event_topic
-from soothe_daemon.logging import set_client_id, set_loop_id
-from soothe_daemon.loop_isolation import LoopInputDispatcher
-from soothe_daemon.paths import pid_path
-from soothe_daemon.protocol import MessageRouter
-from soothe_daemon.query import QueryEngine
-from soothe_daemon.session import ClientSessionManager
-from soothe_daemon.singleton import (
+from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
+from soothe_daemon.bootstrap.paths import pid_path
+from soothe_daemon.bootstrap.singleton import (
     acquire_pid_lock,
     cleanup_pid,
     release_pid_lock,
 )
-from soothe_daemon.thread_state import ThreadStateRegistry
+from soothe_daemon.channel_manager import ChannelManager
+from soothe_daemon.config import SootheDaemonConfig
+from soothe_daemon.event import EventBus, EventSizeDistributionCollector, loop_event_topic
+from soothe_daemon.protocol import MessageRouter
+from soothe_daemon.query import QueryEngine
+from soothe_daemon.runtime.loop_dispatcher import LoopInputDispatcher
+from soothe_daemon.runtime.thread_state import ThreadStateRegistry
+from soothe_daemon.server.handlers import DaemonHandlersMixin
+from soothe_daemon.server.session import ClientSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -740,7 +740,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Purge idle ephemeral loops (execution data only; workspaces retained)."""
         from datetime import UTC, datetime, timedelta
 
-        from soothe_daemon.loop_gc import purge_loop_execution_data
+        from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
 
         gc_cfg = self._daemon_config.ephemeral_loop_gc
         interval = float(gc_cfg.interval_seconds)

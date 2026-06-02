@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe_daemon.event import EventBus
-from soothe_daemon.session import ClientSessionManager
+from soothe_daemon.server.session import ClientSessionManager
 
 
 @pytest.mark.asyncio

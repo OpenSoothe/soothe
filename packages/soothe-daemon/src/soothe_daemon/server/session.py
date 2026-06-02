@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 import websockets.exceptions
 from soothe_sdk.core.types import VerbosityLevel
 
+from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.event import loop_event_topic
-from soothe_daemon.logging import set_client_id, set_loop_id
 from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 
 if TYPE_CHECKING:

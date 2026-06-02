@@ -6,7 +6,7 @@ import contextlib
 import fcntl
 import os
 
-from soothe_daemon.paths import pid_path
+from soothe_daemon.bootstrap.paths import pid_path
 
 
 def write_pid() -> None:
