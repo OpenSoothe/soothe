@@ -38,10 +38,17 @@ from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
+from soothe.core.loop.clarification import (
+    ClarificationCapture,
+    ClarificationDetector,
+    ClarificationOrigin,
+    LoopStateView,
+)
 from soothe.core.loop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
     await_next_graph_stream_chunk,
     build_auto_resume_payload,
+    is_ask_user_interrupt,
 )
 from soothe.core.loop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
@@ -913,6 +920,10 @@ class Executor:
         config: SootheConfig | None = None,
         goal_context_manager: GoalContextManager | None = None,
         loop_id: str | None = None,
+        clarification_detector: ClarificationDetector | None = None,
+        clarification_capture: ClarificationCapture | None = None,
+        clarification_loop_state_view: LoopStateView | None = None,
+        clarification_resume_answer_payload: dict[str, Any] | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -925,6 +936,18 @@ class Executor:
             config: Optional Soothe config for Act wave caps (IG-130).
             goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-217).
             loop_id: Optional loop identifier for Langfuse trace correlation.
+            clarification_detector: When set with ``clarification_capture`` and
+                ``clarification_loop_state_view``, enables RFC-622 clarification
+                relay during the CoreAgent stream.
+            clarification_capture: Side-channel that receives the first detected
+                ``ask_user`` request. The caller reads ``capture.pending_request``
+                after ``execute()`` completes.
+            clarification_loop_state_view: Read-only loop state snapshot threaded
+                to the policy.
+            clarification_resume_answer_payload: Optional LangGraph resume payload
+                (built from ``state.pending_clarification_answer``) injected as
+                the first ``Command(resume=...)`` to resume after a prior
+                clarification was answered.
         """
         self.core_agent = core_agent
         self._checkpointer = checkpointer
@@ -932,6 +955,10 @@ class Executor:
         self._config = config
         self._goal_context_manager = goal_context_manager
         self._loop_id = loop_id
+        self._clarification_detector = clarification_detector
+        self._clarification_capture = clarification_capture
+        self._clarification_loop_state_view = clarification_loop_state_view
+        self._clarification_resume_answer_payload = clarification_resume_answer_payload
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -1030,13 +1057,38 @@ class Executor:
         self,
         stream_input: dict[str, Any] | Command,
         graph_config: dict[str, Any],
+        *,
+        detector: ClarificationDetector | None = None,
+        capture: ClarificationCapture | None = None,
+        loop_state_view: LoopStateView | None = None,
+        origin_node: ClarificationOrigin = "execute",
+        resume_answer_payload: dict[str, Any] | None = None,
     ) -> AsyncGenerator[Any, None]:
-        """Run ``CoreAgent.astream`` with LangGraph interrupt auto-resume."""
+        """Run ``CoreAgent.astream`` with interrupt handling.
+
+        Behavior:
+
+        - Action-approval interrupts are auto-approved (unchanged).
+        - ``ask_user`` interrupts, when ``detector``/``capture`` are provided,
+          are written to ``capture`` and the stream returns early so the
+          AgentLoop can route to ``await_clarification`` (RFC-622).
+        - When ``resume_answer_payload`` is set, the first CoreAgent call
+          uses it as the initial ``Command(resume=...)`` (re-entry after the
+          policy answered a prior clarification).
+        """
         interrupt_iterations = 0
-        current_input: dict[str, Any] | Command = stream_input
+        current_input: dict[str, Any] | Command = (
+            Command(resume=resume_answer_payload)
+            if resume_answer_payload is not None
+            else stream_input
+        )
+        clarification_enabled = (
+            detector is not None and capture is not None and loop_state_view is not None
+        )
         while True:
             interrupt_occurred = False
             pending_interrupts: dict[str, Any] = {}
+            captured_clarification = False
             chunk_iter = self.core_agent.astream(
                 current_input,
                 config=graph_config,
@@ -1057,9 +1109,25 @@ class Executor:
                         if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                             interrupts: list[Interrupt] = data["__interrupt__"]
                             for interrupt_obj in interrupts:
+                                if clarification_enabled and is_ask_user_interrupt(
+                                    interrupt_obj.value
+                                ):
+                                    request = detector.from_interrupt(  # type: ignore[union-attr]
+                                        interrupt_obj.value,
+                                        interrupt_id=interrupt_obj.id,
+                                        origin_node=origin_node,
+                                        loop_state=loop_state_view,  # type: ignore[arg-type]
+                                    )
+                                    if request is not None:
+                                        capture.set(request)  # type: ignore[union-attr]
+                                        captured_clarification = True
+                                        continue
                                 pending_interrupts[interrupt_obj.id] = interrupt_obj.value
                                 interrupt_occurred = True
                     yield chunk
+                    if captured_clarification:
+                        # Bubble up to the calling node — do not auto-resume.
+                        return
             except asyncio.CancelledError:
                 raise
 
@@ -2086,6 +2154,11 @@ class Executor:
                     mcp_state=mcp_state,
                 ),
                 config,
+                detector=self._clarification_detector,
+                capture=self._clarification_capture,
+                loop_state_view=self._clarification_loop_state_view,
+                origin_node="execute",
+                resume_answer_payload=self._clarification_resume_answer_payload,
             )
 
             # Stream events and collect outcome metadata (RFC-211)

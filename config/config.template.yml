@@ -211,6 +211,22 @@ agent:
       persist_dir: null
       thread_inactivity_timeout_hours: 72
 
+  # === CLARIFICATION RELAY (RFC-622) ===
+  # When CoreAgent emits a structured ``ask_user`` interrupt, the loop bubbles
+  # it up through a ClarificationPolicy. Manual mode relays to the human via
+  # the TUI; auto mode delegates to the veritas subagent. Plain-text questions
+  # in assistant messages are NOT detected — emit a structured ``ask_user`` to
+  # engage the relay.
+  clarification:
+    auto_policy: veritas        # only built-in for now
+    auto_min_confidence: 0.4    # below this, veritas answer is treated as defer
+    max_defer_age_hours: 168    # autopilot: scrub stale awaiting_clarification goals
+
+  # === VERITAS (Clarification auto-answerer, RFC-622) ===
+  veritas:
+    model_role: think           # reuses the existing "think" ModelRole
+    max_context_steps: 8        # how many recent step outputs to include
+
   # === CODE INTERPRETER (Embedded QuickJS) ===
   code_interpreter:
     enabled: true

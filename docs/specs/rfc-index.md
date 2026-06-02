@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-01
-**Total RFCs**: 63
+**Last Updated**: 2026-06-02
+**Total RFCs**: 68
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,8 +11,9 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 45 |
+| Draft | 49 |
 | Implemented | 18 |
+| Accepted | 1 |
 
 ---
 
@@ -374,13 +375,35 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-05-11
   - Depends on: RFC-613, RFC-601, RFC-600
 
+- **RFC-619**: [Tacitus Subagent](RFC-619-tacitus-subagent.md)
+  - Kind: Architecture Design
+  - Status: Accepted
+  - Created: 2026-05-21
+  - Depends on: RFC-600, RFC-601, RFC-403
+
+- **RFC-620**: [Unified Channel Architecture for Extensible Communication Endpoints](RFC-620-channel-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-05-29
+
+- **RFC-621**: [Workspace Host Convention: Path Mapping for Containerized Daemon](RFC-621-workspace-host-convention.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-02
+
+- **RFC-622**: [CoreAgent Clarification Relay](RFC-622-coreagent-clarification-relay.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-02
+  - Depends on: RFC-220, RFC-222, RFC-403, RFC-600, RFC-601
+
 ---
 
 ## Spec Kind Distribution
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 40 |
+| Architecture Design | 45 |
 | Implementation Interface Design | 10 |
 | Conceptual Design | 1 |
 | Not stated / ambiguous | 8 |
@@ -397,12 +420,17 @@ This index reflects the canonical RFC set and defines which files are active for
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
 | 5xx | CLI & TUI | 5 |
-| 6xx | Plugin System & Extensions | 16 |
+| 6xx | Plugin System & Extensions | 20 |
 
 ---
 
 ## Recently Added
 
+- **RFC-623**: Daemon Module Structure Refactoring (2026-06-02)
+- **RFC-622**: CoreAgent Clarification Relay (2026-06-02)
+- **RFC-621**: Workspace Host Convention — Path Mapping for Containerized Daemon (2026-06-02)
+- **RFC-620**: Unified Channel Architecture for Extensible Communication Endpoints (2026-05-29)
+- **RFC-619**: Tacitus Subagent (2026-05-21)
 - **RFC-227**: Plan-Assess Prior-Progress Digest (2026-06-01)
 - **RFC-226**: Continuation-Aware plan_assess and Post-Execute Fast Exit (2026-05-29)
 - **RFC-225**: Loop Continuity and Goal Record Enrichment (2026-05-29)

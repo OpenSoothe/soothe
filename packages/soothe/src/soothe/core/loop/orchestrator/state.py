@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
-IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations"]
+IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "deferred"]
 
 PlanRoute = Literal["goal_done", "execute"]
 IntentRoute = Literal["continue_loop", "fast_path"]
 AssessRoute = Literal["continue_generate", "skip_generate", "continue_assess"]
+ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess"]
 
 PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
 PLAN_ROUTE_EXECUTE: PlanRoute = "execute"
@@ -21,3 +22,7 @@ class LoopGraphState(TypedDict, total=False):
     plan_route: PlanRoute | None
     intent_route: IntentRoute | None
     assess_route: AssessRoute | None
+    # Clarification relay (RFC-622): serialized to keep the channel JSON-safe.
+    pending_clarification: dict[str, Any] | None
+    pending_clarification_answer: dict[str, Any] | None
+    last_clarification_origin: ClarificationOrigin | None

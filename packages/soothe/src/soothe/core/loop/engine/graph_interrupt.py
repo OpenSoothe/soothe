@@ -1,4 +1,10 @@
-"""LangGraph interrupt detection and auto-resume for CoreAgent streams."""
+"""LangGraph interrupt detection and auto-resume for CoreAgent streams.
+
+Action-approval interrupts (deepagents tool review) are auto-approved here.
+``ask_user`` interrupts are no longer handled in this module — they bubble up
+through :class:`ClarificationCapture` to the ``await_clarification`` loop node
+(RFC-622).
+"""
 
 from __future__ import annotations
 
@@ -44,19 +50,27 @@ async def await_next_graph_stream_chunk(chunk_iter: AsyncIterator[Any]) -> Any:
                 pass
 
 
+def is_ask_user_interrupt(value: Any) -> bool:
+    """Return True if ``value`` is a structured ``ask_user`` interrupt payload."""
+    return isinstance(value, Mapping) and value.get("type") == "ask_user"
+
+
 def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str, Any]:
-    """Build a LangGraph ``Command(resume=...)`` payload that auto-continues all interrupts."""
+    """Build a LangGraph ``Command(resume=...)`` payload that auto-approves tool interrupts.
+
+    ``ask_user`` interrupts are intentionally skipped — those flow through the
+    clarification relay (RFC-622) and must be answered by the policy layer,
+    not auto-resumed here.
+    """
     payload: dict[str, Any] = {}
     for iid, value in pending_interrupts.items():
-        if isinstance(value, dict) and value.get("type") == "ask_user":
-            questions = value.get("questions", [])
-            payload[iid] = {"answers": ["" for _ in questions]}
-        else:
-            action_requests = []
-            if isinstance(value, dict):
-                action_requests = value.get("action_requests", [])
-            decisions = [{"type": "approve"} for _ in (action_requests or [value])]
-            payload[iid] = {"decisions": decisions}
+        if is_ask_user_interrupt(value):
+            continue
+        action_requests = []
+        if isinstance(value, dict):
+            action_requests = value.get("action_requests", [])
+        decisions = [{"type": "approve"} for _ in (action_requests or [value])]
+        payload[iid] = {"decisions": decisions}
     return payload
 
 
@@ -64,4 +78,5 @@ __all__ = [
     "_MAX_INTERRUPT_ITERATIONS",
     "await_next_graph_stream_chunk",
     "build_auto_resume_payload",
+    "is_ask_user_interrupt",
 ]

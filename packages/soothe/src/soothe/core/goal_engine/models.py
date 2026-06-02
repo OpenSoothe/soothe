@@ -10,13 +10,23 @@ from pydantic import BaseModel, Field, model_validator
 
 from soothe.protocols.planner import GoalReport
 
-# RFC-204: Extended lifecycle states (7 total)
+# RFC-204: Extended lifecycle states; RFC-622: + awaiting_clarification
 GoalStatus = Literal[
-    "pending", "active", "validated", "completed", "failed", "suspended", "blocked"
+    "pending",
+    "active",
+    "validated",
+    "completed",
+    "failed",
+    "suspended",
+    "blocked",
+    "awaiting_clarification",
 ]
 
 # Terminal states that count as "resolved"
 TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed"})
+
+# RFC-622: states that block the scheduler from picking the goal up
+BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})
 
 
 class Goal(BaseModel):
@@ -80,6 +90,10 @@ class Goal(BaseModel):
     attempts_after_crash: int = 0
     # RFC-222: client workspace for autopilot dispatch (optional).
     workspace: str | None = None
+    # RFC-622: pending clarification persisted while ``status="awaiting_clarification"``.
+    # Serialized form of ``ClarificationRequest`` (see
+    # ``soothe.core.loop.clarification.protocol.request_to_state``).
+    pending_clarification: dict[str, Any] | None = None
 
 
 # RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration
