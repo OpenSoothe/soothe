@@ -25,11 +25,11 @@ if TYPE_CHECKING:
 
 
 class ModelLabel(Widget):
-    """A label that displays a model name, right-aligned with smart truncation.
+    """A label that displays a model name with smart truncation.
 
     When the full `provider:model` text doesn't fit, the provider is dropped
-    first. If the bare model name still doesn't fit, it is left-truncated
-    with a leading ellipsis so the most distinctive tail stays visible.
+    first. If the bare model name still doesn't fit, it is right-truncated
+    with a trailing ellipsis so the leading provider/model prefix stays visible.
     """
 
     provider: reactive[str] = reactive("", layout=True)
@@ -54,7 +54,7 @@ class ModelLabel(Widget):
         """Render the model label with width-aware truncation.
 
         Returns:
-            Text content, truncated from the left when necessary.
+            Text content, truncated from the right when necessary.
         """
         width = self.content_size.width
         if not self.model or width <= 0:
@@ -65,12 +65,67 @@ class ModelLabel(Widget):
         if len(self.model) <= width:
             return Content(self.model)
         if width > 1:
-            return Content("\u2026" + self.model[-(width - 1) :])
+            return Content(self.model[: width - 1] + "\u2026")
         return Content("\u2026")
 
 
+CLARIFICATION_MODE_AUTO = "auto"
+CLARIFICATION_MODE_MANUAL = "manual"
+_VALID_CLARIFICATION_MODES = frozenset({CLARIFICATION_MODE_AUTO, CLARIFICATION_MODE_MANUAL})
+
+
+class ClarificationModeBadge(Static):
+    """Visual block showing the active clarification relay mode (RFC-622).
+
+    Rendered as ``Auto`` or ``Manual`` with a bold yellow background so it
+    reads as a discrete pill badge in the status bar — similar to a label
+    chip in shell prompts.
+    """
+
+    DEFAULT_CSS = """
+    ClarificationModeBadge {
+        width: auto;
+        height: 1;
+        padding: 0 1;
+        text-style: bold;
+        background: #f1c40f;
+        color: black;
+    }
+
+    ClarificationModeBadge.manual {
+        background: #e67e22;
+        color: black;
+    }
+    """
+
+    mode: reactive[str] = reactive(CLARIFICATION_MODE_AUTO, init=False)
+
+    def __init__(self, *args: Any, mode: str = CLARIFICATION_MODE_AUTO, **kwargs: Any) -> None:
+        """Initialize with the badge text already rendered so it shows on first paint."""
+        initial = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
+        super().__init__(initial.capitalize(), *args, **kwargs)
+        self.add_class(initial)
+        # Defer reactive assignment until mount so watchers run normally afterwards.
+        self._initial_mode = initial
+
+    def on_mount(self) -> None:
+        """Apply the initial mode class once the widget is part of the DOM."""
+        self.mode = self._initial_mode
+        self._refresh(self._initial_mode)
+
+    def watch_mode(self, new_value: str) -> None:
+        """Update CSS class and rendered text when the mode changes."""
+        self._refresh(new_value)
+
+    def _refresh(self, mode: str) -> None:
+        normalized = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
+        self.remove_class("auto", "manual")
+        self.add_class(normalized)
+        self.update(normalized.capitalize())
+
+
 class StatusBar(Horizontal):
-    """Status bar showing input mode badge, session tip, cwd, branch, tokens, and model."""
+    """Status bar with model, clarification-mode badge, tip, cwd, branch, tokens."""
 
     DEFAULT_CSS = """
     StatusBar {
@@ -78,6 +133,13 @@ class StatusBar(Horizontal):
         dock: bottom;
         background: $surface;
         padding: 0 1;
+    }
+
+    StatusBar ModelLabel {
+        width: auto;
+        padding: 0 1;
+        color: $text-muted;
+        text-align: left;
     }
 
     StatusBar .status-mode {
@@ -143,15 +205,9 @@ class StatusBar(Horizontal):
         padding: 0 1;
         color: $text-muted;
     }
-
-    StatusBar ModelLabel {
-        width: auto;
-        padding: 0 2;
-        color: $text-muted;
-        text-align: right;
-    }
     """
     mode: reactive[str] = reactive("normal", init=False)
+    clarification_mode: reactive[str] = reactive(CLARIFICATION_MODE_AUTO, init=False)
     status_message: reactive[str] = reactive("", init=False)
     session_tip: reactive[str] = reactive("", init=False)
     cwd: reactive[str] = reactive("", init=False)
@@ -173,8 +229,12 @@ class StatusBar(Horizontal):
         """Compose the status bar layout.
 
         Yields:
-            Widgets for mode badge, session tip, message, cwd, branch, tokens, and model.
+            Clarification-mode badge (flush with the chat-box left edge),
+            model label, input-mode indicator, tip, message/cwd/branch group,
+            and token count.
         """
+        yield ClarificationModeBadge(id="clarification-mode-badge")
+        yield ModelLabel(id="model-display")
         yield Static("", classes="status-mode normal", id="mode-indicator")
         yield Static("", classes="status-tip", id="session-tip")
         with Horizontal(classes="status-left-collapsible"):
@@ -182,7 +242,6 @@ class StatusBar(Horizontal):
             yield Static("", classes="status-cwd", id="cwd-display")
             yield Static("", classes="status-branch", id="branch-display")
         yield Static("", classes="status-tokens", id="tokens-display")
-        yield ModelLabel(id="model-display")
 
     _BRANCH_WIDTH_THRESHOLD = 100
     """Hide git branch display below this terminal width."""
@@ -211,6 +270,8 @@ class StatusBar(Horizontal):
         label = self.query_one("#model-display", ModelLabel)
         label.provider = settings.model_provider or ""
         label.model = settings.model_name or ""
+        # Apply the initial clarification-mode badge.
+        self._apply_clarification_mode(self.clarification_mode)
 
     def watch_mode(self, mode: str) -> None:
         """Update mode indicator when mode changes."""
@@ -377,3 +438,19 @@ class StatusBar(Horizontal):
         label = self.query_one("#model-display", ModelLabel)
         label.provider = provider
         label.model = model
+
+    def watch_clarification_mode(self, new_value: str) -> None:
+        """Refresh the badge widget when the reactive mode flips."""
+        self._apply_clarification_mode(new_value)
+
+    def _apply_clarification_mode(self, mode: str) -> None:
+        try:
+            badge = self.query_one("#clarification-mode-badge", ClarificationModeBadge)
+        except NoMatches:
+            return
+        badge.mode = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
+
+    def set_clarification_mode(self, mode: str) -> None:
+        """Set the active clarification relay mode (``'auto'`` or ``'manual'``)."""
+        normalized = mode if mode in _VALID_CLARIFICATION_MODES else CLARIFICATION_MODE_AUTO
+        self.clarification_mode = normalized

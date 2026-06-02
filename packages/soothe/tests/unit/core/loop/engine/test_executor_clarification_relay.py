@@ -173,12 +173,12 @@ async def test_relay_disabled_when_detector_absent_keeps_legacy_behavior() -> No
     """Without detector+capture, ``ask_user`` flows back into auto-resume (which now skips it)."""
     core = _StubCoreAgent()
     core.queue([_ask_user_chunk("iX")])
-    core.queue([])  # legacy code would call resume; with new skip the payload is empty -> still calls
+    core.queue(
+        []
+    )  # legacy code would call resume; with new skip the payload is empty -> still calls
 
     executor = _make_executor(core)
-    stream = executor._core_agent_astream_with_interrupt_resume(
-        {"messages": []}, {}
-    )
+    stream = executor._core_agent_astream_with_interrupt_resume({"messages": []}, {})
     _ = [c async for c in stream]
 
     # Without detector wiring, the wrapper treats the ask_user as a regular

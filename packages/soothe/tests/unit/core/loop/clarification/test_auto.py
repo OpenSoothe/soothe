@@ -62,9 +62,7 @@ async def test_high_confidence_returns_answer() -> None:
 @pytest.mark.asyncio
 async def test_low_confidence_defers() -> None:
     policy = AutoClarificationPolicy(
-        _veritas_returning(
-            VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False)
-        )
+        _veritas_returning(VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False))
     )
     with pytest.raises(ClarificationDeferredError) as exc_info:
         await policy.answer(_request())
@@ -74,9 +72,7 @@ async def test_low_confidence_defers() -> None:
 @pytest.mark.asyncio
 async def test_explicit_defer_propagates() -> None:
     policy = AutoClarificationPolicy(
-        _veritas_returning(
-            VeritasAnswerSchema(answers=[], confidence=0.95, defer=True)
-        )
+        _veritas_returning(VeritasAnswerSchema(answers=[], confidence=0.95, defer=True))
     )
     with pytest.raises(ClarificationDeferredError) as exc_info:
         await policy.answer(_request())
@@ -86,9 +82,7 @@ async def test_explicit_defer_propagates() -> None:
 @pytest.mark.asyncio
 async def test_custom_min_confidence() -> None:
     policy = AutoClarificationPolicy(
-        _veritas_returning(
-            VeritasAnswerSchema(answers=["x"], confidence=0.5, defer=False)
-        ),
+        _veritas_returning(VeritasAnswerSchema(answers=["x"], confidence=0.5, defer=False)),
         min_confidence=0.8,
     )
     with pytest.raises(ClarificationDeferredError):
