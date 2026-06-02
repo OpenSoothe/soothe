@@ -130,16 +130,28 @@ from soothe.core.scheduling import ConcurrencyController, StepScheduler
 ```
 
 ### `persistence/` Package
-**Purpose:** Persistence and configuration-driven policy
+**Purpose:** Persistence and run artifacts
 
 Contents:
 - `artifact_store.py` — Run artifact management
-- `config_policy.py` — ConfigDrivenPolicy implementation
 - `__init__.py` — Re-exports all persistence APIs
 
 Example:
 ```python
-from soothe.core.persistence import RunArtifactStore, ConfigDrivenPolicy
+from soothe.core.persistence import RunArtifactStore
+```
+
+### `security/` Package
+**Purpose:** Path validation, operation security, and configuration-driven policy
+
+Contents:
+- `validator.py`, `policy.py`, `enforcement.py` — Filesystem path security
+- `operation_security.py` — Workspace tool operation security (RFC-617)
+- `config_policy.py` — ConfigDrivenPolicy implementation
+
+Example:
+```python
+from soothe.core.security import ConfigDrivenPolicy, WorkspaceToolOperationSecurity
 ```
 
 ---
