@@ -10,6 +10,7 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
+from .nodes.await_clarification import node_await_clarification
 from .nodes.bounded_evidence_gather import node_bounded_evidence_gather
 from .nodes.execute_steps import node_execute
 from .nodes.goal_completion import node_goal_completion
@@ -23,6 +24,7 @@ from .nodes.resolve_decision import node_resolve_decision
 from .nodes.validate_evidence_bindings import node_validate_evidence_bindings
 from .routing import (
     route_after_assess,
+    route_after_clarification,
     route_after_execute,
     route_after_init,
     route_after_iteration_gate,
@@ -71,6 +73,9 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     async def record_iteration(state: dict[str, Any]) -> dict[str, Any]:
         return await node_record_iteration(ctx, state)
 
+    async def await_clarification(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_await_clarification(ctx, state)
+
     graph = StateGraph(LoopGraphState)
     graph.add_node("init_or_resume", init_or_resume)
     graph.add_node("iteration_gate", iteration_gate)
@@ -83,6 +88,7 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node("validate_evidence_bindings", validate_evidence_bindings)
     graph.add_node("execute", execute)
     graph.add_node("record_iteration", record_iteration)
+    graph.add_node("await_clarification", await_clarification)
 
     graph.add_edge(START, "init_or_resume")
     graph.add_conditional_edges(
@@ -104,12 +110,17 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
             "goal_completion": "goal_completion",
             "resolve_decision": "resolve_decision",
             "plan_generate": "plan_generate",
+            "await_clarification": "await_clarification",
         },
     )
     graph.add_conditional_edges(
         "plan_generate",
         route_after_plan,
-        {"goal_completion": "goal_completion", "resolve_decision": "resolve_decision"},
+        {
+            "goal_completion": "goal_completion",
+            "resolve_decision": "resolve_decision",
+            "await_clarification": "await_clarification",
+        },
     )
     graph.add_edge("goal_completion", END)
     graph.add_conditional_edges(
@@ -125,7 +136,11 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     graph.add_conditional_edges(
         "execute",
         route_after_execute,
-        {"record_iteration": "record_iteration", END: END},
+        {
+            "record_iteration": "record_iteration",
+            "await_clarification": "await_clarification",
+            END: END,
+        },
     )
     graph.add_conditional_edges(
         "record_iteration",
@@ -133,6 +148,16 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
         {
             "iteration_gate": "iteration_gate",
             "goal_completion": "goal_completion",  # RFC-226 terminal bootstrap fast-exit
+            END: END,
+        },
+    )
+    graph.add_conditional_edges(
+        "await_clarification",
+        route_after_clarification,
+        {
+            "execute": "execute",
+            "plan_generate": "plan_generate",
+            "plan_assess": "plan_assess",
             END: END,
         },
     )

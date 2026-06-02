@@ -427,6 +427,87 @@ class GoalEngine:
         await self._emit_state_change(goal, old, reason=reason or "suspended")
         return goal
 
+    async def mark_awaiting_clarification(
+        self,
+        goal_id: str,
+        *,
+        pending_clarification: dict[str, Any],
+        reason: str = "",
+    ) -> Goal:
+        """RFC-622: pause a goal until an out-of-band clarification arrives.
+
+        Args:
+            goal_id: Goal to pause.
+            pending_clarification: Serialized ``ClarificationRequest`` to persist
+                on the goal so an operator can answer it later.
+            reason: Audit string.
+
+        Returns:
+            The updated Goal.
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
+        old = goal.status
+        goal.status = "awaiting_clarification"
+        goal.pending_clarification = pending_clarification
+        goal.assigned_loop_id = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "[ClarificationRelay] goal %s -> awaiting_clarification: %s",
+            goal_id,
+            reason,
+        )
+        await self._emit_state_change(goal, old, reason=reason or "awaiting_clarification")
+        return goal
+
+    async def answer_clarification(
+        self,
+        goal_id: str,
+        answers: list[str],
+    ) -> Goal:
+        """RFC-622: provide answers for a goal blocked on a clarification.
+
+        Clears ``pending_clarification`` and transitions the goal back to
+        ``pending`` so the scheduler picks it up on the next cycle. The
+        loop on re-entry will consume the answers from the goal record.
+
+        Args:
+            goal_id: Goal currently in ``awaiting_clarification``.
+            answers: One answer per question; the loop validates lengths.
+
+        Returns:
+            The updated Goal.
+
+        Raises:
+            KeyError: If goal not found.
+            ValueError: If goal is not awaiting a clarification.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
+        if goal.status != "awaiting_clarification":
+            msg = f"Goal {goal_id} is not awaiting a clarification (status={goal.status!r})"
+            raise ValueError(msg)
+        pending = goal.pending_clarification or {}
+        pending["answers"] = list(answers)
+        goal.pending_clarification = pending
+        old = goal.status
+        goal.status = "pending"
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "[ClarificationRelay] goal %s clarification answered (%d answer(s))",
+            goal_id,
+            len(answers),
+        )
+        await self._emit_state_change(goal, old, reason="clarification_answered")
+        return goal
+
     async def send_back_goal(self, goal_id: str, *, reason: str = "") -> Goal:
         """RFC-204: Return a goal to pending after consensus rejection.
 

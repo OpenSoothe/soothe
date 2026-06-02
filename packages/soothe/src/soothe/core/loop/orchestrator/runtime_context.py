@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -17,9 +18,12 @@ from .phase_scratch import LoopPhaseScratch
 
 if TYPE_CHECKING:
     from soothe.core.agent import CoreAgent
+    from soothe.core.loop.clarification.protocol import ClarificationPolicy
     from soothe.core.loop.engine.agent_loop import AgentLoop
 
 EmitFn = Callable[[str, Any], Awaitable[None]]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,8 +44,19 @@ class LoopRuntimeContext:
     intent_classifier: Any | None = None
     preferred_subagent: str | None = None
     scratch: LoopPhaseScratch = field(default_factory=LoopPhaseScratch)
+    clarification_policy: ClarificationPolicy | None = None
 
     @property
     def core_agent(self) -> CoreAgent:
         """Layer 1 graph (checkpoint key = ``thread_id``, not loop_id)."""
         return self.agent_loop.core_agent
+
+    async def mark_goal_status(self, status: str, reason: str = "") -> None:
+        """Update the running goal's status (best-effort).
+
+        Solo loop: logs only — the loop simply terminates with ``deferred``
+        outcome and the operator restarts when ready.
+        Autopilot: a goal-engine-aware subclass is expected to override this
+        and notify the scheduler that the goal is blocked.
+        """
+        logger.info("[ClarificationRelay] goal status -> %s (reason=%s)", status, reason)

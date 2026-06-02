@@ -1,4 +1,4 @@
-"""Execute planned steps via CoreAgent (RFC-220 ``execute``)."""
+"""Execute planned steps via CoreAgent (RFC-220 ``execute``, RFC-622 relay)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.core.events.constants import AGENT_LOOP_CONTEXT_COMPACTED
+from soothe.core.loop.clarification import (
+    ClarificationCapture,
+    ClarificationDetector,
+    LoopStateView,
+    answer_from_state,
+    request_to_state,
+)
 from soothe.core.loop.engine.context_window_manager import ContextWindowManager
 from soothe.core.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.core.loop.state.schemas import StepAction, StepResult
@@ -16,6 +23,36 @@ from ..runtime_context import LoopRuntimeContext
 logger = logging.getLogger(__name__)
 
 _STREAM_CHUNK_LEN = 3
+_RECENT_STEP_OUTPUTS_CAP = 8
+
+
+def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
+    state = ctx.loop_state
+    goal_record = ctx.goal_record
+    plan_result = ctx.scratch.plan_result
+    recent: list[str] = []
+    for sr in state.step_results[-_RECENT_STEP_OUTPUTS_CAP:]:
+        try:
+            recent.append(sr.to_evidence_string(truncate=True))
+        except AttributeError:
+            recent.append(str(getattr(sr, "output", "")))
+    plan_summary: str | None = None
+    if plan_result is not None:
+        plan_summary = getattr(plan_result, "plan_reasoning", None) or getattr(
+            plan_result, "next_action", None
+        )
+    return LoopStateView(
+        goal_id=getattr(goal_record, "goal_id", "") or "",
+        goal_description=getattr(goal_record, "goal_description", "") or getattr(state, "goal", ""),
+        user_request=getattr(state, "user_request", "") or "",
+        iteration=getattr(state, "iteration", 0),
+        intent_classification=getattr(state, "intent_classification", None),
+        plan_summary=plan_summary,
+        recent_step_outputs=tuple(recent),
+        workspace_summary=getattr(state, "workspace", None),
+        active_skills=tuple(getattr(state, "activated_skill_names", []) or []),
+        active_mcp_servers=tuple(getattr(state, "active_mcp_servers", []) or []),
+    )
 
 
 def _is_rate_limit_error(error: str | None) -> bool:
@@ -66,7 +103,7 @@ async def _record_and_emit_step_completed(
     )
 
 
-async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
+async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> dict[str, Any]:
     """Run ready steps, stream events, apply step results to ``LoopState``."""
     agent_loop = ctx.agent_loop
     state = ctx.loop_state
@@ -76,6 +113,19 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
     checkpoint = ctx.checkpoint
     decision = ctx.scratch.decision
     plan_result = ctx.scratch.plan_result
+
+    # RFC-622: consume any answer left by a prior await_clarification visit.
+    resume_answer_payload: dict[str, Any] | None = None
+    pending_answer_state = state_dict.get("pending_clarification_answer")
+    pending_request_state = state_dict.get("pending_clarification")
+    if pending_answer_state and pending_request_state:
+        try:
+            ans = answer_from_state(pending_answer_state)
+            origin_iid = str(pending_request_state.get("origin_interrupt_id", ""))
+            if origin_iid:
+                resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
+        except (ValueError, TypeError):
+            logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
     if decision is None or plan_result is None:
         logger.error("[execute] missing decision or plan_result on scratch")
@@ -117,6 +167,13 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
     # RFC-223: Pass checkpointer for thread fork inheritance
     checkpointer = getattr(agent_loop.core_agent.graph, "checkpointer", None)
 
+    clarification_capture = ClarificationCapture()
+    clarification_detector: ClarificationDetector | None = None
+    clarification_view: LoopStateView | None = None
+    if ctx.clarification_policy is not None:
+        clarification_detector = ClarificationDetector()
+        clarification_view = _build_loop_state_view(ctx)
+
     run_executor = Executor(
         agent_loop.core_agent,
         checkpointer=checkpointer,
@@ -124,6 +181,10 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
         config=agent_loop.config,
         goal_context_manager=goal_context_manager,
         loop_id=ctx.state_manager.loop_id,
+        clarification_detector=clarification_detector,
+        clarification_capture=clarification_capture,
+        clarification_loop_state_view=clarification_view,
+        clarification_resume_answer_payload=resume_answer_payload,
     )
     async for item in run_executor.execute(
         decision=decision,
@@ -212,5 +273,20 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
                 state.thread_id,
                 exc_info=True,
             )
+
+    # RFC-622: surface a captured clarification so the graph routes to
+    # ``await_clarification`` instead of ``record_iteration``.
+    if clarification_capture.pending_request is not None:
+        logger.info("[execute] clarification captured; routing to await_clarification")
+        return {
+            "pending_clarification": request_to_state(clarification_capture.pending_request),
+            "last_clarification_origin": "execute",
+            # Clear any prior answer so re-entry only consumes it once.
+            "pending_clarification_answer": None,
+        }
+
+    if resume_answer_payload is not None:
+        # Successfully resumed from a prior clarification; clear answer state.
+        return {"pending_clarification_answer": None}
 
     return {}
