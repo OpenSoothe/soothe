@@ -1,12 +1,18 @@
-# Soothe runtime stack (production-ready)
-# Multi-database PostgreSQL + pgvector for checkpoints, metadata, vectors, memory.
+# Soothe production stack - PostgreSQL + pgvector + Soothe Daemon
+# Multi-database PostgreSQL architecture with layered networks.
 #
-# Usage (production deployment):
-#   docker compose -f deploy/docker-compose.yml up -d
+# Usage:
+#   docker compose up -d
 #
-# Override secrets via environment or a .env file next to this compose file:
-#   POSTGRES_PASSWORD=...   # required in production
+# Environment variables (set in .env file):
+#   POSTGRES_PASSWORD=...            # PostgreSQL password
+#   DASHSCOPE_API_KEY=...            # DashScope provider key
+#   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
+#   DASHSCOPE_BASE_URL=...           # DashScope API base URL
+#   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
+
 services:
+  # PostgreSQL + pgvector multi-database backend
   soothe-pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
     restart: unless-stopped
@@ -14,11 +20,13 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    networks:
+      - soothe-db
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
+      - soothe_postgres_data:/var/lib/postgresql/data
+      - ./soothe/config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
@@ -27,5 +35,52 @@ services:
       start_period: 20s
     shm_size: 256mb
 
+  # Soothe Daemon - orchestration server
+  soothed:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+    restart: unless-stopped
+    depends_on:
+      soothe-pgvector:
+        condition: service_healthy
+    networks:
+      - soothe-db
+      - soothe-app
+    environment:
+      # Provider credentials
+      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      DASHSCOPE_CP_BASE_URL: ${DASHSCOPE_CP_BASE_URL:-https://coding.dashscope.aliyuncs.com/v1}
+      DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY}
+      # Temporary LangChain fallback (until propagate_env fix republished)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-${DASHSCOPE_API_KEY}}
+      # PostgreSQL connection strings (RFC-612 multi-database)
+      SOOTHE_POSTGRES_BASE_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432
+      SOOTHE_POSTGRES_VECTORS_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432/soothe_vectors
+      # Daemon config overrides (note: correct env var syntax without extra __)
+      SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
+      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED: true
+      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - soothe_daemon_data:/var/lib/soothe
+      - ./config.yml:/var/lib/soothe/config.yml:ro
+      # Removed daemon_config.yml mount - using Dockerfile ENV vars instead
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.settimeout(3); s.connect((\"localhost\",8765)); s.close()' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  soothe-db:
+    driver: bridge
+  soothe-app:
+    driver: bridge
+
 volumes:
-  postgres_data:
+  soothe_postgres_data:
+    name: soothe_postgres_data
+  soothe_daemon_data:
+    name: soothe_daemon_data
