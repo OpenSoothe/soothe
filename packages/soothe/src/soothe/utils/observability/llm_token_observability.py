@@ -183,8 +183,10 @@ class SootheTokenUsageChatModel(BaseChatModel):
         return self._model.bind_tools(tools, **kwargs)
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
-        """Delegate structured output to the wrapped provider model."""
-        return self._model.with_structured_output(schema, **kwargs)
+        """Delegate structured output and wrap for json_object prompt compatibility."""
+        from soothe.utils.llm.structured_invoke import wrap_json_keyword_safe
+
+        return wrap_json_keyword_safe(self._model.with_structured_output(schema, **kwargs))
 
     def _generate(
         self,

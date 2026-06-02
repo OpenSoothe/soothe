@@ -491,17 +491,15 @@ class PlannerProtocolConfig(BaseModel):
 
     Args:
         model: Model role used for planning (resolved via ModelRouter).
-        use_fast_model: Use fast model for structured output (default: True).
+            Use "think" for complex reasoning (default), "fast" for speed,
+            or "default" as fallback.
         routing: Routing strategy for planner selection.
-        planner_model: Model role alias for planning (same as model).
     """
 
     model: str = "think"
-    use_fast_model: bool = True
 
     # Config fields (IG-150 Phase 4)
     routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
-    planner_model: str = "think"
 
 
 class PolicyProtocolConfig(BaseModel):

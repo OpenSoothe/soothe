@@ -8,9 +8,12 @@ from weakref import WeakKeyDictionary
 
 import jsonschema
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
 from soothe.utils.llm.schema_wire import resolve_schema_name, validate_response_schema
+
+_JSON_KEYWORD_HINT = "Respond with JSON matching the required schema."
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,11 @@ _METHOD_CACHE: WeakKeyDictionary[BaseChatModel, str | None] = WeakKeyDictionary(
 
 def _ordered_structured_methods(chat: BaseChatModel) -> tuple[str | None, ...]:
     """Return ``_STRUCTURED_METHODS`` with the cached working method moved to the front."""
-    cached = _METHOD_CACHE.get(chat, _MISSING)
+    try:
+        cached = _METHOD_CACHE.get(chat, _MISSING)
+    except TypeError:
+        # Unhashable chat model (e.g., SootheTokenUsageChatModel wrapper) — skip cache
+        return _STRUCTURED_METHODS
     if cached is _MISSING or cached == _STRUCTURED_METHODS[0]:
         return _STRUCTURED_METHODS
     if cached not in _STRUCTURED_METHODS:
@@ -50,6 +57,63 @@ def _remember_structured_method(chat: BaseChatModel, method: str | None) -> None
 
 class StructuredOutputError(Exception):
     """Raised when structured output cannot be produced for a requested schema."""
+
+
+def _message_text(message: Any) -> str:
+    """Extract plain text from a LangChain message for keyword checks."""
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        return "\n".join(parts)
+    return str(content)
+
+
+def messages_contain_json_keyword(messages: list[Any]) -> bool:
+    """Return True when any message already mentions JSON (case-insensitive)."""
+    return any("json" in _message_text(message).lower() for message in messages)
+
+
+def ensure_json_keyword_in_messages(messages: list[Any]) -> list[Any]:
+    """Ensure messages mention JSON for providers that require it with json_object mode.
+
+    DashScope and some other OpenAI-compatible APIs reject ``response_format`` of type
+    ``json_object`` unless the word ``json`` appears somewhere in the prompt messages.
+    """
+    if not messages or messages_contain_json_keyword(messages):
+        return messages
+    return [*messages, HumanMessage(content=_JSON_KEYWORD_HINT)]
+
+
+class _JsonKeywordSafeRunnable:
+    """Wrap a structured-output runnable to satisfy json_object prompt requirements."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
+        if isinstance(input, list):
+            input = ensure_json_keyword_in_messages(input)
+        return self._inner.invoke(input, config=config, **kwargs)
+
+    async def ainvoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
+        if isinstance(input, list):
+            input = ensure_json_keyword_in_messages(input)
+        return await self._inner.ainvoke(input, config=config, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def wrap_json_keyword_safe(runnable: Any) -> Any:
+    """Wrap a structured-output runnable so prompts satisfy json_object providers."""
+    return _JsonKeywordSafeRunnable(runnable)
 
 
 def normalize_structured_result(result: Any) -> dict[str, Any]:
@@ -85,19 +149,33 @@ def _try_create_structured_runnable(
     method: str | None,
     strict: bool,
 ) -> Any:
-    """Build a structured-output runnable for a single method, or raise."""
+    """Build a structured-output runnable for a single method, or raise.
+
+    For function_calling method, uses tool_choice='auto' instead of the default
+    object format. Thinking-mode models (MiniMax, glm-5, Moonshot) reject
+    tool_choice in object format but accept string values like 'auto'.
+    """
     if method is None:
         return chat.with_structured_output(schema_with_title)
     if method == "json_mode":
         # LangChain rejects strict= with json_mode; post-validate in invoke_structured_chat.
         return chat.with_structured_output(schema_with_title, method="json_mode")
+    if method == "function_calling":
+        # Use tool_choice='auto' for thinking-model compatibility.
+        # Default function_calling uses object format which thinking models reject.
+        # With 'auto', the model can reason then decide to call the tool.
+        return chat.with_structured_output(
+            schema_with_title, method=method, strict=strict, tool_choice="auto"
+        )
     return chat.with_structured_output(schema_with_title, method=method, strict=strict)
 
 
 def _is_retriable_structured_invoke_error(exc: Exception) -> bool:
     """Return True when another structured-output method may succeed (e.g. thinking models)."""
     msg = str(exc).lower()
-    return "tool_choice" in msg and "thinking mode" in msg
+    if "tool_choice" in msg and "thinking mode" in msg:
+        return True
+    return "json_object" in msg and "must contain" in msg and "json" in msg
 
 
 def _create_structured_runnable(
@@ -162,6 +240,7 @@ async def invoke_structured_chat(
 
     methods = _ordered_structured_methods(chat)
     last_method = methods[-1]
+    prepared_messages = ensure_json_keyword_in_messages(messages)
 
     last_exc: Exception | None = None
     for method in methods:
@@ -181,7 +260,7 @@ async def invoke_structured_chat(
             continue
 
         try:
-            result = await structured.ainvoke(messages, config=invoke_cfg)
+            result = await structured.ainvoke(prepared_messages, config=invoke_cfg)
         except StructuredOutputError:
             raise
         except Exception as exc:
@@ -211,7 +290,10 @@ async def invoke_structured_chat(
 
 __all__ = [
     "StructuredOutputError",
+    "ensure_json_keyword_in_messages",
     "invoke_structured_chat",
+    "messages_contain_json_keyword",
     "normalize_structured_result",
     "post_validate_structured_dict",
+    "wrap_json_keyword_safe",
 ]

@@ -8,7 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from soothe.core.loop.planning.simple_bypass import (
     SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
@@ -45,6 +45,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
+from soothe.utils.llm.structured_invoke import invoke_structured_chat
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
 from soothe.utils.token_counting import estimate_content_chars
@@ -69,6 +70,43 @@ def _plan_phase_chat_model(model: Any) -> Any:
         return model.bind(temperature=0)  # type: ignore[union-attr]
     except Exception:
         return model
+
+
+async def _invoke_plan_structured_output(
+    model: Any,
+    messages: list[Any],
+    schema: type[BaseModel],
+    *,
+    config: dict[str, Any] | None = None,
+) -> BaseModel:
+    """Invoke structured output with thinking-model fallback.
+
+    Moonshot/Kimi and other thinking-mode models reject ``tool_choice=required``
+    at invoke time. This helper uses `invoke_structured_chat` which tries methods
+    in order at invoke time: function_calling → json_schema → json_mode.
+
+    Args:
+        model: The chat model (may be temperature-bound).
+        messages: Messages to send to the LLM.
+        schema: Pydantic schema for structured output.
+        config: Optional RunnableConfig for tracing.
+
+    Returns:
+        Parsed Pydantic model instance.
+
+    Raises:
+        StructuredOutputError: When all methods fail.
+    """
+    json_schema = schema.model_json_schema()
+    result_dict = await invoke_structured_chat(
+        model,
+        messages,
+        json_schema=json_schema,
+        schema_name=schema.__name__,
+        strict=True,
+        config=config,
+    )
+    return schema(**result_dict)
 
 
 _SIMPLE_PLANNER_HINT_MAP = {
@@ -196,14 +234,13 @@ class LLMPlanner:
     ) -> Plan:
         """Revise plan based on reflection feedback."""
         prompt = self._build_revision_prompt(plan, reflection)
+        messages = [HumanMessage(content=prompt)]
 
         try:
-            structured_model = self._model.with_structured_output(Plan)
             lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="revise-plan")
-            if lf_cfg is not None:
-                revised = await structured_model.ainvoke(prompt, config=lf_cfg)
-            else:
-                revised = await structured_model.ainvoke(prompt)
+            revised = await _invoke_plan_structured_output(
+                self._model, messages, Plan, config=lf_cfg
+            )
             revised.status = "revised"
             return self._normalize_hints(revised)
         except Exception as e:
@@ -389,16 +426,13 @@ class LLMPlanner:
     async def _create_plan_via_llm(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via LLM structured output with fallback parsing."""
         prompt = self._build_plan_prompt(goal, context)
+        messages = [HumanMessage(content=prompt)]
 
         try:
-            structured_model = self._model.with_structured_output(Plan)
             lf_cfg = self._planner_langfuse_run_config(
                 thread_id=context.thread_id, phase="create-plan-structured"
             )
-            if lf_cfg is not None:
-                plan = await structured_model.ainvoke(prompt, config=lf_cfg)
-            else:
-                plan = await structured_model.ainvoke(prompt)
+            plan = await _invoke_plan_structured_output(self._model, messages, Plan, config=lf_cfg)
             return self._normalize_hints(plan)
         except Exception as e:
             logger.warning("Structured output failed, trying manual parse: %s", e)
@@ -663,16 +697,13 @@ class LLMPlanner:
         """
         from soothe.core.loop.state.schemas import StatusAssessment
 
-        structured_model = _plan_phase_chat_model(self._model).with_structured_output(
-            StatusAssessment
-        )
+        model = _plan_phase_chat_model(self._model)
 
         try:
             lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
-            if lf_cfg is not None:
-                assessment = await structured_model.ainvoke(messages, config=lf_cfg)
-            else:
-                assessment = await structured_model.ainvoke(messages)
+            assessment = await _invoke_plan_structured_output(
+                model, messages, StatusAssessment, config=lf_cfg
+            )
 
             if assessment is None:
                 raise ValueError("StatusAssessment returned None")
@@ -760,18 +791,15 @@ class LLMPlanner:
             prior_goals=prior_goals,
             capabilities=capabilities,
         )
-        structured_model = _plan_phase_chat_model(self._model).with_structured_output(
-            ContinuationAssessment
-        )
+        messages = [HumanMessage(content=prompt)]
+        model = _plan_phase_chat_model(self._model)
         try:
             lf_cfg = self._planner_langfuse_run_config(
                 thread_id=thread_id, phase="continuation-assess"
             )
-            messages = [HumanMessage(content=prompt)]
-            if lf_cfg is not None:
-                result = await structured_model.ainvoke(messages, config=lf_cfg)
-            else:
-                result = await structured_model.ainvoke(messages)
+            result = await _invoke_plan_structured_output(
+                model, messages, ContinuationAssessment, config=lf_cfg
+            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -866,14 +894,13 @@ class LLMPlanner:
         )
         plan_messages = messages + [context_msg]
 
-        structured_model = _plan_phase_chat_model(self._model).with_structured_output(plan_schema)
+        model = _plan_phase_chat_model(self._model)
 
         try:
             lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-generate")
-            if lf_cfg is not None:
-                plan_result = await structured_model.ainvoke(plan_messages, config=lf_cfg)
-            else:
-                plan_result = await structured_model.ainvoke(plan_messages)
+            plan_result = await _invoke_plan_structured_output(
+                model, plan_messages, plan_schema, config=lf_cfg
+            )
 
             if plan_result is None:
                 raise ValueError("PlanGeneration returned None")
