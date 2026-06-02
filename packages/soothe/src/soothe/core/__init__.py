@@ -31,8 +31,7 @@ def __getattr__(name: str) -> Any:
 
         return SootheRunner
     if name == "ConfigDrivenPolicy":
-        # Governance: operation security + configuration-driven policy
-        from soothe.core.governance import ConfigDrivenPolicy
+        from soothe.core.security import ConfigDrivenPolicy
 
         return ConfigDrivenPolicy
     if name == "PromptBuilder":

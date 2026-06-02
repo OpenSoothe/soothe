@@ -41,7 +41,7 @@ from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_EXECUTE_TIMEOUT,
 )
-from soothe.core.governance.operation_security import WorkspaceToolOperationSecurity
+from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.utils import expand_path
 

@@ -11,7 +11,6 @@ from soothe_sdk.tools.metadata import (
     is_policy_filesystem_tool,
 )
 
-from soothe.core.governance.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import (
     OperationKind,
     OperationSecurityContext,
@@ -25,6 +24,8 @@ from soothe.protocols.policy import (
     PolicyDecision,
     PolicyProfile,
 )
+
+from .operation_security import WorkspaceToolOperationSecurity
 
 logger = logging.getLogger(__name__)
 
