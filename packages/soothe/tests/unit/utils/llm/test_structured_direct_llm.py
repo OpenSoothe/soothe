@@ -5,14 +5,17 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from soothe.utils.llm.schema_wire import validate_response_schema
 from soothe.utils.llm.structured_invoke import (
     StructuredOutputError,
+    ensure_json_keyword_in_messages,
     invoke_structured_chat,
+    messages_contain_json_keyword,
     normalize_structured_result,
+    wrap_json_keyword_safe,
 )
 from soothe.utils.llm.wrappers import JsonSchemaModelWrapper, LimitedProviderModelWrapper
 
@@ -39,6 +42,53 @@ def test_normalize_structured_result_pydantic() -> None:
         word: str
 
     assert normalize_structured_result(_M(word="ok")) == {"word": "ok"}
+
+
+def test_messages_contain_json_keyword() -> None:
+    assert messages_contain_json_keyword([HumanMessage(content="Return JSON output")])
+    assert not messages_contain_json_keyword([HumanMessage(content="hello")])
+
+
+def test_ensure_json_keyword_in_messages_appends_hint() -> None:
+    original = [SystemMessage(content="plan"), HumanMessage(content="Assess status")]
+    updated = ensure_json_keyword_in_messages(original)
+    assert len(updated) == len(original) + 1
+    assert "json" in updated[-1].content.lower()
+
+
+def test_ensure_json_keyword_in_messages_noop_when_present() -> None:
+    messages = [HumanMessage(content="Respond in JSON format")]
+    assert ensure_json_keyword_in_messages(messages) is messages
+
+
+@pytest.mark.asyncio
+async def test_wrap_json_keyword_safe_injects_on_invoke() -> None:
+    inner = MagicMock()
+    inner.ainvoke = AsyncMock(return_value={"word": "OK"})
+    wrapped = wrap_json_keyword_safe(inner)
+
+    await wrapped.ainvoke([HumanMessage(content="hi")])
+
+    sent_messages = inner.ainvoke.await_args.args[0]
+    assert any("json" in str(getattr(m, "content", "")).lower() for m in sent_messages)
+
+
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_injects_json_keyword() -> None:
+    chat = MagicMock()
+    structured = MagicMock()
+    structured.ainvoke = AsyncMock(return_value={"word": "OK"})
+    chat.with_structured_output = MagicMock(return_value=structured)
+
+    await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+    )
+
+    sent_messages = structured.ainvoke.await_args.args[0]
+    assert any("json" in str(getattr(m, "content", "")).lower() for m in sent_messages)
 
 
 @pytest.mark.asyncio

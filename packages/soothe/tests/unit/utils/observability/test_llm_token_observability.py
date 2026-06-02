@@ -60,13 +60,15 @@ def test_soothe_token_usage_model_delegates_with_structured_output() -> None:
     """Regression: wrapper must not inherit BaseChatModel.with_structured_output (daemon IntentClassifier)."""
     from unittest.mock import MagicMock
 
+    from soothe.utils.llm.structured_invoke import _JsonKeywordSafeRunnable
+
     inner = MagicMock(spec=BaseChatModel)
     inner.bind_tools.side_effect = lambda *a, **k: inner
     inner.with_structured_output.return_value = "structured-runnable"
     wrapped = SootheTokenUsageChatModel(inner)
     assert type(wrapped).bind_tools is not BaseChatModel.bind_tools
     out = wrapped.with_structured_output("schema", method="json_mode")
-    assert out == "structured-runnable"
+    assert isinstance(out, _JsonKeywordSafeRunnable)
     inner.with_structured_output.assert_called_once_with("schema", method="json_mode")
 
 

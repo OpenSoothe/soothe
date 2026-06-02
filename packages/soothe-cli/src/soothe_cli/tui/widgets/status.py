@@ -229,9 +229,8 @@ class StatusBar(Horizontal):
         """Compose the status bar layout.
 
         Yields:
-            Clarification-mode badge (flush with the chat-box left edge),
-            model label, input-mode indicator, tip, message/cwd/branch group,
-            and token count.
+            Clarification-mode badge, model label, input-mode indicator, tip,
+            message/cwd/branch group, and token count.
         """
         yield ClarificationModeBadge(id="clarification-mode-badge")
         yield ModelLabel(id="model-display")

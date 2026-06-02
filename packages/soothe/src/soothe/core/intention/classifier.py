@@ -15,6 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from soothe.core.quiz_messages import build_quiz_system_message
+from soothe.utils.llm.structured_invoke import invoke_structured_chat
 
 from .models import (
     IntentClassification,
@@ -144,7 +145,12 @@ class IntentClassifier:
         retry_mode: bool = False,
         observability_metadata: dict[str, str] | None = None,
     ) -> IntentClassification:
-        """LLM quiz detection with structured output."""
+        """LLM quiz detection with structured output.
+
+        Uses `invoke_structured_chat` for thinking-model compatibility.
+        Models in thinking mode reject `tool_choice=required`, so we use the
+        structured_invoke fallback chain: function_calling → json_schema → json_mode.
+        """
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         prompt_template = (
@@ -167,18 +173,28 @@ class IntentClassifier:
             HumanMessage(content=prompt),
         ]
 
+        # Use invoke_structured_chat for thinking-model fallback support
+        schema = IntentClassificationLLMResult.model_json_schema()
         try:
-            llm_result = await self._intent_model.ainvoke(messages, config=config)
+            result_dict = await invoke_structured_chat(
+                self._fast_model,
+                messages,
+                json_schema=schema,
+                schema_name="IntentClassificationLLMResult",
+                strict=True,
+                config=config,
+            )
         except Exception:
             logger.exception("LLM intent classification call failed")
             raise
 
-        if llm_result is None:
+        if result_dict is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if llm_result.intent_type not in ("agentic", "quiz"):
-            raise ValueError(f"Invalid intent_type from LLM: {llm_result.intent_type!r}")
+        if result_dict.get("intent_type") not in ("agentic", "quiz"):
+            raise ValueError(f"Invalid intent_type from LLM: {result_dict.get('intent_type')!r}")
 
+        llm_result = IntentClassificationLLMResult(**result_dict)
         return llm_result.to_intent_classification()
 
     # -- Model creation ----------------------------------------------------

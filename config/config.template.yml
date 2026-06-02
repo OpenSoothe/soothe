@@ -199,10 +199,8 @@ agent:
       - name: goals
         description: Goals and objectives
     planner:
-      model: think
-      use_fast_model: true
+      model: think              # Use "think" for complex reasoning, "fast" for speed
       routing: auto
-      planner_model: think
     policy:
       profile: standard
     durability:
