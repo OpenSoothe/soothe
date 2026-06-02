@@ -8,6 +8,8 @@
 #   POSTGRES_PASSWORD=...            # PostgreSQL password
 #   DASHSCOPE_API_KEY=...            # DashScope provider key
 #   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
+#   DASHSCOPE_BASE_URL=...           # DashScope API base URL
+#   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
 
 services:
   # PostgreSQL + pgvector multi-database backend
@@ -52,7 +54,6 @@ services:
       # PostgreSQL connection strings (RFC-612 multi-database)
       SOOTHE_POSTGRES_BASE_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432/soothe_vectors
-      # Daemon config (correct env var syntax without extra __)
       SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
       SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED: true
       SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
