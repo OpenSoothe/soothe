@@ -85,9 +85,10 @@ def test_simple_query_gets_minimal_prompt():
 
     modified = middleware.modify_request(request)
 
-    # Should have minimal prompt (no date line - date is in user envelope per RFC-214)
+    # Should have minimal prompt (no date line - date is in user envelope per RFC-214).
+    # Threshold accounts for the RESPONSE_LANGUAGE_HINT block now living in the system prompt.
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 500
+    assert len(modified.system_message.content) < 700
     # RFC-214: Date line NOT in system prompt - it's in user message envelope
     assert "Today's date is" not in modified.system_message.content
 
@@ -259,9 +260,10 @@ def test_minimal_task_complexity_uses_compact_prompt():
 
     modified = middleware.modify_request(request)
 
-    # Should get simple prompt
+    # Should get simple prompt. Threshold accounts for the RESPONSE_LANGUAGE_HINT
+    # block now living in the system prompt.
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 500
+    assert len(modified.system_message.content) < 700
 
 
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
@@ -535,6 +537,20 @@ class TestWorkspaceInjection:
         assert "<WORKSPACE>" in prompt
         assert "<WORKSPACE_INSTRUCTIONS>" in prompt
         assert "Be concise." in prompt
+
+    def test_response_language_hint_lives_in_system_prompt(self, tmp_path) -> None:
+        """Language hint was moved out of the per-turn user envelope into the
+        cache-stable system prelude. The tag is uppercase to match the system
+        prompt's tag convention.
+        """
+        mw = self._middleware()
+        prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
+        assert "<RESPONSE_LANGUAGE_HINT>" in prompt
+        assert "same natural language as the user's goal" in prompt
+        # The lowercase legacy tag must not leak back in.
+        assert "<response_language_hint>" not in prompt
+        # Hint sits in the workspace prelude (before <ENVIRONMENT> / <WORKSPACE>).
+        assert prompt.find("<RESPONSE_LANGUAGE_HINT>") < prompt.find("<ENVIRONMENT")
 
     def test_workspace_rules_warn_against_pasting_truncated_tool_output(self, tmp_path) -> None:
         """Rules must forbid re-pasting truncated tool bodies (trace 0e412f)."""

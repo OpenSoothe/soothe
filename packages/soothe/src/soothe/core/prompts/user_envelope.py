@@ -27,13 +27,8 @@ _GOAL_ITERATION_SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
-# User-visible prose should track the goal's language (execute + plan envelopes, RFC-214).
-_RESPONSE_LANGUAGE_HINT = (
-    "<response_language_hint>"
-    "Prefer the same natural language as the user's goal in this turn for explanations, "
-    "summaries, and conclusions; keep code, file paths, identifiers, and quoted literals unchanged."
-    "</response_language_hint>"
-)
+# Language directive lives in the system prompt (`RESPONSE_LANGUAGE_HINT_FRAGMENT`)
+# so the per-turn envelope stays cache-stable.
 
 _EXECUTE_STEP_CONTEXT_SEPARATOR = "\n\n--- Context ---\n\n"
 
@@ -129,7 +124,6 @@ def build_execute_step_envelope(
     context_info_parts = [
         f"<timestamp>{timestamp}</timestamp>",
         f"<date>{date_str}</date>",
-        _RESPONSE_LANGUAGE_HINT,
     ]
     if workspace_state:
         context_info_parts.append(f"<workspace_state>{workspace_state}</workspace_state>")
@@ -244,7 +238,6 @@ def build_plan_context_envelope(
     context_info_parts = [
         f"<timestamp>{timestamp}</timestamp>",
         f"<date>{date_str}</date>",
-        _RESPONSE_LANGUAGE_HINT,
     ]
     context_info = "<CONTEXT_INFO>\n" + "\n".join(context_info_parts) + "\n</CONTEXT_INFO>"
 
