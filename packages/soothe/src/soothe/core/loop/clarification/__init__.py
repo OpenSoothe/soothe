@@ -25,6 +25,10 @@ from soothe.core.loop.clarification.protocol import (
     request_from_state,
     request_to_state,
 )
+from soothe.core.loop.clarification.runtime_factory import (
+    build_clarification_policy_for_runner,
+    resolve_clarification_mode,
+)
 from soothe.core.loop.clarification.selector import build_default_clarification_policy
 
 __all__ = [
@@ -40,7 +44,9 @@ __all__ = [
     "LoopStateView",
     "answer_from_state",
     "answer_to_state",
+    "build_clarification_policy_for_runner",
     "build_default_clarification_policy",
     "request_from_state",
     "request_to_state",
+    "resolve_clarification_mode",
 ]

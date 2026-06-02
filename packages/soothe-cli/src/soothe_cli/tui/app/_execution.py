@@ -821,6 +821,7 @@ class _ExecutionMixin:
                 ),
                 turn_stats=turn_stats,
                 skip_daemon_send_turn=skip_daemon_send_turn,
+                clarification_mode=getattr(self, "_clarification_mode", None),
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")

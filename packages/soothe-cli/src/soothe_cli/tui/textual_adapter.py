@@ -1406,6 +1406,7 @@ async def execute_task_textual(
     message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
+    clarification_mode: str | None = None,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
 
@@ -1576,6 +1577,7 @@ async def execute_task_textual(
                 model=ctx_model if isinstance(ctx_model, str) and ctx_model.strip() else None,
                 model_params=mp,
                 attachments=image_attachments,
+                clarification_mode=clarification_mode,
             )
             chunk_source = daemon_session.iter_turn_chunks()
 

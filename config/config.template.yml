@@ -221,6 +221,9 @@ agent:
     auto_policy: veritas        # only built-in for now
     auto_min_confidence: 0.4    # below this, veritas answer is treated as defer
     max_defer_age_hours: 168    # autopilot: scrub stale awaiting_clarification goals
+    default_mode: auto          # used when a request omits clarification_mode
+                                # (auto = veritas; manual = TUI relay).
+                                # Autopilot always forces auto.
 
   # === VERITAS (Clarification auto-answerer, RFC-622) ===
   veritas:

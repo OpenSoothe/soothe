@@ -82,7 +82,10 @@ async def test_success_writes_answer_and_clears_pending() -> None:
 
     result = await node_await_clarification(ctx, state)
 
-    assert result["pending_clarification"] is None
+    # IG-462: ``pending_clarification`` survives the answer write so the
+    # originating node can pair the request (carrying ``origin_interrupt_id``)
+    # with the answer on re-entry. The originating node clears both channels.
+    assert "pending_clarification" not in result
     assert result["pending_clarification_answer"]["answers"] == ["auth flows"]
     assert result["pending_clarification_answer"]["source"] == "human"
     names = [n for n, _ in ctx.emitted]

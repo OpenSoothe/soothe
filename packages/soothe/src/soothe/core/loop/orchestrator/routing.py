@@ -10,8 +10,17 @@ from .state import PLAN_ROUTE_GOAL_DONE
 
 
 def _pending_clarification(state: dict[str, Any]) -> bool:
-    """RFC-622: any node-exit router yields to ``await_clarification`` first."""
-    return bool(state.get("pending_clarification"))
+    """RFC-622: yield to ``await_clarification`` when a request is pending and
+    the policy has not yet returned an answer.
+
+    IG-462: ``await_clarification`` keeps ``pending_clarification`` set so the
+    originating node can pair it with the answer on re-entry. We must not
+    re-route those re-entries back into ``await_clarification`` — the answer
+    being present is the signal that we're past the relay.
+    """
+    return bool(state.get("pending_clarification")) and not state.get(
+        "pending_clarification_answer"
+    )
 
 
 def route_after_init(state: dict[str, Any]) -> str:

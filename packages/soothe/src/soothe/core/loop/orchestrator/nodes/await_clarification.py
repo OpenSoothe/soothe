@@ -106,8 +106,12 @@ async def node_await_clarification(
         },
     )
 
+    # IG-462: keep ``pending_clarification`` alive alongside the answer so the
+    # originating node (``execute`` / ``plan_*``) can pair them on re-entry
+    # — it needs ``origin_interrupt_id`` to know which CoreAgent interrupt
+    # (or planner-emitted step) is being resumed. The originating node clears
+    # both channels once it has consumed the pair.
     return {
-        "pending_clarification": None,
         "pending_clarification_answer": answer_to_state(answer),
     }
 

@@ -480,6 +480,7 @@ def _pool_worker_body(
                         client_loop_id=req.loop_id,
                         intent_hint=parse_intent_hint(req.intent_hint),
                         autopilot_job=req.autopilot_job,  # RFC-222 revised
+                        clarification_mode=req.clarification_mode,
                     ):
                         # COOPERATIVE CANCELLATION: Check cancel_event between chunks
                         if cancel_event.is_set():

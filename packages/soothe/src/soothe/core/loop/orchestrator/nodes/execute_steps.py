@@ -10,6 +10,7 @@ from soothe.core.events.constants import AGENT_LOOP_CONTEXT_COMPACTED
 from soothe.core.loop.clarification import (
     ClarificationCapture,
     ClarificationDetector,
+    ClarificationRequest,
     LoopStateView,
     answer_from_state,
     request_to_state,
@@ -24,6 +25,12 @@ logger = logging.getLogger(__name__)
 
 _STREAM_CHUNK_LEN = 3
 _RECENT_STEP_OUTPUTS_CAP = 8
+
+PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
+"""Sentinel prefix marking a clarification request that came from a planner-emitted
+``kind="ask_user"`` step rather than a real CoreAgent ``ask_user`` interrupt.
+On answer arrival, ``node_execute`` synthesizes a ``StepResult`` for the matching
+step id instead of trying to resume a CoreAgent interrupt that never existed."""
 
 
 def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
@@ -116,13 +123,23 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
     # RFC-622: consume any answer left by a prior await_clarification visit.
     resume_answer_payload: dict[str, Any] | None = None
+    planner_ask_answered_step_id: str | None = None
+    planner_ask_answers: tuple[str, ...] = ()
+    planner_ask_source: str = ""
     pending_answer_state = state_dict.get("pending_clarification_answer")
     pending_request_state = state_dict.get("pending_clarification")
     if pending_answer_state and pending_request_state:
         try:
             ans = answer_from_state(pending_answer_state)
             origin_iid = str(pending_request_state.get("origin_interrupt_id", ""))
-            if origin_iid:
+            if origin_iid.startswith(PLANNER_ASK_INTERRUPT_PREFIX):
+                # IG-462 Branch 1: planner-emitted ask_user step. No CoreAgent
+                # interrupt to resume — instead synthesize a StepResult below
+                # so the next get_ready_steps() call naturally skips this step.
+                planner_ask_answered_step_id = origin_iid[len(PLANNER_ASK_INTERRUPT_PREFIX) :]
+                planner_ask_answers = tuple(ans.answers)
+                planner_ask_source = ans.source
+            elif origin_iid:
                 resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
@@ -164,8 +181,71 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     step_results: list[StepResult] = []
     step_desc = {s.id: s.description for s in decision.steps}
 
+    # IG-462 Branch 1 continued: synthesize a successful StepResult for the
+    # planner-emitted ask_user step that was just answered. Recording it here
+    # adds the id to state.completed_step_ids so the executor's
+    # get_ready_steps() will skip it on the resumed wave.
+    if planner_ask_answered_step_id is not None:
+        ask_step = next(
+            (s for s in decision.steps if s.id == planner_ask_answered_step_id),
+            None,
+        )
+        outcome_payload: dict[str, Any] = {
+            "kind": "ask_user",
+            "answers": list(planner_ask_answers),
+            "source": planner_ask_source,
+        }
+        synth_result = StepResult(
+            step_id=planner_ask_answered_step_id,
+            success=True,
+            duration_ms=0,
+            thread_id=state.thread_id,
+            outcome=outcome_payload,
+            tool_call_count=0,
+        )
+        # Make the description available for the step_completed event even when
+        # the answered step is not in decision.steps anymore.
+        if ask_step is not None:
+            step_desc.setdefault(ask_step.id, ask_step.description)
+        else:
+            step_desc.setdefault(planner_ask_answered_step_id, "Ask user clarifying question")
+        step_results.append(synth_result)
+        await _record_and_emit_step_completed(ctx, result=synth_result, step_desc=step_desc)
+
     # RFC-223: Pass checkpointer for thread fork inheritance
     checkpointer = getattr(agent_loop.core_agent.graph, "checkpointer", None)
+
+    # IG-462 Branch 2: when the planner emits a kind="ask_user" step in this
+    # wave, surface it to the clarification relay BEFORE running the executor.
+    # The planner prompt limits this to one ask_user per wave, paired with no
+    # other steps; we honor that by short-circuiting on the first such ready
+    # step. Other ready steps will run on the resumed wave once the answer
+    # arrives.
+    if ctx.clarification_policy is not None:
+        ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
+        ask_step = next((s for s in ready_steps if s.kind == "ask_user"), None)
+        if ask_step is not None and ask_step.questions:
+            ask_view = _build_loop_state_view(ctx)
+            ask_iid = f"{PLANNER_ASK_INTERRUPT_PREFIX}{ask_step.id}"
+            ask_request = ClarificationRequest(
+                questions=tuple(ask_step.questions),
+                origin_node="execute",
+                origin_interrupt_id=ask_iid,
+                loop_state=ask_view,
+            )
+            logger.info(
+                "[execute] planner-emitted ask_user step %s → routing to await_clarification (questions=%d)",
+                ask_step.id,
+                len(ask_step.questions),
+            )
+            # Emit step_started so live UIs surface the pending question;
+            # _record_and_emit_step_completed will fire when the answer lands.
+            await _emit_step_started_for_steps([ask_step])
+            return {
+                "pending_clarification": request_to_state(ask_request),
+                "last_clarification_origin": "execute",
+                "pending_clarification_answer": None,
+            }
 
     clarification_capture = ClarificationCapture()
     clarification_detector: ClarificationDetector | None = None
@@ -285,8 +365,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             "pending_clarification_answer": None,
         }
 
-    if resume_answer_payload is not None:
-        # Successfully resumed from a prior clarification; clear answer state.
-        return {"pending_clarification_answer": None}
+    if resume_answer_payload is not None or planner_ask_answered_step_id is not None:
+        # Successfully resumed from a prior clarification (CoreAgent interrupt
+        # or planner-emitted ask_user — IG-462). Clear BOTH the request and the
+        # answer channels so route_after_execute does not re-route us back into
+        # await_clarification on the next graph tick.
+        return {
+            "pending_clarification": None,
+            "pending_clarification_answer": None,
+        }
 
     return {}

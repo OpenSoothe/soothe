@@ -112,6 +112,7 @@ class AgentLoop:
         intent_classifier: Any | None = None,
         preferred_subagent: str | None = None,
         shared_pool: Any | None = None,  # IG-406: SharedPostgreSQLPool for high-concurrency
+        clarification_policy: Any | None = None,  # RFC-622: ClarificationPolicy injection
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -130,6 +131,9 @@ class AgentLoop:
                 - new_goal: Normal goal execution flow
                 - quiz: Should not reach here (handled in runner)
             routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
+            clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
+                the loop graph's ``await_clarification`` node. When ``None``, clarification
+                requests are deferred via the legacy no-policy path.
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -400,6 +404,7 @@ class AgentLoop:
             emit=emit,
             intent_classifier=intent_classifier,
             preferred_subagent=preferred_subagent,
+            clarification_policy=clarification_policy,
         )
 
         async def pump_graph() -> None:

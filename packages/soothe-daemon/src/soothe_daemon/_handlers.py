@@ -245,6 +245,7 @@ class DaemonHandlersMixin:
                     response_schema=qo.get("response_schema"),
                     response_schema_name=qo.get("response_schema_name"),
                     response_schema_strict=qo.get("response_schema_strict"),
+                    clarification_mode=qo.get("clarification_mode"),
                 )
         except Exception:
             logger.exception("Daemon loop input handler error")
