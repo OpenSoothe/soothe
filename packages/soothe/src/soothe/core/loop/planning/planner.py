@@ -1061,21 +1061,28 @@ class LLMPlanner:
                 break
 
         if human_msg is not None and ai_response is not None:
+            from soothe.core.loop.planning.ledger_compaction import (
+                compact_plan_assess_ai_dump,
+                compact_planning_human_content,
+            )
             from soothe.core.loop.utils.messages import LoopAIMessage
 
+            # Compact the recorded pair so the next assess sees a cache-stable
+            # human and no prior `assessment_reasoning` anchor (A2 + C1 + D1).
+            recorded_human = human_msg.model_copy(
+                update={"content": compact_planning_human_content(str(human_msg.content))}
+            )
             ai_msg = LoopAIMessage(
-                content=str(ai_response.model_dump())
-                if hasattr(ai_response, "model_dump")
-                else str(ai_response),
+                content=compact_plan_assess_ai_dump(ai_response),
                 thread_id=state.thread_id,
                 iteration=state.iteration,
                 phase="plan_assess",
             )
-            state.loop_messages.append(human_msg)
+            state.loop_messages.append(recorded_human)
             state.loop_messages.append(ai_msg)
             logger.debug(
                 "Recorded plan-assess ledger pair: human=%d chars, ai=%d chars",
-                len(str(human_msg.content)),
+                len(str(recorded_human.content)),
                 len(str(ai_msg.content)),
             )
 
@@ -1219,8 +1226,19 @@ class LLMPlanner:
                 break
 
         if human_msg is not None and ai_response is not None:
+            from soothe.core.loop.planning.ledger_compaction import (
+                compact_planning_human_content,
+            )
             from soothe.core.loop.utils.messages import LoopAIMessage
 
+            # Compact the recorded human so cache stays warm and the goal is
+            # not duplicated as a directive (C1 + D1). The AI dump for
+            # plan-generate is kept verbatim — its `steps` list IS the value
+            # of the recording, and there is no equivalent of `assessment_reasoning`
+            # to drop without losing schema fidelity.
+            recorded_human = human_msg.model_copy(
+                update={"content": compact_planning_human_content(str(human_msg.content))}
+            )
             ai_msg = LoopAIMessage(
                 content=str(ai_response.model_dump())
                 if hasattr(ai_response, "model_dump")
@@ -1229,11 +1247,11 @@ class LLMPlanner:
                 iteration=state.iteration,
                 phase="plan_generate",
             )
-            state.loop_messages.append(human_msg)
+            state.loop_messages.append(recorded_human)
             state.loop_messages.append(ai_msg)
             logger.debug(
                 "Recorded plan-generate ledger pair: human=%d chars, ai=%d chars",
-                len(str(human_msg.content)),
+                len(str(recorded_human.content)),
                 len(str(ai_msg.content)),
             )
 
