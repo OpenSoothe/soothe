@@ -33,6 +33,7 @@ from soothe.config.models import (
     UpdateConfig,
     VectorStoreProviderConfig,
     VectorStoreRouter,
+    WorkspaceMountConfig,
 )
 
 # Lazy import to avoid circular dependency - _DEFAULT_SYSTEM_PROMPT imported in methods that use it
@@ -324,6 +325,9 @@ class SootheConfig(BaseSettings):
         default_factory=FilesystemMiddlewareConfig
     )
     """Filesystem middleware configuration."""
+
+    workspace_mount: WorkspaceMountConfig = Field(default_factory=WorkspaceMountConfig)
+    """Container workspace path mapping (RFC-621)."""
 
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     """Semantic optimization for risk and relationship heuristics (IG-433)."""
