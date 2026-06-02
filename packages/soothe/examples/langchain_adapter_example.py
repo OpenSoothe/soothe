@@ -7,7 +7,6 @@ a UnifiedFilesystem for LangChain compatibility.
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
 
 from soothe.core.filesystem import (
     LangChainAdapter,
@@ -148,7 +147,7 @@ def advanced_search():
 
         # Grep for patterns
         import_files = fs.grep("^import", output_mode="content")
-        print(f"\nImport statements found in:")
+        print("\nImport statements found in:")
         if isinstance(import_files, list):
             for file in import_files:
                 print(f"  - {file}")

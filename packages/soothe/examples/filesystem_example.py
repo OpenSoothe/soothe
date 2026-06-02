@@ -8,7 +8,6 @@ various operations and security features.
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
 
 from soothe.core.filesystem import (
     DirectoryNotEmptyError,
@@ -169,17 +168,17 @@ def example_backup():
 
         # Update with backup
         result = fs.write("important.txt", "Version 2", backup=True)
-        print(f"Updated to 'Version 2'")
+        print("Updated to 'Version 2'")
         print(f"Backup created at: {result.backup_path}")
 
         # Update again
         result = fs.write("important.txt", "Version 3", backup=True)
-        print(f"Updated to 'Version 3'")
+        print("Updated to 'Version 3'")
         print(f"Backup created at: {result.backup_path}")
 
         # Delete with backup
         result = fs.delete("important.txt", backup=True)
-        print(f"Deleted file")
+        print("Deleted file")
         print(f"Final backup at: {result.backup_path}")
 
         # List backups
