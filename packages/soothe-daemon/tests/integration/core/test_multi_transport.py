@@ -1,41 +1,46 @@
-"""Integration tests for WebSocket transport (RFC-0013 Phase 2)."""
+"""Integration tests for WebSocket channel (RFC-620)."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from soothe_sdk.client import WebSocketClient
 
+from soothe_daemon.channels.websocket import WebSocketChannel
 from soothe_daemon.config.models import WebSocketConfig
-from soothe_daemon.transports.websocket import WebSocketTransport
 
 
 @pytest.mark.asyncio
-async def test_websocket_transport_basic() -> None:
-    """Test basic WebSocket transport lifecycle."""
+async def test_websocket_channel_basic() -> None:
+    """Test basic WebSocket channel lifecycle."""
     config = WebSocketConfig(
         enabled=True,
         host="127.0.0.1",
-        port=18765,  # Use non-standard port for testing
+        port=18765,
         tls_enabled=False,
     )
 
-    transport = WebSocketTransport(config)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
 
     messages_received: list[dict[str, Any]] = []
 
     def message_handler(_client_id: str, msg: dict[str, Any]) -> None:
         messages_received.append(msg)
 
-    # Start transport
-    await transport.start(message_handler)
-    assert transport.transport_type == "websocket"
-    assert transport.client_count == 0
+    manager._message_handler = message_handler
+    channel._message_handler = message_handler
 
-    # Stop transport
-    await transport.stop()
+    # Start channel
+    await channel.start()
+    assert channel.name == "websocket"
+    assert channel.client_count == 0
+
+    # Stop channel
+    await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -48,13 +53,16 @@ async def test_websocket_client_connect() -> None:
         tls_enabled=False,
     )
 
-    transport = WebSocketTransport(config)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
 
-    # Use synchronous message handler
     def message_handler(_client_id: str, msg: dict[str, Any]) -> None:
         pass
 
-    await transport.start(message_handler)
+    manager._message_handler = message_handler
+    channel._message_handler = message_handler
+
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -70,7 +78,7 @@ async def test_websocket_client_connect() -> None:
         await client.close()
         assert not client.is_connected
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -83,12 +91,16 @@ async def test_websocket_broadcast() -> None:
         tls_enabled=False,
     )
 
-    transport = WebSocketTransport(config)
+    manager = MagicMock()
+    channel = WebSocketChannel(config, manager=manager)
 
     def message_handler(_client_id: str, msg: dict[str, Any]) -> None:
         pass
 
-    await transport.start(message_handler)
+    manager._message_handler = message_handler
+    channel._message_handler = message_handler
+
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -97,7 +109,7 @@ async def test_websocket_broadcast() -> None:
         await client.connect()
 
         # Broadcast message
-        await transport.broadcast({"type": "event", "data": "test"})
+        await channel.broadcast({"type": "event", "data": "test"})
 
         # Read event (with timeout)
         try:
@@ -109,4 +121,4 @@ async def test_websocket_broadcast() -> None:
 
         await client.close()
     finally:
-        await transport.stop()
+        await channel.stop()

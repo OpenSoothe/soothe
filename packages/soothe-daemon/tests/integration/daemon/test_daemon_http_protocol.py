@@ -12,9 +12,9 @@ import pytest
 from soothe.config import SootheConfig
 
 from soothe_daemon import SootheDaemon
+from soothe_daemon.channels.http_rest import HttpRestChannel
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import HttpRestConfig
-from soothe_daemon.transports.http_rest import HttpRestTransport
 
 from ..daemon_fixtures import (
     alloc_ephemeral_port,
@@ -115,11 +115,14 @@ async def http_daemon(tmp_path: Path):
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_http_transport_system_lifecycle(tmp_path: Path) -> None:
-    """Layer A: basic HTTP transport lifecycle and transport-level endpoints."""
+    """Layer A: basic HTTP REST channel lifecycle and endpoints."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
-    transport = HttpRestTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -137,7 +140,7 @@ async def test_http_transport_system_lifecycle(tmp_path: Path) -> None:
             assert version.status_code == 200
             assert version.json()["protocol"] == "soothe-rest-v1"
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -309,10 +312,13 @@ async def test_http_transport_thread_history_continuation(
 @pytest.mark.xfail(reason="Contract expectation: config APIs should be mutable and schema-aware.")
 async def test_http_transport_config_endpoints_are_contractual(tmp_path: Path) -> None:
     """Layer B: config APIs are intentionally expected to become real runtime-backed contracts."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
-    transport = HttpRestTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -330,7 +336,7 @@ async def test_http_transport_config_endpoints_are_contractual(tmp_path: Path) -
             assert schema.status_code == 200
             assert schema.json().get("schema") != {}
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
@@ -338,10 +344,13 @@ async def test_http_transport_config_endpoints_are_contractual(tmp_path: Path) -
 @pytest.mark.xfail(reason="Contract expectation: file upload/download/delete should be persistent.")
 async def test_http_transport_file_endpoints_contract(tmp_path: Path) -> None:
     """Layer B: file endpoints should persist artifacts for upload/download/delete."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
-    transport = HttpRestTransport(config)
-    await transport.start(lambda _client_id, _msg: None)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -362,17 +371,20 @@ async def test_http_transport_file_endpoints_contract(tmp_path: Path) -> None:
             after_delete = await client.get(f"/api/v1/files/{file_id}")
             assert after_delete.status_code == 404
     finally:
-        await transport.stop()
+        await channel.stop()
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_http_transport_shutdown_endpoint(tmp_path: Path) -> None:
     """Layer A: shutdown endpoint returns expected protocol response."""
+    from unittest.mock import MagicMock
+
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
-    transport = HttpRestTransport(config)
-    await transport.start(lambda client_id, msg: None)
+    manager = MagicMock()
+    channel = HttpRestChannel(config, manager=manager)
+    await channel.start()
     await asyncio.sleep(0.2)
 
     try:
@@ -381,4 +393,4 @@ async def test_http_transport_shutdown_endpoint(tmp_path: Path) -> None:
             assert response.status_code == 200
             assert response.json()["status"] == "shutting_down"
     finally:
-        await transport.stop()
+        await channel.stop()
