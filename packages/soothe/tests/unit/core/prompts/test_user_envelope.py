@@ -8,13 +8,14 @@ from soothe.core.prompts.user_envelope import (
 )
 
 
-def test_execute_envelope_includes_response_language_hint() -> None:
+def test_execute_envelope_omits_response_language_hint() -> None:
+    """Language hint lives in the system prompt now, not the per-turn envelope."""
     envelope = build_execute_step_envelope(
         "Read README",
         execution_hints=None,
     )
-    assert "<response_language_hint>" in envelope
-    assert "same natural language as the user's goal" in envelope
+    assert "response_language_hint" not in envelope.lower()
+    assert "RESPONSE_LANGUAGE_HINT" not in envelope
     assert "<CONTEXT_INFO>" in envelope
 
 
@@ -65,12 +66,13 @@ def test_plan_context_envelope_uses_user_query_tag() -> None:
     assert "Execute iteration" not in envelope
 
 
-def test_plan_context_envelope_includes_response_language_hint() -> None:
+def test_plan_context_envelope_omits_response_language_hint() -> None:
+    """Language hint lives in the system prompt now, not the per-turn envelope."""
     envelope = build_plan_context_envelope(
         goal="Résumé demandé",
     )
-    assert "<response_language_hint>" in envelope
-    assert "same natural language as the user's goal" in envelope
+    assert "response_language_hint" not in envelope.lower()
+    assert "RESPONSE_LANGUAGE_HINT" not in envelope
 
 
 def test_plan_context_envelope_skill_reference_when_skill_context_provided() -> None:
