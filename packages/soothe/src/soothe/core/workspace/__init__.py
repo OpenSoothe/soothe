@@ -13,12 +13,15 @@ __all__ = [
     "NormalizedPathBackend",
     "ResolvedWorkspace",
     "WorkspaceAwareBackend",
+    "WorkspaceContext",
+    "WorkspacePrecedence",
     "cleanup_anonymous_workspaces",
     "cleanup_legacy_per_loop_workspaces",
     "clear_virtual_mode_context",
     "compute_workspace_id",
     "compute_scoped_workspace_dir_name",
     "get_git_status",
+    "migrate_workspaces_to_data_dir",
     "normalize_user_id",
     "resolve_loop_workspace",
     "resolve_persisted_loop_workspace",
@@ -28,6 +31,7 @@ __all__ = [
     "resolve_daemon_workspace",
     "resolve_user_workspace",
     "resolve_virtual_path",
+    "resolve_workspace",
     "resolve_workspace_for_stream",
     "resolve_workspace_for_tool_execution",
     "set_virtual_mode_context",
@@ -62,12 +66,20 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "NormalizedPathBackend": (".normalized_backend", "NormalizedPathBackend"),
     "FrameworkFilesystem": (".framework_filesystem", "FrameworkFilesystem"),
     "get_workspace_backend": (".normalized_backend", "get_workspace_backend"),
+    # Virtual home
     "get_virtual_home": (".virtual_home", "get_virtual_home"),
     "get_virtual_mode": (".virtual_home", "get_virtual_mode"),
     "set_virtual_mode_context": (".virtual_home", "set_virtual_mode_context"),
     "clear_virtual_mode_context": (".virtual_home", "clear_virtual_mode_context"),
     "resolve_virtual_path": (".virtual_home", "resolve_virtual_path"),
     "get_virtual_home_relative_path": (".virtual_home", "get_virtual_home_relative_path"),
+    # Unified context
+    "WorkspaceContext": (".context", "WorkspaceContext"),
+    # Shared resolution core
+    "WorkspacePrecedence": (".core_resolution", "WorkspacePrecedence"),
+    "resolve_workspace": (".core_resolution", "resolve_workspace"),
+    # Migration
+    "migrate_workspaces_to_data_dir": (".migration", "migrate_workspaces_to_data_dir"),
 }
 
 

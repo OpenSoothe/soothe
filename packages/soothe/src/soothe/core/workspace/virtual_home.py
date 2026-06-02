@@ -1,30 +1,19 @@
-"""Virtual home directory resolution for virtual mode (IG-405).
+"""Virtual home directory resolution for virtual mode.
 
 In virtual_mode=True, SOOTHE_HOME should be /.soothe (virtual absolute under workspace)
 instead of the host-absolute ~/.soothe or $SOOTHE_HOME.
 
-This module provides ContextVars for thread-safe virtual mode state management,
-allowing each concurrent execution to have its own virtual home context.
+Delegates to ``WorkspaceContext`` (single ContextVar) for thread-safe
+virtual mode state management.
 """
 
 from __future__ import annotations
 
-import contextvars
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
-
-# ContextVar for virtual mode status (set by WorkspaceContextMiddleware)
-_current_virtual_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "soothe_virtual_mode", default=False
-)
-
-# ContextVar for resolved virtual home path (/.soothe under workspace when virtual)
-_virtual_home_path: contextvars.ContextVar[Path | None] = contextvars.ContextVar(
-    "soothe_virtual_home", default=None
-)
 
 
 def set_virtual_mode_context(virtual_mode: bool, workspace: Path) -> None:
@@ -37,13 +26,9 @@ def set_virtual_mode_context(virtual_mode: bool, workspace: Path) -> None:
         virtual_mode: Whether virtual mode is enabled.
         workspace: Current workspace path (used to compute virtual home).
     """
-    _current_virtual_mode.set(virtual_mode)
-    if virtual_mode:
-        # In virtual mode, home is /.soothe under the workspace root
-        # This is a virtual absolute path that the backend will resolve
-        _virtual_home_path.set(workspace / ".soothe")
-    else:
-        _virtual_home_path.set(None)
+    from soothe.core.workspace.context import set_workspace_context
+
+    set_workspace_context(workspace=workspace, virtual_mode=virtual_mode)
 
 
 def get_virtual_home() -> Path:
@@ -56,9 +41,11 @@ def get_virtual_home() -> Path:
     Returns:
         Path to use for SOOTHE_HOME-related operations.
     """
-    virtual_home = _virtual_home_path.get()
-    if virtual_home is not None:
-        return virtual_home
+    from soothe.core.workspace.context import get_workspace_context
+
+    ctx = get_workspace_context()
+    if ctx.virtual_home is not None:
+        return ctx.virtual_home
 
     # Fallback to host SOOTHE_HOME
     from soothe.config import SOOTHE_HOME
@@ -72,7 +59,9 @@ def get_virtual_mode() -> bool:
     Returns:
         True if virtual mode is active, False otherwise.
     """
-    return _current_virtual_mode.get()
+    from soothe.core.workspace.context import get_workspace_context
+
+    return get_workspace_context().virtual_mode
 
 
 def clear_virtual_mode_context() -> None:
@@ -80,8 +69,9 @@ def clear_virtual_mode_context() -> None:
 
     Called by WorkspaceContextMiddleware.aafter_agent to cleanup.
     """
-    _current_virtual_mode.set(False)
-    _virtual_home_path.set(None)
+    from soothe.core.workspace.context import reset_workspace_context
+
+    reset_workspace_context()
 
 
 def resolve_virtual_path(relative_path: str) -> Path:
@@ -101,8 +91,8 @@ def resolve_virtual_path(relative_path: str) -> Path:
 def get_virtual_home_relative_path(host_path: Path) -> str | None:
     """Convert a host-absolute path to virtual-home-relative if under virtual home.
 
-    Useful for converting paths like `{workspace}/.soothe/agents/browser/...`
-    to `/.soothe/agents/browser/...` for backend operations.
+    Useful for converting paths like ``{workspace}/.soothe/agents/browser/...``
+    to ``/.soothe/agents/browser/...`` for backend operations.
 
     Args:
         host_path: Host-absolute path to convert.
@@ -110,12 +100,14 @@ def get_virtual_home_relative_path(host_path: Path) -> str | None:
     Returns:
         Relative path string under virtual home, or None if not under virtual home.
     """
-    virtual_home = _virtual_home_path.get()
-    if virtual_home is None:
+    from soothe.core.workspace.context import get_workspace_context
+
+    ctx = get_workspace_context()
+    if ctx.virtual_home is None:
         return None
 
     try:
-        rel = host_path.resolve().relative_to(virtual_home.resolve())
+        rel = host_path.resolve().relative_to(ctx.virtual_home.resolve())
         return f"/.soothe/{rel.as_posix()}"
     except ValueError:
         return None

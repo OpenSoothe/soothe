@@ -110,14 +110,41 @@ def cleanup_legacy_per_loop_workspaces() -> None:
 def cleanup_anonymous_workspaces() -> None:
     """Clean up anonymous workspace directories (daemon shutdown).
 
-    Removes ``$SOOTHE_HOME/workspaces/anonymous/`` and legacy flat ``anon_*`` dirs.
+    Removes ``$SOOTHE_HOME/data/workspaces/anonymous/`` and legacy flat ``anon_*`` dirs.
+    Also cleans up old ``$SOOTHE_HOME/workspaces/anonymous/`` if it exists (pre-migration).
     """
     import shutil
 
     from soothe.config import SOOTHE_HOME
     from soothe.core.workspace.loop_workspace import normalize_user_id
 
-    workspaces_dir = Path(SOOTHE_HOME) / "workspaces"
+    cleaned = 0
+
+    for base in ("data/workspaces", "workspaces"):
+        workspaces_dir = Path(SOOTHE_HOME) / base
+        if not workspaces_dir.exists():
+            continue
+
+        anon_tree = workspaces_dir / normalize_user_id(None)
+        if anon_tree.is_dir():
+            try:
+                shutil.rmtree(anon_tree)
+                cleaned += 1
+                logger.info("Cleaned anonymous workspace tree: %s", anon_tree)
+            except OSError as e:
+                logger.warning("Failed to cleanup %s: %s", anon_tree, e)
+
+        for ws_dir in workspaces_dir.glob("anon_*"):
+            if ws_dir.is_dir():
+                try:
+                    shutil.rmtree(ws_dir)
+                    cleaned += 1
+                    logger.info("Cleaned legacy anonymous workspace: %s", ws_dir)
+                except OSError as e:
+                    logger.warning("Failed to cleanup %s: %s", ws_dir, e)
+
+    if cleaned > 0:
+        logger.info("Cleaned %d anonymous workspace location(s)", cleaned)
     if not workspaces_dir.exists():
         return
 

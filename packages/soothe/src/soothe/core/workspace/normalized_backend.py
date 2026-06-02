@@ -585,8 +585,8 @@ class WorkspaceAwareBackend:
 
         workspace = resolve_workspace_for_tool_execution(runtime=runtime)
         if workspace is not None:
-            return NormalizedPathBackend(
-                root_dir=workspace,
+            return get_workspace_backend(
+                workspace=workspace,
                 virtual_mode=self._virtual_mode,
                 max_file_size_mb=self._max_file_size_mb,
             )
@@ -603,8 +603,8 @@ class WorkspaceAwareBackend:
 
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:
-            return NormalizedPathBackend(
-                root_dir=current_workspace,
+            return get_workspace_backend(
+                workspace=current_workspace,
                 virtual_mode=self._virtual_mode,
                 max_file_size_mb=self._max_file_size_mb,
             )
