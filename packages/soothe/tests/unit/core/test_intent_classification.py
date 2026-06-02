@@ -115,9 +115,16 @@ class TestIntentClassificationPrompts:
         assert "workspace" in INTENT_CLASSIFICATION_PROMPT
         assert "cwd" in INTENT_CLASSIFICATION_PROMPT
 
+    def test_primary_prompt_quiz_response_uses_assistant_name(self) -> None:
+        assert "{assistant_name}" in INTENT_CLASSIFICATION_PROMPT
+        assert "never identify as Claude" in INTENT_CLASSIFICATION_PROMPT
+
     def test_retry_prompt_excludes_runtime_state_from_quiz(self) -> None:
         assert "runtime state" in INTENT_CLASSIFICATION_RETRY_PROMPT
         assert "workspace" in INTENT_CLASSIFICATION_RETRY_PROMPT
+
+    def test_retry_prompt_quiz_response_uses_assistant_name(self) -> None:
+        assert "{assistant_name}" in INTENT_CLASSIFICATION_RETRY_PROMPT
 
 
 @pytest.mark.asyncio
