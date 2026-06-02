@@ -12,16 +12,13 @@ from pathlib import Path
 
 from soothe.core.security import SecurityEnforcer
 from soothe.core.security.enforcement import SecurityContext, SecurityError, create_enforcer
-from soothe.core.security.integration import SecureFilesystemWrapper, secure_operation
+from soothe.core.security.integration import SecureFilesystemWrapper
 from soothe.core.security.policy import (
     PERMISSIVE_POLICY,
-    READONLY_POLICY,
     STRICT_POLICY,
     SecurityPolicy,
 )
 from soothe.core.security.validator import (
-    PathValidationError,
-    PathValidator,
     create_strict_validator,
 )
 
@@ -231,7 +228,7 @@ def example_custom_policy() -> None:
     def block_temp_files(path: str, operation: str) -> None:
         """Custom validator that blocks temp files."""
         if "temp" in path.lower():
-            from soothe.core.security.policy import PolicyDecision, PolicyAction
+            from soothe.core.security.policy import PolicyAction, PolicyDecision
 
             return PolicyDecision(
                 allowed=False,
