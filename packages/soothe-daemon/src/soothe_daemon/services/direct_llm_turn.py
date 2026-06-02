@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 from soothe.utils.llm.structured_invoke import StructuredOutputError, invoke_structured_chat
 from soothe.utils.text_preview import log_preview
 
-from soothe_daemon.image_understanding import _build_vision_invoke_config
+from soothe_daemon.services.image_understanding import _build_vision_invoke_config
 
 logger = logging.getLogger(__name__)
 

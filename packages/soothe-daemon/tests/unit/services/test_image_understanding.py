@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe_daemon.image_understanding import (
+from soothe_daemon.services.image_understanding import (
     enrich_user_text_with_vision,
     normalize_mime_type,
     validate_and_normalize_image_attachments,

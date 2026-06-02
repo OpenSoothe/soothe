@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.core.workspace import resolve_daemon_workspace, resolve_loop_workspace
 
-from soothe_daemon.logging import set_loop_id
+from soothe_daemon.bootstrap.logging import set_loop_id
 
 if TYPE_CHECKING:
     pass

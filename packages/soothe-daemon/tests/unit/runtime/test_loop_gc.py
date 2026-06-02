@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_daemon.loop_gc import purge_loop_execution_data
+from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from soothe_daemon.cli.daemon_main import app
+from soothe_daemon.cli import app
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus, HealthReport
 
@@ -15,9 +15,7 @@ runner = CliRunner()
 
 
 def test_status_reports_stopped(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(lambda: False)
-    )
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.is_running", staticmethod(lambda: False))
 
     result = runner.invoke(app, ["status"])
 
@@ -26,16 +24,12 @@ def test_status_reports_stopped(monkeypatch) -> None:
 
 
 def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SOOTHE_HOME", str(tmp_path))
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", str(tmp_path))
     # Redirect pid_path so the test doesn't pick up a real daemon's PID file
     # from the host's ``~/.soothe/soothe.pid`` and skip the mocked find_pid().
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.pid_path", lambda: tmp_path / "soothe.pid")
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(lambda: True)
-    )
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 12345)
-    )
+    monkeypatch.setattr("soothe_daemon.cli.pid_path", lambda: tmp_path / "soothe.pid")
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.is_running", staticmethod(lambda: True))
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.find_pid", staticmethod(lambda: 12345))
 
     result = runner.invoke(app, ["status"])
 
@@ -46,18 +40,14 @@ def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SOOTHE_HOME", str(tmp_path))
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(lambda: True)
-    )
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 99)
-    )
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", str(tmp_path))
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.is_running", staticmethod(lambda: True))
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.find_pid", staticmethod(lambda: 99))
     # Mock daemon config to not load any file
     daemon_cfg = SootheDaemonConfig()
     daemon_cfg.soothe_config_path = tmp_path / "config.yml"
     monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        "soothe_daemon.cli._load_daemon_config",
         lambda _path: daemon_cfg,
     )
 
@@ -68,7 +58,7 @@ def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SOOTHE_HOME", str(tmp_path))
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", str(tmp_path))
 
     state = {"calls": 0}
 
@@ -76,20 +66,16 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
         state["calls"] += 1
         return state["calls"] >= 2
 
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(_is_running)
-    )
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 4242)
-    )
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.is_running", staticmethod(_is_running))
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.find_pid", staticmethod(lambda: 4242))
     # Mock daemon config to not load any file
     daemon_cfg = SootheDaemonConfig()
     daemon_cfg.soothe_config_path = tmp_path / "config.yml"
     monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        "soothe_daemon.cli._load_daemon_config",
         lambda _path: daemon_cfg,
     )
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.time.sleep", lambda _v: None)
+    monkeypatch.setattr("soothe_daemon.cli.time.sleep", lambda _v: None)
 
     popen_called = {"value": False}
 
@@ -97,7 +83,7 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
         popen_called["value"] = True
         return SimpleNamespace(pid=4242)
 
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.subprocess.Popen", _fake_popen)
+    monkeypatch.setattr("soothe_daemon.cli.subprocess.Popen", _fake_popen)
 
     result = runner.invoke(app, ["start"])
 
@@ -109,12 +95,8 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_stop_reports_not_running(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: None)
-    )
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.SootheDaemon.stop_running", staticmethod(lambda: False)
-    )
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.find_pid", staticmethod(lambda: None))
+    monkeypatch.setattr("soothe_daemon.cli.SootheDaemon.stop_running", staticmethod(lambda: False))
 
     result = runner.invoke(app, ["stop"])
 
@@ -166,11 +148,11 @@ def test_doctor_json_format_with_filters(monkeypatch) -> None:
             captured["exclude"] = exclude
             return report
 
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.HealthChecker", _FakeChecker)
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.format_json", lambda _report: '{"ok": true}')
+    monkeypatch.setattr("soothe_daemon.cli.HealthChecker", _FakeChecker)
+    monkeypatch.setattr("soothe_daemon.cli.format_json", lambda _report: '{"ok": true}')
     # Mock config loading
     monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        "soothe_daemon.cli._load_daemon_config",
         lambda _path: SootheDaemonConfig(),
     )
 
@@ -204,12 +186,10 @@ def test_doctor_fail_on_warning(monkeypatch) -> None:
         ) -> HealthReport:
             return report
 
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.HealthChecker", _FakeChecker)
+    monkeypatch.setattr("soothe_daemon.cli.HealthChecker", _FakeChecker)
+    monkeypatch.setattr("soothe_daemon.cli.format_text", lambda _r, use_color=True: "warn report")
     monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main.format_text", lambda _r, use_color=True: "warn report"
-    )
-    monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        "soothe_daemon.cli._load_daemon_config",
         lambda _path: SootheDaemonConfig(),
     )
 
@@ -231,10 +211,10 @@ def test_doctor_output_to_file(monkeypatch, tmp_path: Path) -> None:
         ) -> HealthReport:
             return report
 
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.HealthChecker", _FakeChecker)
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.format_markdown", lambda _r: "# report")
+    monkeypatch.setattr("soothe_daemon.cli.HealthChecker", _FakeChecker)
+    monkeypatch.setattr("soothe_daemon.cli.format_markdown", lambda _r: "# report")
     monkeypatch.setattr(
-        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        "soothe_daemon.cli._load_daemon_config",
         lambda _path: SootheDaemonConfig(),
     )
     output_file = tmp_path / "doctor.md"

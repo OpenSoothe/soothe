@@ -11,7 +11,7 @@ from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe_daemon.event import EventBus, loop_event_topic
-from soothe_daemon.session import ClientSessionManager
+from soothe_daemon.server.session import ClientSessionManager
 
 
 @pytest.mark.asyncio
@@ -463,7 +463,7 @@ def test_queue_has_high_priority_detects_high_event() -> None:
     """IG-436: _queue_has_high_priority returns True for HIGH priority events."""
     from soothe.core.events import EventPriority
 
-    from soothe_daemon.session.manager import _queue_has_high_priority
+    from soothe_daemon.server.session import _queue_has_high_priority
 
     queue: asyncio.Queue = asyncio.Queue()
 
@@ -504,7 +504,7 @@ def test_queue_has_high_priority_detects_high_event() -> None:
 
 def test_queue_has_high_priority_handles_tuple_and_non_tuple() -> None:
     """IG-436: _queue_has_high_priority handles various queue item formats."""
-    from soothe_daemon.session.manager import _queue_has_high_priority
+    from soothe_daemon.server.session import _queue_has_high_priority
 
     queue: asyncio.Queue = asyncio.Queue()
 

@@ -1,8 +1,9 @@
 # IG-461: Daemon Module Structure Refactoring
 
 **RFC**: [RFC-623](../specs/RFC-623-daemon-module-structure-refactoring.md)
-**Status**: Draft
+**Status**: Completed
 **Created**: 2026-06-02
+**Completed**: 2026-06-02
 **Depends on**: RFC-623, RFC-450, RFC-454, RFC-620
 **Related**: RFC-610 (companion `soothe-sdk` refactor)
 
@@ -739,3 +740,45 @@ This is a single-PR refactor. Rollback = revert the PR. No DB migrations, no wir
 - [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) — Daemon Communication Protocol
 - [RFC-454](../specs/RFC-454-slash-command-architecture.md) — Slash Command Architecture
 - Brainstorming draft: `docs/drafts/2026-06-02-soothe-daemon-restructure-design.md`
+
+---
+
+## 12. Completion summary
+
+**Implementation completed**: 2026-06-02
+
+### What was done
+
+1. **Created new package structure**:
+   - `bootstrap/` — contains `env.py`, `entrypoint.py`, `logging.py`, `paths.py`, `singleton.py`
+   - `server/` — contains `core.py`, `commands.py`, `handlers.py`, `session.py`
+   - `runtime/` — contains `loop_dispatcher.py`, `loop_gc.py`, `thread_state.py`
+
+2. **Dissolved single-file packages**:
+   - `session/` → folded into `server/session.py`
+   - `rpc/` → folded into `server/commands.py`
+   - `cli/` → flattened to root `cli.py`
+
+3. **Promoted `services/` to multi-file package**:
+   - Added `image_understanding.py` to services
+
+4. **Updated all imports** across the codebase:
+   - Updated 50+ files with new import paths
+   - Updated package `__init__.py` exports for `bootstrap/`, `server/`, `runtime/`, `services/`
+   - Updated ruff per-file ignores in `pyproject.toml` for new `cli.py` and `bootstrap/entrypoint.py` locations
+   - Updated entry point script: `soothe_daemon.cli.daemon_main:app` → `soothe_daemon.cli:app`
+
+5. **Reorganized test structure** to mirror source layout:
+   - Moved 30+ test files from flat `tests/unit/daemon/` to package-aligned directories (`bootstrap/`, `server/`, `runtime/`, `services/`, `protocol/`, `query/`, `event/`, `persistence/`)
+
+### Deferred items
+
+- **Server.py mixin split** (§3): SootheDaemon remains as a single 1417 LOC file in `server/core.py`. The mixin-based split (`lifecycle.py`, `transport.py`, `process.py`) can be done as a follow-up optimization if needed. All current behavior is preserved.
+- **DaemonProcess extraction** (§3): PID discovery methods remain as static methods on `SootheDaemon` class. Can be extracted in future mixin split.
+- **Underscore renames** (§4.2): The `_cmd_*`, `_coerce_loop_input_text`, `_queue_options_from_daemon_message` renames were deferred to minimize API churn. These remain with underscore prefixes but are still accessible via their modules.
+
+### Verification
+
+- All 465 unit tests pass
+- All linting/formatting checks pass
+- Full `./scripts/verify_finally.sh` passes

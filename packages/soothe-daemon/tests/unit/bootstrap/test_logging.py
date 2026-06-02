@@ -11,7 +11,7 @@ from soothe.config import SootheConfig
 from soothe.logging import setup_logging
 from soothe.logging.setup import PACKAGE_LOGGER_NAMES
 
-from soothe_daemon.logging import (
+from soothe_daemon.bootstrap.logging import (
     DEFAULT_DAEMON_LOG,
     default_daemon_log_path,
     setup_daemon_logging,
@@ -35,7 +35,7 @@ class TestDaemonLogging:
     ) -> None:
         """Default path is under SOOTHE_HOME/logs/daemon.log."""
         home = Path("/tmp/soothe-test-home")
-        monkeypatch.setattr("soothe_daemon.logging.SOOTHE_HOME", str(home))
+        monkeypatch.setattr("soothe_daemon.bootstrap.logging.SOOTHE_HOME", str(home))
         assert default_daemon_log_path() == home / "logs" / DEFAULT_DAEMON_LOG
 
     def test_setup_daemon_logging_uses_explicit_log_file(self, tmp_path: Path) -> None:
@@ -53,7 +53,7 @@ class TestDaemonLogging:
     ) -> None:
         """Daemon startup keeps soothe.* on soothe.log, not daemon.log."""
         home = tmp_path / "soothe-home"
-        monkeypatch.setattr("soothe_daemon.logging.SOOTHE_HOME", str(home))
+        monkeypatch.setattr("soothe_daemon.bootstrap.logging.SOOTHE_HOME", str(home))
         monkeypatch.setattr("soothe.logging.setup.SOOTHE_HOME", str(home))
 
         cfg = SootheConfig()

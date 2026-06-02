@@ -9,7 +9,7 @@ from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 def _check_pid_file() -> CheckResult:
     """Check PID file validity."""
-    from soothe_daemon.paths import pid_path
+    from soothe_daemon.bootstrap.paths import pid_path
 
     pf = pid_path()
     if not pf.exists():
@@ -449,7 +449,7 @@ def _check_queue_depth(config: SootheDaemonConfig | None) -> CheckResult:
 
 def _check_stale_locks(config: SootheDaemonConfig | None) -> CheckResult:
     """Check for stale PID files and zombie daemon."""
-    from soothe_daemon.paths import pid_path
+    from soothe_daemon.bootstrap.paths import pid_path
     from soothe_daemon.server import SootheDaemon
 
     pf = pid_path()
