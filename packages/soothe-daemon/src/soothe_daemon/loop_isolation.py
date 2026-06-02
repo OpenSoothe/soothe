@@ -96,21 +96,24 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
         )
         loop_workspace = resolve_daemon_workspace()
 
-    # RFC-621: translate client path to container path when workspace_mount configured
-    mapping = metadata.get("workspace_mapping", {})
-    ws_host_root = mapping.get("host_root")
-    ws_container_root = mapping.get("container_root")
-    if ws_host_root and ws_container_root:
-        from soothe.core.workspace.resolution import translate_client_path_to_container
+    # RFC-621: translate client path to container path when workspace_mount configured.
+    # Only translate when client_workspace was provided — daemon-fallback workspaces
+    # are container-local and don't need translation.
+    if client_ws is not None:
+        mapping = metadata.get("workspace_mapping", {})
+        ws_host_root = mapping.get("host_root")
+        ws_container_root = mapping.get("container_root")
+        if ws_host_root and ws_container_root:
+            from soothe.core.workspace.resolution import translate_client_path_to_container
 
-        try:
-            loop_workspace = translate_client_path_to_container(
-                loop_workspace,
-                host_root=ws_host_root,
-                container_root=ws_container_root,
-            )
-        except ValueError:
-            pass  # fallback to unresolved workspace
+            try:
+                loop_workspace = translate_client_path_to_container(
+                    loop_workspace,
+                    host_root=ws_host_root,
+                    container_root=ws_container_root,
+                )
+            except ValueError:
+                pass  # fallback to unresolved workspace
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)

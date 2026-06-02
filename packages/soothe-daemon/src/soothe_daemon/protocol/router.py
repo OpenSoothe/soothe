@@ -1180,26 +1180,30 @@ class MessageRouter:
 
             resolved_workspace = resolve_daemon_workspace()
 
-        # RFC-621: translate client path to container path when workspace_mount configured
+        # RFC-621: translate client path to container path when workspace_mount configured.
+        # Only translate when client_workspace was provided — daemon-fallback workspaces
+        # (temp or $SOOTHE_HOME) are container-local and don't need translation.
         from soothe.core.workspace.resolution import translate_client_path_to_container
 
         mount = d._config.workspace_mount
         host_root = mount.host_root if mount and mount.is_configured else None
         container_root = mount.container_root if mount and mount.is_configured else None
+        effective_workspace = resolved_workspace
 
-        try:
-            effective_workspace = translate_client_path_to_container(
-                resolved_workspace,
-                host_root=host_root,
-                container_root=container_root,
-            )
-        except ValueError as e:
-            logger.warning("[loop_new] Loop %s workspace mount error: %s", loop_id, e)
-            await d._send_client_message(
-                client_id,
-                {"type": "error", "error": str(e), "request_id": request_id},
-            )
-            return
+        if client_workspace is not None and host_root is not None:
+            try:
+                effective_workspace = translate_client_path_to_container(
+                    resolved_workspace,
+                    host_root=host_root,
+                    container_root=container_root,
+                )
+            except ValueError as e:
+                logger.warning("[loop_new] Loop %s workspace mount error: %s", loop_id, e)
+                await d._send_client_message(
+                    client_id,
+                    {"type": "error", "error": str(e), "request_id": request_id},
+                )
+                return
 
         now = datetime.now(UTC).isoformat()
 
