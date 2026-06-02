@@ -177,8 +177,14 @@ class FrameworkFilesystem:
             A ContextVar Token that can be passed to clear_current_workspace
             to safely restore the previous value.
         """
+        from soothe.core.workspace.context import get_workspace_context, set_workspace_context
+
         ws_path = Path(workspace) if isinstance(workspace, str) else workspace
-        return _current_workspace.set(ws_path)
+        ctx = get_workspace_context()
+        return set_workspace_context(
+            workspace=ws_path,
+            virtual_mode=ctx.virtual_mode,
+        )
 
     @classmethod
     def get_current_workspace(cls) -> Path | None:
@@ -187,7 +193,9 @@ class FrameworkFilesystem:
         Returns:
             Current workspace Path, or None if not set (fallback to daemon default).
         """
-        return _current_workspace.get()
+        from soothe.core.workspace.context import get_workspace_context
+
+        return get_workspace_context().workspace
 
     @classmethod
     def clear_current_workspace(cls, token: Token[Path | None] | None = None) -> None:
@@ -198,18 +206,11 @@ class FrameworkFilesystem:
 
         Args:
             token: If provided, uses ContextVar.reset(token) to safely restore
-                the previous value. Otherwise falls back to setting None.
+                the previous value. Otherwise falls back to clearing context.
         """
-        if token is not None:
-            try:
-                _current_workspace.reset(token)
-            except ValueError:
-                # Token came from a different asyncio Context (e.g. LangGraph ran
-                # ``abefore_agent`` and ``aafter_agent`` on different task/context
-                # boundaries). Restoring via reset is impossible; clear this Context.
-                _current_workspace.set(None)
-        else:
-            _current_workspace.set(None)
+        from soothe.core.workspace.context import reset_workspace_context
+
+        reset_workspace_context(token)
 
     @classmethod
     def resolve_path_dynamic(cls, file_path: str) -> Path:

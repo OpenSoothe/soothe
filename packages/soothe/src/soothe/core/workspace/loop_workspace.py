@@ -54,7 +54,7 @@ def resolve_persisted_loop_workspace(
     soothe_home: Path | None = None,
     create: bool = True,
 ) -> Path:
-    """Resolve ``$SOOTHE_HOME/workspaces/<user>/ws_<hash>`` when no client path.
+    """Resolve ``$SOOTHE_HOME/data/workspaces/<user>/ws_<hash>`` when no client path.
 
     Args:
         loop_id: Loop identifier (hash scope when ``client_workspace_id`` unset).
@@ -77,7 +77,7 @@ def resolve_persisted_loop_workspace(
 
     ws_name = compute_scoped_workspace_dir_name(user_id, scope)
     home = Path(soothe_home or SOOTHE_HOME).expanduser().resolve()
-    workspace_path = home / "workspaces" / normalized_user / ws_name
+    workspace_path = home / "data" / "workspaces" / normalized_user / ws_name
 
     if create:
         workspace_path.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ def resolve_loop_workspace(
 
     Precedence:
         1. ``client_workspace`` — use the validated client path directly.
-        2. Persisted layout — ``$SOOTHE_HOME/workspaces/<normalized_user>/ws_<hash>``
+        2. Persisted layout — ``$SOOTHE_HOME/data/workspaces/<normalized_user>/ws_<hash>``
            where hash is ``sha256(user_id, client_workspace_id)`` or
            ``sha256(user_id, loop_id)`` when ``client_workspace_id`` is unset.
            ``user_id`` empty uses ``anonymous`` as the directory segment and ``""``

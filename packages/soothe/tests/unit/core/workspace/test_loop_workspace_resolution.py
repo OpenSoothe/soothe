@@ -64,7 +64,7 @@ def test_resolve_loop_workspace_persisted_with_user_and_workspace_id(
         soothe_home=tmp_path,
     )
     expected_name = compute_scoped_workspace_dir_name("alice", "my-app")
-    assert ws == tmp_path / "workspaces" / "alice" / expected_name
+    assert ws == tmp_path / "data" / "workspaces" / "alice" / expected_name
     assert ws.is_dir()
 
 
@@ -79,7 +79,7 @@ def test_resolve_loop_workspace_persisted_anonymous_uses_loop_id(
         soothe_home=tmp_path,
     )
     expected_name = compute_scoped_workspace_dir_name(None, loop_id)
-    assert ws == tmp_path / "workspaces" / "anonymous" / expected_name
+    assert ws == tmp_path / "data" / "workspaces" / "anonymous" / expected_name
 
 
 def test_loop_run_request_resolve_workspace_path(tmp_path: Path) -> None:
