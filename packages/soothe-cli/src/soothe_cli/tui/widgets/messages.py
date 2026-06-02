@@ -1471,10 +1471,10 @@ class CognitionStepMessage(Vertical):
             dur_str = format_duration_ms(self._last_duration_ms)
             tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
             if self._last_success:
-                status_body = f"Completed ({dur_str}){tool_part}"
                 self._update_step_footer_status_line(
-                    status_body,
+                    f"Completed ({dur_str})",
                     success=True,
+                    suffix=tool_part,
                 )
                 prose = (self._last_completed_execute_prose or "").strip()
                 if prose and self._detail_widget:
@@ -1787,8 +1787,23 @@ class CognitionStepMessage(Vertical):
             return colors.cognition
         return colors.muted
 
-    def _update_step_footer_status_line(self, status_line_body: str, *, success: bool) -> None:
-        """Paint the step card footer status (always the last visible body line)."""
+    def _update_step_footer_status_line(
+        self,
+        head: str,
+        *,
+        success: bool,
+        suffix: str = "",
+    ) -> None:
+        """Paint the step card footer status (always the last visible body line).
+
+        Args:
+            head: The leading status text (e.g. ``"Completed (1.2s)"`` or
+                ``"Failed · 1.2s"``) that gets the prominent success/error tone.
+            success: Whether this is a successful completion (green) or a
+                failure (red).
+            suffix: Optional stats tail (tool counts, token budget) that keeps
+                the subdued cognition tone so it doesn't drown out the head.
+        """
         if self._status_widget is None:
             return
         g = get_glyphs()
@@ -1798,23 +1813,13 @@ class CognitionStepMessage(Vertical):
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         icon = g.checkmark if success else g.error
-        tone = colors.cognition if success else colors.error
-        has_collapsible = (
-            (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
-            or self._has_task_activity_body()
-            or bool((self._last_completed_execute_prose or "").strip())
-            or bool((self._execute_assistant_buffer or "").strip())
-        )
-        collapse_icon = (
-            f" {g.expand if self._card_collapsed else g.collapse}" if has_collapsible else ""
-        )
+        head_tone = colors.card_success if success else colors.card_error
+        suffix_tone = colors.cognition
         self._status_widget.remove_class("pending")
-        self._status_widget.update(
-            Content.styled(
-                f"{gutter}{icon} {status_line_body}{collapse_icon}",
-                tone,
-            )
-        )
+        parts: list[object] = [Content.styled(f"{gutter}{icon} {head}", head_tone)]
+        if suffix:
+            parts.append(Content.styled(suffix, suffix_tone))
+        self._status_widget.update(Content.assemble(*parts))
         self._status_widget.display = True
 
     def _tool_stats_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
@@ -1861,22 +1866,23 @@ class CognitionStepMessage(Vertical):
         child_gutter: str,
         g: Any,
         colors: Any,
-    ) -> tuple[str, str]:
-        """Build one status line for a task delegation branch (footer-aligned format)."""
+    ) -> Content:
+        """Build one status line for a task delegation branch (footer-aligned format).
+
+        Head (status word + elapsed) gets a phase-specific tone (amber for
+        running, green for done, red for failed); the stats suffix stays in the
+        subdued ``colors.cognition`` tone so it does not drown out the head.
+        """
         stats_suffix = self._tool_stats_title_suffix_for_rows(child_rows)
         p = (phase or "pending").strip().lower()
         if p == "running":
             elapsed = self._task_delegation_elapsed_suffix(task_key)
-            toggle = ""
-            if self._card_collapsed:
-                toggle = f" {g.expand}"
-            elif self._has_task_activity_body():
-                toggle = f" {g.collapse}"
             frame = self._phase_icon("running", g, animate_running=True)
-            return (
-                f"{child_gutter}{frame} Running...{elapsed}{stats_suffix}{toggle}",
-                colors.cognition,
-            )
+            head = f"{child_gutter}{frame} Running...{elapsed}"
+            segs: list[object] = [Content.styled(head, colors.warning)]
+            if stats_suffix:
+                segs.append(Content.styled(stats_suffix, colors.cognition))
+            return Content.assemble(*segs)
         icon = self._phase_icon(p, g, animate_running=False)
         status_word = {
             "success": "Done",
@@ -1887,10 +1893,18 @@ class CognitionStepMessage(Vertical):
             "skipped": "Skipped",
             "pending": "Pending",
         }.get(p, "Pending")
-        return (
-            f"{child_gutter}{icon} {status_word}{stats_suffix}",
-            self._task_children_stats_tone(p, colors),
-        )
+        head_tone = {
+            "success": colors.card_success,
+            "done": colors.card_success,
+            "failed": colors.card_error,
+            "error": colors.card_error,
+            "rejected": colors.card_error,
+        }.get(p, self._task_children_stats_tone(p, colors))
+        head = f"{child_gutter}{icon} {status_word}"
+        segs = [Content.styled(head, head_tone)]
+        if stats_suffix:
+            segs.append(Content.styled(stats_suffix, colors.cognition))
+        return Content.assemble(*segs)
 
     def _normalized_task_note_key(self, task_tool_call_id: str) -> str:
         tcid = str(task_tool_call_id).strip()
@@ -1950,7 +1964,7 @@ class CognitionStepMessage(Vertical):
                 )
 
             if child_rows:
-                line_body, line_tone = self._task_branch_status_line(
+                status_line = self._task_branch_status_line(
                     phase=eff_phase,
                     child_rows=child_rows,
                     task_key=task_key,
@@ -1959,22 +1973,13 @@ class CognitionStepMessage(Vertical):
                     colors=colors,
                 )
                 parts.append("\n")
-                parts.append(Content.styled(line_body, line_tone))
+                parts.append(status_line)
             elif eff_phase == "running":
                 elapsed = self._task_delegation_elapsed_suffix(task_key)
-                toggle = ""
-                if self._card_collapsed:
-                    toggle = f" {g.expand}"
-                elif self._has_task_activity_body():
-                    toggle = f" {g.collapse}"
                 frame = self._phase_icon("running", g, animate_running=True)
+                head = f"{child_gutter}{frame} Running...{elapsed}"
                 parts.append("\n")
-                parts.append(
-                    Content.styled(
-                        f"{child_gutter}{frame} Running...{elapsed}{toggle}",
-                        colors.cognition,
-                    )
-                )
+                parts.append(Content.styled(head, colors.warning))
             elif self._status in ("pending", "queued"):
                 wait_word = "Queued..." if self._status == "queued" else "Pending..."
                 parts.append("\n")
@@ -2188,10 +2193,8 @@ class CognitionStepMessage(Vertical):
         icon = g.checkmark if success else g.error
         # Match running step line and tool activity: cognition accent, not semantic green.
         tone = colors.cognition if success else colors.error
-        # Add expand/collapse icon at the end of status line
-        collapse_icon = g.expand if self._card_collapsed else g.collapse
         parts: list[object] = [
-            Content.styled(f"{gutter}{icon} {status_line_body} {collapse_icon}", tone),
+            Content.styled(f"{gutter}{icon} {status_line_body}", tone),
         ]
         prose = (prose or "").strip()
         if prose:
@@ -2789,21 +2792,15 @@ class CognitionStepMessage(Vertical):
             elapsed = f" ({format_duration(float(elapsed_secs))})"
         colors = theme.get_theme_colors(self)
         gutter = f"{get_glyphs().output_prefix} "
-        # Expand/collapse affordance: collapsed → expand glyph; expanded → collapse glyph.
-        has_collapsible = (
-            (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
-            or self._has_task_activity_body()
-            or self._execute_assistant_buffer.strip()
-        )
-        g = get_glyphs()
-        toggle_icon = ""
-        if has_collapsible:
-            toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
         stats_suffix = self._stats_title_suffix()
         token_suffix = self._token_budget_suffix()
-        line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{token_suffix}{toggle_icon}"
+        head = f"{gutter}{frame} Running...{elapsed}"
+        tail = f"{stats_suffix}{token_suffix}"
         clear_widget_text_selection(self._status_widget)
-        self._status_widget.update(Content.styled(line, colors.cognition))
+        parts: list[object] = [Content.styled(head, colors.warning)]
+        if tail:
+            parts.append(Content.styled(tail, colors.cognition))
+        self._status_widget.update(Content.assemble(*parts))
         if self._has_active_task_branch_animation():
             self._refresh_task_activity_display()
 
@@ -2838,8 +2835,11 @@ class CognitionStepMessage(Vertical):
         self._execute_assistant_buffer = ""
 
         if success:
-            status_body = f"Completed ({dur_str}){tool_part}{token_suffix}"
-            self._update_step_footer_status_line(status_body, success=True)
+            self._update_step_footer_status_line(
+                f"Completed ({dur_str})",
+                success=True,
+                suffix=f"{tool_part}{token_suffix}",
+            )
             self._refresh_task_activity_display()
             if prose:
                 self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
@@ -2878,7 +2878,9 @@ class CognitionStepMessage(Vertical):
             tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
             token_suffix = self._token_budget_suffix()
             self._update_step_footer_status_line(
-                f"Completed ({dur_str}){tool_part}{token_suffix}", success=True
+                f"Completed ({dur_str})",
+                success=True,
+                suffix=f"{tool_part}{token_suffix}",
             )
         first_pv = True
         for ln in preview.splitlines():

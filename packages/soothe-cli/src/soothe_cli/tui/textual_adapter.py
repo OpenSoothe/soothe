@@ -2458,6 +2458,27 @@ async def execute_task_textual(
                             if event_type == AGENT_LOOP_STEP_COMPLETED:
                                 step_id = str(data.get("step_id", "")).strip()
                                 if step_id:
+                                    # Drain buffered tools that still reference this
+                                    # step (or its sibling parallel steps) while
+                                    # the widget is reachable via
+                                    # ``_current_step_messages`` and
+                                    # ``active_step_ids`` still includes
+                                    # in-flight siblings. Running this BEFORE
+                                    # ``on_step_completed`` prevents the
+                                    # single-active-step fallback in
+                                    # ``route_pending_main_tools`` from
+                                    # misrouting non-unified tools to the only
+                                    # remaining sibling.
+                                    router.route_pending_main_tools(
+                                        adapter._current_step_messages,
+                                        adapter._tool_to_step,
+                                        adapter._tool_display_by_call_id,
+                                    )
+                                    router.route_pending_subgraph_tools(
+                                        adapter._current_step_messages,
+                                        adapter._tool_to_step,
+                                        adapter._tool_display_by_call_id,
+                                    )
                                     router.on_step_completed(step_id)
                                     pending_text = pending_text_by_namespace.get(ns_key, "")
                                     if pending_text:
