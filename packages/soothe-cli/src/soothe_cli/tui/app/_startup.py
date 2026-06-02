@@ -119,6 +119,9 @@ class _StartupMixin:
         self._status_bar = self.query_one("#status-bar", StatusBar)
         self._chat_input = self.query_one("#input-area", ChatInput)
 
+        # Seed the badge from the app-level clarification mode (CLI flag, default Auto).
+        self._status_bar.set_clarification_mode(self._clarification_mode)
+
         with suppress(NoMatches):
             banner = self.query_one("#welcome-banner", WelcomeBanner)
             self._status_bar.set_session_tip(banner.session_tip)

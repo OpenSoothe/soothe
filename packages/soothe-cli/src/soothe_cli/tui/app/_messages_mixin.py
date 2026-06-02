@@ -569,11 +569,33 @@ class _MessagesMixin:
         super().exit(result=result, return_code=return_code, message=message)
 
     def action_shift_tab(self) -> None:
-        """Shift+Tab: navigate loop selector filters."""
+        """Shift+Tab: navigate loop selector when active, otherwise flip relay mode.
+
+        - In the LoopSelectorScreen, defer to its filter navigation.
+        - On the main screen, toggle the clarification relay mode
+          (Auto ↔ Manual) so users can switch between the veritas
+          auto-answerer and human-in-the-loop relay at any point (RFC-622).
+        """
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
         if isinstance(self.screen, LoopSelectorScreen):
             self.screen.action_focus_previous_filter()
+            return
+        self.toggle_clarification_mode()
+
+    def toggle_clarification_mode(self) -> None:
+        """Flip clarification mode between Auto and Manual and refresh the badge.
+
+        The new mode is held on the app (``self._clarification_mode``) so future
+        turn submissions can attach it to the wire payload once daemon-side
+        wiring lands. The status-bar badge updates immediately; no toast is
+        emitted because the badge itself is the visual feedback.
+        """
+        current = getattr(self, "_clarification_mode", "auto")
+        new_mode = "manual" if current == "auto" else "auto"
+        self._clarification_mode = new_mode
+        if self._status_bar is not None:
+            self._status_bar.set_clarification_mode(new_mode)
 
     def action_toggle_tool_output(self) -> None:
         """Toggle expand/collapse of the most recent skill or tool card."""

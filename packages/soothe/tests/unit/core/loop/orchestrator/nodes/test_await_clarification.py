@@ -76,9 +76,7 @@ class _AutoPolicyStub:
 
 
 async def test_success_writes_answer_and_clears_pending() -> None:
-    policy = _InteractivePolicyStub(
-        ClarificationAnswer(answers=("auth flows",), source="human")
-    )
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("auth flows",), source="human"))
     ctx = _StubCtx(policy=policy)
     state = _pending_state()
 
@@ -111,9 +109,7 @@ async def test_deferred_marks_status_and_terminates() -> None:
             active_mcp_servers=(),
         ),
     )
-    policy = _AutoPolicyStub(
-        raises=ClarificationDeferredError("low confidence", req)
-    )
+    policy = _AutoPolicyStub(raises=ClarificationDeferredError("low confidence", req))
     ctx = _StubCtx(policy=policy)
 
     result = await node_await_clarification(ctx, _pending_state())
@@ -126,9 +122,9 @@ async def test_deferred_marks_status_and_terminates() -> None:
 
 
 async def test_no_pending_clarification_is_noop() -> None:
-    ctx = _StubCtx(policy=_InteractivePolicyStub(
-        ClarificationAnswer(answers=("x",), source="human")
-    ))
+    ctx = _StubCtx(
+        policy=_InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    )
     result = await node_await_clarification(ctx, {})
     assert result == {"pending_clarification": None}
     assert ctx.emitted == []
@@ -142,9 +138,9 @@ async def test_missing_policy_defers() -> None:
 
 
 async def test_malformed_pending_returns_fatal() -> None:
-    ctx = _StubCtx(policy=_InteractivePolicyStub(
-        ClarificationAnswer(answers=("x",), source="human")
-    ))
+    ctx = _StubCtx(
+        policy=_InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    )
     result = await node_await_clarification(
         ctx, {"pending_clarification": {"origin_node": "garbage"}}
     )
@@ -155,17 +151,13 @@ async def test_malformed_pending_returns_fatal() -> None:
     "policy_factory,expected_mode",
     [
         (
-            lambda: _InteractivePolicyStub(
-                ClarificationAnswer(answers=("x",), source="human")
-            ),
+            lambda: _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human")),
             "manual",
         ),
         (lambda: _AutoPolicyStub(), "auto"),
     ],
 )
-async def test_mode_derived_from_policy_class(
-    policy_factory: Any, expected_mode: str
-) -> None:
+async def test_mode_derived_from_policy_class(policy_factory: Any, expected_mode: str) -> None:
     ctx = _StubCtx(policy=policy_factory())
     await node_await_clarification(ctx, _pending_state())
     requested = [p for n, p in ctx.emitted if n == "soothe.loop.clarification.requested"]

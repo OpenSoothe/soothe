@@ -203,6 +203,10 @@ class SootheApp(
 
         self._model_params_override: dict[str, Any] | None = None
 
+        # RFC-622: clarification relay mode. Seeded from --mode flag (CLIConfig);
+        # default to Auto so loops keep moving when the user hasn't opted in.
+        self._clarification_mode: str = getattr(daemon_config, "clarification_mode", None) or "auto"
+
         self._mcp_tool_count = sum(len(s.tools) for s in (mcp_server_info or []))
 
         self._status_bar: StatusBar | None = None
