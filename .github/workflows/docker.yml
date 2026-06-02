@@ -1,8 +1,10 @@
 name: Build Docker Image
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release Soothe Packages"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       soothe_version:
@@ -27,7 +29,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
       actions: write
@@ -39,27 +41,21 @@ jobs:
           sudo apt-get clean
           df -h
 
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: true
-
-      - name: Resolve Soothe version for Docker build
-        id: soothe_version
+      - name: Resolve release tag
+        id: release_ref
         env:
           GH_REPO: ${{ github.repository }}
           INPUT_VERSION: ${{ github.event.inputs.soothe_version }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "release" ]; then
-            v="${{ github.event.release.tag_name }}"
-            v="${v#v}"
-          elif [ -n "${INPUT_VERSION// }" ]; then
-            v="${INPUT_VERSION}"
-            v="${v#v}"
+          v=""
+          tag_ref=""
+
+          if [ -n "${INPUT_VERSION// }" ]; then
+            v="${INPUT_VERSION#v}"
+            tag_ref="v${v}"
           else
-            # Manual run, no override: use latest published release in this repo (wheels align on tag).
             if ! json="$(curl -fsSL \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${GH_TOKEN}" \
@@ -67,13 +63,31 @@ jobs:
               "https://api.github.com/repos/${GH_REPO}/releases/latest")"; then
               json=""
             fi
-            v="$(printf '%s' "$json" | jq -r 'try .tag_name // empty')"
-            if [ -z "$v" ] || [ "$v" = "null" ]; then
-              echo "::warning::No GitHub release found or API failed; falling back to VERSION in checkout"
-              v="$(tr -d ' \n\r\t' < VERSION)"
+            tag_ref="$(printf '%s' "$json" | jq -r 'try .tag_name // empty')"
+            if [ -n "$tag_ref" ] && [ "$tag_ref" != "null" ]; then
+              v="${tag_ref#v}"
             else
-              v="${v#v}"
+              tag_ref=""
             fi
+          fi
+
+          echo "version=${v}" >> "${GITHUB_OUTPUT}"
+          echo "tag_ref=${tag_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+          ref: ${{ steps.release_ref.outputs.tag_ref || github.sha }}
+
+      - name: Resolve Soothe version for Docker build
+        id: soothe_version
+        run: |
+          set -euo pipefail
+          v="${{ steps.release_ref.outputs.version }}"
+          if [ -z "$v" ]; then
+            echo "::warning::No GitHub release found or API failed; falling back to VERSION in checkout"
+            v="$(tr -d ' \n\r\t' < VERSION)"
           fi
           echo "version=${v}" >> "${GITHUB_OUTPUT}"
           echo "Resolved SOOTHE_VERSION=${v}"
@@ -95,7 +109,7 @@ jobs:
           echo "registry_secrets_ready=${ready}" >> "${GITHUB_OUTPUT}"
 
           want=false
-          if [ "${{ github.event_name }}" = "release" ]; then want=true; fi
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then want=true; fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.push_image }}" = "true" ]; then want=true; fi
           echo "want_push=${want}" >> "${GITHUB_OUTPUT}"
 
@@ -103,10 +117,10 @@ jobs:
           if [ "${ready}" = "true" ] && [ "${want}" = "true" ]; then should=true; fi
           echo "should_push=${should}" >> "${GITHUB_OUTPUT}"
 
-      - name: Fail if release requires registry secrets
-        if: ${{ github.event_name == 'release' && steps.publish.outputs.registry_secrets_ready != 'true' }}
+      - name: Fail if workflow_run requires registry secrets
+        if: ${{ github.event_name == 'workflow_run' && steps.publish.outputs.registry_secrets_ready != 'true' }}
         run: |
-          echo "::error::Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to push images on release."
+          echo "::error::Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to push images after release."
           exit 1
 
       - name: Login to Aliyun Container Registry
@@ -125,8 +139,8 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=
-            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
 
       - name: Build and push daemon image (multi-platform)
         uses: docker/build-push-action@v6
