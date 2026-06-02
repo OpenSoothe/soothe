@@ -33,9 +33,7 @@ async def test_awaiting_clarification_excluded_from_ready_goals() -> None:
     g1 = await engine.create_goal("g1")
     g2 = await engine.create_goal("g2")
 
-    await engine.mark_awaiting_clarification(
-        g1.id, pending_clarification={"questions": ["q"]}
-    )
+    await engine.mark_awaiting_clarification(g1.id, pending_clarification={"questions": ["q"]})
 
     ready = await engine.peek_ready_goals(limit=10)
     ready_ids = {g.id for g in ready}
@@ -47,9 +45,7 @@ async def test_awaiting_clarification_excluded_from_ready_goals() -> None:
 async def test_answer_clarification_restores_pending_status() -> None:
     engine = GoalEngine()
     goal = await engine.create_goal("g")
-    await engine.mark_awaiting_clarification(
-        goal.id, pending_clarification={"questions": ["q"]}
-    )
+    await engine.mark_awaiting_clarification(goal.id, pending_clarification={"questions": ["q"]})
 
     updated = await engine.answer_clarification(goal.id, ["my answer"])
 

@@ -68,9 +68,7 @@ def test_answer_roundtrip() -> None:
 
 
 def test_answer_from_state_rejects_unknown_source() -> None:
-    bad = answer_to_state(
-        ClarificationAnswer(answers=(), source="human", confidence=None)
-    )
+    bad = answer_to_state(ClarificationAnswer(answers=(), source="human", confidence=None))
     bad["source"] = "robot"
     with pytest.raises(ValueError):
         answer_from_state(bad)

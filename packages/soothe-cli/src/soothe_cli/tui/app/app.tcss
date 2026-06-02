@@ -78,6 +78,9 @@ Screen {
     height: 1;
     dock: bottom;
     margin-bottom: 1;
+    /* Match #bottom-app-container's left padding so the clarification-mode
+       badge lines up with the chat-box border. */
+    padding: 0 1;
 }
 
 /* Non-blocking filesystem change previews (write / edit / delete) */

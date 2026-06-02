@@ -31,15 +31,13 @@ def test_route_after_execute_short_circuits_on_pending_clarification() -> None:
 
 def test_route_after_plan_short_circuits_on_pending_clarification() -> None:
     assert (
-        route_after_plan({"pending_clarification": {"questions": ["q"]}})
-        == "await_clarification"
+        route_after_plan({"pending_clarification": {"questions": ["q"]}}) == "await_clarification"
     )
 
 
 def test_route_after_assess_short_circuits_on_pending_clarification() -> None:
     assert (
-        route_after_assess({"pending_clarification": {"questions": ["q"]}})
-        == "await_clarification"
+        route_after_assess({"pending_clarification": {"questions": ["q"]}}) == "await_clarification"
     )
 
 
@@ -49,18 +47,11 @@ def test_route_after_execute_preserved_when_no_pending() -> None:
 
 
 def test_route_after_clarification_returns_to_origin_node() -> None:
+    assert route_after_clarification({"last_clarification_origin": "execute"}) == "execute"
     assert (
-        route_after_clarification({"last_clarification_origin": "execute"})
-        == "execute"
+        route_after_clarification({"last_clarification_origin": "plan_generate"}) == "plan_generate"
     )
-    assert (
-        route_after_clarification({"last_clarification_origin": "plan_generate"})
-        == "plan_generate"
-    )
-    assert (
-        route_after_clarification({"last_clarification_origin": "plan_assess"})
-        == "plan_assess"
-    )
+    assert route_after_clarification({"last_clarification_origin": "plan_assess"}) == "plan_assess"
 
 
 def test_route_after_clarification_terminates_on_deferred_outcome() -> None:
@@ -77,6 +68,4 @@ def test_route_after_clarification_terminates_when_origin_missing() -> None:
 
 
 def test_route_after_clarification_terminates_on_invalid_origin() -> None:
-    assert (
-        route_after_clarification({"last_clarification_origin": "garbage"}) == END
-    )
+    assert route_after_clarification({"last_clarification_origin": "garbage"}) == END
