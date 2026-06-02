@@ -1,0 +1,54 @@
+# Soothe production config — PostgreSQL persistence + pgvector.
+# DashScope and Coding-Plan providers with environment variable substitution.
+#
+# Required env vars:
+#   DASHSCOPE_API_KEY               DashScope provider credential
+#   DASHSCOPE_CP_API_KEY            Coding-Plan provider credential
+#   DASHSCOPE_BASE_URL              DashScope API base URL
+#   DASHSCOPE_CP_BASE_URL           Coding-Plan API base URL
+#   SOOTHE_POSTGRES_BASE_DSN        PostgreSQL base connection string
+#   SOOTHE_POSTGRES_VECTORS_DSN     PostgreSQL vectors database connection string
+
+providers:
+  - name: dashscope
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_BASE_URL}"
+    api_key: "${DASHSCOPE_API_KEY}"
+    models:
+      - qwen-max
+      - qwen3.5-flash
+      - qwen3.5-plus
+      - MiniMax-M2.5
+      - kimi-k2.5
+      - multimodal-embedding-v1
+
+  - name: coding-plan
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
+    api_key: "${DASHSCOPE_CP_API_KEY}"
+    models:
+      - glm-5
+      - qwen3.6-plus
+      - kimi-k2.5
+      - MiniMax-M2.5
+      - deepseek-v3.2
+
+router:
+  default: "coding-plan:glm-5"
+  fast: "coding-plan:kimi-k2.5"
+  think: "coding-plan:glm-5"
+  image: "coding-plan:qwen3.6-plus"
+  embedding: "dashscope:multimodal-embedding-v1"
+
+persistence:
+  default_backend: postgresql
+  postgres_base_dsn: "${SOOTHE_POSTGRES_BASE_DSN}"
+
+vector_stores:
+  - name: pgvector
+    provider_type: pgvector
+    dsn: "${SOOTHE_POSTGRES_VECTORS_DSN}"
+    pool_size: 4
+
+vector_store_router:
+  default: "pgvector:soothe_default"
