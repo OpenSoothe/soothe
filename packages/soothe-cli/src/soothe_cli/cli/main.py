@@ -120,6 +120,17 @@ def main(
             help="Path to additional MCP server config (JSON/YAML) to merge into daemon config.",
         ),
     ] = None,
+    mode: Annotated[
+        str | None,
+        typer.Option(
+            "--mode",
+            help=(
+                "Clarification mode: 'manual' (relay AI questions to you) or "
+                "'auto' (veritas auto-answers). Default: 'manual' when stdin is "
+                "a TTY, 'auto' otherwise."
+            ),
+        ),
+    ] = None,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
@@ -154,6 +165,9 @@ def main(
         raise typer.Exit
 
     home_path = Path(soothe_home).expanduser() if soothe_home else Path(SOOTHE_HOME)
+    if mode is not None and mode not in ("manual", "auto"):
+        typer.echo(f"Invalid --mode {mode!r}; expected 'manual' or 'auto'.", err=True)
+        raise typer.Exit(code=2)
     cli_cfg = CLIConfig(
         daemon_host=daemon_host,
         daemon_port=daemon_port,
@@ -161,6 +175,7 @@ def main(
         render_markdown=render_markdown,
         output_streaming_enabled=streaming,
         output_streaming_mode=streaming_mode,
+        clarification_mode=mode,
         soothe_home=home_path,
     )
     set_runtime_config(cli_cfg)

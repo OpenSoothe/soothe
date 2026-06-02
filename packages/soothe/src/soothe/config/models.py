@@ -1713,6 +1713,48 @@ class AgentConfig(BaseModel):
     )
     """Embedded QuickJS interpreter for programmatic tool calling."""
 
+    # === CLARIFICATION RELAY (RFC-622) ===
+    clarification: ClarificationConfig = Field(
+        default_factory=lambda: ClarificationConfig(),
+        description="Clarification relay configuration (RFC-622)",
+    )
+    """How CoreAgent clarification questions are routed (manual TUI vs auto/veritas)."""
+
+    # === VERITAS (Clarification auto-answerer, RFC-622) ===
+    veritas: VeritasConfig = Field(
+        default_factory=lambda: VeritasConfig(),
+        description="Veritas auto-answerer configuration (RFC-622)",
+    )
+    """Settings for the intent-grounded clarification answerer."""
+
+
+class ClarificationConfig(BaseModel):
+    """RFC-622: configuration for the clarification relay.
+
+    Only structured ``ask_user`` LangGraph interrupts are detected. Plain-text
+    questions in assistant messages are NOT treated as clarifications —
+    callers that want a clarification must emit an ``ask_user`` interrupt.
+    """
+
+    auto_policy: Literal["veritas"] = "veritas"
+    """Auto-mode policy. Only ``veritas`` is supported today."""
+
+    auto_min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
+    """Below this confidence, ``AutoClarificationPolicy`` defers rather than answers."""
+
+    max_defer_age_hours: int = Field(default=168, ge=1)
+    """Autopilot scrubs goals stuck in ``awaiting_clarification`` past this age."""
+
+
+class VeritasConfig(BaseModel):
+    """RFC-622: configuration for the veritas auto-answerer subagent."""
+
+    model_role: Literal["default", "fast", "think", "image", "embedding"] = "think"
+    """Which ``ModelRole`` to use for veritas calls; defaults to ``think``."""
+
+    max_context_steps: int = Field(default=8, ge=0)
+    """How many recent step outputs to include in the veritas user prompt."""
+
 
 class SecurityConfig(BaseModel):
     """Security policy configuration for filesystem access control.

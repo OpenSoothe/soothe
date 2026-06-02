@@ -37,6 +37,10 @@ class CLIConfig:
     output_streaming_mode: str | None = None
     """Override daemon streaming mode: 'streaming' or 'batch'."""
 
+    # RFC-622: clarification relay mode
+    clarification_mode: str | None = None
+    """'manual' (relay to human) or 'auto' (veritas auto-answer). None = auto-detect from TTY."""
+
     # Paths
     soothe_home: Path = field(default_factory=lambda: Path(SOOTHE_HOME))
 
