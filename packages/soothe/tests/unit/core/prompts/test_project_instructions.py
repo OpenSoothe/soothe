@@ -32,21 +32,25 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
 
 
 def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> None:
-    """CLAUDE.md is fallback when no AGENTS.md found; 600 lines triggers headline+note."""
+    """CLAUDE.md fallback: 600 lines fits under 25K headline cap but trips line cap."""
     from soothe.core.prompts.project_instructions import load_workspace_project_instructions
 
     claude = tmp_path / "CLAUDE.md"
-    # 600 lines of `claude line N\n` is ~7.5 KB — far above the 2000-char headline cap.
+    # 600 lines of `claude line N\n` is ~7.5 KB — well under the 25K headline cap,
+    # so the body inlines fully. The 500-line cap still drops lines 500..599 and
+    # marks ``truncated_lines=true``, which alone is enough to emit the note.
     claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
 
     block = load_workspace_project_instructions(tmp_path, max_lines=500)
     assert block is not None
     assert "<WORKSPACE_INSTRUCTIONS>" in block
     assert "claude line 0" in block
-    # Content past the headline cap is suppressed; the note points at read_file.
-    assert "claude line 499" not in block
+    # First 500 lines inline verbatim; lines past the line cap stay out.
+    assert "claude line 499" in block
     assert "claude line 500" not in block
-    assert 'inlined="partial"' in block
+    assert 'inlined="full"' in block
+    assert 'truncated_lines="true"' in block
+    # Line-cap truncation still emits the read_file hint.
     assert "<note>" in block
     assert "read_file" in block
     assert str(claude) in block
@@ -153,9 +157,11 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
         load_workspace_project_instructions,
     )
 
-    # Build a body that exceeds the headline cap with clear paragraph boundaries
-    # so the truncator backs off to a "\n\n" cut rather than mid-sentence.
-    paragraphs = [f"Paragraph {i}: " + ("rule. " * 30) for i in range(60)]
+    # Build a body that exceeds the 25K headline cap with clear paragraph
+    # boundaries so the truncator backs off to a "\n\n" cut rather than
+    # mid-sentence. 200 paragraphs × ~194 chars ≈ 39 KB; line count stays
+    # under the 500-line cap (200 paragraphs + 199 blanks = 399 lines).
+    paragraphs = [f"Paragraph {i}: " + ("rule. " * 30) for i in range(200)]
     body = "\n\n".join(paragraphs) + "\n"
     assert len(body) > PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS
     agents = tmp_path / "AGENTS.md"
