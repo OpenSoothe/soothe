@@ -9,8 +9,9 @@ This directory contains all essential files for production deployment of Soothe 
 ### 1. docker-compose.yml
 Production Docker Compose stack with minimal services:
 - `soothe-pgvector` - PostgreSQL 17 + pgvector extension
-- Exposed on standard port 5432
-- No Langfuse observability stack (production minimal)
+- `soothed` - Soothe daemon server
+- Exposed on standard port 5432 (PostgreSQL) and 8765 (daemon)
+- **Critical**: config.yml mounted at `/var/lib/soothe/config/config.yml` (daemon default path)
 
 ### 2. .env.example
 Environment variables template with:
@@ -18,6 +19,7 @@ Environment variables template with:
 - DashScope provider credentials
 - Coding-Plan provider credentials
 - Connection strings for RFC-612 multi-database architecture
+- **NO OPENAI_API_KEY required** - custom providers use explicit config
 
 **Usage**:
 ```bash
@@ -66,7 +68,7 @@ vim .env
 # - POSTGRES_PASSWORD=<secure_production_password>
 # - DASHSCOPE_API_KEY=<your_dashscope_key>
 # - DASHSCOPE_CP_API_KEY=<your_coding_plan_key>
-# - OPENAI_API_KEY=<fallback_key> (temporary workaround)
+# Note: NO OPENAI_API_KEY needed - custom providers work with explicit credentials
 ```
 
 ### Step 2: Create config.yml
@@ -108,24 +110,25 @@ docker compose logs soothe-pgvector | grep "CREATE DATABASE"
 docker compose exec soothe-pgvector psql -U postgres -l
 ```
 
-### Step 5: Run Soothe Daemon (External)
+### Step 5: Verify Daemon Startup
 
-The soothe daemon can run in a separate container or environment pointing to this PostgreSQL instance:
+The soothe daemon is included in docker-compose.yml and starts automatically:
 
 ```bash
-# Example: Run daemon container connecting to this PostgreSQL
-docker run -d \
-  --name soothed \
-  -p 8765:8765 \
-  -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
-  -e DASHSCOPE_CP_API_KEY=${DASHSCOPE_CP_API_KEY} \
-  -e SOOTHE_POSTGRES_BASE_DSN=postgresql://postgres:${POSTGRES_PASSWORD}@<pgvector-host>:5432 \
-  -e SOOTHE_POSTGRES_VECTORS_DSN=postgresql://postgres:${POSTGRES_PASSWORD}@<pgvector-host>:5432/soothe_vectors \
-  -v ./config.yml:/var/lib/soothe/config.yml:ro \
-  registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+# Check daemon status
+docker compose ps
+
+# Expected output:
+# NAME                  STATUS        PORTS
+# soothe-pgvector       Up (healthy)  127.0.0.1:5432->5432/tcp
+# soothed               Up (healthy)  127.0.0.1:8765->8765/tcp
+
+# Verify daemon listening
+docker compose logs soothed | grep "listening on"
+# Expected: "Unified channels listening on ws://0.0.0.0:8765"
 ```
 
-Or use a separate docker-compose.yml that references this PostgreSQL service.
+**Note**: Daemon uses config from `/var/lib/soothe/config/config.yml` (mounted from ./config.yml)
 
 ---
 
@@ -154,12 +157,31 @@ Host Machine
 └── Docker Container: soothe-pgvector
     └── Port 5432 (bind: 127.0.0.1)
     └── Internal networks: soothe-db, soothe-app
+
+└── Docker Container: soothed
+    └── Port 8765 (bind: 127.0.0.1)
+    └── Config: /var/lib/soothe/config/config.yml (mounted)
 ```
 
 **Security**:
 - PostgreSQL bound to localhost (127.0.0.1:5432)
+- Daemon bound to localhost (127.0.0.1:8765)
 - Not exposed to public network
 - Accessible only from same host or Docker networks
+
+### Config Mount Path (Critical)
+
+**Important**: Config file must be mounted at daemon's expected path:
+```yaml
+volumes:
+  - ./config.yml:/var/lib/soothe/config/config.yml:ro  # ✅ Correct path
+```
+
+**Why**: Daemon loads config from `/var/lib/soothe/config/config.yml` by default.
+- Wrong path: `/var/lib/soothe/config.yml` → empty config → default "openai:gpt-4o-mini" → OPENAI_API_KEY requirement
+- Correct path: `/var/lib/soothe/config/config.yml` → loads DashScope/Coding-Plan → works without OPENAI_API_KEY
+
+**Solution**: Mount at correct path so daemon loads providers successfully.
 
 ---
 
@@ -183,10 +205,7 @@ DASHSCOPE_CP_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
 DASHSCOPE_CP_API_KEY=<your_key>           # Coding-Plan API key
 ```
 
-### LangChain Fallback (Temporary)
-```bash
-OPENAI_API_KEY=${DASHSCOPE_API_KEY}       # Temporary workaround until propagate_env fix deployed
-```
+**Note**: NO OPENAI_API_KEY environment variable required - custom providers use explicit credentials from config.yml.
 
 ### PostgreSQL Connection Strings
 ```bash
@@ -241,6 +260,7 @@ vector_stores:
 - Env vars resolved at runtime by soothe's `env.py`
 - No hardcoded credentials in config file
 - Multi-provider setup with custom OpenAI-compatible endpoints
+- **propagate_env() fix deployed**: Custom providers skip OPENAI_API_KEY env var propagation
 
 ---
 
@@ -257,6 +277,7 @@ vector_stores:
 - ✅ shm_size=256mb (shared memory for PostgreSQL)
 - ✅ pool_size=4 (pgvector connection pool)
 - ✅ Separate databases for different workloads
+- ✅ propagate_env() fix deployed (no OPENAI_API_KEY pollution)
 
 ### Observability
 - ✅ Health checks enabled (pg_isready)
@@ -465,11 +486,8 @@ docker compose pull && docker compose up -d
 
 ## Additional Resources
 
-- **BUG_ANALYSIS.md** - OPENAI_API_KEY dependency investigation
-- **DAEMON_CONFIG_ANALYSIS.md** - Why daemon_config.yml was required
-- **FIXES_TEST_RESULTS.md** - Complete deployment test results
-- **DEPLOYMENT_COMPLETE.md** - Production deployment success summary
-- **DOCKER_GUIDE.md** - Docker Compose development vs production usage
+- **OPENAI_APIKEY_FIX_VERIFICATION.md** (in soothe repo) - Complete fix verification report
+- **DEPLOYMENT_COMPLETE.md** (in deployment directory) - Production deployment success summary
 
 ---
 
@@ -485,5 +503,5 @@ For issues with this deployment:
 ---
 
 **Last Updated**: June 2, 2026
-**Version**: Production v1.0
-**Status**: Ready for deployment
+**Version**: Production v1.1
+**Status**: Deployed successfully with propagate_env() fix
