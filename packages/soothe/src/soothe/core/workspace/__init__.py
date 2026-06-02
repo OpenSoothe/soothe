@@ -31,6 +31,8 @@ __all__ = [
     "resolve_workspace_for_stream",
     "resolve_workspace_for_tool_execution",
     "set_virtual_mode_context",
+    "translate_client_path_to_container",
+    "translate_container_path_to_client",
     "validate_client_workspace",
     "get_workspace_backend",
 ]
@@ -46,6 +48,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "cleanup_anonymous_workspaces": (".resolution", "cleanup_anonymous_workspaces"),
     "cleanup_legacy_per_loop_workspaces": (".resolution", "cleanup_legacy_per_loop_workspaces"),
     "validate_client_workspace": (".resolution", "validate_client_workspace"),
+    "translate_client_path_to_container": (".resolution", "translate_client_path_to_container"),
+    "translate_container_path_to_client": (".resolution", "translate_container_path_to_client"),
     "get_git_status": (".resolution", "get_git_status"),
     "ResolvedWorkspace": (".stream_resolution", "ResolvedWorkspace"),
     "resolve_workspace_for_stream": (".stream_resolution", "resolve_workspace_for_stream"),

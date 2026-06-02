@@ -191,6 +191,82 @@ def validate_client_workspace(workspace: str | Path) -> Path:
     return path
 
 
+def translate_client_path_to_container(
+    client_path: str | Path,
+    *,
+    host_root: str | Path | None = None,
+    container_root: str | Path | None = None,
+) -> Path:
+    """Translate a client-side path to its container-side equivalent (RFC-621).
+
+    When host_root/container_root are not configured, returns the path unchanged.
+    Raises ValueError if client_path is not under host_root.
+
+    Args:
+        client_path: Path on the host/client machine.
+        host_root: Parent directory on the host that is volume-mounted.
+        container_root: Mount point inside the container.
+
+    Returns:
+        Translated path for use inside the container.
+
+    Raises:
+        ValueError: If client_path is not under host_root when mapping is configured.
+    """
+    if not host_root or not container_root:
+        return Path(client_path).resolve()
+
+    host = Path(host_root).resolve()
+    container = Path(container_root).resolve()
+    resolved = Path(client_path).resolve()
+
+    try:
+        relative = resolved.relative_to(host)
+    except ValueError:
+        msg = (
+            f"Client workspace {resolved} is not under configured "
+            f"host_root {host}. All workspaces must reside under the "
+            f"configured host_root for container deployments."
+        )
+        raise ValueError(msg) from None
+
+    return container / relative
+
+
+def translate_container_path_to_client(
+    container_path: str | Path,
+    *,
+    host_root: str | Path | None = None,
+    container_root: str | Path | None = None,
+) -> Path:
+    """Translate a container-side path to its client-side equivalent (RFC-621).
+
+    When host_root/container_root are not configured, returns the path unchanged.
+    If the path is not under container_root, returns it unchanged.
+
+    Args:
+        container_path: Path inside the container.
+        host_root: Parent directory on the host that is volume-mounted.
+        container_root: Mount point inside the container.
+
+    Returns:
+        Translated path for display on the client machine.
+    """
+    if not host_root or not container_root:
+        return Path(container_path).resolve()
+
+    host = Path(host_root).resolve()
+    container = Path(container_root).resolve()
+    resolved = Path(container_path).resolve()
+
+    try:
+        relative = resolved.relative_to(container)
+    except ValueError:
+        return resolved
+
+    return host / relative
+
+
 # ---------------------------------------------------------------------------
 # Git Status Collection (RFC-104)
 # ---------------------------------------------------------------------------

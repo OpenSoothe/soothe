@@ -61,6 +61,8 @@ services:
     volumes:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.yml:/var/lib/soothe/config/config.yml:ro
+      # RFC-621: Workspace host convention — mount host workspace root.
+      - /Users/xiamingchen/Workspace:/var/lib/soothe/workspaces
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.settimeout(3); s.connect((\"localhost\",8765)); s.close()' || exit 1"]
       interval: 30s
