@@ -447,10 +447,9 @@ class QueuedUserMessage(Static):
         margin: 0 0 1 0;
         background: transparent;
         border-left: wide $panel;
-        opacity: 0.6;
     }
     """
-    """Dimmed border + reduced opacity to distinguish queued messages from sent ones."""
+    """Dimmed border to distinguish queued messages from sent ones; text uses terminal `dim` style to match the welcome banner's `Loop:` line."""
 
     def __init__(self, content: str, **kwargs: Any) -> None:
         """Initialize a queued user message.
@@ -471,18 +470,17 @@ class QueuedUserMessage(Static):
         """Render the queued user message (greyed out).
 
         Returns:
-            Styled Content with dimmed prefix and body.
+            Styled Content with dimmed prefix and body matching the welcome banner.
         """
-        colors = theme.get_theme_colors(self)
         content = self._content
         mode = PREFIX_TO_MODE.get(content[:1]) if content else None
         if mode:
             glyph = MODE_DISPLAY_GLYPHS.get(mode, content[0])
-            prefix = (f"{glyph} ", f"bold {colors.muted}")
+            prefix = (f"{glyph} ", "dim")
             content = content[1:]
         else:
-            prefix = ("> ", f"bold {colors.muted}")
-        return Content.assemble(prefix, (content, colors.muted))
+            prefix = ("> ", "dim")
+        return Content.assemble(prefix, (content, "dim"))
 
 
 def _strip_frontmatter(text: str) -> str:

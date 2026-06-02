@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_PROJECT_INSTRUCTION_MAX_LINES = 500
 # Char cap for inlined headline. Files at or below this size are emitted
 # verbatim; larger files emit a paragraph-clean prefix plus a read_file hint.
-PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS = 2000
+# 25K chars covers typical AGENTS.md / CLAUDE.md (this project's own CLAUDE.md
+# is ~25KB / 584 lines) so the model receives the full project instructions
+# in the cache-stable system prelude rather than a partial headline.
+PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS = 25000
 # Paragraph boundary used to back off the headline cut so the model never
 # sees mid-sentence truncation. Falls back to a hard cut if no boundary
 # exists within the budget.
@@ -93,7 +96,7 @@ def load_workspace_project_instructions(
     Args:
         workspace: Thread workspace directory.
         max_lines: Per-file line cap (default 500).
-        headline_max_chars: Inline char cap (default 2000); above this the
+        headline_max_chars: Inline char cap (default 25000); above this the
             full body is suppressed in favor of a read_file hint.
 
     Returns:
