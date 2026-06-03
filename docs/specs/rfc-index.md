@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-02
-**Total RFCs**: 68
+**Last Updated**: 2026-06-03
+**Total RFCs**: 69
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 49 |
+| Draft | 50 |
 | Implemented | 18 |
 | Accepted | 1 |
 
@@ -397,6 +397,12 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-06-02
   - Depends on: RFC-220, RFC-222, RFC-403, RFC-600, RFC-601
 
+- **RFC-623**: [Veritas Auto-Mode Robustness](RFC-623-veritas-auto-mode-robustness.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-06-03
+  - Depends on: RFC-622, RFC-220, RFC-403
+
 ---
 
 ## Spec Kind Distribution
@@ -404,7 +410,7 @@ This index reflects the canonical RFC set and defines which files are active for
 | Kind | Count |
 |------|-------|
 | Architecture Design | 45 |
-| Implementation Interface Design | 10 |
+| Implementation Interface Design | 11 |
 | Conceptual Design | 1 |
 | Not stated / ambiguous | 8 |
 
@@ -426,7 +432,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
-- **RFC-623**: Daemon Module Structure Refactoring (2026-06-02)
+- **RFC-623**: Veritas Auto-Mode Robustness (2026-06-03)
 - **RFC-622**: CoreAgent Clarification Relay (2026-06-02)
 - **RFC-621**: Workspace Host Convention — Path Mapping for Containerized Daemon (2026-06-02)
 - **RFC-620**: Unified Channel Architecture for Extensible Communication Endpoints (2026-05-29)
