@@ -406,6 +406,7 @@ class TuiDaemonSession:
         values: dict[str, Any],
         *,
         timeout: float = 10.0,
+        as_node: str | None = None,
     ) -> None:
         """Merge partial state into the loop on the daemon host (``loop_state_update`` RPC).
 
@@ -413,6 +414,9 @@ class TuiDaemonSession:
             loop_id: AgentLoop id.
             values: Channel updates (e.g. ``messages``) in JSON-serializable form.
             timeout: RPC wait budget in seconds.
+            as_node: Optional LangGraph node to attribute the write to. When
+                omitted, the daemon picks a sensible default for the underlying
+                agent graph.
         """
         lid = str(loop_id or "").strip()
         if not lid:
@@ -422,14 +426,18 @@ class TuiDaemonSession:
         if not isinstance(payload_values, dict):
             return
 
+        payload: dict[str, Any] = {
+            "type": "loop_state_update",
+            "loop_id": lid,
+            "values": payload_values,
+        }
+        if as_node:
+            payload["as_node"] = as_node
+
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
             await self._rpc_client.request_response(
-                {
-                    "type": "loop_state_update",
-                    "loop_id": lid,
-                    "values": payload_values,
-                },
+                payload,
                 response_type="loop_state_update_response",
                 timeout=timeout,
             )
