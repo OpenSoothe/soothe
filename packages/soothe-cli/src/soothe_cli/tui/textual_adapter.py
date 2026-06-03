@@ -1187,16 +1187,22 @@ async def _handle_interrupt_cleanup(
         )
         loop_id = _loop_id_for_remote_state(config, daemon_session)
         if loop_id:
+            # Attribute the write to the deepagents ``model`` node — the owner of
+            # the ``messages`` channel — so LangGraph does not raise
+            # ``Ambiguous update, specify as_node`` when multiple nodes have
+            # checkpointed at the current version (e.g. tool node + model node).
             if interrupted_msg:
                 await daemon_session.aupdate_loop_state(
                     loop_id,
                     {"messages": [interrupted_msg.model_dump()]},
                     timeout=2.0,
+                    as_node="model",
                 )
             await daemon_session.aupdate_loop_state(
                 loop_id,
                 {"messages": [cancellation_msg.model_dump()]},
                 timeout=2.0,
+                as_node="model",
             )
     except Exception:
         logger.warning("Failed to save interrupted state", exc_info=True)
@@ -2536,6 +2542,21 @@ async def execute_task_textual(
                                             tool_call_count,
                                             summary,
                                         )
+                                        clarification = data.get("clarification")
+                                        if isinstance(clarification, dict) and success:
+                                            raw_questions = clarification.get("questions") or []
+                                            raw_answers = clarification.get("answers") or []
+                                            confidence = clarification.get("confidence")
+                                            widget.set_clarification_details(
+                                                questions=[str(q) for q in raw_questions],
+                                                answers=[str(a) for a in raw_answers],
+                                                source=str(clarification.get("source") or ""),
+                                                confidence=(
+                                                    float(confidence)
+                                                    if confidence is not None
+                                                    else None
+                                                ),
+                                            )
                                         if not ns_key:
                                             adapter._last_completed_main_step_execute_prose = (
                                                 widget.last_completed_execute_prose

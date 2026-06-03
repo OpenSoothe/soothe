@@ -17,7 +17,8 @@ from soothe.core.loop.clarification import (
 )
 from soothe.core.loop.engine.context_window_manager import ContextWindowManager
 from soothe.core.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.core.loop.state.schemas import StepAction, StepResult
+from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from ..runtime_context import LoopRuntimeContext
 
@@ -73,6 +74,75 @@ def _is_rate_limit_error(error: str | None) -> bool:
     return "429" in lower or "rate limit" in lower or "throttling" in lower
 
 
+def _format_ask_user_questions(questions: tuple[str, ...]) -> str:
+    if not questions:
+        return "(no questions captured)"
+    return "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+
+
+def _format_ask_user_answers(
+    questions: tuple[str, ...],
+    answers: tuple[str, ...],
+    *,
+    source: str,
+    confidence: float | None,
+) -> str:
+    header = f"Answered (source={source or 'unknown'}"
+    if confidence is not None:
+        header += f", confidence={confidence:.2f}"
+    header += "):"
+    if not answers:
+        return f"{header}\n(no answers captured)"
+    pairs = []
+    for idx, ans in enumerate(answers, 1):
+        question = questions[idx - 1] if idx - 1 < len(questions) else ""
+        if question:
+            pairs.append(f"{idx}. Q: {question}\n   A: {ans}")
+        else:
+            pairs.append(f"{idx}. A: {ans}")
+    return f"{header}\n" + "\n".join(pairs)
+
+
+def _append_ask_user_loop_messages(
+    state: LoopState,
+    *,
+    step_id: str,
+    description: str,
+    questions: tuple[str, ...],
+    answers: tuple[str, ...],
+    source: str,
+    confidence: float | None,
+) -> None:
+    """Mirror the executor (Execute → AI) ledger pattern for ask_user steps.
+
+    plan-assess / plan-generate consume ``state.loop_messages`` to ground the
+    next planning iteration. Without this pair the planner re-asks the same
+    clarification because it has no record of what was asked or answered.
+    """
+    questions_block = _format_ask_user_questions(questions)
+    answers_block = _format_ask_user_answers(
+        questions, answers, source=source, confidence=confidence
+    )
+    human = LoopHumanMessage(
+        content=f"Execute: {description}\nQuestions:\n{questions_block}",
+        thread_id=state.thread_id,
+        iteration=state.iteration,
+        goal_summary=(state.goal[:200] if state.goal else None),
+        workspace=state.workspace,
+        phase="execute_step",
+        step_id=step_id,
+    )
+    ai = LoopAIMessage(
+        content=answers_block,
+        thread_id=state.thread_id,
+        iteration=state.iteration,
+        phase="execute_step",
+        step_id=step_id,
+    )
+    state.loop_messages.append(human)
+    state.loop_messages.append(ai)
+
+
 async def _record_and_emit_step_completed(
     ctx: LoopRuntimeContext,
     *,
@@ -100,17 +170,28 @@ async def _record_and_emit_step_completed(
     else:
         output_preview = f"Failed: {result.error[:50]}" if result.error else "Failed"
 
-    await ctx.emit(
-        "step_completed",
-        {
-            "step_id": result.step_id,
-            "success": result.success,
-            "output_preview": output_preview,
-            "error": result.error or None,
-            "duration_ms": result.duration_ms,
-            "tool_call_count": result.tool_call_count,
-        },
-    )
+    payload: dict[str, Any] = {
+        "step_id": result.step_id,
+        "success": result.success,
+        "output_preview": output_preview,
+        "error": result.error or None,
+        "duration_ms": result.duration_ms,
+        "tool_call_count": result.tool_call_count,
+    }
+    # Surface ask_user Q&A on the event so the TUI can render the resolved
+    # question/answer pair on the step card.
+    if isinstance(result.outcome, dict) and result.outcome.get("kind") == "ask_user":
+        clarification: dict[str, Any] = {
+            "questions": list(result.outcome.get("questions") or ()),
+            "answers": list(result.outcome.get("answers") or ()),
+            "source": str(result.outcome.get("source") or ""),
+        }
+        confidence = result.outcome.get("confidence")
+        if confidence is not None:
+            clarification["confidence"] = float(confidence)
+        payload["clarification"] = clarification
+
+    await ctx.emit("step_completed", payload)
 
 
 async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> dict[str, Any]:
@@ -129,6 +210,8 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     planner_ask_answered_step_id: str | None = None
     planner_ask_answers: tuple[str, ...] = ()
     planner_ask_source: str = ""
+    planner_ask_questions: tuple[str, ...] = ()
+    planner_ask_confidence: float | None = None
     pending_answer_state = state_dict.get("pending_clarification_answer")
     pending_request_state = state_dict.get("pending_clarification")
     if pending_answer_state and pending_request_state:
@@ -142,6 +225,10 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 planner_ask_answered_step_id = origin_iid[len(PLANNER_ASK_INTERRUPT_PREFIX) :]
                 planner_ask_answers = tuple(ans.answers)
                 planner_ask_source = ans.source
+                planner_ask_questions = tuple(
+                    str(q) for q in (pending_request_state.get("questions") or ())
+                )
+                planner_ask_confidence = ans.confidence
             elif origin_iid:
                 resume_answer_payload = {origin_iid: {"answers": list(ans.answers)}}
         except (ValueError, TypeError):
@@ -197,7 +284,10 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             "kind": "ask_user",
             "answers": list(planner_ask_answers),
             "source": planner_ask_source,
+            "questions": list(planner_ask_questions),
         }
+        if planner_ask_confidence is not None:
+            outcome_payload["confidence"] = planner_ask_confidence
         synth_result = StepResult(
             step_id=planner_ask_answered_step_id,
             success=True,
@@ -208,11 +298,24 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         )
         # Make the description available for the step_completed event even when
         # the answered step is not in decision.steps anymore.
-        if ask_step is not None:
-            step_desc.setdefault(ask_step.id, ask_step.description)
-        else:
-            step_desc.setdefault(planner_ask_answered_step_id, "Ask user clarifying question")
+        ask_description = (
+            ask_step.description if ask_step is not None else "Ask user clarifying question"
+        )
+        step_desc.setdefault(planner_ask_answered_step_id, ask_description)
         step_results.append(synth_result)
+        # Append the Q&A pair to the loop ledger so plan-assess and plan-generate
+        # see the questions and resolved answers on the next iteration. Without
+        # this the planner re-asks the same questions because the ledger only
+        # carries executor-emitted (Execute → AI) pairs.
+        _append_ask_user_loop_messages(
+            state,
+            step_id=planner_ask_answered_step_id,
+            description=ask_description,
+            questions=planner_ask_questions,
+            answers=planner_ask_answers,
+            source=planner_ask_source,
+            confidence=planner_ask_confidence,
+        )
         await _record_and_emit_step_completed(ctx, result=synth_result, step_desc=step_desc)
 
     # RFC-223: Pass checkpointer for thread fork inheritance
