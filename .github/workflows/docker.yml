@@ -4,7 +4,6 @@ on:
   workflow_run:
     workflows: ["Release Soothe Packages"]
     types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       soothe_version:
@@ -25,6 +24,8 @@ env:
   REGISTRY: registry.cn-hangzhou.aliyuncs.com
   NAMESPACE: lacogito
   IMAGE_NAME: soothed
+  # Avoid Docker Hub anonymous rate limits / auth.docker.io timeouts on GHA runners.
+  PYTHON_BASE: registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 jobs:
   build-and-push:
@@ -41,8 +42,19 @@ jobs:
           sudo apt-get clean
           df -h
 
-      - name: Resolve release tag
+      - name: Resolve checkout ref
+        id: checkout_ref
+        run: |
+          set -euo pipefail
+          ref=""
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            ref="${{ github.event.workflow_run.head_sha }}"
+          fi
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve release tag (manual / API)
         id: release_ref
+        if: ${{ github.event_name != 'workflow_run' }}
         env:
           GH_REPO: ${{ github.repository }}
           INPUT_VERSION: ${{ github.event.inputs.soothe_version }}
@@ -78,7 +90,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: true
-          ref: ${{ steps.release_ref.outputs.tag_ref || github.sha }}
+          ref: ${{ steps.checkout_ref.outputs.ref || steps.release_ref.outputs.tag_ref || github.sha }}
 
       - name: Resolve Soothe version for Docker build
         id: soothe_version
@@ -86,11 +98,38 @@ jobs:
           set -euo pipefail
           v="${{ steps.release_ref.outputs.version }}"
           if [ -z "$v" ]; then
-            echo "::warning::No GitHub release found or API failed; falling back to VERSION in checkout"
             v="$(tr -d ' \n\r\t' < VERSION)"
+          fi
+          if [ -z "$v" ]; then
+            echo "::error::Could not resolve Soothe version (VERSION file empty and no release tag)"
+            exit 1
           fi
           echo "version=${v}" >> "${GITHUB_OUTPUT}"
           echo "Resolved SOOTHE_VERSION=${v}"
+
+      - name: Wait for PyPI wheels
+        if: ${{ github.event_name == 'workflow_run' }}
+        env:
+          SOOTHE_VERSION: ${{ steps.soothe_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          wait_pkg() {
+            local pkg="$1"
+            echo "Waiting for ${pkg}==${SOOTHE_VERSION} on PyPI..."
+            for attempt in $(seq 1 36); do
+              if python -m pip index versions "${pkg}" 2>/dev/null | grep -qF "${SOOTHE_VERSION}"; then
+                echo "✓ ${pkg} ${SOOTHE_VERSION} is on PyPI"
+                return 0
+              fi
+              echo "  attempt ${attempt}/36: not yet available, sleeping 10s"
+              sleep 10
+            done
+            echo "::error::Timed out waiting for ${pkg}==${SOOTHE_VERSION} on PyPI"
+            return 1
+          }
+          python -m pip install --upgrade pip >/dev/null
+          wait_pkg soothe
+          wait_pkg soothe-daemon
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -117,11 +156,17 @@ jobs:
           if [ "${ready}" = "true" ] && [ "${want}" = "true" ]; then should=true; fi
           echo "should_push=${should}" >> "${GITHUB_OUTPUT}"
 
-      - name: Fail if workflow_run requires registry secrets
-        if: ${{ github.event_name == 'workflow_run' && steps.publish.outputs.registry_secrets_ready != 'true' }}
+      - name: Warn when registry push is skipped
+        if: ${{ steps.publish.outputs.want_push == 'true' && steps.publish.outputs.should_push != 'true' }}
         run: |
-          echo "::error::Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to push images after release."
-          exit 1
+          echo "::warning::Skipping registry push. Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to publish images after release."
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Login to Aliyun Container Registry
         if: ${{ steps.publish.outputs.should_push == 'true' }}
@@ -139,7 +184,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=
-            type=semver,pattern={{version}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
+            type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
 
       - name: Build and push daemon image (multi-platform)
@@ -149,6 +194,8 @@ jobs:
           file: packages/soothe-daemon/Dockerfile
           build-args: |
             SOOTHE_VERSION=${{ steps.soothe_version.outputs.version }}
+            SOOTHE_DAEMON_VERSION=${{ steps.soothe_version.outputs.version }}
+            PYTHON_BASE=${{ env.PYTHON_BASE }}
           platforms: linux/amd64,linux/arm64
           push: ${{ steps.publish.outputs.should_push == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
