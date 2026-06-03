@@ -14,6 +14,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
+
 from .schemas import CollectorDecision, PlanRefinement, PlanSubagentConfig
 
 if TYPE_CHECKING:
@@ -79,8 +81,6 @@ def build_plan_engine(
     plan_config: PlanSubagentConfig,
 ) -> Any:
     """Compile the plan subagent graph."""
-    collector = model.with_structured_output(CollectorDecision)
-    planner = model.with_structured_output(PlanRefinement)
 
     def ingest_task(state: dict[str, Any]) -> dict[str, Any]:
         text = ""
@@ -104,7 +104,7 @@ def build_plan_engine(
             "explores_used": 0,
         }
 
-    def collection_iteration(state: dict[str, Any]) -> dict[str, Any]:
+    async def collection_iteration(state: dict[str, Any]) -> dict[str, Any]:
         from langgraph.config import get_config
 
         task = state.get("task_text", "")
@@ -115,11 +115,13 @@ def build_plan_engine(
             f"## Findings so far\n{findings_block}"
         )
         try:
-            decision = collector.invoke(
+            decision = await invoke_structured_chat_typed(
+                model,
                 [
                     {"role": "system", "content": _COLLECTOR_SYSTEM},
                     {"role": "user", "content": user},
-                ]
+                ],
+                CollectorDecision,
             )
         except Exception:
             logger.exception("Plan subagent: collector structured output failed")
@@ -147,7 +149,9 @@ def build_plan_engine(
                     continue
                 label = f"R{rnd}-E{i + 1}"
                 try:
-                    out = explore_runnable.invoke({"messages": [HumanMessage(content=focus)]}, cfg)
+                    out = await explore_runnable.ainvoke(
+                        {"messages": [HumanMessage(content=focus)]}, cfg
+                    )
                 except Exception:
                     logger.exception("Plan subagent: explore failed for %s", label)
                     new_findings.append(f"### {label}\n_(explore invoke failed — see logs)_\n")
@@ -175,7 +179,7 @@ def build_plan_engine(
             "explores_used": explores_used,
         }
 
-    def plan_iteration(state: dict[str, Any]) -> dict[str, Any]:
+    async def plan_iteration(state: dict[str, Any]) -> dict[str, Any]:
         task = state.get("task_text", "")
         pr = int(state.get("plan_round", 0)) + 1
         prev = (state.get("plan_markdown") or "").strip()
@@ -186,11 +190,13 @@ def build_plan_engine(
             f"## Previous plan draft\n{prev or '(none — write initial plan)'}"
         )
         try:
-            ref = planner.invoke(
+            ref = await invoke_structured_chat_typed(
+                model,
                 [
                     {"role": "system", "content": _PLANNER_SYSTEM},
                     {"role": "user", "content": user},
-                ]
+                ],
+                PlanRefinement,
             )
         except Exception:
             logger.exception("Plan subagent: planner structured output failed")

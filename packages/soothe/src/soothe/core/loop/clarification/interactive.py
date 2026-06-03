@@ -51,7 +51,9 @@ class InteractiveClarificationPolicy:
         answers = self._extract_answers(payload, expected=len(request.questions))
         if answers is None:
             raise ClarificationDeferredError(
-                "operator dismissed clarification (no answer)", request
+                "operator dismissed clarification (no answer)",
+                request,
+                kind="explicit",
             )
 
         return ClarificationAnswer(

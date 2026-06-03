@@ -81,6 +81,23 @@ class TestBuildClarificationPolicyForRunner:
         build_clarification_policy_for_runner(config, mode="manual")
         config.create_chat_model.assert_not_called()
 
+    def test_auto_without_human_attached_has_no_fallback(self) -> None:
+        """RFC-623: autopilot path keeps the legacy hard-defer behavior."""
+        config = _make_config()
+        policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=False)
+        assert isinstance(policy, AutoClarificationPolicy)
+        assert policy._interactive_fallback is None  # noqa: SLF001
+
+    def test_auto_with_human_attached_wires_fallback(self) -> None:
+        """RFC-623: interactive runs gain a TUI fallback for veritas failures."""
+        config = _make_config()
+        policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
+        assert isinstance(policy, AutoClarificationPolicy)
+        assert isinstance(
+            policy._interactive_fallback,  # noqa: SLF001
+            InteractiveClarificationPolicy,
+        )
+
     @pytest.mark.asyncio
     async def test_auto_policy_invokes_veritas_with_configured_steps(self) -> None:
         from soothe.subagents.veritas.schemas import VeritasAnswerSchema

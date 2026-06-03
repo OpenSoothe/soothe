@@ -1627,11 +1627,19 @@ class MessageRouter:
             )
             return
 
+        raw_as_node = msg.get("as_node")
+        as_node = str(raw_as_node) if isinstance(raw_as_node, str) and raw_as_node else None
+
         try:
             from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
             checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
-            await runner.update_thread_state_values(checkpoint_thread_id, dict(raw_values))
+            kwargs: dict[str, Any] = {}
+            if as_node is not None:
+                kwargs["as_node"] = as_node
+            await runner.update_thread_state_values(
+                checkpoint_thread_id, dict(raw_values), **kwargs
+            )
         except Exception as exc:
             await d._send_client_message(
                 client_id,

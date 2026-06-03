@@ -426,16 +426,26 @@ class SootheRunner(
             return dict(state.values)
         return {}
 
-    async def update_thread_state_values(self, thread_id: str, values: dict[str, Any]) -> None:
+    async def update_thread_state_values(
+        self,
+        thread_id: str,
+        values: dict[str, Any],
+        *,
+        as_node: str | None = "model",
+    ) -> None:
         """Persist partial checkpoint state for a thread.
 
         Args:
             thread_id: Thread identifier to update.
             values: Partial state values to write.
+            as_node: Node to attribute the write to. Defaults to ``"model"``,
+                the deepagents/langchain agent node that owns the ``messages``
+                channel. LangGraph requires this when multiple nodes have
+                written at the current checkpoint version.
         """
         await self._ensure_checkpointer_initialized()
         config = {"configurable": {"thread_id": thread_id}}
-        await self._agent.graph.aupdate_state(config, values)
+        await self._agent.graph.aupdate_state(config, values, as_node=as_node)
 
     async def _close_attached_store(self, owner: Any | None) -> None:
         """Close a nested `_store` field when available."""

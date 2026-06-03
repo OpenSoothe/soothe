@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Literal
 
+from soothe.core.loop.clarification.interactive import EmitFn, InteractiveClarificationPolicy
 from soothe.core.loop.clarification.protocol import (
     ClarificationPolicy,
     ClarificationRequest,
@@ -49,6 +50,8 @@ def build_clarification_policy_for_runner(
     config: SootheConfig,
     *,
     mode: str | None = None,
+    emit: EmitFn | None = None,
+    human_attached: bool = False,
 ) -> ClarificationPolicy:
     """Build the policy a runner injects into ``LoopRuntimeContext``.
 
@@ -57,6 +60,14 @@ def build_clarification_policy_for_runner(
             sub-blocks plus the chat-model factory.
         mode: Optional per-request mode (``"auto"`` / ``"manual"``). When
             unset, falls back to ``config.agent.clarification.default_mode``.
+        emit: Optional emit function for early UI notification. The durable
+            pause path uses LangGraph ``interrupt(...)`` regardless.
+        human_attached: When ``True`` and ``mode`` resolves to ``"auto"``,
+            wire an :class:`InteractiveClarificationPolicy` as the
+            ``interactive_fallback`` (RFC-623). Veritas structured-output
+            failures then degrade to a TUI prompt instead of terminating the
+            loop. Headless callers (autopilot) pass ``False`` and keep the
+            legacy hard-defer path on veritas failure.
 
     Returns:
         A ``ClarificationPolicy`` ready to attach to a goal run. The veritas
@@ -67,7 +78,7 @@ def build_clarification_policy_for_runner(
     clar_cfg = config.agent.clarification
 
     if resolved_mode == "manual":
-        return build_default_clarification_policy(mode="manual")
+        return build_default_clarification_policy(mode="manual", emit=emit)
 
     veritas_cfg = config.agent.veritas
     veritas_model = config.create_chat_model(veritas_cfg.model_role)
@@ -79,11 +90,16 @@ def build_clarification_policy_for_runner(
             max_context_steps=veritas_cfg.max_context_steps,
         )
 
+    interactive_fallback: ClarificationPolicy | None = (
+        InteractiveClarificationPolicy(emit=emit) if human_attached else None
+    )
+
     return build_default_clarification_policy(
         mode="auto",
         veritas_answer=_veritas,
-        emit=None,
+        emit=emit,
         min_confidence=clar_cfg.auto_min_confidence,
+        interactive_fallback=interactive_fallback,
     )
 
 

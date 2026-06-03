@@ -6,8 +6,6 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -20,6 +18,10 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import Command, Overwrite
 
+from soothe.utils.llm.structured_invoke import (
+    invoke_structured_chat_sync_typed,
+    invoke_structured_chat_typed,
+)
 from soothe.utils.similarity import (
     async_calculate_relevance_score,
     async_rank_by_similarity,
@@ -488,25 +490,21 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
 
     def _invoke_synthesis_llm_sync(self, prompt: str) -> ExploreResult:
         timeout = self._explore_config.synthesis_timeout_seconds
-        structured_llm = self._synthesis_model.with_structured_output(ExploreResult)
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(structured_llm.invoke, [HumanMessage(content=prompt)])
-            try:
-                result = future.result(timeout=timeout)
-            except FuturesTimeoutError as exc:
-                raise TimeoutError(f"synthesis timed out after {timeout:.0f}s") from exc
-        if not isinstance(result, ExploreResult):
-            return ExploreResult.model_validate(result)
-        return result
+        return invoke_structured_chat_sync_typed(
+            self._synthesis_model,
+            [HumanMessage(content=prompt)],
+            ExploreResult,
+            timeout=timeout,
+        )
 
     async def _invoke_synthesis_llm_async(self, prompt: str) -> ExploreResult:
         timeout = self._explore_config.synthesis_timeout_seconds
-        structured_llm = self._synthesis_model.with_structured_output(ExploreResult)
         async with asyncio.timeout(timeout):
-            result = await structured_llm.ainvoke([HumanMessage(content=prompt)])
-        if not isinstance(result, ExploreResult):
-            return ExploreResult.model_validate(result)
-        return result
+            return await invoke_structured_chat_typed(
+                self._synthesis_model,
+                [HumanMessage(content=prompt)],
+                ExploreResult,
+            )
 
     def _partial_synthesis_response(
         self,
