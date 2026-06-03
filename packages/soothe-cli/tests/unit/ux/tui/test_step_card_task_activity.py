@@ -300,7 +300,7 @@ def test_status_line_still_excludes_nested_task_tools() -> None:
     assert "Glob" not in suffix
 
 
-def test_task_branch_shows_latest_four_child_tools_above_running() -> None:
+def test_task_branch_shows_latest_five_child_tools_above_running() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-child-preview")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -308,7 +308,7 @@ def test_task_branch_shows_latest_four_child_tools_above_running() -> None:
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    for i in range(6):
+    for i in range(7):
         card.add_tool_call(
             f"ABC_01:t0:grep:{i}",
             "grep",
@@ -321,14 +321,15 @@ def test_task_branch_shows_latest_four_child_tools_above_running() -> None:
     assert "Grep(p3)" in text
     assert "Grep(p4)" in text
     assert "Grep(p5)" in text
+    assert "Grep(p6)" in text
     assert "Grep(p0)" not in text
     assert "Grep(p1)" not in text
-    assert text.index("Grep(p5)") < text.index("Running...")
+    assert text.index("Grep(p6)") < text.index("Running...")
 
 
-def test_step_first_level_shows_latest_four_main_tools() -> None:
+def test_step_first_level_shows_latest_five_main_tools() -> None:
     card = CognitionStepMessage("ABC-01", "Scan only", id="stp-main-preview")
-    for i in range(6):
+    for i in range(7):
         card.add_tool_call(f"ABC_01:s:grep:{i}", "grep", {"pattern": f"m{i}"})
     assert card._has_task_activity_body()
     text = _plain(card._step_task_activity_content())
@@ -337,6 +338,7 @@ def test_step_first_level_shows_latest_four_main_tools() -> None:
     assert "Grep(m3)" in text
     assert "Grep(m4)" in text
     assert "Grep(m5)" in text
+    assert "Grep(m6)" in text
     assert "Grep(m0)" not in text
     assert "Grep(m1)" not in text
 
@@ -349,20 +351,20 @@ def test_combined_task_and_main_tools() -> None:
         {"subagent_type": "explore", "description": "scan repo"},
         is_task_row=True,
     )
-    for i in range(5):
+    for i in range(6):
         card.add_tool_call(
             f"ABC_01:t0:glob:{i}",
             "glob",
             {"pattern": f"t{i}"},
             parent_tool_call_id="ABC_01:s:task:0",
         )
-    for i in range(5):
+    for i in range(6):
         card.add_tool_call(f"ABC_01:s:read_file:{i}", "read_file", {"file_path": f"/a{i}.py"})
     card.set_running()
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan repo)" in text
-    assert "Glob(t4)" in text
+    assert "Glob(t5)" in text
     assert "Glob(t0)" not in text
     assert "ReadFile" in text
     assert text.index("Explore(scan repo)") < text.index("ReadFile")
-    assert "Glob(1)" in text or "Glob(5)" in text or "Glob(4)" in text
+    assert "Glob(1)" in text or "Glob(6)" in text or "Glob(5)" in text
