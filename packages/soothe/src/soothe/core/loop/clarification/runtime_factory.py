@@ -52,6 +52,8 @@ def build_clarification_policy_for_runner(
     mode: str | None = None,
     emit: EmitFn | None = None,
     human_attached: bool = False,
+    thread_id: str | None = None,
+    loop_id: str | None = None,
 ) -> ClarificationPolicy:
     """Build the policy a runner injects into ``LoopRuntimeContext``.
 
@@ -68,6 +70,9 @@ def build_clarification_policy_for_runner(
             failures then degrade to a TUI prompt instead of terminating the
             loop. Headless callers (autopilot) pass ``False`` and keep the
             legacy hard-defer path on veritas failure.
+        thread_id: Loop thread id used as the Langfuse ``session_id`` for the
+            veritas LLM call so the span correlates with the parent loop trace.
+        loop_id: Loop id forwarded to Langfuse for trace correlation.
 
     Returns:
         A ``ClarificationPolicy`` ready to attach to a goal run. The veritas
@@ -88,6 +93,9 @@ def build_clarification_policy_for_runner(
             request,
             model=veritas_model,
             max_context_steps=veritas_cfg.max_context_steps,
+            soothe_config=config,
+            thread_id=thread_id,
+            loop_id=loop_id,
         )
 
     interactive_fallback: ClarificationPolicy | None = (
