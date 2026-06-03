@@ -487,6 +487,7 @@ class AgenticMixin:
                 if event_data.get("error"):
                     summary = f"Error: {event_data['error'][:50]}"
 
+                clarification = event_data.get("clarification")
                 yield _custom(
                     AgenticStepCompletedEvent(
                         step_id=str(event_data.get("step_id", "")),
@@ -494,6 +495,7 @@ class AgenticMixin:
                         summary=summary[:100],
                         duration_ms=event_data["duration_ms"],
                         tool_call_count=event_data.get("tool_call_count", 0),
+                        clarification=clarification if isinstance(clarification, dict) else None,
                     ).to_dict()
                 )
 

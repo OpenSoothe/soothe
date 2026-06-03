@@ -30,6 +30,8 @@ def _make_loop_state() -> Any:
     loop_state.add_step_result = MagicMock()
     loop_state.step_results = []
     loop_state.iteration = 0
+    loop_state.goal = "test goal"
+    loop_state.loop_messages = []
     return loop_state
 
 
@@ -231,12 +233,33 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     assert applied.outcome["kind"] == "ask_user"
     assert applied.outcome["answers"] == ["json"]
     assert applied.outcome["source"] == "veritas"
+    # The Q&A is also captured on the outcome so plan-assess/plan-generate can
+    # reference what was asked.
+    assert applied.outcome["questions"] == ["Which output format?"]
+    assert applied.outcome["confidence"] == pytest.approx(0.9)
 
-    # step_completed event mirrors the synthesized result.
+    # The Q&A pair was appended to loop_messages so the next plan iteration
+    # sees the resolved clarification (otherwise the planner re-asks).
+    assert len(loop_state.loop_messages) == 2
+    human_msg, ai_msg = loop_state.loop_messages
+    assert human_msg.type == "human"
+    assert "Which output format?" in human_msg.content
+    assert ai_msg.type == "ai"
+    assert "json" in ai_msg.content
+    assert "veritas" in ai_msg.content
+
+    # step_completed event mirrors the synthesized result and carries the
+    # ``clarification`` payload for TUIs to render the Q&A on the step card.
     completed = [e for e in emitted if e[0] == "step_completed"]
     assert len(completed) == 1
     assert completed[0][1]["step_id"] == "ASK-01"
     assert completed[0][1]["success"] is True
+    clarification = completed[0][1].get("clarification")
+    assert clarification is not None
+    assert clarification["questions"] == ["Which output format?"]
+    assert clarification["answers"] == ["json"]
+    assert clarification["source"] == "veritas"
+    assert clarification["confidence"] == pytest.approx(0.9)
 
     # Executor was invoked with resume_answer_payload=None (no fake interrupt key).
     assert captured_executor_kwargs.get("clarification_resume_answer_payload") is None

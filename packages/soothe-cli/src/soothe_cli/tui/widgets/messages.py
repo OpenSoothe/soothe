@@ -2855,6 +2855,44 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.display = True
         self._maybe_auto_collapse_step_card()
 
+    def set_clarification_details(
+        self,
+        *,
+        questions: list[str],
+        answers: list[str],
+        source: str,
+        confidence: float | None,
+    ) -> None:
+        """Render Q&A pairs for an ask_user step on the detail widget.
+
+        Called after :meth:`set_complete` for steps whose ``step_completed``
+        event payload includes a ``clarification`` block (RFC-622, RFC-623).
+        Lays out one ``Q: ... / A: ...`` pair per question with a header line
+        showing the answer source and (optional) veritas confidence.
+        """
+        if self._detail_widget is None:
+            return
+        if not questions and not answers:
+            return
+        header_bits = [f"source={source or 'unknown'}"]
+        if confidence is not None:
+            header_bits.append(f"confidence={confidence:.2f}")
+        header = "Answered (" + ", ".join(header_bits) + ")"
+        lines: list[str] = [header]
+        pair_count = max(len(questions), len(answers))
+        for i in range(pair_count):
+            q = questions[i].strip() if i < len(questions) else ""
+            a = answers[i].strip() if i < len(answers) else ""
+            if q:
+                lines.append(f"Q{i + 1}: {q}")
+            if a:
+                lines.append(f"A{i + 1}: {a}")
+            else:
+                lines.append(f"A{i + 1}: (no answer)")
+        body = "\n".join(lines)
+        self._detail_widget.update(self._step_branched_execute_body(body, muted=True))
+        self._detail_widget.display = True
+
     def set_result_preview(self, text: str) -> None:
         """Show a 3-line preview of the goal_completion result in the detail area."""
         if not text.strip():
