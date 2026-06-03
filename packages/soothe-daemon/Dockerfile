@@ -23,7 +23,7 @@
 #     -v soothe-data:/var/lib/soothe \
 #     soothed:latest
 
-ARG PYTHON_BASE=docker.io/library/python:3.12-bookworm
+ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 # =============================================================================
 # Stage 1: install wheels, browsers, system libs, warm embedding cache
