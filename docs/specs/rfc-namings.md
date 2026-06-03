@@ -167,6 +167,25 @@ This document defines the terminology and naming conventions used in this projec
 | `SkillActivatedEvent` | Public event (`soothe.skill.activated`) emitted when a conditional skill becomes active on a thread; carries `skill_name`, `matched_path`, `pattern`, `thread_id`. | RFC-105 |
 | `SkillBodyLoadedEvent` | Public event (`soothe.skill.body.loaded`) emitted when a SKILL.md body enters context via Stage 3; carries `skill_name`, `body_chars`, `thread_id`. | RFC-105 |
 
+### Clarification Relay Terms (RFC-622, RFC-623)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Clarification Relay | The pipeline that intercepts a CoreAgent `ask_user` interrupt, dispatches it to a `ClarificationPolicy`, and resumes the originating node with the answer or terminates the loop on defer. | RFC-622 |
+| `ClarificationPolicy` | Protocol with a single `answer(request) -> ClarificationAnswer` coroutine. Two built-ins: `InteractiveClarificationPolicy` (TUI relay) and `AutoClarificationPolicy` (veritas auto-answerer). | RFC-622 |
+| `ClarificationRequest` | Frozen payload describing a pending clarification (questions, origin node, origin interrupt id, snapshot of `LoopStateView`). | RFC-622 |
+| `ClarificationAnswer` | Frozen payload describing a successful clarification answer (answers tuple, source, confidence, audit). | RFC-622 |
+| `ClarificationDeferredError` | Exception raised by a `ClarificationPolicy` when it cannot answer. RFC-623 adds a `kind: DeferKind` field defaulting to `"explicit"`. | RFC-622, RFC-623 |
+| `await_clarification` Node | AgentLoop graph node that consumes `pending_clarification`, dispatches the policy, and on defer marks the goal `awaiting_clarification` and routes to `END`. | RFC-622 |
+| `awaiting_clarification` | Goal-engine status (in `BLOCKED_STATES`) used while the goal is paused waiting for an out-of-band answer. | RFC-622 |
+| Veritas | Built-in auto-answerer subagent under `subagents/veritas/`. Single structured-output LLM call; stands in for the originating user when auto mode is active. | RFC-622 |
+| `VeritasAnswerSchema` | Pydantic model the policy consumes (`answers`, `confidence`, `defer`, `rationale`). Field set unchanged by RFC-623; coercion semantics extended (rationale prefix carries forced-defer kind). | RFC-622, RFC-623 |
+| `build_veritas_response_schema(n)` | Helper returning a per-request JSON Schema with a `oneOf` between *defer* and *exactly N non-empty answers*. Sent to the LLM via `invoke_structured_chat`. | RFC-623 |
+| `DeferKind` | `Literal["explicit", "low_confidence", "structured_output_failed", "answer_was_question"]`. Tags every defer with its provenance. | RFC-623 |
+| `defer_kind` (event field) | Additive field on the `LOOP_CLARIFICATION_DEFERRED` (`soothe.loop.clarification_deferred`) payload carrying the `DeferKind` value. | RFC-623 |
+| Interactive Fallback | Optional `ClarificationPolicy` injected into `AutoClarificationPolicy`. Invoked only when the resolved defer kind is `"structured_output_failed"`. Wired automatically by `runtime_factory` when `emit` is provided. | RFC-623 |
+| `invoke_structured_chat` | Shared structured-output helper from `utils/llm/structured_invoke.py` that iterates `with_structured_output` methods, injects the `json` keyword, and post-validates with `jsonschema`. RFC-623 makes veritas its third caller (after `IntentClassifier` and `LLMPlanner`). | RFC-623 |
+
 ## Naming Conventions
 
 ### General Principles
