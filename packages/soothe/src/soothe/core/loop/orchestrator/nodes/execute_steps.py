@@ -48,10 +48,13 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         plan_summary = getattr(plan_result, "plan_reasoning", None) or getattr(
             plan_result, "next_action", None
         )
+    # goal_user_submission holds the original user line (set by agent_loop.continue_goal).
+    # Fall back to goal when goal_user_submission is None (e.g. autopilot or legacy paths).
+    user_request = getattr(state, "goal_user_submission", None) or getattr(state, "goal", "")
     return LoopStateView(
         goal_id=getattr(goal_record, "goal_id", "") or "",
         goal_description=getattr(goal_record, "goal_description", "") or getattr(state, "goal", ""),
-        user_request=getattr(state, "user_request", "") or "",
+        user_request=user_request,
         iteration=getattr(state, "iteration", 0),
         intent_classification=getattr(state, "intent_classification", None),
         plan_summary=plan_summary,
