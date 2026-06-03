@@ -10,6 +10,48 @@
 # Optional tool env: TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, GITHUB_TOKEN.
 
 # ============================================================
+# PROVIDERS (LLM & Embedding Models)
+# ============================================================
+providers:
+- name: openai
+  provider_type: openai
+  api_key: ${OPENAI_API_KEY}
+  api_base_url: null
+  models:
+  - gpt-4o
+  - gpt-4o-mini
+  - o3-mini
+
+  # OpenAI-compatible (DashScope, OpenRouter, vLLM):
+  # - name: dashscope
+  #   provider_type: openai
+  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key: "${DASHSCOPE_API_KEY}"
+  #   models: [qwen-max]
+
+  # LMStudio / Ollama — use provider_type: limited_openai
+  # - name: lmstudio
+  #   provider_type: limited_openai
+  #   api_base_url: http://localhost:1234/v1
+  #   api_key: "lmstudio"
+  #   models: [google/gemma-4-26b-a4b]
+
+  # Anthropic:
+  # - name: anthropic
+  #   provider_type: anthropic
+  #   api_key: "${ANTHROPIC_API_KEY}"
+  #   models: [claude-sonnet-4-20250514]
+
+router:
+  default: openai:gpt-4o-mini
+  think: null
+  fast: null
+  image: null
+  embedding: null
+
+embedding_dims: 1536
+
+# ============================================================
 # AGENT (Identity, Behavior, Self-Driving, Loop, Protocols)
 # ============================================================
 # All agent-related settings consolidated in one section (IG-434).
@@ -238,48 +280,6 @@ agent:
     max_result_size: 100000
     console_capture: true
     snapshot_between_turns: false
-
-# ============================================================
-# PROVIDERS (LLM & Embedding Models)
-# ============================================================
-providers:
-- name: openai
-  provider_type: openai
-  api_key: ${OPENAI_API_KEY}
-  api_base_url: null
-  models:
-  - gpt-4o
-  - gpt-4o-mini
-  - o3-mini
-
-  # OpenAI-compatible (DashScope, OpenRouter, vLLM):
-  # - name: dashscope
-  #   provider_type: openai
-  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  #   api_key: "${DASHSCOPE_API_KEY}"
-  #   models: [qwen-max]
-
-  # LMStudio / Ollama — use provider_type: limited_openai
-  # - name: lmstudio
-  #   provider_type: limited_openai
-  #   api_base_url: http://localhost:1234/v1
-  #   api_key: "lmstudio"
-  #   models: [google/gemma-4-26b-a4b]
-
-  # Anthropic:
-  # - name: anthropic
-  #   provider_type: anthropic
-  #   api_key: "${ANTHROPIC_API_KEY}"
-  #   models: [claude-sonnet-4-20250514]
-
-router:
-  default: openai:gpt-4o-mini
-  think: null
-  fast: null
-  image: null
-  embedding: null
-
-embedding_dims: 1536
 
 # ============================================================
 # TOOLS (Capabilities Available to Agent)

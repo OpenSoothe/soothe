@@ -68,8 +68,6 @@ def test_finalize_failed_when_no_findings() -> None:
 
 def test_synthesize_findings_falls_back_on_llm_error() -> None:
     model = MagicMock()
-    synthesis_llm = MagicMock()
-    synthesis_llm.invoke.side_effect = RuntimeError("structured output failed")
 
     mw = ExplorePromptBudgetMiddleware(
         model=model,
@@ -79,9 +77,12 @@ def test_synthesize_findings_falls_back_on_llm_error() -> None:
         max_matches=3,
         synthesis_model=model,
     )
-    model.with_structured_output.return_value = synthesis_llm
     findings = [{"path": "/x.py", "snippet": "content", "relevance": "unknown"}]
-    response = mw._synthesize_findings(findings, "find x", 5)
+    with patch(
+        "soothe.subagents.explore.middleware.invoke_structured_chat_sync_typed",
+        side_effect=RuntimeError("structured output failed"),
+    ):
+        response = mw._synthesize_findings(findings, "find x", 5)
     structured = response.model_response.structured_response
     assert structured is not None
     assert len(structured.matches) == 1

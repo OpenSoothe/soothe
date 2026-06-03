@@ -112,7 +112,9 @@ async def test_deferred_marks_status_and_terminates() -> None:
             active_mcp_servers=(),
         ),
     )
-    policy = _AutoPolicyStub(raises=ClarificationDeferredError("low confidence", req))
+    policy = _AutoPolicyStub(
+        raises=ClarificationDeferredError("low confidence", req, kind="low_confidence")
+    )
     ctx = _StubCtx(policy=policy)
 
     result = await node_await_clarification(ctx, _pending_state())
@@ -120,8 +122,41 @@ async def test_deferred_marks_status_and_terminates() -> None:
     assert result["last_outcome"] == "deferred"
     assert result["pending_clarification"] is None
     assert ctx.status_marks == [("awaiting_clarification", "low confidence")]
-    names = [n for n, _ in ctx.emitted]
-    assert "soothe.loop.clarification.deferred" in names
+    deferred_payloads = [p for n, p in ctx.emitted if n == "soothe.loop.clarification.deferred"]
+    assert len(deferred_payloads) == 1
+    assert deferred_payloads[0]["defer_kind"] == "low_confidence"
+    assert deferred_payloads[0]["reason"] == "low confidence"
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["explicit", "low_confidence", "structured_output_failed", "answer_was_question"],
+)
+async def test_deferred_event_carries_defer_kind(kind: str) -> None:
+    req = ClarificationRequest(
+        questions=("Q?",),
+        origin_node="execute",
+        origin_interrupt_id="i1",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="",
+            user_request="",
+            iteration=0,
+            intent_classification=None,
+            plan_summary=None,
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+    )
+    policy = _AutoPolicyStub(
+        raises=ClarificationDeferredError("reason", req, kind=kind)  # type: ignore[arg-type]
+    )
+    ctx = _StubCtx(policy=policy)
+    await node_await_clarification(ctx, _pending_state())
+    payload = next(p for n, p in ctx.emitted if n == "soothe.loop.clarification.deferred")
+    assert payload["defer_kind"] == kind
 
 
 async def test_no_pending_clarification_is_noop() -> None:

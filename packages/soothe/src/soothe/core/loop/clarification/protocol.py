@@ -8,6 +8,13 @@ from typing import Any, Literal, Protocol
 
 ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess"]
 
+DeferKind = Literal[
+    "explicit",
+    "low_confidence",
+    "structured_output_failed",
+    "answer_was_question",
+]
+
 
 @dataclass(frozen=True)
 class LoopStateView:
@@ -52,12 +59,24 @@ class ClarificationDeferredError(Exception):
     ``await_clarification`` translates this into ``awaiting_clarification``
     goal status and terminates the loop until the question is answered
     out-of-band (e.g. by ``soothe goal answer ...``).
+
+    RFC-623 attaches a ``kind: DeferKind`` so operators can distinguish
+    legitimate "I don't know" defers from forced ones (e.g. the LLM produced
+    malformed structured output). The kind is propagated into the
+    ``LOOP_CLARIFICATION_DEFERRED`` event payload.
     """
 
-    def __init__(self, reason: str, request: ClarificationRequest) -> None:
+    def __init__(
+        self,
+        reason: str,
+        request: ClarificationRequest,
+        *,
+        kind: DeferKind = "explicit",
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
         self.request = request
+        self.kind: DeferKind = kind
 
 
 class ClarificationPolicy(Protocol):

@@ -1,9 +1,11 @@
 """Tests for structured plan parser (IG-433)."""
 
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.core.loop.planning import structured_plan_parser as spm
 from soothe.core.loop.planning.parser import parse_plan_from_text
 from soothe.core.loop.planning.structured_plan_parser import (
     PlanExtracted,
@@ -20,8 +22,7 @@ class TestStructuredPlanParser:
         assert len(plan.steps) >= 1
 
     @pytest.mark.asyncio
-    async def test_structured_parse(self) -> None:
-        mock_model = AsyncMock()
+    async def test_structured_parse(self, monkeypatch: pytest.MonkeyPatch) -> None:
         extracted = PlanExtracted(
             goal="Build app",
             steps=[
@@ -29,16 +30,18 @@ class TestStructuredPlanParser:
                 PlanStepExtracted(step_number=2, title="Run", depends_on=[1]),
             ],
         )
-        structured = MagicMock()
-        structured.ainvoke = AsyncMock(return_value=extracted)
-        mock_model.with_structured_output = MagicMock(return_value=structured)
+
+        async def _fake(*_args: Any, **_kwargs: Any) -> PlanExtracted:
+            return extracted
+
+        monkeypatch.setattr(spm, "invoke_structured_chat_typed", _fake)
 
         from soothe.config.models import StructuredPlanConfig
 
         plan = await parse_plan_with_config(
             "Build app",
             "markdown plan",
-            mock_model,
+            MagicMock(),
             config=StructuredPlanConfig(enabled=True),
         )
         assert plan.goal == "Build app"

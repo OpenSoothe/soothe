@@ -19,6 +19,7 @@ from soothe.core.goal_engine.criticality import (
     CriticalityResult,
     evaluate_criticality,
 )
+from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
 from soothe.utils.similarity import async_get_transformer_model, cosine_similarity
 
 if TYPE_CHECKING:
@@ -264,11 +265,12 @@ async def _evaluate_with_llm_structured(
         run_name="soothe:semantic-risk-assess",
     )
 
-    structured = model.with_structured_output(RiskAssessment)
-    result = await structured.ainvoke([HumanMessage(content=prompt)], config=invoke_config)
-    if isinstance(result, RiskAssessment):
-        return result
-    return RiskAssessment.model_validate(result)
+    return await invoke_structured_chat_typed(
+        model,
+        [HumanMessage(content=prompt)],
+        RiskAssessment,
+        config=invoke_config,
+    )
 
 
 async def semantic_evaluate_risk(

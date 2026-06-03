@@ -8,7 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from soothe.core.loop.planning.simple_bypass import (
     SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
@@ -45,7 +45,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
-from soothe.utils.llm.structured_invoke import invoke_structured_chat
+from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
 from soothe.utils.token_counting import estimate_content_chars
@@ -72,41 +72,7 @@ def _plan_phase_chat_model(model: Any) -> Any:
         return model
 
 
-async def _invoke_plan_structured_output(
-    model: Any,
-    messages: list[Any],
-    schema: type[BaseModel],
-    *,
-    config: dict[str, Any] | None = None,
-) -> BaseModel:
-    """Invoke structured output with thinking-model fallback.
-
-    Moonshot/Kimi and other thinking-mode models reject ``tool_choice=required``
-    at invoke time. This helper uses `invoke_structured_chat` which tries methods
-    in order at invoke time: function_calling → json_schema → json_mode.
-
-    Args:
-        model: The chat model (may be temperature-bound).
-        messages: Messages to send to the LLM.
-        schema: Pydantic schema for structured output.
-        config: Optional RunnableConfig for tracing.
-
-    Returns:
-        Parsed Pydantic model instance.
-
-    Raises:
-        StructuredOutputError: When all methods fail.
-    """
-    json_schema = schema.model_json_schema()
-    result_dict = await invoke_structured_chat(
-        model,
-        messages,
-        json_schema=json_schema,
-        schema_name=schema.__name__,
-        strict=True,
-        config=config,
-    )
-    return schema(**result_dict)
+_invoke_plan_structured_output = invoke_structured_chat_typed
 
 
 _SIMPLE_PLANNER_HINT_MAP = {

@@ -20,6 +20,7 @@ def build_default_clarification_policy(
     veritas_answer: VeritasAnswerFn | None = None,
     emit: EmitFn | None = None,
     min_confidence: float = 0.4,
+    interactive_fallback: ClarificationPolicy | None = None,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -30,6 +31,10 @@ def build_default_clarification_policy(
             :class:`~soothe.subagents.veritas.schemas.VeritasAnswerSchema`.
         emit: Optional emit function for ``InteractiveClarificationPolicy``.
         min_confidence: Threshold for auto policy.
+        interactive_fallback: Optional policy injected into
+            :class:`AutoClarificationPolicy` (RFC-623). Invoked when veritas
+            itself fails (``DeferKind == "structured_output_failed"``) and a
+            human is wired. Ignored for manual mode.
 
     Raises:
         ValueError: if ``mode == "auto"`` but ``veritas_answer`` is not provided.
@@ -40,7 +45,11 @@ def build_default_clarification_policy(
         if veritas_answer is None:
             msg = "auto mode requires veritas_answer callable"
             raise ValueError(msg)
-        return AutoClarificationPolicy(veritas_answer, min_confidence=min_confidence)
+        return AutoClarificationPolicy(
+            veritas_answer,
+            min_confidence=min_confidence,
+            interactive_fallback=interactive_fallback,
+        )
     msg = f"unknown clarification mode: {mode!r}"
     raise ValueError(msg)
 

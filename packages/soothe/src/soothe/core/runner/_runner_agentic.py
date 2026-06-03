@@ -383,7 +383,7 @@ class AgenticMixin:
 
         try:
             clarification_policy = build_clarification_policy_for_runner(
-                self._config, mode=clarification_mode
+                self._config, mode=clarification_mode, human_attached=True
             )
         except Exception:
             logger.exception(

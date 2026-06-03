@@ -103,12 +103,15 @@ class AutopilotWorkerMixin:
         )
 
         # RFC-622: autopilot is headless — always answer clarifications via veritas.
+        # RFC-623: human_attached=False keeps the hard-defer path on veritas failure;
+        # there is no operator at the other end to consume an interactive interrupt.
         from soothe.core.loop.clarification import build_clarification_policy_for_runner
 
         try:
             clarification_policy = build_clarification_policy_for_runner(
                 self._config,  # type: ignore[attr-defined]
                 mode="auto",
+                human_attached=False,
             )
         except Exception:
             logger.exception(

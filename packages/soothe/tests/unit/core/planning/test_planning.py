@@ -87,10 +87,11 @@ class TestLLMPlanner:
         await planner.create_plan("test goal", context)
 
         # Verify the prompt includes context
-        call_args = mock_structured.ainvoke.call_args[0][0]
-        assert "tool1" in call_args
-        assert "tool2" in call_args
-        assert "prev_step" in call_args
+        messages = mock_structured.ainvoke.call_args[0][0]
+        prompt_text = "\n".join(str(getattr(m, "content", m)) for m in messages)
+        assert "tool1" in prompt_text
+        assert "tool2" in prompt_text
+        assert "prev_step" in prompt_text
 
     @pytest.mark.asyncio
     async def test_revise_plan_success(self) -> None:
