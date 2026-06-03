@@ -257,7 +257,13 @@ class AgenticStepQueuedEvent(LifecycleEvent):
 
 
 class AgenticStepCompletedEvent(LifecycleEvent):
-    """Level 3: Step result in three-level tree (RFC-0020)."""
+    """Level 3: Step result in three-level tree (RFC-0020).
+
+    For ``ask_user`` steps resolved by veritas / interactive relay, the optional
+    ``clarification`` field carries the questions, the answers, the answer
+    source (``veritas`` / ``human`` / ``fallback``) and (when known) the
+    veritas confidence so live UIs can render the Q&A on the step card.
+    """
 
     type: Literal["soothe.cognition.agent_loop.step.completed"] = (
         "soothe.cognition.agent_loop.step.completed"
@@ -267,6 +273,7 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     summary: str
     duration_ms: int
     tool_call_count: int = 0
+    clarification: dict[str, Any] | None = None
 
 
 class ContextCompactionEvent(LifecycleEvent):
