@@ -185,13 +185,13 @@ class TestIntentClassifier:
             result = await classifier.classify_intent("Help me refactor authentication")
         assert result.intent_type == "agentic"
 
-    async def test_classifier_uses_llm_result_schema(self) -> None:
+    async def test_classifier_constructed_with_fast_model(self) -> None:
         model = MagicMock()
         classifier = IntentClassifier(model=model, assistant_name="TestBot")
-        assert classifier._intent_model is not None
-        model.with_structured_output.assert_called_once()
-        schema_arg = model.with_structured_output.call_args[0][0]
-        assert schema_arg is IntentClassificationLLMResult
+        assert classifier._fast_model is model
+        # invoke_structured_chat builds the runnable lazily at call time, so
+        # construction should NOT touch with_structured_output.
+        model.with_structured_output.assert_not_called()
 
     async def test_fallback_defaults_to_agentic(self) -> None:
         """When the classifier is disabled, fallback is agentic."""

@@ -21,7 +21,10 @@ from soothe.subagents.veritas.events import (
     VeritasRequestedEvent,
 )
 from soothe.subagents.veritas.implementation import answer
-from soothe.subagents.veritas.schemas import VeritasAnswerSchema
+from soothe.subagents.veritas.schemas import (
+    VeritasAnswerSchema,
+    build_veritas_response_schema,
+)
 
 __all__ = [
     "SUBAGENT_VERITAS_ANSWERED",
@@ -32,4 +35,5 @@ __all__ = [
     "VeritasDeferredEvent",
     "VeritasRequestedEvent",
     "answer",
+    "build_veritas_response_schema",
 ]

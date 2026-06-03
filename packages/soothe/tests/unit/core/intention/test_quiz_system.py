@@ -1,6 +1,6 @@
 """Tests for quiz-path system message builder."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -25,10 +25,14 @@ class TestIntentClassifierQuizMessages:
 
     @staticmethod
     def _messages_from_invoke_call(call_args: object) -> list:
-        args, _kwargs = call_args  # type: ignore[misc]
-        if isinstance(args[0], list):
-            return args[0]
-        return [args[0]]
+        args, kwargs = call_args  # type: ignore[misc]
+        if args:
+            payload = args[1] if len(args) > 1 else args[0]
+        else:
+            payload = kwargs.get("messages")
+        if isinstance(payload, list):
+            return payload
+        return [payload]
 
     async def test_classify_intent_llm_uses_system_message(self) -> None:
         from soothe.core.intention import IntentClassifier
@@ -41,14 +45,15 @@ class TestIntentClassifierQuizMessages:
             task_complexity=TaskComplexity.MINIMAL,
             quiz_response="I'm Soothe, your assistant.",
         )
-        mock_structured = MagicMock()
-        mock_structured.ainvoke = AsyncMock(return_value=mock_result)
-        classifier._intent_model = mock_structured
 
-        await classifier._classify_intent_llm("who are u")
+        invoke_mock = AsyncMock(return_value=mock_result.model_dump())
+        with patch(
+            "soothe.core.intention.classifier.invoke_structured_chat",
+            invoke_mock,
+        ):
+            await classifier._classify_intent_llm("who are u")
 
-        call_args = mock_structured.ainvoke.call_args
-        messages = self._messages_from_invoke_call(call_args)
+        messages = self._messages_from_invoke_call(invoke_mock.call_args)
         assert isinstance(messages[0], SystemMessage)
         assert "You are Soothe" in str(messages[0].content)
         assert isinstance(messages[1], HumanMessage)

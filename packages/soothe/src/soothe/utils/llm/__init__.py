@@ -20,6 +20,9 @@ from soothe.utils.llm.schema_wire import (
 from soothe.utils.llm.structured_invoke import (
     StructuredOutputError,
     invoke_structured_chat,
+    invoke_structured_chat_sync,
+    invoke_structured_chat_sync_typed,
+    invoke_structured_chat_typed,
     normalize_structured_result,
     post_validate_structured_dict,
 )
@@ -35,6 +38,9 @@ __all__ = [
     "StructuredOutputError",
     "build_json_schema_response_format",
     "invoke_structured_chat",
+    "invoke_structured_chat_sync",
+    "invoke_structured_chat_sync_typed",
+    "invoke_structured_chat_typed",
     "normalize_structured_result",
     "post_validate_structured_dict",
     "resolve_schema_name",

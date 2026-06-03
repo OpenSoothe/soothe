@@ -5,36 +5,6 @@
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local (see docker-compose LANGFUSE_INIT_*). Export DASHSCOPE_*.
 
 # ============================================================
-# AGENT (Unified)
-# ============================================================
-agent:
-  name: Soothe
-  autonomous:
-    enabled_by_default: false
-    max_iterations: 15
-    # RFC-222: faster scheduling cadence for local iteration
-    poll_interval: 2
-    loop_idle_timeout: 60
-
-  loop:
-    max_iterations: 99
-    # RFC-224: Context window management (dev defaults aligned with template)
-    context_window_limit: 200000
-    context_overflow_threshold_pct: 0.80
-    context_compaction_target_pct: 0.60
-    step_context_check_enabled: false
-    plan_prompt_ledger:
-      plan_ledger_max_messages: 20
-    limits:
-      max_parallel_steps: 4
-      max_parallel_tools: 50
-      llm_concurrent_limit: 20
-      global_max_llm_calls: 10
-      tool_call_limit:
-        global_thread_limit: 200
-        global_run_limit: 80
-
-# ============================================================
 # PROVIDERS
 # ============================================================
 providers:
@@ -72,10 +42,40 @@ providers:
 
 router:
   default: "coding-plan:glm-5"
-  fast: "coding-plan:kimi-k2.5"
+  fast: "coding-plan:glm-5"
   think: "coding-plan:glm-5"
   image: "coding-plan:qwen3.6-plus"
   embedding: "dashscope:multimodal-embedding-v1"
+
+# ============================================================
+# AGENT (Unified)
+# ============================================================
+agent:
+  name: Soothe
+  autonomous:
+    enabled_by_default: false
+    max_iterations: 15
+    # RFC-222: faster scheduling cadence for local iteration
+    poll_interval: 2
+    loop_idle_timeout: 60
+
+  loop:
+    max_iterations: 99
+    # RFC-224: Context window management (dev defaults aligned with template)
+    context_window_limit: 200000
+    context_overflow_threshold_pct: 0.80
+    context_compaction_target_pct: 0.60
+    step_context_check_enabled: false
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 20
+    limits:
+      max_parallel_steps: 4
+      max_parallel_tools: 50
+      llm_concurrent_limit: 20
+      global_max_llm_calls: 10
+      tool_call_limit:
+        global_thread_limit: 200
+        global_run_limit: 80
 
 # ============================================================
 # SUBAGENTS

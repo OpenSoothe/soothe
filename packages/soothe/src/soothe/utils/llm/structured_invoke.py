@@ -1,9 +1,20 @@
-"""Structured chat invocation for client-provided JSON Schema."""
+"""Structured chat invocation for client-provided JSON Schema.
+
+`invoke_structured_chat` is the sanctioned entry point for structured LLM output
+in Soothe. It walks `function_calling -> json_schema -> json_mode` at invoke time,
+caches the working method per chat model, and post-validates against the schema.
+
+`BaseChatModel.with_structured_output` is treated as an internal primitive: it is
+called only from inside this module and the wrapper classes that override it
+(`LimitedProviderModelWrapper`, `SootheTokenUsageChatModel`). New code should
+call `invoke_structured_chat` or `invoke_structured_chat_typed` instead.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any
+from typing import Any, TypeVar
 from weakref import WeakKeyDictionary
 
 import jsonschema
@@ -12,6 +23,8 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
 from soothe.utils.llm.schema_wire import resolve_schema_name, validate_response_schema
+
+T = TypeVar("T", bound=BaseModel)
 
 _JSON_KEYWORD_HINT = "Respond with JSON matching the required schema."
 
@@ -288,10 +301,128 @@ async def invoke_structured_chat(
     raise StructuredOutputError(msg)
 
 
+async def invoke_structured_chat_typed(
+    chat: BaseChatModel,
+    messages: list[Any],
+    schema: type[T],
+    *,
+    strict: bool = True,
+    config: dict[str, Any] | None = None,
+) -> T:
+    """Invoke `invoke_structured_chat` and return a typed Pydantic instance.
+
+    Convenience wrapper for the common case where the caller already has a
+    Pydantic schema class. Derives `json_schema` from `schema.model_json_schema()`
+    and uses the class name as the schema name.
+
+    Args:
+        chat: LangChain chat model.
+        messages: Message list for `ainvoke`.
+        schema: Pydantic class describing the expected output.
+        strict: Post-validate the parsed dict against the wire schema.
+        config: Optional RunnableConfig (Langfuse tracing, etc.).
+
+    Returns:
+        Validated `schema` instance.
+
+    Raises:
+        StructuredOutputError: On provider or validation failure.
+    """
+    json_schema = schema.model_json_schema()
+    result_dict = await invoke_structured_chat(
+        chat,
+        messages,
+        json_schema=json_schema,
+        schema_name=schema.__name__,
+        strict=strict,
+        config=config,
+    )
+    return schema(**result_dict)
+
+
+def invoke_structured_chat_sync(
+    chat: BaseChatModel,
+    messages: list[Any],
+    *,
+    json_schema: dict[str, Any],
+    schema_name: str | None = None,
+    strict: bool = True,
+    config: dict[str, Any] | None = None,
+    timeout: float | None = None,
+) -> dict[str, Any]:
+    """Sync wrapper for `invoke_structured_chat` (must not run inside a live loop).
+
+    Intended for sync middleware paths (e.g., LangGraph sync `wrap_model_call`).
+    Internally calls `asyncio.run`, optionally bounded by `asyncio.wait_for` so
+    timeouts cancel the underlying coroutine instead of leaking a thread.
+
+    Args:
+        chat: LangChain chat model.
+        messages: Message list.
+        json_schema: Client JSON Schema dict.
+        schema_name: Optional provider schema name override.
+        strict: Post-validate parsed output.
+        config: Optional RunnableConfig.
+        timeout: Optional seconds; raises `TimeoutError` on overshoot.
+
+    Returns:
+        Parsed and validated output as a dict.
+
+    Raises:
+        StructuredOutputError: On provider or validation failure.
+        TimeoutError: When the bounded call exceeds `timeout`.
+        RuntimeError: If invoked from inside a running event loop.
+    """
+
+    async def _run() -> dict[str, Any]:
+        coro = invoke_structured_chat(
+            chat,
+            messages,
+            json_schema=json_schema,
+            schema_name=schema_name,
+            strict=strict,
+            config=config,
+        )
+        if timeout is None:
+            return await coro
+        return await asyncio.wait_for(coro, timeout=timeout)
+
+    try:
+        return asyncio.run(_run())
+    except TimeoutError as exc:
+        msg = f"structured model invoke timed out after {timeout:.0f}s"
+        raise TimeoutError(msg) from exc
+
+
+def invoke_structured_chat_sync_typed(
+    chat: BaseChatModel,
+    messages: list[Any],
+    schema: type[T],
+    *,
+    strict: bool = True,
+    config: dict[str, Any] | None = None,
+    timeout: float | None = None,
+) -> T:
+    """Sync `invoke_structured_chat_typed` for sync middleware paths."""
+    data = invoke_structured_chat_sync(
+        chat,
+        messages,
+        json_schema=schema.model_json_schema(),
+        schema_name=schema.__name__,
+        strict=strict,
+        config=config,
+        timeout=timeout,
+    )
+    return schema(**data)
+
+
 __all__ = [
     "StructuredOutputError",
     "ensure_json_keyword_in_messages",
     "invoke_structured_chat",
+    "invoke_structured_chat_sync",
+    "invoke_structured_chat_sync_typed",
+    "invoke_structured_chat_typed",
     "messages_contain_json_keyword",
     "normalize_structured_result",
     "post_validate_structured_dict",

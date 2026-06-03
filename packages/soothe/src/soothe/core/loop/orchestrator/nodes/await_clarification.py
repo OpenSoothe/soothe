@@ -82,11 +82,12 @@ async def node_await_clarification(
     try:
         answer = await policy.answer(request)
     except ClarificationDeferredError as exc:
-        logger.info("[await_clarification] policy deferred: %s", exc.reason)
+        logger.warning("[await_clarification] policy deferred (kind=%s): %s", exc.kind, exc.reason)
         await ctx.emit(
             LOOP_CLARIFICATION_DEFERRED,
             {
                 "reason": exc.reason,
+                "defer_kind": exc.kind,
                 "question_summary": _summary(request.questions),
             },
         )

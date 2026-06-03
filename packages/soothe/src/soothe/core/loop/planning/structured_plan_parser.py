@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from soothe.config.models import StructuredPlanConfig
 from soothe.core.loop.planning.parser import parse_plan_from_text
 from soothe.protocols.planner import Plan, PlanStep
+from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -71,10 +72,11 @@ async def parse_plan_structured(
         phase="plan-generate",
         run_name="soothe:structured-plan-parse",
     )
-    structured = model.with_structured_output(PlanExtracted)
-    result = await structured.ainvoke([HumanMessage(content=prompt)], config=invoke_config)
-    extracted = (
-        result if isinstance(result, PlanExtracted) else PlanExtracted.model_validate(result)
+    extracted = await invoke_structured_chat_typed(
+        model,
+        [HumanMessage(content=prompt)],
+        PlanExtracted,
+        config=invoke_config,
     )
     if not extracted.goal:
         extracted = extracted.model_copy(update={"goal": goal})

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field
 
 from soothe.config.models import FailureIntentConfig
+from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -155,11 +156,12 @@ async def classify_failure_intent_async(
             phase="reflect",
             run_name="soothe:failure-intent",
         )
-        structured = model.with_structured_output(FailureIntent)
-        result = await structured.ainvoke([HumanMessage(content=prompt)], config=invoke_config)
-        if isinstance(result, FailureIntent):
-            return result
-        return FailureIntent.model_validate(result)
+        return await invoke_structured_chat_typed(
+            model,
+            [HumanMessage(content=prompt)],
+            FailureIntent,
+            config=invoke_config,
+        )
     except Exception:
         logger.debug("LLM failure intent classification failed", exc_info=True)
         return keyword_result

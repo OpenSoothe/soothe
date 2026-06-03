@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel
 
 from soothe.core.quiz_messages import build_quiz_system_message
 from soothe.utils.llm.structured_invoke import invoke_structured_chat
@@ -60,10 +59,8 @@ class IntentClassifier:
         self._soothe_config = soothe_config
 
         if model:
-            self._intent_model = self._create_structured_model(model, IntentClassificationLLMResult)
             logger.info("[IntentClassifier] Initialized with structured output model")
         else:
-            self._intent_model = None
             logger.warning("[IntentClassifier] No model provided, classification disabled")
 
     # -- Public API --------------------------------------------------------
@@ -97,7 +94,7 @@ class IntentClassifier:
             logger.info("Heuristic bypass: query too long/complex for quiz, classifying as agentic")
             return self._build_agentic_intent(query)
 
-        if not self._fast_model or not self._intent_model:
+        if not self._fast_model:
             return self._fallback_intent(query)
 
         result: IntentClassification | None = None
@@ -196,27 +193,6 @@ class IntentClassifier:
 
         llm_result = IntentClassificationLLMResult(**result_dict)
         return llm_result.to_intent_classification()
-
-    # -- Model creation ----------------------------------------------------
-
-    def _create_structured_model(
-        self,
-        base_model: BaseChatModel,
-        schema: type[BaseModel],
-    ) -> Any:
-        """Create structured output model.
-
-        Prefers function_calling over json_mode for better literal validation.
-        """
-        for method in ("function_calling", None, "json_mode"):
-            try:
-                if method is None:
-                    return base_model.with_structured_output(schema)
-                return base_model.with_structured_output(schema, method=method)
-            except Exception:
-                logger.debug("with_structured_output failed for method=%s", method, exc_info=True)
-
-        return base_model.with_structured_output(schema, method="json_mode")
 
     # -- Helpers ------------------------------------------------------------
 
