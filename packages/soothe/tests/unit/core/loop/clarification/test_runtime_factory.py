@@ -117,3 +117,25 @@ class TestBuildClarificationPolicyForRunner:
             mock_answer.assert_called_once()
             kwargs = mock_answer.call_args.kwargs
             assert kwargs["max_context_steps"] == 3
+
+    @pytest.mark.asyncio
+    async def test_auto_policy_forwards_thread_and_loop_id_to_veritas(self) -> None:
+        """Langfuse trace correlation: thread_id/loop_id reach veritas_answer."""
+        from soothe.subagents.veritas.schemas import VeritasAnswerSchema
+
+        config = _make_config()
+
+        with patch("soothe.core.loop.clarification.runtime_factory.veritas_answer") as mock_answer:
+            mock_answer.return_value = VeritasAnswerSchema(
+                answers=["ok"], confidence=0.9, defer=False
+            )
+            policy = build_clarification_policy_for_runner(
+                config, mode="auto", thread_id="tid-1", loop_id="lid-1"
+            )
+            assert isinstance(policy, AutoClarificationPolicy)
+            stub_request = MagicMock(questions=("Q?",))
+            await policy._veritas_answer(stub_request)  # noqa: SLF001
+            kwargs = mock_answer.call_args.kwargs
+            assert kwargs["thread_id"] == "tid-1"
+            assert kwargs["loop_id"] == "lid-1"
+            assert kwargs["soothe_config"] is config

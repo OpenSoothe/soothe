@@ -112,6 +112,8 @@ class AutopilotWorkerMixin:
                 self._config,  # type: ignore[attr-defined]
                 mode="auto",
                 human_attached=False,
+                thread_id=tid,
+                loop_id=tid,
             )
         except Exception:
             logger.exception(

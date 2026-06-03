@@ -384,8 +384,22 @@ async def test_stream_forces_auto_clarification_policy(
     builder_calls: list[dict[str, Any]] = []
     sentinel_policy = object()
 
-    def _stub_builder(_config: Any, *, mode: str, human_attached: bool = False) -> Any:
-        builder_calls.append({"mode": mode, "human_attached": human_attached})
+    def _stub_builder(
+        _config: Any,
+        *,
+        mode: str,
+        human_attached: bool = False,
+        thread_id: str | None = None,
+        loop_id: str | None = None,
+    ) -> Any:
+        builder_calls.append(
+            {
+                "mode": mode,
+                "human_attached": human_attached,
+                "thread_id": thread_id,
+                "loop_id": loop_id,
+            }
+        )
         return sentinel_policy
 
     monkeypatch.setattr(
@@ -403,7 +417,10 @@ async def test_stream_forces_auto_clarification_policy(
     ]
 
     # RFC-623: autopilot is headless — never wires the interactive fallback.
-    assert builder_calls == [{"mode": "auto", "human_attached": False}]
+    # Langfuse correlation: the runner forwards thread_id/loop_id (both = tid).
+    assert builder_calls == [
+        {"mode": "auto", "human_attached": False, "thread_id": "t1", "loop_id": "t1"}
+    ]
     assert captured["clarification_policy"] is sentinel_policy
 
 
