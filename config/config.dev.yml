@@ -133,6 +133,19 @@ vector_store_router:
   default: pgvector_dev:soothe_default
 
 # ============================================================
+# FILESYSTEM MIDDLEWARE
+# ============================================================
+# Disable virtual filesystem sandbox so tools operate on real host paths.
+# Note: FrameworkFilesystem derives virtual_mode from security.allow_paths_outside_workspace
+# (see core/workspace/framework_filesystem.py and core/workspace/tool_path_resolution.py),
+# so the real switch is the security flag below — the field here is currently inert.
+filesystem_middleware:
+  virtual_mode: false
+
+security:
+  allow_paths_outside_workspace: true
+
+# ============================================================
 # OPTIMIZATION
 # ============================================================
 # Uses defaults from OptimizationConfig (IG-433).

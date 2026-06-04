@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
+**Last Updated**: 2026-06-04
 **Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
 **Author**: Claude Sonnet 4.6
 
@@ -106,10 +107,25 @@ CREATE TABLE agentloop_loops (
     status TEXT NOT NULL,  -- "running", "ready_for_next_goal", "finalized", "cancelled"
     total_goals_completed INTEGER DEFAULT 0,
     total_thread_switches INTEGER DEFAULT 0,
+    human_message_count INTEGER NOT NULL DEFAULT 0,  -- incremented on accepted loop_input
+    ai_message_count    INTEGER NOT NULL DEFAULT 0,  -- incremented on assistant-output ledger commit
+    last_message_at TEXT,  -- ISO timestamp; NULL until first human or AI activity
     created_at TEXT NOT NULL,  -- ISO timestamp
     updated_at TEXT NOT NULL,  -- ISO timestamp
-    schema_version TEXT DEFAULT '3.1'
+    schema_version TEXT DEFAULT '3.2'
 );
+```
+
+**Message counters** track actual conversational activity at loop scope. `human_message_count` is incremented atomically when the daemon accepts a `loop_input` for the loop; `ai_message_count` is incremented atomically when the runner commits an assistant-output entry to the loop ledger (classified by `loop_message_assistant_output_phase`). Both counters MUST be updated by a single SQL statement together with `last_message_at` and `updated_at` (no read-modify-write). Both increments are best-effort: a failure is logged at `WARNING` and does not block the user-facing path.
+
+**Activity timestamp.** `last_message_at` is the canonical activity clock. It is set ONLY by counter-increment statements; the `loop_new` RPC handler MUST NOT prime it. Empty-loop reclamation queries use `COALESCE(last_message_at, created_at)` so the idle clock begins at creation and resets on real activity.
+
+PostgreSQL deployments SHOULD add a partial index to keep the empty-loop reclamation query cheap:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_agentloop_loops_empty
+  ON agentloop_loops (last_message_at)
+  WHERE human_message_count = 0 AND ai_message_count = 0;
 ```
 
 #### checkpoint_anchors (synchronization)
@@ -507,6 +523,26 @@ agentloop_checkpoint:
 - Implement branch pruning policy
 - Implement anchor cleanup policy
 - Implement goal record cleanup policy
+- Implement empty-loop reclamation (see *Empty-Loop Reclamation* below)
+
+---
+
+## Empty-Loop Reclamation
+
+A loop with `human_message_count = 0 AND ai_message_count = 0 AND status != 'running'` and `COALESCE(last_message_at, created_at)` older than the configured idle window is reclaimable: it represents a bootstrap session that never produced a human/AI exchange (typical cause: a client tab opened and closed without input).
+
+Reclamation is performed by the same periodic daemon task that purges expired ephemeral loops (RFC-450 §loop_gc). The task runs two listing queries per tick — expired-ephemeral and empty-idle — de-duplicates by `loop_id`, and invokes the existing per-loop purge helper which removes the DB row, the on-disk loop directory, and any cross-referenced execution data.
+
+Two independent idle thresholds gate the two passes:
+
+| Threshold | Applies to | Default |
+|---|---|---|
+| `ephemeral_idle_hours` | `is_ephemeral = 1` rows (any state) | unchanged |
+| `empty_idle_hours` | rows with both counters zero | 24 hours |
+
+A loop that is both ephemeral and empty is reclaimed by whichever pass fires first. The 24h empty-loop default gives a fresh tab a working day to receive input before reclamation.
+
+Per-row purge failures are isolated (try/except) so a single failure does not abort the batch. The race where an increment lands between the listing query and the purge call is bounded by the idle window (hours) and is acceptable; implementations MAY add a final `WHERE human_message_count = 0 AND ai_message_count = 0` guard to the purge SQL if observed in practice.
 
 ---
 

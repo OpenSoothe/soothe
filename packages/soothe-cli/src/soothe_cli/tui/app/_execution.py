@@ -246,7 +246,12 @@ class _ExecutionMixin:
         # the wire ``clarification_answer`` flag plus the ``clarification_answers``
         # list, then clears the persisted flag so a follow-up turn is treated
         # as a new goal.
-        await self._run_agent_task(payload_text)
+        #
+        # Use ``_send_to_agent`` (not a direct ``await _run_agent_task``) so the
+        # resumed turn runs in a Textual worker. Awaiting the task inline blocks
+        # the message handler — and therefore the event loop — until the loop
+        # next pauses, which freezes scrolling and chat-input focus.
+        await self._send_to_agent(payload_text)
 
     async def _handle_shell_command(self, command: str) -> None:
         """Handle a shell command (! prefix).

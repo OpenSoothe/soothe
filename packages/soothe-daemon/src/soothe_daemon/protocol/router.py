@@ -632,16 +632,27 @@ class MessageRouter:
 
         Args:
             client_id: Client connection identifier.
-            msg: Request message with optional filter and limit.
+            msg: Request message with optional ``filter`` and ``limit``.
+                ``filter.status`` — narrows to one persisted status value.
+                ``filter.exclude_empty`` — when True (default), hides loops
+                with zero human + zero AI messages (IG-466).
         """
         d = self._daemon
         request_id = msg.get("request_id")
-        filter_data = msg.get("filter")
+        filter_data = msg.get("filter") or {}
         limit = msg.get("limit", 20)
 
-        status_filter = filter_data.get("status") if filter_data else None
+        status_filter = filter_data.get("status") if isinstance(filter_data, dict) else None
+        # Default to hiding empty loops so the picker stops showing bootstrap-only rows.
+        exclude_empty = True
+        if isinstance(filter_data, dict) and "exclude_empty" in filter_data:
+            exclude_empty = bool(filter_data["exclude_empty"])
 
-        rows = await d._persistence_manager.list_loops(status_filter=status_filter, limit=limit)
+        rows = await d._persistence_manager.list_loops(
+            status_filter=status_filter,
+            limit=limit,
+            exclude_empty=exclude_empty,
+        )
         loops = [
             {
                 "loop_id": row["loop_id"],
@@ -649,6 +660,9 @@ class MessageRouter:
                 "threads": len(row.get("thread_ids") or []),
                 "goals": row.get("total_goals_completed", 0),
                 "switches": row.get("total_thread_switches", 0),
+                "human_messages": row.get("human_message_count", 0),
+                "ai_messages": row.get("ai_message_count", 0),
+                "last_message_at": row.get("last_message_at"),
                 "created": (row.get("created_at") or "")[:16],
             }
             for row in rows
@@ -1136,8 +1150,6 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message; may contain optional ``workspace`` and ``user`` fields.
         """
-        from datetime import UTC, datetime
-
         from soothe.core.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
@@ -1224,8 +1236,6 @@ class MessageRouter:
                 )
                 return
 
-        now = datetime.now(UTC).isoformat()
-
         # Create loop directory (still needed for goals/ and working_memory/ subdirs)
         loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
         loop_dir.mkdir(parents=True, exist_ok=True)
@@ -1238,9 +1248,10 @@ class MessageRouter:
             status="created",
         )
 
+        # last_message_at is populated on first counter increment, not at creation,
+        # so empty-loop GC can detect bootstrap-only loops via COALESCE(last_message_at, created_at).
         meta_updates: dict[str, Any] = {
             "is_ephemeral": is_ephemeral,
-            "last_message_at": now,
             "current_workspace": str(effective_workspace),
         }
         if client_workspace is not None:
@@ -1449,9 +1460,11 @@ class MessageRouter:
         await d._loop_input_dispatcher.enqueue(loop_id, queue_payload)
 
         try:
-            await d._persistence_manager.touch_loop_last_message(loop_id)
+            await d._persistence_manager.increment_loop_message_count(loop_id, human=1)
         except Exception:
-            logger.warning("Failed to update last_message_at for loop %s", loop_id, exc_info=True)
+            logger.warning(
+                "Failed to increment human_message_count for loop %s", loop_id, exc_info=True
+            )
 
         await d._send_client_message(
             client_id,

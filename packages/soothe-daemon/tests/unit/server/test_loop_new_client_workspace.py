@@ -122,7 +122,11 @@ async def test_loop_new_persists_is_ephemeral(
         metadata = await _read_metadata(loop_id, config)
         assert metadata.get("is_ephemeral") is True
         assert metadata.get("current_workspace")
-        assert metadata.get("last_message_at")
+        # IG-466: last_message_at is populated on first counter increment, not at creation,
+        # so empty-loop GC can detect bootstrap-only loops via COALESCE(last_message_at, created_at).
+        assert metadata.get("last_message_at") is None
+        assert metadata.get("human_message_count", 0) == 0
+        assert metadata.get("ai_message_count", 0) == 0
     finally:
         await daemon.close()
 
