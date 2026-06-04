@@ -431,9 +431,45 @@ class LoopGcConfig(BaseModel):
     )
 
 
+class LoopStatusReconciliationConfig(BaseModel):
+    """Periodic reconciliation of stale ``status="running"`` loop rows.
+
+    A row with ``status="running"`` but no active runner on this daemon and
+    ``updated_at`` older than ``stale_running_seconds`` is demoted to ``idle``.
+    The runner's heartbeat keeps live loops fresh; rows that miss multiple
+    heartbeat windows are presumed orphaned (daemon/runner crash).
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Run periodic stale-status reconciliation",
+    )
+    interval_seconds: int = Field(
+        default=300,
+        ge=30,
+        description="Seconds between reconciliation scans",
+    )
+    stale_running_seconds: int = Field(
+        default=180,
+        ge=60,
+        description=(
+            "A status=running row whose updated_at is older than this many seconds "
+            "and not in the daemon's active set is demoted to idle. "
+            "Should be > heartbeat interval (30s) with margin."
+        ),
+    )
+    batch_size: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum loops inspected per reconciliation tick",
+    )
+
+
 __all__ = [
     "DistributedConfig",
     "LoopGcConfig",
+    "LoopStatusReconciliationConfig",
     "StaleWorkerReapConfig",
     "HttpRestConfig",
     "RayClusterConfig",

@@ -18,6 +18,7 @@ from soothe_daemon.config.models import (
     ChannelsConfig,
     DistributedConfig,
     LoopGcConfig,
+    LoopStatusReconciliationConfig,
     StaleWorkerReapConfig,
     ThreadPoolConfig,
     TransportConfig,
@@ -139,6 +140,13 @@ class SootheDaemonConfig(BaseSettings):
         description=(
             "Periodic loop garbage collection — runs ephemeral and empty-loop passes "
             "per tick (IG-466)"
+        ),
+    )
+    loop_status_reconciliation: LoopStatusReconciliationConfig = Field(
+        default_factory=LoopStatusReconciliationConfig,
+        description=(
+            "Periodic reconciliation of stale status=running rows whose runner "
+            "is no longer active (IG-466 follow-up)"
         ),
     )
     stale_worker_reap: StaleWorkerReapConfig = Field(

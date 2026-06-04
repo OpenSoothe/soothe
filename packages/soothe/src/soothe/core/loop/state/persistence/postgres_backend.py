@@ -543,6 +543,16 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         now = datetime.now(UTC).isoformat()
         await self.update_loop_metadata(loop_id, last_message_at=now)
 
+    async def heartbeat_loop(self, loop_id: str) -> None:
+        """Bump ``updated_at`` so periodic status reconciliation can trust freshness."""
+        pool = await self._ensure_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE agentloop_checkpoints SET updated_at = NOW() WHERE loop_id = %s",
+                    (loop_id,),
+                )
+
     async def increment_loop_message_count(
         self,
         loop_id: str,
