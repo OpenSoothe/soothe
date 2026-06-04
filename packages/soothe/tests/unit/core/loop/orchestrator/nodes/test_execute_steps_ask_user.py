@@ -370,3 +370,121 @@ async def test_real_coreagent_resume_payload_passes_through(
     # Real CoreAgent interrupt id → resume_answer_payload keyed by that id.
     payload = captured.get("clarification_resume_answer_payload")
     assert payload == {"real-interrupt-xyz": {"answers": ["ok"]}}
+
+
+@pytest.mark.asyncio
+async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
+    """When the resume path synthesizes a step result without a scratch decision,
+    the appended Q&A pair must be mirrored onto ``goal_record.loop_messages`` and
+    the checkpoint persisted. Without this, the next clarification round trip
+    reloads ``goal_record`` with a stale ledger and plan-assess / plan-generate
+    re-ask the same question."""
+    from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+    emitted: list[tuple[str, Any]] = []
+
+    # Real LoopState so loop_messages is a list we can mutate and read back.
+    from soothe.core.loop.state.schemas import LoopState
+
+    loop_state = LoopState(
+        goal="count file types per package",
+        thread_id="thread-1",
+        workspace=None,
+        iteration=2,
+        max_iterations=10,
+    )
+    # Simulate prior plan-phase pairs already on the in-memory ledger that
+    # never reached the goal record (synth path runs before record_iteration).
+    loop_state.loop_messages.extend(
+        [
+            LoopHumanMessage(content="prior assess", thread_id="thread-1", iteration=1),
+            LoopAIMessage(content="prior assess A", thread_id="thread-1", iteration=1),
+        ]
+    )
+
+    goal_record = MagicMock()
+    goal_record.loop_messages = []
+    goal_record.iteration = 1
+
+    # state_manager.save is awaited; capture the checkpoint argument.
+    save_calls: list[Any] = []
+
+    class _StateManager:
+        loop_id = "loop-1"
+
+        async def save(self, ckpt: Any) -> None:
+            save_calls.append(ckpt)
+
+    async def emit(event_type: str, event_data: Any) -> None:
+        emitted.append((event_type, event_data))
+
+    # Synth path is hit when scratch.decision/plan_result are None.
+    scratch = MagicMock()
+    scratch.decision = None
+    scratch.plan_result = None
+
+    agent_loop = MagicMock()
+    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
+    agent_loop.core_agent.graph.checkpointer = None
+
+    checkpoint_obj = MagicMock()
+
+    ctx = LoopRuntimeContext(
+        agent_loop=agent_loop,
+        state_manager=_StateManager(),
+        anchor_manager=MagicMock(),
+        goal_context_manager=MagicMock(),
+        plan_manager=MagicMock(),
+        checkpoint=checkpoint_obj,
+        goal_record=goal_record,
+        continue_loop_mode=False,
+        recovery_valid_resume=True,
+        loop_state=loop_state,
+        emit=emit,
+        scratch=scratch,
+        clarification_policy=None,
+    )
+
+    pending_clar = {
+        "questions": ["Which package next?"],
+        "origin_node": "execute",
+        "origin_interrupt_id": f"{PLANNER_ASK_INTERRUPT_PREFIX}ASK-03",
+        "loop_state": {
+            "goal_id": "",
+            "goal_description": "",
+            "user_request": "",
+            "iteration": 0,
+            "intent_classification": None,
+            "plan_summary": None,
+            "recent_step_outputs": [],
+            "workspace_summary": None,
+            "active_skills": [],
+            "active_mcp_servers": [],
+        },
+    }
+    answer = ClarificationAnswer(answers=("soothe-daemon",), source="human")
+    pending_ans = answer_to_state(answer)
+
+    result = await node_execute(
+        ctx,
+        {
+            "pending_clarification": pending_clar,
+            "pending_clarification_answer": pending_ans,
+        },
+    )
+
+    # Synth path was taken.
+    assert result.get("resume_synth") is True
+    # State got the new Q&A pair appended (2 prior + 2 new = 4).
+    assert len(loop_state.loop_messages) == 4
+    new_human, new_ai = loop_state.loop_messages[-2:]
+    assert "Which package next?" in new_human.content
+    assert "soothe-daemon" in new_ai.content
+
+    # goal_record was updated with the full ledger snapshot and the advanced iteration.
+    assert len(goal_record.loop_messages) == 4
+    assert "soothe-daemon" in goal_record.loop_messages[-1].content
+    assert goal_record.iteration == 3  # 2 → +1 in synth path
+
+    # Checkpoint was persisted exactly once with our checkpoint object.
+    assert save_calls == [checkpoint_obj]
