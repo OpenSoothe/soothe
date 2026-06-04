@@ -10,6 +10,7 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
+from .checkpointer import core_agent_checkpointer
 from .nodes.await_clarification import node_await_clarification
 from .nodes.bounded_evidence_gather import node_bounded_evidence_gather
 from .nodes.execute_steps import node_execute
@@ -37,8 +38,30 @@ from .runtime_context import LoopRuntimeContext
 from .state import LoopGraphState
 
 
+def _is_real_checkpointer(obj: Any) -> bool:
+    """``LangGraph.compile`` only accepts ``BaseCheckpointSaver`` instances or
+    the bool/None sentinels — defensively reject mocks / duck-typed values so
+    unit tests that hand CoreAgent an ``AsyncMock`` keep working.
+    """
+    if obj is None:
+        return False
+    try:
+        from langgraph.checkpoint.base import BaseCheckpointSaver
+    except Exception:  # noqa: BLE001
+        return False
+    return isinstance(obj, BaseCheckpointSaver)
+
+
 def build_agent_loop_graph(ctx: LoopRuntimeContext):
-    """Build and compile the Loop orchestrator graph (RFC-220 topology)."""
+    """Build and compile the Loop orchestrator graph (RFC-220 topology).
+
+    The compiled graph is given the same checkpointer the CoreAgent uses.
+    Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
+    across ``ainvoke`` calls, so a clarification suspended in
+    ``await_clarification`` could never be resumed via ``Command(resume=...)``
+    on the next user input — the user's text would be classified as a new
+    goal and the prior interrupt would dangle (RFC-622 / IG-462).
+    """
 
     async def init_or_resume(state: dict[str, Any]) -> dict[str, Any]:
         return await node_init_or_resume(ctx, state)
@@ -162,4 +185,7 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
         },
     )
 
+    checkpointer = core_agent_checkpointer(ctx.agent_loop)
+    if _is_real_checkpointer(checkpointer):
+        return graph.compile(checkpointer=checkpointer)
     return graph.compile()
