@@ -235,6 +235,53 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
     if decision is None or plan_result is None:
+        # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
+        # graph after a clarification interrupt, ``ctx.scratch`` is freshly
+        # initialized for the new ``ainvoke`` call so the prior plan-phase
+        # decision is gone. We can still synthesize the answered step's
+        # result from state alone — the next iteration's plan_assess /
+        # plan_generate will rebuild a decision before any new execution.
+        if planner_ask_answered_step_id is not None:
+            outcome_payload: dict[str, Any] = {
+                "kind": "ask_user",
+                "answers": list(planner_ask_answers),
+                "source": planner_ask_source,
+                "questions": list(planner_ask_questions),
+            }
+            if planner_ask_confidence is not None:
+                outcome_payload["confidence"] = planner_ask_confidence
+            synth_result = StepResult(
+                step_id=planner_ask_answered_step_id,
+                success=True,
+                duration_ms=0,
+                thread_id=state.thread_id,
+                outcome=outcome_payload,
+                tool_call_count=0,
+            )
+            ask_description = "Ask user clarifying question"
+            step_desc_local = {planner_ask_answered_step_id: ask_description}
+            _append_ask_user_loop_messages(
+                state,
+                step_id=planner_ask_answered_step_id,
+                description=ask_description,
+                questions=planner_ask_questions,
+                answers=planner_ask_answers,
+                source=planner_ask_source,
+                confidence=planner_ask_confidence,
+            )
+            await _record_and_emit_step_completed(
+                ctx, result=synth_result, step_desc=step_desc_local
+            )
+            logger.info(
+                "[execute] resumed clarification answer (no scratch decision); "
+                "synthesized step_completed for %s, deferring further execution to next iteration",
+                planner_ask_answered_step_id,
+            )
+            return {
+                "pending_clarification": None,
+                "pending_clarification_answer": None,
+                "last_outcome": "continue",
+            }
         logger.error("[execute] missing decision or plan_result on scratch")
         await ctx.emit(
             "fatal_error",

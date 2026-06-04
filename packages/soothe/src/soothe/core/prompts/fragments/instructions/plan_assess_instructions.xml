@@ -21,12 +21,20 @@ Use "low" when little or nothing toward the goal has been produced.
 **require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 
 **assessment_reasoning** (≤2 sentences, ≤500 chars)
-- Sentence 1: summarize what `<PRIOR_PROGRESS>` (when present) shows about progress toward the goal — cite a tool that ran, an evidence excerpt, or both. Do NOT restate the user's request; that is what `<USER_QUERY>` is for.
-- Sentence 2: justify your `status` choice given that evidence.
-- If `<PRIOR_PROGRESS>` is absent (first assess of the goal), say so plainly and base reasoning on `<USER_QUERY>` only.
+This text is shown directly to the user in the plan-reason card, so write it as a short, friendly first-person narrative — speak as the agent reporting back ("I see…", "I checked…", "I'll continue because…", "I need to replan since…"). Avoid third-person bureaucratic phrasing ("The assistant determined…", "Evidence indicates…") and avoid raw schema words like "status=done" or "goal_progress=high".
+- Sentence 1: in first person, summarize what `<PRIOR_PROGRESS>` (when present) shows about progress toward the goal — cite a tool that ran, an evidence excerpt, or both. Do NOT restate the user's request; that is what `<USER_QUERY>` is for.
+- Sentence 2: in first person, justify your `status` choice given that evidence (e.g. "so I'll wrap up", "so I'll keep going on the current plan", "so I need a different approach").
+- If `<PRIOR_PROGRESS>` is absent (first assess of the goal), say so plainly in first person (e.g. "I'm starting fresh — no prior evidence yet…") and base reasoning on `<USER_QUERY>` only.
+
+**Tone examples**
+- ✅ "I pulled the file listing and counted 1247 source files vs 612 test files, so the per-package breakdown is the only thing left — I'll continue."
+- ✅ "I haven't run anything yet on this goal, so I need a plan to enumerate the packages first — replanning."
+- ❌ "Evidence shows partial progress; status=continue is appropriate." (third person, schema jargon)
+- ❌ "The user wants to count source code in packages." (restates the request)
 
 **Guards**
 - When <USER_QUERY> shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
 - Never set status="done" without ledger evidence that matches the goal.
 - Do NOT restate the user's request in `assessment_reasoning`. Cite ledger or `<PRIOR_PROGRESS>` evidence instead.
+- Write `assessment_reasoning` in first person ("I…"), not third person ("The agent…", "The assistant…").
 </PLAN_ASSESS>

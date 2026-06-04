@@ -106,6 +106,7 @@ from soothe_cli.tui.media_utils import create_multimodal_content
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    ClarificationInputMessage,
     CognitionReasonMessage,
     CognitionStepMessage,
     DiffMessage,
@@ -209,6 +210,14 @@ class TextualUIAdapter:
         be routed as the answer instead of a new goal. Cleared on
         ``soothe.loop.clarification.answered`` or after a clarification answer
         turn is dispatched.
+        """
+
+        self._clarification_input_by_step: dict[str, ClarificationInputMessage] = {}
+        """Active inline ``ClarificationInputMessage`` widgets keyed by step id.
+
+        Entry is added when a clarification request arrives and removed once
+        the user submits the dialog (the app handler renders the answers on
+        the step card and forwards them to the daemon).
         """
 
     def finalize_pending_tools_with_error(self, error: str) -> None:
@@ -2429,12 +2438,36 @@ async def execute_task_textual(
                                         # ``step_started`` just before await_clarification.
                                         # Surface the pending questions on it so the user
                                         # knows what to answer.
-                                        for step_widget in adapter._current_step_messages.values():
+                                        target_step_id = ""
+                                        for (
+                                            sid,
+                                            step_widget,
+                                        ) in adapter._current_step_messages.items():
                                             if step_widget._status == "running":
                                                 step_widget.set_awaiting_clarification(
                                                     questions_list
                                                 )
+                                                target_step_id = sid
                                                 break
+                                        # Mount the inline answer widget so the
+                                        # user has somewhere to type without it
+                                        # being mistaken for a new goal.
+                                        if target_step_id:
+                                            existing = adapter._clarification_input_by_step.get(
+                                                target_step_id
+                                            )
+                                            if existing is None:
+                                                widget_id = f"clarify-{uuid.uuid4().hex[:8]}"
+                                                input_widget = ClarificationInputMessage(
+                                                    step_id=target_step_id,
+                                                    questions=questions_list,
+                                                    widget_id=widget_id,
+                                                    id=widget_id,
+                                                )
+                                                adapter._clarification_input_by_step[
+                                                    target_step_id
+                                                ] = input_widget
+                                                await adapter._mount_message(input_widget)
                                 continue
 
                             if event_type == LOOP_CLARIFICATION_ANSWERED:
@@ -2748,10 +2781,26 @@ async def execute_task_textual(
         # Safety net: finalize any steps/tools still in-flight (e.g. worker
         # crash sent a soothe.error.* event but step_completed was never
         # emitted, or stream ended before matching results arrived).
-        # Skip when the loop is intentionally suspended on ``await_clarification``
-        # (RFC-622 / RFC-623): the next turn (after the user answers) replays
-        # the same step ids and resolves them via ``step_completed``.
-        if (adapter._current_step_messages or adapter._tool_to_step) and not clarification_pending:
+        # Skip in three RFC-622 / RFC-623 cases where the loop is
+        # intentionally suspended on ``await_clarification`` rather than
+        # crashed:
+        #   1. The local turn flag is set (``clarification_pending``).
+        #   2. The persisted adapter flag is set (the answered event might
+        #      have arrived this turn but a fresh request is queued for the
+        #      next turn).
+        #   3. Any step card is currently in the awaiting-answer ``pending``
+        #      state (set by ``set_awaiting_clarification``); finalizing
+        #      those would replace the question UI with "Stream ended
+        #      unexpectedly".
+        awaiting_step = any(
+            getattr(w, "_status", "") == "pending" for w in adapter._current_step_messages.values()
+        )
+        skip_safety_net = (
+            clarification_pending
+            or bool(getattr(adapter, "_clarification_pending", False))
+            or awaiting_step
+        )
+        if (adapter._current_step_messages or adapter._tool_to_step) and not skip_safety_net:
             adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
             adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
 
