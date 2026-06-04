@@ -488,7 +488,7 @@ class _StartupMixin:
                 "Loop %s is running, starting background event reader",
                 status_loop_id[:8] if status_loop_id else "?",
             )
-            self.run_worker(
+            self._bg_event_worker = self.run_worker(
                 self._consume_daemon_events_background(),
                 exclusive=False,
                 group="daemon-event-reader",
