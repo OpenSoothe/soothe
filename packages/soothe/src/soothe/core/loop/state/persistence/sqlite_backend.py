@@ -340,6 +340,24 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         now = datetime.now(UTC).isoformat()
         await self.update_loop_metadata(loop_id, last_message_at=now, updated_at=now)
 
+    async def heartbeat_loop(self, loop_id: str) -> None:
+        """Bump ``updated_at`` so periodic status reconciliation can trust freshness."""
+        now = datetime.now(UTC).isoformat()
+        await self._writer_to_thread(self._heartbeat_loop_sync, loop_id, now)
+
+    def _heartbeat_loop_sync(
+        self,
+        conn: sqlite3.Connection,
+        loop_id: str,
+        now_iso: str,
+    ) -> None:
+        """Sync heartbeat — single-statement UPDATE; no-op when row is gone."""
+        conn.execute(
+            "UPDATE agentloop_loops SET updated_at = ? WHERE loop_id = ?",
+            (now_iso, loop_id),
+        )
+        conn.commit()
+
     async def increment_loop_message_count(
         self,
         loop_id: str,

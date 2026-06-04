@@ -62,6 +62,19 @@ loop_gc:
   batch_size: 50                     # Cap per pass per tick
 
 # ============================================================================
+# LOOP STATUS RECONCILIATION - Demote stale status=running loops
+#   A row with status=running, updated_at older than stale_running_seconds,
+#   and NOT in this daemon's active set is demoted to idle. The runner
+#   heartbeat (every ~30s) keeps live loops fresh; missing multiple windows
+#   indicates an orphaned row (daemon crash, runner subprocess crash, etc.)
+# ============================================================================
+loop_status_reconciliation:
+  enabled: true
+  interval_seconds: 300              # Scan every 5 minutes
+  stale_running_seconds: 180         # 3min without heartbeat → demote (≈ 6 heartbeat windows)
+  batch_size: 100
+
+# ============================================================================
 # STALE WORKER REAP - Orphaned multiprocessing.spawn processes (worker_pool)
 # ============================================================================
 stale_worker_reap:
