@@ -498,6 +498,11 @@ class MessageRouter:
             },
         )
 
+        # Honor the client's RFC-622 mode for slash-skill turns too. Without
+        # this, the synthetic loop input always carries None and the runner
+        # falls back to ``config.agent.clarification.default_mode`` (typically
+        # "auto"), so manual relay never engages for /skill:* invocations.
+        clarification_mode = _queue_options_from_daemon_message(msg)["clarification_mode"]
         await d._loop_input_dispatcher.enqueue(
             active_loop,
             {
@@ -506,7 +511,7 @@ class MessageRouter:
                 "autonomous": False,
                 "max_iterations": None,
                 "preferred_subagent": None,
-                "clarification_mode": None,
+                "clarification_mode": clarification_mode,
                 "client_id": client_id,
             },
         )

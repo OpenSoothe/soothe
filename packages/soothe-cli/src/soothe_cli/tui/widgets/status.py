@@ -130,14 +130,13 @@ class StatusBar(Horizontal):
     DEFAULT_CSS = """
     StatusBar {
         height: 1;
-        dock: bottom;
         background: $surface;
-        padding: 0 1;
+        padding: 0;
     }
 
     StatusBar ModelLabel {
         width: auto;
-        padding: 0 1;
+        padding: 0 1 0 0;
         color: $text-muted;
         text-align: left;
     }
@@ -165,7 +164,7 @@ class StatusBar(Horizontal):
     StatusBar .status-tip {
         width: 1fr;
         min-width: 0;
-        padding: 0 1;
+        padding: 0 1 0 0;
         color: $text-muted;
         text-overflow: ellipsis;
         overflow: hidden;
@@ -269,6 +268,7 @@ class StatusBar(Horizontal):
         label = self.query_one("#model-display", ModelLabel)
         label.provider = settings.model_provider or ""
         label.model = settings.model_name or ""
+        self._sync_model_label_visibility(label)
         # Apply the initial clarification-mode badge.
         self._apply_clarification_mode(self.clarification_mode)
 
@@ -438,6 +438,16 @@ class StatusBar(Horizontal):
         label = self.query_one("#model-display", ModelLabel)
         label.provider = provider
         label.model = model
+        self._sync_model_label_visibility(label)
+
+    def _sync_model_label_visibility(self, label: ModelLabel | None = None) -> None:
+        """Hide the model label when empty so it does not gap the status tip."""
+        if label is None:
+            try:
+                label = self.query_one("#model-display", ModelLabel)
+            except NoMatches:
+                return
+        label.display = bool(label.model)
 
     def watch_clarification_mode(self, new_value: str) -> None:
         """Refresh the badge widget when the reactive mode flips."""

@@ -668,16 +668,30 @@ class _MessagesMixin:
         When the user opens a link via `webbrowser.open`, OS focus shifts to
         the browser. On returning to the terminal, Textual fires `AppFocus`
         (requires a terminal that supports FocusIn events). Re-focusing the chat
-        input here keeps it ready for typing.
+        input here keeps it ready for typing — but only when no other focusable
+        widget (e.g., an inline clarification Input) currently owns focus, so
+        the user does not lose an in-progress answer to a tab-out and back.
         """
         if not self._chat_input:
             return
         if self.screen.is_modal:
             return
+        focused = self.focused
+        if focused is not None and not self._is_input_focused():
+            return
         self._chat_input.focus_input()
 
     def on_click(self, _event: Click) -> None:
-        """Handle clicks anywhere in the terminal to focus on the command line."""
+        """Focus the chat input when the click landed on non-focusable chrome.
+
+        Original intent: clicking the dead transcript area should drop the
+        caret back in the prompt. But this handler bubbles for *every* click,
+        so an unconditional refocus also steals focus from inline focusable
+        widgets (e.g., the ClarificationInputMessage answer field) on the same
+        click that Textual just used to focus them. Skip the refocus whenever
+        the click landed on a focusable widget — Textual's default focus
+        handling already does the right thing there.
+        """
         if not self._chat_input:
             return
         # Preserve an active text selection (focus would clear highlight for copy).
@@ -685,7 +699,30 @@ class _MessagesMixin:
 
         if screen_has_text_selection(self.screen):
             return
+        if self._click_landed_on_focusable(_event):
+            return
         self.call_after_refresh(self._chat_input.focus_input)
+
+    def _click_landed_on_focusable(self, event: Click) -> bool:
+        """Return True if the click target (or any ancestor) is focusable.
+
+        Walks up from `event.widget` toward the screen. Stops at the screen
+        so non-focusable container chrome (Containers, Statics) does not
+        suppress the dead-area refocus behavior.
+        """
+        widget = getattr(event, "widget", None)
+        if widget is None:
+            return False
+        node: Any = widget
+        screen = self.screen
+        while node is not None and node is not screen:
+            try:
+                if getattr(node, "can_focus", False):
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+            node = getattr(node, "parent", None)
+        return False
 
     def on_text_selected(self, _event: TextSelected) -> None:
         """Copy selected transcript text on mouse release.
