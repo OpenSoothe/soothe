@@ -16,11 +16,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.loop.clarification.events import (
-    LOOP_CLARIFICATION_ANSWERED,
-    LOOP_CLARIFICATION_DEFERRED,
-    LOOP_CLARIFICATION_REQUESTED,
-)
 from soothe.core.loop.clarification.protocol import (
     ClarificationDeferredError,
     answer_to_state,
@@ -30,6 +25,13 @@ from soothe.core.loop.clarification.protocol import (
 from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
+
+# Short event_type names emitted via ``ctx.emit``; the runner dispatch
+# (`_runner_agentic.py`) wraps them in the corresponding wire events
+# (``soothe.loop.clarification.*``) before yielding to the stream.
+_EVT_CLARIFICATION_REQUESTED = "clarification_requested"
+_EVT_CLARIFICATION_ANSWERED = "clarification_answered"
+_EVT_CLARIFICATION_DEFERRED = "clarification_deferred"
 
 _QUESTION_SUMMARY_CHARS = 240
 
@@ -62,7 +64,7 @@ async def node_await_clarification(
     if policy is None:
         logger.warning("[await_clarification] no clarification policy configured; deferring")
         await ctx.emit(
-            LOOP_CLARIFICATION_DEFERRED,
+            _EVT_CLARIFICATION_DEFERRED,
             {
                 "reason": "no clarification policy configured",
                 "question_summary": _summary(request.questions),
@@ -76,7 +78,7 @@ async def node_await_clarification(
         }
 
     await ctx.emit(
-        LOOP_CLARIFICATION_REQUESTED,
+        _EVT_CLARIFICATION_REQUESTED,
         {
             "questions": list(request.questions),
             "origin_node": request.origin_node,
@@ -89,7 +91,7 @@ async def node_await_clarification(
     except ClarificationDeferredError as exc:
         logger.warning("[await_clarification] policy deferred (kind=%s): %s", exc.kind, exc.reason)
         await ctx.emit(
-            LOOP_CLARIFICATION_DEFERRED,
+            _EVT_CLARIFICATION_DEFERRED,
             {
                 "reason": exc.reason,
                 "defer_kind": exc.kind,
@@ -104,7 +106,7 @@ async def node_await_clarification(
         }
 
     await ctx.emit(
-        LOOP_CLARIFICATION_ANSWERED,
+        _EVT_CLARIFICATION_ANSWERED,
         {
             "source": answer.source,
             "confidence": answer.confidence,

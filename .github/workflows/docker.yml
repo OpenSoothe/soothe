@@ -64,15 +64,36 @@ jobs:
           v=""
           tag_ref=""
 
-          if [ -n "${INPUT_VERSION// }" ]; then
-            v="${INPUT_VERSION#v}"
-            tag_ref="v${v}"
-          else
-            if ! json="$(curl -fsSL \
+          api_get() {
+            curl -fsSL \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${GH_REPO}/releases/latest")"; then
+              "$1"
+          }
+
+          # Probe a tag name via the API; echoes the tag if it exists, otherwise empty.
+          tag_exists() {
+            local cand="$1"
+            if api_get "https://api.github.com/repos/${GH_REPO}/git/ref/tags/${cand}" >/dev/null 2>&1; then
+              printf '%s' "$cand"
+            fi
+          }
+
+          if [ -n "${INPUT_VERSION// }" ]; then
+            v="${INPUT_VERSION#v}"
+            # The repo may tag bare ("0.5.27") or v-prefixed ("v0.5.27").
+            # Probe the API for whichever form actually exists.
+            tag_ref="$(tag_exists "${v}")"
+            if [ -z "${tag_ref}" ]; then
+              tag_ref="$(tag_exists "v${v}")"
+            fi
+            if [ -z "${tag_ref}" ]; then
+              echo "::error::No git tag found for version '${INPUT_VERSION}' (tried '${v}' and 'v${v}'). Push the tag before dispatching."
+              exit 1
+            fi
+          else
+            if ! json="$(api_get "https://api.github.com/repos/${GH_REPO}/releases/latest")"; then
               json=""
             fi
             tag_ref="$(printf '%s' "$json" | jq -r 'try .tag_name // empty')"

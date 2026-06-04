@@ -299,6 +299,7 @@ class WebSocketClient:
         response_schema_name: str | None = None,
         response_schema_strict: bool | None = None,
         clarification_mode: str | None = None,
+        clarification_answer: bool = False,
     ) -> None:
         """Send user input to the daemon for a subscribed loop (``loop_input``).
 
@@ -322,6 +323,12 @@ class WebSocketClient:
             clarification_mode: RFC-622 clarification relay mode for this turn
                 (``"auto"`` / ``"manual"``). ``None`` lets the daemon fall back
                 to its configured default.
+            clarification_answer: When True, the daemon treats this input as the
+                answer to the loop's currently pending clarification interrupt
+                (RFC-622) and resumes the graph via ``Command(resume=...)``
+                instead of starting a new turn. Hint only — daemon verifies via
+                the loop's persisted state and falls back to a normal turn when
+                no clarification is pending.
         """
         payload: dict[str, Any] = {
             "type": "loop_input",
@@ -350,6 +357,8 @@ class WebSocketClient:
             payload["response_schema_strict"] = response_schema_strict
         if clarification_mode is not None:
             payload["clarification_mode"] = clarification_mode
+        if clarification_answer:
+            payload["clarification_answer"] = True
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:

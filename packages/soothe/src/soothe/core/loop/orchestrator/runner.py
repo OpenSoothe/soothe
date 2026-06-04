@@ -90,6 +90,8 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
     Args:
         ctx: Fully initialized runtime context including ``emit``.
     """
+    from langgraph.types import Command
+
     loop_id = ctx.state_manager.loop_id
     planner = ctx.agent_loop.plan_phase._loop_planner
     if hasattr(planner, "_loop_id"):
@@ -97,9 +99,43 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
 
     compiled = build_agent_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)
+
+    # RFC-622: if the caller flagged this turn as a clarification answer AND
+    # the persisted graph state shows a pending clarification with no answer,
+    # resume the suspended ``interrupt(...)`` instead of starting a new
+    # iteration. Falls back to a normal invocation when no clarification is
+    # actually pending (defensive against a stale flag).
+    graph_input: dict[str, Any] | Command = {"last_outcome": None}
+    answer_text = (ctx.clarification_resume_text or "").strip()
+    if answer_text:
+        try:
+            snapshot = await compiled.aget_state(config)
+            values = getattr(snapshot, "values", {}) or {}
+            pending = values.get("pending_clarification")
+            answered = values.get("pending_clarification_answer")
+            if pending and not answered:
+                graph_input = Command(resume={"answers": [answer_text]})
+                logger.info(
+                    "[runner] Resuming pending clarification for loop=%s with answer (%d chars)",
+                    loop_id,
+                    len(answer_text),
+                )
+            else:
+                logger.warning(
+                    "[runner] clarification_answer flag set but no pending clarification "
+                    "in state (loop=%s); falling back to normal invocation",
+                    loop_id,
+                )
+        except Exception:
+            logger.exception(
+                "[runner] failed to read graph state for clarification resume (loop=%s); "
+                "falling back to normal invocation",
+                loop_id,
+            )
+
     logger.debug("[runner] Starting graph invocation for loop=%s", loop_id)
     try:
-        await compiled.ainvoke({"last_outcome": None}, config=config)
+        await compiled.ainvoke(graph_input, config=config)
         logger.debug("[runner] Graph invocation completed for loop=%s", loop_id)
     except Exception as e:
         logger.error(

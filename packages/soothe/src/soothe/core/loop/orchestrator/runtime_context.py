@@ -45,6 +45,11 @@ class LoopRuntimeContext:
     preferred_subagent: str | None = None
     scratch: LoopPhaseScratch = field(default_factory=LoopPhaseScratch)
     clarification_policy: ClarificationPolicy | None = None
+    # RFC-622: when set, the next graph invocation should resume a pending
+    # ``await_clarification`` interrupt with this answer instead of starting a
+    # new iteration. Verified against ``pending_clarification`` in the graph
+    # state before issuing ``Command(resume=...)``.
+    clarification_resume_text: str | None = None
 
     @property
     def core_agent(self) -> CoreAgent:

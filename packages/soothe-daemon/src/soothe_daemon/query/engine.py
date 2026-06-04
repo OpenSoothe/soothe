@@ -444,6 +444,7 @@ class QueryEngine:
         response_schema_name: str | None = None,
         response_schema_strict: bool | None = None,
         clarification_mode: str | None = None,
+        clarification_answer: bool = False,
     ) -> None:
         """Stream a query through subprocess workers and broadcast events."""
         d = self._daemon
@@ -685,6 +686,7 @@ class QueryEngine:
                     model_params=model_params or {},
                     intent_hint=intent_hint,
                     clarification_mode=stream_kwargs.get("clarification_mode"),
+                    clarification_answer=clarification_answer,
                 )
                 run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)

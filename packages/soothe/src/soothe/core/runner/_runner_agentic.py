@@ -21,6 +21,11 @@ from soothe.core.events import (
 )
 from soothe.core.intention import IntentHint, build_loop_routing_classification
 from soothe.core.loop import AgentLoop
+from soothe.core.loop.clarification.events import (
+    ClarificationAnsweredEvent,
+    ClarificationDeferredEvent,
+    ClarificationRequestedEvent,
+)
 from soothe.core.loop.planning.simple_bypass import is_simple_query_direct_next_action
 from soothe.core.loop.utils.events import LoopAgentReasonEvent
 from soothe.core.loop.utils.messages import (
@@ -300,6 +305,7 @@ class AgenticMixin:
         preferred_subagent: str | None = None,
         intent_hint: IntentHint | None = None,
         clarification_mode: str | None = None,
+        clarification_answer: bool = False,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
@@ -426,6 +432,7 @@ class AgenticMixin:
             preferred_subagent=preferred_subagent,
             shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
             clarification_policy=clarification_policy,
+            clarification_answer=clarification_answer,
         ):
             if event_type == "intent_classified":
                 logger.info(
@@ -496,6 +503,45 @@ class AgenticMixin:
                         duration_ms=event_data["duration_ms"],
                         tool_call_count=event_data.get("tool_call_count", 0),
                         clarification=clarification if isinstance(clarification, dict) else None,
+                    ).to_dict()
+                )
+
+            elif event_type == "clarification_requested":
+                # RFC-622 / RFC-623: surface the pending question to the TUI so it
+                # can suppress the stream-end "Stream ended unexpectedly" safety net.
+                payload = event_data if isinstance(event_data, dict) else {}
+                yield _custom(
+                    ClarificationRequestedEvent(
+                        questions=list(payload.get("questions") or []),
+                        origin_node=str(payload.get("origin_node") or ""),
+                        mode=payload.get("mode")
+                        if payload.get("mode") in ("manual", "auto")
+                        else "manual",
+                    ).to_dict()
+                )
+
+            elif event_type == "clarification_answered":
+                payload = event_data if isinstance(event_data, dict) else {}
+                source = payload.get("source")
+                if source not in ("human", "veritas", "fallback"):
+                    source = "human"
+                confidence = payload.get("confidence")
+                yield _custom(
+                    ClarificationAnsweredEvent(
+                        source=source,
+                        confidence=float(confidence)
+                        if isinstance(confidence, (int, float))
+                        else None,
+                        defer=bool(payload.get("defer", False)),
+                    ).to_dict()
+                )
+
+            elif event_type == "clarification_deferred":
+                payload = event_data if isinstance(event_data, dict) else {}
+                yield _custom(
+                    ClarificationDeferredEvent(
+                        reason=str(payload.get("reason") or ""),
+                        question_summary=str(payload.get("question_summary") or ""),
                     ).to_dict()
                 )
 

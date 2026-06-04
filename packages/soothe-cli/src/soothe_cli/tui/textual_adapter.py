@@ -37,6 +37,9 @@ from soothe_sdk.core.events import (
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
+    LOOP_CLARIFICATION_ANSWERED,
+    LOOP_CLARIFICATION_DEFERRED,
+    LOOP_CLARIFICATION_REQUESTED,
 )
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.langchain_wire import (
@@ -196,6 +199,17 @@ class TextualUIAdapter:
 
         self._on_tokens_show: _TokensShowCallback | None = None
         """Called to restore the token display with the cached value."""
+
+        self._clarification_pending: bool = False
+        """RFC-622: True while the loop graph is paused on ``await_clarification``.
+
+        Set when ``soothe.loop.clarification.requested`` arrives and survives the
+        end of the current turn so the next ``send_turn`` can attach
+        ``clarification_answer=True`` and the input UI can hint that text will
+        be routed as the answer instead of a new goal. Cleared on
+        ``soothe.loop.clarification.answered`` or after a clarification answer
+        turn is dispatched.
+        """
 
     def finalize_pending_tools_with_error(self, error: str) -> None:
         """Mark all pending/running tool widgets as error and clear tracking.
@@ -1557,6 +1571,21 @@ async def execute_task_textual(
 
     # Track summarization lifecycle so spinner status and notification stay in sync.
     summarization_in_progress = False
+    # Per-turn mirror of the adapter-scoped clarification flag (RFC-622 /
+    # RFC-623). Set when ``soothe.loop.clarification.requested`` /
+    # ``soothe.loop.clarification.deferred`` arrive and cleared on
+    # ``soothe.loop.clarification.answered``. The local copy gates the
+    # stream-end safety net; the persisted adapter flag is what the next turn
+    # reads to decide whether to attach ``clarification_answer=True``.
+    clarification_pending = False
+    # Snapshot of the persisted flag taken when this turn started. If the user
+    # is answering a previously-pending clarification, we attach the wire flag
+    # below and clear ``adapter._clarification_pending`` so the next turn does
+    # not double-send. The new turn's events will re-arm the flag if the
+    # daemon emits another ``clarification_requested``.
+    sending_clarification_answer = bool(getattr(adapter, "_clarification_pending", False))
+    if sending_clarification_answer:
+        adapter._clarification_pending = False
     try:
         if skip_daemon_send_turn:
             chunk_source = daemon_session.iter_turn_chunks()
@@ -1584,6 +1613,7 @@ async def execute_task_textual(
                 model_params=mp,
                 attachments=image_attachments,
                 clarification_mode=clarification_mode,
+                clarification_answer=sending_clarification_answer,
             )
             chunk_source = daemon_session.iter_turn_chunks()
 
@@ -1595,6 +1625,7 @@ async def execute_task_textual(
         async def _apply_turn_chunk(prepared: PreparedTurnChunk | None) -> None:
             nonlocal last_active_tool_call_id
             nonlocal summarization_in_progress
+            nonlocal clarification_pending
             nonlocal goal_loop_start_monotonic
             nonlocal captured_input_tokens
             if prepared is None or prepared.skip:
@@ -2379,6 +2410,38 @@ async def execute_task_textual(
                             if event_type == AGENT_LOOP_COMPLETED:
                                 continue
 
+                            if event_type in (
+                                LOOP_CLARIFICATION_REQUESTED,
+                                LOOP_CLARIFICATION_DEFERRED,
+                            ):
+                                clarification_pending = True
+                                # Persist on the adapter so the next ``send_turn``
+                                # attaches ``clarification_answer=True`` and the
+                                # input UI can hint at it.
+                                adapter._clarification_pending = True
+                                if event_type == LOOP_CLARIFICATION_REQUESTED:
+                                    raw_questions = data.get("questions") or []
+                                    questions_list = [
+                                        str(q) for q in raw_questions if str(q).strip()
+                                    ]
+                                    if questions_list:
+                                        # The ask_user step card was put into "running" by
+                                        # ``step_started`` just before await_clarification.
+                                        # Surface the pending questions on it so the user
+                                        # knows what to answer.
+                                        for step_widget in adapter._current_step_messages.values():
+                                            if step_widget._status == "running":
+                                                step_widget.set_awaiting_clarification(
+                                                    questions_list
+                                                )
+                                                break
+                                continue
+
+                            if event_type == LOOP_CLARIFICATION_ANSWERED:
+                                clarification_pending = False
+                                adapter._clarification_pending = False
+                                continue
+
                             if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
                                 raw_steps = data.get("steps")
                                 if isinstance(raw_steps, list):
@@ -2685,7 +2748,10 @@ async def execute_task_textual(
         # Safety net: finalize any steps/tools still in-flight (e.g. worker
         # crash sent a soothe.error.* event but step_completed was never
         # emitted, or stream ended before matching results arrived).
-        if adapter._current_step_messages or adapter._tool_to_step:
+        # Skip when the loop is intentionally suspended on ``await_clarification``
+        # (RFC-622 / RFC-623): the next turn (after the user answers) replays
+        # the same step ids and resolves them via ``step_completed``.
+        if (adapter._current_step_messages or adapter._tool_to_step) and not clarification_pending:
             adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
             adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
 
