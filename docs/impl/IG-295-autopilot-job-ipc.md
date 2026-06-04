@@ -1,6 +1,6 @@
 # IG-295: Autopilot Job IPC Commands (RFC-228 Implementation)
 
-> **Status**: In Progress
+> **Status**: Completed
 > **RFC**: RFC-228
 > **Created**: 2026-06-04
 > **Updated**: 2026-06-05
@@ -11,10 +11,22 @@
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 1 | ✅ Completed | WebSocket RPC handlers in router.py |
+| Phase 2 | ✅ Completed | DAG snapshot export in AutopilotService |
+| Phase 3 | ✅ Completed | Guidance absorption in GoalEngine |
 | Phase 4 | ✅ Completed | Worker subscription bypass in session.py |
-| Phase 2 | Pending | DAG snapshot export in AutopilotService |
-| Phase 5 | Pending | Goal/worker event emission |
-| Phase 3 | Pending | Guidance absorption in GoalEngine |
+| Phase 5 | ✅ Completed | Goal/worker event emission + daemon bridge |
+
+## Files Modified
+
+| Package | File | Changes |
+|---------|------|---------|
+| soothe-daemon | `protocol/router.py` | 9 WebSocket handlers + autopilot topic subscription |
+| soothe-daemon | `server/session.py` | `autopilot_subscribed` flag + filter bypass |
+| soothe-daemon | `server/core.py` | Internal→client event bridge |
+| soothe | `core/autopilot/service.py` | `dag_snapshot()` method |
+| soothe | `core/goal_engine/engine.py` | `absorb_guidance()` method |
+| soothe | `core/goal_engine/models.py` | `guidance_accumulated` field |
+| soothe | `core/events/internal_events.py` | Client-visible events + conversion helper |
 
 ## Goal
 

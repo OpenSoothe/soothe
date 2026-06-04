@@ -350,6 +350,26 @@ class SootheDaemon(DaemonHandlersMixin):
                     "[Autopilot] daemon-owned AutopilotService constructed "
                     "(real dispatch enabled; scheduling loop will start)"
                 )
+
+                # RFC-228: Bridge internal autopilot events to client-visible events
+                # for desktop clients with autopilot_subscribed=True
+                from soothe.core.events.internal_events import internal_to_client_event
+
+                async def _bridge_internal_to_client(event: Any) -> None:
+                    """Bridge internal event to client-visible event for autopilot subscribers."""
+                    # Convert internal event to client-visible format
+                    client_event = internal_to_client_event(event)
+                    if client_event is None:
+                        return
+                    # Publish to autopilot topic for subscribed clients
+                    await self._event_bus.publish(
+                        "autopilot",
+                        client_event.model_dump(mode="json"),
+                        event_meta=None,
+                    )
+
+                # Subscribe bridge to internal bus (forward relevant events)
+                daemon_autopilot_bus.subscribe("*", _bridge_internal_to_client)
             except Exception:
                 # Construction must never block daemon startup. Log loudly;
                 # autopilot endpoints will return 503.

@@ -1238,3 +1238,89 @@ class AutopilotService:
                 "poll_interval": self._config.poll_interval,
             },
         }
+
+    async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
+        """Export DAG structure for visualization (RFC-228).
+
+        Returns a structure suitable for React Flow rendering with
+        nodes containing goal details and edges for dependencies.
+
+        Args:
+            root_goal_id: Root goal ID (job_id) to traverse from.
+
+        Returns:
+            Dict with 'nodes' and 'edges' arrays for DAG visualization.
+            Nodes contain: id, description, status, priority, depends_on,
+            assigned_loop_id, steps_completed, steps_total, tool_calls,
+            summary (if completed), findings (if completed).
+            Edges contain: source, target for dependency relationships.
+        """
+        goals = await self._goal_engine.list_goals()
+
+        # Build parent → children map from depends_on relationships
+        children_map: dict[str, list[str]] = {}
+        goal_by_id: dict[str, Goal] = {}
+
+        for g in goals:
+            goal_by_id[g.id] = g
+            for dep_id in g.depends_on or []:
+                if dep_id not in children_map:
+                    children_map[dep_id] = []
+                children_map[dep_id].append(g.id)
+
+        # Traverse descendants of root goal
+        descendants: list[Goal] = []
+        visited: set[str] = set()
+        queue = [root_goal_id]
+
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            goal = goal_by_id.get(current_id)
+            if goal is not None:
+                descendants.append(goal)
+
+            # Add children to queue
+            for child_id in children_map.get(current_id, []):
+                if child_id not in visited:
+                    queue.append(child_id)
+
+        # Build nodes for React Flow
+        nodes: list[dict[str, Any]] = []
+        for g in descendants:
+            node: dict[str, Any] = {
+                "id": g.id,
+                "description": (g.description[:100] if len(g.description) > 100 else g.description),
+                "status": g.status,
+                "priority": g.priority,
+                "depends_on": list(g.depends_on or []),
+                "assigned_loop_id": g.assigned_loop_id,
+                "steps_completed": 0,
+                "steps_total": 0,
+                "tool_calls": 0,
+            }
+            # Add report fields if available
+            if g.report is not None:
+                node["steps_completed"] = getattr(g.report, "steps_completed", 0) or 0
+                node["steps_total"] = getattr(g.report, "steps_total", 0) or 0
+                node["tool_calls"] = getattr(g.report, "tool_calls", 0) or 0
+                if g.status == "completed":
+                    node["summary"] = getattr(g.report, "summary", None)
+                    findings = getattr(g.report, "findings", None)
+                    node["findings"] = findings if findings else []
+            nodes.append(node)
+
+        # Build edges from depends_on relationships
+        edges: list[dict[str, str]] = []
+        for g in descendants:
+            for dep_id in g.depends_on or []:
+                edges.append({"source": dep_id, "target": g.id})
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "root_id": root_goal_id,
+        }
