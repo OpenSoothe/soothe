@@ -26,3 +26,9 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: ClarificationOrigin | None
+    # Set true when execute_steps synthesizes a step result on the
+    # clarification-resume path (no scratch decision / plan_result). Routing
+    # skips record_iteration in that case to avoid the "missing plan or
+    # decision" fatal — the synthesized step has already emitted
+    # step_completed and the next iteration will replan from the answer.
+    resume_synth: bool | None

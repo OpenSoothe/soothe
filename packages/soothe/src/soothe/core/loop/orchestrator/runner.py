@@ -107,18 +107,24 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
     # actually pending (defensive against a stale flag).
     graph_input: dict[str, Any] | Command = {"last_outcome": None}
     answer_text = (ctx.clarification_resume_text or "").strip()
-    if answer_text:
+    answer_list = ctx.clarification_resume_answers
+    if answer_text or answer_list:
         try:
             snapshot = await compiled.aget_state(config)
             values = getattr(snapshot, "values", {}) or {}
             pending = values.get("pending_clarification")
             answered = values.get("pending_clarification_answer")
             if pending and not answered:
-                graph_input = Command(resume={"answers": [answer_text]})
+                # Prefer the per-question list when provided so the policy
+                # returns answers paired 1:1 with questions instead of
+                # broadcasting a single concatenated string. Falls back to
+                # the single-string form for legacy single-question turns.
+                resume_answers = [str(a) for a in answer_list] if answer_list else [answer_text]
+                graph_input = Command(resume={"answers": resume_answers})
                 logger.info(
-                    "[runner] Resuming pending clarification for loop=%s with answer (%d chars)",
+                    "[runner] Resuming pending clarification for loop=%s with %d answer(s)",
                     loop_id,
-                    len(answer_text),
+                    len(resume_answers),
                 )
             else:
                 logger.warning(

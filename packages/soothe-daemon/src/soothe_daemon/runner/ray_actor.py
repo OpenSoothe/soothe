@@ -46,6 +46,7 @@ class LoopRunnerActor:
                 autopilot_job=request.autopilot_job,  # RFC-222 revised
                 clarification_mode=request.clarification_mode,
                 clarification_answer=request.clarification_answer,
+                clarification_answers=request.clarification_answers,
             ):
                 if self._cancelled:
                     break

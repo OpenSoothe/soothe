@@ -272,15 +272,33 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             await _record_and_emit_step_completed(
                 ctx, result=synth_result, step_desc=step_desc_local
             )
+            # Resume synth skips record_iteration, where plan_manager normally
+            # records step outcomes into the DAG. Without this call the
+            # ask_user step would remain PENDING in the plan DAG forever and
+            # surface in the goal_completion report even though the user
+            # already answered.
+            try:
+                ctx.plan_manager.record_step_outcomes([synth_result])
+            except Exception:
+                logger.exception(
+                    "[execute] plan_manager.record_step_outcomes failed for resumed step %s",
+                    planner_ask_answered_step_id,
+                )
             logger.info(
                 "[execute] resumed clarification answer (no scratch decision); "
                 "synthesized step_completed for %s, deferring further execution to next iteration",
                 planner_ask_answered_step_id,
             )
+            # Advance the iteration counter inline since we are skipping
+            # record_iteration on this resume path. Without this, iteration_gate
+            # would loop (or never terminate via max_iterations) because no
+            # iteration was recorded as complete during this graph invocation.
+            state.iteration += 1
             return {
                 "pending_clarification": None,
                 "pending_clarification_answer": None,
                 "last_outcome": "continue",
+                "resume_synth": True,
             }
         logger.error("[execute] missing decision or plan_result on scratch")
         await ctx.emit(
