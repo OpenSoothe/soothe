@@ -15,7 +15,6 @@ import websockets.asyncio.client
 import websockets.exceptions
 
 from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
-from soothe_sdk.core.types import VerbosityLevel
 
 logger = logging.getLogger(__name__)
 
@@ -506,18 +505,18 @@ class WebSocketClient:
         self,
         loop_id: str,
         *,
-        verbosity: VerbosityLevel = "normal",
         stream_delivery: str = "adaptive",
         request_id: str | None = None,
     ) -> None:
         """Subscribe client to loop events via daemon RPC (RFC-503 ``loop_subscribe``).
 
         Subscribes client to loop topic for real-time event streaming.
-        Used by loop continue and loop attach commands.
+        Used by loop continue and loop attach commands. Verbosity is owned by
+        the daemon (`observability.verbosity`); clients always receive the
+        daemon's NORMAL projection.
 
         Args:
             loop_id: Loop identifier.
-            verbosity: Event verbosity (RFC-0022).
             stream_delivery: One of ``batch`` | ``adaptive`` (default) | ``streaming``
                 (IG-441). Unknown values fall back to ``adaptive``.
             request_id: Optional request correlation ID.
@@ -528,7 +527,6 @@ class WebSocketClient:
         payload: dict[str, Any] = {
             "type": "loop_subscribe",
             "loop_id": loop_id,
-            "verbosity": verbosity,
             "stream_delivery": delivery,
         }
         if request_id is not None:

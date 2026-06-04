@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import websockets.exceptions
-from soothe_sdk.core.types import VerbosityLevel
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.event import loop_event_topic
@@ -87,7 +86,6 @@ class ClientSession:
         subscriptions: Set of loop_ids this client receives events for
         event_queue: Queue for delivering events to the client
         sender_task: Background task that sends events to the client
-        verbosity: Client verbosity preference (RFC-0022)
         wire_tier: Client wire filter tier (``full`` or ``progress``, IG-435)
         detach_requested: Whether client explicitly requested detach (RFC-0013)
         config: Optional SootheConfig for effective streaming config (RFC-614)
@@ -102,7 +100,6 @@ class ClientSession:
     )
     sender_task: asyncio.Task[None] | None = None
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    verbosity: VerbosityLevel = "normal"  # RFC-0022: client verbosity preference
     wire_tier: str = "full"
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
     config: SootheConfig | None = None  # RFC-614: daemon config reference
@@ -203,7 +200,6 @@ class ClientSessionManager:
         self,
         client_id: str,
         loop_id: str,
-        verbosity: VerbosityLevel = "normal",
         *,
         stream_delivery: StreamDeliveryMode | None = None,
         wire_tier: str = "full",
@@ -243,7 +239,6 @@ class ClientSessionManager:
             )
             return False
 
-        session.verbosity = verbosity
         session.wire_tier = wire_tier if wire_tier in ("full", "progress") else "full"
         if stream_delivery is not None:
             # IG-441: accept the canonical three modes (batch / adaptive / streaming).
@@ -272,10 +267,9 @@ class ClientSessionManager:
         await self._event_bus.unsubscribe(_GLOBAL_TOPIC, session.event_queue)
 
         logger.info(
-            "[Session] Client %s → loop %s (verbosity=%s, stream_delivery=%s, wire_tier=%s)",
+            "[Session] Client %s → loop %s (stream_delivery=%s, wire_tier=%s)",
             client_id,
             loop_id,
-            verbosity,
             delivery,
             session.wire_tier,
         )
@@ -592,10 +586,9 @@ class ClientSessionManager:
                         ):
                             logger.warning(
                                 "Client %s sender dropped a batch of %d event(s) after "
-                                "daemon-side filtering (verbosity=%s, wire_tier=%s)",
+                                "daemon-side filtering (wire_tier=%s)",
                                 session.client_id,
                                 dropped_batch_size,
-                                session.verbosity,
                                 session.wire_tier,
                             )
                         continue
