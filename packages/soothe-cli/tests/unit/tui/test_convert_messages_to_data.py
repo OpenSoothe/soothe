@@ -83,12 +83,20 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
         {
             "kind": "event",
             "timestamp": "2026-04-20T15:41:26.946+00:00",
-            "data": {"summary": "aware"},
+            "data": {
+                "type": "soothe.cognition.agent_loop.step.started",
+                "step_id": "s1",
+                "description": "aware",
+            },
         },
         {
             "kind": "event",
             "timestamp": "2026-04-20T15:41:27.100",
-            "data": {"summary": "naive"},
+            "data": {
+                "type": "soothe.cognition.agent_loop.step.started",
+                "step_id": "s2",
+                "description": "naive",
+            },
         },
     ]
 
@@ -97,33 +105,10 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
     assert [source for source, _ in merged] == ["message", "event", "event"]
 
 
-@pytest.mark.asyncio
-async def test_fetch_loop_history_prefers_checkpoint_cards() -> None:
-    """Resumed history should prioritize checkpoint conversion over event fallback."""
-    app = object.__new__(SootheApp)
-    app._daemon_session = None  # Required attribute for method
-    app._get_loop_state_values = AsyncMock(
-        return_value={
-            "_context_tokens": 7,
-            "messages": [HumanMessage(content="hello"), AIMessage(content="world")],
-        }
-    )
-    app._fetch_loop_activity_events = AsyncMock(
-        return_value=[
-            {
-                "kind": "tool_result",
-                "content": "noisy fallback",
-                "metadata": {"tool_name": "read_file"},
-            }
-        ]
-    )
-
-    payload = await app._fetch_loop_history_data("loop-1")
-
-    assert payload.context_tokens == 7
-    assert [m.type for m in payload.messages] == [MessageType.USER, MessageType.ASSISTANT]
-    assert all("Tool result" not in m.content for m in payload.messages)
-    app._fetch_loop_activity_events.assert_not_awaited()
+# test_fetch_loop_history_prefers_checkpoint_cards was removed when RFC-413
+# replaced the legacy checkpoint+activity-log fallback path. New ledger-RPC
+# behavior is covered by ``test_fetch_loop_history_data_uses_ledger_rpc``
+# (and the empty-payload tests) further down in this file.
 
 
 def test_convert_loop_events_uses_metadata_for_tool_name_and_output() -> None:
@@ -490,56 +475,65 @@ def test_convert_loop_events_renders_interleaved_conversation_rows() -> None:
     assert data[2].content == "All clean."
 
 
-@pytest.mark.asyncio
-async def test_get_loop_state_values_recovers_messages_from_conversation_rows() -> None:
-    """Resume should rehydrate empty checkpoint messages from persisted conversation rows."""
-    app = object.__new__(SootheApp)
-    daemon_session = SimpleNamespace()
-    daemon_session.aget_loop_state = AsyncMock(return_value=SimpleNamespace(values={}))
-    daemon_session.fetch_conversation_log = AsyncMock(
-        return_value=[
-            {"kind": "event", "content": "ignore"},
-            {"kind": "conversation", "role": "user", "content": "Hello"},
-            {
-                "kind": "conversation",
-                "metadata": {"role": "assistant", "text": "Hi, how can I help?"},
-            },
-        ]
-    )
-    daemon_session.aupdate_loop_state = AsyncMock()
-    app._daemon_session = daemon_session
-
-    values = await app._get_loop_state_values("loop-42")
-
-    daemon_session.aget_loop_state.assert_awaited_once_with("loop-42")
-    assert "messages" in values
-    assert isinstance(values["messages"], list)
-    assert len(values["messages"]) == 2
-    assert isinstance(values["messages"][0], HumanMessage)
-    assert isinstance(values["messages"][1], AIMessage)
-    daemon_session.fetch_conversation_log.assert_awaited_once_with(
-        "loop-42",
-        limit=10000,
-        include_events=True,
-    )
-    daemon_session.aupdate_loop_state.assert_awaited_once()
+# Tests for ``_get_loop_state_values`` / ``_recover_missing_checkpoint_messages``
+# were removed when RFC-413 made the daemon authoritative — those helpers
+# are gone (the daemon owns derivation; the TUI reads cards via
+# ``loop_cards_fetch``). The recovery-from-conversation-log behavior is now
+# covered server-side in
+# ``soothe-daemon/tests/unit/display/test_loop_card_manager.py``.
 
 
 @pytest.mark.asyncio
-async def test_get_loop_state_values_skips_recovery_when_messages_exist() -> None:
-    """Resume should not fetch conversation logs when checkpoint messages are already present."""
+async def test_fetch_loop_history_data_uses_ledger_rpc() -> None:
+    """RFC-413: ``_fetch_loop_history_data`` is the single ledger path."""
+    from soothe_sdk.display.card_ledger import card_to_wire_dict
+    from soothe_sdk.display.transcript_types import MessageData, MessageType
+
+    cards = [
+        MessageData(type=MessageType.USER, content="hi"),
+        MessageData(type=MessageType.ASSISTANT, content="hello"),
+    ]
+    wire_cards = [card_to_wire_dict(c) for c in cards]
+
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
-    daemon_session.aget_loop_state = AsyncMock(
-        return_value=SimpleNamespace(values={"messages": [HumanMessage(content="existing")]})
+    daemon_session.fetch_loop_cards = AsyncMock(
+        return_value=SimpleNamespace(
+            cards=wire_cards,
+            seq=2,
+            context_tokens=512,
+            success=True,
+        )
     )
-    daemon_session.fetch_conversation_log = AsyncMock()
-    daemon_session.aupdate_loop_state = AsyncMock()
     app._daemon_session = daemon_session
 
-    values = await app._get_loop_state_values("loop-42")
+    payload = await app._fetch_loop_history_data("loop-1")
 
-    daemon_session.aget_loop_state.assert_awaited_once_with("loop-42")
-    assert len(values["messages"]) == 1
-    daemon_session.fetch_conversation_log.assert_not_awaited()
-    daemon_session.aupdate_loop_state.assert_not_awaited()
+    assert [m.content for m in payload.messages] == ["hi", "hello"]
+    assert payload.context_tokens == 512
+
+
+@pytest.mark.asyncio
+async def test_fetch_loop_history_data_returns_empty_on_rpc_error() -> None:
+    """When the ledger RPC raises, render an empty payload instead of crashing."""
+    app = object.__new__(SootheApp)
+    daemon_session = SimpleNamespace()
+    daemon_session.fetch_loop_cards = AsyncMock(side_effect=RuntimeError("boom"))
+    app._daemon_session = daemon_session
+
+    payload = await app._fetch_loop_history_data("loop-2")
+
+    assert payload.messages == []
+    assert payload.context_tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_fetch_loop_history_data_returns_empty_without_session() -> None:
+    """Belt-and-suspenders: no daemon session ⇒ empty payload, no crash."""
+    app = object.__new__(SootheApp)
+    app._daemon_session = None
+
+    payload = await app._fetch_loop_history_data("loop-3")
+
+    assert payload.messages == []
+    assert payload.context_tokens == 0

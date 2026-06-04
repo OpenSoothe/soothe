@@ -1,30 +1,14 @@
-"""Internal utilities for tool formatting (not part of public API)."""
+"""Re-export shim for ``soothe_sdk.display._text_utils`` (RFC-413).
 
+These utilities live in the SDK so the daemon-resident ``CardBinder`` can
+reuse them. This module preserves the original CLI import path.
+"""
 
-def normalize_tool_name(tool_name: str) -> str:
-    """Normalize tool name to snake_case for comparison and lookup.
+from __future__ import annotations
 
-    Args:
-        tool_name: Raw tool name (may contain dashes or spaces).
+from soothe_sdk.display._text_utils import (
+    normalize_tool_name,
+    text_looks_like_error,
+)
 
-    Returns:
-        Lowercase snake_case name.
-    """
-    return tool_name.lower().replace("-", "_").replace(" ", "_")
-
-
-def text_looks_like_error(text: str) -> bool:
-    """Return True if text content suggests a tool failure.
-
-    Checks for common error indicator substrings.
-
-    Args:
-        text: Tool output text to inspect.
-
-    Returns:
-        True if any error indicator is found.
-    """
-    if not text:
-        return False
-    lowered = text.lower()
-    return any(indicator in lowered for indicator in ("error", "failed", "exception", "traceback"))
+__all__ = ["normalize_tool_name", "text_looks_like_error"]

@@ -1,13 +1,17 @@
-"""Conversation history conversion, checkpoint loading, and daemon event consumption mixin."""
+"""Conversation history loading, daemon event consumption, and thin binder delegation.
+
+Pure event → card binding logic lives in ``soothe_sdk.display.card_binder``
+(RFC-413). The static methods on ``_HistoryMixin`` are kept as thin
+wrappers so the existing ``SootheApp._convert_messages_to_data(...)`` API
+(used by tests and other mixins) continues to work.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
 import uuid
 from contextlib import suppress
-from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -15,20 +19,16 @@ if TYPE_CHECKING:
 
     from textual.content import Content
 
-from textual.content import Content
-
-from soothe_cli.runtime.parse.tool_result import extract_tool_result_payload
-from soothe_cli.runtime.wire.display_text import (
+from soothe_sdk.display import card_binder as _binder
+from soothe_sdk.display.text_extract import (
     extract_ai_text_for_display,
     extract_user_text_for_display,
     normalize_stream_message,
 )
+from soothe_sdk.display.transcript_types import MessageData
+from textual.content import Content
+
 from soothe_cli.tui.app._module_init import _LoopHistoryPayload
-from soothe_cli.tui.widgets.message_store import (
-    MessageData,
-    MessageType,
-    ToolStatus,
-)
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -37,69 +37,28 @@ from soothe_cli.tui.widgets.messages import (
 
 logger = logging.getLogger(__name__)
 
-# Phases persisted on loop checkpoint messages that the live TUI aggregates into
-# cognition cards (plan / step / task rows) rather than standalone assistant
-# and tool widgets.
-_LOOP_INTERNAL_CHECKPOINT_PHASES: frozenset[str] = frozenset(
-    {"plan_assess", "plan_generate", "execute_step", "execute_wave"}
-)
-
 
 class _HistoryMixin:
     """History conversion, loading, and daemon WebSocket event consumption."""
 
+    # ------------------------------------------------------------------
+    # Binder delegation (RFC-413).
+    # Pure logic lives in `soothe_sdk.display.card_binder`; these wrappers
+    # preserve the existing SootheApp API so tests and callers stay unchanged.
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _is_loop_internal_checkpoint_message(msg: Any) -> bool:
-        """True when this checkpoint message is loop-orchestration internals only."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
-        if not isinstance(msg, (HumanMessage, AIMessage)):
-            return False
-        phase = getattr(msg, "phase", None)
-        return isinstance(phase, str) and phase in _LOOP_INTERNAL_CHECKPOINT_PHASES
+        """Delegate to ``soothe_sdk.display.card_binder.is_loop_internal_checkpoint_message``."""
+        return _binder.is_loop_internal_checkpoint_message(msg)
 
     @staticmethod
     def _merge_visible_messages_with_cognition_cards(
         visible: list[MessageData],
         cognition: list[MessageData],
     ) -> list[MessageData]:
-        """Interleave visible checkpoint cards with cognition replay by time.
-
-        Visible messages have unreliable wall times; cognition rows carry parsed
-        event timestamps. Spread visible items across [0, 1] in order and map
-        cognition timestamps into the same range so the transcript reads
-        naturally (user → plan/step cards → final assistant).
-
-        Args:
-            visible: MessageData from checkpoint after internal phases were
-                stripped.
-            cognition: Cognition card replay from the conversation log.
-
-        Returns:
-            Merged list for bulk load.
-        """
-        if not cognition:
-            return visible
-        if not visible:
-            return list(cognition)
-
-        n = len(visible)
-        vis_spread = max(1, n - 1)
-        vis_entries: list[tuple[float, MessageData]] = [
-            (i / vis_spread, m) for i, m in enumerate(visible)
-        ]
-        sorted_cog = sorted(cognition, key=lambda m: m.timestamp)
-        ts0 = sorted_cog[0].timestamp
-        ts1 = sorted_cog[-1].timestamp
-        span = ts1 - ts0 or 1.0
-        cog_entries: list[tuple[float, MessageData]] = []
-        for m in sorted_cog:
-            # Keep inside (0, 1) so tie-break ordering stays stable vs endpoints.
-            frac = (m.timestamp - ts0) / span
-            mapped = 0.05 + 0.9 * frac
-            cog_entries.append((mapped, m))
-        merged = sorted([*vis_entries, *cog_entries], key=lambda x: x[0])
-        return [m for _, m in merged]
+        """Delegate to ``soothe_sdk.display.card_binder.merge_visible_messages_with_cognition_cards``."""
+        return _binder.merge_visible_messages_with_cognition_cards(visible, cognition)
 
     @staticmethod
     def _convert_messages_to_data(
@@ -107,706 +66,105 @@ class _HistoryMixin:
         *,
         cognition_card_replay: list[MessageData] | None = None,
     ) -> list[MessageData]:
-        """Convert LangChain messages into lightweight `MessageData` objects.
-
-        This is a pure function with zero DOM operations. Tool call matching
-        happens here: `ToolMessage` results are matched by `tool_call_id` and
-        stored directly on the corresponding `MessageData`.
-
-        Args:
-            messages: LangChain message objects from a LangGraph checkpoint.
-            cognition_card_replay: When non-empty, strip checkpoint messages
-                tagged with internal loop phases and merge these cognition cards
-                (plan / goal / step) so resume matches live streaming.
-
-        Returns:
-            Ordered list of `MessageData` ready for `MessageStore.bulk_load`.
-        """
-        from langchain_core.messages import AIMessage, ToolMessage
-
-        from soothe_cli.runtime.parse.message_processing import (
-            extract_tool_args_dict,
-            normalize_tool_calls_list,
+        """Delegate to ``soothe_sdk.display.card_binder.convert_messages_to_data``."""
+        return _binder.convert_messages_to_data(
+            messages,
+            cognition_card_replay=cognition_card_replay,
         )
-
-        hide_internals = bool(cognition_card_replay)
-        result: list[MessageData] = []
-        # Maps tool_call_id -> index into result list
-        pending_tool_indices: dict[str, int] = {}
-
-        for msg in messages:
-            msg = normalize_stream_message(msg)
-            if hide_internals and _HistoryMixin._is_loop_internal_checkpoint_message(msg):
-                continue
-            user_text = extract_user_text_for_display(msg)
-            if user_text is not None:
-                # Detect skill invocations persisted via additional_kwargs
-                skill_meta = (msg.additional_kwargs or {}).get("__skill")
-                if isinstance(skill_meta, dict) and skill_meta.get("name"):
-                    result.append(
-                        MessageData(
-                            type=MessageType.SKILL,
-                            content="",
-                            skill_name=skill_meta["name"],
-                            skill_description=str(skill_meta.get("description", "")),
-                            skill_source=str(skill_meta.get("source", "")),
-                            skill_args=str(skill_meta.get("args", "")),
-                            skill_body=user_text,
-                        )
-                    )
-                else:
-                    result.append(MessageData(type=MessageType.USER, content=user_text))
-
-            elif isinstance(msg, AIMessage):
-                text = extract_ai_text_for_display(msg)
-                if text:
-                    result.append(MessageData(type=MessageType.ASSISTANT, content=text))
-
-                # Track tool calls for later matching
-                for tc in normalize_tool_calls_list(getattr(msg, "tool_calls", [])):
-                    tc_id = tc.get("id")
-                    name = tc.get("name", "unknown")
-                    args = extract_tool_args_dict(tc)
-                    data = MessageData(
-                        type=MessageType.TOOL,
-                        content="",
-                        tool_name=name,
-                        tool_args=args,
-                        tool_status=ToolStatus.PENDING,
-                    )
-                    result.append(data)
-                    if tc_id:
-                        pending_tool_indices[tc_id] = len(result) - 1
-                    else:
-                        data.tool_status = ToolStatus.REJECTED
-
-            elif isinstance(msg, ToolMessage):
-                tc_id = getattr(msg, "tool_call_id", None)
-                if tc_id and tc_id in pending_tool_indices:
-                    idx = pending_tool_indices.pop(tc_id)
-                    data = result[idx]
-                    payload = extract_tool_result_payload(msg)
-                    if payload is not None:
-                        data.tool_status = (
-                            ToolStatus.ERROR if payload.is_error else ToolStatus.SUCCESS
-                        )
-                        data.tool_output = payload.output_display
-                    else:
-                        status = getattr(msg, "status", "success")
-                        content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                        if status == "success":
-                            data.tool_status = ToolStatus.SUCCESS
-                        else:
-                            data.tool_status = ToolStatus.ERROR
-                        data.tool_output = content
-                else:
-                    logger.debug(
-                        "ToolMessage with tool_call_id=%r could not be matched to a pending tool call",
-                        tc_id,
-                    )
-
-            else:
-                logger.debug(
-                    "Skipping unsupported message type %s during history conversion",
-                    type(msg).__name__,
-                )
-
-        # Mark unmatched tool calls as rejected
-        for idx in pending_tool_indices.values():
-            result[idx].tool_status = ToolStatus.REJECTED
-
-        if cognition_card_replay:
-            return _HistoryMixin._merge_visible_messages_with_cognition_cards(
-                result,
-                cognition_card_replay,
-            )
-        return result
-
-    async def _get_loop_state_values(self, loop_id: str) -> dict[str, Any]:
-        """Fetch checkpoint channel values from the daemon host.
-
-        Args:
-            loop_id: Loop id.
-
-        Returns:
-            State values keyed by channel name, or empty when none are available.
-        """
-        if self._daemon_session is None:
-            return {}
-
-        snapshot = await self._daemon_session.aget_loop_state(loop_id)
-        values = dict(snapshot.values)
-        recovered = await self._recover_missing_checkpoint_messages(
-            loop_id=loop_id,
-            values=values,
-        )
-        if recovered:
-            values["messages"] = recovered
-        return values
-
-    async def _recover_missing_checkpoint_messages(
-        self,
-        *,
-        loop_id: str,
-        values: dict[str, Any],
-    ) -> list[Any] | None:
-        """Recover missing checkpoint messages from persisted conversation rows.
-
-        Args:
-            loop_id: Loop id.
-            values: Current checkpoint channel values.
-
-        Returns:
-            Recovered LangChain message objects, or `None` when recovery is not possible.
-        """
-        if self._daemon_session is None:
-            return None
-        existing = values.get("messages")
-        if isinstance(existing, list) and existing:
-            return None
-
-        rows = await self._daemon_session.fetch_conversation_log(
-            loop_id,
-            limit=10000,
-            include_events=True,
-        )
-        recovered_messages = self._conversation_rows_to_langchain_messages(rows)
-        if not recovered_messages:
-            return None
-
-        try:
-            await self._daemon_session.aupdate_loop_state(
-                loop_id,
-                {"messages": [m.model_dump() for m in recovered_messages]},
-                timeout=10.0,
-            )
-            logger.info(
-                "Recovered %d checkpoint messages from conversation log for %s",
-                len(recovered_messages),
-                loop_id,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to persist recovered checkpoint messages for %s",
-                loop_id,
-                exc_info=True,
-            )
-        return recovered_messages
 
     @staticmethod
     def _conversation_rows_to_langchain_messages(rows: list[dict[str, Any]]) -> list[Any]:
-        """Convert persisted conversation rows to LangChain message objects."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
-        messages: list[Any] = []
-        for row in rows:
-            if str(row.get("kind") or "").strip() != "conversation":
-                continue
-            metadata = row.get("metadata")
-            metadata_dict = metadata if isinstance(metadata, dict) else {}
-            role = str(row.get("role") or metadata_dict.get("role") or "").strip().lower()
-            content = str(row.get("content") or metadata_dict.get("text") or "").strip()
-            if not content:
-                continue
-            if role == "user":
-                messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                messages.append(AIMessage(content=content))
-        return messages
-
-    async def _fetch_loop_activity_events(self, loop_id: str) -> list[dict[str, Any]]:
-        """Read persisted activity events from the daemon conversation log (RPC).
-
-        Args:
-            loop_id: Loop id.
-
-        Returns:
-            Event rows (tool_call, tool_result, custom) suitable for UI replay.
-        """
-        if self._daemon_session is None:
-            logger.debug("No daemon session - cannot read persisted activity events")
-            return []
-
-        try:
-            messages = await self._daemon_session.fetch_conversation_log(
-                loop_id,
-                limit=10000,
-                include_events=True,
-            )
-            # Daemon rows expose a `kind` discriminator. `conversation` rows
-            # carry the user/assistant text written by ThreadLogger and are the
-            # only source of those bubbles when checkpoint state is empty and
-            # recovery did not run.
-            return [
-                m
-                for m in messages
-                if m.get("kind") in ("event", "tool_call", "tool_result", "conversation")
-            ]
-        except Exception:
-            logger.debug("Failed to read persisted activity events for %s", loop_id, exc_info=True)
-            return []
+        """Delegate to ``soothe_sdk.display.card_binder.conversation_rows_to_langchain_messages``."""
+        return _binder.conversation_rows_to_langchain_messages(rows)
 
     @staticmethod
     def _parse_loop_event_timestamp(timestamp: Any) -> datetime | None:
-        """Parse an event timestamp into a UTC-aware datetime.
-
-        Args:
-            timestamp: Raw timestamp string from a persisted event row.
-
-        Returns:
-            Parsed UTC-aware datetime, or `None` when parsing fails.
-        """
-        from datetime import datetime
-
-        if not isinstance(timestamp, str) or not timestamp:
-            return None
-        try:
-            parsed = datetime.fromisoformat(timestamp)
-        except (ValueError, TypeError):
-            return None
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
+        """Delegate to ``soothe_sdk.display.card_binder.parse_loop_event_timestamp``."""
+        return _binder.parse_loop_event_timestamp(timestamp)
 
     @staticmethod
     def _convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
-        """Convert one persisted activity-event row to MessageData.
-
-        Args:
-            event: Conversation-log row with optional metadata payload.
-
-        Returns:
-            MessageData when a displayable card can be built, else `None`.
-        """
-        from ast import literal_eval
-
-        kind = str(event.get("kind") or "").strip()
-        metadata_raw = event.get("metadata")
-        metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
-        parsed_ts = _HistoryMixin._parse_loop_event_timestamp(event.get("timestamp"))
-
-        event_timestamp = parsed_ts.timestamp() if parsed_ts is not None else time.time()
-
-        if kind == "conversation":
-            role = str(event.get("role") or metadata.get("role") or "").strip().lower()
-            content = str(event.get("content") or metadata.get("text") or "").strip()
-            if not content:
-                return None
-            if role == "user":
-                return MessageData(
-                    type=MessageType.USER,
-                    content=content,
-                    timestamp=event_timestamp,
-                )
-            if role == "assistant":
-                return MessageData(
-                    type=MessageType.ASSISTANT,
-                    content=content,
-                    timestamp=event_timestamp,
-                )
-            return None
-
-        if kind == "tool_call":
-            tool_name = str(event.get("tool_name") or metadata.get("tool_name") or "unknown")
-            args_preview = str(
-                event.get("args_preview")
-                or metadata.get("args_preview")
-                or event.get("content")
-                or ""
-            ).strip()
-            parsed_args: dict[str, Any] | None = None
-            if args_preview:
-                with suppress(ValueError, SyntaxError):
-                    parsed = literal_eval(args_preview)
-                    if isinstance(parsed, dict):
-                        parsed_args = parsed
-            return MessageData(
-                type=MessageType.TOOL,
-                content="",
-                tool_name=tool_name,
-                tool_args=parsed_args,
-                tool_status=ToolStatus.RUNNING,
-                timestamp=event_timestamp,
-            )
-
-        if kind == "tool_result":
-            tool_name = str(event.get("tool_name") or metadata.get("tool_name") or "unknown")
-            content = str(event.get("content") or metadata.get("content") or "")
-            return MessageData(
-                type=MessageType.TOOL,
-                content="",
-                tool_name=tool_name,
-                tool_status=ToolStatus.SUCCESS,
-                tool_output=content,
-                timestamp=event_timestamp,
-            )
-
-        if kind == "event":
-            event_data = event.get("data")
-            if not isinstance(event_data, dict):
-                nested_data = metadata.get("data")
-                if isinstance(nested_data, dict):
-                    event_data = nested_data
-                else:
-                    return None
-
-            if isinstance(event_data, dict):
-                event_type = str(event_data.get("type") or "").strip()
-                summary = str(event_data.get("summary") or "").strip()
-                if event_type == "soothe.cognition.agent_loop.completed":
-                    # Render a concise completion report so resumed transcripts
-                    # have a clear endpoint marker (the live transcript reads
-                    # this from streamed progress; replay needs an explicit
-                    # row). The final assistant text is still recovered
-                    # separately from the checkpoint ``phase=goal_completion``
-                    # AIMessage.
-                    status = str(event_data.get("status") or "").strip() or "completed"
-                    goal_progress = str(event_data.get("goal_progress") or "").strip()
-                    total_steps = int(event_data.get("total_steps") or 0)
-                    completion_summary = str(event_data.get("completion_summary") or "").strip()
-                    parts = [f"Goal {status}"]
-                    if goal_progress:
-                        parts.append(f"progress={goal_progress}")
-                    if total_steps:
-                        parts.append(f"{total_steps} step{'s' if total_steps != 1 else ''}")
-                    line = " · ".join(parts)
-                    if completion_summary:
-                        line = f"{line} — {completion_summary}"
-                    return MessageData(
-                        type=MessageType.APP,
-                        content=line,
-                        timestamp=event_timestamp,
-                    )
-                if event_type == "soothe.cognition.agent_loop.reasoned":
-                    assessment = str(event_data.get("assessment_reasoning") or "").strip()
-                    plan_reasoning = str(event_data.get("plan_reasoning") or "").strip()
-                    if not assessment and not plan_reasoning:
-                        return None
-                    plan_action_raw = str(event_data.get("plan_action") or "").strip()
-                    plan_action = plan_action_raw if plan_action_raw in {"keep", "new"} else ""
-                    return MessageData(
-                        type=MessageType.COGNITION_REASON,
-                        content="",
-                        timestamp=event_timestamp,
-                        cognition_plan_next_action="",
-                        cognition_plan_status=str(event_data.get("status") or ""),
-                        cognition_plan_iteration=int(event_data.get("iteration") or 0),
-                        cognition_plan_action=plan_action,
-                        cognition_plan_assessment=assessment,
-                        cognition_plan_strategy=plan_reasoning,
-                    )
-                if event_type == "soothe.cognition.agent_loop.started":
-                    # The goal-tree pin (📍 goal · iter<=N) is suppressed on
-                    # history replay: it only adds value while the loop is
-                    # actively planning. Replayed transcripts already show the
-                    # user prompt, step cards, and the completion summary.
-                    return None
-                if event_type == "soothe.cognition.agent_loop.step.started":
-                    step_id = str(event_data.get("step_id") or "").strip()
-                    if not step_id:
-                        return None
-                    return MessageData(
-                        type=MessageType.STEP_PROGRESS,
-                        content="",
-                        timestamp=event_timestamp,
-                        step_progress_id=step_id,
-                        step_progress_description=str(event_data.get("description") or "(step)"),
-                        step_progress_phase="running",
-                    )
-                if event_type == "soothe.cognition.agent_loop.step.completed":
-                    step_id = str(event_data.get("step_id") or "").strip()
-                    if not step_id:
-                        return None
-                    success = bool(event_data.get("success", True))
-                    summary_text = str(
-                        event_data.get("summary") or event_data.get("output_preview") or ""
-                    ).strip()
-                    if not summary_text:
-                        summary_text = "Done" if success else "Failed"
-                    return MessageData(
-                        type=MessageType.STEP_PROGRESS,
-                        content="",
-                        timestamp=event_timestamp,
-                        step_progress_id=step_id,
-                        step_progress_description=str(event_data.get("description") or "(step)"),
-                        step_progress_phase="success" if success else "error",
-                        step_success=success,
-                        step_duration_ms=int(event_data.get("duration_ms") or 0),
-                        step_tool_call_count=int(event_data.get("tool_call_count") or 0),
-                        step_summary=summary_text,
-                    )
-                if summary:
-                    content = summary
-                elif event_type:
-                    content = f"Event: {event_type}"
-                else:
-                    return None
-            return MessageData(
-                type=MessageType.APP,
-                content=content,
-                timestamp=event_timestamp,
-            )
-
-        return None
+        """Delegate to ``soothe_sdk.display.card_binder.convert_event_to_message_data``."""
+        return _binder.convert_event_to_message_data(event)
 
     @staticmethod
     def _collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageData]:
-        """Build cognition card replay rows for TUI parity with live streaming.
-
-        Live streaming mutates a single ``CognitionStepMessage`` widget per
-        ``step_id`` (started → completed transitions the same card in place),
-        so the replay must collapse the started/completed event pair to one
-        card too. We keep the latest state per ``step_id`` — completed when
-        present (it carries duration, summary, tool-count), otherwise the
-        started card so the step still appears in the transcript.
-
-        Args:
-            events: Raw conversation-log rows (``kind=event`` with cognition
-                payloads).
-
-        Returns:
-            Ordered cognition ``MessageData`` (goal tree, plan, step cards).
-        """
-        from datetime import datetime
-
-        sorted_events = sorted(
-            events,
-            key=lambda event: (
-                _HistoryMixin._parse_loop_event_timestamp(event.get("timestamp"))
-                or datetime.min.replace(tzinfo=UTC)
-            ),
-        )
-        cards: list[MessageData] = []
-        step_card_position: dict[str, int] = {}
-        for event in sorted_events:
-            if str(event.get("kind") or "").strip() != "event":
-                continue
-            msg_data = _HistoryMixin._convert_event_to_message_data(event)
-            if msg_data is None:
-                continue
-            if msg_data.type not in (
-                MessageType.COGNITION_REASON,
-                MessageType.COGNITION_GOAL_TREE,
-                MessageType.STEP_PROGRESS,
-            ):
-                continue
-            if msg_data.type == MessageType.STEP_PROGRESS and msg_data.step_progress_id:
-                step_id = msg_data.step_progress_id
-                existing = step_card_position.get(step_id)
-                if existing is not None:
-                    # Mirror live in-place mutation of CognitionStepMessage:
-                    # transition phase/duration/tools to the later event but
-                    # preserve the description (the schema for
-                    # AgenticStepCompletedEvent omits ``description`` — only
-                    # ``step.started`` carries it).
-                    cards[existing] = _HistoryMixin._merge_step_progress(cards[existing], msg_data)
-                    continue
-                step_card_position[step_id] = len(cards)
-            cards.append(msg_data)
-        return cards
+        """Delegate to ``soothe_sdk.display.card_binder.collect_cognition_card_replay``."""
+        return _binder.collect_cognition_card_replay(events)
 
     @staticmethod
     def _merge_step_progress(prior: MessageData, later: MessageData) -> MessageData:
-        """Combine two ``STEP_PROGRESS`` cards (typically started → completed)."""
-        # Prefer the later event's status / metrics / summary, but keep the
-        # description from whichever card has one (started has it; completed
-        # doesn't and falls back to the placeholder "(step)").
-        prior_desc = (prior.step_progress_description or "").strip()
-        later_desc = (later.step_progress_description or "").strip()
-        description = (
-            later_desc
-            if later_desc and later_desc != "(step)"
-            else (prior_desc if prior_desc and prior_desc != "(step)" else later_desc or prior_desc)
-        )
-        merged = MessageData(
-            type=MessageType.STEP_PROGRESS,
-            content=later.content,
-            timestamp=later.timestamp,
-            step_progress_id=later.step_progress_id or prior.step_progress_id,
-            step_progress_description=description or "(step)",
-            step_progress_phase=later.step_progress_phase or prior.step_progress_phase,
-            step_success=later.step_success
-            if later.step_success is not None
-            else prior.step_success,
-            step_duration_ms=later.step_duration_ms or prior.step_duration_ms,
-            step_tool_call_count=later.step_tool_call_count or prior.step_tool_call_count,
-            step_summary=later.step_summary or prior.step_summary,
-        )
-        return merged
+        """Delegate to ``soothe_sdk.display.card_binder.merge_step_progress``."""
+        return _binder.merge_step_progress(prior, later)
 
     def _convert_loop_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
-        """Convert persisted activity-event rows into stable TUI cards.
-
-        This fallback is used only when checkpoint messages are unavailable.
-        """
-        from datetime import datetime
-
-        data: list[MessageData] = []
-        pending_tool_indices: dict[str, list[int]] = {}
-        # Track step_progress card index per step_id so a later `completed`
-        # event mutates the same card instead of mounting a second one — see
-        # _collect_cognition_card_replay for the same rationale.
-        step_card_position: dict[str, int] = {}
-
-        sorted_events = sorted(
-            events,
-            key=lambda event: (
-                self._parse_loop_event_timestamp(event.get("timestamp"))
-                or datetime.min.replace(tzinfo=UTC)
-            ),
-        )
-        for event in sorted_events:
-            kind = str(event.get("kind") or "").strip()
-            msg_data = _HistoryMixin._convert_event_to_message_data(event)
-            if msg_data is None:
-                continue
-
-            if kind == "tool_call" and msg_data.type == MessageType.TOOL and msg_data.tool_name:
-                pending_tool_indices.setdefault(msg_data.tool_name, []).append(len(data))
-                data.append(msg_data)
-                continue
-
-            if kind == "tool_result" and msg_data.type == MessageType.TOOL and msg_data.tool_name:
-                tool_name = msg_data.tool_name
-                pending = pending_tool_indices.get(tool_name, [])
-                if pending:
-                    call_idx = pending.pop(0)
-                    data[call_idx].tool_status = ToolStatus.SUCCESS
-                    data[call_idx].tool_output = msg_data.tool_output
-                else:
-                    data.append(msg_data)
-                continue
-
-            if msg_data.type == MessageType.STEP_PROGRESS and msg_data.step_progress_id:
-                step_id = msg_data.step_progress_id
-                existing = step_card_position.get(step_id)
-                if existing is not None:
-                    data[existing] = _HistoryMixin._merge_step_progress(data[existing], msg_data)
-                    continue
-                step_card_position[step_id] = len(data)
-
-            data.append(msg_data)
-
-        return data
+        """Delegate to ``soothe_sdk.display.card_binder.convert_loop_events_to_data``."""
+        return _binder.convert_loop_events_to_data(events)
 
     def _merge_history_sources(
         self,
         checkpoint_messages: list[Any],
         activity_events: list[dict[str, Any]],
     ) -> list[tuple[str, Any]]:
-        """Merge checkpoint messages and persisted activity events chronologically.
-
-        Args:
-            checkpoint_messages: LangChain message objects from checkpoint.
-            activity_events: Event rows from the daemon conversation log.
-
-        Returns:
-            List of (source_type, data) tuples sorted by timestamp:
-                source_type: "message" or "event"
-                data: LangChain message or MessageData
-        """
-        from datetime import datetime
-
-        timeline: list[tuple[datetime, str, Any]] = []
-        min_timestamp = datetime.min.replace(tzinfo=UTC)
-
-        # Extract timestamps from checkpoint messages
-        for msg in checkpoint_messages:
-            # LangChain messages don't have explicit timestamps in checkpoint
-            # Use message sequence as proxy (they're already ordered)
-            # We'll place them relative to events based on tool call matching
-            timeline.append((min_timestamp, "message", msg))
-
-        # Activity events carry explicit timestamps for ordering
-        for event in activity_events:
-            ts = self._parse_loop_event_timestamp(event.get("timestamp")) or min_timestamp
-
-            # Convert event to MessageData
-            msg_data = _HistoryMixin._convert_event_to_message_data(event)
-            if msg_data:
-                timeline.append((ts, "event", msg_data))
-
-        # Sort by timestamp (messages without timestamps get datetime.min)
-        # This interleaves events chronologically with messages
-        timeline.sort(key=lambda x: x[0])
-
-        # Return as (source_type, data) list
-        return [(item[1], item[2]) for item in timeline]
+        """Delegate to ``soothe_sdk.display.card_binder.merge_history_sources``."""
+        return _binder.merge_history_sources(checkpoint_messages, activity_events)
 
     def _convert_combined_to_data(self, combined: list[tuple[str, Any]]) -> list[MessageData]:
-        """Convert merged timeline to MessageData widgets.
+        """Delegate to ``soothe_sdk.display.card_binder.convert_combined_to_data``."""
+        return _binder.convert_combined_to_data(combined)
 
-        Args:
-            combined: List of (source_type, data) from merge.
-
-        Returns:
-            List of MessageData widgets for UI rendering.
-        """
-        data: list[MessageData] = []
-        pending_checkpoint_messages: list[Any] = []
-
-        def flush_checkpoint_messages() -> None:
-            if not pending_checkpoint_messages:
-                return
-            data.extend(self._convert_messages_to_data(pending_checkpoint_messages))
-            pending_checkpoint_messages.clear()
-
-        for source_type, item in combined:
-            if source_type == "message":
-                pending_checkpoint_messages.append(item)
-                continue
-
-            flush_checkpoint_messages()
-            if source_type == "event" and isinstance(item, MessageData):
-                data.append(item)
-
-        flush_checkpoint_messages()
-        return data
+    # ------------------------------------------------------------------
+    # I/O: resume reads from the daemon's bound card ledger (RFC-413).
+    # Legacy checkpoint + activity-log readers were removed when RFC-411
+    # was superseded — the daemon now owns derivation and exposes a single
+    # ``loop_cards_fetch`` RPC.
+    # ------------------------------------------------------------------
 
     async def _fetch_loop_history_data(self, loop_id: str) -> _LoopHistoryPayload:
-        """Fetch and convert complete conversation history (checkpoint + persisted events).
+        """Fetch conversation history from the daemon's bound card ledger.
 
-        Reads checkpoint messages when present; otherwise replays persisted activity
-        rows from the daemon conversation log.
+        RFC-413: this is the only resume path. The daemon's
+        ``loop_cards_fetch`` RPC returns the cards plus the persisted
+        context-token count in one round-trip; the daemon eagerly
+        backfills the ledger for legacy loops on first access.
 
         Args:
             loop_id: Loop id.
 
         Returns:
             Payload containing converted message data and the persisted
-            context-token count.
+            context-token count. Empty payload on error or when the daemon
+            session is unavailable; the caller mounts an "Could not load
+            history" message via the surrounding error path.
         """
-        # 1. Read checkpoint messages (existing)
-        state_values = await self._get_loop_state_values(loop_id)
-        raw_tokens = state_values.get("_context_tokens")
-        context_tokens = raw_tokens if isinstance(raw_tokens, int) and raw_tokens >= 0 else 0
-        messages = state_values.get("messages", [])
+        if self._daemon_session is None:
+            return _LoopHistoryPayload([], 0)
 
-        # 2. Primary source: checkpoint messages -> canonical TUI cards
-        if messages and isinstance(messages[0], dict):
-            from soothe_sdk.langchain_wire import messages_from_wire_dicts
+        try:
+            response = await self._daemon_session.fetch_loop_cards(loop_id)
+        except Exception:
+            logger.warning("loop_cards_fetch failed for %s", loop_id, exc_info=True)
+            return _LoopHistoryPayload([], 0)
 
-            messages = messages_from_wire_dicts(messages)
-        if messages:
-            cognition_replay: list[MessageData] | None = None
-            if self._daemon_session is not None:
-                log_events = await self._fetch_loop_activity_events(loop_id)
-                replay = self._collect_cognition_card_replay(log_events)
-                if replay:
-                    cognition_replay = replay
-            data = await asyncio.to_thread(
-                self._convert_messages_to_data,
-                messages,
-                cognition_card_replay=cognition_replay,
-            )
-            return _LoopHistoryPayload(data, context_tokens)
+        if not getattr(response, "success", False):
+            return _LoopHistoryPayload([], 0)
 
-        # 3. Fallback: persisted activity events when checkpoints are unavailable.
-        events = await self._fetch_loop_activity_events(loop_id)
-        if not events:
+        raw_cards = list(getattr(response, "cards", []) or [])
+        context_tokens = int(getattr(response, "context_tokens", 0) or 0)
+        if not raw_cards:
             return _LoopHistoryPayload([], context_tokens)
 
-        data = await asyncio.to_thread(self._convert_loop_events_to_data, events)
+        try:
+            from soothe_sdk.display.card_ledger import card_from_wire_dict
+
+            data = [card_from_wire_dict(c) for c in raw_cards]
+        except Exception:
+            logger.warning(
+                "Failed to deserialize loop_cards_fetch payload for %s",
+                loop_id,
+                exc_info=True,
+            )
+            return _LoopHistoryPayload([], context_tokens)
 
         return _LoopHistoryPayload(data, context_tokens)
 
