@@ -102,6 +102,7 @@ class ClientSession:
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     wire_tier: str = "full"
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
+    autopilot_subscribed: bool = False  # RFC-228: receives autopilot__* worker events
     config: SootheConfig | None = None  # RFC-614: daemon config reference
 
     def get_effective_streaming_config(
@@ -213,17 +214,31 @@ class ClientSessionManager:
         RFC-222 §WorkerPool: refuses subscriptions to ``autopilot__*`` worker
         loop_ids. Those are internal autopilot subprocess workers and must
         never be exposed as user-facing sessions.
+
+        RFC-228: If client has ``autopilot_subscribed=True``, bypass the
+        worker filter to allow Loop Observation Room (LOR) access.
         """
         try:
             from soothe.core.autopilot.worker_pool import is_autopilot_worker_loop_id
 
             if is_autopilot_worker_loop_id(loop_id):
-                logger.warning(
-                    "[Session] rejected subscribe to autopilot worker loop %s by client %s",
+                # RFC-228: Check if client has autopilot subscription bypass
+                async with self._lock:
+                    session = self._sessions.get(client_id)
+                if session is None or not session.autopilot_subscribed:
+                    logger.warning(
+                        "[Session] rejected subscribe to autopilot worker loop %s by client %s "
+                        "(autopilot_subscribe required per RFC-228)",
+                        loop_id,
+                        client_id,
+                    )
+                    return False
+                # Client has autopilot_subscribed=True, allow subscription
+                logger.info(
+                    "[Session] allowing autopilot worker subscription %s for client %s (RFC-228 bypass)",
                     loop_id,
                     client_id,
                 )
-                return False
         except Exception:
             # Helper unavailable — fall through; this is purely a defensive gate.
             logger.debug("autopilot worker loop_id check unavailable", exc_info=True)

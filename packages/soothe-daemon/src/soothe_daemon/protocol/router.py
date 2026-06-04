@@ -353,6 +353,35 @@ class MessageRouter:
             await self._handle_config_get(client_id, msg)
             return
 
+        # RFC-228: Autopilot Job IPC Commands
+        if msg_type == "job_create":
+            await self._handle_job_create(client_id, msg)
+            return
+        if msg_type == "job_status":
+            await self._handle_job_status(client_id, msg)
+            return
+        if msg_type == "job_pause":
+            await self._handle_job_pause(client_id, msg)
+            return
+        if msg_type == "job_resume":
+            await self._handle_job_resume(client_id, msg)
+            return
+        if msg_type == "job_cancel":
+            await self._handle_job_cancel(client_id, msg)
+            return
+        if msg_type == "job_dag":
+            await self._handle_job_dag(client_id, msg)
+            return
+        if msg_type == "job_guidance":
+            await self._handle_job_guidance(client_id, msg)
+            return
+        if msg_type == "autopilot_subscribe":
+            await self._handle_autopilot_subscribe(client_id, msg)
+            return
+        if msg_type == "autopilot_unsubscribe":
+            await self._handle_autopilot_unsubscribe(client_id, msg)
+            return
+
         if msg_type == "command_request":
             active_loop = await self._client_subscribed_loop_id(client_id)
             if not active_loop:
@@ -1855,3 +1884,725 @@ class MessageRouter:
         if isinstance(raw, int) and raw >= 0:
             return raw
         return 0
+
+    # ---------------------------------------------------------------------------
+    # RFC-228: Autopilot Job IPC Handlers
+    # ---------------------------------------------------------------------------
+
+    def _require_autopilot_service(self, client_id: Any, request_id: str | None) -> Any | None:
+        """Return the daemon's AutopilotService or send error response.
+
+        Args:
+            client_id: Client connection identifier.
+            request_id: Optional request_id for error response.
+
+        Returns:
+            AutopilotService instance if available, None otherwise (error sent).
+        """
+        d = self._daemon
+        service = getattr(d, "_autopilot_service", None)
+        if service is None:
+            d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "AUTOPILOT_NOT_READY",
+                    "message": "Autopilot service not initialized or unavailable",
+                    "request_id": request_id,
+                },
+            )
+            return None
+        return service
+
+    async def _handle_job_create(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_create RPC request (RFC-228).
+
+        Submit a root goal to AutopilotService, creating a new autopilot job.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with goal (required), verification_rules (optional), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        goal_text = msg.get("goal")
+        # TODO: verification_rules to be passed to GoalEngine when supported
+        _verification_rules = msg.get("verification_rules")  # noqa: F841
+
+        if not isinstance(goal_text, str) or not goal_text.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "goal (non-empty string) is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        # Submit root goal to AutopilotService
+        try:
+            goal = await service.submit_task(
+                description=goal_text.strip(),
+                priority=50,  # Default priority
+            )
+        except Exception as exc:
+            logger.error("[JobCreate] Failed to submit task: %s", exc, exc_info=True)
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_CREATE_FAILED",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_create_response",
+                "job_id": goal.id,
+                "status": goal.status,
+                "request_id": request_id,
+            },
+        )
+        logger.info("[JobCreate] Created job %s with goal: %s", goal.id, goal_text[:50])
+
+    async def _handle_job_status(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_status RPC request (RFC-228).
+
+        Query job state: goal status, counts, assigned workers.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "job_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        goal_engine = service._goal_engine
+
+        # Get root goal
+        root_goal = await goal_engine.get_goal(job_id)
+        if root_goal is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job {job_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Traverse DAG to count goals
+        all_goals = await goal_engine.list_goals()
+        descendants = _traverse_goal_descendants(job_id, all_goals)
+
+        active_count = sum(1 for g in descendants if g.status == "active")
+        completed_count = sum(1 for g in descendants if g.status == "completed")
+        failed_count = sum(1 for g in descendants if g.status == "failed")
+        total_count = len(descendants)
+
+        # Collect workers assigned to active goals
+        workers = [
+            {"goal_id": g.id, "loop_id": g.assigned_loop_id}
+            for g in descendants
+            if g.status == "active" and g.assigned_loop_id
+        ]
+
+        # Get last error from failed goals
+        last_error = None
+        for g in descendants:
+            if g.status == "failed" and g.error:
+                last_error = g.error
+                break
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_status_response",
+                "job_id": job_id,
+                "status": root_goal.status,
+                "active_goals": active_count,
+                "completed_goals": completed_count,
+                "failed_goals": failed_count,
+                "total_goals": total_count,
+                "workers": workers,
+                "last_error": last_error,
+                "request_id": request_id,
+            },
+        )
+
+    async def _handle_job_pause(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_pause RPC request (RFC-228).
+
+        Pause goal execution by suspending the root goal.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "job_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        goal_engine = service._goal_engine
+
+        # Check goal exists and is not already suspended
+        goal = await goal_engine.get_goal(job_id)
+        if goal is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job {job_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if goal.status == "suspended":
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_ALREADY_PAUSED",
+                    "message": f"Job {job_id} is already paused",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if goal.status in ("completed", "failed"):
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_COMPLETED",
+                    "message": f"Job {job_id} is in terminal state {goal.status}",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Suspend the root goal
+        try:
+            await goal_engine.suspend_goal(job_id, reason="user_pause")
+        except Exception as exc:
+            logger.error("[JobPause] Failed to suspend goal %s: %s", job_id, exc)
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_PAUSE_FAILED",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_pause_response",
+                "job_id": job_id,
+                "status": "suspended",
+                "request_id": request_id,
+            },
+        )
+        logger.info("[JobPause] Paused job %s", job_id)
+
+    async def _handle_job_resume(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_resume RPC request (RFC-228).
+
+        Resume paused goal execution by reactivating the root goal.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "job_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        goal_engine = service._goal_engine
+
+        # Check goal exists and is suspended
+        goal = await goal_engine.get_goal(job_id)
+        if goal is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job {job_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if goal.status not in ("suspended", "blocked"):
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_NOT_PAUSED",
+                    "message": f"Job {job_id} is not paused (status: {goal.status})",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Reactivate the root goal
+        try:
+            await goal_engine.reactivate_goal(job_id)
+        except Exception as exc:
+            logger.error("[JobResume] Failed to reactivate goal %s: %s", job_id, exc)
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_RESUME_FAILED",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_resume_response",
+                "job_id": job_id,
+                "status": "pending",  # After reactivation, goal goes to pending
+                "request_id": request_id,
+            },
+        )
+        logger.info("[JobResume] Resumed job %s", job_id)
+
+    async def _handle_job_cancel(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_cancel RPC request (RFC-228).
+
+        Cancel job by cancelling the root goal via AutopilotService.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "job_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        # Cancel via AutopilotService (handles worker cleanup)
+        try:
+            cancelled = await service.cancel_goal(job_id, reason="user_cancel")
+        except Exception as exc:
+            logger.error("[JobCancel] Failed to cancel goal %s: %s", job_id, exc)
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_CANCEL_FAILED",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if cancelled is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job {job_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_cancel_response",
+                "job_id": job_id,
+                "status": cancelled.status,
+                "request_id": request_id,
+            },
+        )
+        logger.info("[JobCancel] Cancelled job %s", job_id)
+
+    async def _handle_job_dag(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_dag RPC request (RFC-228).
+
+        Get GoalEngine DAG snapshot for visualization.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "job_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        goal_engine = service._goal_engine
+
+        # Get root goal
+        root_goal = await goal_engine.get_goal(job_id)
+        if root_goal is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job {job_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Get all goals and filter to descendants of root
+        all_goals = await goal_engine.list_goals()
+        descendants = _traverse_goal_descendants(job_id, all_goals)
+
+        # Build nodes for React Flow
+        nodes = []
+        for g in descendants:
+            node: dict[str, Any] = {
+                "id": g.id,
+                "description": g.description[:100] if len(g.description) > 100 else g.description,
+                "status": g.status,
+                "priority": g.priority,
+                "depends_on": list(g.depends_on or []),
+                "assigned_loop_id": g.assigned_loop_id,
+                "steps_completed": 0,
+                "steps_total": 0,
+                "tool_calls": 0,
+            }
+            # Add report fields if available
+            if g.report:
+                node["steps_completed"] = getattr(g.report, "steps_completed", 0) or 0
+                node["steps_total"] = getattr(g.report, "steps_total", 0) or 0
+                node["tool_calls"] = getattr(g.report, "tool_calls", 0) or 0
+                if g.status == "completed":
+                    node["summary"] = getattr(g.report, "summary", None)
+                    node["findings"] = getattr(g.report, "findings", None)
+            nodes.append(node)
+
+        # Build edges from depends_on relationships
+        edges = []
+        for g in descendants:
+            for dep_id in g.depends_on or []:
+                edges.append({"source": dep_id, "target": g.id})
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_dag_response",
+                "job_id": job_id,
+                "dag": {
+                    "nodes": nodes,
+                    "edges": edges,
+                },
+                "request_id": request_id,
+            },
+        )
+
+    async def _handle_job_guidance(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle job_guidance RPC request (RFC-228).
+
+        Send user guidance to GoalEngine for absorption.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id, goal_id (optional), text, request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+        goal_id = msg.get("goal_id")  # Optional - specific goal or root
+        text = msg.get("text")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "job_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if not isinstance(text, str) or not text.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "text (non-empty string) is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        service = self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        goal_engine = service._goal_engine
+
+        # Determine target goal
+        target_id = goal_id if goal_id else job_id
+        target_goal = await goal_engine.get_goal(target_id)
+        if target_goal is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "GOAL_NOT_FOUND",
+                    "message": f"Goal {target_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # TODO: Guidance absorption mechanism needs implementation in GoalEngine
+        # For now, log and acknowledge
+        logger.info(
+            "[JobGuidance] Received guidance for job=%s goal=%s: %s",
+            job_id,
+            target_id,
+            text[:50],
+        )
+
+        # Future: call goal_engine.absorb_guidance(target_id, text)
+        # For Phase 1, just acknowledge receipt
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "job_guidance_response",
+                "job_id": job_id,
+                "goal_id": target_id,
+                "absorbed": True,  # Placeholder until real implementation
+                "request_id": request_id,
+            },
+        )
+
+    async def _handle_autopilot_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_subscribe RPC request (RFC-228).
+
+        Subscribe client to autopilot worker events (bypasses autopilot__* filter).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+
+        session_manager = d._session_manager
+        session = await session_manager.get_session(client_id)
+        if session is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_SESSION",
+                    "message": "Client session not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Set autopilot subscription flag (enables worker event bypass)
+        session.autopilot_subscribed = True
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "autopilot_subscribe_response",
+                "client_id": client_id,
+                "subscribed": True,
+                "request_id": request_id,
+            },
+        )
+        logger.info("[AutopilotSubscribe] Client %s subscribed to autopilot events", client_id)
+
+    async def _handle_autopilot_unsubscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_unsubscribe RPC request (RFC-228).
+
+        Release autopilot worker event subscription.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+
+        session_manager = d._session_manager
+        session = await session_manager.get_session(client_id)
+        if session is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_SESSION",
+                    "message": "Client session not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Clear autopilot subscription flag
+        session.autopilot_subscribed = False
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "autopilot_unsubscribe_response",
+                "client_id": client_id,
+                "subscribed": False,
+                "request_id": request_id,
+            },
+        )
+        logger.info(
+            "[AutopilotUnsubscribe] Client %s unsubscribed from autopilot events", client_id
+        )
+
+
+def _traverse_goal_descendants(root_id: str, all_goals: list[Any]) -> list[Any]:
+    """Traverse goal DAG to collect all descendants of a root goal.
+
+    Args:
+        root_id: Root goal ID to start from.
+        all_goals: List of all goals in GoalEngine.
+
+    Returns:
+        List of goals that are descendants of root (including root itself).
+    """
+    # Build parent → children map from depends_on
+    children_map: dict[str, list[str]] = {}
+    goal_by_id: dict[str, Any] = {}
+
+    for g in all_goals:
+        goal_by_id[g.id] = g
+        for dep_id in g.depends_on or []:
+            if dep_id not in children_map:
+                children_map[dep_id] = []
+            children_map[dep_id].append(g.id)
+
+    # BFS/DFS to collect descendants
+    descendants: list[Any] = []
+    visited: set[str] = set()
+    queue = [root_id]
+
+    while queue:
+        current_id = queue.pop(0)
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+
+        goal = goal_by_id.get(current_id)
+        if goal:
+            descendants.append(goal)
+
+        # Add children to queue
+        for child_id in children_map.get(current_id, []):
+            if child_id not in visited:
+                queue.append(child_id)
+
+    return descendants
