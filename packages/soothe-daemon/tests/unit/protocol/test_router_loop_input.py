@@ -51,6 +51,7 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "response_schema_name": None,
         "response_schema_strict": None,
         "clarification_mode": None,
+        "clarification_answer": False,
     }
 
 

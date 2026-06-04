@@ -40,6 +40,7 @@ from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    ClarificationInputMessage,
     ErrorMessage,
     QueuedUserMessage,
     UserMessage,
@@ -187,6 +188,60 @@ class _ExecutionMixin:
         """Update status bar when input mode changes."""
         if self._status_bar:
             self._status_bar.set_mode(event.mode)
+
+    async def on_clarification_input_message_submitted(
+        self,
+        event: ClarificationInputMessage.Submitted,
+    ) -> None:
+        """Forward a clarification answer to the daemon and refresh the step card.
+
+        Wired to ``ClarificationInputMessage.Submitted`` (RFC-622). The inline
+        widget collects per-question answers; here we render them on the
+        matching step card and trigger ``_run_agent_task`` with the answer
+        text. ``execute_task_textual`` reads ``adapter._clarification_pending``
+        and attaches ``clarification_answer=True`` to the wire so the daemon
+        resumes the suspended loop graph rather than starting a new turn.
+        """
+        event.stop()
+        adapter = self._ui_adapter
+        if adapter is None:
+            return
+
+        # Render answers on the corresponding step card so the user sees
+        # confirmation in-place. ``set_clarification_details`` handles styling
+        # and the detail-area layout.
+        step_widget = adapter._current_step_messages.get(event.step_id)
+        if step_widget is not None:
+            try:
+                step_widget.set_clarification_details(
+                    questions=list(event.questions),
+                    answers=list(event.answers),
+                    source="human",
+                    confidence=None,
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("Failed to render clarification answers on step card", exc_info=True)
+
+        # Drop tracking; the inline widget itself stays mounted (disabled) so
+        # the user can still see what they answered.
+        adapter._clarification_input_by_step.pop(event.step_id, None)
+
+        non_empty = [a for a in event.answers if a.strip()]
+        if not non_empty:
+            return
+        if len(non_empty) == 1:
+            payload_text = non_empty[0]
+        else:
+            payload_text = "\n".join(
+                f"Q{i + 1}: {q}\nA{i + 1}: {a}"
+                for i, (q, a) in enumerate(zip(event.questions, event.answers, strict=False))
+            )
+
+        # Hand off to the standard turn pipeline. ``execute_task_textual``
+        # snapshots ``adapter._clarification_pending`` (still True) and sets
+        # the wire ``clarification_answer`` flag, then clears the persisted
+        # flag so a follow-up turn is treated as a new goal.
+        await self._run_agent_task(payload_text)
 
     async def _handle_shell_command(self, command: str) -> None:
         """Handle a shell command (! prefix).
