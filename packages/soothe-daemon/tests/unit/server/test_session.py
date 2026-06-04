@@ -267,28 +267,8 @@ async def test_subscribe_loop_replaces_prior_subscription():
 
 
 @pytest.mark.asyncio
-async def test_subscribe_loop_accepts_normal_verbosity() -> None:
-    """Test `normal` is accepted as a client verbosity level."""
-    bus = EventBus()
-    manager = ClientSessionManager(bus)
-
-    transport = MagicMock()
-    transport.name = "test"
-
-    client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="normal")
-    assert result is True
-
-    session = await manager.get_session(client_id)
-    assert session is not None
-    assert session.verbosity == "normal"
-
-    await manager.remove_session(client_id)
-
-
-@pytest.mark.asyncio
-async def test_sender_loop_filters_detailed_event_for_normal_verbosity() -> None:
-    """Test daemon-side filtering at `normal` verbosity hides DETAILED-tier events."""
+async def test_sender_loop_filters_internal_events_on_wire() -> None:
+    """Wire visibility filter drops INTERNAL-tier events regardless of client."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -297,7 +277,7 @@ async def test_sender_loop_filters_detailed_event_for_normal_verbosity() -> None
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="normal")
+    result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result is True
 
     class TestEvent(SootheEvent):
@@ -320,8 +300,8 @@ async def test_sender_loop_filters_detailed_event_for_normal_verbosity() -> None
 
 
 @pytest.mark.asyncio
-async def test_sender_loop_filters_verbose_events_even_at_debug_verbosity() -> None:
-    """Client ``verbosity=debug`` must not receive DETAILED/DEBUG catalog events on the wire."""
+async def test_sender_loop_filters_debug_tier_events_on_wire() -> None:
+    """Wire visibility filter drops DEBUG-tier events; clients always project NORMAL."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -330,7 +310,7 @@ async def test_sender_loop_filters_verbose_events_even_at_debug_verbosity() -> N
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="debug")
+    result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result is True
 
     class DebugEvent(SootheEvent):

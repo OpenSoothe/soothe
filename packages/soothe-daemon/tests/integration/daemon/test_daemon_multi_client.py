@@ -248,7 +248,6 @@ async def test_switching_loop_subscription_replaces_prior(tmp_path: Path):
             {
                 "type": "loop_subscribe",
                 "loop_id": loop2,
-                "verbosity": "normal",
             },
             response_type="loop_subscribe_response",
             timeout=5.0,

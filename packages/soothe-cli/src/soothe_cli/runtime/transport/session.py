@@ -64,7 +64,6 @@ class TuiDaemonSession:
         status_event = await bootstrap_loop_session(
             self._client,
             resume_loop_id=resume_loop_id,
-            verbosity="normal",
             stream_delivery=stream_delivery,
             workspace=self._workspace,
         )
