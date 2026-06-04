@@ -2004,10 +2004,8 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._goal_engine
-
         # Get root goal
-        root_goal = await goal_engine.get_goal(job_id)
+        root_goal = await service.get_goal(job_id)
         if root_goal is None:
             await d._send_client_message(
                 client_id,
@@ -2020,28 +2018,33 @@ class MessageRouter:
             )
             return
 
-        # Traverse DAG to count goals
-        all_goals = await goal_engine.list_goals()
-        descendants = _traverse_goal_descendants(job_id, all_goals)
+        # Use dag_snapshot to get goal descendants (RFC-228)
+        dag = await service.dag_snapshot(job_id)
+        nodes = dag.get("nodes", [])
 
-        active_count = sum(1 for g in descendants if g.status == "active")
-        completed_count = sum(1 for g in descendants if g.status == "completed")
-        failed_count = sum(1 for g in descendants if g.status == "failed")
-        total_count = len(descendants)
+        # Count goals by status
+        active_count = sum(1 for n in nodes if n.get("status") == "active")
+        completed_count = sum(1 for n in nodes if n.get("status") == "completed")
+        failed_count = sum(1 for n in nodes if n.get("status") == "failed")
+        total_count = len(nodes)
 
         # Collect workers assigned to active goals
         workers = [
-            {"goal_id": g.id, "loop_id": g.assigned_loop_id}
-            for g in descendants
-            if g.status == "active" and g.assigned_loop_id
+            {"goal_id": n.get("id"), "loop_id": n.get("assigned_loop_id")}
+            for n in nodes
+            if n.get("status") == "active" and n.get("assigned_loop_id")
         ]
 
         # Get last error from failed goals
         last_error = None
-        for g in descendants:
-            if g.status == "failed" and g.error:
-                last_error = g.error
-                break
+        all_goals = await service.list_goals()
+        for g in all_goals:
+            if g.id == job_id or any(
+                dep_id == job_id for dep_id in g.depends_on or []
+            ):  # Approximate check
+                if g.status == "failed" and g.error:
+                    last_error = g.error
+                    break
 
         await d._send_client_message(
             client_id,
@@ -2336,10 +2339,8 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._goal_engine
-
-        # Get root goal
-        root_goal = await goal_engine.get_goal(job_id)
+        # Check root goal exists
+        root_goal = await service.get_goal(job_id)
         if root_goal is None:
             await d._send_client_message(
                 client_id,
@@ -2352,49 +2353,15 @@ class MessageRouter:
             )
             return
 
-        # Get all goals and filter to descendants of root
-        all_goals = await goal_engine.list_goals()
-        descendants = _traverse_goal_descendants(job_id, all_goals)
-
-        # Build nodes for React Flow
-        nodes = []
-        for g in descendants:
-            node: dict[str, Any] = {
-                "id": g.id,
-                "description": g.description[:100] if len(g.description) > 100 else g.description,
-                "status": g.status,
-                "priority": g.priority,
-                "depends_on": list(g.depends_on or []),
-                "assigned_loop_id": g.assigned_loop_id,
-                "steps_completed": 0,
-                "steps_total": 0,
-                "tool_calls": 0,
-            }
-            # Add report fields if available
-            if g.report:
-                node["steps_completed"] = getattr(g.report, "steps_completed", 0) or 0
-                node["steps_total"] = getattr(g.report, "steps_total", 0) or 0
-                node["tool_calls"] = getattr(g.report, "tool_calls", 0) or 0
-                if g.status == "completed":
-                    node["summary"] = getattr(g.report, "summary", None)
-                    node["findings"] = getattr(g.report, "findings", None)
-            nodes.append(node)
-
-        # Build edges from depends_on relationships
-        edges = []
-        for g in descendants:
-            for dep_id in g.depends_on or []:
-                edges.append({"source": dep_id, "target": g.id})
+        # Use AutopilotService.dag_snapshot() for visualization (RFC-228)
+        dag = await service.dag_snapshot(job_id)
 
         await d._send_client_message(
             client_id,
             {
                 "type": "job_dag_response",
                 "job_id": job_id,
-                "dag": {
-                    "nodes": nodes,
-                    "edges": edges,
-                },
+                "dag": dag,
                 "request_id": request_id,
             },
         )
@@ -2459,24 +2426,25 @@ class MessageRouter:
             )
             return
 
-        # TODO: Guidance absorption mechanism needs implementation in GoalEngine
-        # For now, log and acknowledge
+        # Absorb guidance via GoalEngine (RFC-228)
+        scope = "goal" if goal_id else "job"
+        absorbed = await goal_engine.absorb_guidance(target_id, text.strip(), scope=scope)
+
         logger.info(
-            "[JobGuidance] Received guidance for job=%s goal=%s: %s",
+            "[JobGuidance] Guidance for job=%s goal=%s absorbed=%s: %s",
             job_id,
             target_id,
+            absorbed,
             text[:50],
         )
 
-        # Future: call goal_engine.absorb_guidance(target_id, text)
-        # For Phase 1, just acknowledge receipt
         await d._send_client_message(
             client_id,
             {
                 "type": "job_guidance_response",
                 "job_id": job_id,
                 "goal_id": target_id,
-                "absorbed": True,  # Placeholder until real implementation
+                "absorbed": absorbed,
                 "request_id": request_id,
             },
         )
@@ -2509,6 +2477,9 @@ class MessageRouter:
 
         # Set autopilot subscription flag (enables worker event bypass)
         session.autopilot_subscribed = True
+
+        # Subscribe to autopilot topic for client-visible events (RFC-228)
+        await d._event_bus.subscribe("autopilot", session.event_queue)
 
         await d._send_client_message(
             client_id,
@@ -2550,6 +2521,9 @@ class MessageRouter:
         # Clear autopilot subscription flag
         session.autopilot_subscribed = False
 
+        # Unsubscribe from autopilot topic (RFC-228)
+        await d._event_bus.unsubscribe("autopilot", session.event_queue)
+
         await d._send_client_message(
             client_id,
             {
@@ -2562,47 +2536,3 @@ class MessageRouter:
         logger.info(
             "[AutopilotUnsubscribe] Client %s unsubscribed from autopilot events", client_id
         )
-
-
-def _traverse_goal_descendants(root_id: str, all_goals: list[Any]) -> list[Any]:
-    """Traverse goal DAG to collect all descendants of a root goal.
-
-    Args:
-        root_id: Root goal ID to start from.
-        all_goals: List of all goals in GoalEngine.
-
-    Returns:
-        List of goals that are descendants of root (including root itself).
-    """
-    # Build parent → children map from depends_on
-    children_map: dict[str, list[str]] = {}
-    goal_by_id: dict[str, Any] = {}
-
-    for g in all_goals:
-        goal_by_id[g.id] = g
-        for dep_id in g.depends_on or []:
-            if dep_id not in children_map:
-                children_map[dep_id] = []
-            children_map[dep_id].append(g.id)
-
-    # BFS/DFS to collect descendants
-    descendants: list[Any] = []
-    visited: set[str] = set()
-    queue = [root_id]
-
-    while queue:
-        current_id = queue.pop(0)
-        if current_id in visited:
-            continue
-        visited.add(current_id)
-
-        goal = goal_by_id.get(current_id)
-        if goal:
-            descendants.append(goal)
-
-        # Add children to queue
-        for child_id in children_map.get(current_id, []):
-            if child_id not in visited:
-                queue.append(child_id)
-
-    return descendants

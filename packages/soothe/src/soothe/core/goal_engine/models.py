@@ -94,6 +94,9 @@ class Goal(BaseModel):
     # Serialized form of ``ClarificationRequest`` (see
     # ``soothe.core.loop.clarification.protocol.request_to_state``).
     pending_clarification: dict[str, Any] | None = None
+    # RFC-228: accumulated guidance from desktop LOR (Loop Observation Room).
+    # Each entry: {"text": str, "timestamp": datetime, "scope": "goal"|"job"}
+    guidance_accumulated: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration
