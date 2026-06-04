@@ -512,6 +512,7 @@ class SootheRunner(
         intent_hint: IntentHint | None = None,
         autopilot_job: Any = None,  # AutopilotJob | None — see RFC-222 revised
         clarification_mode: str | None = None,  # RFC-622 per-request override
+        clarification_answer: bool = False,  # RFC-622: resume hint
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -545,6 +546,11 @@ class SootheRunner(
             clarification_mode: RFC-622 per-request mode (``"auto"`` / ``"manual"``).
                 ``None`` falls back to ``config.agent.clarification.default_mode``.
                 Ignored when ``autopilot_job`` is set (autopilot forces ``"auto"``).
+            clarification_answer: When True, hints that ``user_input`` is the
+                answer to a pending clarification. The runner verifies via the
+                loop's persisted state and resumes the graph via
+                ``Command(resume=...)``; falls back to a normal turn when no
+                clarification is actually pending.
         """
         # Update thread_id for logging if one is provided
         from soothe.core.workspace import resolve_daemon_workspace
@@ -593,6 +599,7 @@ class SootheRunner(
                 preferred_subagent=preferred_subagent,
                 intent_hint=intent_hint,
                 clarification_mode=clarification_mode,
+                clarification_answer=clarification_answer,
             ):
                 yield chunk
         finally:

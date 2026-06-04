@@ -45,6 +45,7 @@ class LoopRunnerActor:
                 intent_hint=parse_intent_hint(request.intent_hint),
                 autopilot_job=request.autopilot_job,  # RFC-222 revised
                 clarification_mode=request.clarification_mode,
+                clarification_answer=request.clarification_answer,
             ):
                 if self._cancelled:
                     break

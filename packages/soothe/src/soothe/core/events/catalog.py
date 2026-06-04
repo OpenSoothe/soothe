@@ -467,6 +467,7 @@ _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
     "lifecycle": VerbosityTier.DETAILED,
     "protocol": VerbosityTier.DETAILED,
     "cognition": VerbosityTier.NORMAL,
+    "loop": VerbosityTier.NORMAL,  # Loop relay events (clarification, RFC-622)
     "tool": VerbosityTier.INTERNAL,  # RFC-0020: tool display via LangChain on_tool_call
     "subagent": VerbosityTier.DETAILED,  # IG-089: subagent internals hidden at normal
     "output": VerbosityTier.QUIET,

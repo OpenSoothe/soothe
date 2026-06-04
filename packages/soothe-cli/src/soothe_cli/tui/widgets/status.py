@@ -296,7 +296,8 @@ class StatusBar(Horizontal):
             tip_widget = self.query_one("#session-tip", Static)
         except NoMatches:
             return
-        tip_widget.update((new_value or "").strip())
+        text = (new_value or "").strip()
+        tip_widget.update(f"Tips: {text}" if text else "")
 
     def watch_cwd(self, new_value: str) -> None:
         """Update cwd display when it changes."""
