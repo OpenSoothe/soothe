@@ -48,7 +48,10 @@ _COL_LID = 10
 _COL_STATUS = 12
 _COL_THREADS = 4
 _COL_GOALS = 4
+_COL_MESSAGES = 4
+_COL_DURATION = 6
 _COL_TIMESTAMP = None
+_COL_PROMPT = None  # flex column
 _MAX_SEARCH_TEXT_LEN = 200
 _AUTO_WIDTH_COLUMNS = {"created_at", "updated_at"}
 _COLUMN_ORDER = (
@@ -56,35 +59,47 @@ _COLUMN_ORDER = (
     "status",
     "threads",
     "goals",
+    "messages",
+    "duration",
     "created_at",
     "updated_at",
+    "prompt",
 )
 _COLUMN_WIDTHS: dict[str, int | None] = {
     "loop_id": _COL_LID,
     "status": _COL_STATUS,
     "threads": _COL_THREADS,
     "goals": _COL_GOALS,
+    "messages": _COL_MESSAGES,
+    "duration": _COL_DURATION,
     "created_at": _COL_TIMESTAMP,
     "updated_at": _COL_TIMESTAMP,
+    "prompt": _COL_PROMPT,
 }
 _COLUMN_LABELS = {
     "loop_id": "Loop ID",
     "status": "Status",
     "threads": "Contexts",
     "goals": "Goals",
+    "messages": "Msgs",
+    "duration": "Dur",
     "created_at": "Created",
     "updated_at": "Updated",
+    "prompt": "Goal",
 }
 _COLUMN_TOGGLE_LABELS = {
     "loop_id": "Loop ID",
     "status": "Status",
     "threads": "# Contexts",
     "goals": "# Goals",
+    "messages": "# Messages",
+    "duration": "Duration",
     "created_at": "Created At",
     "updated_at": "Updated At",
+    "prompt": "Goal Text",
 }
 # Reserved for future right-aligned columns (e.g., message counts).
-_RIGHT_ALIGNED_COLUMNS: set[str] = set()
+_RIGHT_ALIGNED_COLUMNS: set[str] = {"messages", "duration"}
 _SWITCH_ID_PREFIX = "loop-column-"
 _SORT_SWITCH_ID = "loop-sort-toggle"
 _RELATIVE_TIME_SWITCH_ID = "loop-relative-time"
@@ -191,6 +206,20 @@ def _truncate_value(value: str, width: int | None) -> str:
     return display[: width - len(ellipsis)] + ellipsis
 
 
+def _format_duration_ms(duration_ms: int | None) -> str:
+    """Compact human duration for the selector cell (e.g. ``43s``, ``1m8s``)."""
+    if not isinstance(duration_ms, int) or duration_ms <= 0:
+        return "-"
+    total_seconds = duration_ms // 1000
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+    minutes, seconds = divmod(total_seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m{seconds}s" if seconds else f"{minutes}m"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes}m" if minutes else f"{hours}h"
+
+
 def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool = False) -> str:
     """Return the display text for one loop column.
 
@@ -211,18 +240,29 @@ def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool 
         # never leaves a dangling trailing hyphen in the loop ID column.
         value = loop["loop_id"].replace("-", "")
     elif key == "status":
-        value = loop.get("status") or "unknown"
+        status = loop.get("status") or "unknown"
+        # Distinguish stale "running" persisted state from genuinely-active
+        # loops by prefixing the live ones with a dot.
+        if loop.get("live") and status == "running":
+            status = f"● {status}"
+        value = status
     elif key == "threads":
         raw_count = loop.get("threads")
         value = str(raw_count) if raw_count is not None else "..."
     elif key == "goals":
         raw_count = loop.get("goals")
         value = str(raw_count) if raw_count is not None else "..."
+    elif key == "messages":
+        raw_count = loop.get("messages")
+        value = str(raw_count) if raw_count is not None else "..."
+    elif key == "duration":
+        value = _format_duration_ms(loop.get("duration_ms"))
     elif key == "created_at":
         value = fmt(loop.get("created"))
     elif key == "updated_at":
-        # Daemon doesn't return updated_at for loops - use created instead
-        value = fmt(loop.get("created"))
+        value = fmt(loop.get("updated") or loop.get("created"))
+    elif key == "prompt":
+        value = str(loop.get("prompt") or "").strip() or "(no prompt)"
     else:
         value = ""
 
@@ -324,7 +364,7 @@ class LoopOption(Horizontal):
             cell = Static(
                 text,
                 classes=f"loop-cell loop-cell-{key}",
-                expand=key == "initial_prompt",
+                expand=key in ("initial_prompt", "prompt"),
                 markup=False,
             )
             _apply_column_width(cell, key, self._column_widths)
@@ -545,6 +585,20 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         text-overflow: ellipsis;
     }
 
+    LoopSelectorScreen .loop-cell-prompt {
+        width: 1fr;
+        min-width: 8;
+        overflow-x: hidden;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    LoopSelectorScreen .loop-cell-messages,
+    LoopSelectorScreen .loop-cell-duration {
+        width: auto;
+        content-align: right middle;
+    }
+
     LoopSelectorScreen .loop-selector-help {
         height: auto;
         color: $text-muted;
@@ -727,7 +781,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                             cell = Static(
                                 _format_header_label(key),
                                 classes=_header_cell_classes(key, sort_key=sort_key),
-                                expand=key == "initial_prompt",
+                                expand=key in ("initial_prompt", "prompt"),
                                 markup=False,
                             )
                             _apply_column_width(cell, key, self._column_widths)
@@ -1037,6 +1091,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         parts = [
             loop["loop_id"],
             loop.get("status") or "",
+            loop.get("prompt") or "",
         ]
         text = " ".join(parts)
         return text[:_MAX_SEARCH_TEXT_LEN]
@@ -1392,7 +1447,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 cell = Static(
                     _format_header_label(key),
                     classes=_header_cell_classes(key, sort_key=sort_key),
-                    expand=key == "initial_prompt",
+                    expand=key in ("initial_prompt", "prompt"),
                     markup=False,
                 )
                 _apply_column_width(cell, key, self._column_widths)

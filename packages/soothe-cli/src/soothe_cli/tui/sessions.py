@@ -69,7 +69,7 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
         yield conn
 
 
-class LoopInfo(TypedDict):
+class LoopInfo(TypedDict, total=False):
     """Loop metadata returned by `list_loops_via_daemon_rpc`."""
 
     loop_id: str
@@ -90,6 +90,41 @@ class LoopInfo(TypedDict):
     created: str
     """ISO timestamp of loop creation (truncated to [:16])."""
 
+    updated: str
+    """ISO timestamp of last loop activity (truncated to [:16])."""
+
+    prompt: str
+    """First user-visible prompt of the loop (the initial goal text)."""
+
+    messages: int
+    """Total user + assistant turns recorded in the loop."""
+
+    duration_ms: int
+    """Cumulative agent execution time across all goals (milliseconds)."""
+
+    live: bool
+    """True when an active runner stream is currently attached to the loop."""
+
+
+def _parse_iso_to_local(iso_timestamp: str) -> datetime | None:
+    """Parse an ISO 8601 timestamp and convert it to local time.
+
+    Naive timestamps (no offset suffix) are assumed to be UTC — the daemon
+    stores all timestamps as UTC, and historic wire payloads truncated the
+    offset away. Treating them as local instead would render UTC clocks as
+    if they were already local, producing an N-hour drift in any non-UTC
+    timezone.
+    """
+    from datetime import UTC
+
+    try:
+        dt = datetime.fromisoformat(iso_timestamp)
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone()
+
 
 def format_timestamp(iso_timestamp: str | None) -> str:
     """Format ISO timestamp for display (e.g., 'Dec 30, 6:10pm').
@@ -102,16 +137,11 @@ def format_timestamp(iso_timestamp: str | None) -> str:
     """
     if not iso_timestamp:
         return ""
-    try:
-        dt = datetime.fromisoformat(iso_timestamp).astimezone()
-        return dt.strftime("%b %d, %-I:%M%p").lower().replace("am", "am").replace("pm", "pm")
-    except (ValueError, TypeError):
-        logger.debug(
-            "Failed to parse timestamp %r; displaying as blank",
-            iso_timestamp,
-            exc_info=True,
-        )
+    dt = _parse_iso_to_local(iso_timestamp)
+    if dt is None:
+        logger.debug("Failed to parse timestamp %r; displaying as blank", iso_timestamp)
         return ""
+    return dt.strftime("%b %d, %-I:%M%p").lower().replace("am", "am").replace("pm", "pm")
 
 
 def format_relative_timestamp(iso_timestamp: str | None) -> str:
@@ -125,14 +155,9 @@ def format_relative_timestamp(iso_timestamp: str | None) -> str:
     """
     if not iso_timestamp:
         return ""
-    try:
-        dt = datetime.fromisoformat(iso_timestamp).astimezone()
-    except (ValueError, TypeError):
-        logger.debug(
-            "Failed to parse timestamp %r; displaying as blank",
-            iso_timestamp,
-            exc_info=True,
-        )
+    dt = _parse_iso_to_local(iso_timestamp)
+    if dt is None:
+        logger.debug("Failed to parse timestamp %r; displaying as blank", iso_timestamp)
         return ""
 
     delta = datetime.now(tz=dt.tzinfo) - dt
@@ -249,14 +274,36 @@ async def list_loops_via_daemon_rpc(
     for loop_data in loops_data[:limit]:  # Apply limit
         if not isinstance(loop_data, dict):
             continue
-        loop_info = LoopInfo(
-            loop_id=str(loop_data.get("loop_id", "")),
-            status=str(loop_data.get("status", "unknown")),
-            threads=int(loop_data.get("threads", 0)),
-            goals=int(loop_data.get("goals", 0)),
-            switches=int(loop_data.get("switches", 0)),
-            created=str(loop_data.get("created", "")),
-        )
+        loop_info: LoopInfo = {
+            "loop_id": str(loop_data.get("loop_id", "")),
+            "status": str(loop_data.get("status", "unknown")),
+            "threads": int(loop_data.get("threads", 0)),
+            "goals": int(loop_data.get("goals", 0)),
+            "switches": int(loop_data.get("switches", 0)),
+            "created": str(loop_data.get("created", "")),
+        }
+        updated_raw = loop_data.get("updated_at") or loop_data.get("last_message_at")
+        if isinstance(updated_raw, str) and updated_raw:
+            # Keep the full ISO string (with the ``+HH:MM`` suffix) so
+            # ``format_timestamp`` / ``format_relative_timestamp`` can parse
+            # it as an aware datetime and convert to local time. Truncating
+            # to [:16] here would silently strip the timezone offset and
+            # render UTC as local — the same bug we just fixed daemon-side
+            # for ``created``.
+            loop_info["updated"] = updated_raw
+        prompt_text = loop_data.get("prompt")
+        if isinstance(prompt_text, str) and prompt_text.strip():
+            loop_info["prompt"] = prompt_text.strip()
+        human = loop_data.get("human_messages")
+        ai = loop_data.get("ai_messages")
+        if isinstance(human, int) or isinstance(ai, int):
+            loop_info["messages"] = int(human or 0) + int(ai or 0)
+        dur = loop_data.get("duration_ms")
+        if isinstance(dur, int):
+            loop_info["duration_ms"] = dur
+        live = loop_data.get("live")
+        if isinstance(live, bool):
+            loop_info["live"] = live
         loops.append(loop_info)
 
     return loops
