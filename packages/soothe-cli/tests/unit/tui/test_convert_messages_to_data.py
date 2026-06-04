@@ -176,12 +176,12 @@ def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() 
     assert MessageType.COGNITION_REASON in types
 
 
-def test_agent_loop_completed_event_yields_app_summary() -> None:
-    """Persisted completion event becomes a concise summary row on resume.
+def test_agent_loop_completed_event_is_dropped() -> None:
+    """Completion event is a status transition, not a chat card.
 
-    Earlier behaviour was to drop this event entirely, which left the
-    transcript without a visible end-of-goal marker on history replay even
-    when the streamed assistant text had successfully been recovered.
+    The goal_completion text (persisted as a conversation row) is the
+    natural endpoint marker — surfacing a separate APP banner would be
+    redundant with the resumed transcript.
     """
     event = {
         "kind": "event",
@@ -195,9 +195,7 @@ def test_agent_loop_completed_event_yields_app_summary() -> None:
         },
     }
     msg = SootheApp._convert_event_to_message_data(event)
-    assert msg is not None
-    assert msg.type == MessageType.APP
-    assert "Goal completed" in msg.content
+    assert msg is None
 
 
 def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> None:
@@ -351,8 +349,8 @@ def test_collect_cognition_card_replay_drops_goal_tree_pin() -> None:
     assert not any(c.type == MessageType.COGNITION_GOAL_TREE for c in cards)
 
 
-def test_convert_event_emits_completion_summary_card() -> None:
-    """agent_loop.completed must render a concise summary line on resume."""
+def test_convert_event_drops_completion_with_metadata() -> None:
+    """agent_loop.completed is dropped even when metadata carries rich fields."""
     event = {
         "kind": "event",
         "timestamp": "2026-04-20T15:43:00.000+00:00",
@@ -369,11 +367,7 @@ def test_convert_event_emits_completion_summary_card() -> None:
         },
     }
     msg = SootheApp._convert_event_to_message_data(event)
-    assert msg is not None
-    assert msg.type == MessageType.APP
-    assert "Goal completed" in msg.content
-    assert "3 steps" in msg.content
-    assert "70,609" in msg.content
+    assert msg is None
 
 
 def test_collect_cognition_card_replay_keeps_started_when_completed_missing() -> None:

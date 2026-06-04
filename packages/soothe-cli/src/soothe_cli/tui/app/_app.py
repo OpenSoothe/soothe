@@ -224,6 +224,9 @@ class SootheApp(
 
         self._agent_running = False
 
+        self._bg_event_worker: Worker[None] | None = None
+        """Background daemon event consumer worker (cancelled on active turn start)."""
+
         self._server_startup_error: str | None = None
         """Set when daemon bootstrap fails; persists for the session lifetime."""
 
