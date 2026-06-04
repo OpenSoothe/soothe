@@ -38,13 +38,10 @@ from soothe_sdk.ux import classify_event_to_tier
 # Event types that should NEVER be shown (internal implementation details)
 INTERNAL_EVENT_TYPES: frozenset[str] = frozenset()
 
-# Event types to skip in progress display (handled by plan update mechanism or not rendered)
-SKIP_EVENT_TYPES = frozenset(
-    {
-        # Plan events handled by renderer's plan update mechanism
-        "soothe.cognition.plan.batch.started",
-    }
-)
+# Event types to skip in progress display (handled by plan update mechanism or not rendered).
+# `soothe.cognition.plan.batch.started` was moved to `soothe.internal.plan.batch.started`
+# and is now filtered automatically by `is_internal_event`.
+SKIP_EVENT_TYPES: frozenset[str] = frozenset()
 
 PLAN_EVENT_TYPES = frozenset(
     {
@@ -152,7 +149,7 @@ class DisplayPolicy:
 
     def is_internal_event(self, event_type: str) -> bool:
         """Check if this is an internal (never-shown) event."""
-        return event_type in INTERNAL_EVENT_TYPES or "internal" in event_type
+        return event_type in INTERNAL_EVENT_TYPES or event_type.startswith("soothe.internal.")
 
 
 # =============================================================================
