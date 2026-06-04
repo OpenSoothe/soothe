@@ -324,4 +324,12 @@ class _HistoryMixin:
             for card in assistant_cards_by_ns.values():
                 with suppress(Exception):
                     await card.stop_stream()
+            self._bg_event_worker = None
+            # If an agent turn was active (e.g. the loop completed while the
+            # background consumer was reading), perform the same cleanup that
+            # _run_agent_task's finally block would: re-enable input, clear
+            # spinner, drain deferred actions, and process queued messages.
+            if self._agent_running:
+                with suppress(Exception):
+                    await self._cleanup_agent_task()
             logger.info("Background event consumer stopped")

@@ -375,7 +375,7 @@ class _ModelMixin:
             await self._load_loop_history(loop_id=loop_id)
 
             # Start consuming daemon events for this loop
-            self.run_worker(
+            self._bg_event_worker = self.run_worker(
                 self._consume_daemon_events_background(),
                 exclusive=False,
                 group="daemon-event-reader",
