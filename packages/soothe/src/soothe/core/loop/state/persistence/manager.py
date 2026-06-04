@@ -124,6 +124,10 @@ class AgentLoopCheckpointPersistenceManager:
         """Record user turn activity for ephemeral loop TTL."""
         await self._backend.touch_loop_last_message(loop_id)
 
+    async def heartbeat_loop(self, loop_id: str) -> None:
+        """Bump ``updated_at`` for periodic status reconciliation."""
+        await self._backend.heartbeat_loop(loop_id)
+
     async def increment_loop_message_count(
         self,
         loop_id: str,

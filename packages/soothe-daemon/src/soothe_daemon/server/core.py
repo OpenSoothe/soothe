@@ -138,6 +138,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._postgres_pool_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
         self._loop_gc_task: asyncio.Task[None] | None = None
+        self._loop_status_reconciliation_task: asyncio.Task[None] | None = None
         self._stale_worker_reap_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
@@ -441,6 +442,11 @@ class SootheDaemon(DaemonHandlersMixin):
             gc_cfg = self._daemon_config.loop_gc
             if gc_cfg.enabled:
                 self._loop_gc_task = asyncio.create_task(self._periodic_loop_gc())
+            recon_cfg = self._daemon_config.loop_status_reconciliation
+            if recon_cfg.enabled:
+                self._loop_status_reconciliation_task = asyncio.create_task(
+                    self._periodic_loop_status_reconciliation()
+                )
             reap_cfg = self._daemon_config.stale_worker_reap
             if self._daemon_config.worker_pool.enabled and reap_cfg.enabled:
                 self._stale_worker_reap_task = asyncio.create_task(
@@ -800,6 +806,79 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning("Loop GC failed", exc_info=True)
 
+    async def _periodic_loop_status_reconciliation(self) -> None:
+        """Demote stale ``status="running"`` rows whose runner is no longer active.
+
+        A loop row qualifies as stale when ALL hold:
+          * ``status == "running"``
+          * ``updated_at`` older than ``stale_running_seconds``
+          * ``loop_id`` is NOT in this daemon's ``_active_stream_loop_ids``
+
+        The runner heartbeat (see ``_runner_agentic._start_loop_heartbeat``)
+        ticks ``updated_at`` every ~30s while a goal is in flight, so loops
+        that miss multiple heartbeat windows are presumed orphaned (daemon
+        crash + restart, runner subprocess crash, etc.) and are demoted to
+        ``idle`` so list_loops reflects reality.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        cfg = self._daemon_config.loop_status_reconciliation
+        interval = float(cfg.interval_seconds)
+        while self._running:
+            await asyncio.sleep(interval)
+            if not self._running:
+                break
+            try:
+                stale_before = datetime.now(UTC) - timedelta(seconds=cfg.stale_running_seconds)
+                rows = await self._persistence_manager.list_loops(
+                    status_filter="running",
+                    limit=cfg.batch_size,
+                )
+                if not rows:
+                    continue
+
+                active_set: set[str] = set(self._active_stream_loop_ids)
+                demoted = 0
+                for row in rows:
+                    loop_id = str(row.get("loop_id") or "").strip()
+                    if not loop_id or loop_id in active_set:
+                        continue
+                    updated_at_raw = row.get("updated_at")
+                    if not isinstance(updated_at_raw, str) or not updated_at_raw:
+                        continue
+                    try:
+                        # SQLite stores ISO with offset; PG list_loops returns isoformat too.
+                        updated_at = datetime.fromisoformat(updated_at_raw.replace("Z", "+00:00"))
+                    except ValueError:
+                        continue
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=UTC)
+                    if updated_at >= stale_before:
+                        continue
+                    try:
+                        await self._persistence_manager.update_loop_metadata(loop_id, status="idle")
+                        demoted += 1
+                        logger.info(
+                            "Reconciled stale loop status: %s running -> idle "
+                            "(last updated %s, threshold %ds, no active runner)",
+                            loop_id,
+                            updated_at_raw,
+                            cfg.stale_running_seconds,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to demote stale loop %s",
+                            loop_id,
+                            exc_info=True,
+                        )
+                if demoted:
+                    logger.info(
+                        "Loop status reconciliation: demoted %d stale running loop(s)",
+                        demoted,
+                    )
+            except Exception:
+                logger.warning("Loop status reconciliation failed", exc_info=True)
+
     async def _periodic_event_size_stats(self) -> None:
         """Log EventBus wire-size distribution on a fixed interval (IG-403).
 
@@ -1000,6 +1079,13 @@ class SootheDaemon(DaemonHandlersMixin):
             self._loop_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._loop_gc_task
+        if (
+            self._loop_status_reconciliation_task
+            and not self._loop_status_reconciliation_task.done()
+        ):
+            self._loop_status_reconciliation_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._loop_status_reconciliation_task
 
         if self._stale_worker_reap_task and not self._stale_worker_reap_task.done():
             self._stale_worker_reap_task.cancel()

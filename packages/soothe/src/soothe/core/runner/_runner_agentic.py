@@ -5,6 +5,7 @@ Implements Plan → Execute loop using AgentLoop (RFC-201).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -47,6 +48,75 @@ _AGENTIC_STEP_DESC_UI_MAX = 4000
 
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
+
+# Loop status liveness heartbeat: tick `updated_at` every N seconds while the
+# loop is in flight, so periodic reconciliation can trust the timestamp.
+_LOOP_HEARTBEAT_INTERVAL_S = 30.0
+
+
+class _LoopHeartbeatHandle:
+    """Manages a background task that ticks `updated_at` for a running loop."""
+
+    __slots__ = ("_task", "_pm")
+
+    def __init__(self, task: asyncio.Task[None] | None, pm: Any) -> None:
+        self._task = task
+        self._pm = pm
+
+    def stop(self) -> None:
+        """Cancel the heartbeat task and close the persistence manager. Idempotent."""
+        task, pm = self._task, self._pm
+        self._task = None
+        self._pm = None
+        if task is not None and not task.done():
+            task.cancel()
+        if pm is not None and hasattr(pm, "close"):
+            # Best-effort fire-and-forget close (avoids needing to await here).
+            try:
+                asyncio.create_task(pm.close())
+            except RuntimeError:
+                # No running loop (process tearing down); nothing to close.
+                pass
+
+
+def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
+    """Spawn a background task that ticks ``updated_at`` for ``loop_id``.
+
+    Returns an opaque handle whose ``stop()`` cancels the task and releases the
+    persistence manager. Failure to start the heartbeat is non-fatal — returns
+    a handle whose ``stop()`` is a no-op so the calling site can stay simple.
+    """
+    try:
+        from soothe.core.loop.state.persistence import (
+            AgentLoopCheckpointPersistenceManager,
+        )
+
+        pm = AgentLoopCheckpointPersistenceManager(config=config)
+    except Exception:
+        logger.debug(
+            "Loop heartbeat unavailable for %s; persistence manager init failed",
+            loop_id,
+            exc_info=True,
+        )
+        return _LoopHeartbeatHandle(task=None, pm=None)
+
+    async def _tick() -> None:
+        try:
+            while True:
+                await asyncio.sleep(_LOOP_HEARTBEAT_INTERVAL_S)
+                try:
+                    await pm.heartbeat_loop(loop_id)
+                except Exception:
+                    logger.debug("Loop heartbeat tick failed for %s", loop_id, exc_info=True)
+        except asyncio.CancelledError:
+            raise
+
+    try:
+        task = asyncio.create_task(_tick())
+    except RuntimeError:
+        # Not running inside an asyncio loop (rare in this code path).
+        return _LoopHeartbeatHandle(task=None, pm=pm)
+    return _LoopHeartbeatHandle(task=task, pm=pm)
 
 
 def _is_tool_stream_chunk(chunk: object) -> bool:
@@ -429,258 +499,273 @@ class AgenticMixin:
             intent_classification, preferred_subagent
         )
 
-        async for event_type, event_data in loop_agent.run_with_progress(
-            goal=user_input,
-            thread_id=tid,
-            loop_id=agent_loop_id,
-            workspace=workspace,
-            git_status=git_status,
-            max_iterations=max_iterations,
-            intent=intent_classification,
-            routing_classification=routing_classification,
-            intent_classifier=self._intent_classifier,
-            preferred_subagent=preferred_subagent,
-            shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
-            clarification_policy=clarification_policy,
-            clarification_answer=clarification_answer,
-            clarification_answers=clarification_answers,
-        ):
-            if event_type == "intent_classified":
-                logger.info(
-                    "[Intent] Classified in graph as %s",
-                    event_data.get("intent_type") if isinstance(event_data, dict) else "unknown",
-                )
+        # Loop status liveness heartbeat (IG-466 follow-up):
+        # While the loop runs, tick `updated_at` so periodic reconciliation can
+        # trust the timestamp as a freshness signal and avoid demoting a live
+        # `status="running"` row to `idle`.
+        heartbeat_handle = _start_loop_heartbeat(self._config, agent_loop_id)
 
-            elif event_type == "intent_fast_path":
-                classification = (
-                    event_data.get("classification") if isinstance(event_data, dict) else None
-                )
-                intent_type = (
-                    event_data.get("intent_type") if isinstance(event_data, dict) else None
-                )
-                if intent_type == "quiz":
-                    async for chunk in self._run_quiz(user_input, tid, classification):
-                        yield chunk
-                    return
+        try:
+            async for event_type, event_data in loop_agent.run_with_progress(
+                goal=user_input,
+                thread_id=tid,
+                loop_id=agent_loop_id,
+                workspace=workspace,
+                git_status=git_status,
+                max_iterations=max_iterations,
+                intent=intent_classification,
+                routing_classification=routing_classification,
+                intent_classifier=self._intent_classifier,
+                preferred_subagent=preferred_subagent,
+                shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
+                clarification_policy=clarification_policy,
+                clarification_answer=clarification_answer,
+                clarification_answers=clarification_answers,
+            ):
+                if event_type == "intent_classified":
+                    logger.info(
+                        "[Intent] Classified in graph as %s",
+                        event_data.get("intent_type")
+                        if isinstance(event_data, dict)
+                        else "unknown",
+                    )
 
-            if event_type == "iteration_started":
-                # Internal event - not shown to user
-                logger.debug("[Loop] Iteration %d started", event_data["iteration"])
+                elif event_type == "intent_fast_path":
+                    classification = (
+                        event_data.get("classification") if isinstance(event_data, dict) else None
+                    )
+                    intent_type = (
+                        event_data.get("intent_type") if isinstance(event_data, dict) else None
+                    )
+                    if intent_type == "quiz":
+                        async for chunk in self._run_quiz(user_input, tid, classification):
+                            yield chunk
+                        return
 
-            elif event_type == "plan_decision":
-                logger.debug(
-                    "[Loop] Plan: %d steps (%s mode)",
-                    len(event_data.get("steps", [])),
-                    event_data.get("execution_mode", ""),
-                )
-                yield _custom(
-                    AgenticPlanDecisionEvent(
-                        iteration=int(event_data.get("iteration", 0)),
-                        steps=list(event_data.get("steps") or []),
-                        execution_mode=str(event_data.get("execution_mode", "")),
-                    ).to_dict()
-                )
+                if event_type == "iteration_started":
+                    # Internal event - not shown to user
+                    logger.debug("[Loop] Iteration %d started", event_data["iteration"])
 
-            elif event_type == "step_started":
-                # Level 2: Step description (clip — Reason can embed a full brief; avoids TUI duplicate wall)
-                yield _custom(
-                    AgenticStepStartedEvent(
-                        step_id=str(event_data.get("step_id", "")),
-                        description=_clip_agentic_step_description(event_data["description"]),
-                    ).to_dict()
-                )
-
-            elif event_type == "step_queued":
-                yield _custom(
-                    AgenticStepQueuedEvent(
-                        step_id=str(event_data.get("step_id", "")),
-                        description=_clip_agentic_step_description(event_data["description"]),
-                    ).to_dict()
-                )
-
-            elif event_type == "step_completed":
-                # Level 3: Step result
-                success = event_data["success"]
-                summary = event_data.get("output_preview") or ("Failed" if not success else "Done")
-                if event_data.get("error"):
-                    summary = f"Error: {event_data['error'][:50]}"
-
-                clarification = event_data.get("clarification")
-                yield _custom(
-                    AgenticStepCompletedEvent(
-                        step_id=str(event_data.get("step_id", "")),
-                        success=success,
-                        summary=summary[:100],
-                        duration_ms=event_data["duration_ms"],
-                        tool_call_count=event_data.get("tool_call_count", 0),
-                        clarification=clarification if isinstance(clarification, dict) else None,
-                    ).to_dict()
-                )
-
-            elif event_type == "clarification_requested":
-                # RFC-622 / RFC-623: surface the pending question to the TUI so it
-                # can suppress the stream-end "Stream ended unexpectedly" safety net.
-                payload = event_data if isinstance(event_data, dict) else {}
-                yield _custom(
-                    ClarificationRequestedEvent(
-                        questions=list(payload.get("questions") or []),
-                        origin_node=str(payload.get("origin_node") or ""),
-                        mode=payload.get("mode")
-                        if payload.get("mode") in ("manual", "auto")
-                        else "manual",
-                    ).to_dict()
-                )
-
-            elif event_type == "clarification_answered":
-                payload = event_data if isinstance(event_data, dict) else {}
-                source = payload.get("source")
-                if source not in ("human", "veritas", "fallback"):
-                    source = "human"
-                confidence = payload.get("confidence")
-                yield _custom(
-                    ClarificationAnsweredEvent(
-                        source=source,
-                        confidence=float(confidence)
-                        if isinstance(confidence, (int, float))
-                        else None,
-                        defer=bool(payload.get("defer", False)),
-                    ).to_dict()
-                )
-
-            elif event_type == "clarification_deferred":
-                payload = event_data if isinstance(event_data, dict) else {}
-                yield _custom(
-                    ClarificationDeferredEvent(
-                        reason=str(payload.get("reason") or ""),
-                        question_summary=str(payload.get("question_summary") or ""),
-                    ).to_dict()
-                )
-
-            elif event_type == "stream_event":
-                # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
-                # IG-416: Forward custom tool_call_update (main + subgraph).
-                if _forward_messages_chunk(event_data):
-                    yield event_data
-
-            elif event_type == "assess":
-                reasoning = str(event_data.get("assessment_reasoning", "")).strip()
-                if reasoning:
+                elif event_type == "plan_decision":
+                    logger.debug(
+                        "[Loop] Plan: %d steps (%s mode)",
+                        len(event_data.get("steps", [])),
+                        event_data.get("execution_mode", ""),
+                    )
                     yield _custom(
-                        LoopAgentReasonEvent(
-                            status="",
-                            progress="",
-                            next_action="",
-                            assessment_reasoning=reasoning,
+                        AgenticPlanDecisionEvent(
                             iteration=int(event_data.get("iteration", 0)),
-                            plan_action="",
+                            steps=list(event_data.get("steps") or []),
+                            execution_mode=str(event_data.get("execution_mode", "")),
                         ).to_dict()
                     )
 
-            elif event_type == "plan":
-                next_action = str(event_data.get("next_action", "")).strip()
-                if is_simple_query_direct_next_action(next_action):
-                    yield loop_assistant_messages_chunk(
-                        content=next_action,
-                        phase="plan_direct",
-                        thread_id=tid,
-                        iteration=int(event_data.get("iteration", 0)),
-                    )
-                assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
-                plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
-                if _should_emit_loop_reason_event(
-                    assessment_reasoning=assessment_reasoning,
-                    plan_reasoning=plan_reasoning,
-                ):
+                elif event_type == "step_started":
+                    # Level 2: Step description (clip — Reason can embed a full brief; avoids TUI duplicate wall)
                     yield _custom(
-                        LoopAgentReasonEvent(
-                            status=str(event_data.get("status", "")),
-                            progress=event_data["progress"],
-                            next_action="",
-                            assessment_reasoning=assessment_reasoning,
-                            plan_reasoning=plan_reasoning,
-                            plan_action=event_data.get("plan_action", "new"),
-                            iteration=event_data["iteration"],
+                        AgenticStepStartedEvent(
+                            step_id=str(event_data.get("step_id", "")),
+                            description=_clip_agentic_step_description(event_data["description"]),
                         ).to_dict()
                     )
 
-            elif event_type == "iteration_completed":
-                # Internal - used for debugging only
-                logger.debug(
-                    "[Loop] Iteration %d completed (status=%s, progress=%.0f%%)",
-                    event_data["iteration"],
-                    event_data["status"],
-                    event_data["progress"] * 100,
-                )
-
-            elif event_type == "completed":
-                if isinstance(event_data, dict):
-                    final_result = event_data["result"]
-                    n_act_steps = int(event_data.get("step_results_count", 0))
-                    skip_goal_completion_wire_duplicate = bool(
-                        event_data.get("skip_goal_completion_wire_duplicate")
-                    )
-                else:
-                    final_result = event_data
-                    n_act_steps = 0
-                    skip_goal_completion_wire_duplicate = False
-
-                evidence = (final_result.evidence_summary or "")[:500]
-                completion_summary = (final_result.next_action or "").strip()
-                if not completion_summary:
-                    completion_summary = (
-                        f"{n_act_steps} step(s) complete"
-                        if n_act_steps
-                        else (final_result.status or "complete")
-                    )
-                completion_summary = completion_summary[:240]
-                final_stdout: str | None = None
-                if final_result.status == "done" and not skip_goal_completion_wire_duplicate:
-                    raw = (final_result.full_output or "").strip()
-                    if raw:
-                        cap = _AGENTIC_FINAL_STDOUT_CAP
-                        final_stdout = raw[:cap] if len(raw) > cap else raw
-
-                if final_stdout:
-                    yield loop_assistant_messages_chunk(
-                        content=final_stdout,
-                        phase="goal_completion",
-                        thread_id=tid,
-                        iteration=None,
+                elif event_type == "step_queued":
+                    yield _custom(
+                        AgenticStepQueuedEvent(
+                            step_id=str(event_data.get("step_id", "")),
+                            description=_clip_agentic_step_description(event_data["description"]),
+                        ).to_dict()
                     )
 
-                yield _custom(
-                    AgenticLoopCompletedEvent(
-                        thread_id=tid,
-                        status=final_result.status,
-                        goal_progress=final_result.goal_progress,
-                        evidence_summary=evidence,
-                        goal=display_goal,  # IG-267: Pass goal for CLI trophy display
-                        completion_summary=completion_summary,
-                        total_steps=n_act_steps,
-                    ).to_dict()
-                )
+                elif event_type == "step_completed":
+                    # Level 3: Step result
+                    success = event_data["success"]
+                    summary = event_data.get("output_preview") or (
+                        "Failed" if not success else "Done"
+                    )
+                    if event_data.get("error"):
+                        summary = f"Error: {event_data['error'][:50]}"
 
-                logger.info(
-                    "[Runner] Agentic loop completed (status=%s, progress=%s)",
-                    final_result.status,
-                    final_result.goal_progress,
-                )
-
-                # Empty-loop reclamation: one AI counter bump per completed goal,
-                # so loops that produced any AI output are immune to empty-loop GC.
-                try:
-                    from soothe.core.loop.state.persistence import (
-                        AgentLoopCheckpointPersistenceManager,
+                    clarification = event_data.get("clarification")
+                    yield _custom(
+                        AgenticStepCompletedEvent(
+                            step_id=str(event_data.get("step_id", "")),
+                            success=success,
+                            summary=summary[:100],
+                            duration_ms=event_data["duration_ms"],
+                            tool_call_count=event_data.get("tool_call_count", 0),
+                            clarification=clarification
+                            if isinstance(clarification, dict)
+                            else None,
+                        ).to_dict()
                     )
 
-                    _pm = AgentLoopCheckpointPersistenceManager(config=self._config)
+                elif event_type == "clarification_requested":
+                    # RFC-622 / RFC-623: surface the pending question to the TUI so it
+                    # can suppress the stream-end "Stream ended unexpectedly" safety net.
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    yield _custom(
+                        ClarificationRequestedEvent(
+                            questions=list(payload.get("questions") or []),
+                            origin_node=str(payload.get("origin_node") or ""),
+                            mode=payload.get("mode")
+                            if payload.get("mode") in ("manual", "auto")
+                            else "manual",
+                        ).to_dict()
+                    )
+
+                elif event_type == "clarification_answered":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    source = payload.get("source")
+                    if source not in ("human", "veritas", "fallback"):
+                        source = "human"
+                    confidence = payload.get("confidence")
+                    yield _custom(
+                        ClarificationAnsweredEvent(
+                            source=source,
+                            confidence=float(confidence)
+                            if isinstance(confidence, (int, float))
+                            else None,
+                            defer=bool(payload.get("defer", False)),
+                        ).to_dict()
+                    )
+
+                elif event_type == "clarification_deferred":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    yield _custom(
+                        ClarificationDeferredEvent(
+                            reason=str(payload.get("reason") or ""),
+                            question_summary=str(payload.get("question_summary") or ""),
+                        ).to_dict()
+                    )
+
+                elif event_type == "stream_event":
+                    # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
+                    # IG-416: Forward custom tool_call_update (main + subgraph).
+                    if _forward_messages_chunk(event_data):
+                        yield event_data
+
+                elif event_type == "assess":
+                    reasoning = str(event_data.get("assessment_reasoning", "")).strip()
+                    if reasoning:
+                        yield _custom(
+                            LoopAgentReasonEvent(
+                                status="",
+                                progress="",
+                                next_action="",
+                                assessment_reasoning=reasoning,
+                                iteration=int(event_data.get("iteration", 0)),
+                                plan_action="",
+                            ).to_dict()
+                        )
+
+                elif event_type == "plan":
+                    next_action = str(event_data.get("next_action", "")).strip()
+                    if is_simple_query_direct_next_action(next_action):
+                        yield loop_assistant_messages_chunk(
+                            content=next_action,
+                            phase="plan_direct",
+                            thread_id=tid,
+                            iteration=int(event_data.get("iteration", 0)),
+                        )
+                    assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
+                    plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
+                    if _should_emit_loop_reason_event(
+                        assessment_reasoning=assessment_reasoning,
+                        plan_reasoning=plan_reasoning,
+                    ):
+                        yield _custom(
+                            LoopAgentReasonEvent(
+                                status=str(event_data.get("status", "")),
+                                progress=event_data["progress"],
+                                next_action="",
+                                assessment_reasoning=assessment_reasoning,
+                                plan_reasoning=plan_reasoning,
+                                plan_action=event_data.get("plan_action", "new"),
+                                iteration=event_data["iteration"],
+                            ).to_dict()
+                        )
+
+                elif event_type == "iteration_completed":
+                    # Internal - used for debugging only
+                    logger.debug(
+                        "[Loop] Iteration %d completed (status=%s, progress=%.0f%%)",
+                        event_data["iteration"],
+                        event_data["status"],
+                        event_data["progress"] * 100,
+                    )
+
+                elif event_type == "completed":
+                    if isinstance(event_data, dict):
+                        final_result = event_data["result"]
+                        n_act_steps = int(event_data.get("step_results_count", 0))
+                        skip_goal_completion_wire_duplicate = bool(
+                            event_data.get("skip_goal_completion_wire_duplicate")
+                        )
+                    else:
+                        final_result = event_data
+                        n_act_steps = 0
+                        skip_goal_completion_wire_duplicate = False
+
+                    evidence = (final_result.evidence_summary or "")[:500]
+                    completion_summary = (final_result.next_action or "").strip()
+                    if not completion_summary:
+                        completion_summary = (
+                            f"{n_act_steps} step(s) complete"
+                            if n_act_steps
+                            else (final_result.status or "complete")
+                        )
+                    completion_summary = completion_summary[:240]
+                    final_stdout: str | None = None
+                    if final_result.status == "done" and not skip_goal_completion_wire_duplicate:
+                        raw = (final_result.full_output or "").strip()
+                        if raw:
+                            cap = _AGENTIC_FINAL_STDOUT_CAP
+                            final_stdout = raw[:cap] if len(raw) > cap else raw
+
+                    if final_stdout:
+                        yield loop_assistant_messages_chunk(
+                            content=final_stdout,
+                            phase="goal_completion",
+                            thread_id=tid,
+                            iteration=None,
+                        )
+
+                    yield _custom(
+                        AgenticLoopCompletedEvent(
+                            thread_id=tid,
+                            status=final_result.status,
+                            goal_progress=final_result.goal_progress,
+                            evidence_summary=evidence,
+                            goal=display_goal,  # IG-267: Pass goal for CLI trophy display
+                            completion_summary=completion_summary,
+                            total_steps=n_act_steps,
+                        ).to_dict()
+                    )
+
+                    logger.info(
+                        "[Runner] Agentic loop completed (status=%s, progress=%s)",
+                        final_result.status,
+                        final_result.goal_progress,
+                    )
+
+                    # Empty-loop reclamation: one AI counter bump per completed goal,
+                    # so loops that produced any AI output are immune to empty-loop GC.
                     try:
-                        await _pm.increment_loop_message_count(agent_loop_id, ai=1)
-                    finally:
-                        await _pm.close()
-                except Exception:
-                    logger.warning(
-                        "Failed to increment ai_message_count for loop %s",
-                        agent_loop_id,
-                        exc_info=True,
-                    )
+                        from soothe.core.loop.state.persistence import (
+                            AgentLoopCheckpointPersistenceManager,
+                        )
+
+                        _pm = AgentLoopCheckpointPersistenceManager(config=self._config)
+                        try:
+                            await _pm.increment_loop_message_count(agent_loop_id, ai=1)
+                        finally:
+                            await _pm.close()
+                    except Exception:
+                        logger.warning(
+                            "Failed to increment ai_message_count for loop %s",
+                            agent_loop_id,
+                            exc_info=True,
+                        )
+        finally:
+            heartbeat_handle.stop()

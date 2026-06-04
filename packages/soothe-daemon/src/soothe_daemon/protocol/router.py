@@ -653,16 +653,22 @@ class MessageRouter:
             limit=limit,
             exclude_empty=exclude_empty,
         )
+        # Snapshot of loops with an active runner stream right now. Used to derive
+        # `live` so consumers can distinguish stale "running" persisted status
+        # from genuinely-running loops (this daemon only).
+        active_loop_ids: set[str] = set(getattr(d, "_active_stream_loop_ids", ()) or ())
         loops = [
             {
                 "loop_id": row["loop_id"],
                 "status": row.get("status", "unknown"),
+                "live": row["loop_id"] in active_loop_ids,
                 "threads": len(row.get("thread_ids") or []),
                 "goals": row.get("total_goals_completed", 0),
                 "switches": row.get("total_thread_switches", 0),
                 "human_messages": row.get("human_message_count", 0),
                 "ai_messages": row.get("ai_message_count", 0),
                 "last_message_at": row.get("last_message_at"),
+                "updated_at": row.get("updated_at"),
                 "created": (row.get("created_at") or "")[:16],
             }
             for row in rows
