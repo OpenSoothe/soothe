@@ -70,7 +70,7 @@ register_event(
 )
 register_event(
     ExploreMilestoneEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="{decision} ({findings_count} findings)",
 )
 register_event(

@@ -55,12 +55,10 @@ def test_final_answer_lock_and_reset_turn() -> None:
     assert not engine.final_answer_locked
 
 
-def test_tier_visible_matches_fixed_normal_ceiling() -> None:
+def test_tier_visible_matches_normal_only_policy() -> None:
     engine = PresentationEngine()
-    for tier in (
-        VerbosityTier.QUIET,
-        VerbosityTier.NORMAL,
-        VerbosityTier.DETAILED,
-        VerbosityTier.DEBUG,
-    ):
-        assert engine.tier_visible(tier) == should_show(tier, "normal")
+    assert engine.tier_visible(VerbosityTier.NORMAL) is True
+    assert engine.tier_visible(VerbosityTier.INTERNAL) is False
+    # `should_show` is the single source of truth — `tier_visible` is a thin facade.
+    for tier in (VerbosityTier.NORMAL, VerbosityTier.INTERNAL):
+        assert engine.tier_visible(tier) == should_show(tier)

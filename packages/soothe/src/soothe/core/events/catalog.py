@@ -464,14 +464,14 @@ class EventMeta:
 
 _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
     "internal": VerbosityTier.INTERNAL,
-    "lifecycle": VerbosityTier.DETAILED,
-    "protocol": VerbosityTier.DETAILED,
+    "lifecycle": VerbosityTier.INTERNAL,
+    "protocol": VerbosityTier.INTERNAL,
     "cognition": VerbosityTier.NORMAL,
     "loop": VerbosityTier.NORMAL,  # Loop relay events (clarification, RFC-622)
     "tool": VerbosityTier.INTERNAL,  # RFC-0020: tool display via LangChain on_tool_call
-    "subagent": VerbosityTier.DETAILED,  # IG-089: subagent internals hidden at normal
-    "output": VerbosityTier.QUIET,
-    "error": VerbosityTier.QUIET,
+    "subagent": VerbosityTier.INTERNAL,  # IG-089: subagent internals hidden from clients
+    "output": VerbosityTier.NORMAL,
+    "error": VerbosityTier.NORMAL,
     "agentic": VerbosityTier.NORMAL,
 }
 
@@ -509,7 +509,7 @@ class EventRegistry:
         if meta:
             return meta.verbosity
         domain = self.classify(event_type)
-        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
+        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.INTERNAL)
 
     def on(self, event_type: str, handler: EventHandler) -> None:
         """Register a handler for an event type (or ``*`` for fallback)."""
@@ -556,7 +556,7 @@ def _reg(
         domain = parts[1] if len(parts) >= 2 else "unknown"
         component = parts[2] if len(parts) >= 3 else ""
         action = parts[3] if len(parts) >= 4 else ""
-        default_tier = _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
+        default_tier = _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.INTERNAL)
     v = verbosity if verbosity is not None else default_tier
     REGISTRY.register(
         EventMeta(
@@ -683,7 +683,7 @@ _reg(
 _reg(
     AGENT_LOOP_COMPLETED,
     AgenticLoopCompletedEvent,
-    verbosity=VerbosityTier.QUIET,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Done: {completion_summary}",
     priority=EventPriority.HIGH,
 )
@@ -718,7 +718,7 @@ _reg(
 _reg(
     AGENT_LOOP_CONTEXT_COMPACTED,
     ContextCompactionEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Context compacted: {tokens_before} → {tokens_after} tokens",
     priority=EventPriority.NORMAL,
 )
