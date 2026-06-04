@@ -163,9 +163,10 @@ class ThreadLogger:
         namespace: tuple[str, ...],
         data: Any,
     ) -> None:
-        """Log tool calls and tool results from messages-mode chunks."""
+        """Log tool calls / tool results / loop assistant output from messages-mode chunks."""
         try:
-            from langchain_core.messages import AIMessage, ToolMessage
+            from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+            from soothe_sdk.ux.loop_stream import assistant_output_phase
 
             msg, _metadata = data
             if isinstance(msg, ToolMessage):
@@ -190,6 +191,35 @@ class ThreadLogger:
                                 "namespace": list(namespace),
                                 "tool_name": tc["name"],
                                 "args_preview": _truncate_for_log(str(tc.get("args", {})), 500),
+                            }
+                        )
+
+                # Persist loop-tagged assistant output (plan_direct next-action,
+                # goal_completion final answer for LEDGER_DIRECT, etc.) so
+                # resume replay can rebuild the assistant text. ``LEDGER_DIRECT``
+                # goal completion skips ``_append_goal_completion_ledger_pair``
+                # so the final answer never lands in the checkpoint — without
+                # this persistence path the resumed transcript silently drops
+                # the user-visible result.
+                #
+                # Only fully-assembled ``LoopAIMessage`` instances are logged.
+                # ``AIMessageChunk`` payloads (SYNTHESIZE streaming) are
+                # already accumulated into a ``goal_completion`` LoopAIMessage
+                # appended to ``state.loop_messages`` by the goal_completion
+                # node, so resume picks them up via the checkpoint.
+                phase = assistant_output_phase(msg)
+                if phase and not tool_calls and not isinstance(msg, AIMessageChunk):
+                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    cleaned = content.strip()
+                    if cleaned:
+                        self._write_record(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "kind": "conversation",
+                                "role": "assistant",
+                                "text": cleaned,
+                                "phase": phase,
+                                "namespace": list(namespace),
                             }
                         )
         except Exception:

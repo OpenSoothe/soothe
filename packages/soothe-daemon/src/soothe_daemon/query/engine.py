@@ -631,6 +631,14 @@ class QueryEngine:
             )
 
         full_response: list[str] = []
+        # Set to True once a phase-tagged loop assistant chunk (plan_direct,
+        # goal_completion, autonomous_goal, direct_model, quiz) has been
+        # persisted by ThreadLogger._log_message_event. When true, the legacy
+        # ``log_assistant_response("".join(full_response))`` row at end-of-
+        # stream is suppressed — the per-phase rows already cover the user-
+        # visible answer, and the legacy concat row mixes plan_direct text
+        # with raw tool outputs into a single malformed assistant card.
+        phase_tagged_assistant_written = [False]
 
         async def _run_stream() -> None:
             from soothe.core.context.model_override import (
@@ -781,6 +789,13 @@ class QueryEngine:
                         if not namespace and mode == "messages" and is_msg_pair:
                             msg, _metadata = data
                             full_response.extend(extract_text_from_ai_message(msg))
+                            # Detect phase-tagged loop assistant output so the
+                            # finally block can skip the legacy concat row.
+                            if not phase_tagged_assistant_written[0]:
+                                from soothe_sdk.ux.loop_stream import assistant_output_phase
+
+                                if assistant_output_phase(msg):
+                                    phase_tagged_assistant_written[0] = True
 
                         if effective_loop_id:
                             ns_tuple = tuple(namespace) if namespace else ()
@@ -886,6 +901,18 @@ class QueryEngine:
 
                 # IG-054: Moved post-query logic here since we don't await task
                 final_thread_id = d._runner.current_thread_id or ""
+                final_logger_handle: ThreadLogger | None = None
+                # Phase-tagged conversation rows (plan_direct, goal_completion,
+                # etc.) written by ``_log_message_event`` are the canonical
+                # record of the assistant's user-visible output. The legacy
+                # ``log_assistant_response("".join(full_response))`` concatenates
+                # plan_direct text + ToolMessage outputs + goal_completion
+                # fragments into a single malformed assistant card — surface it
+                # only when nothing phase-tagged was written (autopilot bundles,
+                # non-loop turns, etc. that bypass the per-phase emit paths).
+                write_legacy_assistant_row = (
+                    bool(full_response) and not phase_tagged_assistant_written[0]
+                )
                 if final_thread_id and final_thread_id != thread_id:
                     final_logger = ThreadLogger(
                         thread_id=final_thread_id,
@@ -893,10 +920,29 @@ class QueryEngine:
                         max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
                     final_logger.log_user_input(effective_text)
-                    if full_response:
+                    if write_legacy_assistant_row:
                         final_logger.log_assistant_response("".join(full_response))
-                elif full_response:
+                    final_logger_handle = final_logger
+                elif write_legacy_assistant_row:
                     thread_logger.log_assistant_response("".join(full_response))
+
+                # Flush ThreadLogger's write buffer. Records (especially the
+                # ``phase=goal_completion`` conversation row written by
+                # ``_log_message_event`` for the final assistant chunk, and
+                # the ``log_assistant_response`` write above) only flush on
+                # the NEXT write or after the 1-second interval elapses;
+                # once the loop ends no further writes arrive on this thread,
+                # so without an explicit flush the tail records stay stuck in
+                # memory and resume rendering loses the final answer.
+                try:
+                    thread_logger.flush()
+                except Exception:
+                    logger.debug("ThreadLogger flush failed for primary log", exc_info=True)
+                if final_logger_handle is not None:
+                    try:
+                        final_logger_handle.flush()
+                    except Exception:
+                        logger.debug("ThreadLogger flush failed for final_logger", exc_info=True)
 
                 if final_thread_id:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
@@ -1089,6 +1135,10 @@ class QueryEngine:
         finally:
             d._query_running = False
             d._active_threads.pop(thread_id, None)
+            try:
+                thread_logger.flush()
+            except Exception:
+                logger.debug("ThreadLogger flush failed in direct turn finally", exc_info=True)
             await d._broadcast(
                 self._loop_scoped_client_message(
                     effective_loop_id,
