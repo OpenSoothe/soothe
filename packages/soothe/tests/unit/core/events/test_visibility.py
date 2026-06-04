@@ -254,7 +254,7 @@ def test_custom_mode_visibility_unchanged_by_messages_short_circuit() -> None:
     assert is_client_wire_visible(internal_custom) is False
 
 
-def test_debug_tier_catalog_event_not_client_wire_visible() -> None:
+def test_internal_tier_catalog_event_not_client_wire_visible() -> None:
     class HeartbeatEvent(SootheEvent):
         type: str = "soothe.stream.heartbeat"
 
@@ -264,7 +264,7 @@ def test_debug_tier_catalog_event_not_client_wire_visible() -> None:
         domain="stream",
         component="heartbeat",
         action="tick",
-        verbosity=VerbosityTier.DEBUG,
+        verbosity=VerbosityTier.INTERNAL,
     )
     msg = {
         "type": "event",

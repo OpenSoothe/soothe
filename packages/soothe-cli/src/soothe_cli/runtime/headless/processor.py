@@ -273,8 +273,6 @@ class EventProcessor:
         """Display logic for RFC-614 loop-tagged assistant messages (IG-317 / IG-343)."""
         if phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
             return
-        if not self._presentation.tier_visible(VerbosityTier.QUIET):
-            return
 
         accum_key = _loop_msg_accum_event_key(phase)
         streaming_config = self._get_effective_streaming_config()
@@ -925,8 +923,7 @@ class EventProcessor:
         etype = data.get("type", "")
 
         if self._headless_output:
-            category = classify_event_to_tier(etype, namespace)
-            if category == VerbosityTier.QUIET and "error" in etype:
+            if etype.startswith("soothe.error."):
                 error_text = data.get("error", data.get("message", str(etype)))
                 self._renderer.on_error(error_text)
             return
@@ -938,7 +935,7 @@ class EventProcessor:
         # Update plan state and call specific hooks
         if etype == PLAN_CREATED:
             self._handle_plan_created(data)
-        elif category == VerbosityTier.QUIET and "error" in etype:
+        elif etype.startswith("soothe.error."):
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
         elif self._presentation.tier_visible(category):

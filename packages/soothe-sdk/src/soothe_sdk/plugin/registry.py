@@ -92,16 +92,17 @@ def register_event(
 
     type_string = type_default
 
-    # Normalize verbosity to VerbosityTier
+    # Normalize verbosity to VerbosityTier. Only two tiers exist: NORMAL
+    # (client-visible) and INTERNAL (daemon-only). Legacy string aliases
+    # `quiet`/`detailed`/`debug` collapse to the nearest survivor.
     if verbosity is None:
         verbosity_tier = VerbosityTier.NORMAL
     elif isinstance(verbosity, str):
-        # Map string verbosity names to VerbosityTier
         verbosity_map = {
-            "quiet": VerbosityTier.QUIET,
+            "quiet": VerbosityTier.NORMAL,
             "normal": VerbosityTier.NORMAL,
-            "detailed": VerbosityTier.DETAILED,
-            "debug": VerbosityTier.DEBUG,
+            "detailed": VerbosityTier.INTERNAL,
+            "debug": VerbosityTier.INTERNAL,
             "internal": VerbosityTier.INTERNAL,
         }
         verbosity_tier = verbosity_map.get(verbosity.lower(), VerbosityTier.NORMAL)
