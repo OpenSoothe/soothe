@@ -109,3 +109,71 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
     queued = await asyncio.wait_for(q.get(), timeout=2.0)
     assert queued["type"] == "input"
     assert queued["text"] == "/skill:invoke_rpc go"
+    # No clarification_mode supplied → daemon stores None and the runner
+    # falls back to ``config.agent.clarification.default_mode``.
+    assert queued["clarification_mode"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("incoming_mode", "expected"),
+    [
+        ("manual", "manual"),
+        ("auto", "auto"),
+        ("MANUAL", "manual"),  # normalized to lowercase
+        ("weird", None),  # unrecognized → cleared, runner falls back to config default
+        (123, None),  # non-string → cleared
+    ],
+)
+async def test_invoke_skill_forwards_clarification_mode(
+    tmp_path: Any, incoming_mode: object, expected: str | None
+) -> None:
+    """``invoke_skill`` must propagate the RFC-622 mode like ``loop_input`` does.
+
+    Without this, slash-skill turns drop the TUI's Manual badge and always
+    fall back to ``config.agent.clarification.default_mode`` (typically auto),
+    so veritas runs even when the operator selected Manual.
+    """
+    skill_dir = tmp_path / "mode_skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: mode_skill\ndescription: mode\n---\n# Body\n",
+        encoding="utf-8",
+    )
+    cfg = SootheConfig()
+    cfg.skills = [str(skill_dir)]
+
+    q: asyncio.Queue = asyncio.Queue()
+    loop_id = "loop-mode"
+
+    async def enqueue(_lid: str, msg: dict[str, Any]) -> None:
+        await q.put(msg)
+
+    class _FakeDaemon:
+        _config = cfg
+        _query_running = False
+        _active_threads: set[Any] = set()
+        _runner = SimpleNamespace(current_thread_id="t-mode")
+        _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
+        _session_manager = SimpleNamespace(
+            get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
+        )
+        _thread_registry = SimpleNamespace(get_workspace=lambda _tid: None)
+        _current_thread_id = "t-mode"
+
+        async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
+            return None
+
+    router = MessageRouter(_FakeDaemon())
+    await router.dispatch(
+        "client-c",
+        {
+            "type": "invoke_skill",
+            "skill": "mode_skill",
+            "args": "",
+            "clarification_mode": incoming_mode,
+        },
+    )
+
+    queued = await asyncio.wait_for(q.get(), timeout=2.0)
+    assert queued["clarification_mode"] == expected

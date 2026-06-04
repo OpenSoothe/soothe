@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-03
-**Total RFCs**: 69
+**Last Updated**: 2026-06-04
+**Total RFCs**: 70
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 50 |
+| Draft | 51 |
 | Implemented | 18 |
 | Accepted | 1 |
 
@@ -294,6 +294,11 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-04-22
 
+- **RFC-505**: [Soothe Desktop Client Architecture](RFC-505-soothe-desktop-client.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-04
+
 ### Plugin System & Extensions (6xx)
 
 - **RFC-600**: [Plugin Extension Specification](RFC-600-plugin-extension-system.md)
@@ -425,13 +430,14 @@ This index reflects the canonical RFC set and defines which files are active for
 | 2xx | AgentLoop & Cognition | 21 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 10 |
-| 5xx | CLI & TUI | 5 |
+| 5xx | CLI & TUI | 6 |
 | 6xx | Plugin System & Extensions | 20 |
 
 ---
 
 ## Recently Added
 
+- **RFC-505**: Soothe Desktop Client Architecture (2026-06-04)
 - **RFC-623**: Veritas Auto-Mode Robustness (2026-06-03)
 - **RFC-622**: CoreAgent Clarification Relay (2026-06-02)
 - **RFC-621**: Workspace Host Convention — Path Mapping for Containerized Daemon (2026-06-02)

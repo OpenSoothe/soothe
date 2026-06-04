@@ -381,7 +381,11 @@ class _StartupMixin:
             )
             return
         try:
-            resp = await self._daemon_session.invoke_skill(skill_name, args)
+            resp = await self._daemon_session.invoke_skill(
+                skill_name,
+                args,
+                clarification_mode=getattr(self, "_clarification_mode", None),
+            )
         except RuntimeError as exc:
             await self._mount_message(UserMessage(command))
             await self._mount_message(AppMessage(str(exc)))

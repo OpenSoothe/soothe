@@ -356,6 +356,4 @@ class SootheApp(
                 image_tracker=self._image_tracker,
                 id="input-area",
             )
-
-        # Status bar at bottom
-        yield StatusBar(cwd=self._cwd, id="status-bar")
+            yield StatusBar(cwd=self._cwd, id="status-bar")
