@@ -114,6 +114,7 @@ class AgentLoop:
         shared_pool: Any | None = None,  # IG-406: SharedPostgreSQLPool for high-concurrency
         clarification_policy: Any | None = None,  # RFC-622: ClarificationPolicy injection
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
+        clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -407,6 +408,11 @@ class AgentLoop:
             preferred_subagent=preferred_subagent,
             clarification_policy=clarification_policy,
             clarification_resume_text=goal if clarification_answer else None,
+            clarification_resume_answers=(
+                list(clarification_answers)
+                if clarification_answer and clarification_answers
+                else None
+            ),
         )
 
         async def pump_graph() -> None:

@@ -306,6 +306,7 @@ class AgenticMixin:
         intent_hint: IntentHint | None = None,
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
+        clarification_answers: list[str] | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
@@ -335,8 +336,15 @@ class AgenticMixin:
         # RFC-225: intent classification is quiz vs. agentic only.
         # Loop continuation is derived structurally inside AgentLoop from the
         # loaded checkpoint, not by the runner.
+        #
+        # When the caller flags this turn as a clarification answer (RFC-622),
+        # skip classification entirely: a bare word like "soothe" would
+        # otherwise classify as quiz and short-circuit the AgentLoop, never
+        # reaching the orchestrator's Command(resume=...) path. The
+        # orchestrator runner verifies the actual pending state and falls back
+        # to a normal turn if no clarification is really pending.
         intent_classification = None
-        if self._intent_classifier:
+        if self._intent_classifier and not clarification_answer:
             intent_classification = await self._intent_classifier.classify_intent(
                 user_input,
                 intent_hint=intent_hint,
@@ -355,6 +363,8 @@ class AgenticMixin:
                 ):
                     yield chunk
                 return
+        elif clarification_answer:
+            logger.info("[Agentic] clarification_answer=True - bypassing intent classification")
 
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
@@ -433,6 +443,7 @@ class AgenticMixin:
             shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
             clarification_policy=clarification_policy,
             clarification_answer=clarification_answer,
+            clarification_answers=clarification_answers,
         ):
             if event_type == "intent_classified":
                 logger.info(

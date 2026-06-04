@@ -148,6 +148,7 @@ class TuiDaemonSession:
         attachments: list[dict[str, str]] | None = None,
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
+        clarification_answers: list[str] | None = None,
     ) -> None:
         """Send a new user turn to the daemon."""
         if not self._loop_id:
@@ -163,6 +164,7 @@ class TuiDaemonSession:
             attachments=attachments,
             clarification_mode=clarification_mode,
             clarification_answer=clarification_answer,
+            clarification_answers=clarification_answers,
         )
 
     async def cancel_remote_query(self) -> None:

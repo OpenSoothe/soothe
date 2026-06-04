@@ -162,6 +162,7 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
         {
             "record_iteration": "record_iteration",
             "await_clarification": "await_clarification",
+            "iteration_gate": "iteration_gate",
             END: END,
         },
     )
