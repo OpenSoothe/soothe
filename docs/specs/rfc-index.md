@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-06-04
-**Total RFCs**: 70
+**Total RFCs**: 71
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -12,8 +12,9 @@ This index reflects the canonical RFC set and defines which files are active for
 | Status | Count |
 |--------|-------|
 | Draft | 51 |
-| Implemented | 18 |
+| Implemented | 19 |
 | Accepted | 1 |
+| Deprecated | 1 |
 
 ---
 
@@ -248,8 +249,15 @@ This index reflects the canonical RFC set and defines which files are active for
 
 - **RFC-411**: [Event Stream Replay & History Reconstruction](RFC-411-event-stream-replay.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Deprecated (superseded by RFC-413, IG-470)
   - Created: 2026-04-24
+
+- **RFC-413**: [Server-Owned Display Card Ledger](RFC-413-server-owned-display-card-ledger.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-06-04
+  - Depends On: RFC-401, RFC-403, RFC-411, RFC-503, RFC-505
+  - Supersedes: RFC-411
 
 - **RFC-450**: [Unified Daemon Communication Protocol](RFC-450-daemon-communication-protocol.md)
   - Kind: Architecture Design

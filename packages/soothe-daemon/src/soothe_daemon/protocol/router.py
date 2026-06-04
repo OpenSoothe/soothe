@@ -280,6 +280,10 @@ class MessageRouter:
             await self._handle_loop_state_update(client_id, msg)
             return
 
+        if msg_type == "loop_cards_fetch":
+            await self._handle_loop_cards_fetch(client_id, msg)
+            return
+
         # IG-174 Phase 0: Daemon RPC endpoints
         if msg_type == "daemon_status":
             await self._handle_daemon_status(client_id, msg)
@@ -1689,3 +1693,99 @@ class MessageRouter:
                 "success": True,
             },
         )
+
+    async def _handle_loop_cards_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Return the bound display-card snapshot for a loop (RFC-413).
+
+        The card ledger is derived lazily from the loop's checkpoint + activity
+        log on first access; this RPC waits for eager backfill if needed so the
+        client receives a complete snapshot. Typical cost is ~50 ms for an
+        active loop's cached ledger, ~1–3 s for a pre-413 loop's first read.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        card_manager = getattr(d, "_card_manager", None)
+        if card_manager is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "CARD_MANAGER_UNAVAILABLE",
+                    "message": "Daemon card manager not initialized",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        from soothe_sdk.display.card_ledger import card_to_wire_dict
+
+        try:
+            ledger = await card_manager.ensure_for_loop(str(loop_id))
+            snapshot = ledger.snapshot()
+            wire_cards = [card_to_wire_dict(card) for card in snapshot]
+            latest_seq = ledger.next_seq() - 1
+        except Exception as exc:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "CARDS_FETCH_FAILED",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Context-token count is owned by the checkpoint state channel, not
+        # the ledger. Read it alongside so the client doesn't need a separate
+        # round-trip (RFC-413).
+        context_tokens = await self._read_loop_context_tokens(str(loop_id))
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_cards_fetch_response",
+                "request_id": request_id,
+                "loop_id": str(loop_id),
+                "cards": wire_cards,
+                "seq": latest_seq,
+                "context_tokens": context_tokens,
+            },
+        )
+
+    async def _read_loop_context_tokens(self, loop_id: str) -> int:
+        """Best-effort read of ``_context_tokens`` from the loop's checkpoint.
+
+        Returns 0 on any failure — the TUI tolerates a zero token count
+        (renders without the budget badge).
+        """
+        d = self._daemon
+        runner = getattr(d, "_runner", None)
+        if runner is None:
+            return 0
+        try:
+            from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
+
+            checkpoint_thread_id = await bind_execution_thread_for_loop(d, loop_id)
+            values = await runner.get_thread_state_values(checkpoint_thread_id)
+        except Exception:
+            logger.debug("Failed to read context_tokens for loop %s", loop_id, exc_info=True)
+            return 0
+        raw = values.get("_context_tokens") if isinstance(values, dict) else None
+        if isinstance(raw, int) and raw >= 0:
+            return raw
+        return 0

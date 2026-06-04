@@ -934,17 +934,23 @@ class WebSocketClient:
         self._pending_events.clear()
 
     # Handshake / RPC responses that must not count as turn progress (TUI stall detection).
+    # ``card.replay_*`` / ``card.created`` are emitted by the daemon during
+    # ``loop_subscribe`` for non-TUI clients (RFC-413). The TUI consumes its
+    # cards via the synchronous ``loop_cards_fetch`` RPC so these frames are
+    # peeled silently here. Legacy ``history_replay`` / ``loop_reattached`` /
+    # ``replay_complete`` were removed when RFC-411 was superseded.
     _STALE_TURN_PENDING_TYPES = frozenset(
         {
             "daemon_ready",
             "subscription_confirmed",
-            "history_replay",
-            "loop_reattached",
-            "replay_complete",
+            "card.replay_begin",
+            "card.replay_end",
+            "card.created",
             "loop_new_response",
             "loop_subscribe_response",
             "loop_input_response",
             "loop_list_response",
+            "loop_cards_fetch_response",
             "skills_list_response",
             "models_list_response",
             "invoke_skill_response",

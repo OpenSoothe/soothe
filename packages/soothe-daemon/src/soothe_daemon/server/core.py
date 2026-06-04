@@ -185,6 +185,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._message_router: MessageRouter = MessageRouter(self)
         # MCP registry (RFC-412): daemon-singleton for MCP connections
         self._mcp_registry: Any = None  # MCPRegistry | None
+        # Per-loop display card ledger (RFC-413).
+        from soothe_daemon.display import LoopCardManager
+
+        self._card_manager: LoopCardManager = LoopCardManager(self)
 
     async def _cancel_loop_for_session(self, loop_id: str) -> None:
         """Cancel in-flight work for a loop when a client disconnects (IG-408)."""

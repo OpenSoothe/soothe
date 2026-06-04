@@ -1,30 +1,20 @@
-"""Loop reattachment handler for history reconstruction.
+"""Loop reattachment handler — card-ledger replay (RFC-413).
 
-Handles client reattachment to detached loops by reconstructing
-complete event history and replaying to TUI/CLI.
+When a client (re)subscribes to an existing loop, the daemon streams the
+bound display-card ledger through ``card.*`` wire frames. Clients on the
+new wire (TUI, soothe-desktop) render directly from those frames.
 
-RFC-411: Event Stream Replay
-RFC-503: Loop-First User Experience
+RFC-411's ``history_replay`` / ``loop_reattached`` / ``replay_complete``
+frames were removed when this RFC superseded it, along with the
+reconstructor / enricher modules under ``soothe.core.events.replay``.
+Clients that still expect those frames should upgrade to consume
+``card.*``.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
-
-from soothe.core.events import REPLAY_COMPLETE
-from soothe.core.events.replay import (
-    enrich_events_with_coreagent_details,
-    reconstruct_event_stream,
-)
-from soothe.core.events.visibility import (
-    is_catalog_event_client_wire_visible,
-)
-from soothe.core.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
-)
-
-LOOP_REATTACHED_WIRE = "loop_reattached"
 
 logger = logging.getLogger(__name__)
 
@@ -34,98 +24,50 @@ async def handle_loop_reattach(
     daemon: Any,
     client_id: Any,
 ) -> None:
-    """Handle loop reattachment: reconstruct history and replay.
+    """Handle loop (re)attachment by streaming bound cards from the ledger.
 
     Process:
-    1. Load AgentLoop checkpoint data
-    2. Reconstruct event stream from checkpoint tree
-    3. Enrich with CoreAgent checkpoint details
-    4. Send history_replay event to client
-    5. Send LOOP_REATTACHED event
+    1. Ensure the daemon's card ledger for this loop is populated (eagerly
+       backfill from checkpoint + activity log if needed).
+    2. Stream ``card.replay_begin`` → ``card.created`` × N → ``card.replay_end``.
 
     Args:
         loop_id: AgentLoop identifier.
-        daemon: Daemon instance (for sending messages).
+        daemon: Daemon instance (for sending messages + card manager access).
         client_id: Client connection identifier.
     """
     try:
         logger.info("Handling loop reattachment for %s (client=%s)", loop_id, client_id)
 
-        # Load checkpoint data
-        persistence_manager = AgentLoopCheckpointPersistenceManager(config=daemon._config)
+        card_manager = getattr(daemon, "_card_manager", None)
+        if card_manager is None:
+            logger.warning(
+                "Card manager unavailable; reattach for %s will emit empty replay",
+                loop_id,
+            )
+            return
 
-        # Reconstruct event stream
-        event_stream = await reconstruct_event_stream(loop_id, persistence_manager)
+        async def _send(frame: dict[str, Any]) -> None:
+            await daemon._send_client_message(client_id, frame)
 
-        # Build thread checkpointer map (from daemon's thread registry)
-        checkpointer_thread_map = {}
-        if hasattr(daemon, "_thread_registry"):
-            for thread_id in daemon._thread_registry.all_thread_ids():
-                thread_state = daemon._thread_registry.get(thread_id)
-                cp = getattr(thread_state, "checkpointer", None) if thread_state else None
-                if cp:
-                    checkpointer_thread_map[thread_id] = cp
-
-        # Enrich events with checkpoint details
-        enriched_stream = await enrich_events_with_coreagent_details(
-            event_stream, checkpointer_thread_map
-        )
-
-        client_stream = [
-            event
-            for event in enriched_stream
-            if isinstance(event, dict)
-            and is_catalog_event_client_wire_visible(str(event.get("type") or ""))
-        ]
-
-        # Send history_replay event to client
-        await daemon._send_client_message(
-            client_id,
-            {
-                "type": "history_replay",
-                "loop_id": loop_id,
-                "events": client_stream,
-                "total_events": len(client_stream),
-            },
-        )
-
-        # Send loop reattached control frame (not soothe.internal catalog type on wire)
-        await daemon._send_client_message(
-            client_id,
-            {
-                "type": LOOP_REATTACHED_WIRE,
-                "loop_id": loop_id,
-                "timestamp": enriched_stream[-1].get("timestamp") if enriched_stream else None,
-            },
-        )
-
-        await daemon._send_client_message(
-            client_id,
-            {
-                "type": REPLAY_COMPLETE,
-                "loop_id": loop_id,
-                "event_count": len(client_stream),
-            },
-        )
+        card_count = await card_manager.replay_to_client(str(loop_id), _send)
 
         logger.info(
-            "Loop reattachment complete: %s (%d events replayed)",
+            "Loop reattachment complete: %s (%d cards replayed)",
             loop_id,
-            len(enriched_stream),
+            card_count,
         )
 
-    except Exception as e:
+    except Exception as exc:
         logger.error(
-            "Failed to handle loop reattachment for %s: %s", loop_id, str(e), exc_info=True
+            "Failed to handle loop reattachment for %s: %s", loop_id, str(exc), exc_info=True
         )
-
-        # Send error to client
         await daemon._send_client_message(
             client_id,
             {
                 "type": "error",
                 "code": "LOOP_REATTACH_FAILED",
-                "message": f"Failed to reconstruct loop history: {str(e)}",
+                "message": f"Failed to reconstruct loop history: {exc!s}",
                 "loop_id": loop_id,
             },
         )

@@ -1,4 +1,4 @@
-"""Interactive loop selector screen for /loops command (RFC-503)."""
+"""Interactive loop selector screen for the /resume command (RFC-503)."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ _column_widths_cache: (
     ]
     | None
 ) = None
-"""Module-level cache so repeated `/loops` opens skip column-width computation
+"""Module-level cache so repeated `/resume` opens skip column-width computation
 when the inputs (loop data + config) haven't changed."""
 
 _COL_LID = 10

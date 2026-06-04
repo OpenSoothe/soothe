@@ -253,22 +253,14 @@ __all__ = [
     "make_subagent_tool_started",
     "make_subagent_tool_completed",
     "make_subagent_tool_failed",
-    # Event replay (RFC-411)
-    "reconstruct_event_stream",
-    "enrich_events_with_coreagent_details",
+    # RFC-411 event replay was removed when RFC-413 superseded it.
+    # ``soothe.core.events.replay`` is gone; the daemon's
+    # ``LoopCardManager`` owns reattach replay now.
 ]
 
 
-# Lazy imports for replay submodule and internal bus to avoid circular dependencies
-def __getattr__(name: str) -> object:  # noqa: PLW0912
-    if name == "reconstruct_event_stream":
-        from soothe.core.events.replay import reconstruct_event_stream
-
-        return reconstruct_event_stream
-    if name == "enrich_events_with_coreagent_details":
-        from soothe.core.events.replay import enrich_events_with_coreagent_details
-
-        return enrich_events_with_coreagent_details
+# Lazy imports for internal bus (kept to avoid circular deps).
+def __getattr__(name: str) -> object:
     # RFC-222: Internal EventBus (lazy import to avoid circular deps)
     if name == "InternalEventBus":
         from soothe.core.events.internal_bus import InternalEventBus

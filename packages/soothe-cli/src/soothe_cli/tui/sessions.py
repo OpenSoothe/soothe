@@ -354,7 +354,7 @@ async def find_similar_loops(loop_id: str, limit: int = 3) -> list[str]:
 
 
 def get_loop_limit() -> int:
-    """Default maximum loops to load for `/loops` when no explicit limit is set.
+    """Default maximum loops to load for `/resume` when no explicit limit is set.
 
     Reads ``DA_CLI_RECENT_LOOPS``, then the legacy alias ``DA_CLI_RECENT_THREADS``,
     then defaults to ``20``.
