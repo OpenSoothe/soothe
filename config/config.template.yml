@@ -508,9 +508,9 @@ filesystem_middleware:
   backup_enabled: true
   backup_dir: null
   workspace_root: null
-  virtual_mode: false
   max_file_size_mb: 10
   tool_token_limit_before_evict: 20000
+  # Path sandboxing is controlled by security.allow_paths_outside_workspace.
 
 # ============================================================
 # OPTIMIZATION (Semantic Heuristics)

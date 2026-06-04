@@ -55,15 +55,15 @@ class FileOpsPlugin:
         sc = context.soothe_config
         workspace_root = context.config.get("workspace_root") or str(resolve_daemon_workspace())
         fs_config = dict(context.config.get("filesystem_middleware", {}))
-        if "virtual_mode" not in fs_config:
-            fs_config["virtual_mode"] = filesystem_virtual_mode_from_soothe_config(sc)
-        if "max_file_size_mb" not in fs_config:
-            fs_config["max_file_size_mb"] = max_file_size_mb_for_filesystem_backend(sc)
+        virtual_mode = filesystem_virtual_mode_from_soothe_config(sc)
+        max_file_size_mb = fs_config.get(
+            "max_file_size_mb", max_file_size_mb_for_filesystem_backend(sc)
+        )
 
         backend = FilesystemBackend(
             root_dir=workspace_root or None,
-            virtual_mode=fs_config.get("virtual_mode", False),
-            max_file_size_mb=fs_config.get("max_file_size_mb", 10),
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_file_size_mb,
         )
 
         middleware = SootheFilesystemMiddleware(
