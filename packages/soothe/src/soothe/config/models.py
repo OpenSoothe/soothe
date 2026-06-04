@@ -1477,11 +1477,13 @@ class OptimizationConfig(BaseModel):
 class FilesystemMiddlewareConfig(BaseModel):
     """Configuration for SootheFilesystemMiddleware.
 
+    Path sandboxing (``virtual_mode``) is derived from
+    ``security.allow_paths_outside_workspace`` — set that flag, not a field here.
+
     Args:
         backup_enabled: Enable automatic backup before file deletion.
         backup_dir: Directory for backup files.
         workspace_root: Root directory for workspace operations.
-        virtual_mode: Enable path sandboxing to workspace (passed to FilesystemBackend).
         max_file_size_mb: Maximum file size for operations.
         tool_token_limit_before_evict: Token limit for large result eviction.
     """
@@ -1494,9 +1496,6 @@ class FilesystemMiddlewareConfig(BaseModel):
 
     workspace_root: str | None = None
     """Root directory for workspace operations."""
-
-    virtual_mode: bool = False
-    """Enable path sandboxing to workspace directory (FilesystemBackend parameter)."""
 
     max_file_size_mb: int = 10
     """Maximum file size for operations (MB) - passed to FilesystemBackend."""
