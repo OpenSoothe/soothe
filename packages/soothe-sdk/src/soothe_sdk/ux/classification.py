@@ -29,17 +29,17 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         namespace: Subagent namespace tuple (for non-soothe events).
 
     Returns:
-        VerbosityTier for the event.
+        VerbosityTier for the event — NORMAL (client-visible) or INTERNAL (hidden).
 
     Examples:
         >>> classify_event_to_tier("soothe.error.general.failed")
-        <VerbosityTier.QUIET: 0>
-        >>> classify_event_to_tier("soothe.output.telemetry.line")
-        <VerbosityTier.QUIET: 0>
+        <VerbosityTier.NORMAL: 1>
         >>> classify_event_to_tier("soothe.cognition.plan.creating")
         <VerbosityTier.NORMAL: 1>
+        >>> classify_event_to_tier("soothe.internal.iteration.started")
+        <VerbosityTier.INTERNAL: 99>
     """
-    # Stream tool wire (IG-416/427) — normal-tier progress for TUI tool/task rows.
+    # Stream tool wire (IG-416/427) — client-visible progress for TUI tool/task rows.
     if event_type in (TOOL_CALL_UPDATES_BATCH, STREAM_TOOL_CALL_UPDATE):
         return VerbosityTier.NORMAL
 
@@ -48,38 +48,28 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         if wire is not None:
             return wire
 
-        # Fine-grained overrides (RFC-0024 / UX tests — before coarse domain defaults)
-        if event_type == "soothe.cognition.agent_loop.completed":
-            return VerbosityTier.QUIET
         if "heartbeat" in event_type:
-            return VerbosityTier.DEBUG
+            return VerbosityTier.INTERNAL
         segments = event_type.split(".")
         domain = segments[1] if len(segments) >= 2 else "unknown"
-        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
+        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.INTERNAL)
 
-    # Non-soothe events (from subagents) — not curated soothe.subagent.*
-    if namespace or (".subagent." in event_type and not event_type.startswith("soothe.subagent.")):
-        return VerbosityTier.DETAILED
-
-    # Thinking and heartbeats are debug-level
-    if "thinking" in event_type or "heartbeat" in event_type:
-        return VerbosityTier.DEBUG
-
-    # Fallback to DEBUG
-    return VerbosityTier.DEBUG
+    # Non-soothe events (from subagents not under curated soothe.subagent.*) and
+    # thinking/heartbeat traces are internal-only.
+    return VerbosityTier.INTERNAL
 
 
 # Domain-based default verbosity tiers, matching daemon's EventRegistry.
 # Kept in sync with soothe.core.event_catalog._DOMAIN_DEFAULT_TIER.
 _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
-    "lifecycle": VerbosityTier.DETAILED,
-    "protocol": VerbosityTier.DETAILED,
+    "lifecycle": VerbosityTier.INTERNAL,
+    "protocol": VerbosityTier.INTERNAL,
     "cognition": VerbosityTier.NORMAL,
     "loop": VerbosityTier.NORMAL,  # Loop relay events (clarification, RFC-622)
     "tool": VerbosityTier.INTERNAL,  # Tool display via LangChain on_tool_call
-    "subagent": VerbosityTier.DETAILED,
-    "output": VerbosityTier.QUIET,
-    "error": VerbosityTier.QUIET,
+    "subagent": VerbosityTier.INTERNAL,
+    "output": VerbosityTier.NORMAL,
+    "error": VerbosityTier.NORMAL,
     "agentic": VerbosityTier.NORMAL,
 }
 

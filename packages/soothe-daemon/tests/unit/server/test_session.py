@@ -323,7 +323,7 @@ async def test_sender_loop_filters_debug_tier_events_on_wire() -> None:
         domain="stream",
         component="heartbeat",
         action="tick",
-        verbosity=VerbosityTier.DEBUG,
+        verbosity=VerbosityTier.INTERNAL,
     )
     await bus.publish(loop_event_topic("loop-abc123"), event, event_meta=event_meta)
     await asyncio.sleep(0.05)
@@ -473,7 +473,7 @@ def test_queue_has_high_priority_detects_high_event() -> None:
         domain="cognition",
         component="agent_loop",
         action="completed",
-        verbosity=VerbosityTier.QUIET,
+        verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.HIGH,
     )
     queue.put_nowait(({"type": "event"}, high_meta))
@@ -528,7 +528,7 @@ async def test_sender_loop_flushes_high_priority_immediately() -> None:
         domain="cognition",
         component="agent_loop",
         action="completed",
-        verbosity=VerbosityTier.QUIET,
+        verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.HIGH,
     )
     event = {
@@ -614,7 +614,7 @@ async def test_await_loop_delivery_drained_with_high_priority() -> None:
         domain="cognition",
         component="agent_loop",
         action="completed",
-        verbosity=VerbosityTier.QUIET,
+        verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.HIGH,
     )
     session.event_queue.put_nowait(({"type": "event"}, high_meta))

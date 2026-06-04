@@ -18,7 +18,6 @@ from soothe_sdk.core.events import (
     AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
 )
-from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.loop_stream import assistant_output_phase
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
@@ -165,7 +164,8 @@ def _prepare_custom_chunk(
         prepared.skip = True
         return prepared
 
-    if category == VerbosityTier.QUIET and "error" not in event_type:
+    # Output events have a dedicated renderer path; drop the generic copy.
+    if event_type.startswith("soothe.output."):
         prepared.skip = True
         return prepared
 

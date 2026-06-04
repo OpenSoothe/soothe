@@ -69,7 +69,7 @@ register_event(
 )
 register_event(
     TacitusProgressEvent,
-    verbosity=VerbosityTier.DETAILED,  # Progress events are detailed
+    verbosity=VerbosityTier.INTERNAL,  # Progress events stay daemon-side
     summary_template="{phase}: {message}",
 )
 register_event(
