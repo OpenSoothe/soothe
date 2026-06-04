@@ -412,6 +412,14 @@ class AgentLoop:
                 from soothe.core.loop.orchestrator.runner import invoke_agent_loop_graph
 
                 await invoke_agent_loop_graph(ctx)
+            except Exception as e:
+                logger.error(
+                    "[pump_graph] Graph execution error: %s: %s",
+                    type(e).__name__,
+                    e,
+                    exc_info=True,
+                )
+                raise
             finally:
                 await queue.put(_graph_sentinel)
 
@@ -420,6 +428,10 @@ class AgentLoop:
             while True:
                 item = await queue.get()
                 if item is _graph_sentinel:
+                    logger.debug(
+                        "[run_with_progress] Graph sentinel received, ending stream (loop=%s)",
+                        ctx.state_manager.loop_id,
+                    )
                     break
                 yield item
         except asyncio.CancelledError:

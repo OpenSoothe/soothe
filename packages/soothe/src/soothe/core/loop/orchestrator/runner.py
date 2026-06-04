@@ -9,6 +9,7 @@ routing. Metadata adds ``soothe_component`` and dashboard tags for AgentLoop.
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import Any
 
 from soothe.core.loop.orchestrator.builder import build_agent_loop_graph
@@ -96,7 +97,18 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
 
     compiled = build_agent_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)
-    await compiled.ainvoke({"last_outcome": None}, config=config)
+    logger.debug("[runner] Starting graph invocation for loop=%s", loop_id)
+    try:
+        await compiled.ainvoke({"last_outcome": None}, config=config)
+        logger.debug("[runner] Graph invocation completed for loop=%s", loop_id)
+    except Exception as e:
+        logger.error(
+            "[runner] Graph invocation failed for loop=%s: %s\n%s",
+            loop_id,
+            e,
+            traceback.format_exc(),
+        )
+        raise
 
     cfg = ctx.agent_loop.config
     if cfg.observability.langfuse.enabled:
