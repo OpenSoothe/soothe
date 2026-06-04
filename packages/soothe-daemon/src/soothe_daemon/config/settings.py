@@ -17,7 +17,7 @@ from soothe.config import SOOTHE_HOME
 from soothe_daemon.config.models import (
     ChannelsConfig,
     DistributedConfig,
-    EphemeralLoopGcConfig,
+    LoopGcConfig,
     StaleWorkerReapConfig,
     ThreadPoolConfig,
     TransportConfig,
@@ -134,9 +134,12 @@ class SootheDaemonConfig(BaseSettings):
         description="Suppress stats logs after this many seconds without any published events",
     )
 
-    ephemeral_loop_gc: EphemeralLoopGcConfig = Field(
-        default_factory=EphemeralLoopGcConfig,
-        description="Idle ephemeral loop garbage collection",
+    loop_gc: LoopGcConfig = Field(
+        default_factory=LoopGcConfig,
+        description=(
+            "Periodic loop garbage collection — runs ephemeral and empty-loop passes "
+            "per tick (IG-466)"
+        ),
     )
     stale_worker_reap: StaleWorkerReapConfig = Field(
         default_factory=StaleWorkerReapConfig,

@@ -3599,14 +3599,6 @@ class ClarificationInputMessage(Vertical):
         border: solid $primary;
     }
 
-    ClarificationInputMessage .clarification-help {
-        height: 1;
-        color: $text-muted;
-        text-style: italic;
-        padding: 0;
-        margin: 1 0 0 0;
-    }
-
     ClarificationInputMessage.is-submitted {
         border-left: wide $success;
     }
@@ -3656,10 +3648,6 @@ class ClarificationInputMessage(Vertical):
             inp = Input(placeholder=f"Your answer for Q{i + 1}…", id=f"clarification-input-{i}")
             self._inputs.append(inp)
             yield inp
-        yield Static(
-            "Press Enter on the last field to submit · single answer broadcasts to all questions",
-            classes="clarification-help",
-        )
 
     def on_mount(self) -> None:
         if not self._inputs:
