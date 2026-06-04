@@ -77,9 +77,9 @@ _VALID_CLARIFICATION_MODES = frozenset({CLARIFICATION_MODE_AUTO, CLARIFICATION_M
 class ClarificationModeBadge(Static):
     """Visual block showing the active clarification relay mode (RFC-622).
 
-    Rendered as ``Auto`` or ``Manual`` with a bold yellow background so it
-    reads as a discrete pill badge in the status bar — similar to a label
-    chip in shell prompts.
+    ``Auto`` renders as muted/dim text — matching the welcome banner's
+    ``Loop:`` line — to stay visually quiet in the default state. ``Manual``
+    keeps a bold orange pill so the override stands out.
     """
 
     DEFAULT_CSS = """
@@ -87,14 +87,14 @@ class ClarificationModeBadge(Static):
         width: auto;
         height: 1;
         padding: 0 1;
-        text-style: bold;
-        background: #f1c40f;
-        color: black;
+        background: $surface-lighten-2;
+        color: $text-muted;
     }
 
     ClarificationModeBadge.manual {
         background: #e67e22;
         color: black;
+        text-style: bold;
     }
     """
 
