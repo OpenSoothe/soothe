@@ -406,7 +406,7 @@ Runs comprehensive health checks for daemon, protocols, persistence, and integra
 
 ### Verbose Logging
 ```bash
-SOOTHE_LOG_LEVEL=DEBUG soothe "your query"
+SOOTHE_LOG_LEVEL=DEBUG soothe -p "your query"
 ```
 
 ### TUI Debug Mode
