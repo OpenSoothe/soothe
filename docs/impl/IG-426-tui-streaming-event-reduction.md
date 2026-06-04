@@ -122,7 +122,7 @@ await asyncio.gather(*[
 
 ## Verification
 
-1. Run: `SOOTHE_LOG_LEVEL=DEBUG soothe "test query"`
+1. Run: `SOOTHE_LOG_LEVEL=DEBUG soothe -p "test query"`
 2. Check log timestamps for goal completion vs client finish
 3. Run: `./scripts/verify_finally.sh`
 4. Compare event counts in TUI stats

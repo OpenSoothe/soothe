@@ -53,7 +53,7 @@ In-memory continuity only handles linear-chain-on-one-worker. Every other shape 
 3. **Bounded summarization for DAG composability.** Cross-goal context flows as a serializable `GoalDispatchContextBundle` (kilobytes, not megabytes). Diamonds and fan-out compose naturally. Crash recovery is automatic.
 4. **Workspace-level conflict gate at scheduling time.** Daemon refuses to dispatch two goals on overlapping workspace prefixes concurrently. Removes the need for cross-process file-lock RPC.
 5. **Subprocess isolation preserved (RFC-221).** Workers still crash independently; the daemon still consumes their streams; cancellation still uses the existing `cancel_event`.
-6. **Solo mode unchanged.** `soothe "do X"` bypasses autopilot entirely — no `GoalEngine`, no `GoalDispatchContextBundle`, no DAG.
+6. **Solo mode unchanged.** `soothe -p "do X"` bypasses autopilot entirely — no `GoalEngine`, no `GoalDispatchContextBundle`, no DAG.
 
 ---
 
@@ -517,7 +517,7 @@ The existing internal-event types declared in `core/events/internal_events.py` a
 │ Solo Mode: bypasses autopilot entirely                     │
 │                                                            │
 │ Entry:                                                     │
-│   `soothe "user input"` (CLI headless)                     │
+│   `soothe -p "user input"` (CLI headless)                  │
 │   `soothe` → TUI → user input                              │
 │                                                            │
 │ Flow:                                                      │

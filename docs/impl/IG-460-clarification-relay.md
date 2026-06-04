@@ -589,8 +589,8 @@ Coverage target: `ClarificationPolicy` protocol implementations and `await_clari
 Spot-checks beyond the script:
 
 - `soothe doctor` — confirm new config keys validate.
-- Manual sanity run: `soothe "refine the auth module"` (vague prompt) → TUI modal appears with the clarification, accept input, observe CoreAgent resume.
-- Auto sanity run: `soothe --mode auto "refine the auth module"` → veritas answers from goal text; loop proceeds without pausing.
+- Manual sanity run: `soothe -p "refine the auth module"` (vague prompt) → TUI modal appears with the clarification, accept input, observe CoreAgent resume.
+- Auto sanity run: `soothe --mode auto -p "refine the auth module"` → veritas answers from goal text; loop proceeds without pausing.
 
 ---
 

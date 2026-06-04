@@ -296,7 +296,7 @@ class VectorStoreProviderConfig(BaseModel):
 ### Minimal local config (SQLite defaults)
 ```bash
 # No config needed - SQLite is default
-soothe "What is the weather?"
+soothe -p "What is the weather?"
 ```
 
 ### Explicit SQLite config

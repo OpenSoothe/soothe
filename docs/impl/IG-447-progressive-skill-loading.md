@@ -801,7 +801,7 @@ soothe daemon start --workspace /tmp/soothe-skill-test
 #   paths:
 #     - "**/*.py"
 #   ---
-soothe "list files in this directory"
+soothe -p "list files in this directory"
 # Trace via Langfuse:
 #   - turn-0 system prompt does NOT contain python-helper
 #   - after glob/read_file hits a .py path, next turn DOES contain it

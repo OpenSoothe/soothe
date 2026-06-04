@@ -594,10 +594,10 @@ output_streaming:
 **CLI Usage**:
 ```bash
 # Real-time streaming (default)
-soothe "Write a report"
+soothe -p "Write a report"
 
 # Batch mode (final output only)
-soothe --no-streaming "Write a report"
+soothe --no-streaming -p "Write a report"
 ```
 
 ## References
