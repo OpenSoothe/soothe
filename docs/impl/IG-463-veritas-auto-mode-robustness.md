@@ -152,4 +152,4 @@ def build_clarification_policy_for_runner(
 2. `make lint` — zero errors
 3. `make test-unit` — 900+ tests pass plus the new unit tests in Slice D
 4. `./scripts/verify_finally.sh` — full verification suite green
-5. Manual smoke: run a goal that the planner is likely to ask about (e.g. `soothe "refine the daemon"`), watch for `soothe.subagent.veritas.requested` → `…answered` events with non-empty `answers`. If structured output happens to fail, verify the TUI surfaces a clarification prompt instead of the loop terminating silently.
+5. Manual smoke: run a goal that the planner is likely to ask about (e.g. `soothe -p "refine the daemon"`), watch for `soothe.subagent.veritas.requested` → `…answered` events with non-empty `answers`. If structured output happens to fail, verify the TUI surfaces a clarification prompt instead of the loop terminating silently.

@@ -108,9 +108,9 @@ System: Executes query on loop (thread managed internally)
 
 **Default behavior**:
 ```bash
-soothe "query"  # Uses active loop (or creates new loop if none active)
-soothe --loop loop_abc123 "query"  # Execute on specific loop
-soothe --new-loop "query"  # Create fresh loop for query
+soothe -p "query"  # Uses active loop (or creates new loop if none active)
+soothe --loop loop_abc123 -p "query"  # Execute on specific loop
+soothe --new-loop -p "query"  # Create fresh loop for query
 ```
 
 ---

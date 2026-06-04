@@ -229,7 +229,7 @@ soothed start
 
 2. Run agent with verbose TUI:
 ```bash
-soothe "your query"
+soothe -p "your query"
 ```
 
 3. Monitor daemon logs in real-time:
@@ -260,7 +260,7 @@ soothed start
 
 3. Run query and check logs:
 ```bash
-soothe "test query"
+soothe -p "test query"
 grep -i "langfuse\|observability" ~/.soothe/logs/soothed.log | tail -100
 ```
 
@@ -336,7 +336,7 @@ soothed start
 
 3. Test subagent:
 ```bash
-soothe "browse example.com"
+soothe -p "browse example.com"
 ```
 
 4. Monitor daemon logs for subagent:

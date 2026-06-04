@@ -226,7 +226,7 @@ cd packages/soothe-cli && uv run pytest tests/unit/tui/test_turn_event_pipeline.
 ./scripts/verify_finally.sh
 ```
 
-**Manual**: `SOOTHE_LOG_LEVEL=DEBUG soothe "polish readme..."` — confirm `Turn event stats` shows far fewer total chunks, `filtered_early` &gt; 0, file preview visible before `status: idle`.
+**Manual**: `SOOTHE_LOG_LEVEL=DEBUG soothe -p "polish readme..."` — confirm `Turn event stats` shows far fewer total chunks, `filtered_early` &gt; 0, file preview visible before `status: idle`.
 
 ---
 
