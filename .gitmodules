@@ -4,3 +4,6 @@
 [submodule "client/typescript"]
 	path = client/typescript
 	url = git@github.com:mirasoth/soothe-client-typescript.git
+[submodule "apps/soothe-desktop"]
+	path = apps/soothe-desktop
+	url = git@github.com:mirasoth/soothe-desktop.git
