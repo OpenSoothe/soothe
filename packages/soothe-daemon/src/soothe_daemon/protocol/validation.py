@@ -92,6 +92,8 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
             errors.append("invoke_skill skill must be a string")
         if "args" in msg and not isinstance(msg["args"], str):
             errors.append("invoke_skill args must be a string")
+        if "clarification_mode" in msg and not isinstance(msg["clarification_mode"], str):
+            errors.append("invoke_skill clarification_mode must be a string")
 
     else:
         # Unknown message type - allow but log warning

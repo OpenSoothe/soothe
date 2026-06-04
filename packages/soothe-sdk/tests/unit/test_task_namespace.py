@@ -143,9 +143,13 @@ def test_try_bind_namespace_rebinds_on_definitive_tool_id() -> None:
 
 
 def test_legacy_unified_formats_are_not_accepted() -> None:
-    """Hyphen wire step or dot tool index are not unified."""
+    """Hyphen wire step is rejected; only the underscore wire form marks a unified id.
+
+    Tool_info is treated as opaque after the leading ``{step_wire}:{type}:`` marker,
+    so ``YKF_02:s:task.0`` is now a valid unified id with tool_info ``task.0`` — the
+    parser doesn't enforce a structured ``name:idx`` form anymore.
+    """
     assert parse_unified_tool_call_id("YKF-02:s:task:0") == ("", "", None, "YKF-02:s:task:0")
-    assert parse_unified_tool_call_id("YKF_02:s:task.0") == ("", "", None, "YKF_02:s:task.0")
     assert normalize_unified_tool_call_id("YKF-02:s:task.0") == "YKF-02:s:task.0"
 
 
@@ -223,6 +227,36 @@ def test_parse_unified_tool_call_id_non_unified() -> None:
 def test_parse_unified_tool_call_id_empty() -> None:
     """Empty IDs return empty tuple."""
     assert parse_unified_tool_call_id("") == ("", "", None, "")
+
+
+def test_parse_unified_tool_call_id_opaque_provider_step_level() -> None:
+    """Provider ids without a ``:idx`` suffix still recover the step id.
+
+    Kimi-style providers stamp tool_call_ids like ``tool-{uuid}``. The executor
+    wraps them as ``ZKE_01:s:tool-{uuid}`` (3 colon segments). The leading wire
+    fragment + ``s`` marker is enough to recover the step id; tool_info is the
+    raw provider fragment.
+    """
+    raw = "ZKE_01:s:tool-f9af17a88ccf476e948e7a094fca8795"
+    assert parse_unified_tool_call_id(raw) == (
+        "ZKE-01",
+        "s",
+        None,
+        "tool-f9af17a88ccf476e948e7a094fca8795",
+    )
+
+
+def test_parse_unified_tool_call_id_opaque_provider_task_level() -> None:
+    """Task-level ids with opaque tool_info also parse correctly."""
+    raw = "ABC_03:t1:call_xyz"
+    assert parse_unified_tool_call_id(raw) == ("ABC-03", "t", 1, "call_xyz")
+
+
+def test_parse_unified_tool_call_id_round_trip_opaque_id() -> None:
+    """Opaque tool_info round-trips through normalize without losing the step id."""
+    raw = "ZKE_01:s:tool-f9af17a88ccf476e948e7a094fca8795"
+    assert normalize_unified_tool_call_id(raw) == raw
+    assert _shorten_tool_call_id(raw) == "tool-f9af17a88ccf476e948e7a094fca8795"
 
 
 def test_scoped_subgraph_tool_key_passes_through_task_level_id() -> None:

@@ -705,10 +705,26 @@ class WebSocketClient:
         args: str = "",
         *,
         timeout: float = 120.0,
+        clarification_mode: str | None = None,
     ) -> dict[str, Any]:
-        """Resolve a skill on the daemon host and receive echo before streaming (RFC-400)."""
+        """Resolve a skill on the daemon host and receive echo before streaming (RFC-400).
+
+        Args:
+            skill: Skill identifier (e.g. ``"my-plugin:my-skill"``).
+            args: Free-form argument string appended after the skill name.
+            timeout: RPC timeout in seconds.
+            clarification_mode: RFC-622 clarification relay mode for the
+                synthetic turn the daemon will enqueue (``"auto"`` /
+                ``"manual"``). ``None`` lets the daemon fall back to its
+                configured default. Without this, slash-skill turns ignore
+                the client's Manual badge and always defer to the config
+                default — typically ``"auto"`` (veritas).
+        """
+        payload: dict[str, Any] = {"type": "invoke_skill", "skill": skill, "args": args}
+        if clarification_mode is not None:
+            payload["clarification_mode"] = clarification_mode
         return await self.request_response(
-            {"type": "invoke_skill", "skill": skill, "args": args},
+            payload,
             response_type="invoke_skill_response",
             timeout=timeout,
         )

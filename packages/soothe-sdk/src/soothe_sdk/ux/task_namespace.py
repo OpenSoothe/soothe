@@ -48,9 +48,16 @@ def _provider_tool_fragment(tid: str) -> str:
 
 
 def _tool_info_from_unified_parts(parts: list[str]) -> str:
-    """Extract ``tool:idx`` from colon segments after the type segment."""
-    if len(parts) >= 4 and parts[-1].isdigit():
-        return f"{parts[-2]}:{parts[-1]}"
+    """Extract tool_info from colon segments after the type segment.
+
+    Returns everything after ``parts[1]`` joined by ``":"``. The canonical wire form
+    is ``{name}:{idx}`` (e.g. ``grep:0``), but providers that stamp opaque call ids
+    without an ``:idx`` suffix (Kimi ``tool-{uuid}``, OpenAI ``call_{uuid}``) are
+    preserved verbatim so the leading ``{step_wire}:{type}:`` marker can still
+    recover the step id.
+    """
+    if len(parts) >= 3:
+        return ":".join(parts[2:]).strip()
     return ""
 
 
@@ -104,9 +111,20 @@ def normalize_unified_tool_call_id(tool_call_id: str) -> str:
 def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]:
     """Parse unified tool_call_id format into components.
 
-    Canonical wire form (strict):
-    - Step-level: ``{step_wire}:s:{tool}:{idx}`` (e.g. ``GHT_01:s:grep:0``)
-    - Task-level: ``{step_wire}:t{task_idx}:{tool}:{idx}`` (e.g. ``GHT_01:t0:read_file:1``)
+    Recognition rules (in order):
+
+    1. The id must contain at least three colon-separated segments.
+    2. ``parts[0]`` must be a wire step fragment (underscore form, no hyphen — e.g.
+       ``GHT_01``). This is the structural marker that distinguishes a stamped
+       unified id from a raw provider id like ``functions.grep:0``.
+    3. ``parts[1]`` must be ``s`` (step-level) or ``t{N}`` where ``{N}`` is an
+       integer (task-level).
+    4. Everything after ``parts[1]`` is the tool_info, joined by ``":"``.
+
+    Canonical providers stamp ``{name}:{idx}`` tool_info (``GHT_01:s:grep:0``).
+    Opaque-id providers may stamp something like ``GHT_01:s:tool-{uuid}`` — both
+    forms recover the step_id correctly. Tool_info is returned verbatim so callers
+    that need a structured ``name:idx`` form must validate it themselves.
 
     Args:
         tool_call_id: Unified tool_call_id string.
@@ -116,32 +134,35 @@ def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None,
         - step_id: Canonical execute step id (hyphen form, e.g. ``GHT-01``)
         - type_code: ``s`` for step-level, ``t`` for task-level, ``''`` if not unified
         - task_idx: ``None`` for step-level, integer for task-level
-        - tool_info: Tool name and index (e.g. ``grep:0``)
+        - tool_info: Provider-stamped tool fragment (e.g. ``grep:0``, ``tool-{uuid}``)
     """
     tid = str(tool_call_id).strip()
     if not tid:
         return ("", "", None, "")
 
     parts = tid.split(":")
-    if len(parts) < 4 or not _is_wire_step_fragment(parts[0]):
+    if len(parts) < 3 or not _is_wire_step_fragment(parts[0]):
         return ("", "", None, tid)
 
-    step_id = _step_id_from_unified_fragment(parts[0])
     type_part = parts[1]
-    tool_info = _tool_info_from_unified_parts(parts)
-    if not tool_info:
-        return ("", "", None, tid)
-
     if type_part == "s":
-        return (step_id, "s", None, tool_info)
-    if type_part.startswith("t") and len(type_part) > 1:
+        type_code = "s"
+        task_idx: int | None = None
+    elif type_part.startswith("t") and len(type_part) > 1:
         try:
             task_idx = int(type_part[1:])
         except ValueError:
             return ("", "", None, tid)
-        return (step_id, "t", task_idx, tool_info)
+        type_code = "t"
+    else:
+        return ("", "", None, tid)
 
-    return ("", "", None, tid)
+    tool_info = _tool_info_from_unified_parts(parts)
+    if not tool_info:
+        return ("", "", None, tid)
+
+    step_id = _step_id_from_unified_fragment(parts[0])
+    return (step_id, type_code, task_idx, tool_info)
 
 
 def is_step_level_task_tool_id(tool_call_id: str) -> bool:
