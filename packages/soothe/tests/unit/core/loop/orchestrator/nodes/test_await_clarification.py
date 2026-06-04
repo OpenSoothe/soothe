@@ -89,8 +89,10 @@ async def test_success_writes_answer_and_clears_pending() -> None:
     assert result["pending_clarification_answer"]["answers"] == ["auth flows"]
     assert result["pending_clarification_answer"]["source"] == "human"
     names = [n for n, _ in ctx.emitted]
-    assert "soothe.loop.clarification.requested" in names
-    assert "soothe.loop.clarification.answered" in names
+    # Short names — the runner dispatch wraps them into the
+    # ``soothe.loop.clarification.*`` wire events before yielding.
+    assert "clarification_requested" in names
+    assert "clarification_answered" in names
     assert ctx.status_marks == []
 
 
@@ -122,7 +124,7 @@ async def test_deferred_marks_status_and_terminates() -> None:
     assert result["last_outcome"] == "deferred"
     assert result["pending_clarification"] is None
     assert ctx.status_marks == [("awaiting_clarification", "low confidence")]
-    deferred_payloads = [p for n, p in ctx.emitted if n == "soothe.loop.clarification.deferred"]
+    deferred_payloads = [p for n, p in ctx.emitted if n == "clarification_deferred"]
     assert len(deferred_payloads) == 1
     assert deferred_payloads[0]["defer_kind"] == "low_confidence"
     assert deferred_payloads[0]["reason"] == "low confidence"
@@ -155,7 +157,7 @@ async def test_deferred_event_carries_defer_kind(kind: str) -> None:
     )
     ctx = _StubCtx(policy=policy)
     await node_await_clarification(ctx, _pending_state())
-    payload = next(p for n, p in ctx.emitted if n == "soothe.loop.clarification.deferred")
+    payload = next(p for n, p in ctx.emitted if n == "clarification_deferred")
     assert payload["defer_kind"] == kind
 
 
@@ -198,6 +200,6 @@ async def test_malformed_pending_returns_fatal() -> None:
 async def test_mode_derived_from_policy_class(policy_factory: Any, expected_mode: str) -> None:
     ctx = _StubCtx(policy=policy_factory())
     await node_await_clarification(ctx, _pending_state())
-    requested = [p for n, p in ctx.emitted if n == "soothe.loop.clarification.requested"]
+    requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
     assert requested[0]["mode"] == expected_mode

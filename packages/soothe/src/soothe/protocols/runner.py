@@ -78,6 +78,12 @@ class LoopRunRequest:
     intent_hint: str | None = None
     # RFC-622: per-request clarification mode ("auto" / "manual" / None for daemon default)
     clarification_mode: str | None = None
+    # RFC-622: when True, the runner treats ``user_input`` as the answer to the
+    # loop's currently pending clarification interrupt and resumes the graph
+    # via ``Command(resume=...)`` instead of starting a new turn. The runner
+    # verifies via the loop's persisted ``pending_clarification`` state and
+    # falls back to a normal turn when no clarification is pending.
+    clarification_answer: bool = False
     # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched
     # goals. None for solo-mode requests (default).
     autopilot_job: AutopilotJob | None = None

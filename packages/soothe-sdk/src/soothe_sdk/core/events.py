@@ -83,6 +83,15 @@ AGENT_LOOP_STEP_QUEUED = "soothe.cognition.agent_loop.step.queued"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
 
+# Clarification relay events (RFC-622 / RFC-623)
+# Emitted while the loop graph is paused on the ``await_clarification`` node.
+# When the stream ends with one of these pending, the TUI must avoid the
+# "stream ended unexpectedly" safety net — the loop is intentionally suspended
+# waiting for an answer, not crashed.
+LOOP_CLARIFICATION_REQUESTED = "soothe.loop.clarification.requested"
+LOOP_CLARIFICATION_ANSWERED = "soothe.loop.clarification.answered"
+LOOP_CLARIFICATION_DEFERRED = "soothe.loop.clarification.deferred"
+
 # Message events (DETAILED level)
 MESSAGE_RECEIVED = "soothe.protocol.message.received"
 MESSAGE_SENT = "soothe.protocol.message.sent"
@@ -112,6 +121,10 @@ __all__ = [
     "AGENT_LOOP_STEP_QUEUED",
     "AGENT_LOOP_STEP_COMPLETED",
     "AGENT_LOOP_PLAN_DECISION",
+    # Clarification relay (RFC-622 / RFC-623)
+    "LOOP_CLARIFICATION_REQUESTED",
+    "LOOP_CLARIFICATION_ANSWERED",
+    "LOOP_CLARIFICATION_DEFERRED",
     # Message (DETAILED)
     "MESSAGE_RECEIVED",
     "MESSAGE_SENT",

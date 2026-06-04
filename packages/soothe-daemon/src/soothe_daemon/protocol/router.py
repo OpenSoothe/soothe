@@ -89,6 +89,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "response_schema_name": response_schema_name,
         "response_schema_strict": response_schema_strict,
         "clarification_mode": clarification_mode_norm,
+        "clarification_answer": bool(msg.get("clarification_answer", False)),
     }
 
 

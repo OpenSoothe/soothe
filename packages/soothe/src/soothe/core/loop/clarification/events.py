@@ -5,14 +5,15 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import ConfigDict
-from soothe_sdk.core.events import SootheEvent
+from soothe_sdk.core.events import (
+    LOOP_CLARIFICATION_ANSWERED,
+    LOOP_CLARIFICATION_DEFERRED,
+    LOOP_CLARIFICATION_REQUESTED,
+    SootheEvent,
+)
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe.core.events import register_event
-
-LOOP_CLARIFICATION_REQUESTED = "soothe.loop.clarification.requested"
-LOOP_CLARIFICATION_ANSWERED = "soothe.loop.clarification.answered"
-LOOP_CLARIFICATION_DEFERRED = "soothe.loop.clarification.deferred"
 
 
 class ClarificationRequestedEvent(SootheEvent):

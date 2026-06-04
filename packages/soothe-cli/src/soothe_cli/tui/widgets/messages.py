@@ -2927,6 +2927,39 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.update(Content.assemble(*assembled))
         self._detail_widget.display = True
 
+    def set_awaiting_clarification(self, questions: list[str]) -> None:
+        """Pause the running animation and show the pending questions.
+
+        Called when a ``soothe.loop.clarification.requested`` event arrives
+        while the loop graph is suspended on ``await_clarification``
+        (RFC-622 / RFC-623). Stops the spinner, marks the card as awaiting an
+        answer, and renders the questions in the detail area so the user
+        knows what to type. ``set_clarification_details`` will replace the
+        body with the Q&A pairs once ``step_completed`` arrives.
+        """
+        clean = [q.strip() for q in questions if q and q.strip()]
+        if not clean:
+            return
+        self._stop_animation()
+        self._status = "pending"
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001  # Unmounted widget (tests / no Textual app)
+            colors = theme.DARK_COLORS
+        if self._status_widget is not None:
+            g = get_glyphs()
+            gutter = f"{g.output_prefix} "
+            line = f"{gutter}{g.circle_empty} Awaiting your answer..."
+            self._status_widget.remove_class("queued")
+            self._status_widget.add_class("pending")
+            self._status_widget.update(Content.styled(line, colors.warning))
+            self._status_widget.display = True
+        if self._detail_widget is not None:
+            lines = [f"Q{i + 1}: {q}" for i, q in enumerate(clean)]
+            body = "\n".join(lines)
+            self._detail_widget.update(self._step_branched_execute_body(body, muted=False))
+            self._detail_widget.display = True
+
     def set_interrupted(self, message: str) -> None:
         """Mark step as aborted (stream error / cancel) while still running."""
         self._stop_animation()
