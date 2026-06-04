@@ -78,6 +78,12 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         response_schema_strict = raw_schema_strict
     else:
         response_schema_strict = None
+    raw_clar_answers = msg.get("clarification_answers")
+    clarification_answers: list[str] | None
+    if isinstance(raw_clar_answers, list) and raw_clar_answers:
+        clarification_answers = [str(a) for a in raw_clar_answers]
+    else:
+        clarification_answers = None
     return {
         "autonomous": bool(msg.get("autonomous", False)),
         "max_iterations": parsed_max,
@@ -90,6 +96,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "response_schema_strict": response_schema_strict,
         "clarification_mode": clarification_mode_norm,
         "clarification_answer": bool(msg.get("clarification_answer", False)),
+        "clarification_answers": clarification_answers,
     }
 
 

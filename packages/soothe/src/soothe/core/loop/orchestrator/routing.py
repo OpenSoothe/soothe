@@ -89,6 +89,13 @@ def route_after_execute(state: dict[str, Any]) -> str:
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_execute → END (fatal)")
         return END
+    # RFC-622 resume synthesis: scratch has no plan_result/decision so
+    # record_iteration would emit fatal_error. The synthesized step has
+    # already emitted step_completed and execute_steps advanced
+    # state.iteration; skip straight to iteration_gate to start the next cycle.
+    if state.get("resume_synth"):
+        logger.info("[routing] route_after_execute → iteration_gate (resume synth)")
+        return "iteration_gate"
     logger.debug("[routing] route_after_execute → record_iteration")
     return "record_iteration"
 

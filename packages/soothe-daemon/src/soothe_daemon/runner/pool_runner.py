@@ -482,6 +482,7 @@ def _pool_worker_body(
                         autopilot_job=req.autopilot_job,  # RFC-222 revised
                         clarification_mode=req.clarification_mode,
                         clarification_answer=req.clarification_answer,
+                        clarification_answers=req.clarification_answers,
                     ):
                         # COOPERATIVE CANCELLATION: Check cancel_event between chunks
                         if cancel_event.is_set():

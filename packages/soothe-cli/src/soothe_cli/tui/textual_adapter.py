@@ -220,6 +220,15 @@ class TextualUIAdapter:
         the step card and forwards them to the daemon).
         """
 
+        self._clarification_answers_pending: list[str] | None = None
+        """RFC-622: per-question answers paired with the next clarification turn.
+
+        Set by the app's clarification submit handler so ``execute_task_textual``
+        can forward them on the wire as ``clarification_answers``. Cleared once
+        attached to ``send_turn`` so a subsequent normal turn does not reuse
+        stale answers.
+        """
+
     def finalize_pending_tools_with_error(self, error: str) -> None:
         """Mark all pending/running tool widgets as error and clear tracking.
 
@@ -1593,8 +1602,13 @@ async def execute_task_textual(
     # not double-send. The new turn's events will re-arm the flag if the
     # daemon emits another ``clarification_requested``.
     sending_clarification_answer = bool(getattr(adapter, "_clarification_pending", False))
+    pending_clarification_answers: list[str] | None = None
     if sending_clarification_answer:
         adapter._clarification_pending = False
+        raw_answers = getattr(adapter, "_clarification_answers_pending", None)
+        if isinstance(raw_answers, list) and raw_answers:
+            pending_clarification_answers = list(raw_answers)
+        adapter._clarification_answers_pending = None
     try:
         if skip_daemon_send_turn:
             chunk_source = daemon_session.iter_turn_chunks()
@@ -1623,6 +1637,7 @@ async def execute_task_textual(
                 attachments=image_attachments,
                 clarification_mode=clarification_mode,
                 clarification_answer=sending_clarification_answer,
+                clarification_answers=pending_clarification_answers,
             )
             chunk_source = daemon_session.iter_turn_chunks()
 

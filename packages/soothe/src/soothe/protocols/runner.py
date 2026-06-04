@@ -84,6 +84,12 @@ class LoopRunRequest:
     # verifies via the loop's persisted ``pending_clarification`` state and
     # falls back to a normal turn when no clarification is pending.
     clarification_answer: bool = False
+    # RFC-622: per-question answers paired with clarification_answer=True. When
+    # provided, the runner resumes the graph with one answer per question
+    # instead of broadcasting a single concatenated string. None falls back to
+    # treating user_input as a single answer string (broadcast to all questions
+    # if there are several).
+    clarification_answers: list[str] | None = None
     # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched
     # goals. None for solo-mode requests (default).
     autopilot_job: AutopilotJob | None = None

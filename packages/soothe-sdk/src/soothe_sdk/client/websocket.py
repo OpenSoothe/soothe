@@ -299,6 +299,7 @@ class WebSocketClient:
         response_schema_strict: bool | None = None,
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
+        clarification_answers: list[str] | None = None,
     ) -> None:
         """Send user input to the daemon for a subscribed loop (``loop_input``).
 
@@ -328,6 +329,12 @@ class WebSocketClient:
                 instead of starting a new turn. Hint only — daemon verifies via
                 the loop's persisted state and falls back to a normal turn when
                 no clarification is pending.
+            clarification_answers: Optional per-question answer list paired with
+                ``clarification_answer=True`` for multi-question clarifications.
+                When set, the daemon resumes with one answer per question (no
+                broadcast), so the step card and working memory carry exactly
+                what the user typed — instead of a single concatenated string
+                being broadcast to every question.
         """
         payload: dict[str, Any] = {
             "type": "loop_input",
@@ -358,6 +365,8 @@ class WebSocketClient:
             payload["clarification_mode"] = clarification_mode
         if clarification_answer:
             payload["clarification_answer"] = True
+        if clarification_answers is not None:
+            payload["clarification_answers"] = list(clarification_answers)
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:

@@ -3582,10 +3582,21 @@ class ClarificationInputMessage(Vertical):
         color: $text;
     }
 
+    /* Match the main ChatInput visual: solid primary border on a $surface
+       fill, transparent inner padding so the cursor sits where the user
+       expects. Keeps the warning left-rail of the answer card while making
+       the editable region feel identical to the prompt at the bottom. */
     ClarificationInputMessage Input {
         margin: 0 0 1 0;
         width: 1fr;
+        height: 3;
+        padding: 0 1;
         background: $surface;
+        border: solid $primary;
+    }
+
+    ClarificationInputMessage Input:focus {
+        border: solid $primary;
     }
 
     ClarificationInputMessage .clarification-help {
@@ -3598,6 +3609,10 @@ class ClarificationInputMessage(Vertical):
 
     ClarificationInputMessage.is-submitted {
         border-left: wide $success;
+    }
+
+    ClarificationInputMessage.is-submitted Input {
+        border: solid $success;
     }
     """
 
@@ -3647,13 +3662,41 @@ class ClarificationInputMessage(Vertical):
         )
 
     def on_mount(self) -> None:
-        if self._inputs:
+        if not self._inputs:
+            return
+        first_input = self._inputs[0]
+
+        def _focus_first() -> None:
             try:
-                self._inputs[0].focus()
+                # ``App.set_focus`` is more authoritative than ``Input.focus``
+                # when another widget (e.g., the bottom ChatInput) has just
+                # been re-focused by an unrelated handler — the App-level call
+                # bypasses the ancestor scope check and cancels any pending
+                # focus restoration scheduled before this point.
+                app = first_input.app
+                app.set_focus(first_input)
             except Exception:  # noqa: BLE001
-                logger.debug(
-                    "ClarificationInputMessage: failed to focus first input", exc_info=True
-                )
+                try:
+                    first_input.focus()
+                except Exception:  # noqa: BLE001
+                    logger.debug(
+                        "ClarificationInputMessage: failed to focus first input",
+                        exc_info=True,
+                    )
+
+        # ChatInput's app-level handlers (on_click, on_app_focus) re-focus the
+        # chat box on every refresh; a single ``call_after_refresh`` can land
+        # before those handlers run, only to be overwritten. Schedule the
+        # focus twice — once after the next refresh, and again on the next
+        # event-loop tick — so we win the race.
+        try:
+            self.call_after_refresh(_focus_first)
+        except Exception:  # noqa: BLE001
+            _focus_first()
+        try:
+            self.set_timer(0.05, _focus_first)
+        except Exception:  # noqa: BLE001
+            pass
 
     @on(Input.Submitted)
     def _on_input_submitted(self, event: Input.Submitted) -> None:

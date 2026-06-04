@@ -229,18 +229,23 @@ class _ExecutionMixin:
         non_empty = [a for a in event.answers if a.strip()]
         if not non_empty:
             return
-        if len(non_empty) == 1:
-            payload_text = non_empty[0]
-        else:
-            payload_text = "\n".join(
-                f"Q{i + 1}: {q}\nA{i + 1}: {a}"
-                for i, (q, a) in enumerate(zip(event.questions, event.answers, strict=False))
-            )
+        # Send the answers as a structured list so the daemon resumes the
+        # graph with one answer per question instead of broadcasting a single
+        # concatenated string. ``content`` carries a human-readable summary
+        # for clients that look at it; the authoritative payload is the
+        # ``clarification_answers`` wire field.
+        payload_text = (
+            non_empty[0]
+            if len(non_empty) == 1
+            else " | ".join(f"A{i + 1}: {a}" for i, a in enumerate(event.answers) if a.strip())
+        )
+        adapter._clarification_answers_pending = list(event.answers)
 
         # Hand off to the standard turn pipeline. ``execute_task_textual``
         # snapshots ``adapter._clarification_pending`` (still True) and sets
-        # the wire ``clarification_answer`` flag, then clears the persisted
-        # flag so a follow-up turn is treated as a new goal.
+        # the wire ``clarification_answer`` flag plus the ``clarification_answers``
+        # list, then clears the persisted flag so a follow-up turn is treated
+        # as a new goal.
         await self._run_agent_task(payload_text)
 
     async def _handle_shell_command(self, command: str) -> None:
