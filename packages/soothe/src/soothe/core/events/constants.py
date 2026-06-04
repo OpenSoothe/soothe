@@ -50,6 +50,14 @@ PLUGIN_UNLOADED = "soothe.internal.plugin.unloaded"
 
 # Plan internals
 PLAN_DAG_SNAPSHOT = "soothe.internal.plan.dag_snapshot"
+PLAN_BATCH_STARTED = "soothe.internal.plan.batch.started"
+
+# Skill internals
+SKILL_BODY_LOADED = "soothe.internal.skill.body.loaded"
+
+# MCP internals
+MCP_LIST_CHANGED = "soothe.internal.mcp.list_changed"
+MCP_TOOL_TIMEOUT = "soothe.internal.mcp.tool.timeout"
 
 # Branch internals
 BRANCH_ANALYZED = "soothe.internal.branch.analyzed"
@@ -76,7 +84,6 @@ GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 
 # Plan cognition (client UX)
 PLAN_CREATED = "soothe.cognition.plan.created"
-PLAN_BATCH_STARTED = "soothe.cognition.plan.batch.started"
 PLAN_REFLECTED = "soothe.cognition.plan.reflected"
 
 # AgentLoop cognition
@@ -153,12 +160,15 @@ __all__ = [
     "LOOP_DETACHED",
     "LOOP_REATTACHED",
     "LOOP_STARTED",
+    "MCP_LIST_CHANGED",
+    "MCP_TOOL_TIMEOUT",
     "MEMORY_RECALLED",
     "MEMORY_STORED",
     "PLAN_BATCH_STARTED",
     "PLAN_CREATED",
     "PLAN_DAG_SNAPSHOT",
     "PLAN_REFLECTED",
+    "SKILL_BODY_LOADED",
     "PLUGIN_FAILED",
     "PLUGIN_LOADED",
     "PLUGIN_UNLOADED",

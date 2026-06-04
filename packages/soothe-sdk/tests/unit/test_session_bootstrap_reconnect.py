@@ -57,7 +57,6 @@ async def test_bootstrap_reconnects_when_socket_not_alive(monkeypatch: pytest.Mo
     result = await bootstrap_loop_session(
         client,
         resume_loop_id=None,
-        verbosity="normal",
     )
 
     assert client.closed is True

@@ -98,7 +98,6 @@ async def websocket_bootstrap_loop_session(
     client: Any,
     *,
     resume_loop_id: str | None = None,
-    verbosity: str = "normal",
 ) -> str:
     """Create or attach to a loop and subscribe for streaming; returns ``loop_id``."""
     from soothe_sdk.client.session import bootstrap_loop_session
@@ -106,7 +105,6 @@ async def websocket_bootstrap_loop_session(
     ev = await bootstrap_loop_session(
         client,
         resume_loop_id=resume_loop_id,
-        verbosity=verbosity,
     )
     if ev.get("type") == "error" or not ev.get("success", True):
         raise RuntimeError(str(ev.get("message", "loop bootstrap failed")))

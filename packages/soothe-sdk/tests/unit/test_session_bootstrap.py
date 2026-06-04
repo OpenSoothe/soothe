@@ -47,7 +47,6 @@ async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> No
     result = await bootstrap_loop_session(
         client,
         resume_loop_id=None,
-        verbosity="normal",
         workspace=str(workspace),
     )
 
@@ -61,7 +60,8 @@ async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> No
     assert rr[0][1]["client_workspace"] == str(workspace)
     assert rr[1][1]["type"] == "loop_subscribe"
     assert rr[1][1]["loop_id"] == "loop-created"
-    assert rr[1][1]["verbosity"] == "normal"
+    # Verbosity is owned by the daemon — clients never send it.
+    assert "verbosity" not in rr[1][1]
     # IG-441: ``adaptive`` is the bootstrap default — best UX for most clients.
     assert rr[1][1]["stream_delivery"] == "adaptive"
 
@@ -74,7 +74,6 @@ async def test_bootstrap_new_loop_omits_workspace_when_none() -> None:
     result = await bootstrap_loop_session(
         client,
         resume_loop_id=None,
-        verbosity="normal",
         workspace=None,
     )
 
@@ -95,7 +94,6 @@ async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
     result = await bootstrap_loop_session(
         client,
         resume_loop_id="loop-existing",
-        verbosity="normal",
         workspace=str(workspace),
     )
 
@@ -104,6 +102,7 @@ async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
     assert len(rr) == 1
     assert rr[0][1]["type"] == "loop_subscribe"
     assert rr[0][1]["loop_id"] == "loop-existing"
-    assert rr[0][1]["verbosity"] == "normal"
+    # Verbosity is owned by the daemon — clients never send it.
+    assert "verbosity" not in rr[0][1]
     # IG-441: ``adaptive`` is the bootstrap default.
     assert rr[0][1]["stream_delivery"] == "adaptive"
