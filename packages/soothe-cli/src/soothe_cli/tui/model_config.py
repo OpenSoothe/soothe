@@ -282,14 +282,20 @@ class LoopConfig:
     sort_order: str
 
 
-# Default column visibility for loops
+# Default column visibility for loops. ``prompt`` is on by default — it is
+# the single biggest cue for distinguishing one loop from another in /resume.
+# ``threads`` / ``goals`` / ``created_at`` are off by default to leave horizontal
+# room for the goal text; users can re-enable them from the side panel.
 _DEFAULT_LOOP_COLUMNS = {
     "loop_id": True,
     "status": True,
-    "threads": True,
-    "goals": True,
-    "created_at": True,
+    "threads": False,
+    "goals": False,
+    "messages": True,
+    "duration": True,
+    "created_at": False,
     "updated_at": True,
+    "prompt": True,
 }
 
 

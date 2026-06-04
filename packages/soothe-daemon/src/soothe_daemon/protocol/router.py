@@ -6,9 +6,11 @@ of reaching into ``runner._durability``.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
+from soothe.core.loop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
@@ -18,6 +20,60 @@ from soothe_daemon.services.image_understanding import validate_and_normalize_im
 logger = logging.getLogger(__name__)
 
 _CLIENT_LABEL_LEN = 8
+_LOOP_PROMPT_PREVIEW_MAX = 200
+_LOOP_PROMPT_SCAN_LIMIT = 32
+
+
+def _peek_loop_prompt(loop_id: str) -> str | None:
+    """Return the loop's initial user prompt from ``cards.jsonl``, if available.
+
+    The /resume selector needs a short identifying snippet per loop. The
+    cheapest authoritative source is the loop's display card ledger: the first
+    ``op=create, kind=user`` line carries the original goal text. We scan only
+    the first few records so a huge ledger does not slow the list RPC.
+
+    Args:
+        loop_id: Loop identifier whose cards.jsonl should be peeked.
+
+    Returns:
+        Stripped prompt text (capped at ``_LOOP_PROMPT_PREVIEW_MAX`` chars), or
+        ``None`` when the ledger has no user card or cannot be read.
+    """
+    try:
+        path = PersistenceDirectoryManager.get_loop_directory(loop_id) / "cards.jsonl"
+        if not path.exists():
+            return None
+        with path.open(encoding="utf-8") as fh:
+            for index, line in enumerate(fh):
+                if index >= _LOOP_PROMPT_SCAN_LIMIT:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if record.get("op") != "create" or record.get("kind") != "user":
+                    continue
+                data = record.get("data")
+                if not isinstance(data, dict):
+                    continue
+                content = data.get("content")
+                if not isinstance(content, str):
+                    continue
+                cleaned = " ".join(content.split())
+                if not cleaned:
+                    return None
+                if len(cleaned) > _LOOP_PROMPT_PREVIEW_MAX:
+                    cleaned = cleaned[: _LOOP_PROMPT_PREVIEW_MAX - 1] + "…"
+                return cleaned
+    except Exception:  # noqa: BLE001 — peek is best-effort, never block the RPC
+        logger.debug("peek_loop_prompt failed for %s", loop_id, exc_info=True)
+    return None
+
 
 # Client messages logged at DEBUG on every dispatch; skip types that poll frequently.
 _SKIP_PER_MESSAGE_DEBUG_TYPES = frozenset({"daemon_ready", "daemon_status"})
@@ -661,11 +717,13 @@ class MessageRouter:
         # `live` so consumers can distinguish stale "running" persisted status
         # from genuinely-running loops (this daemon only).
         active_loop_ids: set[str] = set(getattr(d, "_active_stream_loop_ids", ()) or ())
-        loops = [
-            {
-                "loop_id": row["loop_id"],
+        loops = []
+        for row in rows:
+            loop_id = row["loop_id"]
+            entry: dict[str, Any] = {
+                "loop_id": loop_id,
                 "status": row.get("status", "unknown"),
-                "live": row["loop_id"] in active_loop_ids,
+                "live": loop_id in active_loop_ids,
                 "threads": len(row.get("thread_ids") or []),
                 "goals": row.get("total_goals_completed", 0),
                 "switches": row.get("total_thread_switches", 0),
@@ -673,10 +731,18 @@ class MessageRouter:
                 "ai_messages": row.get("ai_message_count", 0),
                 "last_message_at": row.get("last_message_at"),
                 "updated_at": row.get("updated_at"),
-                "created": (row.get("created_at") or "")[:16],
+                # Wire as full ISO 8601 (including the ``+00:00`` offset). The
+                # previous ``[:16]`` truncation stripped the timezone suffix,
+                # so the client's ``datetime.fromisoformat`` returned a naive
+                # datetime that ``.astimezone()`` then treated as local — an
+                # 8h drift in UTC+8 ("8h ago" for a loop created minutes ago).
+                "created": row.get("created_at") or "",
+                "duration_ms": int(row.get("total_duration_ms") or 0),
             }
-            for row in rows
-        ]
+            prompt = _peek_loop_prompt(loop_id)
+            if prompt:
+                entry["prompt"] = prompt
+            loops.append(entry)
 
         response = {
             "type": "loop_list_response",
