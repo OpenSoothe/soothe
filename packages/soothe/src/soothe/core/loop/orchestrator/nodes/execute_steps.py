@@ -294,6 +294,23 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # would loop (or never terminate via max_iterations) because no
             # iteration was recorded as complete during this graph invocation.
             state.iteration += 1
+            # Mirror the appended Q&A pair (and updated iteration) onto
+            # goal_record.loop_messages and persist. The synth path skips
+            # record_iteration, where plan-phase / execute pairs are normally
+            # snapshotted onto the goal record. Without this save, the next
+            # clarification round trip reloads goal_record with a stale
+            # ledger and plan-assess / plan-generate re-ask the same
+            # question because the prior answers are gone.
+            if goal_record is not None:
+                goal_record.loop_messages = [m.model_copy(deep=True) for m in state.loop_messages]
+                goal_record.iteration = state.iteration
+                try:
+                    await state_manager.save(checkpoint)
+                except Exception:
+                    logger.exception(
+                        "[execute] failed to persist synth-path Q&A ledger for step %s",
+                        planner_ask_answered_step_id,
+                    )
             return {
                 "pending_clarification": None,
                 "pending_clarification_answer": None,
