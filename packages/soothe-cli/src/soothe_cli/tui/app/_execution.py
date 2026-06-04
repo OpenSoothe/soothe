@@ -493,7 +493,7 @@ class _ExecutionMixin:
                 "Commands: /quit, /clear, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /theme, "
-                "/tokens, /loops, "
+                "/tokens, /resume, "
                 "/research, /explore, /plan, /«subagent» (when configured), "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
                 "Interactive Features:\n"
@@ -576,7 +576,7 @@ class _ExecutionMixin:
                     await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
-        elif cmd == "/loops":
+        elif cmd == "/resume":
             await self._show_loop_selector()
         elif cmd == "/update":
             await self._handle_update_command()

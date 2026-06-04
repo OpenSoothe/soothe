@@ -90,10 +90,10 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="warnings alerts suppress",
     ),
     SlashCommand(
-        name="/loops",
+        name="/resume",
         description="Browse and resume AgentLoop instances",
         bypass_tier=BypassTier.IMMEDIATE_UI,
-        hidden_keywords="continue history sessions",
+        hidden_keywords="continue history sessions loops",
     ),
     SlashCommand(
         name="/tacitus",

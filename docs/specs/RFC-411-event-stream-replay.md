@@ -2,11 +2,16 @@
 
 **RFC**: 411
 **Title**: Event Stream Replay & History Reconstruction
-**Status**: Draft
+**Status**: Deprecated. Superseded by RFC-413.
 **Kind**: Architecture Design
 **Created**: 2026-04-22
 **Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-215 (Persistence Backend)
+**Superseded by**: RFC-413 (Server-Owned Display Card Ledger)
 **Author**: Claude Sonnet 4.6
+
+---
+
+> **Supersession notice (2026-06-04).** This RFC's checkpoint-tree → event-stream reconstruction model has been superseded by [RFC-413](RFC-413-server-owned-display-card-ledger.md). The daemon now records bound display cards forward as the loop runs (via `soothe_daemon.display.LoopCardManager`) and replays them via the `card.*` wire schema. The `soothe.core.events.replay.reconstructor` and `enricher` modules were deleted in **IG-470** (RFC-413 Phase 4) along with the legacy `history_replay` / `loop_reattached` / `replay_complete` wire frames. Keep this RFC for historical context; do not extend it.
 
 ---
 

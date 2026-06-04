@@ -3582,12 +3582,16 @@ class ClarificationInputMessage(Vertical):
         color: $text;
     }
 
+    ClarificationInputMessage .clarification-question.has-separator {
+        margin-top: 1;
+    }
+
     /* Match the main ChatInput visual: solid primary border on a $surface
        fill, transparent inner padding so the cursor sits where the user
        expects. Keeps the warning left-rail of the answer card while making
        the editable region feel identical to the prompt at the bottom. */
     ClarificationInputMessage Input {
-        margin: 0 0 1 0;
+        margin: 0;
         width: 1fr;
         height: 3;
         padding: 0 1;
@@ -3644,7 +3648,10 @@ class ClarificationInputMessage(Vertical):
     def compose(self) -> Any:
         yield Static("Awaiting your answer", classes="clarification-title")
         for i, q in enumerate(self._questions):
-            yield Static(f"Q{i + 1}: {q}", classes="clarification-question", markup=False)
+            q_classes = "clarification-question"
+            if i > 0:
+                q_classes += " has-separator"
+            yield Static(f"Q{i + 1}: {q}", classes=q_classes, markup=False)
             inp = Input(placeholder=f"Your answer for Q{i + 1}…", id=f"clarification-input-{i}")
             self._inputs.append(inp)
             yield inp

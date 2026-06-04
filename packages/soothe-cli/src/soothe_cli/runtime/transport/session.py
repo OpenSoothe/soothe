@@ -381,6 +381,57 @@ class TuiDaemonSession:
         await connect_websocket_with_retries(self._rpc_client)
         self._rpc_connected = True
 
+    async def fetch_loop_cards(self, loop_id: str) -> SimpleNamespace:
+        """Fetch the daemon's bound display-card snapshot for a loop.
+
+        RFC-413: returns a populated ledger (eagerly backfilled if the loop
+        has no ``cards.jsonl`` yet) so resume can render through the same
+        binder that produced the original cards.
+
+        Args:
+            loop_id: AgentLoop id.
+
+        Returns:
+            ``SimpleNamespace`` with ``cards: list[dict]``, ``seq: int``,
+            ``success: bool``. On error, ``cards=[]`` and ``success=False`` so
+            the caller can fall back to the legacy resume path.
+        """
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return SimpleNamespace(cards=[], seq=0, success=False)
+
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            try:
+                resp = await self._rpc_client.request_response(
+                    {"type": "loop_cards_fetch", "loop_id": lid},
+                    response_type="loop_cards_fetch_response",
+                    timeout=30.0,
+                )
+            except Exception:
+                logger.warning(
+                    "loop_cards_fetch failed for loop %s",
+                    lid[:16],
+                    exc_info=True,
+                )
+                return SimpleNamespace(cards=[], seq=0, success=False)
+
+        raw_cards = resp.get("cards")
+        cards = list(raw_cards) if isinstance(raw_cards, list) else []
+        seq = int(resp.get("seq") or 0)
+        context_tokens_raw = resp.get("context_tokens")
+        context_tokens = (
+            context_tokens_raw
+            if isinstance(context_tokens_raw, int) and context_tokens_raw >= 0
+            else 0
+        )
+        return SimpleNamespace(
+            cards=cards,
+            seq=seq,
+            context_tokens=context_tokens,
+            success=True,
+        )
+
     async def aget_loop_state(self, loop_id: str) -> Any:
         """Load agent-loop state channels from the daemon (``loop_state_get`` RPC).
 

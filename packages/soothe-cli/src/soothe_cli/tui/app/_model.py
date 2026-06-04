@@ -369,6 +369,11 @@ class _ModelMixin:
                 warn_if_missing=False,
             )
 
+            # Render historical transcript before live events start arriving on the
+            # new subscription (RFC-413). Awaiting (rather than scheduling) guarantees
+            # painting order: prior history first, then live frames.
+            await self._load_loop_history(loop_id=loop_id)
+
             # Start consuming daemon events for this loop
             self.run_worker(
                 self._consume_daemon_events_background(),
@@ -389,7 +394,7 @@ class _ModelMixin:
                 warn_if_missing=True,
             )
             await self._mount_message(
-                AppMessage(f"Failed to attach to loop {loop_id}: {exc}. Use /loops to try again.")
+                AppMessage(f"Failed to attach to loop {loop_id}: {exc}. Use /resume to try again.")
             )
         finally:
             self._loop_switching = False
