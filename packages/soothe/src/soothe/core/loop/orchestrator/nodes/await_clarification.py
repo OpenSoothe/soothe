@@ -38,6 +38,11 @@ async def node_await_clarification(
     ctx: LoopRuntimeContext, state: dict[str, Any]
 ) -> dict[str, Any]:
     """Resolve a pending clarification by dispatching to the policy."""
+    logger.info(
+        "[await_clarification] node entered with pending=%s, answer=%s",
+        bool(state.get("pending_clarification")),
+        state.get("pending_clarification_answer"),
+    )
     pending = state.get("pending_clarification")
     if not pending:
         logger.warning("[await_clarification] entered without pending_clarification; no-op")
