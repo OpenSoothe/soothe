@@ -137,7 +137,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._cleanup_task: asyncio.Task[None] | None = None
         self._postgres_pool_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
-        self._ephemeral_gc_task: asyncio.Task[None] | None = None
+        self._loop_gc_task: asyncio.Task[None] | None = None
         self._stale_worker_reap_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
@@ -438,9 +438,9 @@ class SootheDaemon(DaemonHandlersMixin):
                     self._periodic_postgres_pool_maintenance()
                 )
             self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
-            gc_cfg = self._daemon_config.ephemeral_loop_gc
+            gc_cfg = self._daemon_config.loop_gc
             if gc_cfg.enabled:
-                self._ephemeral_gc_task = asyncio.create_task(self._periodic_ephemeral_loop_gc())
+                self._loop_gc_task = asyncio.create_task(self._periodic_loop_gc())
             reap_cfg = self._daemon_config.stale_worker_reap
             if self._daemon_config.worker_pool.enabled and reap_cfg.enabled:
                 self._stale_worker_reap_task = asyncio.create_task(
@@ -736,41 +736,69 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning("Periodic inactivity check failed", exc_info=True)
 
-    async def _periodic_ephemeral_loop_gc(self) -> None:
-        """Purge idle ephemeral loops (execution data only; workspaces retained)."""
+    async def _periodic_loop_gc(self) -> None:
+        """Periodic loop GC: ephemeral pass + empty-loop pass per tick (IG-466).
+
+        Both passes share the per-loop purge helper. Loops appearing in both
+        listings are purged once via de-duplication by ``loop_id``.
+        """
         from datetime import UTC, datetime, timedelta
 
         from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
 
-        gc_cfg = self._daemon_config.ephemeral_loop_gc
+        gc_cfg = self._daemon_config.loop_gc
         interval = float(gc_cfg.interval_seconds)
         while self._running:
             await asyncio.sleep(interval)
             if not self._running:
                 break
             try:
-                idle_before = datetime.now(UTC) - timedelta(hours=gc_cfg.idle_hours)
-                expired = await self._persistence_manager.list_expired_ephemeral_loops(
-                    idle_before,
+                now = datetime.now(UTC)
+                idle_before_ephemeral = now - timedelta(hours=gc_cfg.ephemeral_idle_hours)
+                idle_before_empty = now - timedelta(hours=gc_cfg.empty_idle_hours)
+
+                expired_ephemeral = await self._persistence_manager.list_expired_ephemeral_loops(
+                    idle_before_ephemeral,
                     limit=gc_cfg.batch_size,
                 )
-                if not expired:
+                empty_loops = await self._persistence_manager.list_empty_loops(
+                    idle_before_empty,
+                    limit=gc_cfg.batch_size,
+                )
+                if not expired_ephemeral and not empty_loops:
                     continue
-                purged = 0
-                for row in expired:
+
+                seen: set[str] = set()
+                purged_ephemeral = 0
+                purged_empty = 0
+
+                for row in expired_ephemeral:
                     loop_id = str(row.get("loop_id") or "").strip()
-                    if not loop_id:
+                    if not loop_id or loop_id in seen:
                         continue
+                    seen.add(loop_id)
                     if await purge_loop_execution_data(self, loop_id, row):
-                        purged += 1
-                if purged:
+                        purged_ephemeral += 1
+
+                for row in empty_loops:
+                    loop_id = str(row.get("loop_id") or "").strip()
+                    if not loop_id or loop_id in seen:
+                        continue
+                    seen.add(loop_id)
+                    if await purge_loop_execution_data(self, loop_id, row):
+                        purged_empty += 1
+
+                if purged_ephemeral or purged_empty:
                     logger.info(
-                        "Ephemeral loop GC purged %d loop(s) (idle > %d hours)",
-                        purged,
-                        gc_cfg.idle_hours,
+                        "Loop GC purged %d ephemeral, %d empty "
+                        "(idle thresholds: ephemeral=%dh, empty=%dh)",
+                        purged_ephemeral,
+                        purged_empty,
+                        gc_cfg.ephemeral_idle_hours,
+                        gc_cfg.empty_idle_hours,
                     )
             except Exception:
-                logger.warning("Ephemeral loop GC failed", exc_info=True)
+                logger.warning("Loop GC failed", exc_info=True)
 
     async def _periodic_event_size_stats(self) -> None:
         """Log EventBus wire-size distribution on a fixed interval (IG-403).
@@ -968,10 +996,10 @@ class SootheDaemon(DaemonHandlersMixin):
             self._inactivity_check_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._inactivity_check_task
-        if self._ephemeral_gc_task and not self._ephemeral_gc_task.done():
-            self._ephemeral_gc_task.cancel()
+        if self._loop_gc_task and not self._loop_gc_task.done():
+            self._loop_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._ephemeral_gc_task
+                await self._loop_gc_task
 
         if self._stale_worker_reap_task and not self._stale_worker_reap_task.done():
             self._stale_worker_reap_task.cancel()

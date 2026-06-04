@@ -32,6 +32,8 @@ _LOOP_COLUMN_MIGRATIONS: dict[str, str] = {
     "is_ephemeral": "INTEGER NOT NULL DEFAULT 0",
     "last_message_at": "TEXT",
     "current_workspace": "TEXT",
+    "human_message_count": "INTEGER NOT NULL DEFAULT 0",
+    "ai_message_count": "INTEGER NOT NULL DEFAULT 0",
 }
 
 # RFC-225 / IG-445: enriched GoalExecutionRecord fields packed as JSON
@@ -191,7 +193,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                    total_goals_completed, total_thread_switches,
                    total_duration_ms, total_tokens_used, schema_version,
                    client_workspace, detached_at, user_id, client_workspace_id,
-                   is_ephemeral, last_message_at, current_workspace
+                   is_ephemeral, last_message_at, current_workspace,
+                   human_message_count, ai_message_count
             FROM agentloop_loops WHERE loop_id = ?
         """,
             (loop_id,),
@@ -219,6 +222,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             "is_ephemeral": bool(row[14]) if row[14] is not None else False,
             "last_message_at": row[15],
             "current_workspace": row[16],
+            "human_message_count": row[17] or 0,
+            "ai_message_count": row[18] or 0,
         }
 
     async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
@@ -267,42 +272,48 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         self,
         status_filter: str | None = None,
         limit: int = 100,
+        exclude_empty: bool = False,
     ) -> list[dict]:
-        """Return summary rows for all loops, ordered by created_at DESC."""
-        return await self._writer_to_thread(self._list_loops_sync, status_filter, limit)
+        """Return summary rows for all loops, ordered by created_at DESC.
+
+        Args:
+            status_filter: Optional status value to filter by.
+            limit: Maximum rows to return.
+            exclude_empty: When True, hide loops with zero human and zero AI
+                messages (bootstrap-only loops with no real exchange).
+        """
+        return await self._writer_to_thread(
+            self._list_loops_sync, status_filter, limit, exclude_empty
+        )
 
     def _list_loops_sync(
         self,
         conn: sqlite3.Connection,
         status_filter: str | None,
         limit: int,
+        exclude_empty: bool,
     ) -> list[dict]:
         """Sync list loops."""
+        clauses: list[str] = []
+        params: list[Any] = []
         if status_filter:
-            cursor = conn.execute(
-                """
-                SELECT loop_id, status, thread_ids, current_thread_id,
-                       total_goals_completed, total_thread_switches,
-                       created_at, updated_at, client_workspace, detached_at
-                FROM agentloop_loops
-                WHERE status = ?
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (status_filter, limit),
-            )
-        else:
-            cursor = conn.execute(
-                """
-                SELECT loop_id, status, thread_ids, current_thread_id,
-                       total_goals_completed, total_thread_switches,
-                       created_at, updated_at, client_workspace, detached_at
-                FROM agentloop_loops
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
+            clauses.append("status = ?")
+            params.append(status_filter)
+        if exclude_empty:
+            clauses.append("(human_message_count > 0 OR ai_message_count > 0)")
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"""
+            SELECT loop_id, status, thread_ids, current_thread_id,
+                   total_goals_completed, total_thread_switches,
+                   created_at, updated_at, client_workspace, detached_at,
+                   human_message_count, ai_message_count, last_message_at
+            FROM agentloop_loops
+            {where_sql}
+            ORDER BY created_at DESC
+            LIMIT ?
+        """  # noqa: S608 — all interpolations are static identifiers.
+        params.append(limit)
+        cursor = conn.execute(sql, params)
         rows = cursor.fetchall()
         result = []
         for row in rows:
@@ -317,6 +328,9 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                 "updated_at": row[7],
                 "client_workspace": row[8],
                 "detached_at": row[9],
+                "human_message_count": row[10] or 0,
+                "ai_message_count": row[11] or 0,
+                "last_message_at": row[12],
             }
             result.append(d)
         return result
@@ -325,6 +339,97 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         """Record user turn activity for ephemeral loop TTL."""
         now = datetime.now(UTC).isoformat()
         await self.update_loop_metadata(loop_id, last_message_at=now, updated_at=now)
+
+    async def increment_loop_message_count(
+        self,
+        loop_id: str,
+        human: int = 0,
+        ai: int = 0,
+    ) -> None:
+        """Atomically increment message counters and refresh activity timestamps."""
+        if human == 0 and ai == 0:
+            return
+        now = datetime.now(UTC).isoformat()
+        await self._writer_to_thread(
+            self._increment_loop_message_count_sync, loop_id, human, ai, now
+        )
+
+    def _increment_loop_message_count_sync(
+        self,
+        conn: sqlite3.Connection,
+        loop_id: str,
+        human: int,
+        ai: int,
+        now_iso: str,
+    ) -> None:
+        """Sync increment counters in a single UPDATE."""
+        conn.execute(
+            """
+            UPDATE agentloop_loops
+            SET human_message_count = human_message_count + ?,
+                ai_message_count    = ai_message_count + ?,
+                last_message_at     = ?,
+                updated_at          = ?
+            WHERE loop_id = ?
+            """,
+            (human, ai, now_iso, now_iso, loop_id),
+        )
+        conn.commit()
+
+    async def list_empty_loops(
+        self,
+        idle_before: datetime,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return loops with zero human/AI messages idle since ``idle_before``."""
+        idle_iso = idle_before.isoformat()
+        return await self._writer_to_thread(
+            self._list_empty_loops_sync,
+            idle_iso,
+            limit,
+        )
+
+    def _list_empty_loops_sync(
+        self,
+        conn: sqlite3.Connection,
+        idle_before_iso: str,
+        limit: int,
+    ) -> list[dict]:
+        """Sync list empty loops idle past threshold."""
+        cursor = conn.execute(
+            """
+            SELECT loop_id, thread_ids, current_thread_id, status,
+                   client_workspace, current_workspace, user_id, client_workspace_id,
+                   last_message_at, created_at, is_ephemeral
+            FROM agentloop_loops
+            WHERE human_message_count = 0
+              AND ai_message_count = 0
+              AND status != 'running'
+              AND COALESCE(last_message_at, created_at) < ?
+            ORDER BY COALESCE(last_message_at, created_at) ASC
+            LIMIT ?
+            """,
+            (idle_before_iso, limit),
+        )
+        rows = cursor.fetchall()
+        result: list[dict] = []
+        for row in rows:
+            result.append(
+                {
+                    "loop_id": row[0],
+                    "thread_ids": json.loads(row[1]) if row[1] else [],
+                    "current_thread_id": row[2],
+                    "status": row[3],
+                    "client_workspace": row[4],
+                    "current_workspace": row[5],
+                    "user_id": row[6],
+                    "client_workspace_id": row[7],
+                    "last_message_at": row[8],
+                    "created_at": row[9],
+                    "is_ephemeral": bool(row[10]) if row[10] is not None else False,
+                }
+            )
+        return result
 
     async def list_expired_ephemeral_loops(
         self,
@@ -931,14 +1036,16 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     thread_switch_pending INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '3.1',
+                    schema_version TEXT DEFAULT '3.2',
                     client_workspace TEXT,
                     detached_at TEXT,
                     user_id TEXT,
                     client_workspace_id TEXT,
                     is_ephemeral INTEGER NOT NULL DEFAULT 0,
                     last_message_at TEXT,
-                    current_workspace TEXT
+                    current_workspace TEXT,
+                    human_message_count INTEGER NOT NULL DEFAULT 0,
+                    ai_message_count INTEGER NOT NULL DEFAULT 0
                 )
             """)
 
@@ -1089,14 +1196,16 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     thread_switch_pending INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '3.1',
+                    schema_version TEXT DEFAULT '3.2',
                     client_workspace TEXT,
                     detached_at TEXT,
                     user_id TEXT,
                     client_workspace_id TEXT,
                     is_ephemeral INTEGER NOT NULL DEFAULT 0,
                     last_message_at TEXT,
-                    current_workspace TEXT
+                    current_workspace TEXT,
+                    human_message_count INTEGER NOT NULL DEFAULT 0,
+                    ai_message_count INTEGER NOT NULL DEFAULT 0
                 )
             """)
 

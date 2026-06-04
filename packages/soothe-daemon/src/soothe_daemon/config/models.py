@@ -395,31 +395,45 @@ class StaleWorkerReapConfig(BaseModel):
     )
 
 
-class EphemeralLoopGcConfig(BaseModel):
-    """Background GC for idle ephemeral loops (IG-430)."""
+class LoopGcConfig(BaseModel):
+    """Background GC for idle loops (IG-430, IG-466).
 
-    enabled: bool = Field(default=True, description="Run periodic ephemeral loop GC")
+    Single periodic sweeper that runs two passes per tick:
+    - Ephemeral pass: ``is_ephemeral=True`` loops idle past ``ephemeral_idle_hours``.
+    - Empty pass: any loop with zero human + zero AI messages idle past ``empty_idle_hours``
+      (bootstrap sessions that never produced a real exchange).
+    """
+
+    enabled: bool = Field(default=True, description="Run periodic loop GC")
     interval_seconds: int = Field(
         default=3600,
         ge=60,
         description="Seconds between GC scans",
     )
-    idle_hours: int = Field(
+    ephemeral_idle_hours: int = Field(
         default=24,
         ge=1,
-        description="Purge ephemeral loops with no loop_input for this many hours",
+        description="Purge ephemeral loops idle (no activity) for this many hours",
+    )
+    empty_idle_hours: int = Field(
+        default=24,
+        ge=1,
+        description=(
+            "Purge any loop with zero human/AI messages idle (no activity) "
+            "for this many hours, regardless of is_ephemeral"
+        ),
     )
     batch_size: int = Field(
         default=50,
         ge=1,
         le=500,
-        description="Maximum loops purged per GC tick",
+        description="Maximum loops purged per GC tick (applies to each pass independently)",
     )
 
 
 __all__ = [
     "DistributedConfig",
-    "EphemeralLoopGcConfig",
+    "LoopGcConfig",
     "StaleWorkerReapConfig",
     "HttpRestConfig",
     "RayClusterConfig",

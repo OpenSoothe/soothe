@@ -48,13 +48,18 @@ query_timeout_action: cancel         # Action on timeout: 'cancel' or 'terminate
 auto_cancel_on_startup: true         # Cancel stale queries from previous session
 
 # ============================================================================
-# EPHEMERAL LOOP GC - Purge idle ephemeral loops (loop_new is_ephemeral=true)
+# LOOP GC - Single periodic sweeper, two passes per tick (IG-466)
+#   * ephemeral pass: is_ephemeral=true loops idle past ephemeral_idle_hours
+#   * empty pass: any loop with zero human + zero AI messages idle past
+#                 empty_idle_hours (bootstrap sessions that never produced
+#                 a real exchange)
 # ============================================================================
-ephemeral_loop_gc:
+loop_gc:
   enabled: true
   interval_seconds: 3600             # Scan every hour
-  idle_hours: 24                     # No loop_input for 24h → eligible for purge
-  batch_size: 50
+  ephemeral_idle_hours: 24           # is_ephemeral=true, idle 24h → purge
+  empty_idle_hours: 24               # zero human/AI messages, idle 24h → purge
+  batch_size: 50                     # Cap per pass per tick
 
 # ============================================================================
 # STALE WORKER REAP - Orphaned multiprocessing.spawn processes (worker_pool)

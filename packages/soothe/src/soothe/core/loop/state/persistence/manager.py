@@ -103,21 +103,35 @@ class AgentLoopCheckpointPersistenceManager:
         self,
         status_filter: str | None = None,
         limit: int = 100,
+        exclude_empty: bool = False,
     ) -> list[dict]:
         """Return summary rows for all loops, ordered by created_at DESC.
 
         Args:
             status_filter: Optional status value to filter by.
             limit: Maximum rows to return.
+            exclude_empty: When True, hide loops with zero human and zero AI
+                messages (bootstrap-only loops with no real exchange).
 
         Returns:
             List of loop metadata dicts.
         """
-        return await self._backend.list_loops(status_filter=status_filter, limit=limit)
+        return await self._backend.list_loops(
+            status_filter=status_filter, limit=limit, exclude_empty=exclude_empty
+        )
 
     async def touch_loop_last_message(self, loop_id: str) -> None:
         """Record user turn activity for ephemeral loop TTL."""
         await self._backend.touch_loop_last_message(loop_id)
+
+    async def increment_loop_message_count(
+        self,
+        loop_id: str,
+        human: int = 0,
+        ai: int = 0,
+    ) -> None:
+        """Atomically bump human/AI message counters and refresh activity timestamp."""
+        await self._backend.increment_loop_message_count(loop_id, human=human, ai=ai)
 
     async def list_expired_ephemeral_loops(
         self,
@@ -126,6 +140,14 @@ class AgentLoopCheckpointPersistenceManager:
     ) -> list[dict]:
         """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
         return await self._backend.list_expired_ephemeral_loops(idle_before, limit)
+
+    async def list_empty_loops(
+        self,
+        idle_before: datetime,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return loops with zero human/AI messages idle since ``idle_before``."""
+        return await self._backend.list_empty_loops(idle_before, limit)
 
     async def purge_loop_execution_data(self, loop_id: str) -> None:
         """Delete loop row and related execution tables (keeps workspace dirs)."""

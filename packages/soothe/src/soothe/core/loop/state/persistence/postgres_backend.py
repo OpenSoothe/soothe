@@ -457,43 +457,54 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         self,
         status_filter: str | None = None,
         limit: int = 100,
+        exclude_empty: bool = False,
     ) -> list[dict]:
-        """Return summary rows for all loops, ordered by created_at DESC."""
+        """Return summary rows for all loops, ordered by created_at DESC.
+
+        Args:
+            status_filter: Optional status value to filter by.
+            limit: Maximum rows to return.
+            exclude_empty: When True, hide loops with zero human and zero AI
+                messages (bootstrap-only loops with no real exchange).
+        """
         pool = await self._ensure_pool()
+
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status_filter:
+            clauses.append("status = %s")
+            params.append(status_filter)
+        if exclude_empty:
+            clauses.append(
+                "(COALESCE((checkpoint_data->>'human_message_count')::int, 0) > 0"
+                " OR COALESCE((checkpoint_data->>'ai_message_count')::int, 0) > 0)"
+            )
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+
+        sql = f"""
+            SELECT loop_id, status,
+                   checkpoint_data->>'thread_ids' AS thread_ids_json,
+                   thread_id AS current_thread_id,
+                   COALESCE((checkpoint_data->>'total_goals_completed')::int, 0)
+                       AS total_goals_completed,
+                   COALESCE((checkpoint_data->>'total_thread_switches')::int, 0)
+                       AS total_thread_switches,
+                   COALESCE((checkpoint_data->>'human_message_count')::int, 0)
+                       AS human_message_count,
+                   COALESCE((checkpoint_data->>'ai_message_count')::int, 0)
+                       AS ai_message_count,
+                   checkpoint_data->>'last_message_at' AS last_message_at,
+                   created_at, updated_at, client_workspace, detached_at
+            FROM agentloop_checkpoints
+            {where_sql}
+            ORDER BY created_at DESC
+            LIMIT %s
+        """  # noqa: S608 — only static SQL fragments interpolated.
 
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
-                if status_filter:
-                    await cur.execute(
-                        """
-                        SELECT loop_id, status,
-                               checkpoint_data->>'thread_ids' AS thread_ids_json,
-                               thread_id AS current_thread_id,
-                               COALESCE((checkpoint_data->>'total_goals_completed')::int, 0) AS total_goals_completed,
-                               COALESCE((checkpoint_data->>'total_thread_switches')::int, 0) AS total_thread_switches,
-                               created_at, updated_at, client_workspace, detached_at
-                        FROM agentloop_checkpoints
-                        WHERE status = %s
-                        ORDER BY created_at DESC
-                        LIMIT %s
-                        """,
-                        (status_filter, limit),
-                    )
-                else:
-                    await cur.execute(
-                        """
-                        SELECT loop_id, status,
-                               checkpoint_data->>'thread_ids' AS thread_ids_json,
-                               thread_id AS current_thread_id,
-                               COALESCE((checkpoint_data->>'total_goals_completed')::int, 0) AS total_goals_completed,
-                               COALESCE((checkpoint_data->>'total_thread_switches')::int, 0) AS total_thread_switches,
-                               created_at, updated_at, client_workspace, detached_at
-                        FROM agentloop_checkpoints
-                        ORDER BY created_at DESC
-                        LIMIT %s
-                        """,
-                        (limit,),
-                    )
+                await cur.execute(sql, params)
                 rows = await cur.fetchall()
 
         result = []
@@ -514,6 +525,9 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     "current_thread_id": row["current_thread_id"],
                     "total_goals_completed": row["total_goals_completed"],
                     "total_thread_switches": row["total_thread_switches"],
+                    "human_message_count": row["human_message_count"],
+                    "ai_message_count": row["ai_message_count"],
+                    "last_message_at": row.get("last_message_at"),
                     "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
                     "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else updated,
                     "client_workspace": row.get("client_workspace"),
@@ -528,6 +542,41 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         """Record user turn activity for ephemeral loop TTL."""
         now = datetime.now(UTC).isoformat()
         await self.update_loop_metadata(loop_id, last_message_at=now)
+
+    async def increment_loop_message_count(
+        self,
+        loop_id: str,
+        human: int = 0,
+        ai: int = 0,
+    ) -> None:
+        """Atomically increment counters inside ``checkpoint_data`` JSONB.
+
+        Counters live in the JSONB blob for parity with other per-loop scalars
+        (`is_ephemeral`, `last_message_at`, `total_goals_completed`). Single
+        UPDATE per call; no read-modify-write.
+        """
+        if human == 0 and ai == 0:
+            return
+        now = datetime.now(UTC).isoformat()
+        pool = await self._ensure_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    UPDATE agentloop_checkpoints
+                    SET checkpoint_data = checkpoint_data
+                        || jsonb_build_object(
+                            'human_message_count',
+                            COALESCE((checkpoint_data->>'human_message_count')::int, 0) + %s,
+                            'ai_message_count',
+                            COALESCE((checkpoint_data->>'ai_message_count')::int, 0) + %s,
+                            'last_message_at', %s::text
+                        ),
+                        updated_at = NOW()
+                    WHERE loop_id = %s
+                    """,
+                    (human, ai, now, loop_id),
+                )
 
     async def list_expired_ephemeral_loops(
         self,
@@ -585,6 +634,67 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     "last_message_at": data.get("last_message_at"),
                     "created_at": data.get("created_at"),
                     "is_ephemeral": True,
+                }
+            )
+        return result
+
+    async def list_empty_loops(
+        self,
+        idle_before: datetime,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return loops with zero human/AI messages idle since ``idle_before``."""
+        idle_iso = idle_before.isoformat()
+        pool = await self._ensure_pool()
+
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT loop_id, status, thread_id AS current_thread_id,
+                           checkpoint_data, client_workspace, created_at, updated_at
+                    FROM agentloop_checkpoints
+                    WHERE COALESCE((checkpoint_data->>'human_message_count')::int, 0) = 0
+                      AND COALESCE((checkpoint_data->>'ai_message_count')::int, 0) = 0
+                      AND status != 'running'
+                      AND COALESCE(
+                            checkpoint_data->>'last_message_at',
+                            checkpoint_data->>'created_at',
+                            created_at::text
+                          ) < %s
+                    ORDER BY COALESCE(
+                        checkpoint_data->>'last_message_at',
+                        checkpoint_data->>'created_at',
+                        created_at::text
+                    ) ASC
+                    LIMIT %s
+                    """,
+                    (idle_iso, limit),
+                )
+                rows = await cur.fetchall()
+
+        result: list[dict] = []
+        for row in rows:
+            data = dict(row["checkpoint_data"]) if row.get("checkpoint_data") else {}
+            raw_tids = data.get("thread_ids")
+            thread_ids = raw_tids if isinstance(raw_tids, list) else []
+            if isinstance(raw_tids, str):
+                with contextlib.suppress(ValueError, TypeError):
+                    thread_ids = json.loads(raw_tids)
+            result.append(
+                {
+                    "loop_id": row["loop_id"],
+                    "thread_ids": thread_ids,
+                    "current_thread_id": row.get("current_thread_id")
+                    or data.get("current_thread_id"),
+                    "status": row["status"],
+                    "client_workspace": row.get("client_workspace") or data.get("client_workspace"),
+                    "current_workspace": data.get("current_workspace"),
+                    "user_id": data.get("user_id"),
+                    "client_workspace_id": data.get("client_workspace_id"),
+                    "last_message_at": data.get("last_message_at"),
+                    "created_at": data.get("created_at"),
+                    "is_ephemeral": bool(data.get("is_ephemeral", False)),
                 }
             )
         return result

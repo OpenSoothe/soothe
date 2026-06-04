@@ -665,3 +665,22 @@ class AgenticMixin:
                     final_result.status,
                     final_result.goal_progress,
                 )
+
+                # Empty-loop reclamation: one AI counter bump per completed goal,
+                # so loops that produced any AI output are immune to empty-loop GC.
+                try:
+                    from soothe.core.loop.state.persistence import (
+                        AgentLoopCheckpointPersistenceManager,
+                    )
+
+                    _pm = AgentLoopCheckpointPersistenceManager(config=self._config)
+                    try:
+                        await _pm.increment_loop_message_count(agent_loop_id, ai=1)
+                    finally:
+                        await _pm.close()
+                except Exception:
+                    logger.warning(
+                        "Failed to increment ai_message_count for loop %s",
+                        agent_loop_id,
+                        exc_info=True,
+                    )

@@ -213,7 +213,7 @@ def _router_with_enqueue_stub(
         _session_manager = SimpleNamespace(
             get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
         )
-        _persistence_manager = SimpleNamespace(touch_loop_last_message=AsyncMock())
+        _persistence_manager = SimpleNamespace(increment_loop_message_count=AsyncMock())
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))
