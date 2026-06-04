@@ -321,7 +321,7 @@ class PlanCreatedEvent(ProtocolEvent):
 
 
 class PlanBatchStartedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.batch.started"] = "soothe.cognition.plan.batch.started"
+    type: Literal["soothe.internal.plan.batch.started"] = "soothe.internal.plan.batch.started"
     batch_index: int = 0
     step_ids: list[str] = []  # noqa: RUF012
     parallel_count: int = 1

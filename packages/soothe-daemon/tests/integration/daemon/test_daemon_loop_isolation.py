@@ -325,7 +325,7 @@ class TestLoopIsolation:
             client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client2)
             sub2_resp = await client2.request_response(
-                {"type": "loop_subscribe", "loop_id": loop_id, "verbosity": "normal"},
+                {"type": "loop_subscribe", "loop_id": loop_id},
                 response_type="loop_subscribe_response",
                 timeout=5.0,
             )
@@ -334,7 +334,7 @@ class TestLoopIsolation:
             client3 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client3)
             sub3_resp = await client3.request_response(
-                {"type": "loop_subscribe", "loop_id": loop_id, "verbosity": "normal"},
+                {"type": "loop_subscribe", "loop_id": loop_id},
                 response_type="loop_subscribe_response",
                 timeout=5.0,
             )
@@ -392,7 +392,7 @@ class TestLoopIsolation:
             client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client2)
             await client2.request_response(
-                {"type": "loop_subscribe", "loop_id": loop_id, "verbosity": "normal"},
+                {"type": "loop_subscribe", "loop_id": loop_id},
                 response_type="loop_subscribe_response",
                 timeout=5.0,
             )

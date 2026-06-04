@@ -1014,7 +1014,6 @@ class MessageRouter:
 
         await handle_loop_reattach(loop_id, d, client_id)
 
-        verbosity = msg.get("verbosity", "normal")
         wire_tier = msg.get("wire_tier", "full")
         # IG-441: three first-class modes (batch / adaptive / streaming);
         # default to ``adaptive`` for new subscribers since it gives the best
@@ -1025,7 +1024,6 @@ class MessageRouter:
         await d._session_manager.subscribe_loop(
             client_id,
             loop_id,
-            verbosity=verbosity,
             stream_delivery=stream_delivery,
             wire_tier=wire_tier,
         )
@@ -1037,7 +1035,6 @@ class MessageRouter:
                     "type": "subscription_confirmed",
                     "loop_id": loop_id,
                     "client_id": client_id,
-                    "verbosity": verbosity,
                 },
             )
 
