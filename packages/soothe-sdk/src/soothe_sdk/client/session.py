@@ -45,7 +45,6 @@ async def bootstrap_loop_session(
     client: Any,
     *,
     resume_loop_id: str | None,
-    verbosity: str,
     workspace: str | Path | None = None,
     user_id: str | None = None,
     client_workspace_id: str | None = None,
@@ -59,7 +58,6 @@ async def bootstrap_loop_session(
     Args:
         client: ``WebSocketClient`` instance (connected).
         resume_loop_id: If set, subscribe to this existing loop. Otherwise create ``loop_new``.
-        verbosity: Event verbosity for ``loop_subscribe``.
         stream_delivery: Daemon stream shaping — one of ``batch`` | ``adaptive``
             (default, IG-441) | ``streaming``.
         is_ephemeral: When True, loop execution data is GC'd after idle period.
@@ -134,7 +132,6 @@ async def bootstrap_loop_session(
         {
             "type": "loop_subscribe",
             "loop_id": loop_id,
-            "verbosity": verbosity,
             "stream_delivery": delivery,
         },
         response_type="loop_subscribe_response",
@@ -144,9 +141,8 @@ async def bootstrap_loop_session(
         raise RuntimeError(str(sub_resp.get("message", "loop_subscribe failed")))
 
     logger.info(
-        "Subscribed to loop %s with verbosity=%s stream_delivery=%s",
+        "Subscribed to loop %s with stream_delivery=%s",
         loop_id,
-        verbosity,
         delivery,
     )
     result: dict[str, Any] = {"type": "session_ready", "loop_id": loop_id, "success": True}

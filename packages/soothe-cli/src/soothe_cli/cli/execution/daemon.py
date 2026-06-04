@@ -91,7 +91,6 @@ async def _run_headless_session_once(
         status_event = await bootstrap_loop_session(
             client,
             resume_loop_id=resume_loop_id,
-            verbosity="normal",
             stream_delivery=stream_delivery,
             workspace=cli_ws,
             subscribe_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,

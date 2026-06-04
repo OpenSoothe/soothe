@@ -21,7 +21,7 @@ class SkillActivatedEvent(SootheEvent):
 class SkillBodyLoadedEvent(SootheEvent):
     """Emitted when a skill body enters context via Stage 3 invocation."""
 
-    type: str = "soothe.skill.body.loaded"
+    type: str = "soothe.internal.skill.body.loaded"
     skill_name: str
     body_chars: int
     thread_id: str
