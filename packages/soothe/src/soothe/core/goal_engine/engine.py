@@ -631,6 +631,65 @@ class GoalEngine:
             await self._emit_state_change(goal, old, reason="deps_resolved")
         return reactivated
 
+    async def absorb_guidance(
+        self,
+        goal_id: str,
+        guidance_text: str,
+        scope: str = "goal",
+    ) -> bool:
+        """Absorb user guidance from desktop LOR (RFC-228).
+
+        Desktop sends guidance via job_guidance IPC. GoalEngine accumulates
+        the guidance for use in next reasoning cycle. Guidance influences:
+        - Goal priority adjustments
+        - Constraint additions
+        - Subgoal creation modifications
+        - Execution behavior changes
+
+        Args:
+            goal_id: Target goal ID to receive guidance.
+            guidance_text: User's guidance/instruction text.
+            scope: "goal" for specific goal, "job" for root goal (full DAG).
+
+        Returns:
+            True if guidance was absorbed, False if goal not found.
+        """
+        goal = self._goals.get(goal_id)
+        if goal is None:
+            logger.warning("[Guidance] Goal %s not found for guidance absorption", goal_id)
+            return False
+
+        # Accumulate guidance for this goal
+        guidance_entry = {
+            "text": guidance_text,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "scope": scope,
+        }
+        goal.guidance_accumulated.append(guidance_entry)
+        goal.updated_at = datetime.now(UTC)
+
+        logger.info(
+            "[Guidance] Absorbed guidance for goal %s (scope=%s): %s",
+            goal_id,
+            scope,
+            guidance_text[:50],
+        )
+
+        # Emit event for observers (scheduler may re-evaluate)
+        if self._internal_bus is not None:
+            from soothe.core.events.internal_events import InternalGoalStateChangedEvent
+
+            await self._internal_bus.emit(
+                InternalGoalStateChangedEvent(
+                    goal_id=goal_id,
+                    old_status=goal.status,
+                    new_status=goal.status,  # Status unchanged, but guidance added
+                    reason="guidance_absorbed",
+                )
+            )
+
+        return True
+
     async def complete_goal(self, goal_id: str) -> Goal:
         """Mark a goal as completed (IG-155: update source file).
 
