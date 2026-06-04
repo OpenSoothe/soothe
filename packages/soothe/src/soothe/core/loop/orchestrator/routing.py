@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langgraph.graph import END
 
 from .state import PLAN_ROUTE_GOAL_DONE
+
+logger = logging.getLogger(__name__)
 
 
 def _pending_clarification(state: dict[str, Any]) -> bool:
@@ -18,9 +21,16 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
     re-route those re-entries back into ``await_clarification`` — the answer
     being present is the signal that we're past the relay.
     """
-    return bool(state.get("pending_clarification")) and not state.get(
-        "pending_clarification_answer"
+    pending = state.get("pending_clarification")
+    answer = state.get("pending_clarification_answer")
+    result = bool(pending) and not answer
+    logger.debug(
+        "[routing] _pending_clarification: pending=%s, answer=%s, result=%s",
+        bool(pending),
+        answer,
+        result,
     )
+    return result
 
 
 def route_after_init(state: dict[str, Any]) -> str:
@@ -74,9 +84,12 @@ def route_after_validate_evidence(state: dict[str, Any]) -> str:
 def route_after_execute(state: dict[str, Any]) -> str:
     """Stop on execute fatal; otherwise persist iteration."""
     if _pending_clarification(state):
+        logger.info("[routing] route_after_execute → await_clarification")
         return "await_clarification"
     if state.get("last_outcome") == "fatal":
+        logger.debug("[routing] route_after_execute → END (fatal)")
         return END
+    logger.debug("[routing] route_after_execute → record_iteration")
     return "record_iteration"
 
 
