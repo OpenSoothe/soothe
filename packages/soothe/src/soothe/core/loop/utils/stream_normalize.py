@@ -22,8 +22,8 @@ _LIST_MIN_LEN = 2
 
 
 def join_text_fragments(parts: list[str]) -> str:
-    """Join text fragments without any boundary repair."""
-    return "".join(parts) if parts else ""
+    """Join text fragments with newline separators between content blocks."""
+    return "\n".join(parts) if parts else ""
 
 
 def extract_text_from_message_content(content: Any) -> str:

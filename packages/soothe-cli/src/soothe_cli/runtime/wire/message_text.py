@@ -25,7 +25,7 @@ def extract_text_from_message_content(content: Any) -> str:
                 parts.append(block)
             elif isinstance(block, dict) and "text" in block:
                 parts.append(str(block["text"]))
-        return "".join(parts)
+        return "\n".join(parts)
     return ""
 
 
@@ -41,7 +41,7 @@ def extract_plain_text_from_stream_message(msg: Any) -> str:
                 if text:
                     texts.append(str(text))
         if texts:
-            return "".join(texts)
+            return "\n".join(texts)
     if hasattr(msg, "content"):
         return extract_text_from_message_content(getattr(msg, "content", None))
     if isinstance(msg, dict):
@@ -54,7 +54,7 @@ def extract_plain_text_from_stream_message(msg: Any) -> str:
                     text = block.get("text", "")
                     if text:
                         texts.append(str(text))
-            return "".join(texts)
+            return "\n".join(texts)
         content = body.get("content", "")
         if isinstance(content, str):
             return content
