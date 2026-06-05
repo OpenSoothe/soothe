@@ -162,9 +162,7 @@ class TestLoopIsolation:
                 client1.read_event, {"running", "idle"}, timeout=idle_timeout
             )
             if st.get("state") == "running":
-                await await_status_state(
-                    client1.read_event, "idle", timeout=idle_timeout
-                )
+                await await_status_state(client1.read_event, "idle", timeout=idle_timeout)
 
             # Verify loop2 client receives NO events from loop1 (isolation)
             with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
