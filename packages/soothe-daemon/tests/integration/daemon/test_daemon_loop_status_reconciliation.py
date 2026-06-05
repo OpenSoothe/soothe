@@ -12,13 +12,12 @@ import pytest_asyncio
 from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
-
-from ..daemon_fixtures import (
+from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
     force_isolated_home,
 )
-from ..ws_loop_client import loop_new
+from tests.integration.ws_loop_client import loop_new
 
 
 async def _connect_client(port: int) -> WebSocketClient:

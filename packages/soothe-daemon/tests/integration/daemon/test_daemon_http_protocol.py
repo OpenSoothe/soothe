@@ -15,8 +15,7 @@ from soothe_daemon import SootheDaemon
 from soothe_daemon.channels.http_rest import HttpRestChannel
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import HttpRestConfig
-
-from ..daemon_fixtures import (
+from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     force_isolated_home,
     get_base_config,
