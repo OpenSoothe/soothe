@@ -16,7 +16,7 @@ from ._runner_shared import StreamChunk
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe.core.artifacts import RunArtifactStore
+    from ._artifact_store import RunArtifactStore
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,9 @@ class CheckpointMixin:
 
     def _ensure_artifact_store(self, state: Any) -> RunArtifactStore | None:
         """Lazily create the artifact store on *state* when thread_id is known."""
-        from soothe.core.artifacts import RunArtifactStore
         from soothe.utils.runtime import current_run_dir
+
+        from ._artifact_store import RunArtifactStore
 
         thread_id = getattr(state, "thread_id", None) or ""
         if not thread_id:
