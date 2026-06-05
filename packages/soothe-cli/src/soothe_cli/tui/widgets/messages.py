@@ -1013,15 +1013,15 @@ class DiffMessage(Static):
     DEFAULT_CSS = """
     DiffMessage {
         height: auto;
-        padding: 1;
-        margin: 0 0 1 0;
+        padding: 0 1;
+        margin: 0;
         background: $surface;
         border: solid $primary;
     }
 
     DiffMessage .diff-header {
         text-style: bold;
-        margin-bottom: 1;
+        margin: 0;
     }
 
     DiffMessage .diff-add {

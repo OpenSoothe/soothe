@@ -38,16 +38,27 @@ def _format_stats(additions: int, deletions: int) -> Content:
     return Content.assemble(*parts) if parts else Content("")
 
 
-def _file_header(file_path: str, additions: int = 0, deletions: int = 0) -> ComposeResult:
-    """Yield the file path header with optional +N -M stats."""
+def _compact_header(
+    file_path: str,
+    *,
+    action_label: str = "",
+    additions: int = 0,
+    deletions: int = 0,
+    extra: str = "",
+) -> Static:
+    """Build a single-line header: action, path, optional suffix, and diff stats."""
+    parts: list[str | tuple[str, str] | Content] = []
+    if action_label:
+        parts.append(Content.from_markup("[bold]$label[/bold]  ", label=action_label))
+    path_markup = "[bold cyan]$path[/bold cyan]"
+    if extra:
+        path_markup += "  [dim]$extra[/dim]"
+    parts.append(Content.from_markup(path_markup, path=file_path, extra=extra))
     stats = _format_stats(additions, deletions)
-    yield Static(
-        Content.assemble(
-            Content.from_markup("[bold cyan]File:[/bold cyan] $path  ", path=file_path),
-            stats,
-        )
-    )
-    yield Static("")
+    if additions or deletions:
+        parts.append("  ")
+        parts.append(stats)
+    return Static(Content.assemble(*parts), classes="file-change-preview-header")
 
 
 def _count_diff_stats(diff_lines: list[str], old_string: str, new_string: str) -> tuple[int, int]:
@@ -82,6 +93,23 @@ class FileChangePreviewWidget(Vertical):
                 classes="file-change-preview-label",
             )
         yield Static("Change details not available", classes="file-change-preview-body")
+
+    def _yield_compact_header(
+        self,
+        file_path: str,
+        *,
+        additions: int = 0,
+        deletions: int = 0,
+        extra: str = "",
+    ) -> ComposeResult:
+        """Yield a single-line action + path + stats header."""
+        yield _compact_header(
+            file_path,
+            action_label=self._action_label,
+            additions=additions,
+            deletions=deletions,
+            extra=extra,
+        )
 
     def _render_diff_lines_only(self, diff_lines: list[str]) -> ComposeResult:
         lines_shown = 0
@@ -128,12 +156,6 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
 
     def compose(self) -> ComposeResult:
         """Compose file path header and content or unified diff."""
-        if self._action_label:
-            yield Static(
-                Content.from_markup("[bold]$label[/bold]", label=self._action_label),
-                classes="file-change-preview-label",
-            )
-
         file_path = self.data.get("file_path", "")
         content = self.data.get("content", "")
         file_extension = self.data.get("file_extension", "text")
@@ -148,15 +170,12 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         total_lines = len(lines)
 
         if is_new_file:
-            yield Static(
-                Content.from_markup(
-                    "[bold cyan]File:[/bold cyan] $path  [dim](new file)[/dim]",
-                    path=file_path,
-                )
-            )
-            yield Static("")
+            yield from self._yield_compact_header(file_path, extra="new file")
         else:
-            yield from _file_header(file_path, additions=total_lines if content else 0)
+            yield from self._yield_compact_header(
+                file_path,
+                additions=total_lines if content else 0,
+            )
 
         if not content:
             yield Static("Empty file", classes="file-change-preview-body")
@@ -175,7 +194,7 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         old_string = self.data.get("old_string", "")
         new_string = self.data.get("new_string", "")
         additions, deletions = _count_diff_stats(diff_lines, old_string, new_string)
-        yield from _file_header(file_path, additions, deletions)
+        yield from self._yield_compact_header(file_path, additions=additions, deletions=deletions)
         if not diff_lines:
             yield Static("No changes to display", classes="file-change-preview-body")
             return
@@ -187,24 +206,16 @@ class DeleteFilePreviewWidget(FileChangePreviewWidget):
 
     def compose(self) -> ComposeResult:
         """Compose deletion preview."""
-        if self._action_label:
-            yield Static(
-                Content.from_markup("[bold]$label[/bold]", label=self._action_label),
-                classes="file-change-preview-label",
-            )
-
         file_path = self.data.get("file_path", "")
         preview_lines: list[str] = self.data.get("preview_lines", [])
         total_lines = int(self.data.get("total_lines", 0))
 
-        yield from _file_header(file_path, deletions=total_lines)
-        yield Static(Content.styled("Deleting file", "bold"))
+        yield from self._yield_compact_header(file_path, deletions=total_lines)
 
         if not preview_lines:
             yield Static("No preview available", classes="file-change-preview-body")
             return
 
-        yield Static("")
         for line in preview_lines[:TOOL_APPROVAL_PREVIEW_LINES]:
             yield Static(
                 Content.from_markup("- $text", text=line),
@@ -223,36 +234,24 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
         yield from self._compose_edit_diff_body(show_line_range=False)
 
     def _compose_edit_diff_body(self, *, show_line_range: bool) -> ComposeResult:
-        if self._action_label:
-            yield Static(
-                Content.from_markup("[bold]$label[/bold]", label=self._action_label),
-                classes="file-change-preview-label",
-            )
-
         file_path = self.data.get("file_path", "")
-        if show_line_range:
-            start_line = self.data.get("start_line")
-            end_line = self.data.get("end_line")
-            if isinstance(start_line, int) and isinstance(end_line, int):
-                yield Static(
-                    Content.from_markup(
-                        "[bold cyan]File:[/bold cyan] $path  [dim]lines $start–$end[/dim]",
-                        path=file_path,
-                        start=start_line,
-                        end=end_line,
-                    )
-                )
-                yield Static("")
-
         diff_lines = self.data.get("diff_lines", [])
         old_string = self.data.get("old_string", "")
         new_string = self.data.get("new_string", "")
 
         additions, deletions = _count_diff_stats(diff_lines, old_string, new_string)
-        if not show_line_range:
-            yield from _file_header(file_path, additions, deletions)
-        elif additions or deletions:
-            yield Static(_format_stats(additions, deletions))
+        extra = ""
+        if show_line_range:
+            start_line = self.data.get("start_line")
+            end_line = self.data.get("end_line")
+            if isinstance(start_line, int) and isinstance(end_line, int):
+                extra = f"lines {start_line}–{end_line}"
+        yield from self._yield_compact_header(
+            file_path,
+            additions=additions,
+            deletions=deletions,
+            extra=extra,
+        )
 
         if not diff_lines and not old_string and not new_string:
             yield Static("No changes to display", classes="file-change-preview-body")
@@ -264,11 +263,16 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
     def _render_strings_only(self, old_string: str, new_string: str) -> ComposeResult:
         colors = theme.get_theme_colors()
         if old_string:
-            yield Static(Content.styled("Removing:", f"bold {colors.error}"))
+            yield Static(
+                Content.styled("Removing:", f"bold {colors.error}"),
+                classes="file-change-preview-section-label",
+            )
             yield from self._render_string_lines(old_string, is_addition=False)
-            yield Static("")
         if new_string:
-            yield Static(Content.styled("Adding:", f"bold {colors.success}"))
+            yield Static(
+                Content.styled("Adding:", f"bold {colors.success}"),
+                classes="file-change-preview-section-label",
+            )
             yield from self._render_string_lines(new_string, is_addition=True)
 
 

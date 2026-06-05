@@ -341,7 +341,7 @@ def is_internal_event_type(event_type: str) -> bool:
 
 
 # ============================================================================
-# soothe.goal.* - Client-visible goal events (RFC-228)
+# soothe.autopilot.* - Client-visible autopilot events (RFC-228)
 # ============================================================================
 
 
@@ -351,7 +351,7 @@ class GoalStatusEvent(SootheEvent):
     Emitted when goal status changes. Desktop uses this for DAG node updates.
     """
 
-    type: str = "soothe.goal.status"
+    type: str = "soothe.autopilot.goal.status"
     goal_id: str
     status: str
     previous_status: str | None = None
@@ -366,7 +366,7 @@ class GoalProgressEvent(SootheEvent):
     Desktop uses this for progress bar and badge updates.
     """
 
-    type: str = "soothe.goal.progress"
+    type: str = "soothe.autopilot.goal.progress"
     goal_id: str
     steps_completed: int = 0
     steps_total: int = 0
@@ -380,7 +380,7 @@ class GoalCreatedEvent(SootheEvent):
     Emitted when new goal is created. Desktop uses this to add DAG nodes.
     """
 
-    type: str = "soothe.goal.created"
+    type: str = "soothe.autopilot.goal.created"
     goal_id: str
     parent_id: str | None = None
     description: str
@@ -394,7 +394,7 @@ class GoalCompletedEvent(SootheEvent):
     Desktop uses this for completion display.
     """
 
-    type: str = "soothe.goal.completed"
+    type: str = "soothe.autopilot.goal.completed"
     goal_id: str
     summary: str | None = None
     findings: list[str] = Field(default_factory=list)
@@ -408,7 +408,7 @@ class WorkerAssignedEvent(SootheEvent):
     Desktop uses this for loop navigation from DAG nodes.
     """
 
-    type: str = "soothe.worker.assigned"
+    type: str = "soothe.autopilot.worker.assigned"
     goal_id: str
     loop_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -420,7 +420,7 @@ class WorkerUnassignedEvent(SootheEvent):
     Emitted when autopilot worker finishes or is reassigned.
     """
 
-    type: str = "soothe.worker.unassigned"
+    type: str = "soothe.autopilot.worker.unassigned"
     goal_id: str
     loop_id: str | None = None
     reason: str | None = None
@@ -428,14 +428,14 @@ class WorkerUnassignedEvent(SootheEvent):
 
 
 # Client-visible event type constants (RFC-228)
-CLIENT_GOAL_STATUS = "soothe.goal.status"
-CLIENT_GOAL_PROGRESS = "soothe.goal.progress"
-CLIENT_GOAL_CREATED = "soothe.goal.created"
-CLIENT_GOAL_COMPLETED = "soothe.goal.completed"
-CLIENT_WORKER_ASSIGNED = "soothe.worker.assigned"
-CLIENT_WORKER_UNASSIGNED = "soothe.worker.unassigned"
+CLIENT_GOAL_STATUS = "soothe.autopilot.goal.status"
+CLIENT_GOAL_PROGRESS = "soothe.autopilot.goal.progress"
+CLIENT_GOAL_CREATED = "soothe.autopilot.goal.created"
+CLIENT_GOAL_COMPLETED = "soothe.autopilot.goal.completed"
+CLIENT_WORKER_ASSIGNED = "soothe.autopilot.worker.assigned"
+CLIENT_WORKER_UNASSIGNED = "soothe.autopilot.worker.unassigned"
 
-CLIENT_GOAL_EVENT_TYPES: frozenset[str] = frozenset(
+CLIENT_AUTOPILOT_EVENT_TYPES: frozenset[str] = frozenset(
     {
         CLIENT_GOAL_STATUS,
         CLIENT_GOAL_PROGRESS,

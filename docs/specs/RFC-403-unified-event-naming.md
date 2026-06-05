@@ -7,7 +7,7 @@
 **Created**: 2026-04-15
 **Updated**: 2026-05-01
 **Authors**: Platonic Brainstorming Session
-**Depends on**: RFC-401 (Event Processing)
+**Depends on**: -
 
 ---
 
