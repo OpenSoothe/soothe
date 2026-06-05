@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.artifacts import RunArtifactStore
 from soothe.core.runner import SootheRunner
+from soothe.core.runner._artifact_store import RunArtifactStore
 from soothe.core.runner._types import RunnerState
 from soothe.protocols.planner import Plan, PlanStep
 
