@@ -33,6 +33,7 @@ dev = [
     "pytest>=9.0.2",
     "textual-dev>=1.8.0",
     "soothe[langfuse]",
+    "pyinstaller>=6.20.0",
 ]
 
 [tool.pytest.ini_options]
