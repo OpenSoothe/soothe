@@ -694,7 +694,7 @@ async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 @pytest.mark.slow
-async def test_event_delivery_latency(tmp_path: Path) -> None:
+async def test_event_delivery_latency(tmp_path: Path, requires_llm_api) -> None:
     """Test event delivery latency is within acceptable bounds."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -740,7 +740,7 @@ async def test_event_delivery_latency(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_daemon_remains_stable_after_client_errors(tmp_path: Path) -> None:
+async def test_daemon_remains_stable_after_client_errors(tmp_path: Path, requires_llm_api) -> None:
     """Test daemon remains stable after client errors (malformed messages, etc.)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
