@@ -47,12 +47,12 @@ You must decide WHERE to backoff in the goal DAG. Consider:
 
 Output JSON structure (strict format):
 ```json
-{
+{{
   "backoff_to_goal_id": "<goal_id>",
   "reason": "<natural language reasoning for backoff decision>",
   "new_directives": [],
   "evidence_summary": "<condensed failure analysis>"
-}
+}}
 ```
 
 Constraints:
