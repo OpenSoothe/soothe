@@ -10,6 +10,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from soothe.core.goal_engine.models import TERMINAL_STATES
+
 if TYPE_CHECKING:
     from soothe.core.goal_engine.models import Goal
 
@@ -151,7 +153,7 @@ def detect_relationships(
     for other in all_goals:
         if other.id == completed_goal.id:
             continue
-        if other.status in ("completed", "failed"):
+        if other.status in TERMINAL_STATES:
             continue
 
         other_words = _significant_words(other.description)

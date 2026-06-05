@@ -57,6 +57,7 @@ class GoalDagWidget(Static):
             "validated": "blue",
             "completed": "green",
             "failed": "red",
+            "cancelled": "dim red",
             "suspended": "magenta",
             "blocked": "orange",
         }
@@ -65,6 +66,7 @@ class GoalDagWidget(Static):
             "active": "◉",
             "completed": "✓",
             "failed": "✗",
+            "cancelled": "⊘",
             "suspended": "⏸",
             "blocked": "⏺",
         }
