@@ -346,7 +346,6 @@ async def test_job_guidance_via_websocket(daemon_with_autopilot_ws) -> None:
 async def test_autopilot_subscribe_unsubscribe_via_websocket(daemon_with_autopilot_ws) -> None:
     """WebSocket autopilot_subscribe enables worker event stream."""
     ws_port = daemon_with_autopilot_ws["ws_port"]
-    daemon = daemon_with_autopilot_ws["daemon"]
 
     import websockets
 
