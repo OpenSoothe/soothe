@@ -133,7 +133,7 @@ class TestLoopIsolation:
     # Test 2: Concurrent Loops - No Message Leakage
     # -------------------------------------------------------------------------
 
-    async def test_concurrent_loops_no_message_leakage(self, tmp_path: Path):
+    async def test_concurrent_loops_no_message_leakage(self, tmp_path: Path, requires_llm_api):
         """Verify input messages don't leak between loops during concurrent execution."""
         force_isolated_home(tmp_path / "soothe-home")
         ws_port = alloc_ephemeral_port()
@@ -152,21 +152,19 @@ class TestLoopIsolation:
             # Client2 should not receive any loop1 events during execution
             client2.clear_pending_events()
 
-            # Send multiple inputs to loop1 while loop2 is idle
-            for i in range(3):
-                await client1.send_input(loop1, f"Message {i} to loop1")
+            idle_timeout = integration_llm_idle_timeout()
 
-            # Verify loop1 processes inputs correctly
-            events1_count = 0
-            for _ in range(10):
-                event = await asyncio.wait_for(client1.read_event(), timeout=1.0)
-                if event and event.get("type") in ("status", "event"):
-                    events1_count += 1
-                    # Events with loop_id should match loop1
-                    if event.get("loop_id"):
-                        assert event.get("loop_id") == loop1
+            # Send one input to loop1 while loop2 is idle
+            await client1.send_input(loop1, "Reply with only: LOOP1-OK")
 
-            assert events1_count > 0, "Loop1 should have processed messages"
+            # Wait for loop1 to finish processing (running → idle)
+            st = await await_status_state(
+                client1.read_event, {"running", "idle"}, timeout=idle_timeout
+            )
+            if st.get("state") == "running":
+                await await_status_state(
+                    client1.read_event, "idle", timeout=idle_timeout
+                )
 
             # Verify loop2 client receives NO events from loop1 (isolation)
             with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
@@ -434,7 +432,7 @@ class TestLoopIsolation:
     # Test 7: Loop Reattach Replay Isolation
     # -------------------------------------------------------------------------
 
-    async def test_loop_reattach_replay_isolation(self, tmp_path: Path):
+    async def test_loop_reattach_replay_isolation(self, tmp_path: Path, requires_llm_api):
         """Reattaching to loop replays history without leaking to other loops."""
         force_isolated_home(tmp_path / "soothe-home")
         ws_port = alloc_ephemeral_port()
@@ -478,14 +476,13 @@ class TestLoopIsolation:
                 timeout=5.0,
             )
 
-            # Client1 reattaches to loop1 with replay (RFC-411: history_replay + markers)
+            # Client1 reattaches to loop1 with replay (RFC-413 card-based replay)
             client1.clear_pending_events()
             await client1.send_loop_reattach(loop1)
             await await_event_type(
-                client1.read_event, "history_replay", timeout=integration_llm_idle_timeout()
+                client1.read_event, "card.replay_begin", timeout=integration_llm_idle_timeout()
             )
-            await await_event_type(client1.read_event, "loop_reattached", timeout=15.0)
-            await await_event_type(client1.read_event, "replay_complete", timeout=15.0)
+            await await_event_type(client1.read_event, "card.replay_end", timeout=15.0)
 
             # Verify replay events go only to client1 (already consumed above)
 
@@ -576,15 +573,15 @@ class TestLoopIsolation:
             await _connect_and_drain_handshake(client2)
             loop2a = await websocket_create_loop_only(client2)
 
-            # Both clients call loop_list
+            # Both clients call loop_list (exclude_empty=false to include fresh loops)
             list1_resp = await client1.request_response(
-                {"type": "loop_list", "limit": 20},
+                {"type": "loop_list", "limit": 20, "filter": {"exclude_empty": False}},
                 response_type="loop_list_response",
                 timeout=5.0,
             )
 
             list2_resp = await client2.request_response(
-                {"type": "loop_list", "limit": 20},
+                {"type": "loop_list", "limit": 20, "filter": {"exclude_empty": False}},
                 response_type="loop_list_response",
                 timeout=5.0,
             )

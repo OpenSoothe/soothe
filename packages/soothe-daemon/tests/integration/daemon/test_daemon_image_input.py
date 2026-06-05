@@ -99,7 +99,7 @@ async def websocket_daemon_patched(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_websocket_input_with_image_runs_turn(
-    websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]],
+    websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]], requires_llm_api
 ) -> None:
     daemon, port, vision_calls = websocket_daemon_patched
     _ = daemon
@@ -161,7 +161,7 @@ async def test_websocket_input_invalid_attachment_returns_error(
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_websocket_input_with_real_image_attachment(
-    websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]],
+    websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]], requires_llm_api
 ) -> None:
     """Test agent task execution with a real image file (soothe-logo.png)."""
     daemon, port, vision_calls = websocket_daemon_patched
@@ -198,7 +198,7 @@ async def test_websocket_input_with_real_image_attachment(
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_websocket_input_with_multi_image_attachments(
-    websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]],
+    websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]], requires_llm_api
 ) -> None:
     """Test agent task execution with multiple image files (soothe-logo.png + logical-arch.png)."""
     daemon, port, vision_calls = websocket_daemon_patched
