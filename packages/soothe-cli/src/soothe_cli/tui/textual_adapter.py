@@ -1868,7 +1868,7 @@ async def execute_task_textual(
 
                         # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
                         if getattr(message, "phase", None) == "goal_completion":
-                            text_gc = "".join(
+                            text_gc = "\n".join(
                                 str(b.get("text", ""))
                                 for b in blocks
                                 if isinstance(b, dict) and b.get("type") == "text"
@@ -1998,7 +1998,7 @@ async def execute_task_textual(
                         if assistant_output_phase(message) == "plan_direct" and is_main_agent:
                             if suppress_main_agent_assistant_text:
                                 continue
-                            text_plan_direct = "".join(
+                            text_plan_direct = "\n".join(
                                 str(b.get("text", ""))
                                 for b in blocks
                                 if isinstance(b, dict) and b.get("type") == "text"
