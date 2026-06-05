@@ -88,19 +88,36 @@ Screen {
 /* Non-blocking filesystem change previews (write / edit / delete) */
 .file-change-preview {
     height: auto;
-    padding: 1;
-    margin: 0 0 1 0;
+    padding: 0 1;
+    margin: 0;
     background: $surface-darken-1;
     border: solid $secondary;
 }
 
+.file-change-preview-header {
+    height: auto;
+    margin: 0;
+}
+
 .file-change-preview-label {
     text-style: bold;
-    margin-bottom: 1;
+    margin: 0;
 }
 
 .file-change-preview-body {
     color: $text-muted;
+    margin: 0;
+}
+
+.file-change-preview Markdown {
+    margin: 0;
+    padding: 0;
+    height: auto;
+}
+
+.file-change-preview-section-label {
+    height: auto;
+    margin: 0;
 }
 
 /* Diff styling — previews and DiffMessage (fg + bg + padding) */
@@ -108,20 +125,23 @@ Screen {
     height: auto;
     color: $text-error;
     background: $error-muted;
-    padding: 0 1;
+    padding: 0;
+    margin: 0;
 }
 
 .diff-added {
     height: auto;
     color: $text-success;
     background: $success-muted;
-    padding: 0 1;
+    padding: 0;
+    margin: 0;
 }
 
 .diff-context {
     height: auto;
     color: $text-muted;
-    padding: 0 1;
+    padding: 0;
+    margin: 0;
 }
 
 /* Diff line backgrounds — used by compose_diff_lines (bg only, fg via Content) */
