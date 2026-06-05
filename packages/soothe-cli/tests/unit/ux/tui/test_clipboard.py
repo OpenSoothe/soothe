@@ -9,6 +9,7 @@ import pytest
 from soothe_cli.tui.widgets.clipboard import (
     _clipboard_copy_methods,
     _collect_selected_texts,
+    _copy_native,
     _copy_osc52,
     _copy_texts_to_clipboard,
     _selected_text_from_screen,
@@ -85,31 +86,62 @@ def test_clipboard_methods_use_osc52_before_textual_in_tmux(
 
     methods = _clipboard_copy_methods(app)
 
-    assert methods[0] is _copy_osc52
+    assert _copy_native in methods
+    assert _copy_osc52 in methods
     assert app.copy_to_clipboard not in methods
+    native_idx = methods.index(_copy_native)
+    osc52_idx = methods.index(_copy_osc52)
+    assert native_idx < osc52_idx
 
 
 def test_clipboard_methods_use_textual_before_osc52_locally(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Local sessions prefer Textual's driver, with OSC 52 as fallback."""
+    """Local sessions prefer native then Textual's driver, with OSC 52 as fallback."""
     monkeypatch.delenv("TMUX", raising=False)
     monkeypatch.delenv("SSH_CONNECTION", raising=False)
     app = MagicMock()
 
     methods = _clipboard_copy_methods(app)
 
-    assert methods[0] is app.copy_to_clipboard
+    assert _copy_native in methods
     assert methods[-1] is _copy_osc52
+    native_idx = methods.index(_copy_native)
+    textual_idx = methods.index(app.copy_to_clipboard)
+    assert native_idx < textual_idx
 
 
-def test_copy_in_tmux_calls_osc52_not_textual(
+def test_copy_in_tmux_calls_native_then_osc52_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """End-to-end copy path must reach tmux-aware OSC 52 when TMUX is set."""
+    """End-to-end copy: native clipboard is preferred; OSC 52 is tmux fallback."""
     monkeypatch.setenv("TMUX", "/tmp/tmux-123/default,12345,0")
     app = MagicMock()
+    native_mock = MagicMock()
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard._copy_native",
+        native_mock,
+    )
+
+    _copy_texts_to_clipboard(app, ["hello"])
+
+    native_mock.assert_called_once_with("hello")
+    app.copy_to_clipboard.assert_not_called()
+    app.notify.assert_called_once()
+
+
+def test_copy_falls_through_to_osc52_when_native_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When native clipboard fails, OSC 52 is the next fallback."""
+    monkeypatch.setenv("TMUX", "/tmp/tmux-123/default,12345,0")
+    app = MagicMock()
+    native_mock = MagicMock(side_effect=RuntimeError("no pbcopy"))
     osc52_mock = MagicMock()
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard._copy_native",
+        native_mock,
+    )
     monkeypatch.setattr(
         "soothe_cli.tui.widgets.clipboard._copy_osc52",
         osc52_mock,
@@ -117,8 +149,8 @@ def test_copy_in_tmux_calls_osc52_not_textual(
 
     _copy_texts_to_clipboard(app, ["hello"])
 
+    native_mock.assert_called_once_with("hello")
     osc52_mock.assert_called_once_with("hello")
-    app.copy_to_clipboard.assert_not_called()
     app.notify.assert_called_once()
 
 
