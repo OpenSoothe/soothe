@@ -1,4 +1,4 @@
-# IG-295: Autopilot Job IPC Commands (RFC-228 Implementation)
+# IG-471: Autopilot Job IPC Commands (RFC-228 Implementation)
 
 > **Status**: Completed
 > **RFC**: RFC-228
