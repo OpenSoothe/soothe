@@ -1889,7 +1889,9 @@ class MessageRouter:
     # RFC-228: Autopilot Job IPC Handlers
     # ---------------------------------------------------------------------------
 
-    def _require_autopilot_service(self, client_id: Any, request_id: str | None) -> Any | None:
+    async def _require_autopilot_service(
+        self, client_id: Any, request_id: str | None
+    ) -> Any | None:
         """Return the daemon's AutopilotService or send error response.
 
         Args:
@@ -1902,7 +1904,7 @@ class MessageRouter:
         d = self._daemon
         service = getattr(d, "_autopilot_service", None)
         if service is None:
-            d._send_client_message(
+            await d._send_client_message(
                 client_id,
                 {
                     "type": "error",
@@ -1941,7 +1943,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 
@@ -2000,7 +2002,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 
@@ -2026,6 +2028,7 @@ class MessageRouter:
         active_count = sum(1 for n in nodes if n.get("status") == "active")
         completed_count = sum(1 for n in nodes if n.get("status") == "completed")
         failed_count = sum(1 for n in nodes if n.get("status") == "failed")
+        cancelled_count = sum(1 for n in nodes if n.get("status") == "cancelled")
         total_count = len(nodes)
 
         # Collect workers assigned to active goals
@@ -2055,6 +2058,7 @@ class MessageRouter:
                 "active_goals": active_count,
                 "completed_goals": completed_count,
                 "failed_goals": failed_count,
+                "cancelled_goals": cancelled_count,
                 "total_goals": total_count,
                 "workers": workers,
                 "last_error": last_error,
@@ -2087,7 +2091,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 
@@ -2119,7 +2123,7 @@ class MessageRouter:
             )
             return
 
-        if goal.status in ("completed", "failed"):
+        if goal.status in ("completed", "failed", "cancelled"):
             await d._send_client_message(
                 client_id,
                 {
@@ -2183,7 +2187,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 
@@ -2267,7 +2271,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 
@@ -2335,7 +2339,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 
@@ -2405,7 +2409,7 @@ class MessageRouter:
             )
             return
 
-        service = self._require_autopilot_service(client_id, request_id)
+        service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
 

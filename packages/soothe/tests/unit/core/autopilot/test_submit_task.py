@@ -100,12 +100,12 @@ class TestListAndGet:
 
 class TestCancelGoal:
     @pytest.mark.asyncio
-    async def test_cancel_existing_goal_marks_failed(self) -> None:
+    async def test_cancel_existing_goal_marks_cancelled(self) -> None:
         svc = _service()
         goal = await svc.submit_task("doomed", max_retries=0)
         cancelled = await svc.cancel_goal(goal.id, reason="user said no")
         assert cancelled is not None
-        assert cancelled.status == "failed"
+        assert cancelled.status == "cancelled"
         assert "user said no" in (cancelled.error or "")
 
     @pytest.mark.asyncio

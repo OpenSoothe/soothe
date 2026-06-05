@@ -17,13 +17,14 @@ GoalStatus = Literal[
     "validated",
     "completed",
     "failed",
+    "cancelled",
     "suspended",
     "blocked",
     "awaiting_clarification",
 ]
 
 # Terminal states that count as "resolved"
-TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed"})
+TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 # RFC-622: states that block the scheduler from picking the goal up
 BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})

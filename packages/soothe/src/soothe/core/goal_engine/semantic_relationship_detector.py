@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from soothe.config.models import SemanticRelationshipsConfig
+from soothe.core.goal_engine.models import TERMINAL_STATES
 from soothe.core.goal_engine.relationship_detector import (
     Relationship,
     _extract_artifact_refs,
@@ -67,7 +68,7 @@ async def detect_semantic_relationships(
     for other in all_goals:
         if other.id == completed_goal.id:
             continue
-        if other.status in ("completed", "failed"):
+        if other.status in TERMINAL_STATES:
             continue
 
         other_desc = (other.description or "").strip()

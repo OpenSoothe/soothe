@@ -89,12 +89,22 @@ class WorkspaceReservation:
     def reservation_count(self) -> int:
         return len(self._reservations)
 
-    def conflicts_with_active(self, workspace: str | Path) -> str | None:
-        """Return the goal_id of a conflicting active reservation, or None."""
+    def conflicts_with_active(
+        self, workspace: str | Path, *, exclude_goal_id: str | None = None
+    ) -> str | None:
+        """Return the goal_id of a conflicting active reservation, or None.
+
+        Args:
+            workspace: Workspace path to check.
+            exclude_goal_id: Skip this goal when checking (avoids self-conflict
+                when re-dispatching a goal that still holds a stale reservation).
+        """
         if not self._enabled:
             return None
         norm = _normalize(workspace)
         for goal_id, held in self._reservations.items():
+            if goal_id == exclude_goal_id:
+                continue
             if _overlaps(norm, held, strict=self._strict):
                 return goal_id
         return None
