@@ -47,16 +47,16 @@ class TestCancelGoal:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_pending_goal_no_worker_just_fails(self) -> None:
+    async def test_pending_goal_no_worker_transitions_to_cancelled(self) -> None:
         svc = _service()
         goal = await svc.submit_task("g", max_retries=0)
         result = await svc.cancel_goal(goal.id, reason="user_quit")
         assert result is not None
-        assert result.status == "failed"
+        assert result.status == "cancelled"
         # No worker assigned, so nothing to cancel.
 
     @pytest.mark.asyncio
-    async def test_active_goal_cancels_worker_and_fails(self) -> None:
+    async def test_active_goal_cancels_worker_and_transitions_to_cancelled(self) -> None:
         svc = _service()
         goal = await svc.submit_task("g", max_retries=0)
         worker = await svc._worker_pool.pick_worker(goal)
@@ -68,13 +68,12 @@ class TestCancelGoal:
 
         assert worker.runner.cancel_called is True
         assert result is not None
-        assert result.status == "failed"
+        assert result.status == "cancelled"
 
     @pytest.mark.asyncio
     async def test_cancel_no_retry_even_if_retries_left(self) -> None:
-        """allow_retry=False short-circuits the retry path."""
+        """Cancellation is terminal regardless of retry budget."""
         svc = _service()
-        # max_retries default would normally let it retry; cancel should override.
         goal = await svc.submit_task("g", max_retries=5)
         worker = await svc._worker_pool.pick_worker(goal)
         assert worker is not None
@@ -83,4 +82,4 @@ class TestCancelGoal:
         result = await svc.cancel_goal(goal.id)
 
         assert result is not None
-        assert result.status == "failed"  # not pending — no retry
+        assert result.status == "cancelled"

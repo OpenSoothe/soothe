@@ -155,8 +155,7 @@ class TestJobCreate:
             _autopilot_service = None
             _session_manager = MagicMock()
 
-            def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
-                # Note: _require_autopilot_service calls this synchronously
+            async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
                 sent.append((client_id, msg))
 
         daemon = _FakeDaemonWithoutAutopilot()

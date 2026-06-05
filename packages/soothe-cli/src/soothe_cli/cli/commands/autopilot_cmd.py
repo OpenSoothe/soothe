@@ -91,7 +91,7 @@ def run(
         detail = client.get_goal(goal_id)
         goal = detail.get("goal") or {}
         status = goal.get("status", "unknown")
-        if status in ("completed", "failed", "suspended"):
+        if status in ("completed", "failed", "cancelled", "suspended"):
             typer.echo(f"Goal {goal_id[:8]}: {status}")
             if status == "failed":
                 sys.exit(1)

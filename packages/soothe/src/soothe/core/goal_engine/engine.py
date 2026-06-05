@@ -746,6 +746,54 @@ class GoalEngine:
         await self._emit_state_change(goal, old, reason="completed")
         return goal
 
+    async def cancel_goal(
+        self,
+        goal_id: str,
+        *,
+        reason: str = "user_cancelled",
+    ) -> None:
+        """Mark a goal as cancelled.
+
+        Distinct from ``fail_goal``: no backoff reasoning, no retry logic.
+        Used for intentional user or system cancellations.
+
+        Args:
+            goal_id: Goal to cancel.
+            reason: Human-readable cancellation reason (stored in ``goal.error``).
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
+
+        old = goal.status
+        goal.status = "cancelled"
+        goal.error = reason
+        goal.updated_at = datetime.now(UTC)
+
+        if goal.source_file:
+            try:
+                from pathlib import Path
+
+                from soothe.core.goal_engine.writer import update_goal_status
+
+                update_goal_status(Path(goal.source_file), "cancelled", error=reason)
+            except Exception:
+                logger.debug("Failed to update goal file status", exc_info=True)
+
+        logger.info(
+            'Cancelled goal %s: "%s" — %s',
+            goal_id,
+            goal.description,
+            reason,
+        )
+        logger.debug(self._format_goal_dag())
+        await self._release_locks_and_emit(goal_id)
+        await self._emit_state_change(goal, old, reason="cancelled")
+
     async def fail_goal(
         self,
         goal_id: str,
@@ -755,7 +803,7 @@ class GoalEngine:
     ) -> BackoffDecision | None:
         """Mark a goal as failed with evidence, apply backoff reasoning.
 
-        RFC-200 §14-22, §205-541: Receives EvidenceBundle from Layer 2,
+        RFC-200 §14-22, §205-541: Receives EvidenceBundle from execution,
         applies GoalBackoffReasoner for LLM-driven DAG restructuring.
 
         If ``allow_retry`` and retries remain, resets to pending.
@@ -763,8 +811,7 @@ class GoalEngine:
 
         Args:
             goal_id: Goal to fail.
-            evidence: EvidenceBundle from Layer 2 execution (RFC-200 contract).
-            allow_retry: Whether to allow retry if retries remain.
+            evidence: EvidenceBundle from execution (RFC-200 contract).
             allow_retry: Whether to allow retry if retries remain.
 
         Returns:

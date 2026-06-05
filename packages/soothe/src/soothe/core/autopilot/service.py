@@ -40,6 +40,7 @@ from soothe.core.events.internal_events import (
     InternalLoopReleasedEvent,
     InternalLoopSpawnedEvent,
 )
+from soothe.core.goal_engine.models import TERMINAL_STATES
 
 if TYPE_CHECKING:
     from soothe.config.models import AutonomousConfig
@@ -193,8 +194,8 @@ class AutopilotService:
             event.new_status,
         )
 
-        # Release file locks if goal completed or failed
-        if event.new_status in ("completed", "failed"):
+        # Release file locks if goal reached a terminal state
+        if event.new_status in TERMINAL_STATES:
             await self._release_goal_locks(event.goal_id)
 
         # Release loop if goal completed
@@ -417,22 +418,19 @@ class AutopilotService:
         return await self._goal_engine.get_goal(goal_id)
 
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> Goal | None:
-        """Cancel a goal: stop the worker (if any) and transition to ``failed``.
+        """Cancel a goal: stop the worker (if any) and transition to ``cancelled``.
 
         RFC-222 H8: when the goal is currently dispatched, resolve the assigned
         worker via ``WorkerPool`` and call ``worker.runner.cancel()`` to abort
-        the subprocess via RFC-221's cooperative cancellation. The goal is then
-        transitioned to ``failed`` with ``allow_retry=False``.
+        the subprocess via RFC-221's cooperative cancellation.
 
         Args:
             goal_id: Goal to cancel.
-            reason: Logged with the failure for audit.
+            reason: Logged with the cancellation for audit.
 
         Returns:
             The Goal if it existed, else None.
         """
-        from soothe.core.goal_engine.models import EvidenceBundle
-
         goal = await self._goal_engine.get_goal(goal_id)
         if goal is None:
             return None
@@ -456,12 +454,9 @@ class AutopilotService:
                         exc_info=True,
                     )
 
-        evidence = EvidenceBundle(
-            structured={"reason": reason},
-            narrative=f"Cancelled by autopilot: {reason}",
-            source="layer3_reflect",
-        )
-        await self._goal_engine.fail_goal(goal_id, evidence=evidence, allow_retry=False)
+        await self._goal_engine.cancel_goal(goal_id, reason=reason)
+        if self._workspace_reservation is not None:
+            self._workspace_reservation.release(goal_id)
         await self._persist_goals()
         return await self._goal_engine.get_goal(goal_id)
 
@@ -618,7 +613,9 @@ class AutopilotService:
             # Workspace reservation gate (RFC-222 revised Q1).
             if self._workspace_reservation is not None:
                 ws = self._infer_workspace(candidate)
-                conflict = self._workspace_reservation.conflicts_with_active(ws)
+                conflict = self._workspace_reservation.conflicts_with_active(
+                    ws, exclude_goal_id=candidate.id
+                )
                 if conflict:
                     logger.debug(
                         "Goal %s deferred: workspace %s conflicts with active goal %s",
