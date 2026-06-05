@@ -86,7 +86,7 @@ def _thread_worker_init_checkpointer(config: SootheConfig) -> object:
 
 @pytest.mark.asyncio
 async def test_concurrent_thread_workers_share_checkpointer_pool(
-    pg_agent_config: SootheConfig,
+    pg_agent_config: SootheConfig, requires_llm_api
 ) -> None:
     """Regression: parallel workers must not each create max_size=8 pools."""
     from soothe.core.loop.state.persistence.shared_pool import SharedPostgreSQLPool

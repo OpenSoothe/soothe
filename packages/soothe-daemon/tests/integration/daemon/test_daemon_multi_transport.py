@@ -129,10 +129,15 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -> None:
+async def test_multi_transport_thread_operations(
+    multi_transport_daemon: dict, requires_llm_api
+) -> None:
     """Test creating thread on one transport and accessing from another."""
+    from tests.integration.daemon_fixtures import integration_llm_idle_timeout
+
     daemon = multi_transport_daemon["daemon"]
     ws_port = multi_transport_daemon["ws_port"]
+    idle_timeout = integration_llm_idle_timeout()
 
     _ = daemon  # Acknowledge daemon for future multi-transport testing
 
@@ -147,30 +152,24 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
         assert get_response["loop"]["loop_id"] == loop_id
 
         await unix_client.send_loop_reattach(loop_id)
-        # `loop_reattach` responds with history_replay + loop_reattached control
-        # frames (see soothe_daemon.event.reattachment); the only `status`
-        # frame on the wire is the handshake `idle` frame, which carries no
-        # loop_id and would always match here. Match the dedicated control
-        # frame instead.
         resume_response = await await_event_type(
-            unix_client.read_event, "loop_reattached", timeout=3.0
+            unix_client.read_event, "card.replay_end", timeout=10.0
         )
-        assert (
-            resume_response.get("loop_id") == loop_id or resume_response.get("thread_id") == loop_id
-        )
+        assert resume_response.get("loop_id") == loop_id
 
         await subscribe_loop_stream(unix_client, loop_id)
 
         # Send query and verify state consistency
         await unix_client.send_input(loop_id, "Say test")
-        status = await await_status_state(unix_client.read_event, {"running", "idle"}, timeout=5.0)
+        status = await await_status_state(
+            unix_client.read_event, {"running", "idle"}, timeout=idle_timeout
+        )
 
         # If running, wait for idle
         if status.get("state") == "running":
             try:
-                await await_status_state(unix_client.read_event, "idle", timeout=5.0)
+                await await_status_state(unix_client.read_event, "idle", timeout=idle_timeout)
             except TimeoutError:
-                # Continue even if idle not reached - query may have completed quickly
                 pass
 
         final_get = await request_loop_get(unix_client, loop_id)
@@ -206,10 +205,8 @@ async def test_multi_transport_cross_transport_thread_sync(
         assert fetched["loop"]["loop_id"] == loop_id
 
         await unix_client.send_loop_reattach(loop_id)
-        # See note in test_multi_transport_thread_operations — reattach emits
-        # `loop_reattached`, not `status`, and that's the frame carrying loop_id.
-        resumed = await await_event_type(unix_client.read_event, "loop_reattached", timeout=3.0)
-        assert resumed.get("loop_id") == loop_id or resumed.get("thread_id") == loop_id
+        resumed = await await_event_type(unix_client.read_event, "card.replay_end", timeout=10.0)
+        assert resumed.get("loop_id") == loop_id
     finally:
         if ws_client.is_connected:
             await ws_client.close()

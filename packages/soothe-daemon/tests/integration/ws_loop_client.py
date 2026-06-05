@@ -77,11 +77,12 @@ async def request_loop_list(
     client: WebSocketClient,
     *,
     limit: int = 20,
+    exclude_empty: bool = False,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
     """Return ``loop_list_response``."""
     return await client.request_response(
-        {"type": "loop_list", "limit": limit},
+        {"type": "loop_list", "limit": limit, "filter": {"exclude_empty": exclude_empty}},
         response_type="loop_list_response",
         timeout=timeout,
     )

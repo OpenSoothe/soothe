@@ -200,6 +200,11 @@ def force_isolated_home(home: Path) -> None:
 
     thread_manager.SOOTHE_HOME = Path(home_str)
 
+    import soothe_sdk.client.config as sdk_config
+
+    sdk_config.SOOTHE_HOME = Path(home_str)
+    sdk_config.SOOTHE_DATA_DIR = str(Path(home_str) / "data")
+
 
 # ---------------------------------------------------------------------------
 # Service Availability Fixtures
