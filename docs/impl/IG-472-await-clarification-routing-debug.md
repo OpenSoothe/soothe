@@ -1,4 +1,4 @@
-# IG-295: Fix await_clarification Routing Debug Logging
+# IG-472: Fix await_clarification Routing Debug Logging
 
 ## Status: ✅ Completed
 
