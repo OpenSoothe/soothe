@@ -91,8 +91,9 @@ class SootheRunner(
             resolve_durability,
             resolve_goal_engine,
         )
-        from soothe.core.scheduling import ConcurrencyController
         from soothe.protocols.concurrency import ConcurrencyPolicy
+
+        from ._concurrency import ConcurrencyController
 
         init_start = time.perf_counter()
 
@@ -244,7 +245,7 @@ class SootheRunner(
         Callers outside core (e.g. daemon) should use this instead of reading
         ``runner._durability`` directly.
         """
-        from soothe.core.thread import ThreadContextManager
+        from ._thread_manager import ThreadContextManager
 
         return ThreadContextManager(self._durability, self._config)
 

@@ -1,7 +1,7 @@
 """Mtime-based skill index for fast daemon-level skill discovery.
 
 Indexes skills under ``~/.soothe/skills``, ``~/.agents/skills``, and
-the package-bundled ``built_in_skills/`` directory.
+the package-bundled ``skills/builtin_skills/`` directory.
 Uses stat-only invalidation: re-parses SKILL.md only when mtime changes.
 Persists cache to ~/.soothe/cache/skill_index.json for fast restarts.
 """
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _CACHE_FILE = Path.home() / ".soothe" / "cache" / "skill_index.json"
 
 # Package-bundled built-in skills directory
-_BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent.parent / "built_in_skills"
+_BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent / "builtin_skills"
 
 # (root_path, source_label) — order matters: later roots win on name collision
 _SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
