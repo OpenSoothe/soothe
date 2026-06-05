@@ -188,17 +188,17 @@ def force_isolated_home(home: Path) -> None:
     import soothe.config as soothe_config
     from soothe import config as config_module
 
-    soothe_config.SOOTHE_HOME = home_str
-    config_module.SOOTHE_HOME = home_str
+    soothe_config.SOOTHE_HOME = Path(home_str)
+    config_module.SOOTHE_HOME = Path(home_str)
 
-    import soothe_daemon.paths as daemon_paths
+    import soothe_daemon.bootstrap.paths as daemon_paths
 
-    daemon_paths.SOOTHE_HOME = home_str
+    daemon_paths.SOOTHE_HOME = Path(home_str)
     importlib.reload(daemon_paths)
 
     import soothe.core.thread.manager as thread_manager
 
-    thread_manager.SOOTHE_HOME = home_str
+    thread_manager.SOOTHE_HOME = Path(home_str)
 
 
 # ---------------------------------------------------------------------------
