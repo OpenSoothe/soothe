@@ -6,6 +6,9 @@ import base64
 import logging
 import os
 import pathlib
+import shutil
+import subprocess
+import sys
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
 
@@ -29,6 +32,29 @@ def _copy_osc52(text: str) -> None:
     with pathlib.Path("/dev/tty").open("w", encoding="utf-8") as tty:
         tty.write(osc52_seq)
         tty.flush()
+
+
+def _copy_native(text: str) -> None:
+    """Copy text using native OS clipboard command (pbcopy/xclip/xsel)."""
+    if sys.platform == "darwin":
+        cmd = ["pbcopy"]
+    elif shutil.which("xclip"):
+        cmd = ["xclip", "-selection", "clipboard"]
+    elif shutil.which("xsel"):
+        cmd = ["xsel", "--clipboard", "--input"]
+    elif shutil.which("wl-copy"):
+        cmd = ["wl-copy"]
+    else:
+        raise RuntimeError("No native clipboard command found")
+
+    proc = subprocess.run(
+        cmd,
+        input=text.encode("utf-8"),
+        capture_output=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"{cmd[0]} failed: {proc.stderr.decode()}")
 
 
 def _shorten_preview(texts: list[str]) -> str:
@@ -91,6 +117,10 @@ def _clipboard_copy_methods(app: App) -> list[Callable[[str], None]]:
         methods.append(pyperclip.copy)
     except ImportError:
         pass
+
+    # Native OS clipboard (pbcopy on macOS, xclip/xsel on Linux) — most
+    # reliable for local sessions where OSC 52 may not be supported.
+    methods.append(_copy_native)
 
     if _prefer_tty_osc52():
         methods.append(_copy_osc52)
