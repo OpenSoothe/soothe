@@ -22,8 +22,7 @@ import pytest
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.event import EventBus
-
-from ..daemon_fixtures import (
+from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,
@@ -31,7 +30,7 @@ from ..daemon_fixtures import (
     force_isolated_home,
     integration_llm_idle_timeout,
 )
-from ..ws_loop_client import (
+from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
     request_loop_list,
     subscribe_loop_stream,

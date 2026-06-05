@@ -21,8 +21,7 @@ from soothe.core.loop.state.persistence.directory_manager import (
 )
 
 from soothe_daemon import SootheDaemon, WebSocketClient
-
-from ..daemon_fixtures import (
+from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,

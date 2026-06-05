@@ -15,15 +15,14 @@ from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.config import SootheDaemonConfig
-
-from ..daemon_fixtures import (
+from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,
     build_daemon_config,
     force_isolated_home,
 )
-from ..ws_loop_client import loop_new, subscribe_loop_stream
+from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 

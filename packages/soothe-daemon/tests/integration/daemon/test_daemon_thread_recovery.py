@@ -15,8 +15,7 @@ from soothe.config import SootheConfig
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.config import SootheDaemonConfig
-
-from ..daemon_fixtures import (
+from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,
@@ -24,7 +23,7 @@ from ..daemon_fixtures import (
     force_isolated_home,
     integration_llm_idle_timeout,
 )
-from ..ws_loop_client import (
+from tests.integration.ws_loop_client import (
     loop_new,
     request_loop_get,
     request_loop_list,
