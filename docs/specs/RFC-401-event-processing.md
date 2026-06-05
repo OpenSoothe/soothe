@@ -7,7 +7,7 @@
 **Created**: 2026-03-31
 **Updated**: 2026-04-29
 **Authors**: Soothe Team
-**Depends on**: RFC-450 (Daemon Communication), RFC-403 (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
+**Depends on**: RFC-450 (Daemon Communication), RFC-403 (Unified Event Naming), RFC-500 (CLI/TUI Architecture)
 **Supersedes**: RFC-0015, RFC-0019, RFC-0022
 
 ---

@@ -2,7 +2,20 @@
 
 This document defines the terminology and naming conventions used in this project.
 
+**Last Updated**: 2026-06-05
+
 ## Core Terminology
+
+### Core Module Architecture
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| CoreAgent | Foundation runtime for Soothe's execution architecture. Handles tool/subagent execution via LangGraph CompiledStateGraph, created by `create_soothe_agent()`. Operates at the lowest level with Model → Tools → Model loop. | RFC-100 |
+| AgentLoop | Single-goal execution through iterative Plan-Execute cycles. Agentic goal execution for single-goal completion via iterative refinement. Operates at the middle level with Plan → Execute → Assess loop (max ~8 iterations). | RFC-201 |
+| GoalEngine | Autonomous goal management with multi-goal DAGs, scheduling, and long-running workflows. Operates at the highest level with Goal → PLAN → PERFORM → REFLECT loop. Daemon-owned singleton service. | RFC-222 |
+| LoopState | Persistent execution state across plan-execute cycles in AgentLoop. Contains plan, progress, metrics, and execution context. LangGraph state schema. | RFC-201 |
+
+**Naming Convention**: Use concrete module names (CoreAgent, AgentLoop, GoalEngine) instead of abstract "Layer N" terminology. This improves clarity and follows CLAUDE.md Rule #9.
 
 ### Domain Terms
 
@@ -137,97 +150,47 @@ This document defines the terminology and naming conventions used in this projec
 | `_LOOP_CONTINUATION_GUIDE` | System-prompt section injected by `system_prompt` when `state["continue_loop_mode"]` is `True`. Renamed from `_THREAD_CONTINUATION_GUIDE`. | RFC-225 |
 | `seed_loop_ledger_from_prior_goal()` | Seeds a new goal's `loop_messages` from the immediately prior completed goal in the same loop. Runs unconditionally for any same-loop new goal. Renamed from `seed_continue_thread_ledger_from_prior_goal()`. | RFC-225 |
 
-### Prompt Architecture Terms (RFC-206)
-
-| Term | Definition | Introduced In |
-|------|------------|---------------|
-| Hierarchical Prompt | Three-layer XML structure separating system context from user tasks. Uses explicit container tags: `<SYSTEM_CONTEXT>`, `<USER_TASK>`, `<INSTRUCTIONS>`. Prevents LLM confusion between metadata and user content. | RFC-206 |
-| PromptBuilder | Internal API class that composes hierarchical prompts from modular XML fragments. Manages fragment loading, template rendering, and assembly. Not exposed to users for configuration. | RFC-206 |
-| SYSTEM_CONTEXT | Top-level XML container holding static system metadata (environment, workspace, capabilities, policies). Explicitly marked as non-user-content to prevent processing during ambiguous requests. | RFC-206 |
-| USER_TASK | Top-level XML container holding dynamic user-specific content (goal, prior conversation, evidence). This is the section LLM should focus on for user requests. | RFC-206 |
-| INSTRUCTIONS | Top-level XML container holding output format specification and execution rules. Defines how LLM should respond to the task. | RFC-206 |
-| Fragment Composition | Modular prompt construction from XML fragment files stored in `src/soothe/prompts/fragments/`. Each fragment has single responsibility (e.g., environment.xml, goal.xml). Internal implementation detail, not user-configurable. | RFC-206 |
-
-### Progressive Skill Loading Terms (RFC-105)
-
-| Term | Definition | Introduced In |
-|------|------------|---------------|
-| Progressive Skill Loading | Three-stage progressive disclosure pipeline replacing deepagents' always-emit-all skill listing: budgeted turn-0 metadata listing, path-driven conditional activation, lazy body injection on invocation. | RFC-105 |
-| Stage 1 Disclosure | Budgeted, delta-only metadata listing rendered as `<AVAILABLE_SKILLS>` on every turn. Cap is `progressive_skills.budget_pct` of `AgentLoopConfig.context_window_limit`. | RFC-105 |
-| Stage 2 Disclosure | Path-driven conditional activation triggered when a file-op tool call's argument matches a conditional skill's `paths:` patterns (gitignore semantics). | RFC-105 |
-| Stage 3 Disclosure | Lazy SKILL.md body injection rendered as `<SKILL_CONTEXT>` only on/after invocation (`/skill:<name>`). | RFC-105 |
-| Unconditional Skill | Skill whose frontmatter has no `paths:` field (or `paths: []` / `paths: ["**"]`); appears in every `<AVAILABLE_SKILLS>` listing subject to budget. | RFC-105 |
-| Conditional Skill | Skill whose frontmatter has a non-empty `paths:` field; held back from listings until a file-op tool touches a matching path. | RFC-105 |
-| `<AVAILABLE_SKILLS>` Block | Static-tier system-prompt block carrying the delta-only skill listing. Emitted by `SystemPromptMiddleware._compose_skills_block`. | RFC-105 |
-| `<SKILL_CONTEXT>` Block | Semi-static-tier system-prompt block carrying invoked skill bodies. One block per invoked skill name. | RFC-105 |
-| Skill Activation State | The per-thread dict at `state["skill_activation"]` with keys `sent`, `activated`, `invoked`, `invoked_bodies`, `just_invoked`. Snapshotted to `LoopState` at iteration boundaries. | RFC-105 |
-| `ProgressiveSkillRegistry` | Stateless helper that partitions catalog entries into unconditional/conditional, computes turn-0/turn-N deltas, and matches file-op paths against conditional skills' patterns. | RFC-105 |
-| `SkillActivationMiddleware` | Middleware that intercepts file-op tool calls, extracts paths, matches against conditional skills, and mutates `state["skill_activation"]["activated"]`. | RFC-105 |
-| `ProgressiveSkillsConfig` | Config block (`SootheConfig.progressive_skills`) with `budget_pct`, `max_listing_chars_per_entry`, `min_listing_chars_per_entry`. | RFC-105 |
-| `SkillActivatedEvent` | Public event (`soothe.skill.activated`) emitted when a conditional skill becomes active on a thread; carries `skill_name`, `matched_path`, `pattern`, `thread_id`. | RFC-105 |
-| `SkillBodyLoadedEvent` | Public event (`soothe.skill.body.loaded`) emitted when a SKILL.md body enters context via Stage 3; carries `skill_name`, `body_chars`, `thread_id`. | RFC-105 |
-
 ### Clarification Relay Terms (RFC-622, RFC-623)
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| Clarification Relay | The pipeline that intercepts a CoreAgent `ask_user` interrupt, dispatches it to a `ClarificationPolicy`, and resumes the originating node with the answer or terminates the loop on defer. | RFC-622 |
-| `ClarificationPolicy` | Protocol with a single `answer(request) -> ClarificationAnswer` coroutine. Two built-ins: `InteractiveClarificationPolicy` (TUI relay) and `AutoClarificationPolicy` (veritas auto-answerer). | RFC-622 |
-| `ClarificationRequest` | Frozen payload describing a pending clarification (questions, origin node, origin interrupt id, snapshot of `LoopStateView`). | RFC-622 |
-| `ClarificationAnswer` | Frozen payload describing a successful clarification answer (answers tuple, source, confidence, audit). | RFC-622 |
-| `ClarificationDeferredError` | Exception raised by a `ClarificationPolicy` when it cannot answer. RFC-623 adds a `kind: DeferKind` field defaulting to `"explicit"`. | RFC-622, RFC-623 |
-| `await_clarification` Node | AgentLoop graph node that consumes `pending_clarification`, dispatches the policy, and on defer marks the goal `awaiting_clarification` and routes to `END`. | RFC-622 |
-| `awaiting_clarification` | Goal-engine status (in `BLOCKED_STATES`) used while the goal is paused waiting for an out-of-band answer. | RFC-622 |
-| Veritas | Built-in auto-answerer subagent under `subagents/veritas/`. Single structured-output LLM call; stands in for the originating user when auto mode is active. | RFC-622 |
-| `VeritasAnswerSchema` | Pydantic model the policy consumes (`answers`, `confidence`, `defer`, `rationale`). Field set unchanged by RFC-623; coercion semantics extended (rationale prefix carries forced-defer kind). | RFC-622, RFC-623 |
-| `build_veritas_response_schema(n)` | Helper returning a per-request JSON Schema with a `oneOf` between *defer* and *exactly N non-empty answers*. Sent to the LLM via `invoke_structured_chat`. | RFC-623 |
-| `DeferKind` | `Literal["explicit", "low_confidence", "structured_output_failed", "answer_was_question"]`. Tags every defer with its provenance. | RFC-623 |
-| `defer_kind` (event field) | Additive field on the `LOOP_CLARIFICATION_DEFERRED` (`soothe.loop.clarification_deferred`) payload carrying the `DeferKind` value. | RFC-623 |
-| Interactive Fallback | Optional `ClarificationPolicy` injected into `AutoClarificationPolicy`. Invoked only when the resolved defer kind is `"structured_output_failed"`. Wired automatically by `runtime_factory` when `emit` is provided. | RFC-623 |
-| `invoke_structured_chat` | Shared structured-output helper from `utils/llm/structured_invoke.py` that iterates `with_structured_output` methods, injects the `json` keyword, and post-validates with `jsonschema`. RFC-623 makes veritas its third caller (after `IntentClassifier` and `LLMPlanner`). | RFC-623 |
-
-## Naming Conventions
-
-### General Principles
-
-1. **Clarity over brevity**: Prefer descriptive names
-2. **Consistency**: Use the same term for the same concept throughout
-3. **Domain language**: Use terms from the problem domain
-4. **Protocol suffix**: All Soothe protocol interfaces end with `Protocol` (e.g., `ContextProtocol`)
-5. **Middleware suffix**: All deepagents middleware implementations end with `Middleware` (e.g., `PolicyMiddleware`)
+| Clarification Relay | CoreAgent → user → CoreAgent loop to resolve ambiguity without stopping the agent loop. When CoreAgent cannot confidently answer, it emits a `ClarificationRequest` event, suspends itself, waits for user clarification via `await_clarification` node, then resumes with the clarified answer. | RFC-622 |
+| Veritas | Agent node that performs structured yes/no confidence checking for core agent answers. Checks whether CoreAgent has enough information to confidently respond to user. Emits `ClarificationDeferredError` when confidence is insufficient. | RFC-622 |
+| Interactive Fallback | Mechanism allowing AgentLoop to auto-retry Veritas failures up to N times before raising `ClarificationDeferredError` to the orchestrator. Prevents immediate loop exit on transient issues. | RFC-623 |
+| `ClarificationPolicy` | Config knob controlling Veritas behavior: `max_defer_attempts` (N), `confidence_threshold`, `auto_retry_on_defer_kind`. | RFC-622 |
+| `ClarificationRequest` | Event payload: `{question, context, urgency, timeout_hint}`. Sent from daemon to client when CoreAgent needs clarification. | RFC-622 |
+| `ClarificationAnswer` | Event payload: `{original_question, answer, source}`. User response to a clarification request. | RFC-622 |
+| `ClarificationDeferredError` | Exception raised after N Veritas failures. Signals AgentLoop to either retry with different parameters or exit goal with clarification status. | RFC-622, RFC-623 |
+| `DeferKind` | Enum in Veritas response: `ambiguous`, `insufficient_context`, `contradiction`, `other`. Used by Interactive Fallback to decide retry strategy. | RFC-623 |
+| `VeritasAnswerSchema` | Pydantic model for Veritas structured output: `{can_answer: bool, defer_kind: DeferKind | null, reasoning: str}`. | RFC-622, RFC-623 |
+| `await_clarification` Node | AgentLoop state node that suspends execution, sends clarification request to client, and waits for user input. Resumes when `ClarificationAnswer` arrives. | RFC-622 |
+| `awaiting_clarification` | LoopState status flag indicating CoreAgent is suspended waiting for user clarification. | RFC-622 |
+| `defer_kind` (event field) | Field in `ClarificationDeferredError` event indicating why Veritas deferred. Used by downstream handlers for categorization. | RFC-623 |
+| `invoke_structured_chat` | Veritas helper that calls the model with `VeritasAnswerSchema` to check confidence. Returns structured `can_answer` decision. | RFC-623 |
+| `build_veritas_response_schema(n)` | Constructor for Veritas schema with configurable `max_defer_attempts` N. | RFC-623 |
 
 ### Code Naming
 
 | Convention | Pattern | Example |
-|-----------|---------|---------|
+|------------|---------|---------|
 | Protocol classes | `{Name}Protocol` | `ContextProtocol`, `PolicyProtocol` |
 | Middleware classes | `{Name}Middleware` | `ContextMiddleware`, `PolicyMiddleware` |
-| Data models | PascalCase, no suffix | `ContextEntry`, `Plan`, `Permission` |
-| Config fields | snake_case | `planner_routing`, `policy_profiles` |
 | Module directories | snake_case | `src/soothe/protocols/`, `src/soothe/middleware/` |
+| Config fields | snake_case | `planner_routing`, `policy_profiles` |
+| Data models | CamelCase | `ContextEntry`, `Plan`, `Permission` |
 
-### RFC File Naming
-
-RFC specification files use:
-
-`RFC-NNN-short-semantic-name.md`
-
-Rules:
-
-1. `NNN` is the canonical RFC number (3 digits).
-2. `short-semantic-name` is lowercase kebab-case, concise, and stable.
-3. Prefer domain + function wording (e.g., `agentloop-state-memory`, `policy-protocol-architecture`).
-4. Avoid generic suffix-only names like `final`, `draft2`, or `updated`.
-
-Examples:
-
-| RFC | Filename |
-|-----|----------|
-| RFC-201 | `RFC-201-agentloop-plan-execute-loop.md` |
-| RFC-400 | `RFC-400-context-protocol-architecture.md` |
-| RFC-450 | `RFC-450-daemon-communication-protocol.md` |
+---
 
 ## Related Documents
 
-- [RFC Standard](./rfc-standard.md) - Specification kinds
-- [RFC Index](./rfc-index.md) - All RFCs
+- [RFC Standard](rfc-standard.md) - RFC process and specification kinds
+- [RFC Index](rfc-index.md) - Complete RFC catalog
+- [RFC History](rfc-history.md) - Chronological change history
+
+This terminology index is manually curated with automated extraction support. To update:
+
+```bash
+# Manual additions are preserved
+# Automated extraction available via:
+python scripts/generate_rfc_namings.py
+```

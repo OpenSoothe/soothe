@@ -1,125 +1,538 @@
 # RFC History
 
-This document tracks the change history of all RFCs in this project.
+This document tracks the chronological evolution of RFCs in the Soothe project.
 
-## Change Log
+**Last Updated**: 2026-06-05
+**Total RFCs**: 73
 
-| Date | RFC | Status | Description |
-|------|-----|--------|-------------|
-| 2026-06-04 | RFC-411 → RFC-413 | Deprecated / Implemented | RFC-413 Phase 4 (IG-470) — TUI resume collapsed to a single `loop_cards_fetch` RPC path; legacy checkpoint+activity-log fallback in `_HistoryMixin._fetch_loop_history_data` deleted along with `_get_loop_state_values` / `_recover_missing_checkpoint_messages` / `_fetch_loop_activity_events`; daemon `handle_loop_reattach` no longer emits `history_replay` / `loop_reattached` / `replay_complete` (only `card.*` frames remain); SDK `_STALE_TURN_PENDING_TYPES` loses the three legacy entries; `soothe.core.events.replay.{reconstructor,enricher}` modules + the 454-line `test_detachment_reattachment.py` integration test deleted; RFC-411 marked **Deprecated**, RFC-413 marked **Implemented** |
-| 2026-06-04 | RFC-413 | Draft | Server-Owned Display Card Ledger — collapses live and replay rendering onto a single binding source: daemon-resident `CardBinder` translates raw events into typed card mutations, `DisplayCardLedger` persists them as append-only JSONL under `~/.soothe/data/loops/<loop_id>/cards.jsonl`, and a new `card.created/updated/finalized/replay_begin/replay_end` wire schema replaces the deprecated `history_replay`/`loop_reattached`/`replay_complete` frames; supersedes RFC-411 (checkpoint-tree reconstruction); fixes the empty-transcript bug on TUI `/loops` switch and the missing-subagent / mis-bound-step-tool symptoms on `loop continue`; mutation diffs (not snapshots) keep wire ≤1 MB per 100-turn loop; pre-existing loops backfilled lazily from checkpoint + thread-scoped `conversation.jsonl`; 4-phase migration (Phase 1: `/loops` switch hotfix in 1 day; Phase 3: daemon binder + ledger + wire frames; Phase 4: RFC-411 reconstructor deleted) |
-| 2026-06-04 | RFC-215 | Draft | Empty-loop reclamation amendment — extends `agentloop_loops` schema with `human_message_count` / `ai_message_count` columns (schema_version 3.1 → 3.2, clean cut, no backfill); `last_message_at` is NULL until first activity (`loop_new` MUST NOT prime it); both counters atomically updated via single-statement UPDATE alongside `last_message_at`/`updated_at`; adds "Empty-Loop Reclamation" section documenting the periodic GC's second pass (empty rows idle past `empty_idle_hours`, default 24h) running alongside the existing ephemeral pass with shared per-loop purge and `COALESCE(last_message_at, created_at)` idle clock; PostgreSQL deployments SHOULD add a partial index on `(last_message_at) WHERE human_message_count = 0 AND ai_message_count = 0`. Implementation tracked in IG-466. |
-| 2026-06-04 | RFC-505 | Draft | Soothe Desktop Client Architecture — Electron + React desktop client under `apps/soothe-desktop` reusing `soothe-client-typescript` over WebSocket. Defines the main/renderer process split (WS-in-main due to Node `ws` + CORS), one-`Client`-per-tab model honoring the daemon's `_client_subscribed_loop_id` invariant, typed IPC channel set (`tab:open/input/event/status/close`, `loops:list/delete`, `daemon:health`, `settings:*`), a renderer event-rendering registry keyed by RFC-403 type strings with a debug-card fallback, and ports the TUI clarification (`ask_user`) resume flow from commit `45917adb` to an inline `ClarificationCard`. MVP scope: tab-per-loop chat with reasoning/tool cards, slash palette + skill invocation, image attachments, file-diff cards, sidebar loop history; model picker, MCP viewer, autopilot dashboard, loop-tree visualization, auto-update, multi-window, and authentication all explicitly deferred to v1.1+. No new daemon RPCs or wire types added. |
-| 2026-06-03 | RFC-623 | Draft | Veritas Auto-Mode Robustness — migrates `subagents/veritas/implementation.py` onto the shared `invoke_structured_chat` helper (matching `IntentClassifier`/`LLMPlanner`); adds `build_veritas_response_schema(n)` returning a per-request JSON Schema with a `oneOf` between *defer* and *exactly N non-empty answers* so empty-but-not-deferred responses are structurally rejected; introduces a `DeferKind` taxonomy (`explicit` / `low_confidence` / `structured_output_failed` / `answer_was_question`) attached to `ClarificationDeferredError` and propagated into the `LOOP_CLARIFICATION_DEFERRED` event payload as `defer_kind`; bumps the `await_clarification` policy-deferred log from `INFO` to `WARNING`; lets `AutoClarificationPolicy` accept an optional `interactive_fallback: ClarificationPolicy` and delegate to it (durable LangGraph `interrupt`) when, and only when, `defer_kind == "structured_output_failed"`; `runtime_factory.build_clarification_policy_for_runner` wires the fallback automatically when `emit` is provided so interactive runs gain the path while autopilot (`emit=None`) preserves its hard-defer contract; root-caused from loop `019e8c08-3ce2-7b11-a17d-679c0fa0090c` (loop 090c) where the veritas LLM call returned an empty `answers=[]` payload that the post-hoc count guard had to coerce to defer |
-| 2026-06-01 | RFC-227 | Draft | Plan-Assess Prior-Progress Digest — executor-owned `PriorProgressDigest` (new typed value + `ToolCallHead`) refreshed at the end of every wave and stashed on `LoopState.prior_progress`; rendered as a ≤600-char `<PRIOR_PROGRESS>` XML block by `build_plan_context_envelope` for both `plan_assess` and `plan_generate`; new `assessment_reasoning` contract in `plan_assess_instructions.xml` (anchor on `<PRIOR_PROGRESS>`, do not restate the user query); deterministic `derived_progress_hint` shown verbatim (no code-side override); telemetry log on digest/LLM `goal_progress` disagreement; no graph topology change; root-caused from Langfuse trace `279a91c70f73f5b71fb31a5b61370f45` where plan-assess `assessment_reasoning` repeatedly restated the goal across iterations 1-3 despite 13 prior `run_command` results in the ledger |
-| 2026-05-29 | RFC-105 | Draft | Progressive Skill Loading — three-stage progressive disclosure replacing deepagents' always-emit-all skill listing: budgeted turn-0 `<AVAILABLE_SKILLS>` (delta-only, ≤1% of context window), path-driven conditional activation via new `SkillActivationMiddleware` on file-op tool calls (`pathspec` gitignore matching), lazy `<SKILL_CONTEXT>` body injection on `/skill:<name>` invocation; new `ProgressiveSkillRegistry`, `format_skills_within_budget`, `ProgressiveSkillsConfig`; new events `soothe.skill.activated` / `soothe.skill.body.loaded`; `LoopState` snapshot of agent-state activation dict at iteration boundaries; deepagents' `SkillsMiddleware` suppressed via `skills=None` |
-| 2026-05-29 | RFC-226 | Draft | Continuation-Aware plan_assess and Post-Execute Fast Exit — `plan_assess` on iter=0 of continuation queries becomes a single LLM-driven discriminator (new `ContinuationAssessment` schema + `LOOP_CONTINUATION_ASSESS_PROMPT`) that routes to bootstrap or `plan_generate`; new `PlanResult.terminal_after_execute: bool`; one new conditional edge `record_iteration → goal_completion`; removes structural `continue_loop_plan_bootstrap_allowed()` heuristic; multi-step continuations correctly escalate to `plan_generate` |
-| 2026-05-29 | RFC-225 | Draft | Loop Continuity and Goal Record Enrichment — `IntentClassification.intent_type` collapses to `quiz \| agentic`; `continue_loop_mode` (renamed from `continue_thread_mode`) derived structurally in `AgentLoop` from checkpoint (replaces broken `GoalEngine` check in solo runner); status `ready_for_next_goal` → `idle`; `GoalExecutionRecord` enriched with `current_plan`, `step_results`, `evidence_ledger`, `completed_step_ids`, `plan_revision_count`; schema bump `3.1` → `3.2` |
-| 2026-05-11 | RFC-618 | Draft | Plan subagent — compiled LangGraph delegate for structured multi-step plans; optional sequential invokes of the explore runnable (no nested `task` tool); YAML `subagents.plan.config` (`enable_explore`, `max_explore_passes`); default model role `think` |
-| 2026-05-09 | RFC-221 | Draft | LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution — one subprocess per loop_id via Python multiprocessing (local) or Ray actor (distributed); fixes SootheRunner singleton data race on `_current_thread_id`, `_current_plan`, `_interrupt_resolver`, `_artifact_store`; removes `daemon._runner` singleton; `QueryEngine` migrated to `LoopRunnerFactory`; renumbered into 2xx AgentLoop series |
-| 2026-05-05 | RFC-220 | Draft | LangGraph Agent Loop Orchestrator — Layer 2 as Loop Graph (`loop_id` checkpoint key), mandatory evidence-bound steps, cut-over (supersedes RFC-201 imperative driver); **RFC id**: was RFC-620, renumbered into AgentLoop 2xx series |
-| 2026-05-04 | Multiple specs | — | Path migration: `soothe/cognition/*` Python sources documented as `packages/soothe/src/soothe/core/*` (AgentLoop, goal_engine, prompts, events); wire event types `soothe.cognition.*` unchanged (RFC-403) |
-| 2026-05-04 | RFC-603, RFC-604, RFC-214 | Draft / Implemented / Draft | IG-376: `goal_progress` is assess-model output only (remove evidence blend); confidence blend remains in `LLMPlanner`; plan-context human uses `Goal` + `Execute iteration` lines; abstract and §3 updated |
-| 2026-05-03 | RFC-409 → RFC-215 | Renumbered | AgentLoop Persistence Backend moved to 2xx series (architecture alignment) |
-| 2026-05-03 | RFC-608 → RFC-216 | Renumbered | AgentLoop Multi-Thread Lifecycle moved to 2xx series |
-| 2026-05-03 | RFC-609 → RFC-217 | Renumbered | Goal Context Management moved to 2xx series |
-| 2026-05-03 | RFC-611 → RFC-218 | Renumbered | Checkpoint Tree Architecture moved to 2xx series |
-| 2026-05-03 | RFC-615 → RFC-219 | Renumbered | Goal Completion Module moved to 2xx series |
-| 2026-05-03 | RFC-214 | Draft | AgentLoop Loop Message Surface and Plan Context — unified ledger of LoopHumanMessage/LoopAIMessage per step as sole Plan context; checkpoint persistence for loop_messages; gap analysis vs combined-wave Execute, StepResult evidence, derive_plan_conversation, LangGraph transcript |
-| 2026-04-13 | RFC-605 | Draft | Explore Subagent and Parallel Spawning — targeted filesystem search with wave-based strategy, LLM-driven search planning, match validation; parallel subagent spawning via StepAction.subagents list field; breaking schema migration (no backward compatibility) |
-| 2026-04-10 | RFC-211 | Draft | Layer 2 Tool Result Optimization — minimal data contract with outcome metadata, tool_call_id uniqueness, file system cache for large results, final report generation shifted to Layer 1 |
-| 2026-04-09 | RFC-207 | Draft | Executor Thread Isolation Simplification — remove manual thread ID generation, leverage langgraph concurrency and task tool automatic isolation, ~80 lines simplified |
-| 2026-04-08 | RFC-206 | Draft | Hierarchical Prompt Architecture with System/User Separation — three-layer XML structure (SYSTEM_CONTEXT, USER_TASK, INSTRUCTIONS), PromptBuilder API, modular fragment composition |
-| 2026-04-08 | RFC-203 | Draft | Layer 2 Unified State Model and Independent Checkpoint — step I/O semantics, independent persistence, recovery without Layer 1 dependency |
-| 2026-04-07 | RFC-200 | Implemented | Added Layer 2 Context Isolation and Execution Bounds — thread isolation for delegation steps, subagent task cap, wave metrics, output contract enforcement |
-| 2026-04-03 | RFC-203 | Active | Autopilot Mode — consensus loop, dreaming mode, channel protocol, scheduler, UX surfaces; gap analysis identifying 12 remaining gaps |
-| 2026-04-03 | IG-125 | New | Implementation Guide for RFC-203 gap closure |
-| 2026-03-31 | Multiple | Reclassified | **RFC Reclassification** — Consolidated 23 RFCs into 16 with new numbering scheme |
-| 2026-03-31 | RFC-101 | New | Created from merger of RFC-0016 (Tool Interface) + RFC-0025 (Event Naming) |
-| 2026-03-31 | RFC-200 | New | Created from merger of RFC-0009 (DAG Execution) + RFC-0010 (Failure Recovery) |
-| 2026-03-31 | RFC-301 | New | Created: Protocol Registry for remaining 6 protocols |
-| 2026-03-31 | RFC-400 | New | Created from merger of RFC-0015 + RFC-0019 + RFC-0022 (Event Processing) |
-| 2026-03-31 | RFC-501 | New | Created from merger of RFC-0020 + RFC-0024 (Display & Verbosity) |
-| 2026-03-31 | RFC-601 | New | Created from merger of RFC-0004 + RFC-0005 + RFC-0021 (Built-in Agents) |
-| 2026-03-31 | RFC-0001 | Renamed | Renumbered to RFC-000 (System Conceptual Design) |
-| 2026-03-31 | RFC-0002 | Renamed | Renumbered to RFC-001 (Core Modules Architecture) |
-| 2026-03-31 | RFC-0023 | Renamed | Renumbered to RFC-100 (CoreAgent Runtime) |
-| 2026-03-31 | RFC-0012 | Renamed | Renumbered to RFC-102 (Security & Filesystem Policy) |
-| 2026-03-31 | RFC-0007 | Renamed | Renumbered to RFC-200 (Autonomous Goal Management) |
-| 2026-03-31 | RFC-0008 | Renamed | Renumbered to RFC-200 (Agentic Goal Execution) |
-| 2026-03-31 | RFC-0006 | Renamed | Renumbered to RFC-300 (Context & Memory Protocols) |
-| 2026-03-31 | RFC-0013 | Renamed | Renumbered to RFC-400 (Daemon Communication) |
-| 2026-03-31 | RFC-0003 | Renamed | Renumbered to RFC-500 (CLI/TUI Architecture) |
-| 2026-03-31 | RFC-0018 | Renamed | Renumbered to RFC-600 (Plugin Extension System) |
-| 2026-03-30 | RFC-0020 | Draft | Added CLI Stream Display Pipeline section with goal/step/tool narrative format |
-| 2026-03-29 | RFC-0024 | Draft | VerbosityTier Unification - replaces two-layer classification with unified enum |
-| 2026-03-29 | RFC-0022 | Implemented | Updated to use VerbosityTier, changed VerbosityLevel from `minimal` to `quiet` |
-| 2026-03-29 | RFC-0020 | Draft | Updated to use VerbosityTier classification throughout |
-| 2026-03-29 | RFC-0019 | Implemented | Added RFC-0024 reference for VerbosityTier |
-| 2026-03-29 | RFC-0015 | Implemented | Updated EventMeta.verbosity to use VerbosityTier enum |
-| 2026-03-29 | event-catalog.md | Reference | Updated all verbosity columns to use VerbosityTier |
-| 2026-03-27 | RFC-0002 | Implemented | Status updated to reflect complete implementation of all 8 core protocols |
-| 2026-03-27 | RFC-0003 | Implemented | Status updated to reflect full CLI/TUI implementation |
-| 2026-03-27 | RFC-0004 | Implemented | Status updated to reflect Skillify subagent implementation |
-| 2026-03-27 | RFC-0005 | Implemented | Status updated to reflect Weaver subagent implementation |
-| 2026-03-27 | RFC-0006 | Implemented | Status updated to reflect Context and Memory backends implementation |
-| 2026-03-27 | RFC-0013 | Implemented | Status updated to reflect multi-transport daemon implementation |
-| 2026-03-27 | RFC-0015 | Implemented | Status updated to reflect progress event system implementation |
-| 2026-03-27 | RFC-0018 | Implemented | Status updated to reflect plugin system with decorator API implementation |
-| 2026-03-27 | RFC-0021 | Implemented | Status updated to reflect research subagent implementation |
-| 2026-03-24 | RFC-0018 | Draft | Updated: Renamed to "Plugin Extension Specification", simplified scope |
-| 2026-04-14 | RFC-606 | Implemented | DeepAgents CLI TUI Migration — full copy of deepagents-cli TUI (~30 files), backend adapters created, ProtocolEventWidget implemented (commit 945cc2e) |
-| 2026-04-14 | RFC-607 | Implemented | Progressive Display Refinements Post-Migration — newline separators for goal/step/reasoning/completion events, backend adapter integration, protocol event rendering (commit 37c2b09) |
-| 2026-03-23 | RFC-0018 | Draft | Initial Plugin Extension Specification |
-| 2026-03-18 | RFC-0009 | Draft | DAG-Based Execution and Unified Concurrency |
-| 2026-03-18 | RFC-0010 | Draft | Failure Recovery, Progressive Persistence |
-| 2026-03-13 | RFC-0004 | Draft | Skillify Agent Architecture Design |
-| 2026-03-13 | RFC-0005 | Draft | Weaver Agent Architecture Design |
-| 2026-03-12 | RFC-0001 | Draft | Initial Conceptual Design (Platonic Init) |
-| 2026-03-12 | RFC-0003 | Draft | CLI TUI Architecture Design |
-| 2026-03-20 | RFC-0015 | Draft | Progress Event Protocol |
+## Summary Statistics
 
-## Reclassification Summary (2026-03-31)
+### By Status
 
-### New Numbering Scheme
+| Status | Count | Percentage |
+|--------|-------|------------|
+| Draft | 51 | 69.9% |
+| Implemented | 16 | 21.9% |
+| Proposed | 2 | 2.7% |
+| Superseded | 2 | 2.7% |
+| Deprecated. Superseded by RFC-413. | 1 | 1.4% |
+| Accepted | 1 | 1.4% |
 
-| Prefix | Category |
-|--------|----------|
-| 0xx | Foundation |
-| 1xx | Core Agent |
-| 2xx | Cognition Loop |
-| 3xx | Protocols |
-| 4xx | Daemon |
-| 5xx | CLI/TUI |
-| 6xx | Plugin System |
+### By Kind
 
-### Merges
+| Kind | Count |
+|------|-------|
+| Architecture Design | 50 |
+| Implementation Interface Design | 14 |
+| Unknown | 2 |
+| Architecture Design + Implementation Interface Design | 2 |
+| Conceptual Design | 1 |
+| Architecture Design / Impl Interface | 1 |
+| Protocol Specification | 1 |
+| Feature Enhancement | 1 |
+| Product Specification | 1 |
 
-| New RFC | Source RFCs |
-|---------|-------------|
-| RFC-101 | RFC-0016 + RFC-0025 |
-| RFC-200 | RFC-0009 + RFC-0010 |
-| RFC-400 | RFC-0015 + RFC-0019 + RFC-0022 |
-| RFC-501 | RFC-0020 + RFC-0024 |
-| RFC-601 | RFC-0004 + RFC-0005 + RFC-0021 |
+## Chronological Timeline
 
-### Renumbered
+### 2026-06
 
-| Old | New |
-|-----|-----|
-| RFC-0001 | RFC-000 |
-| RFC-0002 | RFC-001 |
-| RFC-0023 | RFC-100 |
-| RFC-0012 | RFC-102 |
-| RFC-0007 | RFC-200 |
-| RFC-0008 | RFC-200 |
-| RFC-0006 | RFC-300 |
-| RFC-0013 | RFC-400 |
-| RFC-0003 | RFC-500 |
-| RFC-0018 | RFC-600 |
+- **2026-06-04**: RFC-215 - AgentLoop Persistence Backend Architecture
+  - Status: Draft
+  - Kind: Architecture Design
 
-## Notes
+- **2026-06-04**: RFC-228 - Autopilot Job IPC Commands for Desktop Integration
+  - Status: Proposed
+  - Kind: Protocol Specification
 
-- All RFCs start in **Draft** status when generated
-- Use `specs-refine` to validate and refine RFCs
-- Reclassification maintains all content, only changes organization
+- **2026-06-04**: RFC-413 - Server-Owned Display Card Ledger
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: xiaming (with Claude)
+
+- **2026-06-04**: RFC-505 - Soothe Desktop Client Architecture
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-06-04**: RFC-700 - Desktop App Product Redesign
+  - Status: Proposed
+  - Kind: Product Specification
+
+- **2026-06-04**: RFC-413 supersedes RFC-411
+
+- **2026-06-03**: RFC-623 - Veritas Auto-Mode Robustness
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Soothe Team
+
+- **2026-06-02**: RFC-621 - Workspace Host Convention: Path Mapping for Containerized Daemon
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Platonic Coding Workflow
+
+- **2026-06-02**: RFC-622 - CoreAgent Clarification Relay
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-06-01**: RFC-227 - Plan-Assess Prior-Progress Digest
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: xiaming
+
+### 2026-05
+
+- **2026-05-29**: RFC-105 - Progressive Skill Loading
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Platonic brainstorming session
+
+- **2026-05-29**: RFC-225 - Loop Continuity and Goal Record Enrichment
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: xiaming
+
+- **2026-05-29**: RFC-226 - Continuation-Aware plan_assess and Post-Execute Fast Exit
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: xiaming
+
+- **2026-05-29**: RFC-412 - MCP Management
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Platonic brainstorming session
+
+- **2026-05-29**: RFC-620 - Unified Channel Architecture for Extensible Communication Endpoints
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-28**: RFC-200 - Autonomous Goal Management Loop
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-05-28**: RFC-204 - Autopilot Mode (Layer 3 Extension)
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-05-27**: RFC-222 - Autopilot and Goal Engine Architecture (Daemon-Owned)
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-27**: RFC-223 - Thread Inheritance with LangGraph Checkpoint Forking
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-27**: RFC-224 - Automatic Context Window Management
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-26**: RFC-000 - System Conceptual Design
+  - Status: Implemented
+  - Kind: Conceptual Design
+
+- **2026-05-26**: RFC-100 - CoreAgent Runtime Architecture
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-21**: RFC-619 - Tacitus Subagent
+  - Status: Accepted
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-05-21**: RFC-619 supersedes RFC-601
+
+- **2026-05-13**: RFC-214 - Volatility-Tiered Prompt Architecture & Unified Message Ledger
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-11**: RFC-618 - Plan Subagent — Structured Planning with Explore Delegation
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-05-09**: RFC-221 - LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-05**: RFC-213 - AgentLoop Reasoning Quality & Robustness
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Claude Code
+
+- **2026-05-05**: RFC-220 - LangGraph Agent Loop Orchestrator
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-05-05**: RFC-604 - Plan Phase Robustness (Three-Layer Defense)
+  - Status: Implemented
+  - Kind: Architecture Design
+  - Authors: Claude Sonnet 4.6
+
+- **2026-05-05**: RFC-220 supersedes RFC-201
+
+- **2026-05-04**: RFC-603 - Reasoning Quality & Progressive Actions
+  - Status: Draft
+  - Kind: Feature Enhancement
+  - Authors: Claude Code
+
+- **2026-05-01**: RFC-403 - Unified Event Naming Semantics
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Platonic Brainstorming Session
+
+- **2026-05-01**: RFC-501 - Display & Verbosity
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Soothe Team
+
+- **2026-05-01**: RFC-613 - Explore Agent — LLM-Orchestrated Iterative Search
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Platonic Coding Workflow
+
+- **2026-05-01**: RFC-501 supersedes RFC-0020
+
+- **2026-05-01**: RFC-501 supersedes RFC-0024
+
+- **2026-05-01**: RFC-613 supersedes RFC-605
+
+### 2026-04
+
+- **2026-04-30**: RFC-617 - OperationSecurityProtocol: Unified Workspace and Tool Operation Security
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-29**: RFC-201 - AgentLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-04-29**: RFC-401 - Event Processing & Filtering
+  - Status: Implemented
+  - Kind: Implementation Interface Design
+  - Authors: Soothe Team
+
+- **2026-04-29**: RFC-500 - CLI TUI Architecture Design
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-04-29**: RFC-401 supersedes RFC-0015
+
+- **2026-04-29**: RFC-401 supersedes RFC-0019
+
+- **2026-04-29**: RFC-401 supersedes RFC-0022
+
+- **2026-04-28**: RFC-219 - Goal Completion Module Architecture
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-04-28**: RFC-616 - Scenario-Driven Goal Completion Synthesis
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-27**: RFC-614 - Unified Daemon → Client Streaming Messaging Framework
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-04-22**: RFC-218 - AgentLoop Checkpoint Tree Architecture
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-22**: RFC-411 - Event Stream Replay & History Reconstruction
+  - Status: Deprecated. Superseded by RFC-413.
+  - Kind: Architecture Design
+  - Superseded by: RFC-413 (Server-Owned Display Card Ledger)
+
+- **2026-04-22**: RFC-503 - Loop-First User Experience Architecture
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-22**: RFC-504 - Loop Management CLI Commands
+  - Status: Draft
+  - Kind: Implementation Interface Design
+
+- **2026-04-22**: RFC-612 - Persistence Architecture Refactor
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Platonic Coding Workflow
+
+- **2026-04-17**: RFC-001 - Architecture Design for Core Protocol Modules
+  - Status: Implemented
+
+- **2026-04-17**: RFC-203 - AgentLoop State & Memory Architecture
+  - Status: Draft
+  - Kind: Architecture Design / Impl Interface
+
+- **2026-04-17**: RFC-207 - AgentLoop Thread Management & Goal Context
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-217 - Goal Context Management for AgentLoop
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-400 - ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-402 - MemoryProtocol: Cross-Thread Memory & Context Separation
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-404 - PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-406 - PolicyProtocol: Permission Checking & Scope Matching
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-408 - DurabilityProtocol: Thread Lifecycle & Metadata Management
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-17**: RFC-610 - SDK Module Structure Refactoring
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-16**: RFC-216 - AgentLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-16**: RFC-454 - Slash Command Architecture
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-14**: RFC-450 - Unified Daemon Communication Protocol for WebSocket IPC
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-04-14**: RFC-607 - Progressive Display Refinements Post-Migration
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Claude Code, Xiaming Chen
+
+- **2026-04-13**: RFC-605 - Explore Subagent and Parallel Spawning
+  - Status: Superseded
+  - Kind: Architecture Design
+
+- **2026-04-13**: RFC-606 - DeepAgents CLI TUI Migration
+  - Status: Draft
+  - Kind: Architecture Design + Implementation Interface Design
+
+- **2026-04-10**: RFC-211 - Layer 2 Tool Result Optimization
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-08**: RFC-206 - Hierarchical Prompt Architecture with System/User Separation
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-04-05**: RFC-601 - Built-in Plugin Agents
+  - Status: Implemented
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-04-05**: RFC-601 supersedes RFC-0004
+
+- **2026-04-05**: RFC-601 supersedes RFC-0005
+
+- **2026-04-05**: RFC-601 supersedes RFC-0021
+
+- **2026-04-04**: RFC-602 - SQLite Backend for Persistence, Durability, and Vector Store
+  - Status: Draft
+  - Kind: Architecture Design + Implementation Interface Design
+
+- **2026-04-02**: RFC-502 - Unified Presentation Engine
+  - Status: Draft
+  - Kind: Implementation Interface Design
+  - Authors: Soothe Team
+
+### 2026-03
+
+- **2026-03-31**: RFC-101 - Tool Interface & Event Naming
+  - Status: Implemented
+  - Kind: Implementation Interface Design
+  - Authors: Xiaming Chen
+
+- **2026-03-31**: RFC-103 - Thread-Aware Workspace
+  - Status: Draft
+  - Kind: Implementation Interface Design
+
+- **2026-03-31**: RFC-104 - Dynamic System Context Injection
+  - Status: Implemented
+  - Kind: Implementation Interface Design
+
+- **2026-03-31**: RFC-301 - Protocol Registry
+  - Status: Implemented
+  - Kind: Implementation Interface Design
+  - Authors: Xiaming Chen
+
+- **2026-03-31**: RFC-101 supersedes RFC-0016
+
+- **2026-03-31**: RFC-101 supersedes RFC-0025
+
+- **2026-03-27**: RFC-300 - Context and Memory Architecture Design
+  - Status: Superseded
+
+- **2026-03-27**: RFC-600 - Plugin Extension Specification
+  - Status: Implemented
+  - Kind: Architecture Design
+
+- **2026-03-22**: RFC-452 - Unified Thread Management Architecture
+  - Status: Draft
+  - Kind: Architecture Design
+
+- **2026-03-18**: RFC-102 - Secure Filesystem Path Handling and Security Policy
+  - Status: Implemented
+  - Kind: Implementation Interface Design
+
+## Supersede Relationships
+
+This section tracks which RFCs supersede older ones.
+
+| RFC | Supersedes |
+|-----|------------|
+| RFC-101 | RFC-0016, RFC-0025 |
+| RFC-220 | RFC-201 |
+| RFC-401 | RFC-0015, RFC-0019, RFC-0022 |
+| RFC-413 | RFC-411 |
+| RFC-501 | RFC-0020, RFC-0024 |
+| RFC-601 | RFC-0004, RFC-0005, RFC-0021 |
+| RFC-613 | RFC-605 |
+| RFC-619 | RFC-601 |
+| RFC-622 |  |
+
+## RFC Lifecycle Milestones
+
+### Implemented RFCs
+
+- **2026-05-28**: RFC-200 implemented
+- **2026-05-28**: RFC-204 implemented
+- **2026-05-26**: RFC-000 implemented
+- **2026-05-05**: RFC-604 implemented
+- **2026-04-29**: RFC-201 implemented
+- **2026-04-29**: RFC-401 implemented
+- **2026-04-29**: RFC-500 implemented
+- **2026-04-28**: RFC-219 implemented
+- **2026-04-17**: RFC-001 implemented
+- **2026-04-14**: RFC-450 implemented
+- **2026-04-05**: RFC-601 implemented
+- **2026-03-31**: RFC-101 implemented
+- **2026-03-31**: RFC-104 implemented
+- **2026-03-31**: RFC-301 implemented
+- **2026-03-27**: RFC-600 implemented
+- **2026-03-18**: RFC-102 implemented
+
+### Deprecated/Superseded RFCs
+
+- **2026-04-22**: RFC-411 - Deprecated. Superseded by RFC-413.
+- **2026-04-13**: RFC-605 - Superseded
+- **2026-03-27**: RFC-300 - Superseded
+
+## RFC Numbering Series
+
+RFCs are organized into numbered series by category:
+
+### 0xx - Foundation (System Design)
+
+- RFC-000: System Conceptual Design
+- RFC-001: Architecture Design for Core Protocol Modules
+
+### 1xx - Core Agent (Runtime)
+
+- RFC-100: CoreAgent Runtime Architecture
+- RFC-101: Tool Interface & Event Naming
+- RFC-102: Secure Filesystem Path Handling and Security Policy
+- RFC-103: Thread-Aware Workspace
+- RFC-104: Dynamic System Context Injection
+- RFC-105: Progressive Skill Loading
+
+### 2xx - AgentLoop & Cognition
+
+- RFC-200: Autonomous Goal Management Loop
+- RFC-201: AgentLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
+- RFC-203: AgentLoop State & Memory Architecture
+- RFC-204: Autopilot Mode (Layer 3 Extension)
+- RFC-206: Hierarchical Prompt Architecture with System/User Separation
+- RFC-207: AgentLoop Thread Management & Goal Context
+- RFC-211: Layer 2 Tool Result Optimization
+- RFC-213: AgentLoop Reasoning Quality & Robustness
+- RFC-214: Volatility-Tiered Prompt Architecture & Unified Message Ledger
+- RFC-215: AgentLoop Persistence Backend Architecture
+- RFC-216: AgentLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
+- RFC-217: Goal Context Management for AgentLoop
+- RFC-218: AgentLoop Checkpoint Tree Architecture
+- RFC-219: Goal Completion Module Architecture
+- RFC-220: LangGraph Agent Loop Orchestrator
+- RFC-221: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution
+- RFC-222: Autopilot and Goal Engine Architecture (Daemon-Owned)
+- RFC-223: Thread Inheritance with LangGraph Checkpoint Forking
+- RFC-224: Automatic Context Window Management
+- RFC-225: Loop Continuity and Goal Record Enrichment
+- RFC-226: Continuation-Aware plan_assess and Post-Execute Fast Exit
+- RFC-227: Plan-Assess Prior-Progress Digest
+- RFC-228: Autopilot Job IPC Commands for Desktop Integration
+
+### 3xx - Protocols
+
+- RFC-300: Context and Memory Architecture Design
+- RFC-301: Protocol Registry
+
+### 4xx - Daemon & Transport
+
+- RFC-400: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
+- RFC-401: Event Processing & Filtering
+- RFC-402: MemoryProtocol: Cross-Thread Memory & Context Separation
+- RFC-403: Unified Event Naming Semantics
+- RFC-404: PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
+- RFC-406: PolicyProtocol: Permission Checking & Scope Matching
+- RFC-408: DurabilityProtocol: Thread Lifecycle & Metadata Management
+- RFC-411: Event Stream Replay & History Reconstruction
+- RFC-412: MCP Management
+- RFC-413: Server-Owned Display Card Ledger
+- RFC-450: Unified Daemon Communication Protocol for WebSocket IPC
+- RFC-452: Unified Thread Management Architecture
+- RFC-454: Slash Command Architecture
+
+### 5xx - CLI & TUI
+
+- RFC-500: CLI TUI Architecture Design
+- RFC-501: Display & Verbosity
+- RFC-502: Unified Presentation Engine
+- RFC-503: Loop-First User Experience Architecture
+- RFC-504: Loop Management CLI Commands
+- RFC-505: Soothe Desktop Client Architecture
+
+### 6xx - Plugin System & Extensions
+
+- RFC-600: Plugin Extension Specification
+- RFC-601: Built-in Plugin Agents
+- RFC-602: SQLite Backend for Persistence, Durability, and Vector Store
+- RFC-603: Reasoning Quality & Progressive Actions
+- RFC-604: Plan Phase Robustness (Three-Layer Defense)
+- RFC-605: Explore Subagent and Parallel Spawning
+- RFC-606: DeepAgents CLI TUI Migration
+- RFC-607: Progressive Display Refinements Post-Migration
+- RFC-610: SDK Module Structure Refactoring
+- RFC-612: Persistence Architecture Refactor
+- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search
+- RFC-614: Unified Daemon → Client Streaming Messaging Framework
+- RFC-616: Scenario-Driven Goal Completion Synthesis
+- RFC-617: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
+- RFC-618: Plan Subagent — Structured Planning with Explore Delegation
+- RFC-619: Tacitus Subagent
+- RFC-620: Unified Channel Architecture for Extensible Communication Endpoints
+- RFC-621: Workspace Host Convention: Path Mapping for Containerized Daemon
+- RFC-622: CoreAgent Clarification Relay
+- RFC-623: Veritas Auto-Mode Robustness
+
+### 7xx - Product & Applications
+
+- RFC-700: Desktop App Product Redesign
+
+---
+
+This history is auto-generated from RFC metadata. To update:
+```bash
+python scripts/generate_rfc_history.py
+```
