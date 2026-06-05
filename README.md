@@ -4,8 +4,6 @@
   #
 
   [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
-  [![License](https://img.shields.io/github/license/mirasoth/soothe)](https://github.com/mirasoth/soothe/blob/main/LICENSE)
-  [![GitHub Stars](https://img.shields.io/github/stars/mirasoth/soothe)](https://github.com/mirasoth/soothe)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mirasoth/soothe)
 
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)

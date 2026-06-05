@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_BUILTIN_SKILLS_DIR_NAME = "built_in_skills"
+_BUILTIN_SKILLS_DIR_NAME = "builtin_skills"
 
 
 def is_builtin_skill_directory(skill_dir: str | Path) -> bool:
-    """Return True for package-bundled skills under ``soothe/built_in_skills/``."""
+    """Return True for package-bundled skills under ``soothe/skills/builtin_skills/``."""
     resolved = Path(skill_dir).expanduser().resolve()
-    package_builtins = Path(__file__).resolve().parent.parent / _BUILTIN_SKILLS_DIR_NAME
+    package_builtins = Path(__file__).resolve().parent / _BUILTIN_SKILLS_DIR_NAME
     try:
         if resolved.is_relative_to(package_builtins.resolve()):
             return True
@@ -23,7 +23,7 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     """Return absolute paths for discovered skill directories.
 
     A valid skill directory contains a `SKILL.md` file. The search includes:
-    - Package-bundled built-ins (`soothe/built_in_skills/`)
+    - Package-bundled built-ins (`soothe/skills/builtin_skills/`)
     - User skills in `~/.soothe/skills/`
     - User skills in `~/.agents/skills/`
     - Project skills in `<workspace>/.soothe/skills/` (if workspace provided)
@@ -38,9 +38,9 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     Returns:
         Sorted absolute paths to skill directories.
     """
-    module_dir = Path(__file__).resolve().parent.parent
+    skills_dir = Path(__file__).resolve().parent
     candidate_roots = [
-        module_dir / "built_in_skills",
+        skills_dir / "builtin_skills",
         Path.home() / ".soothe" / "skills",
         Path.home() / ".agents" / "skills",
     ]

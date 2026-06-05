@@ -250,8 +250,9 @@ def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) ->
     """
     import time
 
-    from soothe.core.scheduling.tool_cache import cache_tools, get_cached_tools
     from soothe.core.workspace.framework_filesystem import FrameworkFilesystem
+
+    from ._tool_cache import cache_tools, get_cached_tools
 
     # Include workspace in cache key to prevent cross-workspace tool reuse
     current_ws = FrameworkFilesystem.get_current_workspace()
