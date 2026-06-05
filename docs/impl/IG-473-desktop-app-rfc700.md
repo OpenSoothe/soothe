@@ -1,9 +1,9 @@
-# IG-296: Desktop App Implementation (RFC-700)
+# IG-473: Desktop App Implementation (RFC-700)
 
 > **Status**: Planning
 > **RFC**: RFC-700, RFC-228
 > **Created**: 2026-06-05
-> **Dependencies**: IG-295 (RFC-228 daemon IPC complete)
+> **Dependencies**: IG-471 (RFC-228 daemon IPC complete)
 
 ## Overview
 
