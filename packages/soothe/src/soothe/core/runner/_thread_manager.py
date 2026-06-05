@@ -1,4 +1,7 @@
-"""Thread lifecycle manager for RFC-402."""
+"""Thread lifecycle manager for RFC-402.
+
+Merged from core/thread/ package - only consumer is SootheRunner.
+"""
 
 from __future__ import annotations
 
@@ -7,16 +10,11 @@ import contextlib
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
+
+from pydantic import BaseModel, Field
 
 from soothe.config import SOOTHE_HOME
-from soothe.core.thread.models import (
-    ArtifactEntry,
-    EnhancedThreadInfo,
-    ThreadFilter,
-    ThreadMessage,
-    ThreadStats,
-)
 from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
@@ -25,6 +23,62 @@ if TYPE_CHECKING:
     from soothe.protocols.durability import DurabilityProtocol, ThreadInfo
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Internal models (used only by ThreadContextManager)
+# ---------------------------------------------------------------------------
+
+
+class ThreadStats(BaseModel):
+    """Thread execution statistics (calculated on demand)."""
+
+    message_count: int = 0
+    event_count: int = 0
+    artifact_count: int = 0
+    total_tokens_used: int = 0
+    total_cost: float = 0.0
+    avg_response_time_ms: float = 0.0
+    error_count: int = 0
+    last_error: str | None = None
+
+
+class EnhancedThreadInfo(BaseModel):
+    """Complete thread information with statistics."""
+
+    thread_id: str
+    status: Literal["idle", "running", "suspended", "archived", "error"]
+    created_at: datetime
+    updated_at: datetime
+    last_activity_at: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    stats: ThreadStats = Field(default_factory=ThreadStats)
+    last_human_message: str | None = None
+
+
+class ThreadMessage(BaseModel):
+    """Single message in thread conversation."""
+
+    timestamp: datetime
+    kind: Literal["conversation", "event", "tool_call", "tool_result"]
+    role: Literal["user", "assistant", "system"] | None = None
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ArtifactEntry(BaseModel):
+    """Thread artifact metadata (for API responses)."""
+
+    filename: str
+    size_bytes: int
+    created_at: datetime
+    artifact_type: Literal["file", "report", "checkpoint", "other"]
+    download_url: str
+
+
+# ---------------------------------------------------------------------------
+# ThreadContextManager
+# ---------------------------------------------------------------------------
 
 
 class ThreadContextManager:
@@ -247,7 +301,7 @@ class ThreadContextManager:
 
     async def list_threads(
         self,
-        thread_filter: ThreadFilter | None = None,
+        thread_filter: Any | None = None,
         *,
         include_stats: bool = False,
         include_last_message: bool = False,
@@ -255,7 +309,7 @@ class ThreadContextManager:
         """List threads with optional filtering and statistics.
 
         Args:
-            thread_filter: Optional filter criteria
+            thread_filter: Optional filter criteria (ThreadFilter from protocols.durability)
             include_stats: Whether to calculate stats for each thread
             include_last_message: Whether to include the last human message
 
@@ -474,7 +528,6 @@ class ThreadContextManager:
         Returns:
             List of ArtifactEntry
         """
-        from datetime import UTC, datetime
 
         def get_run_dir() -> Path:
             return Path(SOOTHE_HOME).expanduser() / "data" / "threads" / thread_id
