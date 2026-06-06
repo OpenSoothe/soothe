@@ -133,25 +133,119 @@ def status() -> None:
 
 
 @app.command("list")
-def list_goals(
+def list_jobs(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
-    """List goals from the live daemon autopilot DAG."""
+    """List jobs (root goals) from the daemon autopilot.
+
+    Jobs are user-submitted tasks. Subgoals created during autonomous
+    execution are not shown here; use 'goal <id>' to inspect subgoals.
+    """
     client = _require_daemon_http()
-    payload = client.list_goals()
-    goals = payload.get("goals") or []
-    if not goals:
-        typer.echo("No goals found.")
+    payload = client.list_jobs()
+    jobs = payload.get("jobs") or []
+    if not jobs:
+        typer.echo("No jobs found.")
         return
 
-    for g in goals:
-        if status_filter and g.get("status", "") != status_filter:
+    for j in jobs:
+        if status_filter and j.get("status", "") != status_filter:
             continue
-        sid = g.get("id", "?")[:8]
-        sdesc = preview_first(g.get("description", ""), 60)
-        sstat = g.get("status", "pending")
-        spri = g.get("priority", 50)
+        sid = j.get("id", "?")[:8]
+        sdesc = preview_first(j.get("description", ""), 60)
+        sstat = j.get("status", "pending")
+        spri = j.get("priority", 50)
         typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  {sdesc}")
+
+
+def _render_dag_tree(dag: dict, root_id: str) -> None:
+    """Render DAG as ASCII tree for job visualization."""
+    nodes = {n["id"]: n for n in dag.get("nodes", [])}
+    edges = dag.get("edges", [])
+
+    # Build children map from edges
+    children: dict[str, list[str]] = {}
+    for edge in edges:
+        src = edge.get("source")
+        tgt = edge.get("target")
+        if src and tgt:
+            if src not in children:
+                children[src] = []
+            children[src].append(tgt)
+
+    def render_node(goal_id: str, indent: str = "", is_last: bool = True) -> None:
+        node = nodes.get(goal_id)
+        if not node:
+            return
+
+        # Prefix for this level
+        if indent:
+            prefix = indent + ("└─ " if is_last else "├─ ")
+        else:
+            prefix = ""
+
+        status = node.get("status", "pending")
+        desc = preview_first(node.get("description", ""), 50)
+        typer.echo(f'{prefix}{goal_id[:8]} ({status}) "{desc}"')
+
+        # Render children
+        child_ids = children.get(goal_id, [])
+        for i, child_id in enumerate(child_ids):
+            child_indent = indent + ("    " if is_last else "│   ")
+            render_node(child_id, child_indent, i == len(child_ids) - 1)
+
+    render_node(root_id)
+
+
+@app.command("job")
+def show_job(
+    job_id: str = typer.Argument(..., help="Job ID to show details and DAG."),
+) -> None:
+    """Show job status and DAG tree visualization.
+
+    A job is a root goal submitted by the user. This command shows
+    the job's details and the complete goal DAG under it.
+    """
+    client = _require_daemon_http()
+    try:
+        payload = client.get_job(job_id)
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1)
+
+    job = payload.get("job")
+    dag = payload.get("dag")
+
+    if not job:
+        typer.echo(f"Job '{job_id}' not found.", err=True)
+        raise typer.Exit(1)
+
+    # Job header
+    typer.echo(f"Job ID:          {job.get('id')}")
+    typer.echo(f"Status:          {job.get('status', 'pending')}")
+    typer.echo(f"Priority:        {job.get('priority', 50)}")
+    if job.get("workspace"):
+        typer.echo(f"Workspace:       {job['workspace']}")
+    created = job.get("created_at", "")
+    if created:
+        # Truncate timestamp for readability
+        created_short = created[:19] if len(created) > 19 else created
+        typer.echo(f"Created:         {created_short}")
+
+    # DAG stats from response
+    active = payload.get("active_goals", 0)
+    completed = payload.get("completed_goals", 0)
+    total = payload.get("total_goals", 0)
+    typer.echo(f"Active goals:    {active}")
+    typer.echo(f"Completed goals: {completed}")
+    typer.echo(f"Total goals:     {total}")
+
+    # DAG tree
+    typer.echo("\nDAG:")
+    if dag:
+        _render_dag_tree(dag, job_id)
+    else:
+        typer.echo("  (no subgoals)")
 
 
 @app.command("goal")
