@@ -373,7 +373,7 @@ def _get_subagent_factories() -> dict[str, Callable]:
 
 ```xml
 <AVAILABLE_SUBAGENTS>
-- Optional soothe-community delegates when installed (see that repository)
+- Optional soothe-plugins delegates when installed (see that repository)
 - research: Multi-source research and synthesis
 - explore: Targeted filesystem search (quick/medium/thorough)
 

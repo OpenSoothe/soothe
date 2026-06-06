@@ -186,7 +186,7 @@ Install additional capabilities as needed:
 | Extra | Command | Adds |
 |-------|---------|------|
 | `research` | `pip install soothe[research]` | Tavily web search |
-| `soothe-community` | `pip install soothe-community` | Optional delegated agents and extras (see that repository) |
+| `soothe-plugins` | `pip install soothe-plugins` | Optional delegated agents and extras (see that repository) |
 | `serper` | `pip install soothe[serper]` | Google Serper search |
 | `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search |
 | `jina` | `pip install soothe[jina]` | Jina web reader |

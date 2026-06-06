@@ -25,7 +25,7 @@ This benchmark validates:
 | research | `/research` | Deep multi-source iterative research |
 | explore | `/explore` | Readonly repository search |
 
-Additional delegated agents are not covered here; install and benchmark them from the **`soothe-community`** repository.
+Additional delegated agents are not covered here; install and benchmark them from the **`soothe-plugins`** repository.
 
 ---
 

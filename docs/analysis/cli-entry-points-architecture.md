@@ -72,7 +72,7 @@ pip install soothe[all]
 # - document handling ([document])
 # - media processing ([media])
 # - video processing ([video])
-# Optional plugin subagents: install soothe-community (see package docs)
+# Optional plugin subagents: install soothe-plugins (see package docs)
 ```
 
 ## Migration from Old Architecture

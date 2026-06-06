@@ -240,16 +240,16 @@ def test_entry_point_discovery():
 
     entry_points = discover_entry_points()
 
-    # Entry point plugins should be found if soothe-community is installed
+    # Entry point plugins should be found if soothe-plugins is installed
     if not entry_points:
-        pytest.skip("No entry point plugins found - soothe-community not installed")
+        pytest.skip("No entry point plugins found - soothe-plugins not installed")
 
     # Should contain valid soothe plugin entry points (community or built-in subagents)
     entry_str = " ".join(entry_points)
     # Built-in subagent plugins are also registered via entry points
-    valid_patterns = ["soothe_community", "soothe.subagents"]
+    valid_patterns = ["soothe_plugins", "soothe.subagents"]
     assert any(pattern in entry_str for pattern in valid_patterns), (
-        f"Expected soothe_community or soothe.subagents in entry points, got: {entry_str}"
+        f"Expected soothe_plugins or soothe.subagents in entry points, got: {entry_str}"
     )
 
 
@@ -266,10 +266,10 @@ def test_plugin_load_from_entry_points():
     # Check community entry points exist
     eps = list(importlib.metadata.entry_points(group="soothe.plugins"))
     if not eps:
-        pytest.skip("No entry point plugins found - soothe-community not installed")
+        pytest.skip("No entry point plugins found - soothe-plugins not installed")
 
     # Try importing from entry point (community or built-in subagent)
-    # Note: soothe-community may not be installed; built-in subagent plugins are registered too
+    # Note: soothe-plugins may not be installed; built-in subagent plugins are registered too
     for ep in eps:
         try:
             # Try loading any available plugin from entry points
@@ -283,8 +283,8 @@ def test_plugin_load_from_entry_points():
         except (ImportError, ModuleNotFoundError):
             continue
 
-    # If no plugin could be loaded, skip (this is acceptable if soothe-community not installed)
-    pytest.skip("No entry point plugins could be loaded - soothe-community not installed")
+    # If no plugin could be loaded, skip (this is acceptable if soothe-plugins not installed)
+    pytest.skip("No entry point plugins could be loaded - soothe-plugins not installed")
 
 
 # ---- Test 9: Full lifecycle with community plugins ----
@@ -305,7 +305,7 @@ async def test_lifecycle_loads_plugins():
     entry_eps = discover_entry_points()
 
     if not entry_eps:
-        pytest.skip("No entry point plugins found - soothe-community not installed")
+        pytest.skip("No entry point plugins found - soothe-plugins not installed")
 
     # At least one entry point plugin should be discovered
     assert len(discovered) > 0

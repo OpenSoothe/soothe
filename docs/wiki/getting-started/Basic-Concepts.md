@@ -512,7 +512,7 @@ router:
 workspace_dir: "."
 progress_verbosity: normal
 
-# Subagents (core defaults; optional from soothe-community)
+# Subagents (core defaults; optional from soothe-plugins)
 subagents:
   explore:
     enabled: true

@@ -64,7 +64,7 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 📖 User Guides
 
-- [Specialized Subagents](wiki/subagents.md) - Core explore, plan, and research; optional agents from soothe-community
+- [Specialized Subagents](wiki/subagents.md) - Core explore, plan, and research; optional agents from soothe-plugins
 - [Autonomous Mode](wiki/autonomous-mode.md) - Enable autonomous iteration for complex tasks
 - [Thread Management](wiki/thread-management.md) - Work with conversation threads and maintain context
 - [MCP Servers](wiki/mcp-servers.md) - Extend capabilities with Model Context Protocol servers

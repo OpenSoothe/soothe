@@ -106,7 +106,7 @@ Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in 
 
 ### Subagents
 
-**Explore**, **Plan**, and **Research** ship in core Soothe. Optional delegated agents are published in **`soothe-community`** (install and configuration documented there).
+**Explore**, **Plan**, and **Research** ship in core Soothe. Optional delegated agents are published in **`soothe-plugins`** (install and configuration documented there).
 
 **Skillify** (RFC-601): Skill discovery and execution.
 
