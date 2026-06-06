@@ -278,6 +278,57 @@ class _ModelMixin:
 
         self.push_screen(screen, handle_result)
 
+    async def _submit_autopilot_job(self, task: str) -> None:
+        """Submit an autopilot job via HTTP REST (like CLI `soothe autopilot run`).
+
+        Args:
+            task: Task description for autonomous execution.
+        """
+        import os
+
+        from soothe_sdk.client import (
+            AutopilotHttpClient,
+            http_rest_url_from_config,
+            is_daemon_live,
+            websocket_url_from_config,
+        )
+
+        from soothe_cli.runtime import load_config
+        from soothe_cli.tui.widgets.messages import ErrorMessage, UserMessage
+
+        await self._mount_message(UserMessage(f"/autopilot {task}"))
+
+        cfg = load_config()
+        ws_url = websocket_url_from_config(cfg)
+
+        # Check daemon is running
+        if not await is_daemon_live(ws_url, timeout=5.0):
+            await self._mount_message(
+                ErrorMessage("Daemon not running. Start with 'soothed start'.")
+            )
+            return
+
+        base_url = http_rest_url_from_config(cfg)
+        workspace = self._cwd if hasattr(self, "_cwd") else os.getcwd()
+
+        try:
+            client = AutopilotHttpClient(base_url)
+            result = client.submit(task, workspace=workspace)
+        except RuntimeError as exc:
+            await self._mount_message(ErrorMessage(str(exc)))
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Autopilot submit failed")
+            await self._mount_message(ErrorMessage(f"Failed to submit autopilot job: {exc}"))
+            return
+
+        goal_id = result.get("goal_id", "")
+        if goal_id:
+            self.notify(f"Autopilot job submitted: {goal_id[:8]}", timeout=5)
+            logger.info("Submitted autopilot job %s: %s", goal_id, task[:50])
+        else:
+            await self._mount_message(ErrorMessage("No goal_id returned from daemon"))
+
     async def _show_loop_selector(self) -> None:
         """Show interactive loop selector as a modal screen."""
         from functools import partial

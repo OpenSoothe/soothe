@@ -260,6 +260,12 @@ COMMANDS: dict[str, dict[str, Any]] = {
     },
     "/autopilot": {
         "location": "daemon",
+        "type": "routing",
+        "description": "Submit autopilot job (usage: /autopilot <task>)",
+        "requires_query": True,
+    },
+    "/autopilot-dashboard": {
+        "location": "daemon",
         "type": "rpc",
         "daemon_command": "autopilot_dashboard",
         "description": "Show autopilot dashboard",
