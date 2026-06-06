@@ -155,7 +155,7 @@ Daemon logs are stored in:
 ```bash
 ~/.soothe/logs/
 ├── daemon.log          # Daemon transport, sessions, routing (soothe_daemon.*)
-├── soothe.log          # In-process agent core (soothe.*, soothe_community.*)
+├── soothe.log          # In-process agent core (soothe.*, soothe_plugins.*)
 └── soothe-cli.log      # CLI client (when using soothe TUI/CLI)
 ```
 

@@ -92,16 +92,16 @@ Add daemon later: `pip install soothe-daemon`
 pip install 'soothe[research,wizsearch,pgvector]' soothe-cli soothe-daemon
 ```
 
-### Why do I need soothe-community?
+### Why do I need soothe-plugins?
 
-`soothe-community` is a **separate package** (separate repo) with optional delegated agents:
+`soothe-plugins` is a **separate package** (separate repo) with optional delegated agents:
 - `claude` - Anthropic Claude delegation
 - `browser_use` - Browser automation specialist
 - Other community plugins
 
 **Install**:
 ```bash
-pip install soothe-community
+pip install soothe-plugins
 ```
 
 **Configure**:
@@ -113,7 +113,7 @@ subagents:
     enabled: true
 ```
 
-See [soothe-community repo](https://github.com/mirasoth/soothe-community) for details.
+See [soothe-plugins repo](https://github.com/mirasoth/soothe-plugins) for details.
 
 ### How do I verify installation?
 
@@ -285,7 +285,7 @@ Subagents are specialized helper agents:
 - `plan` - Planning delegate
 - `tacitus` - Deep public-domain research
 
-**Community** (requires `soothe-community`):
+**Community** (requires `soothe-plugins`):
 - `claude` - Anthropic Claude delegation
 - `browser_use` - Browser automation
 
@@ -511,7 +511,7 @@ subagents:
 
 **Community subagent not installed**:
 ```bash
-pip install soothe-community
+pip install soothe-plugins
 ```
 
 **Missing provider key** (for claude/browser_use):

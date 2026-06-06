@@ -311,7 +311,7 @@ soothe --help | grep daemon
 
 ### Workflow 4: Debug Subagent Issues
 
-**Scenario**: Explore, research, or an optional soothe-community delegate is not working; delegation failing.
+**Scenario**: Explore, research, or an optional soothe-plugins delegate is not working; delegation failing.
 
 **Steps**:
 

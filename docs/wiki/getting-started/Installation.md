@@ -96,7 +96,7 @@ Soothe is organized as a monorepo with multiple packages:
 | **soothe-cli** | `soothe-cli` | `soothe` command (TUI, one-shot prompts) | Recommended |
 | **soothe-daemon** | `soothe-daemon` | `soothed` command (background daemon) | Optional |
 | **soothe-sdk** | `soothe-sdk` | Shared protocol types, decorators | Auto-installed |
-| **soothe-community** | `soothe-community` | Community plugins | Optional |
+| **soothe-plugins** | `soothe-plugins` | Community plugins | Optional |
 
 ### Capability Groups
 

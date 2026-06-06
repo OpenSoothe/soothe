@@ -1,6 +1,6 @@
 # Specialized Subagents
 
-Core Soothe ships **explore**, **plan**, and **tacitus** subagents. Additional optional delegated agents (extra slash commands, numeric prefixes, and install steps) are maintained in the **`soothe-community`** repository—see that project’s README and docs.
+Core Soothe ships **explore**, **plan**, and **tacitus** subagents. Additional optional delegated agents (extra slash commands, numeric prefixes, and install steps) are maintained in the **`soothe-plugins`** repository—see that project’s README and docs.
 
 ## Overview
 

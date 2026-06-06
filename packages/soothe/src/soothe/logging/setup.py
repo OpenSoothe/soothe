@@ -16,8 +16,8 @@ from soothe.logging.context import get_thread_id
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
-# Community plugins (soothe-community) use this logger tree; mirror soothe handlers here.
-COMMUNITY_LOGGER_NAME = "soothe_community"
+# Community plugins (soothe-plugins) use this logger tree; mirror soothe handlers here.
+COMMUNITY_LOGGER_NAME = "soothe_plugins"
 PACKAGE_LOGGER_NAMES: tuple[str, ...] = ("soothe", COMMUNITY_LOGGER_NAME)
 
 # Suffix length for conversation thread id in log lines (full id stays in context vars).
@@ -138,7 +138,7 @@ def setup_logging(
     """Configure Soothe and community package loggers with file and optional console handlers.
 
     Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 5 MB max, 3 backups) for both
-    ``soothe.*`` and ``soothe_community.*`` loggers unless ``log_file`` overrides the path.
+    ``soothe.*`` and ``soothe_plugins.*`` loggers unless ``log_file`` overrides the path.
     Optionally outputs to console when enabled in config.
 
     Args:

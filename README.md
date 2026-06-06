@@ -68,7 +68,7 @@ For everyday use you install three PyPI packages: **core** (`soothe`), **CLI** (
 | `soothe-cli` | [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=%20)](https://pypi.org/project/soothe-cli/) | `soothe` command |
 | `soothe-daemon` | [![soothe-daemon](https://img.shields.io/pypi/v/soothe-daemon?label=%20)](https://pypi.org/project/soothe-daemon/) | `soothed` command (WebSocket, HTTP REST) |
 | `soothe-sdk` | [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=%20)](https://pypi.org/project/soothe-sdk/) | Shared protocol types and decorators |
-| `soothe-community` | [![soothe-community](https://img.shields.io/pypi/v/soothe-community?label=%20)](https://pypi.org/project/soothe-community/) | Community plugins ([separate repo](https://github.com/mirasoth/soothe-community)) |
+| `soothe-plugins` | [![soothe-plugins](https://img.shields.io/pypi/v/soothe-plugins?label=%20)](https://pypi.org/project/soothe-plugins/) | Community plugins ([separate repo](https://github.com/mirasoth/soothe-plugins)) |
 
 **Recommended — full daily stack** (core + all optional capability groups + CLI + daemon):
 
