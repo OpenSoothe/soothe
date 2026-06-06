@@ -224,6 +224,50 @@ class HttpRestChannel(Channel):
                 return {"goal": goal.model_dump(mode="json"), "source": "autopilot_service"}
             raise HTTPException(status_code=404, detail="Goal not found")
 
+        @self._app.get("/api/v1/autopilot/jobs")
+        async def autopilot_list_jobs() -> dict[str, Any]:
+            """List root goals (jobs) only.
+
+            A job is a root goal submitted by user (parent_id=None).
+            Subgoals created during autonomous execution are excluded.
+            """
+            service = self._require_autopilot_service()
+            goals = await service.list_goals()
+            jobs = [g for g in goals if g.parent_id is None]
+            return {
+                "jobs": [j.model_dump(mode="json") for j in jobs],
+                "source": "autopilot_service",
+            }
+
+        @self._app.get("/api/v1/autopilot/jobs/{job_id}")
+        async def autopilot_get_job(job_id: str) -> dict[str, Any]:
+            """Get job status with DAG snapshot.
+
+            Returns job details plus complete goal DAG for visualization.
+            """
+            service = self._require_autopilot_service()
+            job = await service.get_goal(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail="Job not found")
+            if job.parent_id is not None:
+                raise HTTPException(
+                    status_code=404, detail="Not a root goal (job). Use /goals/{id} instead."
+                )
+
+            dag = await service.dag_snapshot(job_id)
+            # Count goals by status
+            nodes = dag.get("nodes", [])
+            active = sum(1 for n in nodes if n.get("status") == "active")
+            completed = sum(1 for n in nodes if n.get("status") in ("completed", "validated"))
+            return {
+                "job": job.model_dump(mode="json"),
+                "dag": dag,
+                "active_goals": active,
+                "completed_goals": completed,
+                "total_goals": len(nodes),
+                "source": "autopilot_service",
+            }
+
         @self._app.post("/api/v1/autopilot/submit")
         async def autopilot_submit(request: Request) -> dict[str, Any]:
             """Submit a new task to autopilot."""

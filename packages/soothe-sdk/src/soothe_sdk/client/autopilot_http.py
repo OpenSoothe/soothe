@@ -142,3 +142,25 @@ class AutopilotHttpClient:
     def status(self) -> dict[str, Any]:
         """Fetch autopilot status summary."""
         return self._request("GET", "/api/v1/autopilot/status")
+
+    def list_jobs(self) -> dict[str, Any]:
+        """List root goals (jobs) only.
+
+        A job is a root goal submitted by the user (parent_id=None).
+        Subgoals created by autopilot during execution are excluded.
+        """
+        return self._request("GET", "/api/v1/autopilot/jobs")
+
+    def get_job(self, job_id: str) -> dict[str, Any]:
+        """Get job status with DAG snapshot.
+
+        Returns job details plus the complete goal DAG under this job,
+        suitable for visualization.
+
+        Args:
+            job_id: The root goal ID (job identifier).
+
+        Raises:
+            RuntimeError: If job not found or goal_id is not a root goal.
+        """
+        return self._request("GET", f"/api/v1/autopilot/jobs/{job_id}")
