@@ -1,89 +1,190 @@
 # Soothe Wiki
 
-Welcome to the Soothe end-user wiki. This directory contains comprehensive guides organized by topic to help you get the most out of Soothe.
+> **Goal-driven orchestration framework for building 24/7 long-running autonomous agents**
 
-## 🎯 Quick Navigation
-
-**New to Soothe?** Start here → [Getting Started Guide](getting-started.md)
-
-**Looking for a specific command?** → [CLI Reference](cli-reference.md)
-
-**Having issues?** → [Troubleshooting Guide](troubleshooting.md)
+Welcome to the Soothe documentation. This wiki provides comprehensive guides for users, developers, and operators.
 
 ---
 
-## Wiki Index
+## 🚀 Quick Start
+
+**New to Soothe?** Follow these steps:
+
+1. **Install**: `pip install -U 'soothe[all]' soothe-cli soothe-daemon`
+2. **Configure**: Set `OPENAI_API_KEY` or create `~/.soothe/config.yml`
+3. **Run**: `soothe -p "your query"` for one-shot mode
+4. **Learn**: Read [Getting Started](getting-started/README.md)
+
+**30-Second Example:**
+```bash
+# Install complete stack
+pip install -U 'soothe[all]' soothe-cli soothe-daemon
+
+# Set API key
+export OPENAI_API_KEY=sk-...
+
+# Initialize configuration
+soothe config init
+
+# Run your first query
+soothe -p "List all Python files in the current directory and count lines of code"
+```
+
+---
+
+## 📖 Documentation Index
 
 ### 🚀 Getting Started
 
-| Guide | What You'll Learn |
-|-------|-------------------|
-| **[Getting Started](getting-started.md)** | Install, configure, and run your first session with Soothe |
-| **[CLI Reference](cli-reference.md)** | Complete command-line interface documentation with examples |
-| **[TUI Guide](tui-guide.md)** | Terminal UI usage, slash commands, keyboard shortcuts |
+- **[Getting Started Hub](getting-started/README.md)** - Start here!
+  - **[Installation](getting-started/Installation.md)** - System requirements, installation methods, troubleshooting
+  - **[Quick-Start Guide](getting-started/Quick-Start.md)** - Your first session, common workflows
+  - **[Basic Concepts](getting-started/Basic-Concepts.md)** - Core architecture and concepts
+- **[CLI Reference](cli-reference.md)** - Complete CLI documentation with examples
+- **[TUI Guide](tui-guide.md)** - Terminal UI, slash commands, keyboard shortcuts
+- **[Architecture Overview](architecture/README.md)** ⭐ - System design and concepts
 
 ### 🤖 Core Capabilities
 
-| Guide | What You'll Learn |
-|-------|-------------------|
-| **[Autonomous Mode](autonomous-mode.md)** | Enable autonomous iteration for complex multi-step tasks |
-| **[Specialized Subagents](subagents.md)** | Core explore/plan/research and optional community delegates |
-| **[Thread Management](thread-management.md)** | Work with conversation threads, resume previous sessions |
+- **[Autonomous Mode](autonomous-mode.md)** - Multi-step autonomous task execution
+- **[Subagents](subagents.md)** - Specialized subagents (explore, plan, veritas, etc.)
+- **[Thread Management](thread-management.md)** - Conversation threads and session resumption
 
 ### 🔧 Configuration & Management
 
-| Guide | What You'll Learn |
-|-------|-------------------|
-| **[Configuration](configuration.md)** | Environment variables, YAML config, model routing |
-| **[Daemon Management](daemon-management.md)** | Manage the Soothe daemon lifecycle (start, stop, attach) |
-| **[Multi-Transport Setup](multi-transport.md)** | Configure Unix Socket, WebSocket, and HTTP REST transports |
-| **[Authentication](authentication.md)** | External authentication with reverse proxies |
+- **[Configuration Guide](configuration-guide/README.md)** ⭐ - Complete configuration reference
+  - **[YAML Reference](configuration-guide/yaml-reference.md)** - Full YAML schema with all options
+  - **[Environment Variables](configuration-guide/environment-variables.md)** - SOOTHE_* variables reference
+  - **[Common Patterns](configuration-guide/common-patterns.md)** - Real-world configuration examples
+  - **[Provider Setup](configuration-guide/provider-setup.md)** - LLM providers, vector stores, persistence
+- **[Configuration (Quick Reference)](configuration.md)** - Quick config overview
+- **[Daemon Management](daemon-management.md)** - Daemon lifecycle (start, stop, attach)
+- **[Multi-Transport](multi-transport.md)** - Unix Socket, WebSocket, HTTP REST transports
+- **[Authentication](authentication.md)** - External authentication with reverse proxies
 
-### 🛠️ Troubleshooting & Advanced
+### 🚀 Deployment & Operations
 
-| Guide | What You'll Learn |
-|-------|-------------------|
-| **[Troubleshooting](troubleshooting.md)** | Common issues, error messages, and solutions |
-| **[Query Processing Flow](query-processing-flow.md)** | How user queries flow through the system architecture |
+- **[Deployment Guide](deployment/README.md)** ⭐ - Production deployment patterns
+  - **[Production Setup](deployment/production-setup.md)** - Docker Compose, systemd, Kubernetes
+  - **[Monitoring & Observability](deployment/monitoring.md)** - Langfuse, logs, health checks
+  - **[Security Hardening](deployment/security.md)** - Reverse proxy, TLS, access control
+  - **[Scaling Strategies](deployment/scaling.md)** - Horizontal scaling, Kubernetes, performance tuning
+  - **[Backup & Recovery](deployment/backup-recovery.md)** - PostgreSQL backup, disaster recovery
+
+### 🏗️ Architecture & Core Modules
+
+- **[Core Modules Overview](core/README.md)** ⭐ - Core framework architecture
+  - **[Agent Factory](core/agent-factory.md)** - CoreAgent construction and runtime
+  - **[SootheRunner](core/runner.md)** - Protocol-orchestrated execution
+  - **[AgentLoop](core/agent-loop.md)** - Plan-Execute loop for single goals
+  - **[GoalEngine](core/goal-engine.md)** - Autonomous goal management
+  - **[Event System](core/events.md)** - Event infrastructure and registration
+  - **[Protocol Resolver](core/resolver.md)** - Protocol wiring from config
+  - **[Workspace Management](core/workspace.md)** - Workspace resolution and validation
+- **[Architecture Overview](architecture/README.md)** - System design and concepts
+
+### 🔧 Backend Implementations
+
+- **[Backends Overview](backends/README.md)** ⭐ - Protocol implementations
+  - **[Memory Backends](backends/memory-backends.md)** - MemU semantic memory
+  - **[Durability Backends](backends/durability-backends.md)** - SQLite, PostgreSQL thread storage
+  - **[Persistence Backends](backends/persistence-backends.md)** - Key-value storage
+  - **[Vector Store Backends](backends/vector-store-backends.md)** - PGVector, SQLiteVec, Weaviate
+  - **[Policy Backends](backends/policy-backends.md)** - Config-driven security policies
+
+### 🛠️ Troubleshooting
+
+- **[Troubleshooting](troubleshooting.md)** - Common issues, error messages, and solutions
+- **[Query Processing Flow](query-processing-flow.md)** - How queries flow through the system
+
+### 📚 Reference & Community
+
+- **[FAQ](faq.md)** ⭐ - Frequently asked questions organized by topic
+- **[Changelog](changelog.md)** - Version history and release notes
+- **[Testing Guide](testing-guide.md)** - Comprehensive testing workflow
+- **[Contributing Guide](contributing-guide.md)** - Development workflow and code standards
 
 ---
 
-## Key Concepts
+## 🏗️ Architecture
 
-### Execution Modes
-
-Soothe provides multiple execution modes for different use cases:
-
-| Mode | When to Use | Command |
-|------|-------------|---------|
-| **Default (TUI)** | Standard tasks, research, file operations | `soothe -p "your query"` or just `soothe` |
-| **Headless** | Quick one-off queries, scripts | `soothe -p "your query" --no-tui` |
-| **Autonomous** | Complex multi-step workflows | `soothe autopilot run "your query"` |
-| **Daemon** | Background operations, remote access | `soothed start` |
-
-Learn more: [Getting Started](getting-started.md#execution-modes)
-
-### Architecture Overview
-
-Soothe uses a **Plan → Execute** execution loop:
+### Three-Level Execution Model
 
 ```
-User Query → PLAN (LLM plans, assesses progress, decides steps) → EXECUTE (execute tools)
-                ↑                                                                                ↓
-                └────────────────── Retry/Adjust ←───────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ GoalEngine: Autonomous Goal Management (RFC-200)           │
+│ • Manages goal DAGs, delegates single goals to AgentLoop   │
+│ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update     │
+└─────────────────────────────────────────────────────────────┘
+                          ↓ PERFORM (full delegation)
+┌─────────────────────────────────────────────────────────────┐
+│ AgentLoop: Agentic Goal Execution (RFC-201)                 │
+│ • Executes single goals through Plan → Execute iterations   │
+│ • Loop: Plan → Execute (max ~8 iterations)                 │
+└─────────────────────────────────────────────────────────────┘
+                          ↓ EXECUTE (step execution)
+┌─────────────────────────────────────────────────────────────┐
+│ CoreAgent: Runtime (RFC-100)                                │
+│ • Model → Tools → Model loop (LangGraph native)            │
+│ • Foundation: create_soothe_agent() → CompiledStateGraph    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Key Benefits**:
-- Automatic strategy adjustment based on results
+**Key Principles:**
+- **Protocol-first design** - All modules defined as protocols with pluggable implementations
+- **Durable by default** - Agent state persists and recovers from crashes
+- **Plan-driven execution** - Complex goals decomposed into plans with steps
+- **Least-privilege delegation** - Fine-grained permissions for tools and subagents
+
+**Learn more:** [Architecture Overview](architecture/README.md) | [RFC-000](../specs/RFC-000-system-conceptual-design.md)
+
+### Framework Stack
+
+```
++------------------------------------------------------+
+|  Soothe (orchestration framework)                    |
+|  - GoalEngine: Autonomous Goal Management            |
+|  - AgentLoop: Agentic Goal Execution                 |
+|  - CoreAgent: Runtime                                |
+|  - ContextProtocol, MemoryProtocol,                  |
+|    PlannerProtocol, PolicyProtocol,                  |
+|    DurabilityProtocol                                |
++------------------------------------------------------+
+|  deepagents (agent framework)                        |
+|  - BackendProtocol, AgentMiddleware,                 |
+|    SubAgent/CompiledSubAgent, SummarizationMiddleware|
++------------------------------------------------------+
+|  langchain / langgraph (runtime layer)               |
+|  - BaseChatModel, BaseTool, StateGraph,              |
+|    Checkpointer, BaseStore, RemoteGraph              |
++------------------------------------------------------+
+```
+
+### Plan → Execute Loop
+
+```
+User Query
+    ↓
+PLAN (LLM plans, assesses progress, decides steps)
+    ↓
+EXECUTE (execute tools, collect results)
+    ↓
+Assess Progress → More steps needed? → PLAN
+                  ↓
+              Complete → Return Result
+```
+
+**Benefits:**
+- Automatic strategy adjustment
 - Structured tool outputs for reliable evaluation
 - Sub-second responses for simple queries
 - Intelligent iteration for complex tasks
 
-Learn more: [RFC-201: AgentLoop Plan–Execute Loop](../specs/RFC-201-agentloop-plan-execute-loop.md)
+---
 
-### Plugin System
+## 🔌 Plugin System
 
-Soothe's extensible architecture allows you to add custom capabilities:
+Extend Soothe with custom tools and subagents:
 
 ```python
 from soothe_sdk.plugin import plugin, tool
@@ -95,7 +196,26 @@ class MyPlugin:
         return f"Result: {arg}"
 ```
 
-Learn more: [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension-system.md)
+**Learn more:** [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension-system.md)
+
+---
+
+## 📚 Additional Resources
+
+- **[Architecture Overview](architecture/README.md)** - Detailed system design
+- **[RFC Index](../specs/rfc-index.md)** - All specifications (73 RFCs)
+- **[Implementation Guides](../impl/)** - Implementation tracking
+- **[Debugging Guide](../howto_debug.md)** - Debug and diagnostics
+- **[User Guide](../user_guide.md)** - Comprehensive user documentation
+
+---
+
+## 🆘 Getting Help
+
+- **Documentation**: You're here! Browse the guides above.
+- **Troubleshooting**: See [Troubleshooting Guide](troubleshooting.md)
+- **Issues**: Report bugs on GitHub Issues
+- **Community**: Join discussions on GitHub Discussions
 
 ---
 
