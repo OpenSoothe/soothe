@@ -14,14 +14,20 @@ StreamChunk = tuple[tuple[str, ...], str, Any]
 
 
 @dataclass(frozen=True)
-class AutopilotJob:
-    """Autopilot-dispatched goal job (RFC-222 revised).
+class GoalDispatchEnvelope:
+    """Transient dispatch message for worker goal execution (RFC-222 revised).
 
-    Attached to ``LoopRunRequest.autopilot_job`` when the daemon's
-    ``AutopilotService`` dispatches a goal to a subprocess worker. When
-    present, the worker hydrates AgentLoop from ``merged_context`` and
-    executes ``goal_description``, ignoring ``LoopRunRequest.user_input``.
-    When ``LoopRunRequest.autopilot_job`` is ``None``, the worker runs
+    This is a **wire message**, not a persistent entity. Created by the daemon's
+    ``AutopilotService`` when dispatching a goal to a subprocess worker, and
+    consumed by the worker's ``SootheRunner.astream(autopilot_job=...)`` path.
+
+    **Terminology note (RFC-228):**
+    - "Job" in RFC-228/Desktop UX = user-facing term for a **root Goal** (persistent)
+    - ``GoalDispatchEnvelope`` here = transient dispatch **message** (not stored)
+
+    Attached to ``LoopRunRequest.autopilot_job`` when present. The worker
+    hydrates AgentLoop from ``merged_context`` and executes ``goal_description``,
+    ignoring ``LoopRunRequest.user_input``. When ``None``, the worker runs
     solo-mode behavior — today's path, unchanged.
 
     Attributes:
@@ -38,6 +44,14 @@ class AutopilotJob:
     merged_context: GoalDispatchContextBundle
     deadline_seconds: float | None = None
     attempt: int = 1
+
+
+# Backward-compatible alias for gradual migration (deprecated)
+AutopilotJob = GoalDispatchEnvelope
+"""Deprecated alias for GoalDispatchEnvelope.
+
+Will be removed in a future release. Use GoalDispatchEnvelope instead.
+"""
 
 
 @dataclass
@@ -92,7 +106,7 @@ class LoopRunRequest:
     clarification_answers: list[str] | None = None
     # RFC-222 revised: set by daemon's AutopilotService for autopilot-dispatched
     # goals. None for solo-mode requests (default).
-    autopilot_job: AutopilotJob | None = None
+    autopilot_job: GoalDispatchEnvelope | None = None
 
     def resolve_workspace_path(self) -> str:
         """Absolute workspace path for ``SootheRunner.astream(workspace=...)``."""
@@ -126,4 +140,10 @@ class LoopRunnerProtocol(Protocol):
         ...
 
 
-__all__ = ["AutopilotJob", "LoopRunRequest", "LoopRunnerProtocol", "StreamChunk"]
+__all__ = [
+    "GoalDispatchEnvelope",
+    "AutopilotJob",
+    "LoopRunRequest",
+    "LoopRunnerProtocol",
+    "StreamChunk",
+]
