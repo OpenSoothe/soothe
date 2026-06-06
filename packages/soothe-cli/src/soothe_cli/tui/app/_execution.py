@@ -490,7 +490,7 @@ class _ExecutionMixin:
         elif cmd == "/help":
             await self._mount_message(UserMessage(command))
             help_body = (
-                "Commands: /quit, /clear, /editor, /autopilot, /mcp, "
+                "Commands: /quit, /clear, /editor, /autopilot <task>, /autopilot-dashboard, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /theme, "
                 "/tokens, /resume, "
@@ -633,7 +633,19 @@ class _ExecutionMixin:
             args = command.strip()[len("/skill-creator") :].strip()
             rewritten = f"/skill:skill-creator {args}" if args else "/skill:skill-creator"
             await self._handle_skill_command(rewritten)
-        elif cmd == "/autopilot":
+        elif cmd == "/autopilot" or cmd.startswith("/autopilot "):
+            # Submit autopilot job via HTTP REST (like CLI `soothe autopilot run`)
+            args = command.strip()[len("/autopilot") :].strip()
+            if not args:
+                await self._mount_message(UserMessage(command))
+                await self._mount_message(
+                    AppMessage(
+                        "Usage: /autopilot <task description>\nExample: /autopilot refactor the auth module"
+                    )
+                )
+                return
+            await self._submit_autopilot_job(args)
+        elif cmd == "/autopilot-dashboard":
             await self._show_autopilot_dashboard()
         elif cmd == "/mcp":
             await self._show_mcp_viewer()
