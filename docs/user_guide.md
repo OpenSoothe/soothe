@@ -11,8 +11,8 @@ Soothe can work autonomously on complex tasks, maintain context across long conv
 Get started with Soothe in minutes:
 
 ```bash
-# 1. Install Soothe
-pip install soothe
+# 1. Install Soothe (complete stack)
+pip install -U 'soothe[all]' soothe-cli soothe-daemon
 
 # 2. Initialize default configuration
 soothe config init
@@ -24,7 +24,7 @@ export OPENAI_API_KEY=sk-your-key-here
 soothe
 ```
 
-For detailed setup instructions, see the [Getting Started Guide](wiki/getting-started.md).
+For detailed setup instructions, see the [Getting Started Guide](wiki/getting-started/README.md).
 
 ---
 
@@ -55,7 +55,10 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 🚀 Getting Started
 
-- [Getting Started Guide](wiki/getting-started.md) - Install, configure, and run your first session
+- [Getting Started Hub](wiki/getting-started/README.md) - Installation, configuration, first run
+  - [Installation Guide](wiki/getting-started/Installation.md) - System requirements and setup
+  - [Quick-Start Guide](wiki/getting-started/Quick-Start.md) - Your first session and workflows
+  - [Basic Concepts](wiki/getting-started/Basic-Concepts.md) - Core architecture and concepts
 - [CLI Reference](wiki/cli-reference.md) - Complete command-line interface documentation
 - [TUI Guide](wiki/tui-guide.md) - Terminal UI usage, slash commands, and keyboard shortcuts
 
