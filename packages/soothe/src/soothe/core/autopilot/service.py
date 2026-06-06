@@ -649,7 +649,7 @@ class AutopilotService:
 
     async def _dispatch_to_worker(self, goal: Goal, worker: Any) -> None:
         """Build the LoopRunRequest and spawn a stream-consuming task."""
-        from soothe.protocols.runner import AutopilotJob, LoopRunRequest
+        from soothe.protocols.runner import GoalDispatchEnvelope, LoopRunRequest
 
         # Phase C ships an empty merged_context. Phase C+ wires the
         # ContextProjector to fetch and project parents' contributions.
@@ -665,7 +665,7 @@ class AutopilotService:
             thread_id=f"autopilot__goal_{goal.id}__attempt_{goal.retry_count + 1}",
             user_input="",
             client_workspace=goal.workspace,
-            autopilot_job=AutopilotJob(
+            autopilot_job=GoalDispatchEnvelope(
                 goal_id=goal.id,
                 goal_description=goal.description,
                 merged_context=bundle,

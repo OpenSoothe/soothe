@@ -511,7 +511,7 @@ class SootheRunner(
         preferred_subagent: str | None = None,
         client_loop_id: str | None = None,
         intent_hint: IntentHint | None = None,
-        autopilot_job: Any = None,  # AutopilotJob | None — see RFC-222 revised
+        autopilot_job: Any = None,  # GoalDispatchEnvelope | None — see RFC-222 revised
         clarification_mode: str | None = None,  # RFC-622 per-request override
         clarification_answer: bool = False,  # RFC-622: resume hint
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answers

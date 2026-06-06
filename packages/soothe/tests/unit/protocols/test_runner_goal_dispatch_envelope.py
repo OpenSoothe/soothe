@@ -1,4 +1,4 @@
-"""Tests for AutopilotJob + LoopRunRequest.autopilot_job (RFC-222 revised)."""
+"""Tests for GoalDispatchEnvelope + LoopRunRequest.autopilot_job (RFC-222 revised)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from soothe.core.goal_engine.models import (
     GoalDispatchContextBundle,
     ParentFinding,
 )
-from soothe.protocols.runner import AutopilotJob, LoopRunRequest
+from soothe.protocols.runner import GoalDispatchEnvelope, LoopRunRequest
 
 
 def _sample_bundle() -> GoalDispatchContextBundle:
@@ -20,9 +20,9 @@ def _sample_bundle() -> GoalDispatchContextBundle:
     )
 
 
-class TestAutopilotJob:
+class TestGoalDispatchEnvelope:
     def test_construct_minimal(self) -> None:
-        job = AutopilotJob(
+        job = GoalDispatchEnvelope(
             goal_id="g1",
             goal_description="do thing",
             merged_context=GoalDispatchContextBundle(),
@@ -32,7 +32,7 @@ class TestAutopilotJob:
         assert job.deadline_seconds is None
 
     def test_construct_with_deadline_and_retry(self) -> None:
-        job = AutopilotJob(
+        job = GoalDispatchEnvelope(
             goal_id="g1",
             goal_description="do thing",
             merged_context=GoalDispatchContextBundle(),
@@ -43,13 +43,26 @@ class TestAutopilotJob:
         assert job.attempt == 3
 
     def test_is_frozen(self) -> None:
-        job = AutopilotJob(
+        job = GoalDispatchEnvelope(
             goal_id="g1",
             goal_description="do thing",
             merged_context=GoalDispatchContextBundle(),
         )
         with pytest.raises(Exception):  # FrozenInstanceError
             job.attempt = 5  # type: ignore[misc]
+
+    def test_backward_compat_alias(self) -> None:
+        """AutopilotJob alias still works for gradual migration."""
+        from soothe.protocols.runner import AutopilotJob
+
+        job = AutopilotJob(
+            goal_id="g1",
+            goal_description="do thing",
+            merged_context=GoalDispatchContextBundle(),
+        )
+        assert job.goal_id == "g1"
+        # Verify it's the same class
+        assert AutopilotJob is GoalDispatchEnvelope
 
 
 class TestLoopRunRequestAutopilotJob:
@@ -75,13 +88,13 @@ class TestLoopRunRequestAutopilotJob:
         assert decoded.user_input == "hello"
 
     def test_round_trip_pickle_with_autopilot_job(self) -> None:
-        """When set, the AutopilotJob (incl. nested bundle) survives pickling."""
+        """When set, the GoalDispatchEnvelope (incl. nested bundle) survives pickling."""
         bundle = _sample_bundle()
         request = LoopRunRequest(
             loop_id="L1",
             thread_id="T1",
             user_input="",
-            autopilot_job=AutopilotJob(
+            autopilot_job=GoalDispatchEnvelope(
                 goal_id="g1",
                 goal_description="do thing",
                 merged_context=bundle,
@@ -105,7 +118,7 @@ class TestLoopRunRequestAutopilotJob:
             timeout_seconds=30.0,
             autonomous=True,
             max_iterations=5,
-            autopilot_job=AutopilotJob(
+            autopilot_job=GoalDispatchEnvelope(
                 goal_id="g1",
                 goal_description="d",
                 merged_context=bundle,

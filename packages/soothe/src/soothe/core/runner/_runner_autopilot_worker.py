@@ -5,7 +5,7 @@ runs ``SootheRunner.astream(autopilot_job=...)``. ``astream`` routes that
 case to ``_run_single_autopilot_goal`` defined here.
 
 This mixin owns the **worker side** of the RFC-222 contract: take one
-``AutopilotJob``, hydrate AgentLoop, run it, emit exactly one
+``GoalDispatchEnvelope``, hydrate AgentLoop, run it, emit exactly one
 ``GoalCompletionChunk`` with a ``GoalDispatchContextContribution``, then a
 terminal ``done`` chunk. The runner never reaches into ``GoalEngine`` from
 this path — autopilot owns DAG state on the daemon side.
@@ -42,7 +42,7 @@ from ._runner_shared import StreamChunk, _custom
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe.protocols.runner import AutopilotJob
+    from soothe.protocols.runner import GoalDispatchEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class AutopilotWorkerMixin:
 
     async def _run_single_autopilot_goal(
         self,
-        job: AutopilotJob,
+        job: GoalDispatchEnvelope,
         *,
         thread_id: str | None,
         workspace: str,
@@ -69,7 +69,7 @@ class AutopilotWorkerMixin:
         """Run one autopilot-dispatched goal end-to-end (RFC-222 revised).
 
         Args:
-            job: AutopilotJob carrying goal_id, goal_description, the
+            job: GoalDispatchEnvelope carrying goal_id, goal_description, the
                 pre-merged GoalDispatchContextBundle, deadline, attempt.
             thread_id: Thread id for this attempt (autopilot supplies
                 ``autopilot__goal_<id>__attempt_<N>``).
@@ -251,7 +251,7 @@ class AutopilotWorkerMixin:
 
     def _goal_completion_chunk(
         self,
-        job: AutopilotJob,
+        job: GoalDispatchEnvelope,
         *,
         outcome: str,
         plan_result: PlanResult | None,
