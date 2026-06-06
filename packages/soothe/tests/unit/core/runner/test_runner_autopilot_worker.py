@@ -17,7 +17,7 @@ import pytest
 from soothe.core.goal_engine.models import GoalDispatchContextBundle
 from soothe.core.loop.state.schemas import PlanResult
 from soothe.core.runner._runner_autopilot_worker import AutopilotWorkerMixin
-from soothe.protocols.runner import AutopilotJob
+from soothe.protocols.runner import GoalDispatchEnvelope
 
 _COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
 
@@ -25,8 +25,8 @@ _COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
 # ---- Helpers / fakes ---------------------------------------------------
 
 
-def _job(goal_id: str = "g1", attempt: int = 1) -> AutopilotJob:
-    return AutopilotJob(
+def _job(goal_id: str = "g1", attempt: int = 1) -> GoalDispatchEnvelope:
+    return GoalDispatchEnvelope(
         goal_id=goal_id,
         goal_description="do thing",
         merged_context=GoalDispatchContextBundle(),
