@@ -242,7 +242,9 @@ class GoalEngine:
         active_ids = {g.id for g in self._goals.values() if g.status == "active"}
 
         for goal in self._goals.values():
-            if goal.status not in ("pending", "active"):
+            # Only pending goals are candidates for dispatch.
+            # Active goals are already being executed by a worker.
+            if goal.status != "pending":
                 continue
 
             # Hard dependencies: all must be terminal
