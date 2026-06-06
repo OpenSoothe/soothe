@@ -81,7 +81,7 @@ agent:
 # SUBAGENTS
 # ============================================================
 # Built-in subagents (explore, plan, tacitus) are registered automatically.
-# Community subagents (claude, browser_use) require soothe-community package.
+# Community subagents (claude, browser_use) require soothe-plugins package.
 subagents:
   sample_echo:
     enabled: true

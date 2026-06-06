@@ -43,7 +43,7 @@ Route queries to specialized subagents:
 | `/tacitus <query>` | Tacitus | Multi-source public-domain research |
 | `/explore <query>` | Explore | Readonly repo search |
 | `/plan` | Plan | Plan-mode routing |
-| `/«id» <query>` | Configured id | Optional plugins from soothe-community (see that repo for ids) |
+| `/«id» <query>` | Configured id | Optional plugins from soothe-plugins (see that repo for ids) |
 
 ## Keyboard Shortcuts
 
@@ -69,7 +69,7 @@ Prefix your message with a number to route to a specific subagent:
 | `7` | Skillify | Retrieving relevant skills |
 | `8` | Weaver | Generating specialized agents |
 
-Numeric slots `2`–`6` are reserved for optional installs; see soothe-community for the current mapping on your distribution.
+Numeric slots `2`–`6` are reserved for optional installs; see soothe-plugins for the current mapping on your distribution.
 
 **Examples:**
 

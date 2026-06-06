@@ -32,9 +32,9 @@ OPENAI_API_KEY=sk-your-key-here
 
 ## Subagent Issues
 
-### Optional soothe-community delegate not working
+### Optional soothe-plugins delegate not working
 
-Optional delegated agents ship in **`soothe-community`**, not as `soothe[…]` extras. Install that package and follow its README for provider keys, extras, and `subagents.*` YAML.
+Optional delegated agents ship in **`soothe-plugins`**, not as `soothe[…]` extras. Install that package and follow its README for provider keys, extras, and `subagents.*` YAML.
 
 Ensure matching `subagents.<name>.enabled: true` in your agent config for the delegate you enabled.
 

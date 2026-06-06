@@ -1,4 +1,4 @@
-"""Integration: soothe-community ``sample_echo`` subagent via resolver and CoreAgent."""
+"""Integration: soothe-plugins ``sample_echo`` subagent via resolver and CoreAgent."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from soothe.core.agent import create_soothe_agent
 from soothe.core.resolver import resolve_subagents
 from soothe.plugin.global_registry import load_plugins
 
-pytest.importorskip("soothe_community.sample_echo", reason="soothe-community not installed")
+pytest.importorskip("soothe_plugins.sample_echo", reason="soothe-plugins not installed")
 
 
 @pytest.fixture(autouse=True)

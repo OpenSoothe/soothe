@@ -192,7 +192,7 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 **Primary**: LLM-driven via deepagents `task` tool. Main LLM decides delegation based on request and subagent descriptions.
 
-**Available**: Main (orchestrator), Planner, Scout, Research (RFC-601), Explore, Plan; optional plugin-backed agents when installed (see soothe-community / RFC-601 community doc).
+**Available**: Main (orchestrator), Planner, Scout, Research (RFC-601), Explore, Plan; optional plugin-backed agents when installed (see soothe-plugins / RFC-601 community doc).
 
 **Deprecated**: Numeric prefix routing (e.g., `4 search...` → Research). Retained for compatibility but not used in main flow. Use natural language routing.
 

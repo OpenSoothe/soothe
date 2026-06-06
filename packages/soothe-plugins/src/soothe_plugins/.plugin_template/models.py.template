@@ -1,0 +1,39 @@
+"""Data models for your plugin.
+
+Define Pydantic models for structured data used by your plugin.
+"""
+
+from datetime import datetime
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+
+class YourDataModel(BaseModel):
+    """Sample data model.
+
+    Attributes:
+        id: Unique identifier.
+        name: Name or title.
+        created_at: Creation timestamp.
+        metadata: Optional metadata.
+    """
+
+    id: str
+    name: str
+    created_at: datetime = Field(default_factory=datetime.now)
+    metadata: Optional[dict[str, Any]] = None
+
+
+class YourResult(BaseModel):
+    """Result model for your plugin operations.
+
+    Attributes:
+        success: Whether operation succeeded.
+        data: Result data.
+        error: Error message if failed.
+    """
+
+    success: bool
+    data: Optional[YourDataModel] = None
+    error: Optional[str] = None

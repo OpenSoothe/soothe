@@ -272,7 +272,7 @@ class TestLoggingSetup:
         assert Path(file_handlers[0].baseFilename) == log_file
 
     def test_community_logger_receives_file_handler(self, tmp_path: Path) -> None:
-        """soothe_community.* loggers share the same rotating file handler as soothe.*."""
+        """soothe_plugins.* loggers share the same rotating file handler as soothe.*."""
         log_file = tmp_path / "test.log"
         cfg = SootheConfig(
             observability={
@@ -292,7 +292,7 @@ class TestLoggingSetup:
         assert "community runtime probe" in log_file.read_text(encoding="utf-8")
 
     def test_no_duplicate_handlers_on_community_logger(self, tmp_path: Path) -> None:
-        """Repeated setup_logging does not duplicate soothe_community file handlers."""
+        """Repeated setup_logging does not duplicate soothe_plugins file handlers."""
         log_file = tmp_path / "test.log"
         cfg = SootheConfig(
             observability={
