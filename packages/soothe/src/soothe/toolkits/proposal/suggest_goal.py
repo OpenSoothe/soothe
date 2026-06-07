@@ -1,4 +1,4 @@
-"""suggest_goal tool for proactive subgoal creation (RFC-204 Group C)."""
+"""suggest_goal tool for proactive subgoal creation."""
 
 from __future__ import annotations
 
@@ -48,6 +48,9 @@ class SuggestGoalTool(BaseTool):
 
     The suggested goal will be created as a child of the current goal,
     inheriting the parent's context and priority (adjusted by +10 by default).
+
+    The proposal_queue is accessed via ToolRuntime.state["proposal_queue"]
+    (injected by AgentLoop executor) or via direct attribute (factory pattern).
     """
 
     name: str = "suggest_goal"
@@ -59,7 +62,7 @@ class SuggestGoalTool(BaseTool):
     )
     args_schema: type[BaseModel] = SuggestGoalInput
 
-    # ProposalQueue injected at runtime by the runner
+    # ProposalQueue injected at runtime by the runner (factory pattern)
     proposal_queue: Any = None
 
     def _run(
@@ -68,15 +71,31 @@ class SuggestGoalTool(BaseTool):
         priority: int = 50,
         depends_on: list[str] = [],
         rationale: str = "",
+        runtime: Any | None = None,  # ToolRuntime injection
     ) -> str:
-        """Suggest a new subgoal (synchronous)."""
-        if self.proposal_queue is None:
+        """Suggest a new subgoal (synchronous).
+
+        Args:
+            description: Goal description.
+            priority: Priority 0-100.
+            depends_on: Optional dependency goal IDs.
+            rationale: Why this goal is needed.
+            runtime: ToolRuntime with state["proposal_queue"] from executor.
+        """
+        # Resolve proposal_queue: try runtime.state first, then direct attribute
+        queue = None
+        if runtime is not None and hasattr(runtime, "state"):
+            queue = runtime.state.get("proposal_queue")
+        if queue is None:
+            queue = self.proposal_queue
+
+        if queue is None:
             logger.warning("suggest_goal: proposal_queue not available")
             return "Error: proposal_queue not configured for this execution context"
 
         from soothe.core.goal_engine.proposal_queue import Proposal
 
-        self.proposal_queue.enqueue(
+        queue.enqueue(
             Proposal(
                 type="suggest_goal",
                 goal_id="",  # Filled by runner with source goal
@@ -99,9 +118,10 @@ class SuggestGoalTool(BaseTool):
         priority: int = 50,
         depends_on: list[str] = [],
         rationale: str = "",
+        runtime: Any | None = None,  # ToolRuntime injection
     ) -> str:
         """Suggest a new subgoal (async)."""
-        return self._run(description, priority, depends_on, rationale)
+        return self._run(description, priority, depends_on, rationale, runtime)
 
 
 def create_suggest_goal_tool(proposal_queue: Any) -> SuggestGoalTool:

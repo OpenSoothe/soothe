@@ -337,6 +337,8 @@ class ToolsConfig(BaseModel):
         video: Video analysis tools config.
         http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
         deepxiv: DeepXiv academic paper search tools (enabled by default).
+        proposal: Proposal tools config (suggest_goal, add_finding) - RFC-204 Group C.
+            Requires proposal_queue from AgentLoop runtime context.
     """
 
     execution: ToolConfig = Field(default_factory=ToolConfig)
@@ -349,6 +351,13 @@ class ToolsConfig(BaseModel):
     video: ToolConfig = Field(default_factory=ToolConfig)
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
     deepxiv: DeepxivToolsConfig = Field(default_factory=DeepxivToolsConfig)
+    proposal: ToolConfig = Field(
+        default_factory=lambda: ToolConfig(
+            enabled=False
+        ),  # Disabled by default - requires autopilot context
+        description="Proposal tools (suggest_goal, add_finding) - RFC-204 Group C. "
+        "Enabled automatically when running in autopilot mode.",
+    )
 
 
 class PersistenceConfig(BaseModel):
