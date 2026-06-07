@@ -554,13 +554,16 @@ class ProtocolsConfig(BaseModel):
 
 
 class AutonomousConfig(BaseModel):
-    """Unified self-driving configuration (autonomous + autopilot merged).
+    """Unified self-running configuration (autonomous + autopilot merged).
 
     Controls 24/7 self-running behavior for both goal-level and daemon-level.
     Merges former 'autonomous' and 'autopilot' sections into one unified config.
 
     Args:
-        enabled_by_default: Whether new runs default to autonomous mode.
+        enabled: Whether the AutopilotService scheduling loop is enabled.
+            When False, the daemon constructs the service but does not start
+            the scheduling loop. HTTP /autopilot/submit endpoints are available
+            but goals won't be dispatched automatically. Default is False.
         max_iterations: Maximum iterations per autonomous thread (goal-level).
         max_retries: Maximum retries per goal on failure.
         max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
@@ -578,8 +581,16 @@ class AutonomousConfig(BaseModel):
         webhooks: Webhook URLs by event type (e.g., on_goal_completed).
     """
 
-    # === Goal execution (from old autonomous) ===
-    enabled_by_default: bool = False
+    # === Autopilot scheduling (daemon-level) ===
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable the AutopilotService scheduling loop. When True, the daemon "
+            "starts the scheduling loop on startup for 24/7 autonomous operation. "
+            "When False (default), the service is constructed but the scheduling "
+            "loop does not start automatically; goals must be dispatched manually."
+        ),
+    )
     max_iterations: int = 10
     max_retries: int = 2
     max_total_goals: int = Field(default=50, ge=1, le=500)
