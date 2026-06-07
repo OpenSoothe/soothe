@@ -58,6 +58,9 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     # BM-001 fix: propagate workspace to configurable so tools use client workspace
     if ctx.loop_state.workspace:
         base["configurable"]["workspace"] = ctx.loop_state.workspace
+    # RFC-204 Group C: propagate proposal_queue for Layer 2 tools
+    if ctx.proposal_queue is not None:
+        base["configurable"]["proposal_queue"] = ctx.proposal_queue
     cfg = ctx.agent_loop.config
     run_name = loop_graph_langfuse_run_display_name(cfg.observability.langfuse.trace_name)
     merged = merge_langfuse_runnable_config(
