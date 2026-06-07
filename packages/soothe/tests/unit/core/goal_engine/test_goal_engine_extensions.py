@@ -439,10 +439,10 @@ class TestConflictAwareScheduling:
         conflicting.conflicts_with = [active_g.id]
 
         ready = await engine.ready_goals()
-        # active_g is already active (returned by ready_goals),
-        # but conflicting is deferred due to the conflict check.
-        assert len(ready) == 1
-        assert ready[0].id == active_g.id
+        # active_g is already active, so not returned by ready_goals().
+        # conflicting is deferred due to the conflict check.
+        # Result: no goals are ready.
+        assert len(ready) == 0
 
     @pytest.mark.asyncio
     async def test_non_conflicting_goal_proceeds(self) -> None:
@@ -453,15 +453,14 @@ class TestConflictAwareScheduling:
         g2 = await engine.create_goal("Independent", priority=80)
 
         ready = await engine.ready_goals(limit=10)
-        # Both the already-active goal and the independent pending goal are returned
-        assert len(ready) == 2
-        ids = {r.id for r in ready}
-        assert g1.id in ids
-        assert g2.id in ids
+        # g1 is already active, so not returned by ready_goals().
+        # g2 is pending and has no conflicts, so it's activated and returned.
+        assert len(ready) == 1
+        assert ready[0].id == g2.id
 
     @pytest.mark.asyncio
     async def test_conflict_with_inactive_goal_proceeds(self) -> None:
-        """Conflict only defers when the conflicting goal is active."""
+        """Conflict only defers when the conflicting goal is ALREADY active."""
         engine = GoalEngine()
         inactive = await engine.create_goal("Pending other", priority=90)
 
@@ -469,7 +468,9 @@ class TestConflictAwareScheduling:
         g.conflicts_with = [inactive.id]
 
         ready = await engine.ready_goals(limit=10)
-        # Both are pending; inactive is not active, so no conflict deferral
+        # Both goals are pending when checked. Conflict check uses snapshot of active goals
+        # BEFORE any activations. Since neither is active yet, both pass the conflict check
+        # and get activated in the same batch.
         assert len(ready) == 2
         ids = {r.id for r in ready}
         assert inactive.id in ids
@@ -485,9 +486,10 @@ class TestConflictAwareScheduling:
         g.conflicts_with = [active_a.id]
 
         ready = await engine.ready_goals()
-        # active_a is returned (already active), g is deferred
-        assert len(ready) == 1
-        assert ready[0].id == active_a.id
+        # active_a is already active, so not returned by ready_goals().
+        # g is deferred due to conflict with active_a.
+        # Result: no goals are ready.
+        assert len(ready) == 0
 
     @pytest.mark.asyncio
     async def test_empty_conflicts_with_proceeds(self) -> None:
@@ -497,11 +499,10 @@ class TestConflictAwareScheduling:
         g = await engine.create_goal("No conflicts")
 
         ready = await engine.ready_goals(limit=10)
-        # Both are eligible; no conflicts to defer
-        assert len(ready) == 2
-        ids = {r.id for r in ready}
-        assert g1.id in ids
-        assert g.id in ids
+        # g1 is already active, so not returned by ready_goals().
+        # g is pending with no conflicts, so it's activated and returned.
+        assert len(ready) == 1
+        assert ready[0].id == g.id
 
 
 class TestDiscoverGoalsFromFiles:
@@ -736,10 +737,10 @@ class TestReadyGoalsDAGExtended:
         assert ready[0].status == "active"
 
         # Now g1 is active, so g2 should be deferred.
-        # g1 is still returned because it is already active.
+        # ready_goals() only returns pending goals, not already-active ones.
+        # So second call returns empty (g2 deferred due to conflict).
         ready2 = await engine.ready_goals(limit=1)
-        assert len(ready2) == 1
-        assert ready2[0].id == g1.id
+        assert len(ready2) == 0
 
     @pytest.mark.asyncio
     async def test_completed_dep_unblocks_check_reactivated(self) -> None:

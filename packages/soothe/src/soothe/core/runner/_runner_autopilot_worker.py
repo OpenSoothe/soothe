@@ -34,8 +34,10 @@ from soothe.core.goal_engine.models import (
     StepSummary,
     ToolCallStats,
 )
+from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
 from soothe.core.loop import AgentLoop
 from soothe.core.loop.state.schemas import PlanResult
+from soothe.protocols.planner import GoalDirective
 
 from ._runner_shared import StreamChunk, _custom
 
@@ -90,6 +92,9 @@ class AutopilotWorkerMixin:
             f"{job.deadline_seconds}s" if job.deadline_seconds else "none",
         )
 
+        # RFC-204 Group C: Create per-goal proposal queue for Layer 2 tools
+        proposal_queue = ProposalQueue()
+
         # Lazy async checkpointer (PostgreSQL pool) must be wired before AgentLoop
         # touches CoreAgent checkpoints for anchor capture / thread forks.
         await self._ensure_checkpointer_initialized()  # type: ignore[attr-defined]
@@ -142,6 +147,7 @@ class AutopilotWorkerMixin:
                 else DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
                 loop_id=tid,
                 clarification_policy=clarification_policy,
+                proposal_queue=proposal_queue,  # RFC-204 Group C
             ):
                 if event_type == "completed":
                     plan_result = self._extract_plan_result(event_data)
@@ -162,13 +168,35 @@ class AutopilotWorkerMixin:
                 job,
                 outcome="failed",
                 plan_result=None,
+                directives=[],  # No directives on exception
                 error_text=f"{type(exc).__name__}: {exc}",
             )
             return
 
         # Normal terminal: synthesize completion chunk from final plan_result.
         outcome = self._derive_outcome(plan_result)
-        yield self._goal_completion_chunk(job, outcome=outcome, plan_result=plan_result)
+
+        # RFC-204 Group C: Drain proposal queue and convert to directives
+        proposals = proposal_queue.drain()
+        proposal_directives = _proposals_to_directives(proposals, source_goal_id=job.goal_id)
+        logger.debug(
+            "Drained %d proposals from queue, converted to %d directives",
+            len(proposals),
+            len(proposal_directives),
+        )
+
+        # Extract goal directives from Reflection (RFC-204 Group C reactive path)
+        reflection_directives = _extract_reflection_directives(plan_result)
+
+        # Merge both paths: reflection first, then proposal-derived
+        all_directives = reflection_directives + proposal_directives
+
+        yield self._goal_completion_chunk(
+            job,
+            outcome=outcome,
+            plan_result=plan_result,
+            directives=all_directives,
+        )
 
     # ---- helpers --------------------------------------------------------
 
@@ -255,6 +283,7 @@ class AutopilotWorkerMixin:
         *,
         outcome: str,
         plan_result: PlanResult | None,
+        directives: list[GoalDirective] = [],  # RFC-204 Group C
         error_text: str | None = None,
     ) -> StreamChunk:
         """Build the single terminal ``GoalCompletionChunk`` for ``job``.
@@ -270,6 +299,7 @@ class AutopilotWorkerMixin:
             "outcome": outcome,
             "attempt": job.attempt,
             "context_contribution": contribution.model_dump(mode="json"),
+            "goal_directives": [d.model_dump(mode="json") for d in directives],  # RFC-204 Group C
         }
         if plan_result is not None:
             payload["plan_result_status"] = getattr(plan_result, "status", None)
@@ -277,3 +307,82 @@ class AutopilotWorkerMixin:
         if error_text is not None:
             payload["error_text"] = error_text
         return _custom(payload)
+
+
+def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalDirective]:
+    """Extract goal_directives from PlanResult if Reflection populated them.
+
+    Reflection (core/loop/utils/reflection.py) generates GoalDirectives when
+    step failures indicate prerequisite issues. The directives are attached
+    to the Reflection model which flows through PlanResult.
+
+    Args:
+        plan_result: The final PlanResult from AgentLoop execution.
+
+    Returns:
+        List of GoalDirective objects (may be empty).
+    """
+    if plan_result is None:
+        return []
+
+    # Reflection attaches directives via planner.reflect()
+    # Check decision field (from AgentDecision / PlannerOutput)
+    decision = getattr(plan_result, "decision", None)
+    if decision is None:
+        return []
+
+    # GoalDirective list may be on decision.goal_directives
+    directives = getattr(decision, "goal_directives", None)
+    if isinstance(directives, list):
+        # Filter to ensure all items are GoalDirective instances
+        return [d for d in directives if isinstance(d, GoalDirective)]
+
+    return []
+
+
+def _proposals_to_directives(
+    proposals: list[Proposal],
+    source_goal_id: str,
+) -> list[GoalDirective]:
+    """Convert ProposalQueue proposals to GoalDirectives (RFC-204 Group C).
+
+    Handles the proactive path: Layer 2 tools enqueue proposals during
+    execution, and this function converts them to GoalDirectives that
+    flow through GoalCompletionChunk to the daemon's GoalEngine.
+
+    Args:
+        proposals: List of Proposal objects from the queue.
+        source_goal_id: Goal that owns this queue (for parent_id default).
+
+    Returns:
+        List of GoalDirective objects for 'suggest_goal' proposals.
+        'add_finding' proposals are NOT converted to directives —
+        they enrich GoalDispatchContextContribution separately.
+    """
+    directives: list[GoalDirective] = []
+
+    for p in proposals:
+        if p.type == "suggest_goal":
+            payload = p.payload or {}
+            description = payload.get("description", "")
+            if not description:
+                logger.warning("suggest_goal proposal missing description, skipping")
+                continue
+
+            directives.append(
+                GoalDirective(
+                    action="create",
+                    description=description,
+                    priority=payload.get("priority", 50),
+                    parent_id=None,  # Defaults to source_goal_id in apply_directives
+                    depends_on=payload.get("depends_on", []),
+                    rationale=payload.get("rationale", ""),
+                )
+            )
+
+        elif p.type == "add_finding":
+            # Findings enrich context_contribution, not goal_directives
+            # They are handled separately in _build_contribution (Phase C.4)
+            logger.debug("add_finding proposal will be added to context_contribution")
+
+    return directives
