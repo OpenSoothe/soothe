@@ -3,7 +3,6 @@
 import pytest
 
 from soothe.core.goal_engine.engine import GoalEngine
-from soothe.core.goal_engine.models import EvidenceBundle
 from soothe.protocols.planner import GoalDirective
 
 
@@ -14,7 +13,7 @@ class TestApplyDirectives:
     async def test_create_directive_creates_goal(self) -> None:
         """'create' directive should create a new goal."""
         engine = GoalEngine()
-        parent = await engine.create_goal("parent goal", goal_id="g_parent", priority=50)
+        await engine.create_goal("parent goal", goal_id="g_parent", priority=50)
 
         directives = [
             GoalDirective(action="create", description="subtask A", priority=60),
