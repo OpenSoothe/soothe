@@ -40,7 +40,7 @@ class TestSootheConfig:
         assert cfg.providers == []
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
-        assert cfg.agent.autonomous.enabled_by_default is False
+        assert cfg.agent.autonomous.enabled is False
 
     def test_yaml_with_daemon_top_level_block_loads(self, tmp_path: Path) -> None:
         """Daemon-only keys may appear in legacy agent YAML; they must not break parsing."""
