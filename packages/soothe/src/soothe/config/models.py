@@ -352,11 +352,9 @@ class ToolsConfig(BaseModel):
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
     deepxiv: DeepxivToolsConfig = Field(default_factory=DeepxivToolsConfig)
     proposal: ToolConfig = Field(
-        default_factory=lambda: ToolConfig(
-            enabled=False
-        ),  # Disabled by default - requires autopilot context
-        description="Proposal tools (suggest_goal, add_finding) - RFC-204 Group C. "
-        "Enabled automatically when running in autopilot mode.",
+        default_factory=ToolConfig,  # Enabled by default - safe, just enqueues proposals
+        description="Proposal tools (suggest_goal, add_finding). "
+        "Tools for proactively suggesting subgoals during execution.",
     )
 
 
