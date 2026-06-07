@@ -329,6 +329,43 @@ class HttpRestChannel(Channel):
                 return {"status": "rejected", "goal_id": goal_id}
             raise HTTPException(status_code=404, detail="Confirmation not found")
 
+        @self._app.post("/api/v1/autopilot/goals/{goal_id}/resume")
+        async def autopilot_resume_goal(goal_id: str) -> dict[str, Any]:
+            """Resume a suspended/blocked goal.
+
+            Reactivates a suspended or blocked goal back to pending status
+            so the scheduler can pick it up for execution.
+            """
+            service = self._require_autopilot_service()
+            goal_engine = service._goal_engine
+
+            # Check goal exists
+            goal = await goal_engine.get_goal(goal_id)
+            if goal is None:
+                raise HTTPException(status_code=404, detail="Goal not found")
+
+            # Check goal is in a resumable state
+            if goal.status not in ("suspended", "blocked"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Goal is not paused (status: {goal.status})",
+                )
+
+            # Reactivate the goal
+            try:
+                reactivated = await goal_engine.reactivate_goal(goal_id)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to reactivate goal: {exc}",
+                )
+
+            return {
+                "status": "reactivated",
+                "goal_id": goal_id,
+                "new_status": reactivated.status,
+            }
+
         @self._app.post("/api/v1/autopilot/wake")
         async def autopilot_wake() -> dict[str, Any]:
             """Exit dreaming mode — resume active execution."""

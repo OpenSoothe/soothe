@@ -337,7 +337,7 @@ class ToolsConfig(BaseModel):
         video: Video analysis tools config.
         http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
         deepxiv: DeepXiv academic paper search tools (enabled by default).
-        proposal: Proposal tools config (suggest_goal, add_finding) - RFC-204 Group C.
+        goaling: Goaling tools config (suggest_goal, add_finding) - RFC-204 Group C.
             Requires proposal_queue from AgentLoop runtime context.
     """
 
@@ -351,9 +351,9 @@ class ToolsConfig(BaseModel):
     video: ToolConfig = Field(default_factory=ToolConfig)
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
     deepxiv: DeepxivToolsConfig = Field(default_factory=DeepxivToolsConfig)
-    proposal: ToolConfig = Field(
+    goaling: ToolConfig = Field(
         default_factory=ToolConfig,  # Enabled by default - safe, just enqueues proposals
-        description="Proposal tools (suggest_goal, add_finding). "
+        description="Goaling tools (suggest_goal, add_finding). "
         "Tools for proactively suggesting subgoals during execution.",
     )
 
