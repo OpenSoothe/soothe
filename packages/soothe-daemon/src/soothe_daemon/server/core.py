@@ -497,12 +497,18 @@ class SootheDaemon(DaemonHandlersMixin):
             # scheduling loop so HTTP /autopilot/submit submissions get dispatched.
             # Failure to start is logged but does not block the daemon — autopilot
             # endpoints will return 503-equivalent until the next restart.
-            if self._autopilot_service is not None:
+            # Only start if config.agent.autonomous.enabled is True.
+            if self._autopilot_service is not None and self._config.agent.autonomous.enabled:
                 try:
                     await self._autopilot_service.start()
-                    logger.info("[Autopilot] scheduling loop started")
+                    logger.info("[Autopilot] scheduling loop started (enabled=true)")
                 except Exception:
                     logger.exception("[Autopilot] failed to start scheduling loop")
+            elif self._autopilot_service is not None:
+                logger.info(
+                    "[Autopilot] service constructed but scheduling loop NOT started "
+                    "(config.agent.autonomous.enabled=false)"
+                )
 
             self._readiness_state = "ready"
             self._readiness_message = None

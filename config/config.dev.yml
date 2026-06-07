@@ -53,7 +53,7 @@ router:
 agent:
   name: Soothe
   autonomous:
-    enabled_by_default: false
+    enabled: false
     max_iterations: 15
     # RFC-222: faster scheduling cadence for local iteration
     poll_interval: 2
