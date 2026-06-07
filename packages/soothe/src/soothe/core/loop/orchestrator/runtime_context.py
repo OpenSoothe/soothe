@@ -18,6 +18,7 @@ from .phase_scratch import LoopPhaseScratch
 
 if TYPE_CHECKING:
     from soothe.core.agent import CoreAgent
+    from soothe.core.goal_engine.proposal_queue import ProposalQueue
     from soothe.core.loop.clarification.protocol import ClarificationPolicy
     from soothe.core.loop.engine.agent_loop import AgentLoop
 
@@ -56,6 +57,8 @@ class LoopRuntimeContext:
     # than broadcasting a single concatenated string. ``None`` falls back to
     # broadcasting ``clarification_resume_text``.
     clarification_resume_answers: list[str] | None = None
+    # RFC-204 Group C: ProposalQueue for Layer 2 tools (suggest_goal, add_finding)
+    proposal_queue: ProposalQueue | None = None
 
     @property
     def core_agent(self) -> CoreAgent:

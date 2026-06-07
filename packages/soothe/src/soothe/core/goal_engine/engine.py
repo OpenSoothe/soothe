@@ -19,7 +19,7 @@ from soothe.core.goal_engine.models import (
     Goal,
     GoalStatus,
 )
-from soothe.protocols.planner import GoalReport
+from soothe.protocols.planner import GoalDirective, GoalReport
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
@@ -1240,9 +1240,134 @@ class GoalEngine:
                 "Applying %d new directives from backoff decision",
                 len(decision.new_directives),
             )
-            # TODO: Implement directive application logic.
-            # Tracked for a future RFC; the legacy _runner_goal_directives
-            # processor was removed with the autonomous loop in Phase D.
+            # Apply directives from backoff decision (RFC-204 Group C)
+            created = await self.apply_directives(decision.new_directives, failed_goal_id)
+            logger.info("Backoff directives applied: created %d goals", len(created))
+
+    async def apply_directives(
+        self,
+        directives: list[GoalDirective],
+        source_goal_id: str,
+    ) -> list[str]:
+        """Apply goal directives from GoalCompletionChunk (RFC-204 Group C).
+
+        Handles all six directive actions:
+        - create: Create new goal with parent_id defaulting to source_goal_id
+        - adjust_priority: Update goal.priority (clamped to 0-100)
+        - add_dependency: Extend goal.depends_on (deduplicated)
+        - fail: Transition goal to failed state
+        - complete: Transition goal to completed state
+        - decompose: Log warning (future work)
+
+        Args:
+            directives: List of GoalDirective to apply.
+            source_goal_id: Goal that emitted these directives (for parent_id default).
+
+        Returns:
+            List of newly created goal IDs.
+        """
+        created_ids: list[str] = []
+
+        for d in directives:
+            try:
+                if d.action == "create":
+                    # Parent defaults to source goal if not specified
+                    parent = d.parent_id or source_goal_id
+                    priority = d.priority or 50
+                    # Clamp priority to valid range
+                    priority = max(0, min(100, priority))
+
+                    new_goal = await self.create_goal(
+                        description=d.description,
+                        priority=priority,
+                        parent_id=parent,
+                        depends_on=list(d.depends_on) if d.depends_on else [],
+                    )
+                    created_ids.append(new_goal.id)
+                    logger.info(
+                        "Directive created goal %s (parent=%s, priority=%d): %s",
+                        new_goal.id,
+                        parent,
+                        priority,
+                        preview_first(d.description, 50),
+                    )
+
+                elif d.action == "adjust_priority":
+                    goal = self._goals.get(d.goal_id)
+                    if goal and d.priority is not None:
+                        old_priority = goal.priority
+                        goal.priority = max(0, min(100, d.priority))
+                        goal.updated_at = datetime.now(UTC)
+                        logger.info(
+                            "Directive adjusted goal %s priority: %d → %d",
+                            d.goal_id,
+                            old_priority,
+                            goal.priority,
+                        )
+                    elif not goal:
+                        logger.warning(
+                            "Directive adjust_priority: goal %s not found",
+                            d.goal_id,
+                        )
+
+                elif d.action == "add_dependency":
+                    goal = self._goals.get(d.goal_id)
+                    if goal and d.depends_on:
+                        for dep_id in d.depends_on:
+                            if dep_id not in goal.depends_on:
+                                goal.depends_on.append(dep_id)
+                        goal.updated_at = datetime.now(UTC)
+                        logger.info(
+                            "Directive added dependencies to goal %s: %s",
+                            d.goal_id,
+                            d.depends_on,
+                        )
+                    elif not goal:
+                        logger.warning(
+                            "Directive add_dependency: goal %s not found",
+                            d.goal_id,
+                        )
+
+                elif d.action == "fail":
+                    if d.goal_id:
+                        await self.fail_goal(
+                            d.goal_id,
+                            evidence=EvidenceBundle(
+                                structured={"action": "directive_fail"},
+                                narrative=d.rationale or "Directive-fail",
+                                source="layer3_reflect",  # Directive comes from Layer 3 context
+                            ),
+                            allow_retry=False,
+                        )
+                        logger.info("Directive marked goal %s as failed", d.goal_id)
+                    else:
+                        logger.warning("Directive fail: no goal_id specified")
+
+                elif d.action == "complete":
+                    if d.goal_id:
+                        await self.complete_goal(d.goal_id)
+                        logger.info("Directive marked goal %s as completed", d.goal_id)
+                    else:
+                        logger.warning("Directive complete: no goal_id specified")
+
+                elif d.action == "decompose":
+                    # Future work — log and skip
+                    logger.warning(
+                        "Directive 'decompose' not implemented (goal %s): %s",
+                        d.goal_id,
+                        d.description,
+                    )
+
+            except Exception:
+                logger.warning(
+                    "Directive application failed (action=%s, goal_id=%s): %s",
+                    d.action,
+                    d.goal_id,
+                    d.description,
+                    exc_info=True,
+                )
+
+        return created_ids
 
     def _format_goal_dag(self) -> str:
         """Format the current goal DAG state for logging.

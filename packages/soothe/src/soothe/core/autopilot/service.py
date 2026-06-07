@@ -745,6 +745,31 @@ class AutopilotService:
                     )
                     contribution = GoalDispatchContextContribution()
 
+                # RFC-204 Group C: Apply directives BEFORE outcome handling.
+                # This creates subgoals that inherit from the active goal.
+                directives_data = data.get("goal_directives", [])
+                if directives_data:
+                    try:
+                        from soothe.protocols.planner import GoalDirective
+
+                        directives = [GoalDirective(**d) for d in directives_data]
+                        created_ids = await self._goal_engine.apply_directives(
+                            directives,
+                            source_goal_id=goal_id,
+                        )
+                        logger.info(
+                            "Applied %d directives from goal %s, created goals: %s",
+                            len(directives),
+                            goal_id,
+                            created_ids,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to apply directives for goal %s",
+                            goal_id,
+                            exc_info=True,
+                        )
+
                 # Persist the contribution if a store is wired.
                 store = getattr(self, "_context_store", None)
                 if store is not None:

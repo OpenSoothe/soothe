@@ -280,14 +280,21 @@ class TestNextGoalDelegation:
 
     @pytest.mark.asyncio
     async def test_next_goal_delegates(self) -> None:
+        """Test that next_goal() delegates to ready_goals()."""
         engine = GoalEngine()
-        await engine.create_goal("A", priority=50)
-        await engine.create_goal("B", priority=90)
+        g_a = await engine.create_goal("A", priority=50)
+        g_b = await engine.create_goal("B", priority=90)
+
+        # next_goal() returns the highest priority ready goal (B)
         next_g = await engine.next_goal()
-        ready = await engine.ready_goals(limit=1)
         assert next_g is not None
+        assert next_g.id == g_b.id
+        assert next_g.status == "active"
+
+        # After next_goal(), g_b is already active, so ready_goals() returns g_a
+        ready = await engine.ready_goals(limit=1)
         assert len(ready) == 1
-        assert next_g.id == ready[0].id
+        assert ready[0].id == g_a.id
 
 
 class TestGoalFields:
