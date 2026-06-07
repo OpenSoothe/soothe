@@ -167,6 +167,7 @@ def resolve_tools(
             "audio",
             "video",
             "deepxiv",
+            "goaling",  # RFC-204 Group C: suggest_goal, add_finding tools
         ]
         if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
     ]
@@ -528,17 +529,17 @@ def _resolve_single_tool_group_uncached(
         # They will be handled via resolve_goal_tools
         return []
 
-    # --- Proposal tools (RFC-204 Group C: suggest_goal, add_finding) ---
+    # --- Goaling tools (RFC-204 Group C: suggest_goal, add_finding) ---
     # These require proposal_queue from AgentLoop runtime context.
     # They are injected dynamically during execute when proposal_queue is available.
-    if name == "proposal":
-        from soothe.toolkits.proposal import AddFindingTool, SuggestGoalTool
+    if name == "goaling":
+        from soothe.toolkits.goaling import AddFindingTool, SuggestGoalTool
 
         # Return tools without queue - queue is injected via ToolRuntime.state
         return [SuggestGoalTool(), AddFindingTool()]
 
     if name in ("suggest_goal", "add_finding"):
-        from soothe.toolkits.proposal import AddFindingTool, SuggestGoalTool
+        from soothe.toolkits.goaling import AddFindingTool, SuggestGoalTool
 
         tool_map = {"suggest_goal": SuggestGoalTool, "add_finding": AddFindingTool}
         return [tool_map[name]()]  # Return without queue - runtime injection

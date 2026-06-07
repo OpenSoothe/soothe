@@ -3,7 +3,7 @@
 import pytest
 
 from soothe.core.goal_engine.proposal_queue import ProposalQueue
-from soothe.toolkits.proposal.suggest_goal import SuggestGoalTool, create_suggest_goal_tool
+from soothe.toolkits.goaling.suggest_goal import SuggestGoalTool, create_suggest_goal_tool
 
 
 class TestSuggestGoalTool:

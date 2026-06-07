@@ -139,6 +139,16 @@ class AutopilotHttpClient:
         """Reject a MUST-confirmation."""
         return self._request("POST", f"/api/v1/autopilot/goals/{confirmation_id}/reject")
 
+    def resume(self, goal_id: str) -> dict[str, Any]:
+        """Resume a suspended/blocked goal.
+
+        Reactivates a suspended or blocked goal back to pending status.
+
+        Args:
+            goal_id: The goal ID to resume.
+        """
+        return self._request("POST", f"/api/v1/autopilot/goals/{goal_id}/resume")
+
     def status(self) -> dict[str, Any]:
         """Fetch autopilot status summary."""
         return self._request("GET", "/api/v1/autopilot/status")
