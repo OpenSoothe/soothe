@@ -11,7 +11,7 @@ import pytest
 
 from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
 from soothe.core.runner._runner_autopilot_worker import _proposals_to_directives
-from soothe.toolkits.proposal.suggest_goal import SuggestGoalTool, create_suggest_goal_tool
+from soothe.toolkits.goaling.suggest_goal import SuggestGoalTool, create_suggest_goal_tool
 
 
 class TestSuggestGoalIntegration:

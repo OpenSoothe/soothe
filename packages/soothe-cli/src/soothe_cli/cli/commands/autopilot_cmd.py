@@ -310,6 +310,26 @@ def reject_goal(
     typer.echo(f"Confirmation rejected: {result.get('goal_id', goal_id)}")
 
 
+@app.command("resume")
+def resume_goal(
+    goal_id: str = typer.Argument(..., help="Goal ID to resume."),
+) -> None:
+    """Resume a suspended or blocked goal.
+
+    Reactivates a paused goal back to pending status so the scheduler
+    can pick it up for execution. Use 'jobs' to list goals and their status.
+    """
+    client = _require_daemon_http()
+    try:
+        result = client.resume(goal_id)
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(
+        f"Goal resumed: {result.get('goal_id', goal_id)} → {result.get('new_status', 'pending')}"
+    )
+
+
 @app.command("wake")
 def wake() -> None:
     """Exit dreaming mode — resume active execution."""
