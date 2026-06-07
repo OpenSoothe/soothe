@@ -1,4 +1,4 @@
-"""add_finding tool for recording insights during execution (RFC-204 Group C)."""
+"""add_finding tool for recording insights during execution."""
 
 from __future__ import annotations
 
@@ -46,6 +46,9 @@ class AddFindingTool(BaseTool):
 
     Findings flow through the context projection system and are available
     to child goals without re-discovery.
+
+    The proposal_queue is accessed via ToolRuntime.state["proposal_queue"]
+    (injected by AgentLoop executor) or via direct attribute (factory pattern).
     """
 
     name: str = "add_finding"
@@ -57,7 +60,7 @@ class AddFindingTool(BaseTool):
     )
     args_schema: type[BaseModel] = AddFindingInput
 
-    # ProposalQueue injected at runtime by the runner
+    # ProposalQueue injected at runtime by the runner (factory pattern)
     proposal_queue: Any = None
 
     def _run(
@@ -65,9 +68,24 @@ class AddFindingTool(BaseTool):
         summary: str,
         relevance_score: float = 0.7,
         tags: list[str] = [],
+        runtime: Any | None = None,  # ToolRuntime injection
     ) -> str:
-        """Record a finding (synchronous)."""
-        if self.proposal_queue is None:
+        """Record a finding (synchronous).
+
+        Args:
+            summary: Finding description (max 2000 chars).
+            relevance_score: Relevance 0.0-1.0.
+            tags: Optional categorization tags.
+            runtime: ToolRuntime with state["proposal_queue"] from executor.
+        """
+        # Resolve proposal_queue: try runtime.state first, then direct attribute
+        queue = None
+        if runtime is not None and hasattr(runtime, "state"):
+            queue = runtime.state.get("proposal_queue")
+        if queue is None:
+            queue = self.proposal_queue
+
+        if queue is None:
             logger.warning("add_finding: proposal_queue not available")
             return "Error: proposal_queue not configured for this execution context"
 
@@ -76,7 +94,7 @@ class AddFindingTool(BaseTool):
         # Truncate summary to 2000 chars
         truncated_summary = summary[:2000]
 
-        self.proposal_queue.enqueue(
+        queue.enqueue(
             Proposal(
                 type="add_finding",
                 goal_id="",  # Filled by runner with source goal
@@ -99,9 +117,10 @@ class AddFindingTool(BaseTool):
         summary: str,
         relevance_score: float = 0.7,
         tags: list[str] = [],
+        runtime: Any | None = None,  # ToolRuntime injection
     ) -> str:
         """Record a finding (async)."""
-        return self._run(summary, relevance_score, tags)
+        return self._run(summary, relevance_score, tags, runtime)
 
 
 def create_add_finding_tool(proposal_queue: Any) -> AddFindingTool:

@@ -453,6 +453,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         clarification_capture=clarification_capture,
         clarification_loop_state_view=clarification_view,
         clarification_resume_answer_payload=resume_answer_payload,
+        proposal_queue=ctx.proposal_queue,  # RFC-204 Group C
     )
     async for item in run_executor.execute(
         decision=decision,

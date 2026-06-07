@@ -528,6 +528,21 @@ def _resolve_single_tool_group_uncached(
         # They will be handled via resolve_goal_tools
         return []
 
+    # --- Proposal tools (RFC-204 Group C: suggest_goal, add_finding) ---
+    # These require proposal_queue from AgentLoop runtime context.
+    # They are injected dynamically during execute when proposal_queue is available.
+    if name == "proposal":
+        from soothe.toolkits.proposal import AddFindingTool, SuggestGoalTool
+
+        # Return tools without queue - queue is injected via ToolRuntime.state
+        return [SuggestGoalTool(), AddFindingTool()]
+
+    if name in ("suggest_goal", "add_finding"):
+        from soothe.toolkits.proposal import AddFindingTool, SuggestGoalTool
+
+        tool_map = {"suggest_goal": SuggestGoalTool, "add_finding": AddFindingTool}
+        return [tool_map[name]()]  # Return without queue - runtime injection
+
     logger.warning("Unknown tool group '%s', skipping.", name)
     return []
 

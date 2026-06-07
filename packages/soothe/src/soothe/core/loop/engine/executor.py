@@ -924,6 +924,7 @@ class Executor:
         clarification_capture: ClarificationCapture | None = None,
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
+        proposal_queue: Any | None = None,  # RFC-204 Group C
     ) -> None:
         """Initialize Execute phase.
 
@@ -948,6 +949,8 @@ class Executor:
                 (built from ``state.pending_clarification_answer``) injected as
                 the first ``Command(resume=...)`` to resume after a prior
                 clarification was answered.
+            proposal_queue: Optional ProposalQueue (RFC-204 Group C) for Layer 2
+                tools (suggest_goal, add_finding) to enqueue proposals during execution.
         """
         self.core_agent = core_agent
         self._checkpointer = checkpointer
@@ -959,6 +962,7 @@ class Executor:
         self._clarification_capture = clarification_capture
         self._clarification_loop_state_view = clarification_loop_state_view
         self._clarification_resume_answer_payload = clarification_resume_answer_payload
+        self._proposal_queue = proposal_queue
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -2050,6 +2054,9 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            # RFC-204 Group C: propagate proposal_queue for Layer 2 tools
+            if self._proposal_queue is not None:
+                configurable["proposal_queue"] = self._proposal_queue
             # RFC-217: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()
