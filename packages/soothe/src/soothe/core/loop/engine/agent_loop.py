@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
+    from soothe.core.goal_engine.proposal_queue import ProposalQueue
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ class AgentLoop:
         clarification_policy: Any | None = None,  # RFC-622: ClarificationPolicy injection
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
+        proposal_queue: ProposalQueue | None = None,  # RFC-204 Group C: Layer 2 proposals
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -136,6 +138,8 @@ class AgentLoop:
             clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
                 requests are deferred via the legacy no-policy path.
+            proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
+                tools to enqueue goal suggestions and findings during execution.
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -413,6 +417,7 @@ class AgentLoop:
                 if clarification_answer and clarification_answers
                 else None
             ),
+            proposal_queue=proposal_queue,  # RFC-204 Group C
         )
 
         async def pump_graph() -> None:

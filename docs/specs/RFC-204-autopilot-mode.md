@@ -513,20 +513,22 @@ After initial Phases 1-4 implementation, 12 gaps remain. These are organized int
 
 ### Gap Inventory
 
-| # | Gap | Severity | Group | Phase |
-|---|-----|----------|-------|-------|
-| 1 | `_send_autopilot_webhook()` called but undefined | Bug | A | 4 |
-| 2 | `get_world_info()` tool missing | Missing | B | 1 |
-| 3 | `search_memory()` tool missing | Missing | B | 1 |
-| 4 | `add_finding()` tool missing | Missing | B | 1 |
-| 5 | Proposal queuing not implemented (tools just log) | Missing | C | 1 |
-| 6 | LLM-judged criticality is placeholder only | Partial | D | 2 |
-| 7 | MUST confirmation not wired into execution loop | Missing | D | 2 |
-| 8 | Relationship auto-detection entirely missing | Missing | D | 2 |
-| 9 | File-based progress tracking incomplete | Partial | E | 2 |
-| 10 | WebSocket events not emitted | Missing | F | 3 |
-| 11 | Dreaming "goal anticipation" activity missing | Missing | F | 4 |
-| 12 | Autopilot config schema missing from SootheConfig | Missing | F | 4 |
+| # | Gap | Severity | Group | Phase | Status (2026-06-07) |
+|---|-----|----------|-------|-------|---------------------|
+| 1 | `_send_autopilot_webhook()` called but undefined | Bug | A | 4 | — |
+| 2 | `get_world_info()` tool missing | Missing | B | 1 | — |
+| 3 | `search_memory()` tool missing | Missing | B | 1 | — |
+| 4 | `add_finding()` and `suggest_goal()` tools missing | Missing | B | 1 | See Group C |
+| 5 | ProposalQueue not wired to GoalEngine | Missing | C | 1 | See Group C |
+| 5a | GoalCompletionChunk.goal_directives field missing | Missing | C | 1 | See Group C |
+| 5b | GoalEngine.apply_directives() not implemented | Missing | C | 1 | See Group C |
+| 6 | LLM-judged criticality is placeholder only | Partial | D | 2 | — |
+| 7 | MUST confirmation not wired into execution loop | Missing | D | 2 | — |
+| 8 | Relationship auto-detection entirely missing | Missing | D | 2 | — |
+| 9 | File-based progress tracking incomplete | Partial | E | 2 | — |
+| 10 | WebSocket events not emitted | Missing | F | 3 | — |
+| 11 | Dreaming "goal anticipation" activity missing | Missing | F | 4 | — |
+| 12 | Autopilot config schema missing from SootheConfig | Missing | F | 4 | — |
 
 ### Group A: Broken Code
 
@@ -550,35 +552,218 @@ After initial Phases 1-4 implementation, 12 gaps remain. These are organized int
 - Delegates to memory protocol's `recall(query, limit=5)` — already available
 - Returns list of recalled memory snippets
 
-**Gap 4 — `add_finding()` tool**
+**Gap 4 — Layer 2 proposal tools**
 
-- New `AddFindingTool` in `tools/goals/implementation.py`
-- Writes to the proposal queue (see Group C)
-- Signature: `add_finding(goal_id, content, tags?)`
+- `add_finding()` and `suggest_goal()` tools in `tools/proposal/` (see Group C for full specification)
+- Both write to `ProposalQueue` attached to `LoopRuntimeContext`
+- Signature: `add_finding(summary, relevance_score?, tags?)`, `suggest_goal(description, priority?, depends_on?, rationale?)`
 
-All three tools added to `create_layer2_tools()` return list.
+All Layer 2 proposal tools added to `create_layer2_tools()` return confirmation string.
 
-### Group C: Proposal Queuing
+### Group C: Proposal Queuing (Updated 2026-06-07)
 
-**Gap 5 — Queuing semantics for Layer 2 proposals**
+**Gap 5 — ProposalQueue exists but not wired**
 
-- New `ProposalQueue` class in `packages/soothe/src/soothe/core/goal_engine/proposal_queue.py`:
-  ```python
-  @dataclass
-  class Proposal:
-      type: str  # "report_progress" | "suggest_goal" | "add_finding" | "flag_blocker"
-      goal_id: str
-      payload: dict
-      timestamp: datetime
-  ```
-- `AutonomousMixin` gets `_proposal_queue: list[Proposal]` attribute, initialized per goal execution
-- Layer 2 tools write proposals to the queue instead of just logging
-- After iteration completes (before `complete_goal`), runner processes queued proposals:
-  - `report_progress` → append to goal's progress section
-  - `suggest_goal` → run through criticality evaluator, create if approved
-  - `add_finding` → append to findings list
-  - `flag_blocker` → transition goal to `blocked` state
-- Queue cleared after processing
+**Status (2026-06-07):**
+| Component | Status |
+|-----------|--------|
+| `ProposalQueue` class | ✅ Implemented (`proposal_queue.py`) |
+| Unit tests | ✅ Passing (`test_proposal_queue.py`) |
+| Layer 2 tools (`suggest_goal`, `add_finding`) | ❌ Not implemented |
+| Runner drains proposals | ❌ Not connected |
+| GoalDirective application | ❌ Not connected |
+
+**Implementation design (RFC-229 integration):**
+
+The proposal queue provides **proactive path** for Layer 2 → Layer 3 communication. A **reactive path** via `GoalDirective` is also required. Both paths unify at `GoalCompletionChunk.goal_directives`.
+
+#### Proactive Path: Layer 2 Tools → ProposalQueue → GoalDirective
+
+**New tools in `tools/proposal/`:**
+
+| Tool | Proposal Type | Purpose |
+|------|---------------|---------|
+| `suggest_goal` | `suggest_goal` | Proactively request a subgoal mid-execution |
+| `add_finding` | `add_finding` | Record discoverable insight for context projection |
+
+```python
+@tool
+def suggest_goal(
+    description: str,
+    priority: int = 50,
+    depends_on: list[str] = [],
+    rationale: str = "",
+) -> str:
+    """Suggest a new subgoal for the current goal's DAG.
+
+    Use when you identify a prerequisite or subtask that should be
+    handled separately before continuing the current goal.
+
+    Args:
+        description: What the suggested goal should accomplish.
+        priority: 0-100, higher = more urgent. Default 50.
+        depends_on: Goal IDs this suggestion depends on (optional).
+        rationale: Why this goal is needed.
+
+    Returns:
+        Confirmation string that suggestion was queued.
+    """
+```
+
+```python
+@tool
+def add_finding(
+    summary: str,
+    relevance_score: float = 0.7,
+    tags: list[str] = [],
+) -> str:
+    """Record a finding for context projection to child goals.
+
+    Args:
+        summary: Brief description of the finding (max 2000 chars).
+        relevance_score: 0.0-1.0, how relevant to the overall goal.
+        tags: Optional categorization tags.
+
+    Returns:
+        Confirmation string that finding was queued.
+    """
+```
+
+**ProposalQueue access pattern:**
+- Runner creates `ProposalQueue` per `_run_single_autopilot_goal` dispatch
+- Queue injected into `LoopRuntimeContext.proposal_queue`
+- Tools access via CoreAgent execution context
+
+**Runner wiring (`_runner_autopilot_worker.py`):**
+
+```python
+async def _run_single_autopilot_goal(...):
+    proposal_queue = ProposalQueue()
+
+    async for event in agent_loop.run_with_progress(..., proposal_queue=proposal_queue):
+        # ... handle events ...
+
+    # Drain and convert proposals after AgentLoop completes
+    proposals = proposal_queue.drain()
+    proposal_directives = _proposals_to_directives(proposals, source_goal_id=job.goal_id)
+
+    # Merge with reflection directives (see reactive path below)
+    all_directives = reflection_directives + proposal_directives
+
+    yield _goal_completion_chunk(..., directives=all_directives)
+```
+
+#### Reactive Path: Reflection → GoalCompletionChunk → GoalEngine.apply_directives()
+
+**Gap 5a — GoalCompletionChunk extension**
+
+Current `GoalCompletionChunk` (RFC-222 §"Stream Contract"):
+```python
+class GoalCompletionChunk(BaseModel):
+    type: Literal["soothe.internal.autopilot.goal_completion"] = ...
+    goal_id: str
+    outcome: Literal["completed", "failed", "needs_replan"]
+    goal_result: GoalResult
+    context_contribution: GoalDispatchContextContribution
+    evidence: EvidenceBundle | None
+```
+
+**Extension:**
+```python
+payload = {
+    "type": "soothe.internal.autopilot.goal_completion",
+    "goal_id": job.goal_id,
+    "outcome": outcome,
+    "attempt": job.attempt,
+    "context_contribution": contribution.model_dump(mode="json"),
+    "goal_directives": [d.model_dump(mode="json") for d in directives],  # NEW
+}
+```
+
+**Gap 5b — GoalEngine.apply_directives()**
+
+Location: `engine.py:1243` (TODO comment)
+
+```python
+async def apply_directives(
+    self,
+    directives: list[GoalDirective],
+    source_goal_id: str,
+) -> list[str]:
+    """Apply goal directives from GoalCompletionChunk.
+
+    Args:
+        directives: List of GoalDirective to apply.
+        source_goal_id: Goal that emitted these directives (for parent_id default).
+
+    Returns:
+        List of newly created goal IDs.
+    """
+```
+
+**Action handlers:**
+
+| Action | Implementation |
+|--------|----------------|
+| `create` | `create_goal(description, priority, parent_id=parent_id or source_goal_id, depends_on)` |
+| `decompose` | Log warning + skip (future work) |
+| `adjust_priority` | `goal.priority = d.priority` (clamp to 0-100) |
+| `add_dependency` | `goal.depends_on.extend(d.depends_on)` (dedupe) |
+| `fail` | `fail_goal(d.goal_id, evidence=d.rationale)` |
+| `complete` | `complete_goal(d.goal_id)` |
+
+**Parent_id defaulting:**
+- If `GoalDirective.parent_id` is None, `create_goal` receives `source_goal_id`
+- Creates natural subgoal hierarchy without explicit parent_id required
+
+#### Unified Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    AGENTLOOP WORKER (Subprocess)                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Mid-iteration (Proactive Path):                                    │
+│    suggest_goal tool ──► ProposalQueue.enqueue()                    │
+│    add_finding tool ──► ProposalQueue.enqueue()                     │
+│                                                                     │
+│  End-of-goal (Reactive Path):                                       │
+│    Planner.reflect() ──► Reflection.goal_directives                 │
+│                                                                     │
+│  Runner merges both:                                                │
+│    proposals = ProposalQueue.drain()                                │
+│    proposal_directives = _proposals_to_directives(proposals)        │
+│    all_directives = reflection_directives + proposal_directives     │
+│                                                                     │
+│  Emit:                                                              │
+│    GoalCompletionChunk(goal_directives=all_directives)              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DAEMON AUTOPILOTSERVICE                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  _route_chunk(GoalCompletionChunk):                                 │
+│    goal_engine.apply_directives(chunk.goal_directives)              │
+│      ──► create_goal() for "create" actions                         │
+│      ──► DAG now has subgoals → scheduling loop picks them up       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Deferred tools:**
+- `report_progress`: Lower priority, observability use case
+- `flag_blocker`: Lower priority, maps to existing backoff mechanism
+
+**Implementation phases for Group C:**
+
+| Phase | Scope | Files |
+|-------|-------|-------|
+| C.1 | GoalCompletionChunk extension + apply_directives | `engine.py`, `_runner_autopilot_worker.py`, `daemon/autopilot/service.py` |
+| C.2 | Reflection directive extraction | `_runner_autopilot_worker.py` |
+| C.3 | Layer 2 tools + ProposalQueue wiring | `tools/proposal/`, `core/loop/__init__.py`, `core/loop/state/schemas.py` |
 
 ### Group D: Goal Management
 
@@ -689,6 +874,15 @@ All three tools added to `create_layer2_tools()` return list.
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 
 ## Changelog
+
+### 2026-06-07
+- **Major update to Group C (Proposal Queuing):** Expanded Gap 5 with full integration design for ProposalQueue → GoalDirective → GoalEngine pathway.
+- Added **Gap 5a** (GoalCompletionChunk.goal_directives) and **Gap 5b** (GoalEngine.apply_directives) to gap inventory.
+- Defined **dual-path architecture:** proactive (Layer 2 tools → ProposalQueue) and reactive (Reflection → goal_directives), unified at GoalCompletionChunk.
+- Specified `suggest_goal` and `add_finding` tool implementations with full signatures.
+- Added Runner wiring for ProposalQueue lifecycle, AgentLoop injection, and daemon-side `_route_chunk` consumer.
+- Defined implementation phases C.1, C.2, C.3 for Group C.
+- Related design draft: `docs/drafts/2026-06-07-goal-directive-proposal-integration-design.md`
 
 ### 2026-04-03
 - Initial RFC draft
