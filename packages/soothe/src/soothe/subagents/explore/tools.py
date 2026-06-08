@@ -3,8 +3,8 @@
 Uses ``SootheFilesystemMiddleware`` with a curated read-only subset: filesystem
 reconnaissance only (no shell, no write tools).
 
-IG-328: Backend uses callable pattern to resolve workspace from thread state at runtime,
-not from static resolver context.
+IG-328: Backend resolves workspace from thread state at runtime via
+workspace_backend_factory pattern (not deprecated callable backend).
 """
 
 from __future__ import annotations
@@ -20,49 +20,35 @@ from soothe.middleware.filesystem import SootheFilesystemMiddleware
 logger = logging.getLogger(__name__)
 
 
-def _create_thread_workspace_backend(
-    initial_workspace: str,
-    allow_paths_outside_workspace: bool = False,
+def _create_workspace_backend_factory(
+    virtual_mode: bool = False,
 ) -> Any:
-    """Create callable backend that resolves workspace from thread state at runtime (IG-328).
+    """Create factory for workspace backends (IG-328).
 
-    Returns a callable that:
-    1. Checks ToolRuntime.state["workspace"] (thread workspace from runner)
-    2. Falls back to initial_workspace (resolver workspace)
-    3. Returns ``NormalizedPathBackend`` so host-absolute paths inside the workspace
-       map to the same paths as ``grep``/``glob`` virtual ``/...`` strings (IG-300).
+    Returns a factory function that:
+    1. Takes a workspace path string
+    2. Returns NormalizedPathBackend for that workspace
 
-    This allows explore to search the thread workspace (e.g., client cwd) instead
-    of the static daemon workspace.
+    This factory is passed to SootheFilesystemMiddleware which uses it
+    to resolve thread workspace from runtime.state["workspace"] without
+    the deprecated callable backend pattern.
 
     Args:
-        initial_workspace: Fallback workspace from resolver context.
-        allow_paths_outside_workspace: Security setting from config.
+        virtual_mode: Whether to sandbox paths to workspace.
 
     Returns:
-        Callable backend function for FilesystemMiddleware.
+        Factory function for creating workspace backends.
     """
 
-    def _resolve_backend(runtime: Any | None) -> NormalizedPathBackend:
-        """Resolve backend with thread workspace from state."""
-        # Thread workspace injected by runner via state.workspace (IG-328)
-        thread_workspace = None
-        if runtime is not None and hasattr(runtime, "state"):
-            thread_workspace = runtime.state.get("workspace")
-
-        # Use thread workspace if available, else fallback to resolver workspace
-        # When runtime is None (direct tool invocation), use initial_workspace
-        effective_workspace = thread_workspace or initial_workspace
-
-        # NormalizedPathBackend: host paths under workspace match virtual_mode tool paths
-        virtual_mode = not allow_paths_outside_workspace
+    def _create_backend(workspace_path: str) -> NormalizedPathBackend:
+        """Create backend for a specific workspace."""
         return get_workspace_backend(
-            Path(effective_workspace),
+            Path(workspace_path),
             virtual_mode=virtual_mode,
             max_file_size_mb=10,
         )
 
-    return _resolve_backend
+    return _create_backend
 
 
 def get_explore_tools(
@@ -77,8 +63,8 @@ def get_explore_tools(
     - glob, grep, ls, read_file: via middleware base
     - file_info: Soothe (metadata)
 
-    IG-328: Backend is callable so workspace resolves from thread state at runtime,
-    not from static resolver workspace.
+    IG-328: Uses workspace_backend_factory pattern for thread workspace resolution
+    without deprecated callable backend pattern.
 
     Args:
         workspace: Initial/resolver workspace (fallback when state lacks workspace).
@@ -97,14 +83,19 @@ def get_explore_tools(
 
     root = workspace or os.getcwd()
 
-    # Create callable backend that resolves workspace from thread state (IG-328)
-    callable_backend = _create_thread_workspace_backend(
-        initial_workspace=root,
-        allow_paths_outside_workspace=not virtual_mode,
+    # Create initial backend for the resolver workspace (IG-328)
+    initial_backend = get_workspace_backend(
+        Path(root),
+        virtual_mode=virtual_mode,
+        max_file_size_mb=10,
     )
 
+    # Create factory for thread workspace resolution (IG-328)
+    backend_factory = _create_workspace_backend_factory(virtual_mode=virtual_mode)
+
     middleware = SootheFilesystemMiddleware(
-        backend=callable_backend,  # Callable backend for dynamic workspace resolution
+        backend=initial_backend,  # BackendProtocol instance (not callable)
+        workspace_backend_factory=backend_factory,  # Factory for thread workspace
         backup_enabled=True,
         workspace_root=root,  # Fallback for non-tool operations
     )

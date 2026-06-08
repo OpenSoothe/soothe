@@ -209,10 +209,14 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
     - Path validation with validate_path()
     - StructuredTool.from_function() with infer_schema=False
 
+    IG-328: Supports thread workspace resolution via runtime.state["workspace"]
+    without using deprecated callable backend pattern.
+
     Args:
         backup_enabled: Enable automatic backup before file deletion.
         backup_dir: Directory for backup files (default: .backups).
         workspace_root: Root directory for workspace operations.
+        workspace_backend_factory: Optional factory for creating workspace backends.
         **kwargs: Additional arguments passed to FilesystemMiddleware.
     """
 
@@ -222,6 +226,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         backup_enabled: bool = True,
         backup_dir: str | None = None,
         workspace_root: str | None = None,
+        workspace_backend_factory: Callable[[str], BackendProtocol] | None = None,
         **kwargs,
     ) -> None:
         """Initialize SootheFilesystemMiddleware.
@@ -230,13 +235,46 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             backup_enabled: Enable automatic backup before deletion.
             backup_dir: Custom backup directory path.
             workspace_root: Workspace root directory for path resolution.
+            workspace_backend_factory: Factory function that takes a workspace path
+                and returns a BackendProtocol instance. Used for thread workspace
+                resolution without callable backend deprecation.
             **kwargs: Passed to FilesystemMiddleware (backend, system_prompt, etc.)
         """
+        # Ensure backend is not callable to avoid deepagents deprecation warning
+        backend = kwargs.get("backend")
+        if callable(backend) and not isinstance(backend, BackendProtocol):
+            # Store the callable as factory, pass initial backend instance
+            self._backend_factory = backend
+            # Create initial backend by calling factory with None (fallback)
+            import logging
+
+            _logger = logging.getLogger(__name__)
+            try:
+                initial_backend = backend(None)
+            except Exception as e:
+                _logger.debug("Backend factory failed with None: %s", e)
+                # If factory fails with None, we need workspace_root
+                if workspace_root:
+                    from soothe.core.workspace.normalized_backend import NormalizedPathBackend
+
+                    initial_backend = NormalizedPathBackend(
+                        root_dir=Path(workspace_root),
+                        virtual_mode=True,
+                        max_file_size_mb=10,
+                    )
+                else:
+                    msg = "Backend factory requires workspace_root as fallback"
+                    raise RuntimeError(msg) from e
+            kwargs["backend"] = initial_backend
+        else:
+            self._backend_factory = None
+
         super().__init__(**kwargs)
 
         self._backup_enabled = backup_enabled
         self._backup_dir = backup_dir
         self._workspace_root = workspace_root
+        self._workspace_backend_factory = workspace_backend_factory
 
         # Add surgical file tools
         self.tools.extend(
@@ -249,6 +287,34 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 self._create_apply_diff_tool(),
             ]
         )
+
+    def _get_backend(self, runtime: ToolRuntime | None = None) -> BackendProtocol:
+        """Get backend, handling thread workspace resolution without callable deprecation.
+
+        IG-328: Resolves workspace from runtime.state["workspace"] when available,
+        returning appropriate backend for the thread's workspace.
+
+        Args:
+            runtime: Tool runtime with state containing potential thread workspace.
+
+        Returns:
+            BackendProtocol instance for the effective workspace.
+        """
+        # Check for thread workspace in runtime state
+        if runtime is not None and hasattr(runtime, "state"):
+            thread_workspace = (
+                runtime.state.get("workspace") if isinstance(runtime.state, dict) else None
+            )
+            if thread_workspace:
+                # Use factory if available for workspace-specific backend
+                if self._workspace_backend_factory:
+                    return self._workspace_backend_factory(thread_workspace)
+                # Or use stored backend factory from callable pattern
+                if self._backend_factory:
+                    return self._backend_factory(runtime)
+
+        # No thread workspace or factory - return stored backend
+        return self.backend
 
     def wrap_tool_call(
         self,
@@ -271,26 +337,12 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
     def _backend_for_tools(self, runtime: ToolRuntime | None) -> BackendProtocol:
         """Resolve backend for surgical tools (IG-316, IG-328).
 
-        Callable backends require ``runtime`` so ``_get_backend`` can run.
-        IG-328: Allow callable backend with None runtime (fallback to initial workspace).
+        Uses the overridden ``_get_backend`` which handles thread workspace
+        resolution without the deprecated callable backend pattern.
+
+        IG-328: Allow None runtime (fallback to initial backend).
         """
-        import logging
-
-        _logger = logging.getLogger(__name__)
-
-        if runtime is not None:
-            return self._get_backend(runtime)
-        backend = self.backend
-        if callable(backend):
-            # IG-328: Callable backend with None runtime (direct tool invocation)
-            # Call backend with None to get fallback workspace
-            try:
-                return backend(None)
-            except Exception as e:
-                _logger.debug("Callable backend failed with None runtime: %s", e)
-                msg = "Filesystem tool requires tool runtime for this backend configuration"
-                raise RuntimeError(msg) from e
-        return backend
+        return self._get_backend(runtime)
 
     def _try_resolve_os_path(
         self, logical_path: str, runtime: ToolRuntime | None
