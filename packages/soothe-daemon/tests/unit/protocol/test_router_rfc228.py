@@ -108,6 +108,7 @@ class TestJobCreate:
         daemon._autopilot_service.submit_task.assert_awaited_once_with(
             description="Build feature X",
             priority=50,
+            workspace=None,
         )
 
     @pytest.mark.asyncio
@@ -715,6 +716,7 @@ class TestJobCreateOptionalFields:
         daemon._autopilot_service.submit_task.assert_awaited_once_with(
             description="Normal task",
             priority=50,
+            workspace=None,
         )
 
 
@@ -1141,6 +1143,7 @@ class TestParameterValidation:
         daemon._autopilot_service.submit_task.assert_awaited_once_with(
             description="Build feature X",
             priority=50,
+            workspace=None,
         )
 
     @pytest.mark.asyncio

@@ -104,6 +104,7 @@ class AgentLoopCheckpointPersistenceManager:
         status_filter: str | None = None,
         limit: int = 100,
         exclude_empty: bool = False,
+        workspace_filter: str | None = None,
     ) -> list[dict]:
         """Return summary rows for all loops, ordered by created_at DESC.
 
@@ -112,12 +113,16 @@ class AgentLoopCheckpointPersistenceManager:
             limit: Maximum rows to return.
             exclude_empty: When True, hide loops with zero human and zero AI
                 messages (bootstrap-only loops with no real exchange).
+            workspace_filter: Optional client_workspace path to filter by.
 
         Returns:
             List of loop metadata dicts.
         """
         return await self._backend.list_loops(
-            status_filter=status_filter, limit=limit, exclude_empty=exclude_empty
+            status_filter=status_filter,
+            limit=limit,
+            exclude_empty=exclude_empty,
+            workspace_filter=workspace_filter,
         )
 
     async def touch_loop_last_message(self, loop_id: str) -> None:

@@ -69,12 +69,14 @@ class AgentLoopPersistenceBackend(ABC):
         self,
         status_filter: str | None = None,
         limit: int = 100,
+        workspace_filter: str | None = None,
     ) -> list[dict]:
         """Return summary rows for all loops, ordered by created_at DESC.
 
         Args:
             status_filter: Optional status value to filter by.
             limit: Maximum rows to return.
+            workspace_filter: Optional client_workspace path to filter by.
 
         Returns:
             List of dicts with keys: loop_id, status, thread_ids, current_thread_id,
