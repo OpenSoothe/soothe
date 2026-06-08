@@ -458,6 +458,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         status_filter: str | None = None,
         limit: int = 100,
         exclude_empty: bool = False,
+        workspace_filter: str | None = None,
     ) -> list[dict]:
         """Return summary rows for all loops, ordered by created_at DESC.
 
@@ -466,6 +467,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             limit: Maximum rows to return.
             exclude_empty: When True, hide loops with zero human and zero AI
                 messages (bootstrap-only loops with no real exchange).
+            workspace_filter: Optional client_workspace path to filter by.
         """
         pool = await self._ensure_pool()
 
@@ -474,6 +476,9 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         if status_filter:
             clauses.append("status = %s")
             params.append(status_filter)
+        if workspace_filter:
+            clauses.append("client_workspace = %s")
+            params.append(workspace_filter)
         if exclude_empty:
             clauses.append(
                 "(COALESCE((checkpoint_data->>'human_message_count')::int, 0) > 0"
