@@ -452,7 +452,11 @@ class _StartupMixin:
                     f"Please start the daemon with: soothed start"
                 )
 
-            session = TuiDaemonSession(self._daemon_config, workspace=self._cwd)
+            session = TuiDaemonSession(
+                self._daemon_config,
+                workspace=self._cwd,
+                post_idle_drain_deadline=0.3,
+            )
             status_event = await session.connect(resume_loop_id=self._lc_loop_id)
         except Exception as exc:
             self.post_message(self.ServerStartFailed(error=exc))

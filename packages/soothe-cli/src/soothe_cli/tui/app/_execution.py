@@ -340,10 +340,13 @@ class _ExecutionMixin:
         self._shell_process = None
         self._shell_running = False
         self._shell_worker = None
-        if was_interrupted:
-            await self._mount_message(AppMessage("Command interrupted"))
+
+        # Restore input focus first so the user can type immediately.
         if self._chat_input:
             self._chat_input.set_cursor_active(active=True)
+
+        if was_interrupted:
+            await self._mount_message(AppMessage("Command interrupted"))
         try:
             await self._maybe_drain_deferred()
         except Exception:
@@ -973,11 +976,13 @@ class _ExecutionMixin:
         self._agent_running = False
         self._agent_worker = None
 
-        # Remove spinner if present
-        await self._set_spinner(None)
-
+        # Restore input focus FIRST so the user can start typing immediately
+        # while remaining cleanup (spinner, tokens, deferred) runs.
         if self._chat_input:
             self._chat_input.set_cursor_active(active=True)
+
+        # Remove spinner if present
+        await self._set_spinner(None)
 
         # Ensure token display is restored (in case of early cancellation).
         # Pass the cached approximate flag so an interrupted "+" isn't clobbered.

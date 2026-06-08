@@ -841,6 +841,13 @@ class ChatInput(Vertical):
     - Autocomplete for @ (files) and / (commands)
     """
 
+    _PATH_INDICATOR_CHARS: ClassVar[frozenset[str]] = frozenset("/\\~")
+    """Characters that indicate text might be a file path.
+
+    Used by `_is_dropped_path_payload` as a fast-path guard to skip
+    filesystem I/O when text cannot possibly be a path.
+    """
+
     DEFAULT_CSS = """
     ChatInput {
         height: auto;
@@ -1038,7 +1045,7 @@ class ChatInput(Vertical):
                 "Cannot update slash commands: controller not initialized (widget not yet mounted)"
             )
 
-    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+    async def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Detect input mode and update completions."""
         text = event.text_area.text
         self._sync_media_tracker_to_text(text)
@@ -1075,6 +1082,11 @@ class ChatInput(Vertical):
         # filesystem lookup when the text change came from history navigation
         # or prefix stripping, which never need path detection.
         is_path_payload = self._is_dropped_path_payload(text)
+
+        # Yield to the event loop so pending key events are not starved
+        # when the path check above did filesystem I/O.
+        if is_path_payload:
+            await asyncio.sleep(0)
 
         # Guard: skip mode re-detection after we programmatically stripped
         # a prefix character.
@@ -1193,13 +1205,28 @@ class ChatInput(Vertical):
         """Return whether text is a dropped-path payload for existing files."""
         if len(text) < 2:  # noqa: PLR2004  # Need at least '/' + one char
             return False
+        # Short texts without path-like prefixes are never valid payloads.
+        # Avoids stat(2) calls for slash-command fragments like "/h" or "/he".
+        if len(text) < 3 and not text.startswith(("'", '"', "~/")):  # noqa: PLR2004
+            return False
         from soothe_cli.tui.input import parse_pasted_path_payload
 
         return parse_pasted_path_payload(text, allow_leading_path=True) is not None
 
     def _is_dropped_path_payload(self, text: str) -> bool:
         """Return whether current text looks like a dropped file-path payload."""
-        if not text:
+        if not text or len(text) < 2:
+            return False
+        # Fast path: skip filesystem I/O when text has no path indicators.
+        # Dropped paths always contain at least one of: / (POSIX), \ (Windows),
+        # ~ (home), or a quote prefix ('/path' or "/path").  Plain prose and
+        # slash-command text (e.g. "/help") without path separators never
+        # triggers dropped-path parsing.
+        if (
+            not text.startswith(("'", '"'))
+            and not text.startswith("file://")
+            and not any(c in self._PATH_INDICATOR_CHARS for c in text)
+        ):
             return False
         if self._is_existing_path_payload(text):
             return True
