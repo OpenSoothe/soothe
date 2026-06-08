@@ -681,11 +681,13 @@ class QueryEngine:
 
                 from soothe.protocols.runner import LoopRunRequest
 
+                # RFC-621: Use current_workspace (container path) not client_workspace (host path).
+                # The router already translated client_workspace → current_workspace at loop_new.
                 run_request = LoopRunRequest(
                     loop_id=effective_loop_id or thread_id,
                     thread_id=thread_id,
                     user_input=effective_text,
-                    client_workspace=loop_meta.get("client_workspace"),
+                    client_workspace=loop_meta.get("current_workspace") or loop_meta.get("client_workspace"),
                     user_id=loop_meta.get("user_id") or loop_meta.get("user"),
                     client_workspace_id=loop_meta.get("client_workspace_id"),
                     autonomous=stream_kwargs.get("autonomous", False),
