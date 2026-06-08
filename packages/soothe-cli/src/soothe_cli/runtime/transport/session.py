@@ -32,7 +32,13 @@ _POST_IDLE_DRAIN_DEADLINE_S = 2.5
 class TuiDaemonSession:
     """Own the daemon websocket session used by the TUI."""
 
-    def __init__(self, cfg: Any, *, workspace: str | None = None) -> None:
+    def __init__(
+        self,
+        cfg: Any,
+        *,
+        workspace: str | None = None,
+        post_idle_drain_deadline: float = _POST_IDLE_DRAIN_DEADLINE_S,
+    ) -> None:
         self._cfg = cfg
         self._workspace = workspace
         ws_url = websocket_url_from_config(cfg)
@@ -43,6 +49,7 @@ class TuiDaemonSession:
         self._rpc_lock = asyncio.Lock()
         self._rpc_connected = False
         self._streaming = False
+        self._post_idle_drain_deadline = post_idle_drain_deadline
         self.turn_event_stats = TurnEventStats()
 
     @property
@@ -178,7 +185,9 @@ class TuiDaemonSession:
     ) -> Any:
         """Yield stream chunks that arrive just after ``idle`` (headless client parity)."""
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + _POST_IDLE_DRAIN_DEADLINE_S
+        deadline = loop.time() + getattr(
+            self, "_post_idle_drain_deadline", _POST_IDLE_DRAIN_DEADLINE_S
+        )
         exp = expected_loop_id
         while loop.time() < deadline:
             try:
