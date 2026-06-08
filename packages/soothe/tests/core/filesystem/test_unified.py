@@ -415,10 +415,30 @@ class TestLocalFilesystemNonVirtual:
         """Create a non-virtual filesystem."""
         return LocalFilesystem(workspace=tmp_path, virtual_mode=False)
 
-    def test_absolute_path_outside_workspace_blocked(self, non_virtual_fs: LocalFilesystem) -> None:
-        """Test that absolute paths outside workspace are blocked in non-virtual mode."""
-        with pytest.raises(PathTraversalError):
-            non_virtual_fs.read("/etc/passwd")
+    def test_absolute_path_outside_workspace_allowed(self, non_virtual_fs: LocalFilesystem) -> None:
+        """Test that absolute paths outside workspace are allowed in non-virtual mode.
+
+        Security layer handles approval/deny logic separately via
+        allow_paths_outside_workspace and require_approval_for_outside_paths.
+        """
+        # /tmp is typically accessible; skip if /etc/passwd not readable
+        import os
+
+        if os.path.exists("/etc/hosts") and os.access("/etc/hosts", os.R_OK):
+            result = non_virtual_fs.read("/etc/hosts")
+            assert result.content  # Should have content
+        else:
+            # Use a temp file we can guarantee exists
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+                f.write("test content")
+                temp_path = f.name
+            try:
+                result = non_virtual_fs.read(temp_path)
+                assert result.content == "test content"
+            finally:
+                os.unlink(temp_path)
 
     def test_absolute_path_inside_workspace_allowed(self, non_virtual_fs: LocalFilesystem) -> None:
         """Test that absolute paths inside workspace are allowed."""
