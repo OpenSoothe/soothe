@@ -687,7 +687,8 @@ class QueryEngine:
                     loop_id=effective_loop_id or thread_id,
                     thread_id=thread_id,
                     user_input=effective_text,
-                    client_workspace=loop_meta.get("current_workspace") or loop_meta.get("client_workspace"),
+                    client_workspace=loop_meta.get("current_workspace")
+                    or loop_meta.get("client_workspace"),
                     user_id=loop_meta.get("user_id") or loop_meta.get("user"),
                     client_workspace_id=loop_meta.get("client_workspace_id"),
                     autonomous=stream_kwargs.get("autonomous", False),

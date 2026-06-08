@@ -46,14 +46,9 @@ class TestParallelSourceGathering:
             sources.append(src)
 
         # Execute parallel gather
-        start_time = asyncio.get_event_loop().time()
         results = await _gather_from_sources_parallel(
             sources, "test query", gather_context, timeout_sec=5.0
         )
-        end_time = asyncio.get_event_loop().time()
-
-        # Should complete in ~0.1s (parallel), not ~0.3s (sequential)
-        assert end_time - start_time < 0.2, "Sources were not queried in parallel"
 
         # All sources should have been called
         for src in sources:
@@ -61,6 +56,16 @@ class TestParallelSourceGathering:
 
         # Should have results from all sources
         assert len(results) == 3
+
+        # Verify parallel execution: all sources should start within a short window
+        # If sequential, starts would be ~0.1s apart; if parallel, starts are concurrent
+        start_times = [t for label, t in call_times if label == "start"]
+        assert len(start_times) == 3, "All 3 sources should have started"
+        # All sources should start within 0.05s of each other (parallel window)
+        start_window = max(start_times) - min(start_times)
+        assert start_window < 0.05, (
+            f"Sources did not start concurrently (window={start_window:.3f}s)"
+        )
 
     async def test_gather_aggregates_results_from_all_sources(self, gather_context: GatherContext):
         """Results from multiple sources should be aggregated."""
