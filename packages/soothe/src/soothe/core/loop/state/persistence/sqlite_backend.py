@@ -273,6 +273,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         status_filter: str | None = None,
         limit: int = 100,
         exclude_empty: bool = False,
+        workspace_filter: str | None = None,
     ) -> list[dict]:
         """Return summary rows for all loops, ordered by created_at DESC.
 
@@ -281,9 +282,10 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             limit: Maximum rows to return.
             exclude_empty: When True, hide loops with zero human and zero AI
                 messages (bootstrap-only loops with no real exchange).
+            workspace_filter: Optional client_workspace path to filter by.
         """
         return await self._writer_to_thread(
-            self._list_loops_sync, status_filter, limit, exclude_empty
+            self._list_loops_sync, status_filter, limit, exclude_empty, workspace_filter
         )
 
     def _list_loops_sync(
@@ -292,6 +294,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         status_filter: str | None,
         limit: int,
         exclude_empty: bool,
+        workspace_filter: str | None = None,
     ) -> list[dict]:
         """Sync list loops."""
         clauses: list[str] = []
@@ -301,6 +304,9 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             params.append(status_filter)
         if exclude_empty:
             clauses.append("(human_message_count > 0 OR ai_message_count > 0)")
+        if workspace_filter:
+            clauses.append("client_workspace = ?")
+            params.append(workspace_filter)
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = f"""
             SELECT loop_id, status, thread_ids, current_thread_id,

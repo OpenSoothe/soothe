@@ -725,6 +725,7 @@ class MessageRouter:
                 ``filter.status`` — narrows to one persisted status value.
                 ``filter.exclude_empty`` — when True (default), hides loops
                 with zero human + zero AI messages (IG-466).
+                ``filter.workspace`` — narrows to loops with matching client_workspace.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -736,11 +737,13 @@ class MessageRouter:
         exclude_empty = True
         if isinstance(filter_data, dict) and "exclude_empty" in filter_data:
             exclude_empty = bool(filter_data["exclude_empty"])
+        workspace_filter = filter_data.get("workspace") if isinstance(filter_data, dict) else None
 
         rows = await d._persistence_manager.list_loops(
             status_filter=status_filter,
             limit=limit,
             exclude_empty=exclude_empty,
+            workspace_filter=workspace_filter,
         )
         # Snapshot of loops with an active runner stream right now. Used to derive
         # `live` so consumers can distinguish stale "running" persisted status
@@ -767,6 +770,7 @@ class MessageRouter:
                 # 8h drift in UTC+8 ("8h ago" for a loop created minutes ago).
                 "created": row.get("created_at") or "",
                 "duration_ms": int(row.get("total_duration_ms") or 0),
+                "client_workspace": row.get("client_workspace"),
             }
             prompt = _peek_loop_prompt(loop_id)
             if prompt:
@@ -1923,7 +1927,8 @@ class MessageRouter:
 
         Args:
             client_id: Client connection identifier.
-            msg: Request with goal (required), verification_rules (optional), request_id.
+            msg: Request with goal (required), verification_rules (optional),
+                workspace (optional), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1943,6 +1948,18 @@ class MessageRouter:
             )
             return
 
+        # Resolve workspace path if provided
+        workspace: str | None = None
+        raw_workspace = msg.get("workspace")
+        if raw_workspace and isinstance(raw_workspace, str) and raw_workspace.strip():
+            try:
+                from soothe.core.workspace import validate_client_workspace
+
+                resolved = validate_client_workspace(raw_workspace.strip())
+                workspace = str(resolved)
+            except (ValueError, OSError):
+                workspace = raw_workspace.strip()
+
         service = await self._require_autopilot_service(client_id, request_id)
         if service is None:
             return
@@ -1952,6 +1969,7 @@ class MessageRouter:
             goal = await service.submit_task(
                 description=goal_text.strip(),
                 priority=50,  # Default priority
+                workspace=workspace,
             )
         except Exception as exc:
             logger.error("[JobCreate] Failed to submit task: %s", exc, exc_info=True)
