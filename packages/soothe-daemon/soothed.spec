@@ -21,7 +21,7 @@ a = Analysis(
         # Memu memory config (YAML + prompts)
         (str(SOOTHE_SRC / "soothe" / "backends" / "memory" / "memu" / "config"), "soothe/backends/memory/memu/config"),
         # Built-in skills (SKILL.md files)
-        (str(SOOTHE_SRC / "soothe" / "built_in_skills"), "soothe/built_in_skills"),
+        (str(SOOTHE_SRC / "soothe" / "skills" / "builtin_skills"), "soothe/skills/builtin_skills"),
         # SQL migration scripts loaded via pathlib at runtime
         (str(SOOTHE_SRC / "soothe" / "core" / "persistence" / "sql"), "soothe/core/persistence/sql"),
     ],
