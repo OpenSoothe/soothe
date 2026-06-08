@@ -28,15 +28,16 @@ def test_file_info_invokes_against_workspace_file() -> None:
 
 
 def test_read_file_accepts_host_absolute_and_virtual_paths() -> None:
-    """Callable explore backend uses NormalizedPathBackend: host paths under root resolve."""
+    """Explore backend uses NormalizedPathBackend: host paths under root resolve."""
     td = tempfile.mkdtemp()
     Path(td, "note.txt").write_text("hello", encoding="utf-8")
-    from soothe.subagents.explore.tools import _create_thread_workspace_backend
+    from soothe.core.workspace.normalized_backend import get_workspace_backend
 
-    backend = _create_thread_workspace_backend(
-        initial_workspace=td,
-        allow_paths_outside_workspace=False,
-    )(None)
+    backend = get_workspace_backend(
+        Path(td),
+        virtual_mode=True,
+        max_file_size_mb=10,
+    )
     host = str(Path(td) / "note.txt")
     r1 = backend.read(host)
     assert r1.error is None and r1.file_data is not None
