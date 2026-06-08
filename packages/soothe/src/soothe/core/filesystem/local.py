@@ -90,20 +90,14 @@ class LocalFilesystem(UnifiedFilesystem):
                 rel_path = path.lstrip("/")
                 resolved = self.workspace / rel_path
             else:
-                # Non-virtual mode: use absolute path but check bounds
+                # Non-virtual mode: allow absolute paths outside workspace
                 resolved = expanded.resolve()
-                if not self._is_within_workspace(resolved):
-                    raise PathTraversalError(
-                        path=path,
-                        attempted_path=str(resolved),
-                        workspace=str(self.workspace),
-                    )
         else:
             # Relative path: resolve against workspace
             resolved = (self.workspace / path).resolve()
 
-        # Final check: must be within workspace
-        if not self._is_within_workspace(resolved):
+        # Bounds check only in virtual mode (sandboxed)
+        if self.virtual_mode and not self._is_within_workspace(resolved):
             raise PathTraversalError(
                 path=path,
                 attempted_path=str(resolved),
