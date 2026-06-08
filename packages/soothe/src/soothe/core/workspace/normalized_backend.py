@@ -132,9 +132,12 @@ class NormalizedPathBackend:
             try:
                 rel = expanded.resolve().relative_to(self._root_dir.resolve())
             except ValueError:
-                # Path is outside workspace - treat as workspace-relative
-                relative = abs_str.lstrip("/")
-                return relative or "."
+                # Path is outside workspace
+                if self._virtual_mode:
+                    # Sandboxed: strip leading / so it's treated as workspace-relative
+                    relative = abs_str.lstrip("/")
+                    return relative or "."
+                return abs_str
             if self._virtual_mode:
                 return rel.as_posix()
             return abs_str
