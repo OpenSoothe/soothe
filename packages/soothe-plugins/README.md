@@ -14,52 +14,17 @@ pip install soothe-plugins
 
 Minimal echo subagent for testing soothe-plugins integration. See [CONTRIBUTING.md](CONTRIBUTING.md) for plugin development guide.
 
+### Skillify
+
+Skill warehouse indexing and semantic retrieval agent. Provides background indexing loop and retrieval capabilities for skill discovery.
+
+### Weaver
+
+Generative agent framework with skill harmonization. Composes skills from Skillify, resolves conflicts, and generates task-specific subagents dynamically.
+
 ### BrowserUse and Claude Code
 
 Delegated **browser-use** and **Claude agent SDK** subagents (IG-415). Install with `pip install "soothe-plugins[browser_use]"` or `"soothe-plugins[claude]"` and enable `subagents.browser_use` / `subagents.claude` in config. Spec: `docs/RFC-601-community-agents.md`.
-
-### PaperScout
-
-ArXiv paper recommendation agent that delivers personalized daily paper recommendations.
-
-**Features**:
-- Fetches papers from ArXiv based on configurable categories
-- Analyzes your Zotero library to understand research interests
-- Ranks papers by relevance using sentence embeddings
-- Sends daily email digests with TLDR summaries
-
-**Configuration** (add to your Soothe config.yml):
-
-```yaml
-subagents:
-  paperscout:
-    enabled: true
-    model: "openai:gpt-4o-mini"
-    config:
-      arxiv_categories:
-        - cs.AI
-        - cs.CV
-        - cs.LG
-      max_papers: 25
-      smtp:
-        host: "${SMTP_HOST}"
-        port: 587
-        user: "${SMTP_USER}"
-        password: "${SMTP_PASSWORD}"
-      zotero:
-        api_key: "${ZOTERO_API_KEY}"
-        library_id: "${ZOTERO_LIBRARY_ID}"
-```
-
-**Usage**:
-
-```bash
-# Use the subagent via TUI (default)
-soothe "Find recent papers on transformers" --subagent paperscout
-
-# Or use in headless mode
-soothe "Find recent papers on transformers" --subagent paperscout --no-tui
-```
 
 ## Extensibility
 

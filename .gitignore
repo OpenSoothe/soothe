@@ -218,3 +218,4 @@ __MACOSX
 .qoder
 .soothe
 deploy/config.yml
+.backups/
