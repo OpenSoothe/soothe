@@ -257,7 +257,12 @@ class LocalFilesystem(UnifiedFilesystem):
             backup_path = self._create_backup(resolved)
 
         # Ensure parent directory exists
-        resolved.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            resolved.parent.mkdir(parents=True, exist_ok=True)
+        except PermissionError as e:
+            raise PermissionDeniedError(f"Permission denied: {path}", path=path) from e
+        except OSError as e:
+            raise FilesystemError(f"Cannot create directory for {path}: {e}", path=path) from e
 
         # Write content
         created = not resolved.exists()
