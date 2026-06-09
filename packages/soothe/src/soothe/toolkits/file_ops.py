@@ -45,8 +45,8 @@ class FileOpsPlugin:
         """
         from deepagents.backends.filesystem import FilesystemBackend
 
-        from soothe.core.workspace.resolution import resolve_daemon_workspace
-        from soothe.core.workspace.tool_path_resolution import (
+        from soothe.foundation.workspace.resolution import resolve_daemon_workspace
+        from soothe.foundation.workspace.tool_path_resolution import (
             filesystem_virtual_mode_from_soothe_config,
             max_file_size_mb_for_filesystem_backend,
         )

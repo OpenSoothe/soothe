@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.workspace.migration import migrate_workspaces_to_data_dir
+from soothe.foundation.workspace.migration import migrate_workspaces_to_data_dir
 
 
 def test_migrate_moves_workspace_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

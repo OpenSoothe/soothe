@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config.models import SemanticRiskConfig
-from soothe.core.goal_engine import semantic_risk_classifier as srm
-from soothe.core.goal_engine.semantic_risk_classifier import (
+from soothe.foundation.autopilot.engine import semantic_risk_classifier as srm
+from soothe.foundation.autopilot.engine.semantic_risk_classifier import (
     RiskAssessment,
     RiskCache,
     clear_risk_cache,

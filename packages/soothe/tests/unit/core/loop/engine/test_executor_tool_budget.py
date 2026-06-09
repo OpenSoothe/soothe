@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.core.loop.engine.executor import (
+from soothe.foundation.loop.engine.executor import (
     _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     Executor,
     _ActStreamBudget,
 )
-from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
 def _make_step() -> StepAction:

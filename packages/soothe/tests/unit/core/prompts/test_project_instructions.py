@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.loop.state.schemas import LoopState
-from soothe.core.prompts import PromptBuilder
+from soothe.foundation.loop.state.schemas import LoopState
+from soothe.foundation.loop.prompts import PromptBuilder
 
 
 def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Path) -> None:
-    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
 
     claude = tmp_path / "CLAUDE.md"
     claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
@@ -33,7 +33,7 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
 
 def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> None:
     """CLAUDE.md fallback: 600 lines fits under 25K headline cap but trips line cap."""
-    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
 
     claude = tmp_path / "CLAUDE.md"
     # 600 lines of `claude line N\n` is ~7.5 KB — well under the 25K headline cap,
@@ -57,7 +57,7 @@ def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> 
 
 
 def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
-    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
 
     soothe = tmp_path / ".soothe"
     soothe.mkdir()
@@ -71,7 +71,7 @@ def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Pa
 
 def test_envelope_functions_do_not_embed_project_instructions() -> None:
     """Envelope builders no longer embed project_instructions (moved to system prompt)."""
-    from soothe.core.prompts.user_envelope import (
+    from soothe.foundation.loop.prompts.user_envelope import (
         build_execute_step_envelope,
         build_plan_context_envelope,
     )
@@ -113,8 +113,8 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
     """Executor envelope no longer embeds project_instructions (moved to system prompt)."""
     from unittest.mock import MagicMock
 
-    from soothe.core.loop.engine.executor import Executor
-    from soothe.core.loop.state.schemas import StepAction
+    from soothe.foundation.loop.engine.executor import Executor
+    from soothe.foundation.loop.state.schemas import StepAction
 
     (tmp_path / "AGENTS.md").write_text("execute agents guidance\n", encoding="utf-8")
     state = LoopState(goal="g", thread_id="t1", max_iterations=5, workspace=str(tmp_path))
@@ -134,7 +134,7 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
 
 def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
     """Files under the headline cap inline verbatim with no read_file hint."""
-    from soothe.core.prompts.project_instructions import (
+    from soothe.foundation.loop.prompts.project_instructions import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
         load_workspace_project_instructions,
     )
@@ -152,7 +152,7 @@ def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
 
 def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
     """Files above the headline cap emit a paragraph-clean prefix + read_file hint."""
-    from soothe.core.prompts.project_instructions import (
+    from soothe.foundation.loop.prompts.project_instructions import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
         load_workspace_project_instructions,
     )
@@ -183,8 +183,8 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
 
 def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
     """Second load with unchanged mtime hits the cache; no second disk read."""
-    from soothe.core.prompts import project_instructions
-    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts import project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
 
     (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
     # Reset the LRU cache so neighboring tests don't pollute the counter.
@@ -209,8 +209,8 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
     """Editing the file (advancing mtime) returns updated content on next load."""
     import os
 
-    from soothe.core.prompts import project_instructions
-    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts import project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
 
     agents = tmp_path / "AGENTS.md"
     agents.write_text("original rule\n", encoding="utf-8")

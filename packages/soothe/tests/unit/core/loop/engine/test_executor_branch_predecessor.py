@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:
@@ -376,7 +376,7 @@ async def test_fork_copies_main_thread_into_step_namespace(
     The copy goes through ``copy_thread_via_public_api`` (in-house helper)
     because no LangGraph saver implements ``acopy_thread``.
     """
-    from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+    from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
     copy_calls: list[tuple[str, str]] = []
 

@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction
 
 
 class TestExecutorHints:
@@ -137,7 +137,7 @@ class TestExecutorHints:
         The fork goes through the in-house ``copy_thread_via_public_api`` helper
         (LangGraph savers don't implement ``acopy_thread``).
         """
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         copy_calls: list[tuple[str, str]] = []
 

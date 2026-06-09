@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from soothe.core.filesystem.protocol import GlobResult
-from soothe.core.filesystem.workspace import WorkspaceFilesystem
-from soothe.core.workspace.normalized_backend import NormalizedPathBackend
+from soothe.foundation.core.filesystem.protocol import GlobResult
+from soothe.foundation.core.filesystem.workspace import WorkspaceFilesystem
+from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
 
 
 def test_normalized_backend_glob_uses_workspace_filesystem(tmp_path: Path) -> None:

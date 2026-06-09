@@ -5,7 +5,7 @@ Covers: End-to-end proposal flow from enqueue to drain.
 
 import pytest
 
-from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
+from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
 
 
 class TestProposalFlow:

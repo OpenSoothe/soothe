@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from soothe.core.loop.engine.executor import (
+from soothe.foundation.loop.engine.executor import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     Executor,
     _last_tool_result_block,
 )
-from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
 def test_append_parallel_wave_ledger_success_and_exception() -> None:

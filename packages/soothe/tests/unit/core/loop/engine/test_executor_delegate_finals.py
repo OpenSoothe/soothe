@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from soothe.core.loop.engine.executor import Executor
+from soothe.foundation.loop.engine.executor import Executor
 
 
 @pytest.mark.asyncio
@@ -71,7 +71,7 @@ async def test_stream_and_collect_joins_task_tool_returns_as_delegate_finals() -
 @pytest.mark.asyncio
 async def test_record_execute_wave_prefers_delegate_final_over_empty_root_ai() -> None:
     """LoopState receives delegate text when root-graph AIMessage list is empty."""
-    from soothe.core.loop.state.schemas import LoopState
+    from soothe.foundation.loop.state.schemas import LoopState
 
     mock_agent = MagicMock()
     executor = Executor(mock_agent)
@@ -88,7 +88,7 @@ async def test_record_execute_wave_prefers_delegate_final_over_empty_root_ai() -
 
 def test_record_execute_wave_parallel_multi_merges_delegate_finals() -> None:
     """Parallel multi-step waves preserve merged delegate text for goal completion (IG-356)."""
-    from soothe.core.loop.state.schemas import LoopState
+    from soothe.foundation.loop.state.schemas import LoopState
 
     mock_agent = MagicMock()
     executor = Executor(mock_agent)
@@ -246,7 +246,7 @@ async def test_backfill_tool_calls_args_from_chunks_by_index() -> None:
     """Chunks without ``id`` still backfill ``tool_calls`` via ``index``."""
     from langchain_core.messages import AIMessage
 
-    from soothe.core.loop.engine.executor import _backfill_tool_calls_args_from_chunks
+    from soothe.foundation.loop.engine.executor import _backfill_tool_calls_args_from_chunks
 
     msg = AIMessage(
         content="",
@@ -407,7 +407,7 @@ async def test_backfill_tool_calls_args_from_chunks_on_same_message() -> None:
     """Terminal AIMessage with empty tool_calls gets args from tool_call_chunks."""
     from langchain_core.messages import AIMessage
 
-    from soothe.core.loop.engine.executor import _backfill_tool_calls_args_from_chunks
+    from soothe.foundation.loop.engine.executor import _backfill_tool_calls_args_from_chunks
 
     msg = AIMessage(
         content="",
@@ -533,7 +533,7 @@ async def test_stream_and_collect_logs_tool_call_args_from_index_chunk(
         yield ((), "messages", (tool_msg, {}))
 
     executor = Executor(MagicMock())
-    caplog.set_level(logging.DEBUG, logger="soothe.core.loop.engine.executor")
+    caplog.set_level(logging.DEBUG, logger="soothe.foundation.loop.engine.executor")
     async for _row in executor._stream_and_collect(
         fake_stream(),
         budget=None,
@@ -632,7 +632,7 @@ async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
         yield ((), "messages", (tool_msg, {}))
 
     executor = Executor(MagicMock())
-    caplog.set_level(logging.DEBUG, logger="soothe.core.loop.engine.executor")
+    caplog.set_level(logging.DEBUG, logger="soothe.foundation.loop.engine.executor")
     async for _row in executor._stream_and_collect(
         fake_stream(),
         budget=None,
@@ -672,7 +672,7 @@ async def test_stream_and_collect_logs_tool_call_args(caplog: pytest.LogCaptureF
         yield ((), "messages", (tool_msg, {}))
 
     executor = Executor(MagicMock())
-    caplog.set_level(logging.DEBUG, logger="soothe.core.loop.engine.executor")
+    caplog.set_level(logging.DEBUG, logger="soothe.foundation.loop.engine.executor")
     async for _row in executor._stream_and_collect(
         fake_stream(),
         budget=None,
@@ -689,7 +689,7 @@ async def test_stream_and_collect_logs_tool_call_args(caplog: pytest.LogCaptureF
 
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:
     """Parallel wave with no task returns keeps assistant text empty."""
-    from soothe.core.loop.state.schemas import LoopState
+    from soothe.foundation.loop.state.schemas import LoopState
 
     mock_agent = MagicMock()
     executor = Executor(mock_agent)

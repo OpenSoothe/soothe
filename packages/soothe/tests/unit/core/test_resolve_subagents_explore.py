@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from soothe.config import SootheConfig, SubagentConfig
-from soothe.core.resolver._resolver_tools import resolve_subagents
+from soothe.runner.resolver._resolver_tools import resolve_subagents
 
 
 def test_resolve_subagents_passes_config_and_context_to_explore() -> None:

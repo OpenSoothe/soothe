@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.planning.planner import _detect_stuck_loop
-from soothe.core.loop.state.schemas import LoopState, StepResult
+from soothe.foundation.loop.planning.planner import _detect_stuck_loop
+from soothe.foundation.loop.state.schemas import LoopState, StepResult
 
 
 def test_detect_stuck_loop_repeated_actions() -> None:

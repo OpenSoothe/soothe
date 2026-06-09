@@ -8,7 +8,7 @@ from pydantic import ConfigDict
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe.core.events import register_event
+from soothe.foundation.events import register_event
 
 SUBAGENT_VERITAS_REQUESTED = "soothe.subagent.veritas.requested"
 SUBAGENT_VERITAS_ANSWERED = "soothe.subagent.veritas.answered"

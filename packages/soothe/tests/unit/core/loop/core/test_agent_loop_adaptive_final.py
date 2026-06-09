@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.loop import AgentLoop
-from soothe.core.loop.state.schemas import StatusAssessment
+from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop.state.schemas import StatusAssessment
 
 
 def _make_mock_core_with_checkpointer() -> Mock:
@@ -61,15 +61,15 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
     with (
         patch(
-            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
@@ -133,15 +133,15 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 
     with (
         patch(
-            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
@@ -199,15 +199,15 @@ async def test_completed_payload_for_summary_path() -> None:
 
     with (
         patch(
-            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
@@ -270,15 +270,15 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
 
     with (
         patch(
-            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):

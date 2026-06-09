@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from soothe.core.loop.orchestrator.builder import build_agent_loop_graph
+from soothe.foundation.loop.orchestrator.builder import build_agent_loop_graph
 
 
 def test_agent_loop_graph_exposes_rfc220_named_nodes() -> None:

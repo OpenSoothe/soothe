@@ -13,9 +13,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.core.events import ERROR
-from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.foundation import extract_text_from_ai_message
+from soothe.foundation.events import ERROR
+from soothe.foundation.workspace import resolve_workspace_for_stream
 from soothe.logging import ThreadLogger, set_thread_id
 from soothe.utils.error_format import emit_error_event
 from soothe_sdk.client.protocol import _serialize_for_json
@@ -641,7 +641,7 @@ class QueryEngine:
         phase_tagged_assistant_written = [False]
 
         async def _run_stream() -> None:
-            from soothe.core.context.model_override import (
+            from soothe.foundation.core.context.model_override import (
                 attach_stream_model_override,
                 reset_stream_model_override,
             )
@@ -839,7 +839,7 @@ class QueryEngine:
                     effective_loop_id or "?",
                     thread_id[:16] if thread_id else "?",
                 )
-                from soothe.core import FrameworkFilesystem
+                from soothe.foundation.workspace import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
 
@@ -865,7 +865,7 @@ class QueryEngine:
                     )
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
-                from soothe.core import FrameworkFilesystem
+                from soothe.foundation.workspace import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
                 raise
@@ -1102,7 +1102,7 @@ class QueryEngine:
                 response_schema_strict=response_schema_strict,
             )
 
-            from soothe.core.loop.utils.messages import LoopAIMessage
+            from soothe.foundation.loop.utils.messages import LoopAIMessage
 
             ai_flat = _serialize_for_json(
                 LoopAIMessage(content=answer, phase="direct_model", thread_id=thread_id)

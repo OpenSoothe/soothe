@@ -14,12 +14,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop import AgentLoop
-from soothe.core.loop.clarification import (
+from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop.clarification import (
     ClarificationAnswer,
     ClarificationRequest,
 )
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     PlanResult,
     StatusAssessment,

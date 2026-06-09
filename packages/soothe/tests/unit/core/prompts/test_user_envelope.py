@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.prompts.user_envelope import (
+from soothe.foundation.loop.prompts.user_envelope import (
     build_execute_step_envelope,
     build_plan_context_envelope,
 )

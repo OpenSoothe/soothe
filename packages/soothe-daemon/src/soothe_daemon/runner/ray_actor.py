@@ -22,15 +22,15 @@ class LoopRunnerActor:
 
     def __init__(self, config: object) -> None:
         # Import deferred so the actor process initialises its own SootheRunner.
-        from soothe.core.runner import SootheRunner
+        from soothe.runner import SootheRunner
 
         self._runner = SootheRunner(config)  # type: ignore[arg-type]
         self._cancelled = False
 
     async def run(self, request: LoopRunRequest, queue: Queue) -> None:
         """Stream chunks from ``SootheRunner.astream()`` into ``queue``."""
-        from soothe.core.runner._worker_utils import parse_intent_hint
-        from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
+        from soothe.runner._worker_utils import parse_intent_hint
+        from soothe.runner.worker_logging import configure_loop_runner_worker_logging
 
         configure_loop_runner_worker_logging(self._runner.config, request.loop_id)
 

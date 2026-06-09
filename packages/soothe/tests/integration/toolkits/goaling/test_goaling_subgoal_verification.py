@@ -8,8 +8,8 @@ Scenario: An agent discovers it needs to verify tool integration before
 proceeding with main task, so it creates a verification subgoal.
 """
 
-from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
-from soothe.core.runner._runner_autopilot_worker import _proposals_to_directives
+from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
+from soothe.runner._runner_autopilot_worker import _proposals_to_directives
 from soothe.toolkits.goaling.add_finding import create_add_finding_tool
 from soothe.toolkits.goaling.suggest_goal import create_suggest_goal_tool
 

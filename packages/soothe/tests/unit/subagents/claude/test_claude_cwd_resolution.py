@@ -26,7 +26,7 @@ def test_resolve_uses_framework_filesystem_when_no_config_workspace() -> None:
     """ContextVar workspace is second priority (requires soothe daemon)."""
     with patch("langgraph.config.get_config") as mock_gc:
         mock_gc.return_value = {"configurable": {}}
-        from soothe.core import FrameworkFilesystem
+        from soothe.foundation.workspace import FrameworkFilesystem
 
         try:
             FrameworkFilesystem.set_current_workspace("/tmp/from-contextvar")

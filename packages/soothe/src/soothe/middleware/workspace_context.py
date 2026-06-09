@@ -56,9 +56,10 @@ class WorkspaceContextMiddleware(AgentMiddleware):
 
         from langgraph.config import get_config
 
-        from soothe.core import FrameworkFilesystem
-        from soothe.core.workspace import set_virtual_mode_context
-        from soothe.core.workspace.runtime_resolution import resolve_workspace_for_tool_execution
+        from soothe.foundation.workspace import FrameworkFilesystem, set_virtual_mode_context
+        from soothe.foundation.workspace.runtime_resolution import (
+            resolve_workspace_for_tool_execution,
+        )
 
         config: dict[str, Any] = {}
         try:
@@ -112,8 +113,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         Returns:
             None.
         """
-        from soothe.core import FrameworkFilesystem
-        from soothe.core.workspace import clear_virtual_mode_context
+        from soothe.foundation.workspace import FrameworkFilesystem, clear_virtual_mode_context
 
         FrameworkFilesystem.clear_current_workspace(self._workspace_token)
         self._workspace_token = None

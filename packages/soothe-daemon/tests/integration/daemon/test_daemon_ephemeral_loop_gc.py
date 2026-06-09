@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from soothe.core.loop.state.persistence.directory_manager import (
+from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 from soothe_sdk.client import WebSocketClient

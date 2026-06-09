@@ -81,8 +81,8 @@ def _save_raw_results(query: str, result: object) -> None:
     In virtual mode (IG-405), writes to ``/.soothe/data/threads/{thread_id}/search_results/``.
     Fails silently if no run directory is active.
     """
-    from soothe.core import FrameworkFilesystem
-    from soothe.core.workspace import (
+    from soothe.foundation.workspace import (
+        FrameworkFilesystem,
         get_virtual_home,
         get_virtual_mode,
     )

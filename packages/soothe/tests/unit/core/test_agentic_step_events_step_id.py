@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.events import (
+from soothe.foundation.events import (
     AgenticStepCompletedEvent,
     AgenticStepQueuedEvent,
     AgenticStepStartedEvent,

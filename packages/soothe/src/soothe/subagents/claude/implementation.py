@@ -105,7 +105,7 @@ def _resolve_claude_cwd(fallback: str) -> str:
 
     try:
         # Optional: soothe daemon provides FrameworkFilesystem for thread workspace
-        from soothe.core import FrameworkFilesystem
+        from soothe.foundation.workspace import FrameworkFilesystem
 
         dynamic = FrameworkFilesystem.get_current_workspace()
         if dynamic is not None:

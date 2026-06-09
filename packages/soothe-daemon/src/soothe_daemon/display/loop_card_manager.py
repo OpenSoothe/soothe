@@ -24,7 +24,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.loop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.foundation.loop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe_sdk.display import card_binder
 from soothe_sdk.display.card_ledger import cards_to_mutations
 from soothe_sdk.langchain_wire import messages_from_wire_dicts

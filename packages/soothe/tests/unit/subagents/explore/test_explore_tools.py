@@ -31,7 +31,7 @@ def test_read_file_accepts_host_absolute_and_virtual_paths() -> None:
     """Explore backend uses NormalizedPathBackend: host paths under root resolve."""
     td = tempfile.mkdtemp()
     Path(td, "note.txt").write_text("hello", encoding="utf-8")
-    from soothe.core.workspace.normalized_backend import get_workspace_backend
+    from soothe.foundation.workspace.normalized_backend import get_workspace_backend
 
     backend = get_workspace_backend(
         Path(td),

@@ -93,7 +93,7 @@ class SuggestGoalTool(BaseTool):
             logger.warning("suggest_goal: proposal_queue not available")
             return "Error: proposal_queue not configured for this execution context"
 
-        from soothe.core.goal_engine.proposal_queue import Proposal
+        from soothe.foundation.autopilot.engine.proposal_queue import Proposal
 
         queue.enqueue(
             Proposal(

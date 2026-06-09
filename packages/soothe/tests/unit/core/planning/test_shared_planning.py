@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.loop.planning.parser import parse_plan_from_text
-from soothe.core.loop.utils.reflection import (
+from soothe.foundation.loop.planning.parser import parse_plan_from_text
+from soothe.foundation.loop.utils.reflection import (
     reflect_heuristic,
     reflect_with_llm,
 )

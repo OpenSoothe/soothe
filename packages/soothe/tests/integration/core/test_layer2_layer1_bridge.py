@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.core.prompts.user_envelope import build_execute_step_envelope
+from soothe.foundation.loop.prompts.user_envelope import build_execute_step_envelope
 from soothe.middleware import ExecutionHintsMiddleware
 
 

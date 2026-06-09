@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop.engine.executor import StepWaveQueued, StepWaveStart
-from soothe.core.loop.orchestrator.nodes.execute_steps import node_execute
-from soothe.core.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.core.loop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.foundation.loop.engine.executor import StepWaveQueued, StepWaveStart
+from soothe.foundation.loop.orchestrator.nodes.execute_steps import node_execute
+from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.loop.state.schemas import AgentDecision, StepAction, StepResult
 
 
 async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
@@ -78,7 +78,7 @@ async def test_execute_emits_step_completed_per_result() -> None:
         scratch=scratch,
     )
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     mock_executor = MagicMock()
     mock_executor.execute = _fake_execute_stream
@@ -165,7 +165,7 @@ async def test_execute_emits_step_started_when_dependency_unlocks() -> None:
         scratch=scratch,
     )
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     mock_executor = MagicMock()
     mock_executor.execute = _fake_dependency_execute_stream

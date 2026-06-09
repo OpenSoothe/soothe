@@ -2,8 +2,8 @@
 
 import pytest
 
-from soothe.core.events.internal_bus import InternalEventBus, get_internal_bus, reset_internal_bus
-from soothe.core.events.internal_events import (
+from soothe.foundation.events.internal_bus import InternalEventBus, get_internal_bus, reset_internal_bus
+from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_COMPLETED,
     INTERNAL_GOAL_STATE_CHANGED,
     InternalGoalCompletedEvent,

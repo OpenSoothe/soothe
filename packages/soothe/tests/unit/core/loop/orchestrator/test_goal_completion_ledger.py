@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.core.loop.engine.synthesis import SynthesisGenerator
-from soothe.core.loop.orchestrator.nodes.goal_completion import node_goal_completion
-from soothe.core.loop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.core.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.core.loop.planning.manager import CompletionStrategy, PlanManager
-from soothe.core.loop.state.schemas import LoopState, PlanResult
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
+from soothe.foundation.loop.orchestrator.nodes.goal_completion import node_goal_completion
+from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.loop.planning.manager import CompletionStrategy, PlanManager
+from soothe.foundation.loop.state.schemas import LoopState, PlanResult
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _ctx(
@@ -95,7 +95,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """When the unified DAG has nodes, goal completion logs it (not user output)."""
-    from soothe.core.loop.state.schemas import AgentDecision, StepAction, StepResult
+    from soothe.foundation.loop.state.schemas import AgentDecision, StepAction, StepResult
 
     caplog.set_level(logging.INFO)
     loop_state = LoopState(goal="goal txt", thread_id="thr-dag", loop_messages=[])
@@ -238,7 +238,7 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     )
 
     with patch(
-        "soothe.core.loop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
+        "soothe.foundation.loop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
         return_value="fallback summary body",
     ):
         await node_goal_completion(ctx, {})

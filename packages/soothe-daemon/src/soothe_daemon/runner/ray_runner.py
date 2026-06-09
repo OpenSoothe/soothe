@@ -18,7 +18,7 @@ from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
-    from soothe.core.runner._runner_shared import StreamChunk
+    from soothe.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
 

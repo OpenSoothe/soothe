@@ -881,7 +881,7 @@ class SootheConfig(BaseSettings):
         """
         import datetime as dt
 
-        from soothe.core.prompts import _DEFAULT_SYSTEM_PROMPT
+        from soothe.foundation.loop.prompts import _DEFAULT_SYSTEM_PROMPT
 
         now = dt.datetime.now(dt.UTC).astimezone()
         current_date = now.strftime("%Y-%m-%d")

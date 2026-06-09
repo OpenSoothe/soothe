@@ -8,7 +8,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from soothe.config import SootheConfig
-from soothe.core.intention import RoutingClassification
+from soothe.foundation.loop.intention import RoutingClassification
 from soothe.middleware import SystemPromptMiddleware
 
 

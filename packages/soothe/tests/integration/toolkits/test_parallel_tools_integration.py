@@ -7,7 +7,7 @@ import pytest
 from langchain_core.tools import tool
 
 from soothe.config import SootheConfig
-from soothe.core.agent import create_soothe_agent
+from soothe.foundation.core.agent import create_soothe_agent
 
 
 @pytest.mark.asyncio

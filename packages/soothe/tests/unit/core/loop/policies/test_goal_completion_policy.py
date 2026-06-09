@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.loop.planning.dag import PlanDAG
-from soothe.core.loop.planning.manager import (
+from soothe.foundation.loop.planning.dag import PlanDAG
+from soothe.foundation.loop.planning.manager import (
     CompletionStrategy,
     PlanManager,
     determine_goal_completion_needs,
 )
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,

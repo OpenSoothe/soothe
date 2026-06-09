@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.core.loop.engine.scenario_classifier import ScenarioClassification
-from soothe.core.loop.engine.synthesis_projection import (
+from soothe.foundation.loop.engine.scenario_classifier import ScenarioClassification
+from soothe.foundation.loop.engine.synthesis_projection import (
     build_synthesis_messages,
     flatten_execute_human_content,
     project_synthesis_user_context,
     render_synthesis_system_prompt,
 )
-from soothe.core.loop.state.schemas import LoopState, StepResult
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.core.prompts.user_envelope import (
+from soothe.foundation.loop.state.schemas import LoopState, StepResult
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.prompts.user_envelope import (
     build_execute_step_envelope,
     build_plan_context_envelope,
 )

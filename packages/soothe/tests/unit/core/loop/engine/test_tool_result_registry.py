@@ -1,7 +1,7 @@
 """Tests for tool result registry (IG-433)."""
 
 from soothe.config.models import ToolResultRegistryConfig
-from soothe.core.loop.engine.tool_result_registry import (
+from soothe.foundation.loop.engine.tool_result_registry import (
     generate_outcome_metadata_v2,
     get_tool_result_registry,
 )

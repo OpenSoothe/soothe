@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import soothe.core.loop.state.schemas  # noqa: F401 — break circular import
-from soothe.core.loop.planning.ledger_compaction import (
+import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import
+from soothe.foundation.loop.planning.ledger_compaction import (
     compact_plan_assess_ai_dump,
     compact_planning_human_content,
 )
-from soothe.core.loop.state.schemas import StatusAssessment
+from soothe.foundation.loop.state.schemas import StatusAssessment
 
 
 def test_compact_human_strips_context_info_block() -> None:

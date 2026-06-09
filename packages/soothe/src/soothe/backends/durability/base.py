@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.backends.persistence import AsyncPersistStore
-from soothe.core.runner._types import generate_thread_id
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
+from soothe.runner._types import generate_thread_id
 
 
 class BasePersistStoreDurability:

@@ -1,6 +1,6 @@
 """Unit tests for LoopPool models (RFC-222, IG-295)."""
 
-from soothe.core.autopilot.loop_pool import LoopHandle, LoopPool
+from soothe.foundation.autopilot.service.loop_pool import LoopHandle, LoopPool
 
 
 class TestLoopHandle:

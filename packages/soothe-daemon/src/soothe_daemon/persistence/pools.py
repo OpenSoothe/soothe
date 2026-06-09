@@ -30,8 +30,8 @@ async def preopen_shared_postgres_pools(
     if not uses_postgresql_persistence(config) or not daemon_config.thread_pool.enabled:
         return
 
-    from soothe.core.loop.state.persistence.shared_pool import SharedPostgreSQLPool
-    from soothe.core.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+    from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
     await SharedPostgreSQLPool.get_shared_instance(config)
     cp_pool = SharedCheckpointerPool.get_or_create_pool(config)
@@ -41,8 +41,8 @@ async def preopen_shared_postgres_pools(
 
 async def release_idle_shared_postgres_pools() -> None:
     """Release idle connections on process-wide shared PostgreSQL pools."""
-    from soothe.core.loop.state.persistence.shared_pool import SharedPostgreSQLPool
-    from soothe.core.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+    from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
     await SharedPostgreSQLPool.release_idle_shared()
     await SharedCheckpointerPool.release_idle()
@@ -51,8 +51,8 @@ async def release_idle_shared_postgres_pools() -> None:
 async def close_shared_postgres_pools() -> None:
     """Close shared AgentLoop and checkpointer pools at daemon shutdown."""
     try:
-        from soothe.core.loop.state.persistence.shared_pool import SharedPostgreSQLPool
-        from soothe.core.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+        from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+        from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
         await SharedPostgreSQLPool.close_shared_instance()
         logger.info("Shared AgentLoop PostgreSQL pool closed")

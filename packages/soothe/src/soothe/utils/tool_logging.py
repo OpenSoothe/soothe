@@ -41,7 +41,7 @@ def wrap_tool_with_logging(
     """
     from langchain_core.tools import BaseTool
 
-    from soothe.core.events import (
+    from soothe.foundation.events import (
         make_subagent_tool_completed,
         make_subagent_tool_failed,
         make_subagent_tool_started,
