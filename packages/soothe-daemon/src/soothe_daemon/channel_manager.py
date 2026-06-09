@@ -226,6 +226,16 @@ class ChannelManager:
                 docs_url="/docs",
                 redoc_url="/redoc",
             )
+            # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
+            # Returns HTTP 200 with {"status": "ok"} immediately - no dependencies
+            @self._unified_app.get("/healthz")
+            async def docker_healthcheck() -> dict[str, str]:
+                """Simple health check for Docker healthcheck.
+
+                Returns immediately without checking any dependencies.
+                Used by Docker to verify the server is listening.
+                """
+                return {"status": "ok"}
 
         # Create WebSocket channel
         ws_channel = WebSocketChannel(
