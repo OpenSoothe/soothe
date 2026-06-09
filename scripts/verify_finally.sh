@@ -120,8 +120,17 @@ print_info() {
 
 # Sync command kept in lockstep with `make sync` (UV_SYNC in Makefile).
 # Broken/partial mirrors (e.g. tsinghua) leave dist-info without wheels for
-# packages like psycopg_pool and jsonschema; force PyPI by clearing index vars.
-UV_SYNC_CMD=(env UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras)
+# packages like psycopg_pool and jsonschema.
+# Use UV_PYPI_MIRROR to override the default PyPI (for networks with connectivity issues).
+# Usage: UV_PYPI_MIRROR=https://mirrors.aliyun.com/pypi/simple ./scripts/verify_finally.sh
+# Export UV_DEFAULT_INDEX so all uv sync/run commands use the mirror.
+if [[ -n "${UV_PYPI_MIRROR:-}" ]]; then
+    export UV_DEFAULT_INDEX="$UV_PYPI_MIRROR"
+else
+    # Force PyPI by clearing any mirror environment variables
+    unset UV_INDEX_URL UV_DEFAULT_INDEX UV_EXTRA_INDEX_URL UV_INDEX UV_FIND_LINKS 2>/dev/null || true
+fi
+UV_SYNC_CMD=(uv sync --all-packages --all-extras)
 
 # Verify critical daemon dependencies are importable after sync.
 # Mirrors the `sync-verify` Makefile target so the script catches the same
@@ -213,9 +222,8 @@ validate_package_dependencies() {
     if ! command -v uv >/dev/null 2>&1; then
         print_warning "uv not found, skipping workspace sync check"
     else
-        # Match the real sync invocation (UV_SYNC_CMD) so the dry-run cannot
-        # quietly disagree with `make sync` / setup_workspace.
-        if ! env UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --dry-run >/dev/null 2>&1; then
+        # Match the real sync invocation so the dry-run cannot quietly disagree.
+        if ! uv sync --all-packages --all-extras --dry-run >/dev/null 2>&1; then
             print_failure "Workspace sync would fail (run 'make sync' to resolve)"
             return 1
         else
