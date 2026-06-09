@@ -262,6 +262,9 @@ class EventProcessor:
         lo = assistant_output_phase(msg)
         return lo not in LOOP_ASSISTANT_OUTPUT_PHASES
 
+    # Phases that are internal reasoning/intent and should be suppressed in headless mode.
+    _HEADLESS_SUPPRESSED_PHASES: frozenset[str] = frozenset({"plan_direct"})
+
     def _dispatch_loop_tagged_assistant_text(
         self,
         raw_text: str,
@@ -272,6 +275,8 @@ class EventProcessor:
     ) -> None:
         """Display logic for RFC-614 loop-tagged assistant messages (IG-317 / IG-343)."""
         if phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
+            return
+        if self._headless_output and phase in self._HEADLESS_SUPPRESSED_PHASES:
             return
 
         accum_key = _loop_msg_accum_event_key(phase)

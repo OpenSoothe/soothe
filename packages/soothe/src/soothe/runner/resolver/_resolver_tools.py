@@ -678,10 +678,35 @@ def resolve_subagents(
 
         pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 
+    # If both explore and plan are pending, resolve explore first so plan can
+    # reuse its compiled runnable instead of building a duplicate.
+    explore_spec = None
+    has_plan = any(n == "plan" for n, _, _ in pending)
+    if has_plan:
+        explore_entries = [(i, e) for i, e in enumerate(pending) if e[0] == "explore"]
+        if explore_entries:
+            idx, explore_entry = explore_entries[0]
+            resolved = _resolve_subagents_sequential([explore_entry])
+            if resolved:
+                explore_spec = resolved[0]
+                pending.pop(idx)
+                # Inject the compiled explore runnable into plan's context
+                for i, (n, f, kw) in enumerate(pending):
+                    if n == "plan":
+                        ctx = kw.get("context", {})
+                        ctx["explore_runnable"] = explore_spec["runnable"]
+                        kw["context"] = ctx
+                        pending[i] = (n, f, kw)
+                        break
+
     parallel = lazy and len(pending) > 1
     subagents = (
         _resolve_subagents_parallel(pending) if parallel else _resolve_subagents_sequential(pending)
     )
+
+    # Prepend explore (resolved earlier) so ordering stays consistent.
+    if explore_spec is not None:
+        subagents.insert(0, explore_spec)
 
     total_elapsed_ms = (time.perf_counter() - total_start) * 1000
     logger.info(
