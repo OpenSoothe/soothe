@@ -146,7 +146,7 @@ class PhasesMixin:
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
             return
 
-        from soothe.foundation.core.quiz_messages import build_quiz_system_message
+        from soothe.foundation.loop.intention.quiz_messages import build_quiz_system_message
 
         assistant_name = getattr(getattr(self._config, "agent", None), "name", None) or "Soothe"
         quiz_user_prompt = f"""Answer this question accurately and concisely using only your training knowledge.

@@ -9,6 +9,7 @@ This module provides:
 - IntentClassifier: LLM-driven quiz detector
 - RoutingClassification: routing complexity classification for execution path selection
 - IntentHint: enum for suggested intent to bypass LLM classification (``QUIZ`` only)
+- build_quiz_system_message: system prompt for quiz fast-path LLM calls
 
 Related RFCs: RFC-201, RFC-217, RFC-225
 """
@@ -23,6 +24,7 @@ from .models import (
     TaskComplexity,
     build_loop_routing_classification,
 )
+from .quiz_messages import build_quiz_system_message
 
 __all__ = [
     "IntentClassifier",
@@ -31,4 +33,5 @@ __all__ = [
     "RoutingClassification",
     "TaskComplexity",
     "build_loop_routing_classification",
+    "build_quiz_system_message",
 ]
