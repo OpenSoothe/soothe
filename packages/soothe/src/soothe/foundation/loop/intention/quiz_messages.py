@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_FRAGMENTS_DIR = Path(__file__).resolve().parent.parent / "loop" / "prompts" / "fragments"
+_FRAGMENTS_DIR = Path(__file__).resolve().parent.parent / "prompts" / "fragments"
 
 
 def _read_fragment(relative: str) -> str:
