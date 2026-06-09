@@ -115,11 +115,10 @@ class MemoryProfiler:
 
         if self._running and tracemalloc.is_tracing():
             current_snapshot = tracemalloc.take_snapshot()
-            tracked_size = current_snapshot.size / 1024 / 1024
-            tracked_count = current_snapshot.count
+            traced_current, traced_peak = tracemalloc.get_traced_memory()
 
-            result["tracemalloc_tracked_mb"] = round(tracked_size, 2)
-            result["tracemalloc_tracked_count"] = tracked_count
+            result["tracemalloc_traced_mb"] = round(traced_current / 1024 / 1024, 2)
+            result["tracemalloc_peak_mb"] = round(traced_peak / 1024 / 1024, 2)
 
             # Top allocations by size
             top_stats = current_snapshot.statistics("lineno")
