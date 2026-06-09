@@ -42,18 +42,6 @@ def test_split_conversation_token_count_adds_messages_and_tools() -> None:
     assert total == 103
 
 
-def test_warm_summarization_tool_token_cache_populates_global_cache() -> None:
-    patch_module._TOOLS_TOKEN_CACHE.clear()
-    tools = [{"name": "ls", "description": "list files", "parameters": {"type": "object"}}]
-
-    first = patch_module.warm_summarization_tool_token_cache(tools)
-    second = patch_module.warm_summarization_tool_token_cache(tools)
-
-    assert first > 0
-    assert second == first
-    assert len(patch_module._TOOLS_TOKEN_CACHE) == 1
-
-
 def test_truncate_args_skips_token_count_for_message_trigger() -> None:
     pytest.importorskip("deepagents")
     from deepagents.middleware.summarization import SummarizationMiddleware
