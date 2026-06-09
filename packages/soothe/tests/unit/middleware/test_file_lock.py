@@ -9,8 +9,8 @@ import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.events.internal_bus import InternalEventBus, reset_internal_bus
 from soothe.foundation.autopilot.engine.file_lock_registry import FileLockRegistry
+from soothe.foundation.events.internal_bus import InternalEventBus, reset_internal_bus
 from soothe.middleware.file_lock import FileLockMiddleware
 
 

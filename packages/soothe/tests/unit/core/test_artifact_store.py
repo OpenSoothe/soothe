@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from soothe.runner._artifact_store import ArtifactEntry, RunArtifactStore, RunManifest
 from soothe.protocols.planner import GoalReport, StepReport
+from soothe.runner._artifact_store import ArtifactEntry, RunArtifactStore, RunManifest
 
 
 class TestArtifactEntry:

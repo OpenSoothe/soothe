@@ -7,8 +7,8 @@ Wave metrics are now internal tracking only (not surfaced in Plan prompts).
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop.state.schemas import LoopState
 from soothe.foundation.loop.prompts import PromptBuilder
+from soothe.foundation.loop.state.schemas import LoopState
 from soothe.protocols.planner import PlanContext
 
 

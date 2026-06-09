@@ -24,13 +24,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import at import time
+from soothe.foundation.loop.prompts import PromptBuilder
 from soothe.foundation.loop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     ToolCallHead,
 )
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.foundation.loop.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
 # ---------------------------------------------------------------------------

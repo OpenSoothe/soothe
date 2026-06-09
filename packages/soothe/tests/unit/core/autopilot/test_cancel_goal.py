@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from soothe.config.models import AutonomousConfig
+from soothe.foundation.autopilot.engine import GoalEngine
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.events.internal_bus import InternalEventBus
-from soothe.foundation.autopilot.engine import GoalEngine
 
 
 class _FakeRunner:

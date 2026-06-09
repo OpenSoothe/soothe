@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.autopilot.engine import GoalEngine
 from soothe.foundation.autopilot.engine.models import EvidenceBundle
+from soothe.foundation.events.internal_bus import InternalEventBus
 
 
 def _make_evidence(narrative: str = "x") -> EvidenceBundle:

@@ -3,9 +3,9 @@
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.runner import SootheRunner
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.middleware.system_prompt import SystemPromptMiddleware
+from soothe.runner import SootheRunner
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration

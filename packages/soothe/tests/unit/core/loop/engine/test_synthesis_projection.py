@@ -11,12 +11,12 @@ from soothe.foundation.loop.engine.synthesis_projection import (
     project_synthesis_user_context,
     render_synthesis_system_prompt,
 )
-from soothe.foundation.loop.state.schemas import LoopState, StepResult
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.foundation.loop.prompts.user_envelope import (
     build_execute_step_envelope,
     build_plan_context_envelope,
 )
+from soothe.foundation.loop.state.schemas import LoopState, StepResult
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_flatten_execute_envelope_extracts_user_query() -> None:
