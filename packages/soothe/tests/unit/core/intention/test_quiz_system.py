@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.foundation.core.quiz_messages import build_quiz_system_message
+from soothe.foundation.loop.intention.quiz_messages import build_quiz_system_message
 
 
 def test_build_quiz_system_message_includes_assistant_name() -> None:
