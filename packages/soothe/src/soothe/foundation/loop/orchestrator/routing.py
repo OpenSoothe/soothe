@@ -12,6 +12,21 @@ from .state import PLAN_ROUTE_GOAL_DONE
 logger = logging.getLogger(__name__)
 
 
+def route_after_evidence_gather(state: dict[str, Any]) -> str:
+    """IG-476: Route from bounded_evidence_gather based on fresh-loop detection.
+
+    When evidence_gather_route is "plan_generate_skip_assess", shortcut directly
+    to plan_generate with the synthetic assessment already set in scratch.
+    Otherwise, proceed to plan_assess for normal assessment flow.
+    """
+    route = state.get("evidence_gather_route")
+    if route == "plan_generate_skip_assess":
+        logger.debug("[routing] route_after_evidence_gather → plan_generate (fresh-loop skip)")
+        return "plan_generate"
+    logger.debug("[routing] route_after_evidence_gather → plan_assess")
+    return "plan_assess"
+
+
 def _pending_clarification(state: dict[str, Any]) -> bool:
     """RFC-622: yield to ``await_clarification`` when a request is pending and
     the policy has not yet returned an answer.

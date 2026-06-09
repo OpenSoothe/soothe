@@ -26,6 +26,7 @@ from .nodes.validate_evidence_bindings import node_validate_evidence_bindings
 from .routing import (
     route_after_assess,
     route_after_clarification,
+    route_after_evidence_gather,
     route_after_execute,
     route_after_init,
     route_after_iteration_gate,
@@ -125,7 +126,11 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
         {"iteration_start": "iteration_start", END: END},
     )
     graph.add_edge("iteration_start", "bounded_evidence_gather")
-    graph.add_edge("bounded_evidence_gather", "plan_assess")
+    graph.add_conditional_edges(
+        "bounded_evidence_gather",
+        route_after_evidence_gather,
+        {"plan_assess": "plan_assess", "plan_generate": "plan_generate"},
+    )
     graph.add_conditional_edges(
         "plan_assess",
         route_after_assess,

@@ -8,7 +8,10 @@ IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "
 
 PlanRoute = Literal["goal_done", "execute"]
 IntentRoute = Literal["continue_loop", "fast_path"]
-AssessRoute = Literal["continue_generate", "skip_generate", "continue_assess"]
+AssessRoute = Literal[
+    "continue_generate", "skip_generate", "continue_assess", "fresh_loop_skip_assess"
+]
+EvidenceGatherRoute = Literal["plan_assess", "plan_generate_skip_assess"]
 ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess"]
 
 PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
@@ -22,6 +25,7 @@ class LoopGraphState(TypedDict, total=False):
     plan_route: PlanRoute | None
     intent_route: IntentRoute | None
     assess_route: AssessRoute | None
+    evidence_gather_route: EvidenceGatherRoute | None
     # Clarification relay (RFC-622): serialized to keep the channel JSON-safe.
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
