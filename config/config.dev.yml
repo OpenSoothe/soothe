@@ -97,6 +97,7 @@ subagents:
 # OBSERVABILITY
 # ============================================================
 observability:
+  profile_model_calls: true
   log_file_level: DEBUG
   langfuse:
     enabled: true
