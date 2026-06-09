@@ -572,43 +572,41 @@ class SootheDaemon(DaemonHandlersMixin):
     def _is_port_live(host: str, port: int) -> bool:
         """Check if a WebSocket server is accepting connections.
 
-        Uses lsof to check if the port is bound by a listening process.
-        This avoids sending incomplete HTTP requests that corrupt WebSocket server state.
+        Uses socket probe first (fast), falls back to lsof if needed.
 
         Args:
-            host: Host address to check (unused, for API consistency).
+            host: Host address to check.
             port: TCP port number.
 
         Returns:
-            True if port is bound by a listening process, False otherwise.
+            True if port is accepting connections, False otherwise.
         """
-        # Use lsof to check if port is bound (avoids WebSocket handshake corruption)
+        import socket as sock_mod
+
+        # Primary: socket probe (fastest - no subprocess spawn)
+        try:
+            s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
+            s.settimeout(0.1)  # 100ms is sufficient for local check
+            s.connect((host, port))
+            s.close()
+            return True
+        except (ConnectionRefusedError, OSError, TimeoutError):
+            pass  # Fall back to lsof
+
+        # Fallback: lsof for cases where socket probe fails but port is bound
         import subprocess
 
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
             result = subprocess.run(
                 ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
                 capture_output=True,
                 text=True,
-                timeout=1.0,
+                timeout=0.2,  # 200ms timeout
                 check=False,
             )
-            # If lsof finds a process, port is bound
             return result.returncode == 0 and result.stdout.strip()
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-            # Fallback: simple socket connect test (can cause handshake errors but works)
-            import socket as sock_mod
 
-            try:
-                s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
-                s.settimeout(0.5)
-                s.connect((host, port))
-                # Close gracefully to minimize WebSocket server impact
-                s.shutdown(sock_mod.SHUT_RDWR)
-                s.close()
-                return True
-            except (ConnectionRefusedError, OSError, TimeoutError):
-                return False
+        return False
 
     def request_stop(self) -> None:
         """Thread-safe method to request daemon shutdown from any thread."""
@@ -1339,36 +1337,27 @@ class SootheDaemon(DaemonHandlersMixin):
         """Check if a daemon is already running.
 
         Checks:
-        1. PID file with valid process AND WebSocket port is live
-        2. WebSocket port accepting connections (even without PID file)
+        1. PID file with valid process (fast, no config loading)
+        2. WebSocket port accepting connections (fallback)
         """
-        # Get WebSocket port from daemon config
-        try:
-            cfg = SootheDaemonConfig()
-            ws_host = cfg.transports.websocket.host
-            ws_port = cfg.transports.websocket.port
-        except Exception:
-            ws_host = "127.0.0.1"
-            ws_port = 8765
+        # Use default port - avoid config loading for speed
+        ws_host = "127.0.0.1"
+        ws_port = 8765
 
-        # 1. Check PID file + verify WebSocket is live
+        # 1. Check PID file first (fastest)
         pf = pid_path()
         if pf.exists():
             try:
                 pid = int(pf.read_text().strip())
-                os.kill(pid, 0)
+                os.kill(pid, 0)  # Check process exists
             except (ValueError, ProcessLookupError, PermissionError):
                 cleanup_pid()
                 # PID file stale, check port below
             else:
-                # PID valid - but daemon must also have live WebSocket
-                if SootheDaemon._is_port_live(ws_host, ws_port):
-                    return True
-                # PID valid but port dead - zombie daemon, cleanup needed
-                cleanup_pid()
-                return False
+                # PID valid - process is running, trust it
+                return True
 
-        # 2. Check WebSocket connectivity (primary indicator)
+        # 2. Check WebSocket port (fallback when no PID file)
         return SootheDaemon._is_port_live(ws_host, ws_port)
 
     @staticmethod
@@ -1395,14 +1384,10 @@ class SootheDaemon(DaemonHandlersMixin):
             else:
                 return pid
 
-        # 2. Check WebSocket port (if enabled in default config)
-        with contextlib.suppress(Exception):
-            cfg = SootheDaemonConfig()
-            if cfg.transports.websocket.enabled:
-                ws_port = cfg.transports.websocket.port
-                pid = SootheDaemon._find_port_process(ws_port)
-                if pid:
-                    return pid
+        # 2. Check WebSocket port (use default, skip config loading)
+        pid = SootheDaemon._find_port_process(8765)
+        if pid:
+            return pid
 
         # 3. Fallback: check for daemon processes by name
         import subprocess
@@ -1413,7 +1398,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 [pgrep_path, "-f", "soothe_daemon"],
                 capture_output=True,
                 text=True,
-                timeout=2.0,
+                timeout=0.5,  # 500ms timeout
                 check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
@@ -1437,10 +1422,10 @@ class SootheDaemon(DaemonHandlersMixin):
 
         try:
             result = subprocess.run(
-                ["/usr/sbin/lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
+                ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
                 capture_output=True,
                 text=True,
-                timeout=2.0,
+                timeout=0.3,  # 300ms timeout
                 check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
