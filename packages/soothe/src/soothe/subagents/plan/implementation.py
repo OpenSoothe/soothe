@@ -34,19 +34,21 @@ def create_plan_subagent(
     Returns:
         Dict with ``name``, ``description``, and ``runnable`` graph.
     """
-    from soothe.subagents.explore.implementation import create_explore_subagent
-
     work_dir = context.get("work_dir", "")
     sub_cfg = config.subagents.get("plan", SubagentConfig())
     plan_opts = PlanSubagentConfig(**sub_cfg.config)
 
-    explore_model = config.create_chat_model("fast")
-    explore_spec = create_explore_subagent(
-        explore_model,
-        config,
-        {"work_dir": work_dir},
-    )
-    explore_runnable = explore_spec["runnable"]
+    explore_runnable = context.get("explore_runnable")
+    if explore_runnable is None:
+        from soothe.subagents.explore.implementation import create_explore_subagent
+
+        explore_model = config.create_chat_model("fast")
+        explore_spec = create_explore_subagent(
+            explore_model,
+            config,
+            {"work_dir": work_dir},
+        )
+        explore_runnable = explore_spec["runnable"]
 
     runnable = build_plan_engine(model, explore_runnable, plan_opts)
 

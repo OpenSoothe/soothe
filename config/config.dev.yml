@@ -41,10 +41,10 @@ providers:
       - nomic-embed
 
 router:
-  default: "coding-plan:glm-5"
+  default: "coding-plan:kimi-k2.5"
   fast: "coding-plan:kimi-k2.5"
-  think: "coding-plan:glm-5"
-  image: "coding-plan:qwen3.6-plus"
+  think: "coding-plan:qwen3.7-plus"
+  image: "coding-plan:qwen3.7-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
 # ============================================================

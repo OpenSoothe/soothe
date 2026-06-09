@@ -42,7 +42,7 @@ class PublicSemanticRouter:
         self._sources = list(sources)
         self._config = config or TacitusConfig()
         self._capability_embeddings: dict[CapabilityId, list[float]] = {}
-        self._precompute_embeddings()
+        self._embeddings_precomputed = False
 
     def _precompute_embeddings(self) -> None:
         if not embedding_model_ready_without_download():
@@ -68,6 +68,11 @@ class PublicSemanticRouter:
         vec = model.encode([text[:256]])[0]
         return vec.tolist()
 
+    def _ensure_embeddings(self) -> None:
+        if not self._embeddings_precomputed:
+            self._precompute_embeddings()
+            self._embeddings_precomputed = True
+
     def select(
         self,
         query: str,
@@ -76,6 +81,7 @@ class PublicSemanticRouter:
         max_sources: int | None = None,
     ) -> list[PublicInformationSource]:
         """Pick the best source(s) for *query*."""
+        self._ensure_embeddings()
         eligible = self._filter_by_domain(domain)
         if not eligible:
             logger.warning("No sources for domain=%s, using all", domain)

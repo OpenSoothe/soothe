@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -100,6 +101,9 @@ class SootheConfigLoggingView:
     def level(self) -> str:
         """Top-level file log level (CLI compatibility)."""
         return self._cfg.observability.log_file_level
+
+
+_model_cache_lock = threading.Lock()
 
 
 class SootheConfig(BaseSettings):
@@ -704,34 +708,37 @@ class SootheConfig(BaseSettings):
             provider_name = ""
 
         cache_key = f"{model_str}:streaming"
-        if cache_key in self._model_cache:
-            return self._model_cache[cache_key]
+        with _model_cache_lock:
+            if cache_key in self._model_cache:
+                return self._model_cache[cache_key]
 
-        provider_type, kwargs = self._provider_kwargs(provider_name)
-        init_str = f"{provider_type}:{model_name}" if provider_name else model_str
+            provider_type, kwargs = self._provider_kwargs(provider_name)
+            init_str = f"{provider_type}:{model_name}" if provider_name else model_str
 
-        model = init_chat_model(init_str, streaming=True, stream_usage=True, **kwargs)
+            model = init_chat_model(init_str, streaming=True, stream_usage=True, **kwargs)
 
-        # Check if this is a limited OpenAI provider (limited API compatibility)
-        if provider_name:
-            provider = self._find_provider(provider_name)
-            if provider and provider.provider_type == "limited_openai":
-                logger.info(
-                    "Provider '%s' is limited_openai type, applying compatibility wrapper",
-                    provider_name,
-                )
-                from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
+            # Check if this is a limited OpenAI provider (limited API compatibility)
+            if provider_name:
+                provider = self._find_provider(provider_name)
+                if provider and provider.provider_type == "limited_openai":
+                    logger.info(
+                        "Provider '%s' is limited_openai type, applying compatibility wrapper",
+                        provider_name,
+                    )
+                    from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
 
-                model = LimitedProviderModelWrapper(model, provider_name)
+                    model = LimitedProviderModelWrapper(model, provider_name)
 
-        from soothe.utils.observability.llm_token_observability import bind_llm_token_observability
+            from soothe.utils.observability.llm_token_observability import (
+                bind_llm_token_observability,
+            )
 
-        model = bind_llm_token_observability(model)
+            model = bind_llm_token_observability(model)
 
-        self._model_cache[cache_key] = model
-        logger.debug("Created and cached model for '%s'", model_str)
+            self._model_cache[cache_key] = model
+            logger.debug("Created and cached model for '%s'", model_str)
 
-        return model
+            return model
 
     def create_chat_model_for_spec(
         self,
@@ -770,38 +777,41 @@ class SootheConfig(BaseSettings):
         cache_key = (
             f"spec:{model_str}:streaming:{json.dumps(merged_params, sort_keys=True, default=str)}"
         )
-        if cache_key in self._model_cache:
-            return self._model_cache[cache_key]
+        with _model_cache_lock:
+            if cache_key in self._model_cache:
+                return self._model_cache[cache_key]
 
-        provider_name, _, model_name = model_str.partition(":")
-        if not model_name:
-            model_name = provider_name
-            provider_name = ""
+            provider_name, _, model_name = model_str.partition(":")
+            if not model_name:
+                model_name = provider_name
+                provider_name = ""
 
-        provider_type, kwargs = self._provider_kwargs(provider_name)
-        init_str = f"{provider_type}:{model_name}" if provider_name else model_str
-        merged_kwargs = {**kwargs, **merged_params}
+            provider_type, kwargs = self._provider_kwargs(provider_name)
+            init_str = f"{provider_type}:{model_name}" if provider_name else model_str
+            merged_kwargs = {**kwargs, **merged_params}
 
-        model = init_chat_model(init_str, streaming=True, stream_usage=True, **merged_kwargs)
+            model = init_chat_model(init_str, streaming=True, stream_usage=True, **merged_kwargs)
 
-        # Check if this is a limited OpenAI provider (limited API compatibility)
-        if provider_name:
-            provider = self._find_provider(provider_name)
-            if provider and provider.provider_type == "limited_openai":
-                logger.info(
-                    "Provider '%s' is limited_openai type, applying compatibility wrapper",
-                    provider_name,
-                )
-                from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
+            # Check if this is a limited OpenAI provider (limited API compatibility)
+            if provider_name:
+                provider = self._find_provider(provider_name)
+                if provider and provider.provider_type == "limited_openai":
+                    logger.info(
+                        "Provider '%s' is limited_openai type, applying compatibility wrapper",
+                        provider_name,
+                    )
+                    from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
 
-                model = LimitedProviderModelWrapper(model, provider_name)
+                    model = LimitedProviderModelWrapper(model, provider_name)
 
-        from soothe.utils.observability.llm_token_observability import bind_llm_token_observability
+            from soothe.utils.observability.llm_token_observability import (
+                bind_llm_token_observability,
+            )
 
-        model = bind_llm_token_observability(model)
+            model = bind_llm_token_observability(model)
 
-        self._model_cache[cache_key] = model
-        logger.debug("Created model for explicit spec '%s'", model_str)
+            self._model_cache[cache_key] = model
+            logger.debug("Created model for explicit spec '%s'", model_str)
         return model
 
     def create_embedding_model(self) -> Embeddings:
