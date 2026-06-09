@@ -36,7 +36,10 @@ class TestIntentClassifierQuizMessages:
 
     async def test_classify_intent_llm_uses_system_message(self) -> None:
         from soothe.foundation.loop.intention import IntentClassifier
-        from soothe.foundation.loop.intention.models import IntentClassificationLLMResult, TaskComplexity
+        from soothe.foundation.loop.intention.models import (
+            IntentClassificationLLMResult,
+            TaskComplexity,
+        )
 
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
         mock_result = IntentClassificationLLMResult(

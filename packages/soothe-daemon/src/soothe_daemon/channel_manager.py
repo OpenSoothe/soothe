@@ -226,6 +226,7 @@ class ChannelManager:
                 docs_url="/docs",
                 redoc_url="/redoc",
             )
+
             # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
             # Returns HTTP 200 with {"status": "ok"} immediately - no dependencies
             @self._unified_app.get("/healthz")

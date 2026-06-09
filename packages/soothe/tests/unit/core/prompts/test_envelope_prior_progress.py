@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.state.schemas import PriorProgressDigest, ToolCallHead
 from soothe.foundation.loop.prompts.user_envelope import (
     PRIOR_PROGRESS_MAX_CHARS,
     build_plan_context_envelope,
 )
+from soothe.foundation.loop.state.schemas import PriorProgressDigest, ToolCallHead
 
 
 def _digest(**overrides) -> PriorProgressDigest:

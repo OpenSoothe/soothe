@@ -9,13 +9,13 @@ to avoid double-handling every event.
 from __future__ import annotations
 
 from soothe.config.models import AutonomousConfig
+from soothe.foundation.autopilot.engine import GoalEngine
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
     INTERNAL_GOALS_READY,
 )
-from soothe.foundation.autopilot.engine import GoalEngine
 
 
 def _config() -> AutonomousConfig:

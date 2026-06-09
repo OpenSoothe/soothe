@@ -8,10 +8,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config import SootheConfig
+from soothe.protocols.planner import Plan, PlanStep
 from soothe.runner import SootheRunner
 from soothe.runner._artifact_store import RunArtifactStore
 from soothe.runner._types import RunnerState
-from soothe.protocols.planner import Plan, PlanStep
 
 
 class TestCheckpointEventEmission:

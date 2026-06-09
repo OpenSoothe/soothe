@@ -105,7 +105,9 @@ class TestBuildClarificationPolicyForRunner:
         config = _make_config()
         config.agent.veritas.max_context_steps = 3
 
-        with patch("soothe.foundation.loop.clarification.runtime_factory.veritas_answer") as mock_answer:
+        with patch(
+            "soothe.foundation.loop.clarification.runtime_factory.veritas_answer"
+        ) as mock_answer:
             mock_answer.return_value = VeritasAnswerSchema(
                 answers=["ok"], confidence=0.9, defer=False
             )
@@ -125,7 +127,9 @@ class TestBuildClarificationPolicyForRunner:
 
         config = _make_config()
 
-        with patch("soothe.foundation.loop.clarification.runtime_factory.veritas_answer") as mock_answer:
+        with patch(
+            "soothe.foundation.loop.clarification.runtime_factory.veritas_answer"
+        ) as mock_answer:
             mock_answer.return_value = VeritasAnswerSchema(
                 answers=["ok"], confidence=0.9, defer=False
             )
