@@ -37,7 +37,7 @@ services:
 
   # Soothe Daemon - orchestration server
   soothed:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.0
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
