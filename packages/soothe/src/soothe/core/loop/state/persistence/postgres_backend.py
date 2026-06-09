@@ -407,14 +407,15 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                         """
                         SELECT jsonb_array_length(
                                    COALESCE(checkpoint_data->'goal_history', '[]'::jsonb)
-                               )
+                               ) AS history_len
                         FROM agentloop_checkpoints
                         WHERE loop_id = %s
                         """,
                         (loop_id,),
                     )
                     row = await cur.fetchone()
-                    history_len = int(row[0]) if row and row[0] is not None else 0
+                    # dict_row returns dict with column alias as key
+                    history_len = int(row["history_len"]) if row and row.get("history_len") is not None else 0
             if history_len > 0:
                 logger.debug(
                     "Dropping external status write for loop=%s "
