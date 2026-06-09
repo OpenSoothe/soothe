@@ -11,8 +11,8 @@ import os
 import pytest
 import pytest_asyncio
 from soothe.config import SootheConfig
-from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 from soothe.runner import SootheRunner
+from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_postgresql]
 

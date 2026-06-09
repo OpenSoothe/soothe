@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
 
+from soothe.foundation.loop.prompts import PromptBuilder
 from soothe.foundation.loop.state.schemas import LoopState
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.foundation.loop.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
 

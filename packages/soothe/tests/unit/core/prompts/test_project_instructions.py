@@ -6,12 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.loop.state.schemas import LoopState
 from soothe.foundation.loop.prompts import PromptBuilder
+from soothe.foundation.loop.state.schemas import LoopState
 
 
 def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Path) -> None:
-    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import (
+        load_workspace_project_instructions,
+    )
 
     claude = tmp_path / "CLAUDE.md"
     claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
@@ -33,7 +35,9 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
 
 def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> None:
     """CLAUDE.md fallback: 600 lines fits under 25K headline cap but trips line cap."""
-    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import (
+        load_workspace_project_instructions,
+    )
 
     claude = tmp_path / "CLAUDE.md"
     # 600 lines of `claude line N\n` is ~7.5 KB — well under the 25K headline cap,
@@ -57,7 +61,9 @@ def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> 
 
 
 def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
-    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import (
+        load_workspace_project_instructions,
+    )
 
     soothe = tmp_path / ".soothe"
     soothe.mkdir()
@@ -184,7 +190,9 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
 def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
     """Second load with unchanged mtime hits the cache; no second disk read."""
     from soothe.foundation.loop.prompts import project_instructions
-    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import (
+        load_workspace_project_instructions,
+    )
 
     (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
     # Reset the LRU cache so neighboring tests don't pollute the counter.
@@ -210,7 +218,9 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
     import os
 
     from soothe.foundation.loop.prompts import project_instructions
-    from soothe.foundation.loop.prompts.project_instructions import load_workspace_project_instructions
+    from soothe.foundation.loop.prompts.project_instructions import (
+        load_workspace_project_instructions,
+    )
 
     agents = tmp_path / "AGENTS.md"
     agents.write_text("original rule\n", encoding="utf-8")

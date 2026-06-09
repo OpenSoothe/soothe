@@ -16,8 +16,8 @@ import pytest
 
 from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
 from soothe.foundation.loop.state.schemas import PlanResult
-from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
 from soothe.protocols.runner import GoalDispatchEnvelope
+from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
 
 _COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
 

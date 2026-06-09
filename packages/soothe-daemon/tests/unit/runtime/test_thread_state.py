@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from soothe.runner._thread_manager import ThreadContextManager
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
+from soothe.runner._thread_manager import ThreadContextManager
 
 
 @pytest.fixture

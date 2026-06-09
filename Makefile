@@ -8,7 +8,7 @@
 #
 # Uses .venv managed by uv for development.
 
-.PHONY: setup reset-the-world sync format format-check lint lint-fix test test-unit test-integration test-coverage build clean help \
+.PHONY: setup docker-up docker-down reset-the-world sync format format-check lint lint-fix test test-unit test-integration test-coverage build clean help \
         sdk-publish sdk-publish-test cli-publish cli-publish-test soothe-publish soothe-publish-test daemon-publish daemon-publish-test publish publish-test
 
 # Default target
@@ -17,6 +17,8 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make setup            - Sync workspace dependencies (creates .venv if needed)"
+	@echo "  make docker-up        - Start docker compose services (Langfuse + pgvector)"
+	@echo "  make docker-down      - Stop docker compose services"
 	@echo "  make reset-the-world  - Reset all state: docker compose down -v + clean ~/.soothe/ (keeps config) + restart"
 	@echo ""
 	@echo "Unified Targets (all packages):"
@@ -58,6 +60,17 @@ setup:
 	@echo "Syncing workspace dependencies..."
 	$(UV_SYNC)
 	@echo "Workspace ready (.venv created if needed)"
+
+# Docker compose shortcuts for development
+docker-up:
+	@echo "Starting docker compose services..."
+	docker compose -f docker-compose.dev.yml up -d
+	@echo "Docker services started"
+
+docker-down:
+	@echo "Stopping docker compose services..."
+	docker compose -f docker-compose.dev.yml down
+	@echo "Docker services stopped"
 
 # Reset all state: docker volumes + ~/.soothe/ (keeps config), then restart services
 # Uses development compose file (docker-compose.dev.yml) with Langfuse + pgvector
