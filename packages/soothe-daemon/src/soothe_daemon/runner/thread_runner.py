@@ -411,6 +411,7 @@ class ThreadPool:
         self._waiting_for_worker_slot: int = 0
         self._running = False
         self._metrics_requests_total = 0
+        # Bounded to prevent memory leak - only need last 100 for avg calculation
         self._metrics_latencies: list[float] = []
         self._pending_responses: dict[str, asyncio.Queue] = {}
         self._main_loop: asyncio.AbstractEventLoop | None = None
@@ -788,6 +789,9 @@ class ThreadPool:
                     self._metrics_requests_total += 1
                     latency_ms = (datetime.now() - start_time).total_seconds() * 1000
                     self._metrics_latencies.append(latency_ms)
+                    # Bound to prevent memory leak - keep only last 100 entries
+                    if len(self._metrics_latencies) > 100:
+                        self._metrics_latencies = self._metrics_latencies[-100:]
                     worker.requests_completed += 1
                     return
                 if msg_type == "error":
