@@ -742,6 +742,7 @@ class WorkerPool:
         self._dispatch_stats_task: asyncio.Task[None] | None = None
         self._running = False
         self._metrics_requests_total = 0
+        # Bounded to prevent memory leak - only need last 100 for avg calculation
         self._metrics_latencies: list[float] = []
         # Track pending responses by request_id
         self._pending_responses: dict[str, asyncio.Queue] = {}
@@ -1415,6 +1416,9 @@ class WorkerPool:
                     self._metrics_requests_total += 1
                     latency_ms = (datetime.now() - start_time).total_seconds() * 1000
                     self._metrics_latencies.append(latency_ms)
+                    # Bound to prevent memory leak - keep only last 100 entries
+                    if len(self._metrics_latencies) > 100:
+                        self._metrics_latencies = self._metrics_latencies[-100:]
                     worker.requests_completed += 1
                     return
                 if msg_type == "error":
