@@ -34,6 +34,12 @@ if TYPE_CHECKING:
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
     from soothe.middleware.mcp_tool_search import MCPToolSearchMiddleware
+    from soothe.middleware.model_call_profiler import (
+        InnerModelCallProfilerMiddleware,
+        LLMCallProfilerMiddleware,
+        ModelCallProfilerMiddleware,
+        is_profiler_enabled,
+    )
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
     from soothe.middleware.policy import SoothePolicyMiddleware
     from soothe.middleware.system_prompt import SystemPromptMiddleware
@@ -43,8 +49,11 @@ __all__ = [
     "CodeInterpreterMiddleware",
     "ExecutionHintsMiddleware",
     "FileLockMiddleware",
+    "InnerModelCallProfilerMiddleware",
+    "LLMCallProfilerMiddleware",
     "LLMRateLimitMiddleware",
     "MCPToolSearchMiddleware",
+    "ModelCallProfilerMiddleware",
     "SootheFilesystemMiddleware",
     "SoothePolicyMiddleware",
     "SystemPromptMiddleware",
@@ -52,6 +61,7 @@ __all__ = [
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
     "create_llm_call_metadata",
+    "is_profiler_enabled",
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
@@ -78,6 +88,22 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "WorkspaceContextMiddleware": (
         "soothe.middleware.workspace_context",
         "WorkspaceContextMiddleware",
+    ),
+    "ModelCallProfilerMiddleware": (
+        "soothe.middleware.model_call_profiler",
+        "ModelCallProfilerMiddleware",
+    ),
+    "InnerModelCallProfilerMiddleware": (
+        "soothe.middleware.model_call_profiler",
+        "InnerModelCallProfilerMiddleware",
+    ),
+    "LLMCallProfilerMiddleware": (
+        "soothe.middleware.model_call_profiler",
+        "LLMCallProfilerMiddleware",
+    ),
+    "is_profiler_enabled": (
+        "soothe.middleware.model_call_profiler",
+        "is_profiler_enabled",
     ),
 }
 

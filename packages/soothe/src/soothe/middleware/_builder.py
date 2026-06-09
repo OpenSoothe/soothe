@@ -107,6 +107,7 @@ def build_soothe_middleware_stack(
     """
     from .execution_hints import ExecutionHintsMiddleware
     from .llm_rate_limit import LLMRateLimitMiddleware
+    from .model_call_profiler import is_profiler_enabled
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
     from .system_prompt import SystemPromptMiddleware
@@ -115,6 +116,14 @@ def build_soothe_middleware_stack(
     from .workspace_context import WorkspaceContextMiddleware
 
     stack: list[AgentMiddleware] = []
+
+    # 0. Model call profiler (optional, for latency debugging)
+    # Insert at the very start to capture full middleware chain timing
+    if is_profiler_enabled():
+        from .model_call_profiler import ModelCallProfilerMiddleware
+
+        stack.append(ModelCallProfilerMiddleware())
+        logger.info("[Middleware] Model call profiler enabled (outer wrapper)")
 
     # 1. Policy enforcement (must be first to block unsafe actions)
     if policy:
@@ -174,6 +183,14 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] System prompt middleware enabled")
 
+    # 3b. Inner profiler (optional, after SystemPrompt, before RateLimiter)
+    # Captures timing between prompt modification and rate limiting
+    if is_profiler_enabled():
+        from .model_call_profiler import InnerModelCallProfilerMiddleware
+
+        stack.append(InnerModelCallProfilerMiddleware())
+        logger.info("[Middleware] Inner model call profiler enabled")
+
     # 4. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
     rpm = config.agent.loop.limits.llm_rpm_limit
@@ -230,6 +247,14 @@ def build_soothe_middleware_stack(
     # 7. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
+
+    # 7b. LLM profiler (optional, innermost before PerTurnModelMiddleware)
+    # Captures timing just before the actual model.ainvoke call
+    if is_profiler_enabled():
+        from .model_call_profiler import LLMCallProfilerMiddleware
+
+        stack.append(LLMCallProfilerMiddleware())
+        logger.info("[Middleware] LLM call profiler enabled (innermost wrapper)")
 
     # 8. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
