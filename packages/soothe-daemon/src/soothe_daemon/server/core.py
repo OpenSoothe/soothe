@@ -459,6 +459,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 soothe_config=self._config,
                 session_manager=self._session_manager,
                 autopilot_service=self._autopilot_service,
+                memory_profiler=self._memory_profiler,
             )
             self._channel_manager.set_message_handler(self._handle_transport_message)
             self._channel_manager.set_handshake_callback(self._get_handshake_messages)
