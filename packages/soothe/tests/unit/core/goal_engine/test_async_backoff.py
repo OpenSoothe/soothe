@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from soothe.core.goal_engine import GoalEngine
-from soothe.core.goal_engine.models import BackoffDecision, EvidenceBundle
+from soothe.foundation.autopilot.engine import GoalEngine
+from soothe.foundation.autopilot.engine.models import BackoffDecision, EvidenceBundle
 
 
 class _FakeReasoner:

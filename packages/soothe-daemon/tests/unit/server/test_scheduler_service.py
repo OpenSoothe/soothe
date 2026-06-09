@@ -3,8 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from soothe.core.goal_engine import ScheduledTask, SchedulerService, ScheduleSpec
-from soothe.core.goal_engine.scheduled_tasks import _parse_cron_field, _parse_duration
+from soothe.foundation.autopilot.engine import ScheduledTask, SchedulerService, ScheduleSpec
+from soothe.foundation.autopilot.engine.scheduled_tasks import _parse_cron_field, _parse_duration
 
 
 class TestScheduledTask:

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 
 
 def pytest_addoption(parser) -> None:
@@ -123,7 +123,7 @@ def force_isolated_home(home: Path) -> None:
     soothe_config.SOOTHE_HOME = home_str
     config_module.SOOTHE_HOME = home_str
 
-    import soothe.core.thread.manager as thread_manager
+    import soothe.runner._thread_manager as thread_manager
 
     thread_manager.SOOTHE_HOME = home_str
 

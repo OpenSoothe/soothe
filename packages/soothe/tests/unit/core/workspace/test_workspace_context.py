@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.core.workspace.context import (
+from soothe.foundation.workspace.context import (
     get_workspace_context,
     reset_workspace_context,
     set_workspace_context,

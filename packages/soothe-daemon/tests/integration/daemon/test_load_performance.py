@@ -442,7 +442,7 @@ async def test_event_priority_overflow_strategy():
     consumer the publisher would deadlock. A tiny helper drains only while the
     queue is full so overflow/drop behavior can still be exercised.
     """
-    from soothe.core.events import EventPriority
+    from soothe.foundation.events import EventPriority
 
     from soothe_daemon.event import EventBus
 
@@ -693,7 +693,7 @@ async def test_phase1_full_integration():
     Scenario: 50 clients, sustained 5-second operation with mixed load
     """
     from soothe.config import SootheConfig
-    from soothe.core.events import EventPriority
+    from soothe.foundation.events import EventPriority
 
     from soothe_daemon.config import SootheDaemonConfig
     from soothe_daemon.event import EventBus

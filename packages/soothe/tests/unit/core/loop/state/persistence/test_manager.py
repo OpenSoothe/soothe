@@ -10,13 +10,13 @@ import uuid
 
 import pytest
 
-from soothe.core.loop.state.persistence.directory_manager import (
+from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
-from soothe.core.loop.state.persistence.manager import (
+from soothe.foundation.loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
-from soothe.core.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.foundation.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
 
 
 @pytest.mark.asyncio

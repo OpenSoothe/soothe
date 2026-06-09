@@ -30,11 +30,11 @@ if TYPE_CHECKING:
 
 # Module-class pairs for all Soothe custom message types that travel
 # through LangGraph checkpoints.  Keep in sync with
-# ``soothe.core.loop.utils.messages`` (RFC-214).
+# ``soothe.foundation.loop.utils.messages`` (RFC-214, IG-475).
 _SOOTHE_MSGPACK_MODULES: list[tuple[str, str]] = [
-    ("soothe.core.loop.utils.messages", "LoopHumanMessage"),
-    ("soothe.core.loop.utils.messages", "LoopAIMessage"),
-    ("soothe.core.loop.state.checkpoint", "GoalExecutionRecord"),
+    ("soothe.foundation.loop.utils.messages", "LoopHumanMessage"),
+    ("soothe.foundation.loop.utils.messages", "LoopAIMessage"),
+    ("soothe.foundation.loop.state.checkpoint", "GoalExecutionRecord"),
 ]
 
 

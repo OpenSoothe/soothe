@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import HumanMessage
 
-from soothe.core.loop.planning.planner import LLMPlanner
-from soothe.core.loop.state.schemas import LoopState, StatusAssessment
+from soothe.foundation.loop.planning.planner import LLMPlanner
+from soothe.foundation.loop.state.schemas import LoopState, StatusAssessment
 from soothe.protocols.planner import PlanContext
 
 

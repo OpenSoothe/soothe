@@ -3,7 +3,7 @@
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.middleware.system_prompt import SystemPromptMiddleware
 

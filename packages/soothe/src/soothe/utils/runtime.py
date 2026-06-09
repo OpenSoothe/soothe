@@ -23,7 +23,7 @@ def _get_virtual_home() -> Path:
     Returns:
         Path to virtual /.soothe when virtual_mode=True, else host SOOTHE_HOME.
     """
-    from soothe.core.workspace import get_virtual_home
+    from soothe.foundation.workspace import get_virtual_home
 
     return get_virtual_home()
 
@@ -37,12 +37,12 @@ def _ensure_dir_with_backend(path: Path) -> Path:
     Returns:
         The created/existing directory path.
     """
-    from soothe.core.workspace import get_virtual_home_relative_path, get_virtual_mode
+    from soothe.foundation.workspace import get_virtual_home_relative_path, get_virtual_mode
 
     virtual_mode = get_virtual_mode()
     if virtual_mode:
         # In virtual mode, use backend for directory creation
-        from soothe.core import FrameworkFilesystem
+        from soothe.foundation.workspace import FrameworkFilesystem
 
         backend = FrameworkFilesystem.get()
         if backend is not None:

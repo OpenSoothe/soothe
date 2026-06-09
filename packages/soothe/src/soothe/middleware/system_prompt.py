@@ -17,9 +17,9 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from soothe.config import SootheConfig
-    from soothe.core.context.tool_registry import ToolContextRegistry
-    from soothe.core.context.trigger_registry import ToolTriggerRegistry
-    from soothe.core.intention import RoutingClassification  # IG-226
+    from soothe.foundation.core.context.tool_registry import ToolContextRegistry
+    from soothe.foundation.core.context.trigger_registry import ToolTriggerRegistry
+    from soothe.foundation.loop.intention import RoutingClassification  # IG-226
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
@@ -226,7 +226,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             XML section with platform, shell, model, knowledge cutoff.
         """
-        from soothe.core.prompts.context_xml import build_soothe_environment_section
+        from soothe.foundation.loop.prompts.context_xml import build_soothe_environment_section
 
         model = self._config.resolve_model("default")
         return build_soothe_environment_section(model=model)
@@ -318,7 +318,7 @@ class SystemPromptMiddleware(AgentMiddleware):
 
     def _get_base_prompt_core(self, complexity: str) -> str:
         """Behavioral system prompt for complexity (no volatile date line; RFC-104 cache order)."""
-        from soothe.core.prompts import (
+        from soothe.foundation.loop.prompts import (
             _DEFAULT_SYSTEM_PROMPT,
             _MEDIUM_SYSTEM_PROMPT,
             _SIMPLE_SYSTEM_PROMPT,
@@ -373,7 +373,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             Volatility-ordered system prompt string.
         """
-        from soothe.core.prompts.context_xml import build_context_sections_for_complexity
+        from soothe.foundation.loop.prompts.context_xml import build_context_sections_for_complexity
 
         base_core = self._get_base_prompt_core(complexity)
 
@@ -407,7 +407,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         #   6. <WORKSPACE>                 (when workspace bound)
         # Everything that follows is gated (context/memory/directive/contract)
         # or semi-static (thread/protocols/scenarios/skills/MCP).
-        from soothe.core.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
+        from soothe.foundation.loop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
         static_sections: list[str] = [base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
 
@@ -429,7 +429,9 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "</WORKSPACE_RULES>"
             )
             # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable.
-            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+            from soothe.foundation.loop.prompts.project_instructions import (
+                load_workspace_project_instructions,
+            )
 
             ws_instructions = load_workspace_project_instructions(workspace)
             if ws_instructions:
@@ -596,7 +598,7 @@ class SystemPromptMiddleware(AgentMiddleware):
             return None
         from pathlib import Path
 
-        from soothe.core.prompts.context_xml import build_soothe_workspace_section
+        from soothe.foundation.loop.prompts.context_xml import build_soothe_workspace_section
 
         workspace_path = Path(str(workspace)) if not isinstance(workspace, Path) else workspace
         return build_soothe_workspace_section(workspace_path, git_status)
@@ -605,7 +607,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         """Build <THREAD> section via shared context_xml builder."""
         if not thread_context:
             return None
-        from soothe.core.prompts.context_xml import build_soothe_thread_section
+        from soothe.foundation.loop.prompts.context_xml import build_soothe_thread_section
 
         return build_soothe_thread_section(thread_context)
 
@@ -613,7 +615,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         """Build <PROTOCOLS> section via shared context_xml builder."""
         if not protocol_summary:
             return None
-        from soothe.core.prompts.context_xml import build_soothe_protocols_section
+        from soothe.foundation.loop.prompts.context_xml import build_soothe_protocols_section
 
         result = build_soothe_protocols_section(protocol_summary)
         return result or None
@@ -628,7 +630,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             Scenario guidance text, or None if no matching scenario.
         """
-        from soothe.core.prompts.system_templates import (
+        from soothe.foundation.loop.prompts.system_templates import (
             _ARCHITECTURE_ANALYSIS_GUIDE,
             _LOOP_CONTINUATION_GUIDE,
             _RESEARCH_SYNTHESIS_GUIDE,

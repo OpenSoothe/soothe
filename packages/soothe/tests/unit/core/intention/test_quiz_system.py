@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.core.quiz_messages import build_quiz_system_message
+from soothe.foundation.core.quiz_messages import build_quiz_system_message
 
 
 def test_build_quiz_system_message_includes_assistant_name() -> None:
@@ -35,8 +35,8 @@ class TestIntentClassifierQuizMessages:
         return [payload]
 
     async def test_classify_intent_llm_uses_system_message(self) -> None:
-        from soothe.core.intention import IntentClassifier
-        from soothe.core.intention.models import IntentClassificationLLMResult, TaskComplexity
+        from soothe.foundation.loop.intention import IntentClassifier
+        from soothe.foundation.loop.intention.models import IntentClassificationLLMResult, TaskComplexity
 
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
         mock_result = IntentClassificationLLMResult(
@@ -48,7 +48,7 @@ class TestIntentClassifierQuizMessages:
 
         invoke_mock = AsyncMock(return_value=mock_result.model_dump())
         with patch(
-            "soothe.core.intention.classifier.invoke_structured_chat",
+            "soothe.foundation.loop.intention.classifier.invoke_structured_chat",
             invoke_mock,
         ):
             await classifier._classify_intent_llm("who are u")

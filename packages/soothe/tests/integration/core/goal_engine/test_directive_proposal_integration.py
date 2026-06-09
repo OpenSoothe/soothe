@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.goal_engine.engine import GoalEngine
-from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
+from soothe.foundation.autopilot.engine.engine import GoalEngine
+from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
 from soothe.protocols.planner import GoalDirective
 
 

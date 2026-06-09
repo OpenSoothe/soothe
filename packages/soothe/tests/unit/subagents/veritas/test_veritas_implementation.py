@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
-from soothe.core.loop.clarification.protocol import (
+from soothe.foundation.loop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
 )

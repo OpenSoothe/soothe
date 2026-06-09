@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.planning.dag import PlanDAG
-from soothe.core.loop.planning.dependency_tokens import expand_dependency_satisfaction_ids
-from soothe.core.loop.planning.manager import PlanManager
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.planning.dag import PlanDAG
+from soothe.foundation.loop.planning.dependency_tokens import expand_dependency_satisfaction_ids
+from soothe.foundation.loop.planning.manager import PlanManager
+from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,

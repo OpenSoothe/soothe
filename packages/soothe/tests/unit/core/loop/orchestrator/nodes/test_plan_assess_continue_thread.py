@@ -8,18 +8,18 @@ Covers:
 
 from datetime import UTC, datetime
 
-from soothe.core.loop.orchestrator.nodes.plan_assess import (
+from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
     _prior_goal_summaries,
     build_continue_loop_bootstrap_plan,
     seed_loop_ledger_from_prior_goal,
 )
-from soothe.core.loop.state.checkpoint import (
+from soothe.foundation.loop.state.checkpoint import (
     AgentLoopCheckpoint,
     GoalExecutionRecord,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> AgentLoopCheckpoint:

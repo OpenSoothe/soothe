@@ -1,6 +1,9 @@
 """Soothe protocol definitions -- runtime-agnostic interfaces."""
 
+from soothe.protocols.agent_loop import AgentLoopProtocol
+from soothe.protocols.autopilot import AutopilotProtocol
 from soothe.protocols.concurrency import ConcurrencyPolicy
+from soothe.protocols.core_agent import CoreAgentProtocol
 from soothe.protocols.durability import (
     DurabilityProtocol,
     ThreadFilter,
@@ -45,9 +48,12 @@ from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
     "ActionRequest",
+    "AgentLoopProtocol",
     "AsyncPersistStore",
+    "AutopilotProtocol",
     "CheckpointEnvelope",
     "ConcurrencyPolicy",
+    "CoreAgentProtocol",
     "DurabilityProtocol",
     "GoalReport",
     "LoopPlannerProtocol",

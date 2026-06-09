@@ -50,7 +50,7 @@ from soothe.config.models import (
     WebSearchConfig,
 )
 from soothe.config.settings import SootheConfig
-from soothe.core.prompts import (
+from soothe.foundation.loop.prompts import (
     _DEFAULT_SYSTEM_PROMPT,
     _MEDIUM_SYSTEM_PROMPT,
     _SIMPLE_SYSTEM_PROMPT,

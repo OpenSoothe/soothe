@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.clarification.protocol import ClarificationRequest
+from soothe.foundation.loop.clarification.protocol import ClarificationRequest
 
 _SYSTEM_PROMPT = """You are veritas, an answerer subagent.
 

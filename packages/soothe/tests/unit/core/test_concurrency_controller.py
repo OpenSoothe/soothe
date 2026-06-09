@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from soothe.core.runner._concurrency import ConcurrencyController
+from soothe.runner._concurrency import ConcurrencyController
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.core.autopilot.workspace_reservation import WorkspaceReservation
+from soothe.foundation.autopilot.service.workspace_reservation import WorkspaceReservation
 
 
 class TestBasicAcquireRelease:

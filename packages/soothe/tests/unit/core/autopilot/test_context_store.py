@@ -6,11 +6,11 @@ import asyncio
 
 import pytest
 
-from soothe.core.autopilot.context_store import (
+from soothe.foundation.autopilot.service.context_store import (
     GoalDispatchContextStoreProtocol,
     InMemoryGoalDispatchContextStore,
 )
-from soothe.core.goal_engine.models import (
+from soothe.foundation.autopilot.engine.models import (
     Finding,
     GoalDispatchContextContribution,
 )

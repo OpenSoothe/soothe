@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from soothe.config.models import SemanticRelationshipsConfig
-from soothe.core.goal_engine.models import Goal
-from soothe.core.goal_engine.semantic_relationship_detector import (
+from soothe.foundation.autopilot.engine.models import Goal
+from soothe.foundation.autopilot.engine.semantic_relationship_detector import (
     detect_relationships_async,
     detect_semantic_relationships,
 )
@@ -28,7 +28,7 @@ class TestDetectSemanticRelationships:
         other = _goal("g2", "Improve orders table database query speed")
 
         with patch(
-            "soothe.core.goal_engine.semantic_relationship_detector.async_semantic_similarity",
+            "soothe.foundation.autopilot.engine.semantic_relationship_detector.async_semantic_similarity",
             new_callable=AsyncMock,
             return_value=0.88,
         ):
@@ -61,7 +61,7 @@ class TestDetectSemanticRelationships:
         other = _goal("g2", "beta task two")
 
         with patch(
-            "soothe.core.goal_engine.semantic_relationship_detector.async_semantic_similarity",
+            "soothe.foundation.autopilot.engine.semantic_relationship_detector.async_semantic_similarity",
             new_callable=AsyncMock,
             return_value=0.1,
         ):

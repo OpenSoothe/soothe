@@ -17,8 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop.engine.thread_fork_manager import ThreadForkManager
-from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.foundation.loop.engine.thread_fork_manager import ThreadForkManager
+from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction
 
 
 def _decision(*steps: StepAction) -> AgentDecision:
@@ -129,7 +129,7 @@ class TestForkCheckpoint:
 
     @pytest.mark.asyncio
     async def test_fork_calls_copy_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         recorded: dict[str, Any] = {}
 
@@ -152,7 +152,7 @@ class TestForkCheckpoint:
     async def test_fork_helper_failure_returns_source(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         async def _fake_copy(saver: Any, source: str, target: str) -> int:
             raise RuntimeError("DB error")
@@ -172,7 +172,7 @@ class TestForkCheckpoint:
     @pytest.mark.asyncio
     async def test_same_source_target_no_op(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When source == target, no copy attempted."""
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         called = {"count": 0}
 
@@ -196,7 +196,7 @@ class TestPrepareThreadForStep:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """No deps → fresh isolated __step_<id> thread sourced from main."""
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         copy_calls: list[tuple[str, str]] = []
 
@@ -220,7 +220,7 @@ class TestPrepareThreadForStep:
     async def test_sole_child_reuses_predecessor_no_copy(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         copy_called = {"count": 0}
 
@@ -246,7 +246,7 @@ class TestPrepareThreadForStep:
 
     @pytest.mark.asyncio
     async def test_sibling_step_forks_with_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         copy_calls: list[tuple[str, str]] = []
 
@@ -283,7 +283,7 @@ class TestPrepareThreadForStep:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Multi-dep step → fresh isolated thread sourced from main."""
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         copy_calls: list[tuple[str, str]] = []
 
@@ -312,7 +312,7 @@ class TestPrepareThreadForStep:
     async def test_chain_a_b_c_only_first_forks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A→B→C linear chain: A forks from main once; B and C reuse A's
         thread because each link is a sole-child step. Total copies = 1."""
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         copy_calls: list[tuple[str, str]] = []
 
@@ -347,7 +347,7 @@ class TestPrepareThreadForStepForkFailure:
     @pytest.mark.asyncio
     async def test_fork_failure_uses_source_thread(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When the copy helper raises, prepare returns source (not target)."""
-        from soothe.core.loop.engine import thread_fork_manager as tfm_mod
+        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
 
         async def _fake_copy(*_args: Any, **_kwargs: Any) -> int:
             raise RuntimeError("disk full")

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.foundation.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
 
 
 @pytest.fixture

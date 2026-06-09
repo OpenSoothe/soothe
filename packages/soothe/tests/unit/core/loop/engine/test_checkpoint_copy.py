@@ -10,7 +10,7 @@ import pytest
 from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata
 from langgraph.checkpoint.memory import InMemorySaver
 
-from soothe.core.loop.engine.checkpoint_copy import copy_thread_via_public_api
+from soothe.foundation.loop.engine.checkpoint_copy import copy_thread_via_public_api
 
 
 def _make_checkpoint(checkpoint_id: str) -> Checkpoint:

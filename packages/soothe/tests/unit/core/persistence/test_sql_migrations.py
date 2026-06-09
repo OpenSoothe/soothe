@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.persistence.sql_migrations.runner import (
+from soothe.foundation.persistence.sql_migrations.runner import (
     discover_migration_scripts,
     migration_sql_root,
     run_database_migrations,

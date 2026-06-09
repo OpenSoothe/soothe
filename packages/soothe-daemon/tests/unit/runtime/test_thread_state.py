@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from soothe.core.runner._thread_manager import ThreadContextManager
+from soothe.runner._thread_manager import ThreadContextManager
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
 
@@ -99,7 +99,7 @@ async def test_resume_thread_recovers_missing_metadata(mock_durability, mock_con
     (run_dir / "checkpoint.json").write_text("{}", encoding="utf-8")
 
     manager = ThreadContextManager(mock_durability, mock_config)
-    with patch("soothe.core.runner._thread_manager.SOOTHE_HOME", str(tmp_path)):
+    with patch("soothe.runner._thread_manager.SOOTHE_HOME", str(tmp_path)):
         recovered = await manager.resume_thread("recover-123")
 
     assert recovered.thread_id == "recover-123"
@@ -161,7 +161,7 @@ async def test_get_thread_stats(mock_durability, mock_config):
     manager = ThreadContextManager(mock_durability, mock_config)
 
     # Mock ThreadLogger
-    with patch("soothe.core.runner._thread_manager.ThreadLogger") as mock_logger_class:
+    with patch("soothe.runner._thread_manager.ThreadLogger") as mock_logger_class:
         mock_logger = MagicMock()
         mock_logger.read_recent_records.return_value = [
             {"kind": "conversation", "text": "Hello"},
@@ -277,7 +277,7 @@ async def test_delete_thread(mock_durability, mock_config, tmp_path):
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
-    with patch("soothe.core.runner._thread_manager.SOOTHE_HOME", str(tmp_path)):
+    with patch("soothe.runner._thread_manager.SOOTHE_HOME", str(tmp_path)):
         await manager.delete_thread("test123")
 
     # Verify store.delete was called for thread and state

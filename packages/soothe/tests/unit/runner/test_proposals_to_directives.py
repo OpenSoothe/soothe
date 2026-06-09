@@ -1,7 +1,7 @@
 """Tests for _proposals_to_directives helper (RFC-204 Group C)."""
 
-from soothe.core.goal_engine.proposal_queue import Proposal
-from soothe.core.runner._runner_autopilot_worker import _proposals_to_directives
+from soothe.foundation.autopilot.engine.proposal_queue import Proposal
+from soothe.runner._runner_autopilot_worker import _proposals_to_directives
 
 
 class TestProposalsToDirectives:

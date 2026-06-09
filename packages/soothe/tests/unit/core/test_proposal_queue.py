@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from soothe.core.goal_engine.proposal_queue import Proposal, ProposalQueue
+from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
 
 
 class TestProposal:

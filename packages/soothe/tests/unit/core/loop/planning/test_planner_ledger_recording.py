@@ -14,15 +14,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import soothe.core.loop.state.schemas  # noqa: F401 — break circular import
-from soothe.core.loop.planning.planner import LLMPlanner
-from soothe.core.loop.state.schemas import (
+import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import
+from soothe.foundation.loop.planning.planner import LLMPlanner
+from soothe.foundation.loop.state.schemas import (
     LoopState,
     PlanGenerateStep,
     PlanGeneration,
     StatusAssessment,
 )
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.protocols.planner import PlanContext
 
 GOAL = "translate the README into French"

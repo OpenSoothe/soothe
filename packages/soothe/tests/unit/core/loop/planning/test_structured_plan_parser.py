@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop.planning import structured_plan_parser as spm
-from soothe.core.loop.planning.parser import parse_plan_from_text
-from soothe.core.loop.planning.structured_plan_parser import (
+from soothe.foundation.loop.planning import structured_plan_parser as spm
+from soothe.foundation.loop.planning.parser import parse_plan_from_text
+from soothe.foundation.loop.planning.structured_plan_parser import (
     PlanExtracted,
     PlanStepExtracted,
     parse_plan_with_config,

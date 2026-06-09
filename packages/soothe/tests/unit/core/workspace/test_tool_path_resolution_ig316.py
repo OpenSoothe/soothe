@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.core.workspace.tool_path_resolution import (
+from soothe.foundation.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     join_workspace_normalized_path,
     resolve_backend_os_path,
@@ -55,7 +55,7 @@ def test_join_workspace_normalized_path_handles_absolute(tmp_path: Path) -> None
 
 def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Path) -> None:
     """Host-absolute paths inside the workspace resolve with ``virtual_mode=True`` (IG-300)."""
-    from soothe.core.workspace.normalized_backend import NormalizedPathBackend
+    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -79,7 +79,7 @@ def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Pa
 
 def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path: Path) -> None:
     """``WorkspaceAwareBackend.ls_info`` accepts host-absolute dirs when ``virtual_mode=True`` (IG-300)."""
-    from soothe.core.workspace.normalized_backend import WorkspaceAwareBackend
+    from soothe.foundation.workspace.normalized_backend import WorkspaceAwareBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -127,7 +127,7 @@ def test_filesystem_virtual_mode_from_soothe_config() -> None:
 def test_resolve_file_ops_file_info_virtual_path_with_soothe_config(tmp_path: Path) -> None:
     """Resolver-built file_ops tools use ``virtual_mode`` from ``SootheConfig``."""
     from soothe.config import SootheConfig
-    from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
+    from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
     wdir = tmp_path / "agent_ws"
     wdir.mkdir()

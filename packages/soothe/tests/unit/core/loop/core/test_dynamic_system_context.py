@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.config.models import MODEL_KNOWLEDGE_CUTOFFS, get_knowledge_cutoff
-from soothe.core.prompts.context_xml import (
+from soothe.foundation.loop.prompts.context_xml import (
     build_context_sections_for_complexity,
     build_soothe_environment_section,
     build_soothe_protocols_section,
@@ -316,7 +316,7 @@ class TestGitStatusHelper:
     @pytest.mark.asyncio
     async def test_non_git_directory_returns_none(self, tmp_path: Path) -> None:
         """Non-git directory returns None."""
-        from soothe.core.workspace import get_git_status
+        from soothe.foundation.workspace import get_git_status
 
         result = await get_git_status(tmp_path)
         assert result is None
@@ -326,7 +326,7 @@ class TestGitStatusHelper:
         """Git directory returns snapshot dict (no porcelain status; IG-383)."""
         import subprocess
 
-        from soothe.core.workspace import get_git_status
+        from soothe.foundation.workspace import get_git_status
 
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=False)
         subprocess.run(

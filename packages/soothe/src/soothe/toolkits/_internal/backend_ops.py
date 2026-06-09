@@ -31,7 +31,7 @@ def _should_use_backend(config: Any) -> bool:
     if config is None:
         return False
 
-    from soothe.core.workspace import get_virtual_mode
+    from soothe.foundation.workspace import get_virtual_mode
 
     return get_virtual_mode()
 
@@ -42,7 +42,7 @@ def _get_backend() -> Any:
     Returns:
         FilesystemBackend or None if not available.
     """
-    from soothe.core import FrameworkFilesystem
+    from soothe.foundation.workspace import FrameworkFilesystem
 
     return FrameworkFilesystem.get()
 
@@ -58,7 +58,7 @@ def _to_virtual_home_path(host_path: Path) -> str | None:
     Returns:
         Virtual path string (e.g., "/.soothe/data/...") or None if not under virtual home.
     """
-    from soothe.core.workspace import get_virtual_home_relative_path
+    from soothe.foundation.workspace import get_virtual_home_relative_path
 
     return get_virtual_home_relative_path(host_path)
 

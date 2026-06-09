@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 import soothe.config as soothe_config
-from soothe.core.loop.state.persistence.manager import (
+from soothe.foundation.loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
 
@@ -353,7 +353,7 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(soothe_home))
 
     from soothe.config import SootheConfig
-    from soothe.core.workspace.loop_workspace import (
+    from soothe.foundation.workspace.loop_workspace import (
         compute_scoped_workspace_dir_name,
         normalize_user_id,
     )

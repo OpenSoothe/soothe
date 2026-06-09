@@ -1,6 +1,6 @@
 """Unit tests for File Lock Registry (RFC-222, IG-295)."""
 
-from soothe.core.goal_engine.file_lock_registry import (
+from soothe.foundation.autopilot.engine.file_lock_registry import (
     FileConflictError,
     FileLockEntry,
     FileLockRegistry,

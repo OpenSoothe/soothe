@@ -12,9 +12,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.core import resolve_daemon_workspace
-from soothe.core.loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
-from soothe.core.workspace import cleanup_anonymous_workspaces, cleanup_legacy_per_loop_workspaces
+from soothe.foundation.loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
+from soothe.foundation.workspace import (
+    cleanup_anonymous_workspaces,
+    cleanup_legacy_per_loop_workspaces,
+    resolve_daemon_workspace,
+)
 from soothe.logging import ThreadLogger
 from soothe_sdk.client.protocol import encode
 
@@ -111,7 +114,7 @@ class SootheDaemon(DaemonHandlersMixin):
         logger.info("Daemon workspace: %s", self._daemon_workspace)
 
         # Migrate persisted workspaces from workspaces/ to data/workspaces/ (RFC-621)
-        from soothe.core.workspace.migration import migrate_workspaces_to_data_dir
+        from soothe.foundation.workspace.migration import migrate_workspaces_to_data_dir
 
         migrate_workspaces_to_data_dir()
 
@@ -205,7 +208,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Start the daemon server using the transport manager."""
         from concurrent.futures import ThreadPoolExecutor
 
-        from soothe.core.runner import SootheRunner
+        from soothe.runner import SootheRunner
 
         # Acquire singleton lock *before* heavy init
         self._pid_lock_fd = acquire_pid_lock()
@@ -233,7 +236,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # (create_persisted_thread, touch_thread_activity_timestamp, etc.).
             # Streaming is handled per-loop by LoopRunnerFactory — this instance
             # is never passed to astream().
-            from soothe.core.runner import SootheRunner
+            from soothe.runner import SootheRunner
 
             try:
                 self._runner = await asyncio.to_thread(SootheRunner, self._config)
@@ -264,14 +267,14 @@ class SootheDaemon(DaemonHandlersMixin):
             # to subprocess workers via the runner_factory above.
             try:
                 from soothe.backends.persistence import create_persist_store
-                from soothe.core.autopilot import (
+                from soothe.foundation.autopilot.engine import GoalEngine
+                from soothe.foundation.autopilot.service import (
                     AutopilotService,
                     ContextProjector,
                     DurabilityGoalDispatchContextStore,
                     WorkspaceReservation,
                 )
-                from soothe.core.events.internal_bus import InternalEventBus
-                from soothe.core.goal_engine import GoalEngine
+                from soothe.foundation.events.internal_bus import InternalEventBus
                 from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
                 # Isolated bus for the daemon's autopilot domain.
@@ -339,7 +342,7 @@ class SootheDaemon(DaemonHandlersMixin):
                         context_persist_store
                     )
                 else:
-                    from soothe.core.autopilot import InMemoryGoalDispatchContextStore
+                    from soothe.foundation.autopilot.service import InMemoryGoalDispatchContextStore
 
                     self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
                 self._autopilot_service._context_projector = ContextProjector(
@@ -353,7 +356,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 # RFC-228: Bridge internal autopilot events to client-visible events
                 # for desktop clients with autopilot_subscribed=True
-                from soothe.core.events.internal_events import internal_to_client_event
+                from soothe.foundation.events.internal_events import internal_to_client_event
 
                 async def _bridge_internal_to_client(event: Any) -> None:
                     """Bridge internal event to client-visible event for autopilot subscribers."""
@@ -977,7 +980,7 @@ class SootheDaemon(DaemonHandlersMixin):
         from datetime import UTC, datetime
         from time import monotonic
 
-        from soothe.core.events import DaemonHeartbeatEvent
+        from soothe.foundation.events import DaemonHeartbeatEvent
 
         while self._running:
             await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
@@ -1231,8 +1234,8 @@ class SootheDaemon(DaemonHandlersMixin):
         msg_type = msg.get("type", "")
         lid = str(msg.get("loop_id") or "").strip()
 
-        from soothe.core.events import REGISTRY
-        from soothe.core.events.visibility import (
+        from soothe.foundation.events import REGISTRY
+        from soothe.foundation.events.visibility import (
             decide_client_wire_visibility,
             event_type_from_wire_message,
         )

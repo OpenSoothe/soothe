@@ -33,13 +33,13 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.settings import SootheConfig
-from soothe.core.runner._worker_utils import parse_intent_hint
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
+from soothe.runner._worker_utils import parse_intent_hint
 
 from soothe_daemon.config import SootheDaemonConfig
 
 if TYPE_CHECKING:
-    from soothe.core.runner._runner_shared import StreamChunk
+    from soothe.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -332,7 +332,7 @@ def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
 
     Same as _worker_utils.spawn_safe_config — strips runtime caches.
     """
-    from soothe.core.runner._worker_utils import spawn_safe_config
+    from soothe.runner._worker_utils import spawn_safe_config
 
     return spawn_safe_config(config)
 
@@ -432,8 +432,8 @@ def _pool_worker_body(
     """
     import asyncio as _asyncio
 
-    from soothe.core.runner import SootheRunner
-    from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
+    from soothe.runner import SootheRunner
+    from soothe.runner.worker_logging import configure_loop_runner_worker_logging
 
     loop = _asyncio.new_event_loop()
     _asyncio.set_event_loop(loop)

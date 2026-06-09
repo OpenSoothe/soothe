@@ -7,12 +7,12 @@ from typing import Any
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.core.loop.clarification import (
+from soothe.foundation.loop.clarification import (
     ClarificationCapture,
     ClarificationDetector,
     LoopStateView,
 )
-from soothe.core.loop.engine.executor import Executor
+from soothe.foundation.loop.engine.executor import Executor
 
 
 def _view() -> LoopStateView:

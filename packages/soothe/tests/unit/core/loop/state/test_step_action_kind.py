@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.state.schemas import (
     PlanGenerateStep,
     StepAction,
     plan_generate_steps_to_step_actions,

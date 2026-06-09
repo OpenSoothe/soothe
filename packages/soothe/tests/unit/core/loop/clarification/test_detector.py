@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.clarification.detector import ClarificationDetector
-from soothe.core.loop.clarification.protocol import LoopStateView
+from soothe.foundation.loop.clarification.detector import ClarificationDetector
+from soothe.foundation.loop.clarification.protocol import LoopStateView
 
 
 def _view() -> LoopStateView:

@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from soothe.core.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
+from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
     StepAction,

@@ -23,12 +23,12 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
 
-from soothe.core.events.internal_bus import get_internal_bus
-from soothe.core.events.internal_events import (
+from soothe.foundation.autopilot.engine.file_lock_registry import FileLockRegistry
+from soothe.foundation.events.internal_bus import get_internal_bus
+from soothe.foundation.events.internal_events import (
     InternalFileConflictEvent,
     InternalFileLockedEvent,
 )
-from soothe.core.goal_engine.file_lock_registry import FileLockRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

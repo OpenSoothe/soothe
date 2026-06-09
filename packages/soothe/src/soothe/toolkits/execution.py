@@ -41,7 +41,7 @@ from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_EXECUTE_TIMEOUT,
 )
-from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.foundation.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.utils import expand_path
 
@@ -62,7 +62,7 @@ _VIRTUAL_PATH_TOKEN_RE = re.compile(
 
 def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | None:
     """Resolve effective workspace for shell tools (RFC-103, IG-300)."""
-    from soothe.core.workspace.runtime_resolution import resolve_workspace_for_tool_execution
+    from soothe.foundation.workspace.runtime_resolution import resolve_workspace_for_tool_execution
 
     resolved = resolve_workspace_for_tool_execution(
         runtime=tool_runtime,
@@ -100,7 +100,7 @@ def _translate_virtual_paths_in_command(
     if not virtual_mode or not workspace or not command:
         return command
 
-    from soothe.core.workspace.tool_path_resolution import should_use_virtual_path_resolution
+    from soothe.foundation.workspace.tool_path_resolution import should_use_virtual_path_resolution
 
     workspace_path = Path(workspace).expanduser()
     workspace_str = str(workspace_path).rstrip("/")

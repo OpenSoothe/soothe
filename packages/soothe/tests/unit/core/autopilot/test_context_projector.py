@@ -12,9 +12,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from soothe.config.models import ContextProjectionConfig
-from soothe.core.autopilot.context_projector import ContextProjector
-from soothe.core.autopilot.context_store import InMemoryGoalDispatchContextStore
-from soothe.core.goal_engine.models import (
+from soothe.foundation.autopilot.service.context_projector import ContextProjector
+from soothe.foundation.autopilot.service.context_store import InMemoryGoalDispatchContextStore
+from soothe.foundation.autopilot.engine.models import (
     FileTouchSummary,
     Finding,
     Goal,

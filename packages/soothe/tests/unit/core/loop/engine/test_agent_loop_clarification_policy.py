@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.loop import AgentLoop
-from soothe.core.loop.state.schemas import StatusAssessment
+from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop.state.schemas import StatusAssessment
 
 
 def _make_mock_core_with_checkpointer() -> Mock:
@@ -59,7 +59,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
         captured["clarification_policy"] = kwargs.get("clarification_policy")
         return real_runtime_context_cls(*args, **kwargs)
 
-    from soothe.core.loop.orchestrator import runtime_context as rtx_mod
+    from soothe.foundation.loop.orchestrator import runtime_context as rtx_mod
 
     real_runtime_context_cls = rtx_mod.LoopRuntimeContext
 
@@ -75,19 +75,19 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
 
     with (
         patch(
-            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.LoopRuntimeContext",
+            "soothe.foundation.loop.engine.agent_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):
@@ -121,7 +121,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
         captured["clarification_policy"] = kwargs.get("clarification_policy")
         return real_runtime_context_cls(*args, **kwargs)
 
-    from soothe.core.loop.orchestrator import runtime_context as rtx_mod
+    from soothe.foundation.loop.orchestrator import runtime_context as rtx_mod
 
     real_runtime_context_cls = rtx_mod.LoopRuntimeContext
 
@@ -137,19 +137,19 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
 
     with (
         patch(
-            "soothe.core.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.GoalContextManager",
+            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
         patch(
-            "soothe.core.loop.engine.agent_loop.LoopRuntimeContext",
+            "soothe.foundation.loop.engine.agent_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 from langgraph.graph import END
 
-from soothe.core.loop.orchestrator.builder import build_agent_loop_graph
-from soothe.core.loop.orchestrator.routing import (
+from soothe.foundation.loop.orchestrator.builder import build_agent_loop_graph
+from soothe.foundation.loop.orchestrator.routing import (
     route_after_assess,
     route_after_clarification,
     route_after_execute,

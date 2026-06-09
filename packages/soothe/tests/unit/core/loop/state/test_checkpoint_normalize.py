@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.state.checkpoint import (
+from soothe.foundation.loop.state.checkpoint import (
     AgentLoopCheckpoint,
     normalize_checkpoint_data,
 )

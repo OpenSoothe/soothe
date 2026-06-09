@@ -6,8 +6,8 @@ import logging
 
 import pytest
 
-from soothe.core.loop.engine.executor import _log_dependency_execution_residual
-from soothe.core.loop.state.schemas import AgentDecision, StepAction
+from soothe.foundation.loop.engine.executor import _log_dependency_execution_residual
+from soothe.foundation.loop.state.schemas import AgentDecision, StepAction
 
 
 def test_log_dependency_execution_residual_warns(caplog: pytest.LogCaptureFixture) -> None:

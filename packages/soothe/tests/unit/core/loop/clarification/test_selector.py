@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.loop.clarification.auto import AutoClarificationPolicy
-from soothe.core.loop.clarification.interactive import InteractiveClarificationPolicy
-from soothe.core.loop.clarification.protocol import ClarificationRequest
-from soothe.core.loop.clarification.selector import build_default_clarification_policy
+from soothe.foundation.loop.clarification.auto import AutoClarificationPolicy
+from soothe.foundation.loop.clarification.interactive import InteractiveClarificationPolicy
+from soothe.foundation.loop.clarification.protocol import ClarificationRequest
+from soothe.foundation.loop.clarification.selector import build_default_clarification_policy
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
 

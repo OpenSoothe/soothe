@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from soothe.core.loop.state import schemas as schemas_mod
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.state import schemas as schemas_mod
+from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanGenerateStep,
@@ -212,7 +212,7 @@ class TestAgentDecision:
         """Two digit-only ids with the same int value: do not guess; leave dep unchanged."""
         import logging
 
-        from soothe.core.loop.state import schemas as schemas_mod
+        from soothe.foundation.loop.state import schemas as schemas_mod
 
         d0 = StepAction(id="01", description="a", expected_output="o")
         d1 = StepAction(id="001", description="b", expected_output="o")
@@ -388,7 +388,7 @@ class TestPlanGeneration:
     """Tests for flattened PlanGeneration schema."""
 
     def test_plan_generate_step_schema_omits_subagent_and_evidence_refs(self) -> None:
-        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+        from soothe.foundation.loop.state.schemas import plan_generation_model_for_iteration
 
         props = plan_generation_model_for_iteration(0).model_json_schema()["$defs"][
             "PlanGenerateStep"
@@ -399,7 +399,7 @@ class TestPlanGeneration:
 
     def test_plan_generation_schema_execution_mode_excludes_sequential(self) -> None:
         """Structured plan-generate output must not offer sequential to the LLM."""
-        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+        from soothe.foundation.loop.state.schemas import plan_generation_model_for_iteration
 
         for iteration in (0, 1):
             schema = plan_generation_model_for_iteration(iteration).model_json_schema()
@@ -419,7 +419,7 @@ class TestPlanGeneration:
         assert set(agent_em) == {"parallel", "dependency"}
 
     def test_plan_generate_steps_convert_to_step_actions(self) -> None:
-        from soothe.core.loop.state.schemas import plan_generate_steps_to_step_actions
+        from soothe.foundation.loop.state.schemas import plan_generate_steps_to_step_actions
 
         steps = [
             PlanGenerateStep(
@@ -508,7 +508,7 @@ class TestPlanGeneration:
         assert out.steps == []
 
     def test_first_wave_model_rejects_more_than_two_steps(self) -> None:
-        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+        from soothe.foundation.loop.state.schemas import plan_generation_model_for_iteration
 
         schema = plan_generation_model_for_iteration(0)
         steps = [
@@ -525,7 +525,7 @@ class TestPlanGeneration:
             )
 
     def test_first_wave_model_accepts_two_steps(self) -> None:
-        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+        from soothe.foundation.loop.state.schemas import plan_generation_model_for_iteration
 
         schema = plan_generation_model_for_iteration(0)
         out = schema(
@@ -541,7 +541,7 @@ class TestPlanGeneration:
         assert len(out.steps) == 2
 
     def test_later_iteration_model_allows_three_steps(self) -> None:
-        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+        from soothe.foundation.loop.state.schemas import plan_generation_model_for_iteration
 
         schema = plan_generation_model_for_iteration(1)
         assert schema is PlanGeneration

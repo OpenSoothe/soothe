@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.loop.clarification.auto import AutoClarificationPolicy
-from soothe.core.loop.clarification.protocol import (
+from soothe.foundation.loop.clarification.auto import AutoClarificationPolicy
+from soothe.foundation.loop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
     ClarificationPolicy,

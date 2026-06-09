@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.core.loop.engine.scenario_classifier import ScenarioClassification
-from soothe.core.loop.engine.synthesis import (
+from soothe.foundation.loop.engine.scenario_classifier import ScenarioClassification
+from soothe.foundation.loop.engine.synthesis import (
     SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
     SynthesisGenerator,
     synthesis_checkpoint_thread_id,
 )
-from soothe.core.loop.state.schemas import LoopState, StepResult
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.state.schemas import LoopState, StepResult
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.utils.observability import langfuse as langfuse_util
 
 

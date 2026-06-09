@@ -1,7 +1,7 @@
-"""Tests for Autopilot relationship detector (soothe.core.goal_engine.relationship_detector)."""
+"""Tests for Autopilot relationship detector (soothe.foundation.autopilot.engine.relationship_detector)."""
 
-from soothe.core.goal_engine import Goal
-from soothe.core.goal_engine.relationship_detector import (
+from soothe.foundation.autopilot.engine import Goal
+from soothe.foundation.autopilot.engine.relationship_detector import (
     _AUTO_APPLY_CONFIDENCE,
     _FLAG_FOR_REVIEW_CONFIDENCE,
     Relationship,

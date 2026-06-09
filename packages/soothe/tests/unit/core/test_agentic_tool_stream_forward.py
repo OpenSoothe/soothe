@@ -5,11 +5,11 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
-from soothe.core.loop.utils.messages import (
+from soothe.foundation.loop.utils.messages import (
     LoopAIMessageChunk,
     loop_message_assistant_output_phase,
 )
-from soothe.core.runner._runner_agentic import (
+from soothe.runner._runner_agentic import (
     _forward_messages_chunk,
     _is_ai_messages_stream_chunk,
     _is_ai_tool_invocation_messages_chunk,

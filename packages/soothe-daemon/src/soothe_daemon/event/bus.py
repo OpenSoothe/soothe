@@ -10,10 +10,10 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.events import EventPriority
+from soothe.foundation.events import EventPriority
 
 if TYPE_CHECKING:
-    from soothe.core.events import EventMeta
+    from soothe.foundation.events import EventMeta
 
     from soothe_daemon.event.size_stats import EventSizeDistributionCollector
 

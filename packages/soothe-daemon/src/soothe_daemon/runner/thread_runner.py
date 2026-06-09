@@ -35,7 +35,7 @@ from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.runner.response_bridge import ResponsePusher
 
 if TYPE_CHECKING:
-    from soothe.core.runner._runner_shared import StreamChunk
+    from soothe.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +146,9 @@ def _thread_worker_body(
 
     def _run_single(req: LoopRunRequest, request_id: str, pusher: ResponsePusher | None) -> None:
         """Execute one request with fresh SootheRunner."""
-        from soothe.core.runner import SootheRunner
-        from soothe.core.runner._worker_utils import parse_intent_hint
-        from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
+        from soothe.runner import SootheRunner
+        from soothe.runner._worker_utils import parse_intent_hint
+        from soothe.runner.worker_logging import configure_loop_runner_worker_logging
 
         def _emit(msg_type: str, payload: Any = None) -> None:
             if pusher is not None:
