@@ -430,6 +430,7 @@ observability:
   thread_logging_enabled: true
   thread_logging_retention_days: 30
   thread_logging_max_size_mb: 100
+  profile_model_calls: false
   langfuse:
     enabled: false
     public_key: null

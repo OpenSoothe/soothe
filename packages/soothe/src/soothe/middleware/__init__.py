@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         InnerModelCallProfilerMiddleware,
         LLMCallProfilerMiddleware,
         ModelCallProfilerMiddleware,
+        install_model_call_profiler,
         is_profiler_enabled,
     )
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
@@ -61,6 +62,7 @@ __all__ = [
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
     "create_llm_call_metadata",
+    "install_model_call_profiler",
     "is_profiler_enabled",
 ]
 
@@ -104,6 +106,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "is_profiler_enabled": (
         "soothe.middleware.model_call_profiler",
         "is_profiler_enabled",
+    ),
+    "install_model_call_profiler": (
+        "soothe.middleware.model_call_profiler",
+        "install_model_call_profiler",
     ),
 }
 

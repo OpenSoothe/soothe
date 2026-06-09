@@ -1379,6 +1379,7 @@ class ObservabilityConfig(BaseModel):
         thread_logging_enabled: Whether thread-specific logging is enabled.
         thread_logging_retention_days: Days to retain thread logs before cleanup.
         thread_logging_max_size_mb: Maximum total size for thread logs directory.
+        profile_model_calls: Log per-model-call middleware timing for latency debugging.
         langfuse: Langfuse OpenTelemetry / LangChain callback settings.
     """
 
@@ -1435,6 +1436,13 @@ class ObservabilityConfig(BaseModel):
         default=100,
         ge=1,
         description="Maximum total size for thread logs directory",
+    )
+
+    profile_model_calls: bool = Field(
+        default=False,
+        description=(
+            "Enable model-call profiler middleware (logs pre/post-handler timing per LLM call)"
+        ),
     )
 
     langfuse: LangfuseIntegrationConfig = Field(
