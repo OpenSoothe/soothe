@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from soothe_daemon.bootstrap.env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
-
-bootstrap_dotenv()
-
-import asyncio
+import os
+import socket
 import subprocess
 import sys
 import time
@@ -14,20 +11,89 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from soothe.config import SOOTHE_HOME, SootheConfig
 
-from soothe_daemon.bootstrap.entrypoint import run_daemon
-from soothe_daemon.bootstrap.paths import pid_path
-from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
-from soothe_daemon.health.checker import HealthChecker
-from soothe_daemon.health.formatters import format_json, format_markdown, format_text
-from soothe_daemon.health.models import CheckStatus
-from soothe_daemon.server import SootheDaemon
+# Lightweight helpers - avoid heavy imports (soothe.config takes 4.4s, SootheDaemon takes 5+ seconds)
+_SOOTHE_HOME = Path(os.environ.get("SOOTHE_HOME", "~/.soothe")).expanduser()
+_PID_FILENAME = "soothe.pid"
+
+
+def _fast_pid_path() -> Path:
+    """Fast PID file path without importing soothe.config."""
+    return _SOOTHE_HOME / _PID_FILENAME
+
+
+def _load_dotenv_if_needed() -> None:
+    """Load dotenv only when actually needed (for start/doctor commands)."""
+    from soothe_daemon.bootstrap.env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
+
+    bootstrap_dotenv()
+    return load_dotenv_adjacent_to_yaml
+
 
 app = typer.Typer(
     name="soothed",
     help="Soothe daemon management - start/stop/status/doctor/warmup",
 )
+
+
+# Fast status check helpers - avoid importing SootheDaemon (5+ second import chain)
+# Port can be configured via SOOTHE_WS_PORT env var for fast status checks
+_DEFAULT_WS_HOST = "127.0.0.1"
+_DEFAULT_WS_PORT = 8765
+
+
+def _get_ws_address() -> tuple[str, int]:
+    """Get WebSocket host:port from env (fast) or default.
+
+    For full config support, use SootheDaemonConfig (slower).
+    """
+    host = os.environ.get("SOOTHE_WS_HOST", _DEFAULT_WS_HOST)
+    port = int(os.environ.get("SOOTHE_WS_PORT", str(_DEFAULT_WS_PORT)))
+    return host, port
+
+
+def _is_port_live(host: str, port: int) -> bool:
+    """Fast socket probe to check if port is accepting connections."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.1)  # 100ms is sufficient for local check
+        s.connect((host, port))
+        s.close()
+        return True
+    except (ConnectionRefusedError, OSError, TimeoutError):
+        return False
+
+
+def _fast_is_running() -> bool:
+    """Check if daemon is running without heavy imports.
+
+    Uses PID file + process check, falls back to port probe.
+    """
+    pf = _fast_pid_path()
+    if pf.exists():
+        try:
+            pid = int(pf.read_text().strip())
+            os.kill(pid, 0)  # Check process exists
+            return True
+        except (ValueError, ProcessLookupError, PermissionError):
+            # PID file stale
+            pass
+    # Fallback: check port (use env-configurable address)
+    host, port = _get_ws_address()
+    return _is_port_live(host, port)
+
+
+def _fast_find_pid() -> int | None:
+    """Find PID without heavy imports."""
+    pf = _fast_pid_path()
+    if pf.exists():
+        try:
+            pid = int(pf.read_text().strip())
+            os.kill(pid, 0)
+            return pid
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
+    return None
 
 
 @app.callback(invoke_without_command=True)
@@ -49,12 +115,16 @@ def daemon_start(
     ] = False,
 ) -> None:
     """Start the Soothe daemon server."""
-    daemon_cfg = _load_daemon_config(config)
-    _apply_dotenv_for_daemon_paths(daemon_cfg, config)
+    load_dotenv_adjacent_to_yaml = _load_dotenv_if_needed()
+    from soothe_daemon.bootstrap.entrypoint import run_daemon
+    from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
+
+    daemon_cfg = _load_daemon_config(config, SootheDaemonConfig, default_daemon_config_path)
+    _apply_dotenv_for_daemon_paths(daemon_cfg, config, load_dotenv_adjacent_to_yaml)
     cfg = daemon_cfg.load_soothe_config()
 
-    if SootheDaemon.is_running():
-        pid = SootheDaemon.find_pid()
+    if _fast_is_running():
+        pid = _fast_find_pid()
         pid_info = f" (PID: {pid})" if pid else ""
         typer.echo(f"Daemon is already running{pid_info}.")
         raise typer.Exit(code=1)
@@ -88,7 +158,7 @@ def daemon_start(
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            cwd=str(Path(SOOTHE_HOME).expanduser()),
+            cwd=str(_SOOTHE_HOME),
         )
     except Exception as exc:
         typer.echo(f"Failed to start daemon: {exc}", err=True)
@@ -98,11 +168,12 @@ def daemon_start(
     # Daemon initialization can take several seconds (runner + transport startup).
     # Model loading timeout is 30s; give 45s total buffer for all startup tasks.
     for _ in range(450):
-        if SootheDaemon.is_running():
-            pid = SootheDaemon.find_pid()
+        if _fast_is_running():
+            pid = _fast_find_pid()
+            host, port = _get_ws_address()
 
             pid_str = f"PID: {pid}" if pid else "PID: unknown"
-            typer.echo(f"Daemon started successfully ({pid_str}, ws://127.0.0.1:8765)")
+            typer.echo(f"Daemon started successfully ({pid_str}, ws://{host}:{port})")
             return
         time.sleep(0.1)
 
@@ -113,7 +184,9 @@ def daemon_start(
 @app.command("stop")
 def daemon_stop() -> None:
     """Stop the running Soothe daemon."""
-    pid = SootheDaemon.find_pid()
+    from soothe_daemon.server import SootheDaemon
+
+    pid = _fast_find_pid()
     if pid:
         typer.echo(f"Stopping daemon (PID: {pid})...")
     else:
@@ -128,39 +201,22 @@ def daemon_stop() -> None:
 
 @app.command("status")
 def daemon_status() -> None:
-    """Show soothed status."""
-    running = SootheDaemon.is_running()
+    """Show soothed status (fast - no heavy imports)."""
+    running = _fast_is_running()
     if not running:
         typer.echo("Daemon status: stopped")
         return
 
     typer.echo("Daemon status: running")
 
-    # Read PID file directly first (fast), fall back to find_pid() only if needed
-    pf = pid_path()
-    pid: int | None = None
-    if pf.exists():
-        import os
-
-        try:
-            pid = int(pf.read_text().strip())
-            os.kill(pid, 0)
-        except (ValueError, ProcessLookupError, PermissionError):
-            pid = SootheDaemon.find_pid()
-    else:
-        pid = SootheDaemon.find_pid()
-
+    # Find PID
+    pid = _fast_find_pid()
     if pid:
         typer.echo(f"PID: {pid}")
 
-    # Resolve WebSocket address from daemon config
-    try:
-        cfg = SootheDaemonConfig()
-        ws_host = cfg.transports.websocket.host
-        ws_port = cfg.transports.websocket.port
-    except Exception:
-        ws_host, ws_port = "127.0.0.1", 8765
-    typer.echo(f"WebSocket: ws://{ws_host}:{ws_port}")
+    # WebSocket address (use env-configurable address)
+    host, port = _get_ws_address()
+    typer.echo(f"WebSocket: ws://{host}:{port}")
 
 
 @app.command("restart")
@@ -171,7 +227,9 @@ def daemon_restart(
     ] = None,
 ) -> None:
     """Restart the Soothe daemon."""
-    if SootheDaemon.is_running():
+    from soothe_daemon.server import SootheDaemon
+
+    if _fast_is_running():
         typer.echo("Stopping existing daemon...")
         if not SootheDaemon.stop_running():
             typer.echo("Failed to stop running daemon.", err=True)
@@ -226,6 +284,16 @@ def doctor(
     ] = "error",
 ) -> None:
     """Run comprehensive health checks."""
+    import asyncio
+
+    from soothe.config import SootheConfig
+
+    load_dotenv_adjacent_to_yaml = _load_dotenv_if_needed()
+    from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
+    from soothe_daemon.health.checker import HealthChecker
+    from soothe_daemon.health.formatters import format_json, format_markdown, format_text
+    from soothe_daemon.health.models import CheckStatus
+
     format_key = output_format.lower()
     fail_key = fail_on.lower()
     if format_key not in {"text", "json", "markdown"}:
@@ -244,8 +312,8 @@ def doctor(
     daemon_cfg: SootheDaemonConfig | None = None
     cfg: SootheConfig | None = None
     try:
-        daemon_cfg = _load_daemon_config(config)
-        _apply_dotenv_for_daemon_paths(daemon_cfg, config)
+        daemon_cfg = _load_daemon_config(config, SootheDaemonConfig, default_daemon_config_path)
+        _apply_dotenv_for_daemon_paths(daemon_cfg, config, load_dotenv_adjacent_to_yaml)
         cfg = daemon_cfg.load_soothe_config()
     except Exception as exc:
         if config:
@@ -305,6 +373,8 @@ def warmup_cache(
 
     Run this before starting the daemon for faster first-query response.
     """
+    import asyncio
+
     from soothe.utils.similarity import async_warmup_embedding_model, hf_embedding_cache_dir
 
     cache_dir = hf_embedding_cache_dir()
@@ -339,9 +409,13 @@ def help_command(ctx: typer.Context) -> None:
 
 
 def _apply_dotenv_for_daemon_paths(
-    daemon_cfg: SootheDaemonConfig, explicit_daemon_yaml: str | None
+    daemon_cfg,
+    explicit_daemon_yaml: str | None,
+    load_dotenv_adjacent_to_yaml,
 ) -> None:
     """Load ``.env`` beside daemon YAML and beside ``soothe_config_path`` before parsing agent config."""
+    from soothe_daemon.config import default_daemon_config_path
+
     paths: list[str | Path | None] = [explicit_daemon_yaml]
     if explicit_daemon_yaml is None:
         dp = default_daemon_config_path()
@@ -350,26 +424,30 @@ def _apply_dotenv_for_daemon_paths(
     load_dotenv_adjacent_to_yaml(*paths, daemon_cfg.soothe_config_path)
 
 
-def _load_daemon_config(config_path: str | None) -> SootheDaemonConfig:
+def _load_daemon_config(config_path: str | None, daemon_config_cls, default_config_path_func):
     """Load ``SootheDaemonConfig`` from explicit path or default location.
 
     Args:
         config_path: Optional path passed from CLI (``daemon_config.yml``).
+        daemon_config_cls: SootheDaemonConfig class (passed to avoid import).
+        default_config_path_func: Function to get default config path.
 
     Returns:
         Parsed ``SootheDaemonConfig`` (defaults if no file found).
     """
     if config_path:
-        return SootheDaemonConfig.from_yaml_file(config_path)
+        return daemon_config_cls.from_yaml_file(config_path)
 
-    default_config = default_daemon_config_path()
+    default_config = default_config_path_func()
     if default_config.exists():
-        return SootheDaemonConfig.from_yaml_file(default_config)
-    return SootheDaemonConfig()
+        return daemon_config_cls.from_yaml_file(default_config)
+    return daemon_config_cls()
 
 
-def _status_meets_or_exceeds(status: CheckStatus, threshold: CheckStatus) -> bool:
+def _status_meets_or_exceeds(status: str, threshold: str) -> bool:
     """Return True when status severity is at or above the threshold."""
+    from soothe_daemon.health.models import CheckStatus
+
     severity = {
         CheckStatus.OK: 0,
         CheckStatus.INFO: 1,
