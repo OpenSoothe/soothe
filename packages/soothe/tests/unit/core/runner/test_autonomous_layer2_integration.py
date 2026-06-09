@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from soothe.core.loop.state.schemas import PlanResult
-from soothe.core.runner._types import GoalResult
+from soothe.foundation.loop.state.schemas import PlanResult
+from soothe.runner._types import GoalResult
 
 
 def test_goal_result_model():
@@ -53,7 +53,7 @@ def test_plan_result_to_goal_result_conversion():
 async def test_agentloop_delegation_basic():
     """Test basic AgentLoop delegation from GoalEngine."""
     from soothe.config import SootheConfig
-    from soothe.core.runner import SootheRunner
+    from soothe.runner import SootheRunner
 
     # Mock configuration
     config = SootheConfig()
@@ -84,7 +84,7 @@ async def test_agentloop_delegation_basic():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_agentloop_result():
     """Test planner.reflect() handles agentloop_result parameter."""
-    from soothe.core.loop.planning.planner import LLMPlanner
+    from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
     # Mock model
@@ -131,7 +131,7 @@ async def test_planner_reflect_with_agentloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_failed_agentloop_result():
     """Test planner generates recovery directives for failed AgentLoop result."""
-    from soothe.core.loop.planning.planner import LLMPlanner
+    from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
     mock_model = Mock()
@@ -176,7 +176,7 @@ async def test_planner_reflect_with_failed_agentloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_without_agentloop_result():
     """Test planner falls back to heuristic reflection without agentloop_result."""
-    from soothe.core.loop.planning.planner import LLMPlanner
+    from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import Plan, PlanStep
 
     mock_model = Mock()
@@ -246,8 +246,8 @@ def test_goal_result_serialization():
 @pytest.mark.asyncio
 async def test_agentloop_run_with_progress_interface():
     """Verify AgentLoop.run_with_progress() interface matches expectations."""
-    from soothe.core.agent import CoreAgent
-    from soothe.core.loop import AgentLoop
+    from soothe.foundation.core.agent import CoreAgent
+    from soothe.foundation.loop import AgentLoop
 
     # Mock CoreAgent
     mock_core_agent = Mock(spec=CoreAgent)

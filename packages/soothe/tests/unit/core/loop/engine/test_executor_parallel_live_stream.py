@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop.engine.executor import Executor, StreamEvent
-from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.foundation.loop.engine.executor import Executor, StreamEvent
+from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
 @pytest.mark.asyncio

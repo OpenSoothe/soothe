@@ -117,7 +117,7 @@ class SkillActivationMiddleware(AgentMiddleware):
                 except Exception:  # noqa: BLE001
                     logger.exception("[Skill] sync failed for %s", skill_name)
                 try:
-                    from soothe.core.events.internal_bus import get_internal_event_bus
+                    from soothe.foundation.events.internal_bus import get_internal_event_bus
 
                     bus = get_internal_event_bus()
                     if bus is not None:

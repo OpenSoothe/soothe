@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
 
     from soothe.config import SootheConfig
-    from soothe.core.context.tool_registry import ToolContextRegistry
-    from soothe.core.context.trigger_registry import ToolTriggerRegistry
+    from soothe.foundation.core.context.tool_registry import ToolContextRegistry
+    from soothe.foundation.core.context.trigger_registry import ToolTriggerRegistry
     from soothe.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
@@ -37,8 +37,8 @@ def _build_tool_registries(
     """
     # Tool registries always created (optimizations always enabled)
     try:
-        from soothe.core.context.tool_registry import ToolContextRegistry
-        from soothe.core.context.trigger_registry import ToolTriggerRegistry
+        from soothe.foundation.core.context.tool_registry import ToolContextRegistry
+        from soothe.foundation.core.context.trigger_registry import ToolTriggerRegistry
         from soothe.plugin.global_registry import get_plugin_registry
 
         plugin_registry = get_plugin_registry()

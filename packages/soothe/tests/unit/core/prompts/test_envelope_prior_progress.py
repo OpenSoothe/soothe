@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.state.schemas import PriorProgressDigest, ToolCallHead
-from soothe.core.prompts.user_envelope import (
+from soothe.foundation.loop.state.schemas import PriorProgressDigest, ToolCallHead
+from soothe.foundation.loop.prompts.user_envelope import (
     PRIOR_PROGRESS_MAX_CHARS,
     build_plan_context_envelope,
 )

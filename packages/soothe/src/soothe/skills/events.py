@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from soothe.core.events.catalog import register_event
 from soothe.foundation.base_events import SootheEvent
+from soothe.foundation.events.catalog import register_event
 
 
 class SkillActivatedEvent(SootheEvent):

@@ -7,18 +7,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop.clarification import (
+from soothe.foundation.loop.clarification import (
     ClarificationAnswer,
     answer_to_state,
     request_from_state,
 )
-from soothe.core.loop.engine.executor import StepWaveStart
-from soothe.core.loop.orchestrator.nodes.execute_steps import (
+from soothe.foundation.loop.engine.executor import StepWaveStart
+from soothe.foundation.loop.orchestrator.nodes.execute_steps import (
     PLANNER_ASK_INTERRUPT_PREFIX,
     node_execute,
 )
-from soothe.core.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.core.loop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.loop.state.schemas import AgentDecision, StepAction, StepResult
 
 
 def _make_loop_state() -> Any:
@@ -96,7 +96,7 @@ async def test_branch2_short_circuits_when_planner_emits_ask_user(
 
     executor_called = MagicMock()
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", executor_called)
 
@@ -144,7 +144,7 @@ async def test_branch2_noop_when_no_clarification_policy(
     mock_executor = MagicMock()
     mock_executor.execute = _empty_stream
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
@@ -212,7 +212,7 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
         mock_ex.execute = _empty_stream
         return mock_ex
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", _factory)
 
@@ -292,7 +292,7 @@ async def test_branch2_picks_first_ask_user_in_mixed_wave(
 
     executor_called = MagicMock()
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", executor_called)
 
@@ -355,7 +355,7 @@ async def test_real_coreagent_resume_payload_passes_through(
         mock_ex.execute = _yield_wave
         return mock_ex
 
-    import soothe.core.loop.orchestrator.nodes.execute_steps as mod
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", _factory)
 
@@ -379,12 +379,12 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     the checkpoint persisted. Without this, the next clarification round trip
     reloads ``goal_record`` with a stale ledger and plan-assess / plan-generate
     re-ask the same question."""
-    from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+    from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
     emitted: list[tuple[str, Any]] = []
 
     # Real LoopState so loop_messages is a list we can mutate and read back.
-    from soothe.core.loop.state.schemas import LoopState
+    from soothe.foundation.loop.state.schemas import LoopState
 
     loop_state = LoopState(
         goal="count file types per package",

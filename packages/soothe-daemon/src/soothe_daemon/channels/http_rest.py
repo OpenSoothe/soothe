@@ -277,7 +277,7 @@ class HttpRestChannel(Channel):
             workspace_raw = body.get("workspace")
             workspace: str | None = None
             if isinstance(workspace_raw, str) and workspace_raw.strip():
-                from soothe.core.workspace import validate_client_workspace
+                from soothe.foundation.workspace import validate_client_workspace
 
                 try:
                     workspace = str(validate_client_workspace(workspace_raw))

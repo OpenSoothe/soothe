@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 import soothe.config as soothe_config
-from soothe.core.workspace.loop_workspace import (
+from soothe.foundation.workspace.loop_workspace import (
     compute_scoped_workspace_dir_name,
     normalize_user_id,
     resolve_loop_workspace,

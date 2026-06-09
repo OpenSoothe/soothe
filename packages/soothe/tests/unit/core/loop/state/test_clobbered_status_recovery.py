@@ -23,10 +23,10 @@ from unittest.mock import patch
 
 import pytest
 
-from soothe.core.loop.orchestrator.nodes.plan_assess import (
+from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
     seed_loop_ledger_from_prior_goal,
 )
-from soothe.core.loop.state.manager import AgentLoopStateManager
+from soothe.foundation.loop.state.manager import AgentLoopStateManager
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def temp_state_manager():
         workspace = Path(tmpdir)
         db_path = workspace / "test_clobber_recovery.db"
         with patch(
-            "soothe.core.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             yield AgentLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
@@ -71,7 +71,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
 
     # Cold reload — mimics agent_loop.load() at the start of a new query.
     with patch(
-        "soothe.core.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
         sm2 = AgentLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
@@ -113,7 +113,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
 
     # Final cold reload confirms persistence of preserved history.
     with patch(
-        "soothe.core.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
         sm3 = AgentLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)

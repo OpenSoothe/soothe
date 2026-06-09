@@ -11,7 +11,7 @@ def test_configuration_defaults():
 
 def test_prompt_templates_exist():
     """Test that all prompt templates are defined."""
-    from soothe.core.prompts import (
+    from soothe.foundation.loop.prompts import (
         _DEFAULT_SYSTEM_PROMPT,
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
@@ -43,7 +43,7 @@ def test_token_reduction_estimates():
     config = SootheConfig()
 
     # Get prompts for each complexity
-    from soothe.core.prompts import (
+    from soothe.foundation.loop.prompts import (
         _DEFAULT_SYSTEM_PROMPT,
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,

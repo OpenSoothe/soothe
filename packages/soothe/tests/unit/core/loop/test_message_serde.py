@@ -3,8 +3,8 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from soothe_sdk.utils.serde import create_soothe_serde
 
-from soothe.core.loop.state.checkpoint import GoalExecutionRecord
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.state.checkpoint import GoalExecutionRecord
+from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_loop_human_message_serde_roundtrip():

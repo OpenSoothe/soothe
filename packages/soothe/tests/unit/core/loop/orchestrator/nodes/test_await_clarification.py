@@ -7,14 +7,14 @@ from typing import Any
 
 import pytest
 
-from soothe.core.loop.clarification.protocol import (
+from soothe.foundation.loop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
     ClarificationRequest,
     LoopStateView,
     request_to_state,
 )
-from soothe.core.loop.orchestrator.nodes.await_clarification import (
+from soothe.foundation.loop.orchestrator.nodes.await_clarification import (
     node_await_clarification,
 )
 

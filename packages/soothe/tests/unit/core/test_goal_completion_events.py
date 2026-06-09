@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.events import AgenticLoopCompletedEvent
+from soothe.foundation.events import AgenticLoopCompletedEvent
 
 
 def test_agentic_loop_completed_event_has_no_goal_completion_message_field() -> None:

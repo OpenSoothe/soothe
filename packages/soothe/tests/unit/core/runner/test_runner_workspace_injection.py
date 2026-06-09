@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from soothe.config import SootheConfig
-from soothe.core.runner._runner_phases import PhasesMixin
-from soothe.core.runner._types import RunnerState
+from soothe.runner._runner_phases import PhasesMixin
+from soothe.runner._types import RunnerState
 
 
 class _PhasesOnly(PhasesMixin):

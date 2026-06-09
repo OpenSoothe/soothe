@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.core.goal_engine.consensus import (
+from soothe.foundation.autopilot.engine.consensus import (
     ConsensusEvaluationError,
     _build_consensus_prompt,
     _extract_reasoning,

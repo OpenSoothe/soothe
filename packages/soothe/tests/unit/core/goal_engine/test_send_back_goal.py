@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.goal_engine import GoalEngine
+from soothe.foundation.autopilot.engine import GoalEngine
 
 
 @pytest.mark.asyncio

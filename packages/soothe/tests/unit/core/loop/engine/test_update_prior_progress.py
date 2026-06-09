@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
 def _ai_with_tool_calls(

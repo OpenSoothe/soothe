@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from soothe.core.runner._runner_phases import _STREAM_POLL_INTERVAL_S, _await_next_astream_chunk
+from soothe.runner._runner_phases import _STREAM_POLL_INTERVAL_S, _await_next_astream_chunk
 
 
 @pytest.mark.asyncio

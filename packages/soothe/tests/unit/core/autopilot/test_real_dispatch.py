@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 from soothe.config.models import AutonomousConfig
-from soothe.core.autopilot import AutopilotService
-from soothe.core.autopilot.context_store import InMemoryGoalDispatchContextStore
-from soothe.core.autopilot.workspace_reservation import WorkspaceReservation
-from soothe.core.events.internal_bus import InternalEventBus
-from soothe.core.goal_engine import GoalEngine
+from soothe.foundation.autopilot.service import AutopilotService
+from soothe.foundation.autopilot.service.context_store import InMemoryGoalDispatchContextStore
+from soothe.foundation.autopilot.service.workspace_reservation import WorkspaceReservation
+from soothe.foundation.events.internal_bus import InternalEventBus
+from soothe.foundation.autopilot.engine import GoalEngine
 
 # ---- Fakes -------------------------------------------------------------
 

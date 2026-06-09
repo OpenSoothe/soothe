@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.engine.graph_interrupt import (
+from soothe.foundation.loop.engine.graph_interrupt import (
     build_auto_resume_payload,
     is_ask_user_interrupt,
 )

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from soothe.core.events.catalog import register_event
 from soothe.foundation.base_events import SootheEvent
+from soothe.foundation.events.catalog import register_event
 
 logger = logging.getLogger(__name__)
 

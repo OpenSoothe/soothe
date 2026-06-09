@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.planning.simple_bypass import (
+from soothe.foundation.loop.planning.simple_bypass import (
     SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
     SIMPLE_QUERY_DIRECT_PREFIX,
     format_simple_query_direct_next_action,

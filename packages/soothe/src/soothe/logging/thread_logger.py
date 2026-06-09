@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.core.loop.state.persistence.directory_manager import (
+from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 

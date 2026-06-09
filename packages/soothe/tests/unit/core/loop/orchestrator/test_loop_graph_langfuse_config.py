@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from soothe.config import SootheConfig
-from soothe.core.loop.orchestrator.runner import build_loop_graph_invoke_config
+from soothe.foundation.loop.orchestrator.runner import build_loop_graph_invoke_config
 
 
 def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
@@ -54,7 +54,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     ctx.loop_state = mock_ls
 
     with patch(
-        "soothe.core.loop.orchestrator.runner.merge_langfuse_runnable_config",
+        "soothe.foundation.loop.orchestrator.runner.merge_langfuse_runnable_config",
         return_value={
             "configurable": {"thread_id": "loop-1"},
             "metadata": {"langfuse_session_id": "conv-thread-9"},

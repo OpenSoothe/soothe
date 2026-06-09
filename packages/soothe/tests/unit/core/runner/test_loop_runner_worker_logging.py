@@ -10,7 +10,7 @@ import pytest
 
 import soothe.config as soothe_config
 from soothe.config.settings import SootheConfig
-from soothe.core.runner.worker_logging import (
+from soothe.runner.worker_logging import (
     RUNNER_LOG_FILENAME,
     configure_loop_runner_worker_logging,
 )

@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.core.intention import IntentClassification, IntentClassifier, TaskComplexity
-from soothe.core.intention.models import IntentClassificationLLMResult
-from soothe.core.intention.prompts import (
+from soothe.foundation.loop.intention import IntentClassification, IntentClassifier, TaskComplexity
+from soothe.foundation.loop.intention.models import IntentClassificationLLMResult
+from soothe.foundation.loop.intention.prompts import (
     INTENT_CLASSIFICATION_PROMPT,
     INTENT_CLASSIFICATION_RETRY_PROMPT,
 )

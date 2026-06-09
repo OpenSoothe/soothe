@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.core.loop.planning.phase import PlanPhase
-from soothe.core.loop.state.schemas import LoopState, PlanResult, StepResult
+from soothe.foundation.loop.planning.phase import PlanPhase
+from soothe.foundation.loop.state.schemas import LoopState, PlanResult, StepResult
 from soothe.protocols.planner import PlanContext
 
 

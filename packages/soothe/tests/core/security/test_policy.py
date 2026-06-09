@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.security.policy import (
+from soothe.foundation.core.security.policy import (
     PERMISSIVE_POLICY,
     READONLY_POLICY,
     SANDBOX_POLICY,

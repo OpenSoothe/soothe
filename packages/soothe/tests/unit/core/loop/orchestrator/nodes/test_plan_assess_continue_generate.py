@@ -13,16 +13,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.loop.orchestrator.nodes.plan_assess import node_plan_assess
-from soothe.core.loop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.core.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.core.loop.state.checkpoint import (
+from soothe.foundation.loop.orchestrator.nodes.plan_assess import node_plan_assess
+from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.loop.state.checkpoint import (
     AgentLoopCheckpoint,
     GoalExecutionRecord,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
-from soothe.core.loop.state.schemas import (
+from soothe.foundation.loop.state.schemas import (
     ContinuationAssessment,
     LoopState,
     StatusAssessment,

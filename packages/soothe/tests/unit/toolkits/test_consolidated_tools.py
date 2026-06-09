@@ -252,7 +252,7 @@ class TestResolverToolkitNames:
 
     def test_wizsearch_resolves(self) -> None:
         """Wizsearch toolkit should resolve to 2 tools."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("wizsearch")
         assert len(tools) == 2
@@ -261,7 +261,7 @@ class TestResolverToolkitNames:
 
     def test_file_ops_resolves(self) -> None:
         """File_ops toolkit should resolve to 6 surgical tools."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("file_ops")
         assert len(tools) == 6
@@ -281,7 +281,7 @@ class TestResolverToolkitNames:
 
     def test_execution_resolves(self) -> None:
         """Execution toolkit should resolve to 4 tools."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("execution")
         assert len(tools) == 4
@@ -289,7 +289,7 @@ class TestResolverToolkitNames:
 
     def test_data_resolves(self) -> None:
         """Data toolkit should resolve to 6 tools."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("data")
         assert len(tools) == 6
@@ -301,7 +301,7 @@ class TestResolverOldNamesRejected:
 
     def test_old_names_rejected(self) -> None:
         """Legacy names without backward compat should not resolve."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         for old_name in (
             "inquiry",
@@ -325,7 +325,7 @@ class TestDomainScopedPrompts:
     """Tests for domain-scoped prompt guides."""
 
     def test_guides_exist(self) -> None:
-        from soothe.core.prompts import (
+        from soothe.foundation.loop.prompts import (
             _DATA_GUIDE,
             _FILE_OPS_GUIDE,
             _RESEARCH_GUIDE,
@@ -341,7 +341,7 @@ class TestDomainScopedPrompts:
         assert "explore" in _SUBAGENT_GUIDE.lower()
 
     def test_orchestration_guide_has_all_domains(self) -> None:
-        from soothe.core.prompts import _TOOL_ORCHESTRATION_GUIDE
+        from soothe.foundation.loop.prompts import _TOOL_ORCHESTRATION_GUIDE
 
         # Check for tool categories mentioned in the guide
         guide_lower = _TOOL_ORCHESTRATION_GUIDE.lower()
@@ -352,7 +352,7 @@ class TestDomainScopedPrompts:
         assert "research" in guide_lower
 
     def test_no_old_tool_names_in_guide(self) -> None:
-        from soothe.core.prompts import _TOOL_ORCHESTRATION_GUIDE
+        from soothe.foundation.loop.prompts import _TOOL_ORCHESTRATION_GUIDE
 
         # Old names should not appear (they've been consolidated)
         # Note: wizsearch is a valid name, so we check for the old web_search pattern

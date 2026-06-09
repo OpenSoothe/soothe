@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from soothe.core.intention import IntentClassification
-from soothe.core.loop.orchestrator.nodes.init_or_resume import node_init_or_resume
+from soothe.foundation.loop.intention import IntentClassification
+from soothe.foundation.loop.orchestrator.nodes.init_or_resume import node_init_or_resume
 
 
 @pytest.mark.asyncio

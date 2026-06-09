@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.core.loop.planning.planner import LLMPlanner
-from soothe.core.loop.state.schemas import ContinuationAssessment
+from soothe.foundation.loop.planning.planner import LLMPlanner
+from soothe.foundation.loop.state.schemas import ContinuationAssessment
 
 
 def _make_planner() -> LLMPlanner:
@@ -41,7 +41,7 @@ async def test_continuation_assess_bootstrap() -> None:
     )
 
     with patch(
-        "soothe.core.loop.planning.planner._plan_phase_chat_model",
+        "soothe.foundation.loop.planning.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -76,7 +76,7 @@ async def test_continuation_assess_plan_generate() -> None:
     )
 
     with patch(
-        "soothe.core.loop.planning.planner._plan_phase_chat_model",
+        "soothe.foundation.loop.planning.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -105,7 +105,7 @@ async def test_continuation_assess_llm_exception_falls_back_to_plan_generate() -
     planner = _make_planner()
 
     with patch(
-        "soothe.core.loop.planning.planner._plan_phase_chat_model",
+        "soothe.foundation.loop.planning.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -139,7 +139,7 @@ async def test_continuation_assess_invalid_action_falls_back() -> None:
         goal_progress = "none"
 
     with patch(
-        "soothe.core.loop.planning.planner._plan_phase_chat_model",
+        "soothe.foundation.loop.planning.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value

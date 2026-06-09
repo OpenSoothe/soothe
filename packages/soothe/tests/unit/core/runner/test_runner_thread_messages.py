@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 
 
 @pytest.mark.asyncio

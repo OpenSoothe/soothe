@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.loop.utils.messages import LoopHumanMessage
-from soothe.core.workspace.framework_filesystem import FrameworkFilesystem
-from soothe.core.workspace.runtime_resolution import resolve_workspace_for_tool_execution
+from soothe.foundation.loop.utils.messages import LoopHumanMessage
+from soothe.foundation.workspace.framework_filesystem import FrameworkFilesystem
+from soothe.foundation.workspace.runtime_resolution import resolve_workspace_for_tool_execution
 
 
 @pytest.fixture

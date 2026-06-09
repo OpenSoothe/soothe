@@ -6,12 +6,12 @@ import asyncio
 
 import pytest
 
-from soothe.core.autopilot.worker_pool import (
+from soothe.foundation.autopilot.service.worker_pool import (
     WorkerPool,
     WorkerSlot,
     is_autopilot_worker_loop_id,
 )
-from soothe.core.goal_engine.models import Goal
+from soothe.foundation.autopilot.engine.models import Goal
 
 # ---- Fakes -------------------------------------------------------------
 

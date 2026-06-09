@@ -89,7 +89,7 @@ class AddFindingTool(BaseTool):
             logger.warning("add_finding: proposal_queue not available")
             return "Error: proposal_queue not configured for this execution context"
 
-        from soothe.core.goal_engine.proposal_queue import Proposal
+        from soothe.foundation.autopilot.engine.proposal_queue import Proposal
 
         # Truncate summary to 2000 chars
         truncated_summary = summary[:2000]

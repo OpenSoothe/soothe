@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from soothe.config import SootheConfig
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 
 from soothe_daemon.config import SootheDaemonConfig
 
@@ -196,7 +196,7 @@ def force_isolated_home(home: Path) -> None:
     daemon_paths.SOOTHE_HOME = Path(home_str)
     importlib.reload(daemon_paths)
 
-    import soothe.core.thread.manager as thread_manager
+    import soothe.runner._thread_manager as thread_manager
 
     thread_manager.SOOTHE_HOME = Path(home_str)
 

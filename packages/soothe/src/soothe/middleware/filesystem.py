@@ -255,7 +255,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 _logger.debug("Backend factory failed with None: %s", e)
                 # If factory fails with None, we need workspace_root
                 if workspace_root:
-                    from soothe.core.workspace.normalized_backend import NormalizedPathBackend
+                    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
 
                     initial_backend = NormalizedPathBackend(
                         root_dir=Path(workspace_root),

@@ -2,8 +2,8 @@
 
 import pytest
 
-from soothe.core.goal_engine import Goal, GoalEngine
-from soothe.core.goal_engine.models import EvidenceBundle
+from soothe.foundation.autopilot.engine import Goal, GoalEngine
+from soothe.foundation.autopilot.engine.models import EvidenceBundle
 
 
 class TestGoalModel:

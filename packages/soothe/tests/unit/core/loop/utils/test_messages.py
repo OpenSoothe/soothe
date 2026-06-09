@@ -11,7 +11,7 @@ from langchain_core.messages import (
     messages_to_dict,
 )
 
-from soothe.core.loop.utils.messages import (
+from soothe.foundation.loop.utils.messages import (
     LoopAIMessage,
     LoopAIMessageChunk,
     LoopHumanMessage,

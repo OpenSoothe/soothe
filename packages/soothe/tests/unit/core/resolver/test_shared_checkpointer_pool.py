@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
 
 @pytest.fixture(autouse=True)
 def _reset_singleton() -> None:
     """Isolate singleton between tests."""
-    import soothe.core.resolver.shared_checkpointer_pool as mod
+    import soothe.runner.resolver.shared_checkpointer_pool as mod
 
     mod._shared_checkpointer_pool = None
     yield

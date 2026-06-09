@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.events import AgenticPlanDecisionEvent
+from soothe.foundation.events import AgenticPlanDecisionEvent
 
 
 def test_agentic_plan_decision_event_to_dict() -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.filesystem import (
+from soothe.foundation.core.filesystem import (
     FileInfo,
     GrepResult,
     LocalFilesystem,

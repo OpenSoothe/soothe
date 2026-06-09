@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from soothe.config.models import GoalContextConfig
-from soothe.core.loop.engine.goal_context_manager import GoalContextManager
-from soothe.core.loop.state.checkpoint import (
+from soothe.foundation.loop.engine.goal_context_manager import GoalContextManager
+from soothe.foundation.loop.state.checkpoint import (
     AgentLoopCheckpoint,
     GoalExecutionRecord,
     ThreadHealthMetrics,

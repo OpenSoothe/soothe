@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from soothe.core.workspace.framework_filesystem import FrameworkFilesystem
+from soothe.foundation.workspace.framework_filesystem import FrameworkFilesystem
 
 
 @pytest.mark.asyncio

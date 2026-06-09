@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from soothe.core.loop.engine.scenario_classifier import (
+from soothe.foundation.loop.engine.scenario_classifier import (
     ScenarioClassification,
     classify_synthesis_scenario,
 )

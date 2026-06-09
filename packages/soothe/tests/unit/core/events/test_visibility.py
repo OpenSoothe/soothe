@@ -1,6 +1,6 @@
 """Tests for daemon-to-client wire visibility policy.
 
-Every daemon delivery stage funnels through ``soothe.core.events.visibility``.
+Every daemon delivery stage funnels through ``soothe.foundation.events.visibility``.
 A regression here silently drops user-visible payloads (loop ``…81ec``
 postmortem: synthesis and ledger-direct answers were dropped because the
 ``mode=messages`` envelope shape was not enumerated). This file maintains an
@@ -18,8 +18,8 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
-from soothe.core.events import EventMeta
-from soothe.core.events.visibility import (
+from soothe.foundation.events import EventMeta
+from soothe.foundation.events.visibility import (
     WireEnvelopeKind,
     classify_wire_envelope,
     decide_client_wire_visibility,
@@ -292,7 +292,7 @@ def test_unknown_envelope_is_suppressed_and_warns_once(
     # Use a unique shape so the throttle set does not already contain it.
     novel = {"type": "event", "mode": "future_mode_42", "data": {}}
 
-    with caplog.at_level(logging.WARNING, logger="soothe.core.events.visibility"):
+    with caplog.at_level(logging.WARNING, logger="soothe.foundation.events.visibility"):
         assert is_client_wire_visible(novel) is False
         # Second call same shape — must NOT log again (throttle).
         assert is_client_wire_visible(novel) is False

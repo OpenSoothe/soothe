@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Any
 
-from soothe.core.loop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.foundation.loop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
@@ -1259,10 +1259,10 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message; may contain optional ``workspace`` and ``user`` fields.
         """
-        from soothe.core.loop.state.persistence.directory_manager import (
+        from soothe.foundation.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
-        from soothe.core.workspace import resolve_loop_workspace, validate_client_workspace
+        from soothe.foundation.workspace import resolve_loop_workspace, validate_client_workspace
         from uuid_utils import uuid7
 
         d = self._daemon
@@ -1316,14 +1316,14 @@ class MessageRouter:
                 loop_id,
                 e,
             )
-            from soothe.core.workspace import resolve_daemon_workspace
+            from soothe.foundation.workspace import resolve_daemon_workspace
 
             resolved_workspace = resolve_daemon_workspace()
 
         # RFC-621: translate client path to container path when workspace_mount configured.
         # Only translate when client_workspace was provided — daemon-fallback workspaces
         # (temp or $SOOTHE_HOME) are container-local and don't need translation.
-        from soothe.core.workspace.resolution import translate_client_path_to_container
+        from soothe.foundation.workspace.resolution import translate_client_path_to_container
 
         mount = d._config.workspace_mount
         host_root = mount.host_root if mount and mount.is_configured else None
@@ -1953,7 +1953,7 @@ class MessageRouter:
         raw_workspace = msg.get("workspace")
         if raw_workspace and isinstance(raw_workspace, str) and raw_workspace.strip():
             try:
-                from soothe.core.workspace import validate_client_workspace
+                from soothe.foundation.workspace import validate_client_workspace
 
                 resolved = validate_client_workspace(raw_workspace.strip())
                 workspace = str(resolved)

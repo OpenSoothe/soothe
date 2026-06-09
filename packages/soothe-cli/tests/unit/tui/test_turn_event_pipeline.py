@@ -125,7 +125,7 @@ def test_loop_assistant_output_message_gets_high_priority() -> None:
     text card lands behind the step card even though the daemon emitted it first.
     Regression for: 'I will complete this...' appearing after the step card.
     """
-    from soothe.core.loop.utils.messages import LoopAIMessage
+    from soothe.foundation.loop.utils.messages import LoopAIMessage
 
     from soothe_cli.runtime.presentation.engine import PresentationEngine
     from soothe_cli.runtime.state.session_stats import TurnEventStats

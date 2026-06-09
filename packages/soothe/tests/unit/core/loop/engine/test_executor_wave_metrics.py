@@ -3,8 +3,8 @@
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import LoopState, StepResult
+from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.state.schemas import LoopState, StepResult
 
 
 @pytest.fixture

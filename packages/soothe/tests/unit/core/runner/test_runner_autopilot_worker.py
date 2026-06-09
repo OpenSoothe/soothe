@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.goal_engine.models import GoalDispatchContextBundle
-from soothe.core.loop.state.schemas import PlanResult
-from soothe.core.runner._runner_autopilot_worker import AutopilotWorkerMixin
+from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
+from soothe.foundation.loop.state.schemas import PlanResult
+from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
 from soothe.protocols.runner import GoalDispatchEnvelope
 
 _COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
@@ -176,7 +176,7 @@ class _FakeAgentLoop:
 
 def _patch_agent_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeAgentLoop) -> None:
     """Replace AgentLoop where the mixin imports it."""
-    from soothe.core.runner import _runner_autopilot_worker
+    from soothe.runner import _runner_autopilot_worker
 
     def _factory(*_args: Any, **_kwargs: Any) -> _FakeAgentLoop:
         return fake
@@ -403,7 +403,7 @@ async def test_stream_forces_auto_clarification_policy(
         return sentinel_policy
 
     monkeypatch.setattr(
-        "soothe.core.loop.clarification.build_clarification_policy_for_runner",
+        "soothe.foundation.loop.clarification.build_clarification_policy_for_runner",
         _stub_builder,
         raising=True,
     )
@@ -443,7 +443,7 @@ async def test_stream_continues_when_clarification_builder_fails(
         raise RuntimeError("no model")
 
     monkeypatch.setattr(
-        "soothe.core.loop.clarification.build_clarification_policy_for_runner",
+        "soothe.foundation.loop.clarification.build_clarification_policy_for_runner",
         _raising_builder,
         raising=True,
     )

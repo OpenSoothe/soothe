@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from soothe.core.loop.engine.tool_call_args import (
+from soothe.foundation.loop.engine.tool_call_args import (
     ToolCallArgsCollector,
     format_args_for_log,
 )
