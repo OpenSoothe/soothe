@@ -417,6 +417,8 @@ class HttpRestChannel(Channel):
     def _setup_memory_routes(self) -> None:
         """Setup memory profiling routes."""
 
+        profiler = self._memory_profiler
+
         @self._app.get("/api/v1/memory")
         async def memory_stats(mode: str = "daemon") -> dict[str, Any]:
             """Query daemon memory profiling stats.
@@ -424,29 +426,32 @@ class HttpRestChannel(Channel):
             Args:
                 mode: One of daemon, gc, snapshot, objects, compare.
             """
-            if self._memory_profiler is None:
+            if profiler is None:
                 raise HTTPException(
                     status_code=503,
                     detail="Memory profiling not enabled. "
                     "Set memory_profiling.enabled=true in daemon_config.yml",
                 )
 
+            loop = asyncio.get_running_loop()
+
             if mode == "daemon":
-                return {"memory_stats": self._memory_profiler.get_current_stats()}
+                stats = await loop.run_in_executor(None, profiler.get_current_stats)
+                return {"memory_stats": stats}
             elif mode == "gc":
-                return {"memory_stats": self._memory_profiler.force_gc_and_report()}
+                stats = await loop.run_in_executor(None, profiler.force_gc_and_report)
+                return {"memory_stats": stats}
             elif mode == "snapshot":
-                self._memory_profiler.update_last_snapshot()
-                return {"memory_stats": self._memory_profiler.get_current_stats()}
+                await loop.run_in_executor(None, profiler.update_last_snapshot)
+                stats = await loop.run_in_executor(None, profiler.get_current_stats)
+                return {"memory_stats": stats}
             elif mode == "objects":
-                return {
-                    "memory_stats": {
-                        "object_counts": self._memory_profiler.get_object_counts(),
-                    }
-                }
+                counts = await loop.run_in_executor(None, profiler.get_object_counts)
+                return {"memory_stats": {"object_counts": counts}}
             elif mode == "compare":
                 try:
-                    return {"memory_stats": self._memory_profiler.compare_snapshots()}
+                    stats = await loop.run_in_executor(None, profiler.compare_snapshots)
+                    return {"memory_stats": stats}
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e)) from e
             else:
