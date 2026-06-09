@@ -318,6 +318,13 @@ make test-unit       # Run 900+ tests
 ### 4. Commit
 **Only after all checks pass!**
 
+### 5. GitHub Actions API
+When checking CI status, workflow runs, job logs, or other Actions data:
+- **Authenticate with `GITHUB_PAT`** — use this env var for GitHub API access; do not prompt the user for a token
+- **With `gh`**: export `GH_TOKEN="$GITHUB_PAT"` before `gh run list`, `gh run view`, `gh pr checks`, or `gh api` calls
+- **With raw HTTP**: pass `Authorization: Bearer $GITHUB_PAT` on `https://api.github.com/...` requests
+- Prefer `gh` subcommands when they cover the need; use `gh api` (or direct REST) for Actions endpoints not exposed by subcommands
+
 ---
 
 ## 🎨 Code Standards
