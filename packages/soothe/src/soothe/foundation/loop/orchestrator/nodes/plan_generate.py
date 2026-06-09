@@ -1,15 +1,26 @@
-"""Plan generation node (RFC-220 ``plan_generate`` after assess + pre-generate)."""
+"""Plan generation node (RFC-220 ``plan_generate`` after assess + pre-generate).
+
+IG-476: Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
+"""
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 
+logger = logging.getLogger(__name__)
+
 
 async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Run generate phase from prior assess result and set route key."""
+    """Run generate phase from prior assess result and set route key.
+
+    Assessment can come from:
+    1. plan_assess node (normal flow)
+    2. bounded_evidence_gather (fresh-loop bypass, IG-476)
+    """
     agent_loop = ctx.agent_loop
     state = ctx.loop_state
     plan_manager = ctx.plan_manager
@@ -20,6 +31,10 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             {"error": "plan_generate invoked without prior assessment", "step_id": ""},
         )
         return {"last_outcome": "fatal"}
+
+    # IG-476: Log when using fresh-loop bypass assessment
+    if assessment.assessment_reasoning and "Fresh-loop bypass" in assessment.assessment_reasoning:
+        logger.info("[PlanGenerate] Using fresh-loop bypass assessment")
 
     context = agent_loop._build_plan_context(state)
     plan_result = await agent_loop.plan_phase.generate_from_assessment(
