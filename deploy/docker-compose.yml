@@ -62,13 +62,19 @@ services:
     volumes:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.yml:/var/lib/soothe/config/config.yml:ro
+      - ./logs:/var/lib/soothe/logs  # Persist logs for restart analysis
       # RFC-621: Workspace host convention — mount host workspace root.
       - /Users/xiaming/Workspace:/var/lib/soothe/workspaces
-    # Healthcheck commented out until new image with /healthz endpoint is built.
-    # Uncomment after rebuilding the soothed image.
+    # No explicit memory limit - rely on Docker Desktop global VM limit (11.65GiB).
+    # During request processing, soothed spikes significantly (subagents, embeddings, middleware).
+    # Adding a limit causes OOM when combined with other containers exceeding global limit.
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 6g
+    # Healthcheck using dedicated /healthz endpoint (RFC-620)
+    # Commented out until healthz endpoint returns proper status.
     # healthcheck:
-    #   # Simple health check using dedicated /healthz endpoint (RFC-620)
-    #   # Returns {"status": "ok"} immediately - no dependencies, no timeout risk
     #   test: ["CMD-SHELL", "curl -sf http://localhost:8765/healthz || exit 1"]
     #   interval: 60s
     #   timeout: 10s
