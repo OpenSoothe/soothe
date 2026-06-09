@@ -10,6 +10,7 @@
 #   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
 #   DASHSCOPE_BASE_URL=...           # DashScope API base URL
 #   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
+#   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
 
 services:
   # PostgreSQL + pgvector multi-database backend
@@ -57,6 +58,12 @@ services:
       SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
       SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED: true
       SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
+      # IG-475: Memory profiling (tracemalloc) for leak detection
+      # Enable in production to diagnose memory growth (1GB→24GB issue)
+      # Access stats via: curl http://localhost:8765/rpc/memory?mode=daemon
+      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-false}
+      SOOTHE_DAEMON_MEMORY_PROFILING__TRACE_DEPTH: ${SOOTHE_MEMORY_PROFILING_TRACE_DEPTH:-25}
+      SOOTHE_DAEMON_MEMORY_PROFILING__LOG_GROWTH_THRESHOLD_MB: ${SOOTHE_MEMORY_PROFILING_LOG_GROWTH_THRESHOLD_MB:-100}
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
@@ -65,13 +72,12 @@ services:
       - ./logs:/var/lib/soothe/logs  # Persist logs for restart analysis
       # RFC-621: Workspace host convention — mount host workspace root.
       - /Users/xiaming/Workspace:/var/lib/soothe/workspaces
-    # No explicit memory limit - rely on Docker Desktop global VM limit (11.65GiB).
-    # During request processing, soothed spikes significantly (subagents, embeddings, middleware).
-    # Adding a limit causes OOM when combined with other containers exceeding global limit.
+    # IG-475: Memory leak observed (1GB baseline → 24GB over time)
+    # Uncomment to cap memory and enable profiling for diagnosis:
     # deploy:
     #   resources:
     #     limits:
-    #       memory: 6g
+    #       memory: 4g
     # Healthcheck using dedicated /healthz endpoint (RFC-620)
     # Commented out until healthz endpoint returns proper status.
     # healthcheck:

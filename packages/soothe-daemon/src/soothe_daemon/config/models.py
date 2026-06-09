@@ -466,10 +466,67 @@ class LoopStatusReconciliationConfig(BaseModel):
     )
 
 
+class MemoryProfilingConfig(BaseModel):
+    """Memory profiling and leak detection configuration (IG-475).
+
+    Uses Python's built-in tracemalloc for allocation tracking with minimal
+    overhead. Provides HTTP endpoints for real-time memory inspection.
+
+    tracemalloc tracks Python object allocations and can identify:
+    - Top memory consumers by file/line
+    - Allocation traceback chains
+    - Memory growth between snapshots
+
+    Args:
+        enabled: Enable memory profiling (tracemalloc).
+        trace_depth: Maximum traceback depth for allocations (higher = more detail).
+        snapshot_interval_seconds: Interval for automatic memory snapshots.
+        top_allocations_limit: Number of top allocations to report in stats.
+        log_growth_threshold_mb: Log warning when memory grows by this amount.
+        log_growth_interval_seconds: Interval for memory growth logging.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable tracemalloc memory profiling (has ~5-10% overhead)",
+    )
+    trace_depth: int = Field(
+        default=25,
+        ge=1,
+        le=100,
+        description="Maximum traceback depth for allocation tracking",
+    )
+    snapshot_interval_seconds: int = Field(
+        default=0,  # Disabled by default - manual snapshots via HTTP
+        ge=0,
+        le=3600,
+        description="Interval for automatic memory snapshots (0 = disabled)",
+    )
+    top_allocations_limit: int = Field(
+        default=20,
+        ge=5,
+        le=100,
+        description="Number of top allocations to report in stats",
+    )
+    log_growth_threshold_mb: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Log warning when memory grows by this MB between snapshots",
+    )
+    log_growth_interval_seconds: int = Field(
+        default=0,  # Disabled by default
+        ge=0,
+        le=3600,
+        description="Interval for memory growth logging (0 = disabled)",
+    )
+
+
 __all__ = [
     "DistributedConfig",
     "LoopGcConfig",
     "LoopStatusReconciliationConfig",
+    "MemoryProfilingConfig",
     "StaleWorkerReapConfig",
     "HttpRestConfig",
     "RayClusterConfig",

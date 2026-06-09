@@ -850,8 +850,18 @@ class StepResult(BaseModel):
             return f"Step {self.step_id}: ✓ {tool_name} (size: {size} bytes)"
 
 
+# Memory bounds for unbounded lists (IG-475)
+MAX_STEP_RESULTS_PER_GOAL = 50  # Cap historical step results
+MAX_LOOP_MESSAGES_PER_GOAL = 200  # Cap message ledger
+MAX_ACTION_HISTORY_PER_GOAL = 20  # Cap action descriptions
+MAX_EVIDENCE_LEDGER_PER_GOAL = 100  # Cap evidence entries
+
+
 class LoopState(BaseModel):
     """State for agentic loop (RFC-201, RFC-214).
+
+    IG-475: Bounded lists prevent memory leaks from unbounded accumulation during
+    long-running queries with many iterations.
 
     Attributes:
         goal: Goal description (after any ``/skill:`` expansion for orchestration).
@@ -868,12 +878,12 @@ class LoopState(BaseModel):
         plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses (IG-303).
         completed_step_ids: Set of completed step IDs
         previous_plan: Previous Plan phase result
-        step_results: All step results from execution
+        step_results: All step results from execution (bounded to MAX_STEP_RESULTS_PER_GOAL)
         evidence_summary: Accumulated evidence summary
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
-        loop_messages: RFC-214: Unified message ledger with adjacent Human-AI pairs for all orchestration turns.
+        loop_messages: RFC-214: Unified message ledger (bounded to MAX_LOOP_MESSAGES_PER_GOAL).
         last_execute_assistant_text: Resolved visible answer for the latest Execute wave — see
             :mod:`soothe.core.loop.engine.executor` (IG-357).
         last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
@@ -986,7 +996,10 @@ class LoopState(BaseModel):
     )
 
     def add_step_result(self, result: StepResult) -> None:
-        """Add step result and update completed set.
+        """Add step result and update completed set with bounded accumulation (IG-475).
+
+        Maintains dependency tracking even when old results are evicted by
+        preserving step_id in completed_step_ids set.
 
         Args:
             result: Step execution result
@@ -994,6 +1007,11 @@ class LoopState(BaseModel):
         self.step_results.append(result)
         if result.success:
             self.completed_step_ids.add(result.step_id)
+        # IG-475: Trim old results to prevent unbounded memory growth
+        if len(self.step_results) > MAX_STEP_RESULTS_PER_GOAL:
+            # Keep the most recent results, but preserve all completed_step_ids
+            excess = len(self.step_results) - MAX_STEP_RESULTS_PER_GOAL
+            self.step_results = self.step_results[excess:]
 
     def dependency_completion_ids(self) -> set[str]:
         """Step IDs that satisfy ``StepAction.dependencies`` edges.
@@ -1011,13 +1029,16 @@ class LoopState(BaseModel):
         return self.completed_step_ids | historical
 
     def add_action_to_history(self, action: str) -> None:
-        """Add action description to history for progression tracking.
+        """Add action description to history with bounded accumulation (IG-475).
 
         Args:
             action: Action description text
         """
         if action and action.strip():
             self.action_history.append(action.strip())
+            # IG-475: Trim old actions to prevent unbounded growth
+            if len(self.action_history) > MAX_ACTION_HISTORY_PER_GOAL:
+                self.action_history = self.action_history[-MAX_ACTION_HISTORY_PER_GOAL:]
 
     def get_recent_actions(self, n: int = 3) -> list[str]:
         """Get last N action descriptions.
@@ -1039,3 +1060,76 @@ class LoopState(BaseModel):
         if not self.current_decision:
             return False
         return self.current_decision.has_remaining_steps(self.dependency_completion_ids())
+
+    def trim_loop_messages(self) -> None:
+        """Trim loop_messages to bounded size (IG-475).
+
+        Keeps the most recent Human-AI pairs to preserve recent conversation context
+        while preventing unbounded memory growth.
+        """
+        if len(self.loop_messages) > MAX_LOOP_MESSAGES_PER_GOAL:
+            # Keep the most recent messages (Human-AI pairs should be preserved)
+            excess = len(self.loop_messages) - MAX_LOOP_MESSAGES_PER_GOAL
+            self.loop_messages = self.loop_messages[excess:]
+            logger.debug(
+                "Trimmed loop_messages from %d to %d (thread=%s)",
+                len(self.loop_messages) + excess,
+                len(self.loop_messages),
+                self.thread_id[:16],
+            )
+
+    def trim_evidence_ledger(self) -> None:
+        """Trim evidence_ledger to bounded size (IG-475).
+
+        Keeps the most recent evidence entries for plan validation.
+        """
+        if len(self.evidence_ledger) > MAX_EVIDENCE_LEDGER_PER_GOAL:
+            excess = len(self.evidence_ledger) - MAX_EVIDENCE_LEDGER_PER_GOAL
+            self.evidence_ledger = self.evidence_ledger[excess:]
+            logger.debug(
+                "Trimmed evidence_ledger from %d to %d",
+                len(self.evidence_ledger) + excess,
+                len(self.evidence_ledger),
+            )
+
+    def clear_goal_state(self) -> None:
+        """Clear execution state after goal completion (IG-475).
+
+        Called by goal_completion node to reset state for the next query.
+        Prevents task leakage where pending state from one query persists
+        into the next.
+        """
+        # Clear decision and step state
+        self.current_decision = None
+        self.plan_id = None
+        self.completed_step_ids.clear()
+        self.step_results.clear()
+
+        # Clear evidence and working memory
+        self.evidence_ledger.clear()
+        self.evidence_summary = ""
+        if self.working_memory is not None:
+            try:
+                self.working_memory.clear()
+            except Exception:
+                logger.debug("Failed to clear working_memory (thread=%s)", self.thread_id[:16])
+
+        # Clear wave metrics
+        self.last_wave_tool_call_count = 0
+        self.last_wave_subagent_task_count = 0
+        self.last_wave_hit_subagent_cap = False
+        self.last_wave_hit_tool_budget = False
+        self.last_wave_output_length = 0
+        self.last_wave_error_count = 0
+
+        # Clear prior progress digest
+        self.prior_progress = None
+
+        # Trim but don't fully clear loop_messages - keep recent context
+        self.trim_loop_messages()
+
+        logger.info(
+            "Cleared goal state for thread=%s (iteration=%d)",
+            self.thread_id[:16],
+            self.iteration,
+        )

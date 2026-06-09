@@ -37,6 +37,7 @@ from soothe_daemon.runtime.loop_dispatcher import LoopInputDispatcher
 from soothe_daemon.runtime.thread_state import ThreadStateRegistry
 from soothe_daemon.server.handlers import DaemonHandlersMixin
 from soothe_daemon.server.session import ClientSessionManager
+from soothe_daemon.services.memory_profiler import MemoryProfiler
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._stale_worker_reap_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
+        self._event_bus_cleanup_task: asyncio.Task[None] | None = None  # IG-475
         # Smart heartbeat tracking (IG-426)
         self._last_broadcast_monotonic: float = 0.0
         # Message dispatch concurrency control (IG-258)
@@ -192,6 +194,10 @@ class SootheDaemon(DaemonHandlersMixin):
         from soothe_daemon.display import LoopCardManager
 
         self._card_manager: LoopCardManager = LoopCardManager(self)
+        # IG-475: Memory profiler (tracemalloc) for leak detection
+        self._memory_profiler: MemoryProfiler | None = None
+        if self._daemon_config.memory_profiling.enabled:
+            self._memory_profiler = MemoryProfiler(self._daemon_config.memory_profiling)
 
     async def _cancel_loop_for_session(self, loop_id: str) -> None:
         """Cancel in-flight work for a loop when a client disconnects (IG-408)."""
@@ -483,6 +489,8 @@ class SootheDaemon(DaemonHandlersMixin):
             self._queue_monitoring_task: asyncio.Task[None] = asyncio.create_task(
                 self._periodic_queue_monitoring()
             )
+            # IG-475: Periodic event bus cleanup to remove orphaned topics
+            self._event_bus_cleanup_task = asyncio.create_task(self._periodic_event_bus_cleanup())
             if self._event_size_stats is not None:
                 self._event_size_stats_task = asyncio.create_task(self._periodic_event_size_stats())
 
@@ -515,6 +523,10 @@ class SootheDaemon(DaemonHandlersMixin):
 
             self._readiness_state = "ready"
             self._readiness_message = None
+
+            # IG-475: Start memory profiler if enabled
+            if self._memory_profiler is not None:
+                self._memory_profiler.start()
 
             # Log startup banner with channel info
             _log_startup_banner(self._channel_manager)
@@ -928,6 +940,22 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.debug("event_size_stats periodic tick failed", exc_info=True)
 
+    async def _periodic_event_bus_cleanup(self) -> None:
+        """Periodically clean up orphaned event bus topics (IG-475).
+
+        Removes topics with no subscribers that were not properly cleaned up
+        during unsubscribe (e.g., due to race conditions or early disconnects).
+        Runs every 60 seconds to minimize memory overhead.
+        """
+        while self._running:
+            await asyncio.sleep(60)  # Check every 60 seconds
+            try:
+                removed = await self._event_bus.cleanup_orphaned_topics()
+                if removed > 0:
+                    logger.info("Event bus cleanup: removed %d orphaned topics", removed)
+            except Exception:
+                logger.debug("Event bus cleanup failed", exc_info=True)
+
     async def _periodic_queue_monitoring(self) -> None:
         """Monitor queue depths and log warnings when near capacity (IG-258)."""
         while self._running:
@@ -1081,6 +1109,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._running = False
         self._query_running = False
 
+        # IG-475: Stop memory profiler if running
+        if self._memory_profiler is not None:
+            self._memory_profiler.stop()
+
         # RFC-222 revised (Phase C): stop the autopilot scheduling loop early
         # so it doesn't dispatch new goals while the rest of the daemon shuts down.
         if self._autopilot_service is not None:
@@ -1138,6 +1170,13 @@ class SootheDaemon(DaemonHandlersMixin):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._event_size_stats_task
             self._event_size_stats_task = None
+
+        # IG-475: Cancel event bus cleanup task
+        if self._event_bus_cleanup_task and not self._event_bus_cleanup_task.done():
+            self._event_bus_cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._event_bus_cleanup_task
+            self._event_bus_cleanup_task = None
 
         # Cancel any running query task
         if self._current_query_task and not self._current_query_task.done():

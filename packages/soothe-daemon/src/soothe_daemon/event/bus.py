@@ -61,6 +61,8 @@ class EventBus:
     - Direct dict read (atomic in Python)
     - Multiple concurrent publishers (no contention)
 
+    IG-475: Added cleanup_orphaned_topics() to remove topics with no subscribers.
+
     The event bus implements topic-based routing where publishers emit
     events to specific topics and subscribers receive events for topics
     they've subscribed to.
@@ -95,6 +97,8 @@ class EventBus:
         # Write lock only for subscribe/unsubscribe (IG-258 Phase 2)
         self._write_lock = asyncio.Lock()
         self._event_size_stats = event_size_stats
+        # IG-475: Track orphaned topics for cleanup
+        self._topics_with_no_subscribers_log: set[str] = set()
 
     async def publish(
         self,
@@ -285,6 +289,35 @@ class EventBus:
                 del self._subscribers[topic]
 
         logger.debug("Unsubscribed queue from all topics")
+
+    async def cleanup_orphaned_topics(self) -> int:
+        """Remove topics with empty subscriber sets (IG-475).
+
+        Periodically called by daemon to clean up topics that were not properly
+        removed during unsubscribe (e.g., due to race conditions or early disconnects).
+
+        Returns:
+            Number of orphaned topics removed.
+        """
+        async with self._write_lock:
+            orphaned = [topic for topic, queues in self._subscribers.items() if not queues]
+            for topic in orphaned:
+                del self._subscribers[topic]
+                self._topics_with_no_subscribers_log.discard(topic)
+            if orphaned:
+                logger.info("Cleaned up %d orphaned event bus topics", len(orphaned))
+            return len(orphaned)
+
+    def get_subscriber_count(self, topic: str) -> int:
+        """Return number of subscribers for a topic (no lock needed, atomic read).
+
+        Args:
+            topic: Topic identifier.
+
+        Returns:
+            Number of active subscriber queues for the topic.
+        """
+        return len(self._subscribers.get(topic, set()))
 
     @property
     def topic_count(self) -> int:
