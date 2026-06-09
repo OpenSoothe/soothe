@@ -194,10 +194,6 @@ class AgentBuilder:
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 
-        from soothe.foundation.core.agent._patch import warm_summarization_tool_token_cache
-
-        warm_summarization_tool_token_cache(all_tools)
-
         # Resolve subagents
         subagents_start = time.perf_counter()
         config_subagents = resolve_subagents(
