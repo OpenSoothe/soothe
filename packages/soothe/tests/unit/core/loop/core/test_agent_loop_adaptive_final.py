@@ -6,7 +6,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.foundation.loop import AgentLoop
-from soothe.foundation.loop.state.schemas import StatusAssessment
+from soothe.foundation.loop.state.schemas import PlanResult
 
 
 def _make_mock_core_with_checkpointer() -> Mock:
@@ -20,6 +20,20 @@ def _make_mock_core_with_checkpointer() -> Mock:
     mock_graph.checkpointer = AsyncMock(return_value=None)
     mock_core.graph = mock_graph
     return mock_core
+
+
+def _make_done_plan_result() -> PlanResult:
+    """Create a done PlanResult for tests (IG-476)."""
+    return PlanResult(
+        status="done",
+        goal_progress="complete",
+        plan_action="keep",
+        decision=None,
+        next_action="Goal achieved successfully",
+        require_goal_completion=False,
+        assessment_reasoning="",
+        plan_reasoning="",
+    )
 
 
 @pytest.mark.asyncio
@@ -74,13 +88,8 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        loop.plan_phase.assess_status = AsyncMock(
-            return_value=StatusAssessment(
-                status="done",
-                goal_progress="complete",
-                require_goal_completion=False,
-            ),
-        )
+        # IG-476: Mock generate_from_assessment to return done status directly
+        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -146,13 +155,8 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        loop.plan_phase.assess_status = AsyncMock(
-            return_value=StatusAssessment(
-                status="done",
-                goal_progress="complete",
-                require_goal_completion=False,
-            ),
-        )
+        # IG-476: Mock generate_from_assessment to return done status directly
+        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -212,17 +216,8 @@ async def test_completed_payload_for_summary_path() -> None:
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        # require_goal_completion=False with empty DAG → ledger_direct
-        # But ledger is empty, so last_ledger_ai_content returns ""
-        # The code path: ledger_direct → last_ledger_ai_content → "" → final_output=""
-        # This test verifies the completed event is emitted regardless
-        loop.plan_phase.assess_status = AsyncMock(
-            return_value=StatusAssessment(
-                status="done",
-                goal_progress="complete",
-                require_goal_completion=False,
-            ),
-        )
+        # IG-476: Mock generate_from_assessment to return done status directly
+        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         events = [
             evt
@@ -283,13 +278,8 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        loop.plan_phase.assess_status = AsyncMock(
-            return_value=StatusAssessment(
-                status="done",
-                goal_progress="complete",
-                require_goal_completion=False,
-            ),
-        )
+        # IG-476: Mock generate_from_assessment to return done status directly
+        loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
         _ = [
             evt
