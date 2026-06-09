@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import logging
 import time
 from typing import Any
@@ -76,7 +77,7 @@ def _append_goal_completion_ledger_pair(
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed).
 
-    IG-XXX: Clear all pending execution state to prevent task leakage into next query.
+    IG-475: Clear all pending execution state to prevent task leakage into next query.
     When goal completion happens, any pending decision, step_results, or working memory
     from this query must be cleared so the next query starts fresh.
     """
@@ -102,29 +103,26 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     state.iteration += 1
     state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)
 
-    # IG-XXX: Clear pending execution state to prevent task leakage
-    # When this goal completes, all pending tasks/decisions must be cancelled silently.
-    # The next query should start with a clean slate.
-    state.step_results = []  # Clear completed step results
-    state.current_decision = None  # Clear pending decision for next iteration
-    ctx.scratch.decision = None  # Clear scratch decision
-    ctx.scratch.step_results = []  # Clear scratch step results
-    ctx.scratch.plan_result = None  # Clear scratch plan result (already saved)
-    ctx.scratch.plan_assessment = None  # Clear assessment
+    # IG-475: Clear all goal execution state to prevent memory leak
+    # This resets decision, step_results, evidence, working_memory for the next query
+    state.clear_goal_state()
+    ctx.scratch.decision = None
+    ctx.scratch.step_results = []
+    ctx.scratch.plan_result = None
+    ctx.scratch.plan_assessment = None
     logger.debug(
-        "[goal_completion] Cleared pending state: step_results=%d, decision=%s",
-        len(state.step_results),
-        "cleared" if state.current_decision is None else "present",
+        "[goal_completion] Cleared goal state for next query (iteration=%d)",
+        iteration_completed,
     )
 
     await state_manager.record_iteration(
         goal_record=goal_record,
         iteration=iteration_completed,
         plan_result=plan_result,
-        decision=None,  # IG-XXX: Explicitly None - no pending decision
-        step_results=[],  # IG-XXX: Empty - no pending steps
+        decision=None,  # IG-475: Explicitly None - no pending decision
+        step_results=[],  # IG-475: Empty - no pending steps (state cleared)
         state=state,
-        working_memory=state.working_memory,
+        working_memory=None,  # IG-475: Working memory cleared
     )
 
     synthesis_gen = SynthesisGenerator(
@@ -228,5 +226,9 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             "skip_goal_completion_wire_duplicate": skip_goal_completion_wire_duplicate,
         },
     )
+    # IG-475: Force garbage collection after goal completion to reclaim
+    # LLM streaming objects (langchain message buffers, tokenizer caches, etc.)
+    # This prevents accumulation of ephemeral objects across multiple queries.
+    gc.collect()
     out: dict[str, Any] = {"last_outcome": "completed"}
     return out

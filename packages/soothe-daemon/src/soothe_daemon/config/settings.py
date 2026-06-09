@@ -19,6 +19,7 @@ from soothe_daemon.config.models import (
     DistributedConfig,
     LoopGcConfig,
     LoopStatusReconciliationConfig,
+    MemoryProfilingConfig,
     StaleWorkerReapConfig,
     ThreadPoolConfig,
     TransportConfig,
@@ -152,6 +153,13 @@ class SootheDaemonConfig(BaseSettings):
     stale_worker_reap: StaleWorkerReapConfig = Field(
         default_factory=StaleWorkerReapConfig,
         description="Periodic cleanup of orphaned worker_pool subprocesses",
+    )
+
+    # --- Memory profiling (IG-475) -------------------------------------------
+
+    memory_profiling: MemoryProfilingConfig = Field(
+        default_factory=MemoryProfilingConfig,
+        description="Memory profiling and leak detection configuration (tracemalloc)",
     )
 
     # --- Loop runner mode (RFC-221) -----------------------------------------

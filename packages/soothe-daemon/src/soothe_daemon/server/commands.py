@@ -229,9 +229,71 @@ async def _cmd_cancel(
 async def _cmd_memory(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Query memory stats."""
+    """Query memory stats (IG-475: supports daemon-level tracemalloc profiling).
+
+    Args:
+        params: Optional dict with "mode" key:
+            - "runner": Runner memory stats (default, requires active loop)
+            - "daemon": Daemon-level tracemalloc stats from MemoryProfiler
+            - "gc": Force garbage collection and report reclaimed memory
+            - "snapshot": Take a tracemalloc snapshot and return comparison
+            - "objects": Get Python object counts by type
+
+    Returns:
+        Dict with memory stats for the requested mode.
+    """
+    mode = params.get("mode", "runner") if isinstance(params, dict) else "runner"
+
+    # IG-475: Daemon-level memory profiling via MemoryProfiler
+    if mode == "daemon":
+        if self._memory_profiler is None:
+            return {
+                "memory_stats": {"error": "Memory profiling not enabled"},
+                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+            }
+        return {"memory_stats": self._memory_profiler.get_current_stats()}
+
+    if mode == "gc":
+        if self._memory_profiler is None:
+            return {
+                "memory_stats": {"error": "Memory profiling not enabled"},
+                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+            }
+        return {"memory_stats": self._memory_profiler.force_gc_and_report()}
+
+    if mode == "snapshot":
+        if self._memory_profiler is None:
+            return {
+                "memory_stats": {"error": "Memory profiling not enabled"},
+                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+            }
+        self._memory_profiler.update_last_snapshot()
+        return {"memory_stats": self._memory_profiler.get_current_stats()}
+
+    if mode == "objects":
+        if self._memory_profiler is None:
+            return {
+                "memory_stats": {"error": "Memory profiling not enabled"},
+                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+            }
+        return {"memory_stats": {"object_counts": self._memory_profiler.get_object_counts()}}
+
+    if mode == "compare":
+        if self._memory_profiler is None:
+            return {
+                "memory_stats": {"error": "Memory profiling not enabled"},
+                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+            }
+        try:
+            return {"memory_stats": self._memory_profiler.compare_snapshots()}
+        except ValueError as e:
+            return {"memory_stats": {"error": str(e)}}
+
+    # Default: runner memory stats (requires active loop)
     if not checkpoint_thread_id:
-        raise ValueError("Active loop required")
+        raise ValueError(
+            "Active loop required for runner memory stats. Use mode='daemon' for daemon-level stats."
+        )
 
     stats = await self._runner.memory_stats()
     return {"memory_stats": stats}

@@ -89,6 +89,22 @@ event_size_stats_interval_seconds: 60
 event_size_stats_idle_pause_seconds: 120
 
 # ============================================================================
+# MEMORY PROFILING - tracemalloc-based leak detection (IG-475)
+#   Uses Python's built-in tracemalloc to track allocations and identify
+#   memory growth sources. Has ~5-10% runtime overhead when enabled.
+#
+#   Access via RPC: /memory mode=daemon|gc|snapshot|objects|compare
+#   Useful for diagnosing leaks in production Docker deployments.
+# ============================================================================
+memory_profiling:
+  enabled: false                     # Enable tracemalloc tracing
+  trace_depth: 25                    # Maximum traceback depth for allocations
+  snapshot_interval_seconds: 0       # Auto-snapshot interval (0 = disabled, manual via RPC)
+  top_allocations_limit: 20          # Number of top allocations to report
+  log_growth_threshold_mb: 100       # Log warning when RSS grows by this amount
+  log_growth_interval_seconds: 0     # Interval for growth logging (0 = disabled)
+
+# ============================================================================
 # RUNNER MODES - Execution backend (enable exactly ONE)
 # Options: thread_pool (default), worker_pool, distributed
 #
