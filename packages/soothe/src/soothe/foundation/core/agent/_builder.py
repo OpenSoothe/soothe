@@ -194,6 +194,10 @@ class AgentBuilder:
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 
+        from soothe.foundation.core.agent._patch import warm_summarization_tool_token_cache
+
+        warm_summarization_tool_token_cache(all_tools)
+
         # Resolve subagents
         subagents_start = time.perf_counter()
         config_subagents = resolve_subagents(
@@ -225,6 +229,12 @@ class AgentBuilder:
         # Pass skills=None so the middleware is never installed.
 
         # Create deep_agent graph
+        from soothe.middleware.model_call_profiler import (
+            install_model_call_profiler,
+            is_profiler_enabled,
+        )
+
+        install_model_call_profiler(enabled=is_profiler_enabled(self._config))
         deep_agent_start = time.perf_counter()
         graph = create_deep_agent(
             model=resolved_model,

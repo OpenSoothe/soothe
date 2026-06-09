@@ -1,33 +1,22 @@
-"""Profiling middleware for model call timing analysis (IG-XXX).
+"""Profiling for model-call latency analysis across deepagents and Soothe middleware.
 
-This middleware wraps the model call chain to trace where time is spent
-between the model node entry and the actual LLM API call. Use when debugging
-unexplained latency gaps in Langfuse traces.
+Use when debugging unexplained gaps between Langfuse ``model`` spans and LLM
+generation spans.
 
 Enable via config:
     observability:
       profile_model_calls: true
 
-Or via environment:
-    SOOTHE_PROFILE_MODEL_CALLS=true
-
-The profiler logs timing at these checkpoints:
-- PROFILER_ENTRY: When awrap_model_call starts
-- PROFILER_HANDLER_CALL: When calling the next handler (inner middleware or LLM)
-- PROFILER_HANDLER_RETURN: When handler returns
-- PROFILER_EXIT: When awrap_model_call exits
-
-Example log output:
-    [ModelProfiler] ENTRY chain_depth=1 tools=45 input_tokens=13519
-    [ModelProfiler] HANDLER_CALL chain_depth=1 after=0.002s
-    [ModelProfiler] HANDLER_RETURN chain_depth=1 handler_time=2.986s
-    [ModelProfiler] EXIT chain_depth=1 total=42.67s pre_handler=39.68s
+Log prefixes:
+- ``[DeepAgentsProfiler]`` — outer deepagents stack (TodoList, Filesystem,
+  SubAgent, Summarization, PatchToolCalls) patched at CoreAgent build time
+- ``[ModelProfiler]`` / ``[InnerProfiler]`` / ``[LLMProfiler]`` — Soothe
+  middleware stack inserted via ``build_soothe_middleware_stack``
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
@@ -38,13 +27,23 @@ if TYPE_CHECKING:
     from langchain.agents.request import ModelRequest
     from langchain.agents.response import ModelResponse
 
+    from soothe.config import SootheConfig
+
 logger = logging.getLogger(__name__)
 
-# Environment variable to enable profiling
-_PROFILER_ENABLED = os.environ.get("SOOTHE_PROFILE_MODEL_CALLS", "").lower() in ("true", "1", "yes")
-
-# Track chain depth for nested middleware calls
+# Track chain depth for nested Soothe middleware profiler calls
 _chain_depth = 0
+
+_DEEPAGENTS_PATCHED_ATTR = "_soothe_deepagents_profiler_patched"
+
+_DEEPAGENTS_PROFILER_TARGETS: tuple[tuple[str, str], ...] = (
+    ("langchain.agents.middleware", "TodoListMiddleware"),
+    ("deepagents.middleware.filesystem", "FilesystemMiddleware"),
+    ("deepagents.middleware.subagents", "SubAgentMiddleware"),
+    ("deepagents.middleware.summarization", "SummarizationMiddleware"),
+    # PatchToolCallsMiddleware only implements before_agent; patching awrap_model_call
+    # would register it in the async model-call chain and break astream().
+)
 
 
 class ModelCallProfilerMiddleware(AgentMiddleware):
@@ -62,14 +61,14 @@ class ModelCallProfilerMiddleware(AgentMiddleware):
 
     name = "ModelCallProfilerMiddleware"
 
-    def __init__(self, enabled: bool | None = None) -> None:
+    def __init__(self, enabled: bool = False) -> None:
         """Initialize profiler middleware.
 
         Args:
-            enabled: Override environment variable. If None, uses SOOTHE_PROFILE_MODEL_CALLS.
+            enabled: When True, log model-call timing checkpoints.
         """
         super().__init__()
-        self._enabled = enabled if enabled is not None else _PROFILER_ENABLED
+        self._enabled = enabled
 
     def wrap_model_call(
         self,
@@ -254,14 +253,14 @@ class InnerModelCallProfilerMiddleware(AgentMiddleware):
 
     name = "InnerModelCallProfilerMiddleware"
 
-    def __init__(self, enabled: bool | None = None) -> None:
+    def __init__(self, enabled: bool = False) -> None:
         """Initialize inner profiler middleware.
 
         Args:
-            enabled: Override environment variable. If None, uses SOOTHE_PROFILE_MODEL_CALLS.
+            enabled: When True, log inner handler timing checkpoints.
         """
         super().__init__()
-        self._enabled = enabled if enabled is not None else _PROFILER_ENABLED
+        self._enabled = enabled
 
     async def awrap_model_call(
         self,
@@ -331,24 +330,22 @@ class LLMCallProfilerMiddleware(AgentMiddleware):
     """Middleware that wraps JUST before the LLM call to capture pure API latency.
 
     Insert this as the LAST middleware before the actual LLM ainvoke.
-    This captures timing after ALL middleware processing.
+    This captures timing after Soothe middleware (PerTurnModel, caching).
 
-    In the deepagents chain, this would be placed before:
-    - SummarizationMiddleware (token counting)
-    - AnthropicPromptCachingMiddleware (cache control injection)
-    - The actual model.ainvoke()
+    SummarizationMiddleware runs in the deepagents stack before the Soothe
+    middleware slice; see ``[DeepAgentsProfiler]`` logs when profiling is enabled.
     """
 
     name = "LLMCallProfilerMiddleware"
 
-    def __init__(self, enabled: bool | None = None) -> None:
+    def __init__(self, enabled: bool = False) -> None:
         """Initialize LLM profiler middleware.
 
         Args:
-            enabled: Override environment variable. If None, uses SOOTHE_PROFILE_MODEL_CALLS.
+            enabled: When True, log LLM API timing checkpoints.
         """
         super().__init__()
-        self._enabled = enabled if enabled is not None else _PROFILER_ENABLED
+        self._enabled = enabled
 
     async def awrap_model_call(
         self,
@@ -380,7 +377,8 @@ class LLMCallProfilerMiddleware(AgentMiddleware):
         pre_llm_ms = (handler_start - entry_time) * 1000
 
         logger.info(
-            "[LLMProfiler] HANDLER_CALL depth=%d pre_llm=%.3fms (includes summarization + caching)",
+            "[LLMProfiler] HANDLER_CALL depth=%d pre_llm=%.3fms "
+            "(PerTurnModel + Anthropic caching; summarization is outer)",
             depth,
             pre_llm_ms,
         )
@@ -411,23 +409,126 @@ class LLMCallProfilerMiddleware(AgentMiddleware):
                 (exit_time - handler_end) * 1000 if handler_end else 0,
             )
 
-            # If pre_llm_ms is large, latency is in summarization/token counting
-            if pre_llm_ms > 1000:  # >1s is suspicious for summarization
+            # If pre_llm_ms is large, latency is in PerTurnModel or Anthropic caching
+            if pre_llm_ms > 1000:  # >1s is suspicious
                 logger.warning(
-                    "[LLMProfiler] SUMMARIZATION_OR_CACHING_LATENCY depth=%d pre=%.3fs > 1s",
+                    "[LLMProfiler] CACHING_OR_MODEL_OVERRIDE_LATENCY depth=%d pre=%.3fs > 1s",
                     depth,
                     pre_llm_ms / 1000,
                 )
 
 
-def is_profiler_enabled() -> bool:
-    """Check if model call profiling is enabled."""
-    return _PROFILER_ENABLED
+def is_profiler_enabled(config: SootheConfig) -> bool:
+    """Return whether model call profiling is enabled in config."""
+    return config.observability.profile_model_calls
+
+
+def _implements_model_call_hook(cls: type) -> bool:
+    """Return True when ``cls`` overrides sync or async model-call middleware."""
+    return (
+        cls.wrap_model_call is not AgentMiddleware.wrap_model_call
+        or cls.awrap_model_call is not AgentMiddleware.awrap_model_call
+    )
+
+
+def install_model_call_profiler(*, enabled: bool) -> None:
+    """Install deepagents outer-middleware timing patches when profiling is on.
+
+    Soothe profiler middleware is added separately by ``build_soothe_middleware_stack``.
+    Both layers honor ``observability.profile_model_calls``. Idempotent per process.
+
+    Args:
+        enabled: When False, does nothing. When True, wraps ``awrap_model_call`` on
+            outer deepagents middleware classes once per process.
+    """
+    if not enabled:
+        return
+
+    for module_path, class_name in _DEEPAGENTS_PROFILER_TARGETS:
+        try:
+            module = __import__(module_path, fromlist=[class_name])
+            cls = getattr(module, class_name)
+        except (ImportError, AttributeError):
+            logger.debug(
+                "[DeepAgentsProfiler] Skip %s.%s (not available)",
+                module_path,
+                class_name,
+            )
+            continue
+        if not _implements_model_call_hook(cls):
+            logger.debug(
+                "[DeepAgentsProfiler] Skip %s (no model-call hook)",
+                class_name,
+            )
+            continue
+        _patch_deepagents_awrap_model_call(cls, class_name)
+
+
+def _patch_deepagents_awrap_model_call(cls: type, label: str) -> None:
+    """Wrap ``awrap_model_call`` on a deepagents middleware class with timing logs."""
+    if getattr(cls, _DEEPAGENTS_PATCHED_ATTR, False):
+        return
+
+    if cls.awrap_model_call is AgentMiddleware.awrap_model_call:
+        logger.debug(
+            "[DeepAgentsProfiler] Skip %s (sync-only wrap_model_call)",
+            label,
+        )
+        return
+
+    original = cls.awrap_model_call
+    if original is None:
+        return
+
+    async def awrap_model_call(
+        self: Any,
+        request: Any,
+        handler: Callable[[Any], Awaitable[Any]],
+    ) -> Any:
+        entry_time = time.perf_counter()
+        handler_start: float | None = None
+
+        async def timed_handler(inner_request: Any) -> Any:
+            nonlocal handler_start
+            handler_start = time.perf_counter()
+            return await handler(inner_request)
+
+        try:
+            return await original(self, request, timed_handler)
+        finally:
+            exit_time = time.perf_counter()
+            if handler_start is None:
+                logger.info(
+                    "[DeepAgentsProfiler] %s total=%.3fms (handler not reached)",
+                    label,
+                    (exit_time - entry_time) * 1000,
+                )
+            else:
+                pre_ms = (handler_start - entry_time) * 1000
+                handler_ms = (exit_time - handler_start) * 1000
+                total_ms = (exit_time - entry_time) * 1000
+                logger.info(
+                    "[DeepAgentsProfiler] %s pre=%.3fms handler=%.3fms total=%.3fms",
+                    label,
+                    pre_ms,
+                    handler_ms,
+                    total_ms,
+                )
+                if label == "SummarizationMiddleware" and pre_ms > 1000:
+                    logger.warning(
+                        "[DeepAgentsProfiler] SummarizationMiddleware pre=%.3fs > 1s "
+                        "(token counting / truncation)",
+                        pre_ms / 1000,
+                    )
+
+    cls.awrap_model_call = awrap_model_call  # type: ignore[method-assign]
+    setattr(cls, _DEEPAGENTS_PATCHED_ATTR, True)
 
 
 __all__ = [
     "ModelCallProfilerMiddleware",
     "InnerModelCallProfilerMiddleware",
     "LLMCallProfilerMiddleware",
+    "install_model_call_profiler",
     "is_profiler_enabled",
 ]
