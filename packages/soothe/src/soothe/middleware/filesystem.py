@@ -271,6 +271,14 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
 
         super().__init__(**kwargs)
 
+        # Override deepagents' default "/large_tool_results" and "/conversation_history"
+        # prefixes which assume CompositeBackend or root-writable filesystem.
+        # With NormalizedPathBackend in non-virtual mode, absolute paths outside workspace
+        # are passed as-is, causing OSError on read-only root filesystems (e.g., macOS).
+        # Use workspace-relative paths so artifacts land inside the workspace.
+        self._large_tool_results_prefix = ".soothe/large_tool_results"
+        self._conversation_history_prefix = ".soothe/conversation_history"
+
         self._backup_enabled = backup_enabled
         self._backup_dir = backup_dir
         self._workspace_root = workspace_root
