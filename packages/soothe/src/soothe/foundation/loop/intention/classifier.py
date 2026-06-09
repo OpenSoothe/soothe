@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.foundation.core.quiz_messages import build_quiz_system_message
 from soothe.utils.llm.structured_invoke import invoke_structured_chat
 
 from .models import (
@@ -26,6 +25,7 @@ from .prompts import (
     INTENT_CLASSIFICATION_PROMPT,
     INTENT_CLASSIFICATION_RETRY_PROMPT,
 )
+from .quiz_messages import build_quiz_system_message
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
