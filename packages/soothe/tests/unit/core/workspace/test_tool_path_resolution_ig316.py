@@ -161,3 +161,59 @@ def test_get_data_info_resolves_virtual_path(tmp_path: Path) -> None:
     out = tool.invoke({"file_path": "/data.csv"})
     assert "File not found" not in out
     assert "data.csv" in out or "Size" in out
+
+
+def test_soothe_filesystem_middleware_uses_workspace_relative_artifact_prefix(
+    tmp_path: Path,
+) -> None:
+    """SootheFilesystemMiddleware overrides deepagents' root-absolute artifact prefixes.
+
+    Deepagents defaults `_large_tool_results_prefix` to "/large_tool_results" when
+    the backend is not a CompositeBackend. On read-only root filesystems (macOS), this
+    causes OSError. SootheFilesystemMiddleware must override to workspace-relative paths.
+    """
+    from deepagents.backends.filesystem import FilesystemBackend
+
+    from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+
+    backend = FilesystemBackend(root_dir=str(ws), virtual_mode=True, max_file_size_mb=10)
+    mw = SootheFilesystemMiddleware(backend=backend, workspace_root=str(ws))
+
+    # Verify prefixes are workspace-relative (no leading /)
+    assert not mw._large_tool_results_prefix.startswith("/")
+    assert not mw._conversation_history_prefix.startswith("/")
+    assert mw._large_tool_results_prefix == ".soothe/large_tool_results"
+    assert mw._conversation_history_prefix == ".soothe/conversation_history"
+
+
+def test_normalized_backend_multi_level_path_allowed_non_virtual_mode(tmp_path: Path) -> None:
+    """Multi-level absolute paths are allowed in non-virtual mode.
+
+    Paths like `/Users/xxx/file` are legitimate user file paths and should work
+    when virtual_mode=False and allow_paths_outside_workspace=True.
+    """
+    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
+
+    ws = tmp_path / "repo"
+    ws.mkdir()
+
+    # Create a file outside workspace in a valid location
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    outside_file = outside_dir / "data.txt"
+    outside_file.write_text("external data")
+
+    backend = NormalizedPathBackend(
+        root_dir=str(ws),
+        virtual_mode=False,
+        max_file_size_mb=10,
+    )
+
+    # Multi-level absolute path should work in non-virtual mode
+    result = backend.read(str(outside_file))
+    assert result.error is None, result.error
+    assert result.file_data is not None
+    assert "external data" in result.file_data["content"]
