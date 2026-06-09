@@ -23,6 +23,7 @@ help:
 	@echo ""
 	@echo "Unified Targets (all packages):"
 	@echo "  make sync             - Sync all workspace packages, all optional extras, and dev deps"
+	@echo "                           (use UV_PYPI_MIRROR=https://... for networks with PyPI issues)"
 	@echo "  make format           - Format all packages"
 	@echo "  make format-check     - Check formatting (for CI)"
 	@echo "  make lint             - Lint all packages"
@@ -52,9 +53,14 @@ help:
 # Workspace Setup
 # ============================================================================
 
-# Broken or partial mirrors (e.g. UV_INDEX_URL=https://tsinghua.edu.cn) leave dist-info
-# without wheels (psycopg_pool, jsonschema). Force PyPI for all uv invocations below.
+# Broken or partial mirrors (e.g. Tsinghua) leave dist-info without wheels.
+# Force PyPI by default, but allow explicit mirror override via UV_PYPI_MIRROR.
+# Usage: make sync UV_PYPI_MIRROR=https://mirrors.aliyun.com/pypi/simple
+ifdef UV_PYPI_MIRROR
+UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
+else
 UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras
+endif
 
 setup:
 	@echo "Syncing workspace dependencies..."
