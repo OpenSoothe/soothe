@@ -125,41 +125,6 @@ def _split_conversation_token_count(
     return tools_tokens + message_tokens
 
 
-def warm_summarization_tool_token_cache(tools: list[Any] | None) -> int:
-    """Precompute tool-schema tokens for SummarizationMiddleware at agent init.
-
-    Tool schemas are static for a compiled CoreAgent. Warming the cache during
-    agent construction avoids re-serializing every tool JSON schema on the first
-    model call (~6s with 47 tools in recent profiling).
-
-    Args:
-        tools: Resolved tool list passed to ``create_deep_agent``.
-
-    Returns:
-        Approximate token count for the tool schemas, or 0 when empty.
-    """
-    if not tools:
-        return 0
-
-    try:
-        from langchain_core.messages.utils import count_tokens_approximately
-    except ImportError:  # pragma: no cover - optional dependency surface
-        return 0
-
-    import time
-
-    start = time.perf_counter()
-    count = _cached_tools_token_count(count_tokens_approximately, tools)
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.info(
-        "[Init] Summarization tool token cache warmed: tools=%d tokens=%d (%.1fms)",
-        len(tools),
-        count,
-        elapsed_ms,
-    )
-    return count
-
-
 def _patch_summarization_token_count_optimization() -> None:
     """Speed up SummarizationMiddleware pre-model token counting.
 
