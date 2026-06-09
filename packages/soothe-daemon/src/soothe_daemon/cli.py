@@ -401,6 +401,125 @@ def warmup_cache(
         raise typer.Exit(code=1)
 
 
+@app.command("memory")
+def memory_trace(
+    mode: Annotated[
+        str,
+        typer.Option("--mode", "-m", help="Query mode: daemon, gc, snapshot, objects, compare."),
+    ] = "daemon",
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output raw JSON instead of formatted text."),
+    ] = False,
+) -> None:
+    """Display daemon memory profiling stats (tracemalloc)."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    if not _fast_is_running():
+        typer.echo("Daemon is not running.", err=True)
+        raise typer.Exit(code=1)
+
+    host, port = _get_ws_address()
+    url = f"http://{host}:{port}/api/v1/memory?mode={mode}"
+
+    try:
+        timeout = 30 if mode == "objects" else 10
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            detail = json.loads(body).get("detail", body)
+        except Exception:
+            detail = body
+        typer.echo(f"Error ({e.code}): {detail}", err=True)
+        raise typer.Exit(code=1) from e
+    except (urllib.error.URLError, OSError) as e:
+        typer.echo(f"Failed to connect to daemon REST API: {e}", err=True)
+        raise typer.Exit(code=1) from e
+
+    if json_output:
+        typer.echo(json.dumps(data, indent=2, default=str))
+        return
+
+    _format_memory_output(mode, data)
+
+
+def _format_memory_output(mode: str, data: dict) -> None:
+    """Format memory stats as readable text."""
+    stats = data.get("memory_stats", {})
+
+    if mode == "daemon":
+        rss = stats.get("rss_mb", "?")
+        vsz = stats.get("vsz_mb", "?")
+        traced = stats.get("tracemalloc_traced_mb", "?")
+        peak = stats.get("tracemalloc_peak_mb", "?")
+        typer.echo(f"RSS: {rss} MB  |  VSZ: {vsz} MB")
+        typer.echo(f"Traced: {traced} MB  |  Peak: {peak} MB")
+
+        top = stats.get("top_allocations_by_line", [])
+        if top:
+            typer.echo(f"\nTop allocations ({len(top)}):")
+            for i, entry in enumerate(top[:15], 1):
+                size = entry.get("size_mb") or entry.get("size_kb", "?")
+                unit = "MB" if "size_mb" in entry else "KB"
+                loc = entry.get("file", "?")
+                typer.echo(f"  {i:2d}. {size:>8} {unit}  {loc}")
+
+    elif mode == "gc":
+        rss_before = stats.get("rss_before_mb", "?")
+        rss_after = stats.get("rss_after_mb", "?")
+        reclaimed = stats.get("rss_reclaimed_mb", "?")
+        typer.echo(f"GC: RSS {rss_before} MB -> {rss_after} MB (reclaimed: {reclaimed} MB)")
+        gc_stats = stats.get("gc_stats", {})
+        if gc_stats:
+            collections = gc_stats.get("collections", [])
+            total_collected = sum(g.get("collected", 0) for g in collections)
+            total_uncollectable = sum(g.get("uncollectable", 0) for g in collections)
+            typer.echo(f"  collected: {total_collected}")
+            typer.echo(f"  uncollectable: {total_uncollectable}")
+            typer.echo(f"  garbage_count: {gc_stats.get('garbage_count', 0)}")
+
+    elif mode == "objects":
+        counts = stats.get("object_counts", {})
+        if counts:
+            typer.echo(f"Top object types ({len(counts)}):")
+            for name, count in list(counts.items())[:20]:
+                typer.echo(f"  {count:>10,}  {name}")
+        else:
+            typer.echo("No object counts available.")
+
+    elif mode == "snapshot":
+        _format_memory_output("daemon", data)
+
+    elif mode == "compare":
+        net_diff = stats.get("net_size_diff_kb", 0)
+        typer.echo(f"Net allocation change: {net_diff:+.1f} KB")
+        top_growth = stats.get("top_growth", [])
+        if top_growth:
+            typer.echo(f"\nTop growth ({len(top_growth)} entries):")
+            for entry in top_growth[:15]:
+                size = entry.get("size_diff_kb", 0)
+                loc = entry.get("file", "?")
+                line = entry.get("line", "")
+                typer.echo(f"  {size:>+10.1f} KB  {loc}:{line}")
+        top_shrink = stats.get("top_shrinkage", [])
+        if top_shrink:
+            typer.echo(f"\nTop shrinkage ({len(top_shrink)} entries):")
+            for entry in top_shrink[:10]:
+                size = entry.get("size_diff_kb", 0)
+                loc = entry.get("file", "?")
+                line = entry.get("line", "")
+                typer.echo(f"  {size:>+10.1f} KB  {loc}:{line}")
+
+    else:
+        import json
+
+        typer.echo(json.dumps(stats, indent=2, default=str))
+
+
 @app.command("help")
 def help_command(ctx: typer.Context) -> None:
     """Show help message and exit."""

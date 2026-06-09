@@ -69,6 +69,7 @@ class HttpRestChannel(Channel):
         session_manager: Any | None = None,
         unified_app: FastAPI | None = None,
         autopilot_service: Any | None = None,
+        memory_profiler: Any | None = None,
     ) -> None:
         """Initialize HTTP REST channel.
 
@@ -80,6 +81,7 @@ class HttpRestChannel(Channel):
             session_manager: Optional ClientSessionManager.
             unified_app: Optional shared FastAPI app.
             autopilot_service: Optional AutopilotService.
+            memory_profiler: Optional MemoryProfiler for memory diagnostics.
         """
         super().__init__(config, manager)
         self._http_config = config
@@ -87,6 +89,7 @@ class HttpRestChannel(Channel):
         self._soothe_config = soothe_config
         self._session_manager = session_manager
         self._autopilot_service = autopilot_service
+        self._memory_profiler = memory_profiler
         self._unified_mode = unified_app is not None
 
         # Use unified app or create standalone
@@ -130,6 +133,7 @@ class HttpRestChannel(Channel):
         self._setup_file_routes()
         self._setup_system_routes()
         self._setup_autopilot_routes()
+        self._setup_memory_routes()
 
     def _setup_health_routes(self) -> None:
         """Setup health and status routes."""
@@ -409,6 +413,48 @@ class HttpRestChannel(Channel):
                 client_id = _get_client_id(http_request)
                 self._message_handler(client_id, {"type": "command", "cmd": "/exit"})
             return {"status": "shutting_down"}
+
+    def _setup_memory_routes(self) -> None:
+        """Setup memory profiling routes."""
+
+        @self._app.get("/api/v1/memory")
+        async def memory_stats(mode: str = "daemon") -> dict[str, Any]:
+            """Query daemon memory profiling stats.
+
+            Args:
+                mode: One of daemon, gc, snapshot, objects, compare.
+            """
+            if self._memory_profiler is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Memory profiling not enabled. "
+                    "Set memory_profiling.enabled=true in daemon_config.yml",
+                )
+
+            if mode == "daemon":
+                return {"memory_stats": self._memory_profiler.get_current_stats()}
+            elif mode == "gc":
+                return {"memory_stats": self._memory_profiler.force_gc_and_report()}
+            elif mode == "snapshot":
+                self._memory_profiler.update_last_snapshot()
+                return {"memory_stats": self._memory_profiler.get_current_stats()}
+            elif mode == "objects":
+                return {
+                    "memory_stats": {
+                        "object_counts": self._memory_profiler.get_object_counts(),
+                    }
+                }
+            elif mode == "compare":
+                try:
+                    return {"memory_stats": self._memory_profiler.compare_snapshots()}
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e)) from e
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown mode: {mode!r}. "
+                    "Expected one of: daemon, gc, snapshot, objects, compare",
+                )
 
     async def start(self) -> None:
         """Start the HTTP REST server.

@@ -56,6 +56,7 @@ class ChannelManager:
         soothe_config: Any | None = None,
         session_manager: Any | None = None,
         autopilot_service: Any | None = None,
+        memory_profiler: Any | None = None,
     ) -> None:
         """Initialize channel manager.
 
@@ -66,6 +67,7 @@ class ChannelManager:
             soothe_config: Optional SootheConfig for HTTP REST transport.
             session_manager: Optional ClientSessionManager for session management.
             autopilot_service: Optional daemon-owned AutopilotService.
+            memory_profiler: Optional MemoryProfiler for memory REST endpoints.
         """
         self._config = config
         self._event_bus = event_bus
@@ -73,6 +75,7 @@ class ChannelManager:
         self._soothe_config = soothe_config
         self._session_manager = session_manager
         self._autopilot_service = autopilot_service
+        self._memory_profiler = memory_profiler
 
         # Channel instances
         self._channels: dict[str, Any] = {}  # name → Channel instance
@@ -258,6 +261,7 @@ class ChannelManager:
                 session_manager=self._session_manager,
                 unified_app=self._unified_app,
                 autopilot_service=self._autopilot_service,
+                memory_profiler=self._memory_profiler,
             )
             self._channels["http_rest"] = http_channel
             logger.debug("Configured HTTP REST channel (unified ASGI listener)")
