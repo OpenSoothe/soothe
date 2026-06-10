@@ -40,9 +40,11 @@ Layer 2 Contract (config.configurable):
 
 from soothe.foundation.core.agent._builder import AgentBuilder, create_soothe_agent
 from soothe.foundation.core.agent._core import CoreAgent
+from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent
 
 __all__ = [
     "AgentBuilder",
+    "ClaudeCoreAgent",
     "CoreAgent",
     "create_soothe_agent",
 ]

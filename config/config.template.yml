@@ -62,6 +62,17 @@ agent:
   name: Soothe
   system_prompt: null
 
+  # === CORE AGENT BACKEND ===
+  # Core agent runtime backend.
+  # - 'langgraph' (default): Uses LangGraph with langchain ecosystem
+  # - 'claude': Uses claude-agent-sdk (Claude Code CLI) for full tool capabilities
+  core_agent_backend: langgraph
+
+  # Claude-specific configuration (only used when core_agent_backend='claude')
+  claude_permission_mode: bypassPermissions  # Claude Code permission mode
+  claude_max_turns: 25                       # Maximum turns per execution
+  claude_model: null                         # Claude model (e.g., 'sonnet', 'opus'). null = SDK default
+
   # === AUTONOMOUS (Self-Driving - Unified) ===
   # Merged former 'autonomous' + 'autopilot' sections (IG-434).
   # Controls 24/7 self-running behavior for both goal-level and daemon-level.
@@ -364,6 +375,20 @@ subagents:
       llm_role: fast
       synthesis_role: fast        # set to ``think`` for higher-quality synthesis at higher latency
       effort: normal
+    runtime_dir: ''
+  claude:
+    enabled: false
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  browser_use:
+    enabled: false
+    model: null
+    transport: local
+    url: null
+    config: {}
     runtime_dir: ''
 
 # ============================================================

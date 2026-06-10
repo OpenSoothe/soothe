@@ -10,7 +10,11 @@ if TYPE_CHECKING:
 
 def core_agent_checkpointer(agent_loop: AgentLoop) -> Any | None:
     """Return the LangGraph checkpointer wired on CoreAgent, if any."""
-    graph = getattr(agent_loop.core_agent, "graph", None)
-    if graph is None:
+    try:
+        graph = getattr(agent_loop.core_agent, "graph", None)
+        if graph is None:
+            return None
+        return getattr(graph, "checkpointer", None)
+    except NotImplementedError:
+        # ClaudeCoreAgent doesn't use LangGraph
         return None
-    return getattr(graph, "checkpointer", None)

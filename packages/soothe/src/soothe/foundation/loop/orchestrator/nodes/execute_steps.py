@@ -401,7 +401,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         await _record_and_emit_step_completed(ctx, result=synth_result, step_desc=step_desc)
 
     # RFC-223: Pass checkpointer for thread fork inheritance
-    checkpointer = getattr(agent_loop.core_agent.graph, "checkpointer", None)
+    checkpointer = agent_loop.core_agent.checkpointer
 
     # IG-462 Branch 2: when the planner emits a kind="ask_user" step in this
     # wave, surface it to the clarification relay BEFORE running the executor.

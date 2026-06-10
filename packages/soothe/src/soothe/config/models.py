@@ -1750,6 +1750,21 @@ class AgentConfig(BaseModel):
     )
     """Settings for the intent-grounded clarification answerer."""
 
+    # === CORE AGENT BACKEND ===
+    core_agent_backend: Literal["langgraph", "claude"] = "langgraph"
+    """Core agent runtime backend. 'langgraph' uses LangGraph (default),
+    'claude' uses claude-agent-sdk (Claude Code CLI)."""
+
+    claude_permission_mode: str = "bypassPermissions"
+    """Claude Code permission mode (used when core_agent_backend='claude')."""
+
+    claude_max_turns: int = 25
+    """Maximum Claude Code turns per execution (used when core_agent_backend='claude')."""
+
+    claude_model: str | None = None
+    """Claude model name (e.g., 'sonnet', 'opus'). None = SDK default.
+    Used when core_agent_backend='claude'."""
+
 
 class ClarificationConfig(BaseModel):
     """RFC-622: configuration for the clarification relay.

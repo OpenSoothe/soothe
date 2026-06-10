@@ -420,6 +420,10 @@ class SootheRunner(
         Returns:
             State values keyed by channel name. Empty when no checkpoint exists.
         """
+        # ClaudeCoreAgent doesn't use LangGraph checkpointing
+        if not hasattr(self._agent, "graph"):
+            return {}
+
         await self._ensure_checkpointer_initialized()
         config = {"configurable": {"thread_id": thread_id}}
         state = await self._agent.graph.aget_state(config)
@@ -444,6 +448,10 @@ class SootheRunner(
                 channel. LangGraph requires this when multiple nodes have
                 written at the current checkpoint version.
         """
+        # ClaudeCoreAgent doesn't use LangGraph checkpointing
+        if not hasattr(self._agent, "graph"):
+            return
+
         await self._ensure_checkpointer_initialized()
         config = {"configurable": {"thread_id": thread_id}}
         await self._agent.graph.aupdate_state(config, values, as_node=as_node)

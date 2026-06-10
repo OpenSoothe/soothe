@@ -52,6 +52,7 @@ router:
 # ============================================================
 agent:
   name: Soothe
+  core_agent_backend: claude
   autonomous:
     enabled: false
     max_iterations: 15
@@ -84,8 +85,6 @@ agent:
 # Community subagents (claude, browser_use) require soothe-plugins package.
 subagents:
   browser_use:
-    enabled: true
-  claude:
     enabled: true
   tacitus:
     config:
