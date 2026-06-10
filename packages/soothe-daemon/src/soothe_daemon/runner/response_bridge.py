@@ -66,13 +66,20 @@ class ResponsePusher:
             elif msg_type == WORKER_MSG_CHUNK:
                 # IG-477: Apply backpressure - block briefly if queue is full
                 # This slows down the worker thread when client can't consume fast enough
-                try:
-                    self._queue.put((WORKER_MSG_CHUNK, payload), timeout=_QUEUE_PUT_TIMEOUT_SECONDS)
-                except asyncio.QueueFull:
-                    logger.warning(
-                        "ResponsePusher: queue full (maxsize=100), dropping chunk "
-                        "(worker will slow down to match consumer rate)"
-                    )
+                # Note: asyncio.Queue.put() is async, so we wrap it in wait_for and schedule as task
+                async def _put_with_timeout() -> None:
+                    try:
+                        await asyncio.wait_for(
+                            self._queue.put((WORKER_MSG_CHUNK, payload)),
+                            timeout=_QUEUE_PUT_TIMEOUT_SECONDS,
+                        )
+                    except TimeoutError:
+                        logger.warning(
+                            "ResponsePusher: queue full (maxsize=100), dropping chunk "
+                            "(worker will slow down to match consumer rate)"
+                        )
+
+                asyncio.create_task(_put_with_timeout())
             elif msg_type == WORKER_MSG_DONE:
                 # Terminal message - always deliver without blocking
                 self._queue.put_nowait((WORKER_MSG_DONE, None))

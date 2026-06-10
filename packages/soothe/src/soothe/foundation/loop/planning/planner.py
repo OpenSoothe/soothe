@@ -82,6 +82,21 @@ _SIMPLE_PLANNER_HINT_MAP = {
 }
 
 
+def _parse_status_assessment_from_raw_message(response: Any) -> Any:
+    """Parse ``StatusAssessment`` from a raw AIMessage when tool JSON is null.
+
+    Thinking models (e.g. qwen via coding-plan) often emit valid assessment JSON
+    in ``content`` or ``additional_kwargs["reasoning_content"]`` while LangChain's
+    function-calling parser surfaces ``json: null`` in traces.
+    """
+    from soothe.foundation.loop.state.schemas import StatusAssessment
+    from soothe.foundation.loop.utils.json_parsing import _load_llm_json_dict
+    from soothe.utils.llm.wrappers import _extract_json_str_from_response
+
+    parsed = _load_llm_json_dict(_extract_json_str_from_response(response))
+    return StatusAssessment(**parsed)
+
+
 def _detect_stuck_loop(state: LoopState) -> str | None:
     """IG-454: Detect if the loop is stuck and should be terminated or replanned.
 
@@ -666,9 +681,9 @@ class LLMPlanner:
         from soothe.foundation.loop.state.schemas import StatusAssessment
 
         model = _plan_phase_chat_model(self._model)
+        lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
 
         try:
-            lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
             assessment = await _invoke_plan_structured_output(
                 model, messages, StatusAssessment, config=lf_cfg
             )
@@ -688,7 +703,38 @@ class LLMPlanner:
             raise
         except Exception as e:
             logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
-            # Fallback: return conservative assessment
+            try:
+                raw = await model.ainvoke(messages, config=lf_cfg)
+                # Debug: log raw response content structure
+                content_preview = ""
+                if hasattr(raw, "content"):
+                    content_preview = str(raw.content)[:200] if raw.content else "empty"
+                reasoning_preview = ""
+                if (
+                    hasattr(raw, "additional_kwargs")
+                    and "reasoning_content" in raw.additional_kwargs
+                ):
+                    reasoning_preview = str(raw.additional_kwargs.get("reasoning_content", ""))[
+                        :200
+                    ]
+                logger.debug(
+                    "[Assess] Raw fallback response: content=%s, reasoning_content=%s, type=%s",
+                    content_preview,
+                    reasoning_preview,
+                    type(raw).__name__,
+                )
+                assessment = _parse_status_assessment_from_raw_message(raw)
+                logger.info(
+                    "[Assess] Recovered status=%s prog=%s from raw message after structured failure",
+                    assessment.status,
+                    assessment.goal_progress,
+                )
+                return assessment, assessment
+            except Exception as fallback_exc:
+                logger.warning(
+                    "[LLMPlanner] StatusAssessment raw fallback failed: %s",
+                    str(fallback_exc)[:200],
+                )
             return StatusAssessment(
                 status="replan",
                 goal_progress="none",

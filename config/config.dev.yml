@@ -52,7 +52,7 @@ router:
 # ============================================================
 agent:
   name: Soothe
-  core_agent_backend: claude
+  core_agent_backend: langgraph
   autonomous:
     enabled: false
     max_iterations: 15
