@@ -489,8 +489,10 @@ class ThreadPool:
 
     async def _spawn_worker(self, worker_id: str) -> WorkerThreadState:
         """Spawn a single worker thread with queues and events."""
+        # IG-477: Bound response queue to prevent memory leak
+        # 100 items ~ 10-50 MB depending on chunk payload sizes
         request_queue: queue.Queue = queue.Queue()
-        response_queue: queue.Queue = queue.Queue()
+        response_queue: queue.Queue = queue.Queue(maxsize=100)
         cancel_event: threading.Event = threading.Event()
         stop_event: threading.Event = threading.Event()
 
@@ -749,7 +751,8 @@ class ThreadPool:
                         finally:
                             self._waiting_for_worker_slot -= 1
 
-                response_queue: asyncio.Queue[Any] = asyncio.Queue()
+                # IG-477: Bound response queue to prevent memory leak
+                response_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=100)
                 self._pending_responses[request_id] = response_queue
                 self._workers_by_loop_id[request.loop_id] = worker.worker_id
                 worker.mark_busy(request.loop_id, request_id)
