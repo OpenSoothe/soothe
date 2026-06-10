@@ -130,6 +130,17 @@ class AgentBuilder:
         Returns:
             CoreAgent instance wrapping CompiledStateGraph with typed properties.
         """
+        # Route based on core_agent_backend config
+        backend = self._config.agent.core_agent_backend
+        logger.info(f"[Init] core_agent_backend={backend}")
+        if backend == "claude":
+            return self._build_claude_agent(
+                memory_store=memory_store,
+                planner=planner,
+                policy=policy,
+            )
+
+        # Default: LangGraph-based CoreAgent
         from deepagents import create_deep_agent
 
         create_start = time.perf_counter()
@@ -353,6 +364,61 @@ class AgentBuilder:
             config=self._config,
             policy=policy,
         )
+
+    def _build_claude_agent(
+        self,
+        memory_store: MemoryProtocol | None = None,
+        planner: PlannerProtocol | None = None,
+        policy: PolicyProtocol | None = None,
+    ) -> CoreAgent:
+        """Build ClaudeCoreAgent using claude-agent-sdk.
+
+        This is an alternative to the LangGraph-based CoreAgent that uses
+        claude-agent-sdk (Claude Code CLI) for execution.
+
+        Args:
+            memory_store: Override MemoryProtocol implementation.
+            planner: Override PlannerProtocol implementation.
+            policy: Override PolicyProtocol implementation.
+
+        Returns:
+            ClaudeCoreAgent instance (typed as CoreAgent for compatibility).
+        """
+        from pathlib import Path
+
+        from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent
+
+        create_start = time.perf_counter()
+
+        # Resolve protocols
+        resolved_memory = memory_store or self._resolve_memory()
+        resolved_planner = planner or self._resolve_planner(None)
+        resolved_policy = policy or self._resolve_policy()
+
+        if resolved_memory:
+            logger.info("[Init] Memory: %s", type(resolved_memory).__name__)
+        if resolved_planner:
+            logger.info("[Init] Planner: %s", type(resolved_planner).__name__)
+        if resolved_policy:
+            logger.info("[Init] Policy: %s", type(resolved_policy).__name__)
+
+        # Build ClaudeCoreAgent
+        agent = ClaudeCoreAgent(
+            config=self._config,
+            model=self._config.agent.claude_model,
+            system_prompt=self._config.resolve_system_prompt(),
+            permission_mode=self._config.agent.claude_permission_mode,
+            max_turns=self._config.agent.claude_max_turns,
+            cwd=str(Path.cwd()),
+            memory=resolved_memory,
+            planner=resolved_planner,
+            policy=resolved_policy,
+        )
+
+        total_ms = (time.perf_counter() - create_start) * 1000
+        logger.info("[Init] ✓ ClaudeCoreAgent ready (%.1fms total)", total_ms)
+
+        return agent
 
 
 def create_soothe_agent(

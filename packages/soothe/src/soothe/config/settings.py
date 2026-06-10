@@ -152,7 +152,9 @@ class SootheConfig(BaseSettings):
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
 
-    Builtin subagents (explore, plan, tacitus) are added automatically.
+    Builtin subagents (explore, plan, tacitus, claude, browser_use) are added
+    automatically. claude and browser_use require opt-in extras
+    (``soothe[claude]``, ``soothe[browser_use]``) and are disabled by default.
     Plugin-discovered subagents are merged during config validation.
     """
 
@@ -249,10 +251,13 @@ class SootheConfig(BaseSettings):
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
         # Built-in subagent entries merged before user YAML and plugin registry.
+        # claude and browser_use require opt-in extras (soothe[claude], soothe[browser_use]).
         builtin_subagents = {
             "explore": SubagentConfig(),
             "plan": SubagentConfig(),
             "tacitus": SubagentConfig(),
+            "claude": SubagentConfig(enabled=False),
+            "browser_use": SubagentConfig(enabled=False),
         }
 
         # Import here to avoid circular dependency

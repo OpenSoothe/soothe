@@ -225,6 +225,15 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         if self._checkpointer_initialized or self._checkpointer_pool is None:
             return
 
+        # Check if agent supports LangGraph checkpointer (has .graph property)
+        try:
+            _ = self._agent.graph
+        except NotImplementedError:
+            # Agent doesn't use LangGraph (e.g., ClaudeCoreAgent)
+            logger.debug("Agent does not support LangGraph checkpointer, skipping initialization")
+            self._checkpointer_initialized = True
+            return
+
         try:
             # Check if pool is a string (SQLite path) or an object (PostgreSQL pool)
             is_sqlite = isinstance(self._checkpointer_pool, str)
