@@ -71,9 +71,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     fi; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \
       extras="all"; \
-      pip_extras="playwright sentence_transformers"; \
+      pip_extras="playwright"; \
     else \
-      extras="research,tabular,document,github,dashscope,semantic,langfuse,claude"; \
+      extras="research,tabular,document,github,dashscope,langfuse,claude,semantic"; \
       pip_extras=""; \
     fi; \
     uv venv /app/.venv; \
@@ -85,7 +85,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       /app/.venv/bin/python -m playwright install chromium; \
     fi
 
-ENV SOOTHE_HF_CACHE=/root/.cache/soothe/models/huggingface
+ENV SOOTHE_EMBEDDING_CACHE=/root/.cache/soothe/models/embeddings
 COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
 # Warmup is optional - model downloads at runtime if cache miss
 RUN /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose || echo "Embedding warmup skipped (will download at runtime)" \
@@ -134,7 +134,7 @@ RUN useradd --create-home --system soothe \
     && mkdir -p /home/soothe/.cache/soothe/models \
     && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright /home/soothe/.cache
 
-COPY --from=deps --chown=soothe:soothe /root/.cache/soothe/models/huggingface /home/soothe/.cache/soothe/models/huggingface
+COPY --from=deps --chown=soothe:soothe /root/.cache/soothe/models/embeddings /home/soothe/.cache/soothe/models/embeddings
 
 USER soothe
 WORKDIR /var/lib/soothe

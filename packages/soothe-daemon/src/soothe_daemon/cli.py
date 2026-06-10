@@ -367,17 +367,17 @@ def warmup_cache(
 ) -> None:
     """Pre-download embedding model cache for faster startup.
 
-    Downloads the sentence_transformers embedding model to
-    ~/.cache/soothe/models/huggingface/ for sharing across main daemon
+    Downloads the FastEmbed ONNX embedding model to
+    ~/.cache/soothe/models/embeddings/ for sharing across main daemon
     and worker processes.
 
     Run this before starting the daemon for faster first-query response.
     """
     import asyncio
 
-    from soothe.utils.similarity import async_warmup_embedding_model, hf_embedding_cache_dir
+    from soothe.utils.similarity import async_warmup_embedding_model, embedding_cache_dir
 
-    cache_dir = hf_embedding_cache_dir()
+    cache_dir = embedding_cache_dir()
     typer.echo(f"Warming up embedding model cache at {cache_dir}...")
 
     async def _warmup() -> bool:
@@ -391,11 +391,11 @@ def warmup_cache(
             typer.echo(f"Cache directory: {cache_dir}")
     else:
         typer.echo(
-            "Model cache warmup failed (sentence_transformers may not be installed).",
+            "Model cache warmup failed (fastembed may not be installed).",
             err=True,
         )
         typer.echo(
-            "Install with: pip install 'soothe[semantic_similarity]'",
+            "Install with: pip install 'soothe[semantic]'",
             err=True,
         )
         raise typer.Exit(code=1)

@@ -20,7 +20,7 @@ from soothe.foundation.autopilot.engine.criticality import (
     evaluate_criticality,
 )
 from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
-from soothe.utils.similarity import async_get_transformer_model, cosine_similarity
+from soothe.utils.similarity import async_get_embedding_model, cosine_similarity, encode_texts
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -202,16 +202,16 @@ def _merge_with_hard_rules(
 
 
 async def _embed_text(text: str) -> list[float] | None:
-    """Embed a single text string using the shared sentence-transformers model."""
-    model = await async_get_transformer_model()
+    """Embed a single text string using the shared FastEmbed model."""
+    model = await async_get_embedding_model()
     if model is None:
         return None
     try:
         import asyncio
 
         loop = asyncio.get_running_loop()
-        vec = await loop.run_in_executor(None, lambda: model.encode([text[:500]]))
-        return vec[0].tolist()
+        vectors = await loop.run_in_executor(None, lambda: encode_texts(model, [text[:500]]))
+        return vectors[0] if vectors else None
     except Exception:
         logger.debug("Risk embedding failed", exc_info=True)
         return None

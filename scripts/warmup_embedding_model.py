@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Standalone embedding model warmup script for Docker builds.
 
-Downloads the sentence_transformers embedding model to a shared cache directory.
-Does NOT import soothe code - only requires sentence_transformers package.
+Downloads the FastEmbed ONNX embedding model to a shared cache directory.
+Does NOT import soothe code - only requires the fastembed package.
 
 Used in packages/soothe-daemon/Dockerfile to pre-cache embedding models in the image build.
 
@@ -10,47 +10,45 @@ Usage:
     python scripts/warmup_embedding_model.py [--verbose]
 
 Environment:
-    HF_HOME: Override HuggingFace cache directory (default: ~/.cache/huggingface)
-    SOOTHE_HF_CACHE: Override Soothe-specific cache (default: ~/.cache/soothe/models/huggingface)
+    SOOTHE_EMBEDDING_CACHE: Override cache directory (default: ~/.cache/soothe/models/embeddings)
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
 
-def get_cache_dir() -> Path:
-    """Get embedding model cache directory.
+DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
-    Priority:
-    1. SOOTHE_HF_CACHE env var (for Docker builds)
-    2. Default: ~/.cache/soothe/models/huggingface
-    """
-    env_cache = os.environ.get("SOOTHE_HF_CACHE")
+
+def get_cache_dir() -> Path:
+    """Get embedding model cache directory."""
+    import os
+
+    env_cache = os.environ.get("SOOTHE_EMBEDDING_CACHE")
     if env_cache:
         return Path(env_cache)
-    return Path.home() / ".cache" / "soothe" / "models" / "huggingface"
+    return Path.home() / ".cache" / "soothe" / "models" / "embeddings"
 
 
-def warmup_model(model_name: str = "all-MiniLM-L6-v2", verbose: bool = False) -> bool:
+def warmup_model(model_name: str = DEFAULT_MODEL, verbose: bool = False) -> bool:
     """Download and cache the embedding model.
 
     Args:
-        model_name: HuggingFace model name to download.
+        model_name: FastEmbed model name to download.
         verbose: Print progress messages.
 
     Returns:
         True if successful, False otherwise.
     """
     try:
-        from sentence_transformers import SentenceTransformer
+        from fastembed import TextEmbedding
     except ImportError:
         if verbose:
-            print("ERROR: sentence_transformers not installed", file=sys.stderr)
-            print("Install with: pip install sentence_transformers", file=sys.stderr)
+            print("ERROR: fastembed not installed", file=sys.stderr)
+            print("Install with: pip install 'soothe[semantic]'", file=sys.stderr)
         return False
 
     cache_dir = get_cache_dir()
@@ -61,10 +59,11 @@ def warmup_model(model_name: str = "all-MiniLM-L6-v2", verbose: bool = False) ->
         print(f"Cache directory: {cache_dir}")
 
     try:
-        model = SentenceTransformer(model_name, cache_folder=str(cache_dir))
+        model = TextEmbedding(model_name=model_name, cache_dir=str(cache_dir))
+        vectors = list(model.embed(["warmup probe"]))
         if verbose:
             print(f"Model loaded successfully: {model_name}")
-            print(f"Max sequence length: {model.max_seq_length}")
+            print(f"Embedding dimensions: {len(vectors[0])}")
         return True
     except Exception as e:
         if verbose:
@@ -77,14 +76,15 @@ def main() -> int:
         description="Pre-download embedding model for Soothe daemon",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show detailed progress",
     )
     parser.add_argument(
         "--model",
-        default="all-MiniLM-L6-v2",
-        help="Model name to download (default: all-MiniLM-L6-v2)",
+        default=DEFAULT_MODEL,
+        help=f"Model name to download (default: {DEFAULT_MODEL})",
     )
     args = parser.parse_args()
 

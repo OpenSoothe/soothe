@@ -60,13 +60,13 @@ class PublicSemanticRouter:
 
     @staticmethod
     def _embed_text(text: str) -> list[float]:
-        from soothe.utils.similarity import _get_transformer_model
+        from soothe.utils.similarity import encode_texts, get_embedding_model
 
-        model = _get_transformer_model()
+        model = get_embedding_model()
         if model is None:
             return []
-        vec = model.encode([text[:256]])[0]
-        return vec.tolist()
+        vectors = encode_texts(model, [text[:256]])
+        return vectors[0] if vectors else []
 
     def _ensure_embeddings(self) -> None:
         if not self._embeddings_precomputed:

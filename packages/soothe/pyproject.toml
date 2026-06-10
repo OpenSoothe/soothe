@@ -81,7 +81,7 @@ github = [
     "pygithub>=2.0.0",
 ]
 semantic = [
-    "sentence-transformers>=2.2.0",
+    "fastembed>=0.6.0,<1.0.0",
 ]
 langfuse = [
     "langfuse>=3.0.0,<4.0.0",
