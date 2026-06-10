@@ -36,6 +36,7 @@ dependencies = [
     "langchain-core>=1.2.18,<2.0.0",
     "langchain-mcp-adapters>=0.2.0,<1.0.0",
     "langchain-openai>=0.3.0,<1.0.0",
+    "langchain-quickjs>=0.1.0",
     # Direct pin: langchain-openai needs openai>=1.104.2 (DefaultHttpxClient, etc.).
     # Declaring it here avoids broken/partial installs resolving without a full openai wheel.
     "openai>=1.104.2,<3.0.0",

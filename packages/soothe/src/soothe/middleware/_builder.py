@@ -86,11 +86,15 @@ def build_soothe_middleware_stack(
        (soothe_step_subagent, soothe_step_expected_output)
        into system prompt via abefore_agent hook. Runs before agent loop starts.
 
-    6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    6. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
+       for programmatic tool calling. Enabled when ``code_interpreter.enabled``
+       is True. Exposes allowlisted tools via ``tools.*`` namespace.
+
+    7. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    7. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    8. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -245,7 +249,19 @@ def build_soothe_middleware_stack(
     stack.append(ExecutionHintsMiddleware())
     logger.debug("[Middleware] Execution hints enabled")
 
-    # 6. Workspace context (thread-aware filesystem)
+    # 6. Code interpreter (embedded QuickJS for programmatic tool calling)
+    if config.agent.code_interpreter.enabled:
+        from .code_interpreter import CodeInterpreterMiddleware
+
+        stack.append(CodeInterpreterMiddleware(config=config))
+        logger.info(
+            "[Middleware] Code interpreter enabled with ptc_allowlist=%s",
+            config.agent.code_interpreter.ptc_allowlist,
+        )
+    else:
+        logger.debug("[Middleware] Code interpreter disabled (opt-in)")
+
+    # 7. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
@@ -257,7 +273,7 @@ def build_soothe_middleware_stack(
         stack.append(LLMCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] LLM call profiler enabled (innermost wrapper)")
 
-    # 7. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 8. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

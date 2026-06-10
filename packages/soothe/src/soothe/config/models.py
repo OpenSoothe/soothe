@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from soothe.config.constants import (
+    DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 
@@ -1570,6 +1571,55 @@ class WorkspaceMountConfig(BaseModel):
         return bool(self.host_root) and bool(self.container_root)
 
 
+class CodeInterpreterConfig(BaseModel):
+    """Configuration for CodeInterpreterMiddleware (IG-423).
+
+    Enables embedded QuickJS interpreter for programmatic tool calling and
+    stateful code execution within the agent loop.
+
+    Reference: https://www.langchain.com/blog/give-your-agents-an-interpreter
+
+    Args:
+        enabled: Enable the code interpreter middleware.
+        ptc_allowlist: List of tool names exposed to interpreter via tools.* namespace.
+            Empty list means no tools are exposed (security-first default).
+        memory_limit_mb: Interpreter memory limit in MB.
+        timeout_seconds: Per-eval timeout in seconds.
+        max_ptc_calls: Maximum programmatic tool calls per eval.
+        max_result_size: Maximum result size in characters.
+        console_capture: Capture console.log output.
+        snapshot_between_turns: Preserve interpreter state between conversation turns.
+    """
+
+    enabled: bool = True
+    """Enable the code interpreter middleware. Enabled by default."""
+
+    ptc_allowlist: list[str] = Field(default_factory=list)
+    """Tools exposed to interpreter via tools.* namespace. Empty = security-first default."""
+
+    memory_limit_mb: int = 128
+    """Interpreter memory limit in MB."""
+
+    timeout_seconds: int = 30
+    """Per-eval timeout in seconds."""
+
+    max_ptc_calls: int = 50
+    """Maximum programmatic tool calls per eval."""
+
+    max_result_size: int = Field(
+        default=DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+        ge=1000,
+        le=1_000_000,
+    )
+    """Maximum result size in characters (code_exec / interpreter)."""
+
+    console_capture: bool = True
+    """Capture console.log output from interpreter."""
+
+    snapshot_between_turns: bool = False
+    """Preserve interpreter state between conversation turns."""
+
+
 class ProgressiveSkillsConfig(BaseModel):
     """RFC-105: Tunables for progressive skill listing budget."""
 
@@ -1660,6 +1710,7 @@ class AgentConfig(BaseModel):
     - Autonomous: self-driving configuration (merged autonomous+autopilot)
     - Loop: AgentLoop internal tuning
     - Protocols: Planner, Policy, Durability backend selection
+    - CodeInterpreter: Embedded QuickJS configuration
 
     Args:
         name: Display name for the assistant identity in system prompts.
@@ -1669,6 +1720,7 @@ class AgentConfig(BaseModel):
         autonomous: Unified self-driving configuration (IG-434: merged autonomous+autopilot).
         loop: AgentLoop configuration (IG-407: unified agentic+execution).
         protocols: Protocol backends configuration (planner, policy, durability).
+        code_interpreter: Code interpreter middleware configuration (IG-423).
     """
 
     # === BASIC (User Identity) ===
@@ -1724,6 +1776,13 @@ class AgentConfig(BaseModel):
         description="Protocol backends configuration (planner, policy, durability)",
     )
     """Backend protocol selection for planner, policy, and durability."""
+
+    # === CODE INTERPRETER ===
+    code_interpreter: CodeInterpreterConfig = Field(
+        default_factory=CodeInterpreterConfig,
+        description="Code interpreter middleware configuration (IG-423)",
+    )
+    """Embedded QuickJS interpreter for programmatic tool calling."""
 
     # === CLARIFICATION RELAY (RFC-622) ===
     clarification: ClarificationConfig = Field(
