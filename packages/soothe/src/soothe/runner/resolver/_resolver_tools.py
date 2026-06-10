@@ -131,6 +131,13 @@ def _call_subagent_factory(factory: Any, kwargs: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def _goaling_tools_enabled(config: SootheConfig | None) -> bool:
+    """Goaling tools load only when autopilot is enabled (``agent.autonomous.enabled``)."""
+    if config is None:
+        return False
+    return bool(config.agent.autonomous.enabled)
+
+
 def resolve_tools(
     tools_config: Any,
     *,
@@ -154,23 +161,25 @@ def resolve_tools(
 
     # Get list of enabled tool group names
     # Note: "tacitus" is a subagent, not a tool group - handled in resolve_subagents()
-    enabled_tools = [
-        name
-        for name in [
-            "execution",
-            "file_ops",
-            "datetime",
-            "data",
-            "wizsearch",
-            "http_requests",
-            "image",
-            "audio",
-            "video",
-            "deepxiv",
-            "goaling",  # RFC-204 Group C: suggest_goal, add_finding tools
-        ]
-        if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
+    _tool_groups = [
+        "execution",
+        "file_ops",
+        "datetime",
+        "data",
+        "wizsearch",
+        "http_requests",
+        "deepxiv",
+        "goaling",  # RFC-204 Group C: suggest_goal, add_finding (autopilot only)
     ]
+    enabled_tools = []
+    for name in _tool_groups:
+        if name == "goaling":
+            if _goaling_tools_enabled(config):
+                enabled_tools.append(name)
+            continue
+        group_cfg = getattr(tools_config, name, None)
+        if group_cfg and group_cfg.enabled:
+            enabled_tools.append(name)
 
     # Host-execution tools (run_command, run_python, etc.) do not require a
     # sandbox — they run on the host via subprocess. The `execute`
@@ -308,24 +317,6 @@ def _resolve_single_tool_group_uncached(
         toolkit = DatetimeToolkit()
         return toolkit.get_tools()
 
-    if name == "image":
-        from soothe.toolkits.image import ImageToolkit
-
-        toolkit = ImageToolkit(config=config)
-        return toolkit.get_tools()
-
-    if name == "audio":
-        from soothe.toolkits.audio import AudioToolkit
-
-        toolkit = AudioToolkit(config=config)
-        return toolkit.get_tools()
-
-    if name == "video":
-        from soothe.toolkits.video import VideoToolkit
-
-        toolkit = VideoToolkit(config=config)
-        return toolkit.get_tools()
-
     if name == "wizsearch":
         from soothe.toolkits.wizsearch import WizsearchToolkit
 
@@ -343,12 +334,13 @@ def _resolve_single_tool_group_uncached(
         return toolkit.get_tools()
 
     if name == "execution":
-        from soothe.toolkits.execution import ExecutionToolkit
+        from soothe.toolkits.execution import ExecutionToolkit, _execution_max_output_from_config
 
         resolved_cwd = _get_default_workspace(config)
         toolkit = ExecutionToolkit(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
+            max_output_length=_execution_max_output_from_config(config),
         )
         return toolkit.get_tools()
 
@@ -361,12 +353,13 @@ def _resolve_single_tool_group_uncached(
     # Support individual tool names (map to consolidated group)
     if name in ("run_command", "run_background", "kill_process", "run_python"):
         # Host-execution tools do not require a sandbox backend.
-        from soothe.toolkits.execution import ExecutionToolkit
+        from soothe.toolkits.execution import ExecutionToolkit, _execution_max_output_from_config
 
         resolved_cwd = _get_default_workspace(config)
         toolkit = ExecutionToolkit(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
+            max_output_length=_execution_max_output_from_config(config),
         )
         all_tools = toolkit.get_tools()
         tool_map = {tool.name: tool for tool in all_tools}

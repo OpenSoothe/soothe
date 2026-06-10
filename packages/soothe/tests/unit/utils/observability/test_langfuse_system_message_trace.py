@@ -10,7 +10,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from soothe.utils.observability.langfuse_callback_handler import (
     _apply_effective_system_prompt_to_batches,
     _is_execute_step_run_name,
+    _is_model_chain_run_name,
     _patch_chain_input_with_system_message,
+    _should_mirror_system_prompt_on_chain,
 )
 from soothe.utils.observability.langfuse_system_hint import (
     clear_langfuse_system_prompt_hint,
@@ -162,6 +164,18 @@ def test_is_execute_step_run_name_matches_prefixed_and_bare() -> None:
     assert not _is_execute_step_run_name(None)
 
 
+def test_is_model_chain_run_name() -> None:
+    assert _is_model_chain_run_name("model")
+    assert not _is_model_chain_run_name("model-extra")
+    assert not _is_model_chain_run_name(None)
+
+
+def test_should_mirror_system_prompt_on_chain() -> None:
+    assert _should_mirror_system_prompt_on_chain("model")
+    assert _should_mirror_system_prompt_on_chain("soothe-dev:execute-step")
+    assert not _should_mirror_system_prompt_on_chain("plan-assess")
+
+
 def test_patch_chain_input_prepends_system_message() -> None:
     patched = _patch_chain_input_with_system_message(
         {"messages": [HumanMessage(content="hi")], "workspace": "/w"},
@@ -201,14 +215,14 @@ def test_on_chain_end_patches_input_for_execute_step_chain() -> None:
     handler = object.__new__(SootheLangfuseCallbackHandler)
     handler._system_hint_by_thread = {}
     handler._generation_traced_inputs = {}
-    handler._execute_step_chain_inputs = {}
-    handler._execute_step_chain_prompts = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
     handler.runs = {}
     handler._child_to_parent_run_id_map = {}
 
     chain_run = uuid4()
     chat_run = uuid4()
-    handler._execute_step_chain_inputs[chain_run] = {
+    handler._mirrored_chain_inputs[chain_run] = {
         "messages": [HumanMessage(content="step-1")],
         "workspace": "/w",
     }
@@ -227,7 +241,7 @@ def test_on_chain_end_patches_input_for_execute_step_chain() -> None:
             parent_run_id=chain_run,
             metadata={"thread_id": "t-exec"},
         )
-    assert handler._execute_step_chain_prompts[chain_run] == effective
+    assert handler._mirrored_chain_prompts[chain_run] == effective
 
     with mpatch.object(langchain_handler, "on_chain_end", return_value=None) as parent:
         handler.on_chain_end({"messages": []}, run_id=chain_run)
@@ -238,8 +252,8 @@ def test_on_chain_end_patches_input_for_execute_step_chain() -> None:
         assert isinstance(forwarded["messages"][0], SystemMessage)
         assert forwarded["messages"][0].content == effective
     # Tracking entries cleaned up after end
-    assert chain_run not in handler._execute_step_chain_inputs
-    assert chain_run not in handler._execute_step_chain_prompts
+    assert chain_run not in handler._mirrored_chain_inputs
+    assert chain_run not in handler._mirrored_chain_prompts
 
 
 def test_on_chain_end_no_patch_when_no_hint_captured() -> None:
@@ -251,20 +265,20 @@ def test_on_chain_end_no_patch_when_no_hint_captured() -> None:
     handler = object.__new__(SootheLangfuseCallbackHandler)
     handler._system_hint_by_thread = {}
     handler._generation_traced_inputs = {}
-    handler._execute_step_chain_inputs = {}
-    handler._execute_step_chain_prompts = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
     handler.runs = {}
     handler._child_to_parent_run_id_map = {}
 
     chain_run = uuid4()
-    handler._execute_step_chain_inputs[chain_run] = {"messages": []}
+    handler._mirrored_chain_inputs[chain_run] = {"messages": []}
 
     langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
     with mpatch.object(langchain_handler, "on_chain_end", return_value=None) as parent:
         handler.on_chain_end({"messages": []}, run_id=chain_run)
         # No prompt was captured; kwargs["inputs"] must not be set.
         assert "inputs" not in parent.call_args.kwargs
-    assert chain_run not in handler._execute_step_chain_inputs
+    assert chain_run not in handler._mirrored_chain_inputs
 
 
 def test_on_chain_error_cleans_up_tracking() -> None:
@@ -276,24 +290,24 @@ def test_on_chain_error_cleans_up_tracking() -> None:
     handler = object.__new__(SootheLangfuseCallbackHandler)
     handler._system_hint_by_thread = {}
     handler._generation_traced_inputs = {}
-    handler._execute_step_chain_inputs = {}
-    handler._execute_step_chain_prompts = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
     handler.runs = {}
     handler._child_to_parent_run_id_map = {}
 
     chain_run = uuid4()
-    handler._execute_step_chain_inputs[chain_run] = {"messages": []}
-    handler._execute_step_chain_prompts[chain_run] = "X"
+    handler._mirrored_chain_inputs[chain_run] = {"messages": []}
+    handler._mirrored_chain_prompts[chain_run] = "X"
 
     langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
     with mpatch.object(langchain_handler, "on_chain_error", return_value=None) as parent:
         handler.on_chain_error(RuntimeError("boom"), run_id=chain_run)
         parent.assert_called_once()
-    assert chain_run not in handler._execute_step_chain_inputs
-    assert chain_run not in handler._execute_step_chain_prompts
+    assert chain_run not in handler._mirrored_chain_inputs
+    assert chain_run not in handler._mirrored_chain_prompts
 
 
-def test_on_chain_start_tracks_only_execute_step_chains() -> None:
+def test_on_chain_start_tracks_execute_step_and_model_chains() -> None:
     pytest.importorskip("langfuse")
     from unittest.mock import patch as mpatch
 
@@ -302,12 +316,13 @@ def test_on_chain_start_tracks_only_execute_step_chains() -> None:
     handler = object.__new__(SootheLangfuseCallbackHandler)
     handler._system_hint_by_thread = {}
     handler._generation_traced_inputs = {}
-    handler._execute_step_chain_inputs = {}
-    handler._execute_step_chain_prompts = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
     handler.runs = {}
     handler._child_to_parent_run_id_map = {}
 
     exec_run = uuid4()
+    model_run = uuid4()
     other_run = uuid4()
     langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
     with mpatch.object(langchain_handler, "on_chain_start", return_value=None):
@@ -320,11 +335,59 @@ def test_on_chain_start_tracks_only_execute_step_chains() -> None:
         handler.on_chain_start(
             None,
             {"messages": [HumanMessage(content="hi")]},
+            run_id=model_run,
+            name="model",
+        )
+        handler.on_chain_start(
+            None,
+            {"messages": [HumanMessage(content="hi")]},
             run_id=other_run,
             name="plan-assess",
         )
-    assert exec_run in handler._execute_step_chain_inputs
-    assert other_run not in handler._execute_step_chain_inputs
+    assert exec_run in handler._mirrored_chain_inputs
+    assert model_run in handler._mirrored_chain_inputs
+    assert other_run not in handler._mirrored_chain_inputs
+
+
+def test_on_chain_end_patches_input_for_model_chain() -> None:
+    pytest.importorskip("langfuse")
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    model_run = uuid4()
+    chat_run = uuid4()
+    handler._mirrored_chain_inputs[model_run] = {"messages": [HumanMessage(content="step-1")]}
+    handler._child_to_parent_run_id_map[chat_run] = model_run
+
+    cfg = {"configurable": {"thread_id": "t-model"}}
+    effective = "<AVAILABLE_TOOLS>\n- wizsearch\n</AVAILABLE_TOOLS>"
+    handler.register_system_prompt_hint_for_config(cfg, effective)
+
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_chat_model_start", return_value=None):
+        handler.on_chat_model_start(
+            {},
+            [[HumanMessage(content="step-1")]],
+            run_id=chat_run,
+            parent_run_id=model_run,
+            metadata={"thread_id": "t-model"},
+        )
+    assert handler._mirrored_chain_prompts[model_run] == effective
+
+    with mpatch.object(langchain_handler, "on_chain_end", return_value=None) as parent:
+        handler.on_chain_end({"messages": []}, run_id=model_run)
+        forwarded = parent.call_args.kwargs["inputs"]
+        assert isinstance(forwarded["messages"][0], SystemMessage)
+        assert forwarded["messages"][0].content == effective
 
 
 def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:

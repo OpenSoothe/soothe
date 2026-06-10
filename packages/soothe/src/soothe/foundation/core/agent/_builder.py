@@ -202,6 +202,16 @@ class AgentBuilder:
         )
         if len(all_tools) < before:
             logger.debug("Sandbox disabled: execute tool filtered out")
+
+        if (
+            self._config.progressive_tools.enabled
+            and self._config.progressive_tools.search_tools_enabled
+        ):
+            from soothe.toolkits.progressive.search_tool import create_search_tools_tool
+
+            all_tools.append(create_search_tools_tool())
+            logger.debug("[Init] Progressive search_tools added")
+
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 
@@ -229,6 +239,13 @@ class AgentBuilder:
             resolved_policy,
             mcp_registry=registry,
         )
+        if all_tools:
+            from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
+
+            for mw in default_middleware:
+                if isinstance(mw, ProgressiveToolMiddleware):
+                    mw.set_tool_catalog(all_tools)
+                    break
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
         # RFC-105: Skill emission is owned by SystemPromptMiddleware via

@@ -28,6 +28,7 @@ class MockModelRequest(ModelRequest[dict]):
         object.__setattr__(self, "_messages", [system_message])
         object.__setattr__(self, "_state", state)
         object.__setattr__(self, "_system_message", system_message)
+        object.__setattr__(self, "_tools", [])
 
     def override(self, **kwargs: object) -> "MockModelRequest":
         """Override request properties.
@@ -65,6 +66,15 @@ class MockModelRequest(ModelRequest[dict]):
     def system_message(self, value: SystemMessage) -> None:
         """Set the system message."""
         object.__setattr__(self, "_system_message", value)
+
+    @property
+    def tools(self) -> list:
+        """Get bound tools."""
+        return self._tools
+
+    @tools.setter
+    def tools(self, value: list) -> None:
+        object.__setattr__(self, "_tools", value)
 
 
 def test_simple_query_gets_minimal_prompt():
@@ -572,7 +582,7 @@ class TestWorkspaceInjection:
         """
         (tmp_path / "AGENTS.md").write_text("# Rules\n\nBe terse.\n", encoding="utf-8")
         mw = self._middleware()
-        prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
+        prompt = mw._get_prompt_for_complexity("medium", {"workspace": str(tmp_path)})
 
         idx_rules = prompt.find("<WORKSPACE_RULES>")
         idx_instr = prompt.find("<WORKSPACE_INSTRUCTIONS>")
@@ -616,3 +626,46 @@ class TestWorkspaceInjection:
         # ``__required_keys__`` which loses the marker at runtime.
         assert "NotRequired" in str(annotations["workspace"])
         assert "NotRequired" in str(annotations["git_status"])
+
+
+def test_available_tools_block_when_progressive_enabled() -> None:
+    from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
+
+    config = SootheConfig()
+    config.progressive_tools.enabled = True
+    config.progressive_tools.core_tools = ["run_command", "read_file", "search_tools"]
+    progressive = ProgressiveToolMiddleware(config=config)
+    core = SimpleNamespace(name="run_command", description="Shell")
+    deferred = SimpleNamespace(name="wizsearch_search", description="Web search tool")
+    progressive.set_tool_catalog([core, deferred])
+
+    middleware = SystemPromptMiddleware(
+        config=config,
+        progressive_tool_middleware=progressive,
+    )
+    request = MockModelRequest(
+        state={
+            "routing_classification": RoutingClassification(
+                intent_type="agentic", task_complexity="simple"
+            )
+        },
+        system_message=SystemMessage(content="base"),
+    )
+    # Simulate ProgressiveToolMiddleware filtering bound tools to core only.
+    request.tools = [core]
+
+    modified = middleware.modify_request(request)
+    content = modified.system_message.content
+    assert "<AVAILABLE_TOOLS>" in content
+    assert "wizsearch_search" in content
+    assert "search_tools(query)" in content
+    assert "not yet bound" in content
+
+
+def test_simple_complexity_emits_workspace_instructions(tmp_path) -> None:
+    """Simple-tier execute steps must inline AGENTS.md/CLAUDE.md (headline cap)."""
+    (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
+    mw = SystemPromptMiddleware(config=SootheConfig())
+    prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
+    assert "<WORKSPACE_INSTRUCTIONS>" in prompt
+    assert "Use ruff." in prompt

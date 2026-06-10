@@ -51,13 +51,13 @@ Add optional capability groups as needed:
 pip install -U 'soothe[research]'
 
 # Document processing (PDF, DOCX, etc.)
-pip install -U 'soothe[documents]'
+pip install -U 'soothe[document]'
 
-# Media processing (images, audio, video)
-pip install -U 'soothe[media]'
+# GitHub integration
+pip install -U 'soothe[github]'
 
 # Multiple groups
-pip install -U 'soothe[research,documents,media]'
+pip install -U 'soothe[research,document,github]'
 ```
 
 ### Option 3: Using uv (Fast Alternative)
@@ -105,17 +105,18 @@ The `soothe[all]` extra includes all capability groups:
 | Group | Tools Included |
 |-------|----------------|
 | `research` | Web search, academic papers (arXiv, DeepXiv), research synthesis |
-| `documents` | PDF, DOCX, TXT, Markdown processing |
+| `document` | PDF, DOCX, TXT, Markdown processing |
 | `tabular` | CSV, Excel, Parquet, data analysis |
-| `media` | Image, audio, video processing |
 | `github` | GitHub API integration |
 | `langfuse` | LLM tracing and observability |
 | `dashscope` | Alibaba Cloud LLM models |
+| `semantic` | Embedding models for vector search |
+| `claude` | Anthropic Claude models and agent SDK |
 
 Install specific groups:
 
 ```bash
-pip install -U 'soothe[research,documents]'
+pip install -U 'soothe[research,document]'
 ```
 
 ---

@@ -40,10 +40,6 @@ BUILTIN_TOOL_TRIGGERS: dict[str, list[str]] = {
     "extract_text": ["WORKSPACE"],
     "get_data_info": ["WORKSPACE"],
     "ask_about_file": ["WORKSPACE"],
-    # Image/audio/video tools
-    "analyze_image": [],
-    "transcribe_audio": [],
-    "analyze_video": [],
     # Subagents (task tool targets — core: explore, plan, research; plugins add more)
     "tacitus": ["TACITUS_RULES", "context"],
     # Goal management tools

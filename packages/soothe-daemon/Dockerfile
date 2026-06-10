@@ -4,10 +4,16 @@
 # Build context must be the monorepo root (parent of `packages/`) so `scripts/warmup_embedding_model.py`
 # can be copied. Published wheels are installed from PyPI (same as end users).
 #
-# Build:
+# Build (full image with browser subagent):
 #   docker build -f packages/soothe-daemon/Dockerfile \
-#     --build-arg SOOTHE_VERSION=0.5.7 \
+#     --build-arg SOOTHE_VERSION=0.5.8 \
 #     -t soothed:latest .
+#
+# Build (slim image without browser subagent):
+#   docker build -f packages/soothe-daemon/Dockerfile \
+#     --build-arg SOOTHE_VERSION=0.5.8 \
+#     --build-arg INCLUDE_BROWSER=false \
+#     -t soothed:slim .
 #
 # `soothe[all]` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to the
 # latest PyPI release compatible with that pin (PyPI may lag: newer soothe
@@ -26,13 +32,15 @@
 ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 # =============================================================================
-# Stage 1: install wheels, browsers, system libs, warm embedding cache
+# Stage 1: install wheels, browsers (optional), system libs, warm embedding cache
 # =============================================================================
 FROM ${PYTHON_BASE} AS deps
 
 ARG SOOTHE_VERSION=0.5.8
 # Empty = latest soothe-daemon on PyPI compatible with pinned soothe[all].
 ARG SOOTHE_DAEMON_VERSION=
+# Include browser subagent dependencies (playwright/chromium). Default: true.
+ARG INCLUDE_BROWSER=true
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -40,13 +48,19 @@ ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     SOOTHE_HOME=/var/lib/soothe
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv directly via curl (avoids ghcr.io access for networks with restrictions)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && mv /root/.local/bin/uv /usr/local/bin/uv
+
+# Ensure playwright browsers directory exists (empty if INCLUDE_BROWSER=false)
+RUN mkdir -p /opt/ms-playwright
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     set -eux; \
@@ -55,27 +69,37 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     else \
       dspec="soothe-daemon"; \
     fi; \
+    if [ "${INCLUDE_BROWSER}" = "true" ]; then \
+      extras="all"; \
+      pip_extras="playwright sentence_transformers"; \
+    else \
+      extras="research,tabular,document,github,dashscope,semantic,langfuse,claude"; \
+      pip_extras=""; \
+    fi; \
     uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
-        "soothe[all]==${SOOTHE_VERSION}" \
+        "soothe[${extras}]==${SOOTHE_VERSION}" \
         "${dspec}" \
-        playwright \
-        sentence_transformers; \
-    /app/.venv/bin/python -m playwright install chromium
+        ${pip_extras}; \
+    if [ "${INCLUDE_BROWSER}" = "true" ]; then \
+      /app/.venv/bin/python -m playwright install chromium; \
+    fi
 
 ENV SOOTHE_HF_CACHE=/root/.cache/soothe/models/huggingface
 COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
-RUN /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
-    && rm /tmp/warmup_embedding_model.py
+# Warmup is optional - model downloads at runtime if cache miss
+RUN /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose || echo "Embedding warmup skipped (will download at runtime)" \
+    && rm -f /tmp/warmup_embedding_model.py
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # =============================================================================
-# Stage 2: minimal runtime (venv + browsers + HF cache, non-root)
+# Stage 2: minimal runtime (venv + browsers (optional) + HF cache, non-root)
 # =============================================================================
 FROM ${PYTHON_BASE} AS runtime
 
 ARG SOOTHE_VERSION=0.5.8
+ARG INCLUDE_BROWSER=true
 
 LABEL org.opencontainers.image.title="Soothe Daemon" \
     org.opencontainers.image.description="Soothe agent orchestration daemon (PyPI soothe-daemon + bundled deps)" \
@@ -98,9 +122,11 @@ COPY --from=deps /opt/ms-playwright /opt/ms-playwright
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-RUN apt-get update \
-    && /app/.venv/bin/python -m playwright install-deps \
-    && apt-get install -y --no-install-recommends ffmpeg \
+RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && if [ "${INCLUDE_BROWSER}" = "true" ] && [ -n "$(ls -A /opt/ms-playwright 2>/dev/null)" ]; then \
+      /app/.venv/bin/python -m playwright install-deps; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --system soothe \

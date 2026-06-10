@@ -1160,6 +1160,7 @@ class Executor:
         synthesis_scenario: str | None = None,
         skill_activation: dict[str, Any] | None = None,
         mcp_state: dict[str, Any] | None = None,
+        tool_activation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build LangGraph input for execute waves (RFC-225 carries continue_loop_mode)."""
         out: dict[str, Any] = {"messages": messages}
@@ -1177,7 +1178,38 @@ class Executor:
             out["skill_activation"] = skill_activation
         if mcp_state is not None:
             out.update(mcp_state)
+        if tool_activation is not None:
+            out["tool_activation"] = tool_activation
         return out
+
+    @staticmethod
+    def _seed_tool_activation(loop_state: LoopState) -> dict[str, Any] | None:
+        """Rehydrate progressive tool activation from LoopState for graph input."""
+        has_data = loop_state.sent_tool_names or loop_state.promoted_tool_names
+        if not has_data:
+            return None
+        return {
+            "sent": set(loop_state.sent_tool_names),
+            "promoted": set(loop_state.promoted_tool_names),
+        }
+
+    @staticmethod
+    def _snapshot_tool_activation(
+        graph_output: dict[str, Any] | None,
+        loop_state: LoopState,
+    ) -> None:
+        """Copy tool_activation from graph output back into LoopState."""
+        if not graph_output:
+            return
+        activation = graph_output.get("tool_activation")
+        if not isinstance(activation, dict):
+            return
+        sent = activation.get("sent")
+        promoted = activation.get("promoted")
+        if isinstance(sent, (set, list, tuple)):
+            loop_state.sent_tool_names = set(sent)
+        if isinstance(promoted, (set, list, tuple)):
+            loop_state.promoted_tool_names = set(promoted)
 
     @staticmethod
     def _seed_skill_activation(loop_state: LoopState) -> dict[str, Any] | None:
@@ -2150,6 +2182,7 @@ class Executor:
             graph_input_messages.append(human_msg)
             skill_activation = self._seed_skill_activation(loop_state) if loop_state else None
             mcp_state = self._seed_mcp_state(loop_state) if loop_state else None
+            tool_activation = self._seed_tool_activation(loop_state) if loop_state else None
             stream = self._core_agent_astream_with_interrupt_resume(
                 self._execute_graph_input(
                     graph_input_messages,
@@ -2159,6 +2192,7 @@ class Executor:
                     continue_loop_mode=continue_loop_mode,
                     skill_activation=skill_activation,
                     mcp_state=mcp_state,
+                    tool_activation=tool_activation,
                 ),
                 config,
                 detector=self._clarification_detector,
@@ -2210,6 +2244,7 @@ class Executor:
                     if graph_state and graph_state.values:
                         self._snapshot_skill_activation(graph_state.values, loop_state)
                         self._snapshot_mcp_state(graph_state.values, loop_state)
+                        self._snapshot_tool_activation(graph_state.values, loop_state)
                 except Exception:  # noqa: BLE001
                     logger.debug("[Skill] Failed to snapshot skill_activation from graph state")
 
@@ -2481,11 +2516,23 @@ class Executor:
                     if text_out:
                         # Truncate large tool outputs in aggregated stream text; full payloads
                         # remain in CoreAgent graph state (and LangGraph eviction when enabled).
-                        max_tool_output_chars = (
-                            DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
-                            if get_outcome_type(tool_name) == "code_exec"
-                            else DEFAULT_TOOL_OUTPUT_CHARS
+                        limits = (
+                            self._config.agent.loop.limits
+                            if self._config and hasattr(self._config, "agent")
+                            else None
                         )
+                        if limits is not None:
+                            max_tool_output_chars = (
+                                int(limits.code_exec_max_output_chars)
+                                if get_outcome_type(tool_name) == "code_exec"
+                                else int(limits.tool_output_max_chars)
+                            )
+                        else:
+                            max_tool_output_chars = (
+                                DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+                                if get_outcome_type(tool_name) == "code_exec"
+                                else DEFAULT_TOOL_OUTPUT_CHARS
+                            )
                         if len(text_out) > max_tool_output_chars:
                             truncated = preview(
                                 text_out,

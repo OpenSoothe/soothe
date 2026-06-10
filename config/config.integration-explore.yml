@@ -77,12 +77,6 @@ observability:
 # Daemon-side configuration lives in `config/daemon_config.template.yml`
 # (loaded by `SootheDaemonConfig` from `~/.soothe/config/daemon_config.yml`).
 
-tools:
-  audio:
-    enabled: false
-  video:
-    enabled: false
-
 subagents:
   tacitus:
     enabled: false
