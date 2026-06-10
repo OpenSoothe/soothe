@@ -147,7 +147,7 @@ class ExploreSubagentConfig(BaseModel):
         max_tool_output_chars_per_turn: Truncate oversized tool outputs before sending back to model.
         early_stop_no_new_findings_turns: Force synthesis if N consecutive turns produce zero net-new findings.
         max_findings_for_synthesis: Max findings sent to synthesis model (default 15, configurable).
-        enable_semantic_similarity: Use semantic similarity for relevance scoring (requires sentence_transformers).
+        enable_semantic_similarity: Use semantic similarity for relevance scoring (requires fastembed).
         semantic_similarity_timeout_seconds: Wall-clock cap for async synthesis relevance scoring (embedding + rank).
         synthesis_timeout_seconds: Wall-clock cap for LLM structured synthesis before partial fallback.
     """
@@ -178,7 +178,7 @@ class ExploreSubagentConfig(BaseModel):
     """Max findings sent to synthesis (reduced payload for faster model processing)."""
 
     enable_semantic_similarity: bool = True
-    """Enable semantic similarity for relevance scoring (requires sentence_transformers optional dependency)."""
+    """Enable semantic similarity for relevance scoring (requires fastembed optional dependency)."""
 
     semantic_similarity_timeout_seconds: float = Field(
         default=10.0,

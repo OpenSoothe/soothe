@@ -1,0 +1,90 @@
+# Local monorepo build — installs soothe + soothe-daemon from source (not PyPI).
+#
+# Build from repo root:
+#   docker build -f packages/soothe-daemon/Dockerfile.local \
+#     -t soothed:0.6.2-local .
+#
+# Run:
+#   docker run --rm -p 8765:8765 -v soothe-data:/var/lib/soothe soothed:0.6.2-local
+
+ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
+
+# =============================================================================
+# Stage 1: install local packages + warmup embedding cache
+# =============================================================================
+FROM ${PYTHON_BASE} AS deps
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=1 \
+    SOOTHE_HOME=/var/lib/soothe
+
+RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && mv /root/.local/bin/uv /usr/local/bin/uv
+
+RUN uv venv /app/.venv
+
+COPY VERSION /VERSION
+COPY packages/soothe-sdk /src/soothe-sdk
+COPY packages/soothe /src/soothe
+COPY packages/soothe-daemon /src/soothe-daemon
+COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
+
+RUN set -eux; \
+    uv pip install --python /app/.venv/bin/python \
+        "/src/soothe-sdk" \
+        "/src/soothe[research,tabular,document,github,dashscope,langfuse,claude,semantic]" \
+        "/src/soothe-daemon"; \
+    mkdir -p /root/.cache/soothe/models/embeddings; \
+    /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
+        || echo "Embedding warmup skipped (will download at runtime)"; \
+    rm -f /tmp/warmup_embedding_model.py
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# =============================================================================
+# Stage 2: minimal runtime (non-root)
+# =============================================================================
+FROM ${PYTHON_BASE} AS runtime
+
+LABEL org.opencontainers.image.title="Soothe Daemon (local)" \
+    org.opencontainers.image.description="Soothe daemon built from monorepo source" \
+    org.opencontainers.image.version="0.6.2-local"
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    SOOTHE_HOME=/var/lib/soothe \
+    SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0 \
+    SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED=true \
+    SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST=0.0.0.0
+
+WORKDIR /app
+
+COPY --from=deps /app/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+RUN useradd --create-home --system soothe \
+    && mkdir -p /var/lib/soothe \
+    && mkdir -p /home/soothe/.cache/soothe/models \
+    && chown -R soothe:soothe /var/lib/soothe /home/soothe/.cache
+
+RUN mkdir -p /home/soothe/.cache/soothe/models/embeddings
+COPY --from=deps --chown=soothe:soothe /root/.cache/soothe/models/embeddings/ /home/soothe/.cache/soothe/models/embeddings/
+
+USER soothe
+WORKDIR /var/lib/soothe
+
+EXPOSE 8765/tcp
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)" || exit 1
+
+CMD ["python", "-m", "soothe_daemon"]
