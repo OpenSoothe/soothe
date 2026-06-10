@@ -7,7 +7,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from soothe.config.constants import DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+from soothe.config.constants import (
+    DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_TOOL_OUTPUT_CHARS,
+)
 
 
 class UIConfig(BaseModel):
@@ -332,13 +335,12 @@ class ToolsConfig(BaseModel):
         datetime: DateTime tool config.
         data: Data inspection tools config.
         wizsearch: Wizsearch multi-engine search tools config.
-        image: Image analysis tools config (disabled by default; opt-in for faster startup).
-        audio: Audio transcription tools config (disabled by default).
-        video: Video analysis tools config (disabled by default).
         http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
         deepxiv: DeepXiv academic paper search tools (disabled by default).
-        goaling: Goaling tools config (suggest_goal, add_finding) - RFC-204 Group C.
-            Requires proposal_queue from AgentLoop runtime context.
+
+    Note:
+        ``suggest_goal`` and ``add_finding`` are not configured here; they load when
+        ``agent.autonomous.enabled`` is true (autopilot).
     """
 
     execution: ToolConfig = Field(default_factory=ToolConfig)
@@ -346,16 +348,8 @@ class ToolsConfig(BaseModel):
     datetime: ToolConfig = Field(default_factory=ToolConfig)
     data: ToolConfig = Field(default_factory=ToolConfig)
     wizsearch: WebSearchConfig = Field(default_factory=WebSearchConfig)
-    image: ToolConfig = Field(default_factory=lambda: ToolConfig(enabled=False))
-    audio: ToolConfig = Field(default_factory=lambda: ToolConfig(enabled=False))
-    video: ToolConfig = Field(default_factory=lambda: ToolConfig(enabled=False))
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
     deepxiv: DeepxivToolsConfig = Field(default_factory=lambda: DeepxivToolsConfig(enabled=False))
-    goaling: ToolConfig = Field(
-        default_factory=ToolConfig,  # Enabled by default - safe, just enqueues proposals
-        description="Goaling tools (suggest_goal, add_finding). "
-        "Tools for proactively suggesting subgoals during execution.",
-    )
 
 
 class PersistenceConfig(BaseModel):
@@ -911,6 +905,20 @@ class InfrastructureLimitsConfig(BaseModel):
     llm_retry_on_timeout: bool = True
     llm_max_timeout_retries: int = Field(default=2, ge=0, le=5)
     llm_timeout_retry_multiplier: float = Field(default=2.0, ge=1.0, le=5.0)
+
+    # Tool output caps (model context / graph state)
+    code_exec_max_output_chars: int = Field(
+        default=32_000,
+        ge=1000,
+        le=500_000,
+        description="Max chars for shell/code tool stdout in graph state and model context",
+    )
+    tool_output_max_chars: int = Field(
+        default=DEFAULT_TOOL_OUTPUT_CHARS,
+        ge=500,
+        le=500_000,
+        description="Max chars for non-code_exec tool output in graph state and model context",
+    )
 
     # Tool limits
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
@@ -1636,6 +1644,39 @@ class ProgressiveSkillsConfig(BaseModel):
     )
 
 
+class ProgressiveToolsConfig(BaseModel):
+    """Progressive builtin-tool loading: core tier bound, deferred tools listed."""
+
+    enabled: bool = Field(
+        default=True,
+        description="When true, bind only core tools on cold start; list deferred tools in prompt",
+    )
+    budget_pct: float = Field(
+        default=0.01,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of context_window_limit for <AVAILABLE_TOOLS> listing per turn",
+    )
+    max_listing_chars_per_entry: int = Field(
+        default=120,
+        ge=0,
+        description="Hard per-entry character cap for deferred tool descriptions",
+    )
+    min_listing_chars_per_entry: int = Field(
+        default=20,
+        ge=0,
+        description="Below this, deferred entries fall back to names-only mode",
+    )
+    core_tools: list[str] | None = Field(
+        default=None,
+        description="Explicit core-tier tool names; null uses built-in defaults",
+    )
+    search_tools_enabled: bool = Field(
+        default=True,
+        description="Include search_tools in core tier for discovering deferred tools",
+    )
+
+
 class ProgressiveMCPConfig(BaseModel):
     """RFC-412: Tunables for progressive MCP tool listing budget."""
 
@@ -1688,6 +1729,13 @@ class AgentConfig(BaseModel):
 
     system_prompt: str | None = None
     """System prompt override. When None, a default prompt is generated using ``name``."""
+
+    workspace_instructions_max_chars: int = Field(
+        default=8000,
+        ge=500,
+        le=100_000,
+        description="Max chars inlined from AGENTS.md/CLAUDE.md in WORKSPACE_INSTRUCTIONS",
+    )
 
     # === BEHAVIOR (Response Mode) ===
     goal_completion_mode: AgenticGoalCompletionMode = Field(

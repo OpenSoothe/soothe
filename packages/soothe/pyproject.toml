@@ -77,15 +77,6 @@ document = [
     "pypdf>=3.0.0",
     "docx2txt>=0.8.0",
 ]
-media = [
-    "pillow>=10.0.0",
-    "pydub>=0.25.0",
-    "yt-dlp>=2023.0.0",
-]
-video = [
-    "opencv-python>=4.8.0",
-    "pillow>=10.0.0",
-]
 github = [
     "pygithub>=2.0.0",
 ]
@@ -106,7 +97,7 @@ claude = [
     "claude-agent-sdk>=0.1.0,<1.0.0",
 ]
 all = [
-    "soothe[research,tabular,document,media,video,github,dashscope,semantic,langfuse,browser_use,claude]",
+    "soothe[research,tabular,document,github,dashscope,semantic,langfuse,browser_use,claude]",
 ]
 dev = [
     "pytest>=8.0.0",

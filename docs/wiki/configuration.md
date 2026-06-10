@@ -185,17 +185,16 @@ Install additional capabilities as needed:
 
 | Extra | Command | Adds |
 |-------|---------|------|
-| `research` | `pip install soothe[research]` | Tavily web search |
-| `soothe-plugins` | `pip install soothe-plugins` | Optional delegated agents and extras (see that repository) |
-| `serper` | `pip install soothe[serper]` | Google Serper search |
-| `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search |
-| `jina` | `pip install soothe[jina]` | Jina web reader |
-| `media` | `pip install soothe[media]` | Image generation (DALL-E) |
-| `rocksdb` | `pip install soothe[rocksdb]` | RocksDB persistence |
-| `pgvector` | `pip install soothe[pgvector]` | PostgreSQL vector store |
-| `weaviate` | `pip install soothe[weaviate]` | Weaviate vector store |
-| `ollama` | `pip install soothe[ollama]` | Ollama local models |
-| `all` | `pip install soothe[all]` | Everything above |
+| `research` | `pip install soothe[research]` | Tavily web search, arXiv, DeepXiv |
+| `tabular` | `pip install soothe[tabular]` | Pandas, Excel processing |
+| `document` | `pip install soothe[document]` | PDF, DOCX processing |
+| `github` | `pip install soothe[github]` | GitHub API integration |
+| `semantic` | `pip install soothe[semantic]` | Embedding models |
+| `langfuse` | `pip install soothe[langfuse]` | LLM tracing and observability |
+| `dashscope` | `pip install soothe[dashscope]` | Alibaba Cloud LLM models |
+| `browser_use` | `pip install soothe[browser_use]` | Browser automation subagent |
+| `claude` | `pip install soothe[claude]` | Anthropic Claude models and agent SDK |
+| `all` | `pip install soothe[all]` | All above extras |
 
 ## Using Ollama (Local Models)
 

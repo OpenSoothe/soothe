@@ -13,34 +13,34 @@
 # PROVIDERS (LLM & Embedding Models)
 # ============================================================
 providers:
-- name: openai
-  provider_type: openai
-  api_key: ${OPENAI_API_KEY}
-  api_base_url: null
-  models:
-  - gpt-4o
-  - gpt-4o-mini
-  - o3-mini
+  - name: openai
+    provider_type: openai
+    api_key: ${OPENAI_API_KEY}
+    api_base_url: null
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - o3-mini
 
-  # OpenAI-compatible (DashScope, OpenRouter, vLLM):
-  # - name: dashscope
-  #   provider_type: openai
-  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  #   api_key: "${DASHSCOPE_API_KEY}"
-  #   models: [qwen-max]
+    # OpenAI-compatible (DashScope, OpenRouter, vLLM):
+    # - name: dashscope
+    #   provider_type: openai
+    #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    #   api_key: "${DASHSCOPE_API_KEY}"
+    #   models: [qwen-max]
 
-  # LMStudio / Ollama — use provider_type: limited_openai
-  # - name: lmstudio
-  #   provider_type: limited_openai
-  #   api_base_url: http://localhost:1234/v1
-  #   api_key: "lmstudio"
-  #   models: [google/gemma-4-26b-a4b]
+    # LMStudio / Ollama — use provider_type: limited_openai
+    # - name: lmstudio
+    #   provider_type: limited_openai
+    #   api_base_url: http://localhost:1234/v1
+    #   api_key: "lmstudio"
+    #   models: [google/gemma-4-26b-a4b]
 
-  # Anthropic:
-  # - name: anthropic
-  #   provider_type: anthropic
-  #   api_key: "${ANTHROPIC_API_KEY}"
-  #   models: [claude-sonnet-4-20250514]
+    # Anthropic:
+    # - name: anthropic
+    #   provider_type: anthropic
+    #   api_key: "${ANTHROPIC_API_KEY}"
+    #   models: [claude-sonnet-4-20250514]
 
 router:
   default: openai:gpt-4o-mini
@@ -61,6 +61,7 @@ agent:
   # === BASIC (User Identity) ===
   name: Soothe
   system_prompt: null
+  workspace_instructions_max_chars: 8000
 
   # === CORE AGENT BACKEND ===
   # Core agent runtime backend.
@@ -69,9 +70,9 @@ agent:
   core_agent_backend: langgraph
 
   # Claude-specific configuration (only used when core_agent_backend='claude')
-  claude_permission_mode: bypassPermissions  # Claude Code permission mode
-  claude_max_turns: 25                       # Maximum turns per execution
-  claude_model: null                         # Claude model (e.g., 'sonnet', 'opus'). null = SDK default
+  claude_permission_mode: bypassPermissions # Claude Code permission mode
+  claude_max_turns: 25 # Maximum turns per execution
+  claude_model: null # Claude model (e.g., 'sonnet', 'opus'). null = SDK default
 
   # === AUTONOMOUS (Self-Driving - Unified) ===
   # Merged former 'autonomous' + 'autopilot' sections (IG-434).
@@ -120,7 +121,7 @@ agent:
       max_findings: 20
       max_files: 50
       max_plan_steps: 30
-      context_retention_hours: 168    # evict after root goal terminal + 1 week
+      context_retention_hours: 168 # evict after root goal terminal + 1 week
 
     # Workspace reservation (RFC-222 revised) — scheduling-time conflict gate.
     # Refuses to dispatch two goals on overlapping workspace prefixes.
@@ -134,32 +135,32 @@ agent:
     enabled: true
     max_iterations: 10
     max_subagent_tasks_per_wave: 4
-    agent_loop_output_contract_enabled: true   # Suppress full tool output re-paste during Execute
+    agent_loop_output_contract_enabled: true # Suppress full tool output re-paste during Execute
     prior_conversation_limit: 10
     context_window_limit: 200000
 
     # Response shape (IG-298 / IG-199). Canonical reads live here, not at agent.*.
-    goal_completion_mode: llm_only             # llm_only | heuristic_only | hybrid
-    final_response: adaptive                   # adaptive | always_synthesize
+    goal_completion_mode: llm_only # llm_only | heuristic_only | hybrid
+    final_response: adaptive # adaptive | always_synthesize
 
     # RFC-224: Automatic context window management
-    context_overflow_threshold_pct: 0.80       # Trigger compaction at 80% (160k tokens)
-    context_compaction_target_pct: 0.60        # Compact to 60% (120k tokens)
-    step_context_check_enabled: false          # Step threads usually short-lived
+    context_overflow_threshold_pct: 0.80 # Trigger compaction at 80% (160k tokens)
+    context_compaction_target_pct: 0.60 # Compact to 60% (120k tokens)
+    step_context_check_enabled: false # Step threads usually short-lived
 
     # RFC-220 loop orchestrator
-    loop_orchestrator_evidence_validate: true  # Run plan evidence validation node (currently a no-op)
+    loop_orchestrator_evidence_validate: true # Run plan evidence validation node (currently a no-op)
 
     # Output streaming (RFC-614, IG-441)
     output_streaming:
-      mode: adaptive                           # batch | adaptive | streaming
+      mode: adaptive # batch | adaptive | streaming
       streaming_interval_ms: 300
-      adaptive_threshold_chars: 500            # phase-1 → phase-2 cutover (adaptive)
-      adaptive_block_chars: 500                # phase-2 block size (adaptive)
-      adaptive_block_interval_ms: 250          # phase-2 max ms between blocks (adaptive)
-      file_output_threshold_chars: 0           # 0 = never write goal_completion to file
-      file_output_preview_chars: 500           # Preview chars in TUI when output saved to file
-      file_output_dir: null                    # null = <workspace>/.soothe/output
+      adaptive_threshold_chars: 500 # phase-1 → phase-2 cutover (adaptive)
+      adaptive_block_chars: 500 # phase-2 block size (adaptive)
+      adaptive_block_interval_ms: 250 # phase-2 max ms between blocks (adaptive)
+      file_output_threshold_chars: 0 # 0 = never write goal_completion to file
+      file_output_preview_chars: 500 # Preview chars in TUI when output saved to file
+      file_output_dir: null # null = <workspace>/.soothe/output
       message_coalesce_enabled: true
       tool_batch_enabled: true
       tool_batch_interval_ms: 200
@@ -207,6 +208,8 @@ agent:
       llm_retry_on_timeout: true
       llm_max_timeout_retries: 2
       llm_timeout_retry_multiplier: 2.0
+      code_exec_max_output_chars: 32000
+      tool_output_max_chars: 10000
       recovery:
         progressive_checkpoints: true
         auto_resume_on_start: false
@@ -245,18 +248,18 @@ agent:
       enable_auto_categorization: true
       enable_category_summaries: true
       memory_categories:
-      - name: personal_info
-        description: Personal information
-      - name: preferences
-        description: User preferences and interests
-      - name: knowledge
-        description: Facts and learned information
-      - name: experiences
-        description: Past experiences and events
-      - name: goals
-        description: Goals and objectives
+        - name: personal_info
+          description: Personal information
+        - name: preferences
+          description: User preferences and interests
+        - name: knowledge
+          description: Facts and learned information
+        - name: experiences
+          description: Past experiences and events
+        - name: goals
+          description: Goals and objectives
     planner:
-      model: think              # Use "think" for complex reasoning, "fast" for speed
+      model: think # Use "think" for complex reasoning, "fast" for speed
       routing: auto
     policy:
       profile: standard
@@ -273,17 +276,18 @@ agent:
   # in assistant messages are NOT detected — emit a structured ``ask_user`` to
   # engage the relay.
   clarification:
-    auto_policy: veritas        # only built-in for now
-    auto_min_confidence: 0.4    # below this, veritas answer is treated as defer
-    max_defer_age_hours: 168    # autopilot: scrub stale awaiting_clarification goals
-    default_mode: auto          # used when a request omits clarification_mode
-                                # (auto = veritas; manual = TUI relay).
-                                # Autopilot always forces auto.
+    auto_policy: veritas # only built-in for now
+    auto_min_confidence: 0.4 # below this, veritas answer is treated as defer
+    max_defer_age_hours: 168 # autopilot: scrub stale awaiting_clarification goals
+    default_mode:
+      auto # used when a request omits clarification_mode
+      # (auto = veritas; manual = TUI relay).
+      # Autopilot always forces auto.
 
   # === VERITAS (Clarification auto-answerer, RFC-622) ===
   veritas:
-    model_role: think           # reuses the existing "think" ModelRole
-    max_context_steps: 8        # how many recent step outputs to include
+    model_role: think # reuses the existing "think" ModelRole
+    max_context_steps: 8 # how many recent step outputs to include
 
   # === CODE INTERPRETER (Embedded QuickJS) ===
   code_interpreter:
@@ -311,15 +315,9 @@ tools:
   wizsearch:
     enabled: true
     default_engines:
-    - tavily
+      - tavily
     max_results_per_engine: 10
     timeout: 30
-  image:
-    enabled: false
-  audio:
-    enabled: false
-  video:
-    enabled: false
   http_requests:
     enabled: true
     allow_dangerous_requests: true
@@ -333,7 +331,6 @@ tools:
     token: null
     timeout: 60
     max_retries: 3
-
 # ============================================================
 # SUBAGENTS (Specialized Helper Agents)
 # ============================================================
@@ -358,14 +355,14 @@ subagents:
       enable_semantic_similarity: true
       semantic_similarity_timeout_seconds: 10
       synthesis_timeout_seconds: 120
-    runtime_dir: ''
+    runtime_dir: ""
   plan:
     enabled: true
     model: null
     transport: local
     url: null
     config: {}
-    runtime_dir: ''
+    runtime_dir: ""
   tacitus:
     enabled: true
     model: null
@@ -373,16 +370,16 @@ subagents:
     url: null
     config:
       llm_role: fast
-      synthesis_role: fast        # set to ``think`` for higher-quality synthesis at higher latency
+      synthesis_role: fast # set to ``think`` for higher-quality synthesis at higher latency
       effort: normal
-    runtime_dir: ''
+    runtime_dir: ""
   browser_use:
     enabled: false
     model: null
     transport: local
     url: null
     config: {}
-    runtime_dir: ''
+    runtime_dir: ""
 
 # ============================================================
 # MCP SERVERS, PLUGINS, SKILLS, MEMORY
@@ -408,16 +405,22 @@ subagents:
 #       defer: true
 mcp_servers: []
 progressive_mcp:
-  budget_pct: 0.01                  # fraction of context_window_limit for <AVAILABLE_MCP_TOOLS> listing
-  max_listing_chars_per_entry: 250  # hard per-entry tool description cap
-  min_listing_chars_per_entry: 20   # below this, non-essential entries become names-only
+  budget_pct: 0.01 # fraction of context_window_limit for <AVAILABLE_MCP_TOOLS> listing
+  max_listing_chars_per_entry: 250 # hard per-entry tool description cap
+  min_listing_chars_per_entry: 20 # below this, non-essential entries become names-only
 
 plugins: []
 skills: []
 progressive_skills:
-  budget_pct: 0.01                  # fraction of context_window_limit for <AVAILABLE_SKILLS> listing
-  max_listing_chars_per_entry: 250  # hard per-entry description cap
-  min_listing_chars_per_entry: 20   # below this, non-builtin entries become names-only
+  budget_pct: 0.01 # fraction of context_window_limit for <AVAILABLE_SKILLS> listing
+  max_listing_chars_per_entry: 250 # hard per-entry description cap
+  min_listing_chars_per_entry: 20 # below this, non-builtin entries become names-only
+progressive_tools:
+  enabled: true # bind core tools only; list deferred in prompt
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 120
+  min_listing_chars_per_entry: 20
+  search_tools_enabled: true
 memory: []
 
 # ============================================================
@@ -438,7 +441,7 @@ observability:
     enabled: false
     level: WARNING
     stream: stderr
-    format: '%(level_short)s %(name)s %(message)s'
+    format: "%(level_short)s %(name)s %(message)s"
   global_history:
     enabled: true
     max_size: 5000
@@ -487,8 +490,8 @@ persistence:
   checkpoint_sqlite_path: null
 
 vector_stores:
-- name: sqlite_vec_default
-  provider_type: sqlite_vec
+  - name: sqlite_vec_default
+    provider_type: sqlite_vec
 
 vector_store_router:
   default: sqlite_vec_default:soothe_default
@@ -501,29 +504,29 @@ security:
   allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true
   denied_paths:
-  - /etc/**
-  - /bin/**
-  - /sbin/**
-  - /usr/**
-  - /System/**
-  - /Library/**
-  - /private/etc/**
-  - ~/.ssh/**
-  - ~/.gnupg/**
-  - ~/.aws/**
-  - '**/.env'
-  - '**/credentials.json'
-  - '**/secrets.json'
+    - /etc/**
+    - /bin/**
+    - /sbin/**
+    - /usr/**
+    - /System/**
+    - /Library/**
+    - /private/etc/**
+    - ~/.ssh/**
+    - ~/.gnupg/**
+    - ~/.aws/**
+    - "**/.env"
+    - "**/credentials.json"
+    - "**/secrets.json"
   allowed_paths:
-  - '**'
+    - "**"
   denied_file_types: []
   require_approval_for_file_types:
-  - .env
-  - .pem
-  - .key
-  - .p12
-  - .pfx
-  - .crt
+    - .env
+    - .pem
+    - .key
+    - .p12
+    - .pfx
+    - .crt
   whitelist_paths_bypass: []
   whitelist_commands_bypass: []
 
@@ -576,5 +579,5 @@ optimization:
 # to container paths. Set both fields to enable; leave both unset for local runs.
 # The Docker volume mount must match: -v <host_root>:<container_root>
 workspace_mount:
-  host_root: null           # e.g. /var/run/soothe/workspaces
-  container_root: null      # e.g. /workspaces
+  host_root: null # e.g. /var/run/soothe/workspaces
+  container_root: null # e.g. /workspaces

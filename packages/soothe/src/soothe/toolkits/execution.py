@@ -434,17 +434,25 @@ class ExecutionToolkit:
     """
 
     def __init__(
-        self, *, workspace_root: str = "", timeout: int = 60, security_config: Any = None
+        self,
+        *,
+        workspace_root: str = "",
+        timeout: int = 60,
+        security_config: Any = None,
+        max_output_length: int = DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     ) -> None:
         """Initialize toolkit.
 
         Args:
             workspace_root: Working directory for commands.
             timeout: Default command timeout in seconds.
+            security_config: Security configuration for operation policy.
+            max_output_length: Max stdout chars for run_command.
         """
         self._workspace_root = workspace_root
         self._timeout = timeout
         self._security_config = security_config
+        self._max_output_length = max_output_length
 
     def get_tools(self) -> list[BaseTool]:
         """Get list of langchain tools.
@@ -461,6 +469,7 @@ class ExecutionToolkit:
                 workspace_root=self._workspace_root,
                 timeout=self._timeout,
                 security_config=self._security_config,
+                max_output_length=self._max_output_length,
             ),
             RunPythonREPLTool(),
             RunBackgroundTool(
@@ -472,7 +481,11 @@ class ExecutionToolkit:
 
 
 def create_execution_tools(
-    *, workspace_root: str = "", timeout: int = 60, security_config: Any = None
+    *,
+    workspace_root: str = "",
+    timeout: int = 60,
+    security_config: Any = None,
+    max_output_length: int = DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
 ) -> list[BaseTool]:
     """Factory function to create execution tools.
 
@@ -487,8 +500,18 @@ def create_execution_tools(
         workspace_root=workspace_root,
         timeout=timeout,
         security_config=security_config,
+        max_output_length=max_output_length,
     )
     return toolkit.get_tools()
+
+
+def _execution_max_output_from_config(config: Any | None) -> int:
+    if config is None:
+        return DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+    try:
+        return int(config.agent.loop.limits.code_exec_max_output_chars)
+    except (AttributeError, TypeError, ValueError):
+        return DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
 
 
 @plugin(
