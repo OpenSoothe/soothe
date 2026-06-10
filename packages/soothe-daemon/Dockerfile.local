@@ -57,6 +57,13 @@ RUN set -eux; \
         "/src/soothe[research,dashscope,semantic]" \
         "/src/soothe-daemon"
 
+# Warmup embedding model (cached separately from deps and source)
+COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
+RUN mkdir -p /root/.cache/soothe/models/embeddings \
+    && /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
+        || echo "Embedding warmup skipped (will download at runtime)" \
+    && rm -f /tmp/warmup_embedding_model.py
+
 # =============================================================================
 # Stage 2: install actual source code (fast, no network needed)
 # =============================================================================
@@ -65,15 +72,9 @@ FROM deps AS source
 COPY packages/soothe-sdk /src/soothe-sdk
 COPY packages/soothe /src/soothe
 COPY packages/soothe-daemon /src/soothe-daemon
-COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
 
-RUN set -eux; \
-    uv pip install --python /app/.venv/bin/python --no-deps --reinstall \
-        "/src/soothe-sdk" "/src/soothe" "/src/soothe-daemon"; \
-    mkdir -p /root/.cache/soothe/models/embeddings; \
-    /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
-        || echo "Embedding warmup skipped (will download at runtime)"; \
-    rm -f /tmp/warmup_embedding_model.py
+RUN uv pip install --python /app/.venv/bin/python --no-deps --reinstall \
+        "/src/soothe-sdk" "/src/soothe" "/src/soothe-daemon"
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
