@@ -177,6 +177,7 @@ Technical documentation for developers and system architects.
 | [IG-420](impl/IG-420-goal-engine-agentloop-autopilot-integration.md) | Goal Engine AgentLoop Autopilot Integration |
 | [IG-421](impl/IG-421-step-card-tool-stats-display.md) | Step Card Tool Stats Display |
 | [IG-422](impl/IG-422-cli-runtime-module.md) | CLI Runtime Module |
+| [IG-423](impl/IG-423-code-interpreter-middleware.md) | Code Interpreter Middleware |
 | [IG-425](impl/IG-425-tacitus-subagent.md) | Tacitus Subagent |
 | [IG-426](impl/IG-426-tui-streaming-event-reduction.md) | TUI Streaming Event Reduction |
 | [IG-427](impl/IG-427-stream-event-volume-fifo-latency.md) | Stream Event Volume FIFO Latency |

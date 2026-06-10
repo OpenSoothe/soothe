@@ -55,7 +55,7 @@ embedding_dims: 1536
 # AGENT (Identity, Behavior, Self-Driving, Loop, Protocols)
 # ============================================================
 # All agent-related settings consolidated in one section (IG-434).
-# Progressive disclosure: basic → autonomous → loop → protocols.
+# Progressive disclosure: basic → autonomous → loop → protocols → code_interpreter.
 
 agent:
   # === BASIC (User Identity) ===
@@ -288,6 +288,17 @@ agent:
   veritas:
     model_role: think # reuses the existing "think" ModelRole
     max_context_steps: 8 # how many recent step outputs to include
+
+  # === CODE INTERPRETER (Embedded QuickJS) ===
+  code_interpreter:
+    enabled: true
+    ptc_allowlist: []
+    memory_limit_mb: 128
+    timeout_seconds: 30
+    max_ptc_calls: 50
+    max_result_size: 100000
+    console_capture: true
+    snapshot_between_turns: false
 
 # ============================================================
 # TOOLS (Capabilities Available to Agent)
