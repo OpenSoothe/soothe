@@ -82,15 +82,10 @@ agent:
 # SUBAGENTS
 # ============================================================
 # Built-in subagents (explore, plan, tacitus) are registered automatically.
-# Community subagents (claude, browser_use) require soothe-plugins package.
+# browser_use requires soothe[browser_use]. Claude Code uses agent.core_agent_backend: claude.
 subagents:
   browser_use:
     enabled: true
-  tacitus:
-    config:
-      llm_role: fast
-      synthesis_role: think
-      effort: normal
 
 # ============================================================
 # OBSERVABILITY

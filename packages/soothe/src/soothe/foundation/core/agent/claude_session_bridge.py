@@ -1,4 +1,4 @@
-"""Map Soothe LangGraph threads to Claude Agent SDK session ids (IG-202).
+"""Map Soothe threads to Claude Agent SDK session ids.
 
 Persists ``cwd -> session_uuid`` in thread metadata (durability) and mirrors in
 process memory for fast lookup within a run.
@@ -69,7 +69,6 @@ async def record_claude_session(
             return
         merged = dict(info.metadata.claude_sessions)
         merged[cwd] = session_id
-        # Lazy import for runtime-only dependency on soothe daemon
         from soothe.protocols.durability import ThreadMetadata
 
         await durability.update_thread_metadata(thread_id, ThreadMetadata(claude_sessions=merged))

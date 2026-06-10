@@ -376,13 +376,6 @@ subagents:
       synthesis_role: fast        # set to ``think`` for higher-quality synthesis at higher latency
       effort: normal
     runtime_dir: ''
-  claude:
-    enabled: false
-    model: null
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
   browser_use:
     enabled: false
     model: null

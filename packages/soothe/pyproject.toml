@@ -119,7 +119,6 @@ dev = [
 
 [project.entry-points."soothe.plugins"]
 browser_use = "soothe.subagents.browser_use:BrowserUsePlugin"
-claude = "soothe.subagents.claude:ClaudePlugin"
 
 [project.urls]
 Homepage = "https://github.com/mirasoth/soothe"

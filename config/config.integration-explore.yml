@@ -1,5 +1,5 @@
 # Explore-focused integration/CI profile: PostgreSQL + Langfuse (same stack as dev).
-# Turns off browser, claude, and research subagents so runs focus on explore.
+# Turns off browser_use subagent so runs focus on explore.
 #
 #   SOOTHE_INTEGRATION_BASE_CONFIG=/abs/path/config.integration-explore.yml pytest ... --run-integration
 #
