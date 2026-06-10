@@ -1,9 +1,11 @@
-"""Memory profiling service using tracemalloc (IG-475).
+"""Memory profiling service using tracemalloc (IG-475, IG-477).
 
 Provides real-time memory inspection via tracemalloc with:
 - HTTP endpoints for snapshot comparison and top allocations
 - Automatic periodic logging of memory growth
 - Integration with daemon lifecycle
+- IG-477: Large allocation sampling (captures multi-MB objects)
+- IG-477: Queue depth metrics for stream backpressure debugging
 
 tracemalloc is chosen over objgraph/meliae because:
 - Built-in to Python 3.4+ (no external dependencies)
@@ -28,12 +30,21 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# IG-477: Minimum size for "large allocation" sampling (KB)
+LARGE_ALLOCATION_THRESHOLD_KB = 100.0
+
 
 class MemoryProfiler:
-    """Memory profiling service using tracemalloc (IG-475).
+    """Memory profiling service using tracemalloc (IG-475, IG-477).
 
     Start/stop integrates with daemon lifecycle. Provides methods for
     taking snapshots, comparing allocations, and getting memory stats.
+
+    IG-477 additions:
+    - `get_large_allocations()`: Captures multi-MB objects that standard
+      statistics("lineno") misses due to count-based aggregation
+    - `get_queue_metrics()`: Reports response queue depths for diagnosing
+      stream backpressure issues
 
     Args:
         config: MemoryProfilingConfig with tracing parameters.
@@ -148,6 +159,11 @@ class MemoryProfiler:
                 )
             result["top_allocations_by_traceback"] = top_tracebacks
 
+            # IG-477: Large allocations (>100KB) ranked by size
+            result["large_allocations"] = self.get_large_allocations(
+                snapshot=current_snapshot, min_size_kb=LARGE_ALLOCATION_THRESHOLD_KB
+            )
+
             # Compare with last snapshot if available
             if self._last_snapshot is not None:
                 diff = current_snapshot.compare_to(self._last_snapshot, "lineno")
@@ -164,6 +180,110 @@ class MemoryProfiler:
                 result["growth_since_last"] = growth
 
         return result
+
+    def get_large_allocations(
+        self,
+        snapshot: tracemalloc.Snapshot | None = None,
+        min_size_kb: float = LARGE_ALLOCATION_THRESHOLD_KB,
+    ) -> list[dict[str, Any]]:
+        """Get allocations larger than threshold, ranked by size.
+
+        IG-477: This captures large single objects (multi-MB strings/buffers)
+        that statistics("lineno") misses because it groups by count.
+
+        Args:
+            snapshot: Snapshot to analyze (takes new if None).
+            min_size_kb: Minimum allocation size to include (default 100KB).
+
+        Returns:
+            List of large allocations with traceback, size, and count.
+        """
+        if not self._running:
+            return []
+
+        if snapshot is None:
+            snapshot = tracemalloc.take_snapshot()
+
+        # Use traceback grouping to see full allocation chain
+        stats = snapshot.statistics("traceback")
+
+        large_allocs = []
+        for stat in stats:
+            size_kb = stat.size / 1024
+            if size_kb >= min_size_kb:
+                tb_lines = [f"{t.filename}:{t.lineno}" for t in stat.traceback]
+                large_allocs.append(
+                    {
+                        "size_kb": round(size_kb, 2),
+                        "count": stat.count,
+                        "traceback": tb_lines,
+                        "avg_size_kb": round(size_kb / max(stat.count, 1), 2),
+                    }
+                )
+
+        # Sort by size descending
+        large_allocs.sort(key=lambda x: x["size_kb"], reverse=True)
+        return large_allocs[: self._config.top_allocations_limit]
+
+    def get_queue_metrics(self) -> dict[str, Any]:
+        """Get queue depths from thread pool for backpressure debugging.
+
+        IG-477: Reports response queue depths to diagnose stream backpressure
+        issues. When queues are near capacity (100), it indicates client
+        delivery is slower than worker production.
+
+        Returns:
+            Dict with pending_responses count and per-worker queue metrics.
+        """
+        try:
+            from soothe_daemon.runner.thread_runner import ThreadPool
+        except ImportError:
+            return {"error": "ThreadPool module not available"}
+
+        pool = ThreadPool._shared_pool
+        if pool is None:
+            return {"error": "ThreadPool not initialized", "hint": "No queries have run yet"}
+
+        metrics: dict[str, Any] = {
+            "pending_responses_count": len(pool._pending_responses),
+            "workers_by_loop_count": len(pool._workers_by_loop_id),
+            "workers": {},
+            "config": {
+                "response_queue_maxsize": 100,  # IG-477: hardcoded bound
+            },
+        }
+
+        for worker_id, worker in pool._workers.items():
+            worker_metrics = {
+                "status": worker.status.value,
+                "current_loop_id": worker.current_loop_id,
+                "current_request_id": worker.current_request_id,
+                "requests_completed": worker.requests_completed,
+                "is_alive": worker.is_alive(),
+            }
+
+            # Get queue depth - threading.Queue.qsize() is approximate
+            try:
+                worker_metrics["response_queue_qsize"] = worker.response_queue.qsize()
+            except Exception:
+                worker_metrics["response_queue_qsize"] = "error"
+
+            metrics["workers"][worker_id] = worker_metrics
+
+        # Summary stats
+        queue_sizes = [
+            w.get("response_queue_qsize", 0)
+            for w in metrics["workers"].values()
+            if isinstance(w.get("response_queue_qsize"), int)
+        ]
+        if queue_sizes:
+            metrics["summary"] = {
+                "max_queue_depth": max(queue_sizes),
+                "avg_queue_depth": round(sum(queue_sizes) / len(queue_sizes), 2),
+                "workers_near_capacity": sum(1 for q in queue_sizes if q >= 90),
+            }
+
+        return metrics
 
     def get_object_counts(self) -> dict[str, int]:
         """Get counts of Python objects by type using gc.get_objects().
@@ -309,4 +429,4 @@ class MemoryProfiler:
         return result
 
 
-__all__ = ["MemoryProfiler"]
+__all__ = ["MemoryProfiler", "LARGE_ALLOCATION_THRESHOLD_KB"]

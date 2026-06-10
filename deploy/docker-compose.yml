@@ -38,7 +38,7 @@ services:
 
   # Soothe Daemon - orchestration server
   soothed:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.0
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.1
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
@@ -61,7 +61,7 @@ services:
       # IG-475: Memory profiling (tracemalloc) for leak detection
       # Enable in production to diagnose memory growth (1GB→24GB issue)
       # Access stats via: curl http://localhost:8765/rpc/memory?mode=daemon
-      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-false}
+      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-true}
       SOOTHE_DAEMON_MEMORY_PROFILING__TRACE_DEPTH: ${SOOTHE_MEMORY_PROFILING_TRACE_DEPTH:-25}
       SOOTHE_DAEMON_MEMORY_PROFILING__LOG_GROWTH_THRESHOLD_MB: ${SOOTHE_MEMORY_PROFILING_LOG_GROWTH_THRESHOLD_MB:-100}
     ports:
