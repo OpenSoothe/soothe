@@ -366,11 +366,15 @@ class ClaudeCoreAgent:
                 durability=durability,
             )
 
+        result = "\n".join(collected_text) or "Claude task completed."
+        if cost_usd > 0:
+            result += f"\n\n[Cost: ${cost_usd:.4f}]"
+
+        stream_metadata = {"langgraph_node": "agent", "thread_id": thread_id or "unknown"}
+        if stream_mode and "messages" in stream_mode:
+            yield ((), "messages", (AIMessage(content=result), stream_metadata))
         if stream_mode and "updates" in stream_mode:
-            result = "\n".join(collected_text) or "Claude task completed."
-            if cost_usd > 0:
-                result += f"\n\n[Cost: ${cost_usd:.4f}]"
-            yield ("agent", {"messages": [AIMessage(content=result)]})
+            yield ((), "updates", {"agent": {"messages": [AIMessage(content=result)]}})
 
         logger.debug(
             "[ClaudeCoreAgent] Execution complete: result_length=%d, total_cost=%.4f",
@@ -458,7 +462,7 @@ class ClaudeCoreAgent:
         if "messages" in stream_mode:
             chunk = AIMessageChunk(content=text)
             metadata = {"langgraph_node": "agent", "thread_id": thread_id or "unknown"}
-            yield (metadata, chunk)
+            yield ((), "messages", (chunk, metadata))
 
     def _emit_tool_use_chunks(
         self,
@@ -472,13 +476,17 @@ class ClaudeCoreAgent:
             return
 
         if "custom" in stream_mode:
-            yield {
-                "event": "tool_use",
-                "tool": getattr(block, "name", ""),
-                "input": getattr(block, "input", {}),
-                "input_preview": _preview_claude_tool_input(tool_input),
-                "thread_id": thread_id or "unknown",
-            }
+            yield (
+                (),
+                "custom",
+                {
+                    "event": "tool_use",
+                    "tool": getattr(block, "name", ""),
+                    "input": getattr(block, "input", {}),
+                    "input_preview": _preview_claude_tool_input(tool_input),
+                    "thread_id": thread_id or "unknown",
+                },
+            )
 
 
 __all__ = [
