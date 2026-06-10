@@ -38,7 +38,8 @@ services:
 
   # Soothe Daemon - orchestration server
   soothed:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.1
+    # image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.1
+    image: soothed:0.6.2-local
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
@@ -61,9 +62,14 @@ services:
       # IG-475: Memory profiling (tracemalloc) for leak detection
       # Enable in production to diagnose memory growth (1GB→24GB issue)
       # Access stats via: curl http://localhost:8765/rpc/memory?mode=daemon
-      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-true}
+      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-false}
       SOOTHE_DAEMON_MEMORY_PROFILING__TRACE_DEPTH: ${SOOTHE_MEMORY_PROFILING_TRACE_DEPTH:-25}
       SOOTHE_DAEMON_MEMORY_PROFILING__LOG_GROWTH_THRESHOLD_MB: ${SOOTHE_MEMORY_PROFILING_LOG_GROWTH_THRESHOLD_MB:-100}
+      # IG-475: glibc malloc tuning to reduce RSS fragmentation
+      MALLOC_ARENA_MAX: "2"
+      MALLOC_TRIM_THRESHOLD_: "131072"
+      MALLOC_TOP_PAD_: "131072"
+      MALLOC_MMAP_THRESHOLD_: "131072"
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
@@ -72,20 +78,17 @@ services:
       - ./logs:/var/lib/soothe/logs  # Persist logs for restart analysis
       # RFC-621: Workspace host convention — mount host workspace root.
       - /Users/xiaming/Workspace:/var/lib/soothe/workspaces
-    # IG-475: Memory leak observed (1GB baseline → 24GB over time)
-    # Uncomment to cap memory and enable profiling for diagnosis:
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 4g
-    # Healthcheck using dedicated /healthz endpoint (RFC-620)
-    # Commented out until healthz endpoint returns proper status.
-    # healthcheck:
-    #   test: ["CMD-SHELL", "curl -sf http://localhost:8765/healthz || exit 1"]
-    #   interval: 60s
-    #   timeout: 10s
-    #   retries: 5
-    #   start_period: 60s
+    # IG-477: Cap memory to prevent OOM; daemon auto-restarts on limit hit.
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 networks:
   soothe-db:
