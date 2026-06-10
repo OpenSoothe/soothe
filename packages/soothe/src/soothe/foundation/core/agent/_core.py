@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain_core.runnables import RunnableConfig
     from langgraph.graph.state import CompiledStateGraph
+    from langgraph.pregel.base import BaseCheckpointSaver
 
     from soothe.config import SootheConfig
     from soothe.protocols.memory import MemoryProtocol
@@ -135,6 +136,15 @@ class CoreAgent:
         return self._graph
 
     @property
+    def checkpointer(self) -> BaseCheckpointSaver | None:
+        """LangGraph checkpointer for thread state persistence.
+
+        Returns the checkpointer attached to the underlying graph, or None
+        if checkpointing is not configured.
+        """
+        return getattr(self._graph, "checkpointer", None)
+
+    @property
     def config(self) -> SootheConfig:
         """SootheConfig used to create this agent."""
         return self._config
@@ -222,6 +232,20 @@ class CoreAgent:
                 graph_input, config or {}, stream_mode=stream_mode, subgraphs=subgraphs
             )
         return self._graph.astream(graph_input, config or {}, subgraphs=subgraphs)
+
+    async def aget_state(
+        self,
+        config: RunnableConfig | None = None,
+    ) -> Any:
+        """Get current graph state for a thread.
+
+        Args:
+            config: RunnableConfig with configurable.thread_id.
+
+        Returns:
+            State snapshot from LangGraph aget_state().
+        """
+        return await self._graph.aget_state(config=config or {})
 
     @classmethod
     def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CoreAgent:

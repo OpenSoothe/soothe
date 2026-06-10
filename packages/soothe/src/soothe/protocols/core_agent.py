@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
     from langgraph.graph.state import CompiledStateGraph
+    from langgraph.pregel.base import BaseCheckpointSaver
 
     from soothe.config import SootheConfig
 
@@ -46,6 +47,33 @@ class CoreAgentProtocol(Protocol):
         Note: This property is implementation-specific. Alternative
         implementations may not use LangGraph and should raise
         NotImplementedError or return a compatible adapter.
+        """
+        ...
+
+    @property
+    def checkpointer(self) -> BaseCheckpointSaver | None:
+        """LangGraph checkpointer for thread state persistence.
+
+        Returns None if the implementation doesn't use LangGraph checkpointing
+        or if checkpointing is disabled. Alternative implementations (e.g.,
+        ClaudeCoreAgent) return None since they manage state differently.
+        """
+        ...
+
+    async def aget_state(
+        self,
+        config: RunnableConfig | None = None,
+    ) -> Any:
+        """Get current graph state for a thread.
+
+        Args:
+            config: RunnableConfig with configurable.thread_id.
+
+        Returns:
+            State snapshot or None if unavailable (non-LangGraph implementations).
+
+        Note: Alternative implementations may return None if they don't
+        support state snapshots.
         """
         ...
 

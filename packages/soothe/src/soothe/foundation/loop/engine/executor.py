@@ -2204,7 +2204,7 @@ class Executor:
             # RFC-105: Snapshot skill_activation from graph state back into LoopState
             if loop_state is not None:
                 try:
-                    graph_state = await self.core_agent.graph.aget_state(
+                    graph_state = await self.core_agent.aget_state(
                         config={"configurable": {"thread_id": fork_thread_id}},
                     )
                     if graph_state and graph_state.values:
