@@ -171,10 +171,13 @@ class TestClaudeCoreAgentStreamConversion:
         """Test _emit_text_chunks with messages mode."""
         chunks = list(claude_agent._emit_text_chunks("text", ["messages"], "thread-1"))
         assert len(chunks) == 1
-        metadata, chunk = chunks[0]
+        namespace, mode, data = chunks[0]
+        assert namespace == ()
+        assert mode == "messages"
+        msg, metadata = data
         assert metadata["langgraph_node"] == "agent"
         assert metadata["thread_id"] == "thread-1"
-        assert chunk.content == "text"
+        assert msg.content == "text"
 
     def test_emit_tool_use_chunks_no_mode(self, claude_agent):
         """Test _emit_tool_use_chunks with no stream_mode."""
@@ -191,10 +194,30 @@ class TestClaudeCoreAgentStreamConversion:
         block.input = {"arg": "value"}
         chunks = list(claude_agent._emit_tool_use_chunks(block, ["custom"], "thread-1"))
         assert len(chunks) == 1
-        assert chunks[0]["event"] == "tool_use"
-        assert chunks[0]["tool"] == "test_tool"
-        assert chunks[0]["input"] == {"arg": "value"}
-        assert chunks[0]["thread_id"] == "thread-1"
+        namespace, mode, payload = chunks[0]
+        assert namespace == ()
+        assert mode == "custom"
+        assert payload["event"] == "tool_use"
+        assert payload["tool"] == "test_tool"
+        assert payload["input"] == {"arg": "value"}
+        assert payload["thread_id"] == "thread-1"
+
+    def test_emit_text_chunks_langgraph_compatible(self, claude_agent):
+        """Stream chunks must match LangGraph format for executor aggregation."""
+        from langchain_core.messages import AIMessageChunk
+
+        from soothe.foundation.loop.utils.stream_normalize import (
+            extract_text_from_message_content,
+            iter_messages_for_act_aggregation,
+        )
+
+        chunks = list(claude_agent._emit_text_chunks("hello", ["messages"], "thread-1"))
+        messages = []
+        for chunk in chunks:
+            messages.extend(iter_messages_for_act_aggregation(chunk))
+        assert len(messages) == 1
+        assert isinstance(messages[0], AIMessageChunk)
+        assert extract_text_from_message_content(messages[0].content) == "hello"
 
 
 class TestClaudeCoreAgentAstream:
