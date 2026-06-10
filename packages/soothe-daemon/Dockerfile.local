@@ -10,7 +10,7 @@
 ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 # =============================================================================
-# Stage 1: install local packages + warmup embedding cache
+# Stage 1: install third-party deps (cached until pyproject.toml changes)
 # =============================================================================
 FROM ${PYTHON_BASE} AS deps
 
@@ -31,17 +31,45 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 
 RUN uv venv /app/.venv
 
+# Copy only dependency metadata (cached until pyproject.toml or VERSION changes)
+# hatch version uses path="../../VERSION" relative to each pyproject.toml
 COPY VERSION /VERSION
+COPY packages/soothe-sdk/pyproject.toml /src/soothe-sdk/pyproject.toml
+COPY packages/soothe/pyproject.toml /src/soothe/pyproject.toml
+COPY packages/soothe-daemon/pyproject.toml /src/soothe-daemon/pyproject.toml
+
+# Create minimal package stubs so hatchling can resolve version + local deps
+RUN mkdir -p /src/soothe-sdk/src/soothe_sdk \
+    && touch /src/soothe-sdk/src/soothe_sdk/__init__.py \
+    && touch /src/soothe-sdk/README.md \
+    && mkdir -p /src/soothe/src/soothe \
+    && touch /src/soothe/src/soothe/__init__.py \
+    && touch /src/soothe/README.md \
+    && mkdir -p /src/soothe-daemon/src/soothe_daemon \
+    && touch /src/soothe-daemon/src/soothe_daemon/__init__.py \
+    && touch /src/soothe-daemon/README.md
+
+# Install all third-party dependencies (this layer is cached)
+RUN set -eux; \
+    uv pip install --python /app/.venv/bin/python \
+        --index-url https://mirrors.aliyun.com/pypi/simple/ \
+        "/src/soothe-sdk" \
+        "/src/soothe[research,dashscope,semantic]" \
+        "/src/soothe-daemon"
+
+# =============================================================================
+# Stage 2: install actual source code (fast, no network needed)
+# =============================================================================
+FROM deps AS source
+
 COPY packages/soothe-sdk /src/soothe-sdk
 COPY packages/soothe /src/soothe
 COPY packages/soothe-daemon /src/soothe-daemon
 COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
 
 RUN set -eux; \
-    uv pip install --python /app/.venv/bin/python \
-        "/src/soothe-sdk" \
-        "/src/soothe[research,tabular,document,github,dashscope,langfuse,claude,semantic]" \
-        "/src/soothe-daemon"; \
+    uv pip install --python /app/.venv/bin/python --no-deps --reinstall \
+        "/src/soothe-sdk" "/src/soothe" "/src/soothe-daemon"; \
     mkdir -p /root/.cache/soothe/models/embeddings; \
     /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
         || echo "Embedding warmup skipped (will download at runtime)"; \
@@ -50,7 +78,7 @@ RUN set -eux; \
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # =============================================================================
-# Stage 2: minimal runtime (non-root)
+# Stage 3: minimal runtime (non-root)
 # =============================================================================
 FROM ${PYTHON_BASE} AS runtime
 
@@ -67,7 +95,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY --from=deps /app/.venv /app/.venv
+COPY --from=source /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
@@ -77,7 +105,7 @@ RUN useradd --create-home --system soothe \
     && chown -R soothe:soothe /var/lib/soothe /home/soothe/.cache
 
 RUN mkdir -p /home/soothe/.cache/soothe/models/embeddings
-COPY --from=deps --chown=soothe:soothe /root/.cache/soothe/models/embeddings/ /home/soothe/.cache/soothe/models/embeddings/
+COPY --from=source --chown=soothe:soothe /root/.cache/soothe/models/embeddings/ /home/soothe/.cache/soothe/models/embeddings/
 
 USER soothe
 WORKDIR /var/lib/soothe
