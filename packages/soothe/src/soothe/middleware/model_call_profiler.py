@@ -31,6 +31,38 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_BLOCK_TAGS: tuple[tuple[str, str], ...] = (
+    ("WORKSPACE_INSTRUCTIONS", "workspace_instructions"),
+    ("AVAILABLE_SKILLS", "skills"),
+    ("AVAILABLE_MCP_TOOLS", "mcp"),
+    ("AVAILABLE_TOOLS", "available_tools"),
+    ("WORKSPACE_RULES", "workspace_rules"),
+    ("TOOL_ORCHESTRATION", "orchestration"),
+)
+
+
+def _block_char_sizes(text: str) -> dict[str, int]:
+    """Approximate per-block char counts in the effective system prompt."""
+    sizes: dict[str, int] = {label: 0 for _, label in _BLOCK_TAGS}
+    upper = text.upper()
+    for tag, label in _BLOCK_TAGS:
+        open_tag = f"<{tag}"
+        close_tag = f"</{tag}>"
+        start = 0
+        while True:
+            idx = upper.find(open_tag, start)
+            if idx < 0:
+                break
+            end = upper.find(close_tag, idx)
+            if end < 0:
+                break
+            end += len(close_tag)
+            sizes[label] += end - idx
+            start = end
+    sizes["base"] = max(0, len(text) - sum(sizes.values()))
+    return sizes
+
+
 # Track chain depth for nested Soothe middleware profiler calls
 _chain_depth = 0
 
@@ -182,6 +214,19 @@ class ModelCallProfilerMiddleware(AgentMiddleware):
             input_chars,
             sys_chars,
         )
+        if sys_chars > 0 and isinstance(request.system_message.content, str):
+            blocks = _block_char_sizes(request.system_message.content)
+            logger.info(
+                "[ModelProfiler] SYS_BLOCKS base=%d workspace_instructions=%d "
+                "skills=%d mcp=%d available_tools=%d workspace_rules=%d orchestration=%d",
+                blocks.get("base", 0),
+                blocks.get("workspace_instructions", 0),
+                blocks.get("skills", 0),
+                blocks.get("mcp", 0),
+                blocks.get("available_tools", 0),
+                blocks.get("workspace_rules", 0),
+                blocks.get("orchestration", 0),
+            )
 
         # Call handler (this includes inner middleware + LLM call)
         handler_start = time.perf_counter()

@@ -10,6 +10,19 @@ from soothe.foundation.loop.prompts import PromptBuilder
 from soothe.foundation.loop.state.schemas import LoopState
 
 
+def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
+    from soothe.foundation.loop.prompts.project_instructions import (
+        load_workspace_project_instructions,
+    )
+
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text("A" * 20_000, encoding="utf-8")
+    block = load_workspace_project_instructions(tmp_path, headline_max_chars=8000)
+    assert block is not None
+    assert len(block) < 20_000
+    assert "<note>" in block or 'inlined="partial"' in block
+
+
 def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Path) -> None:
     from soothe.foundation.loop.prompts.project_instructions import (
         load_workspace_project_instructions,

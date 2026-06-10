@@ -48,9 +48,6 @@ def _minimal_config_sample_echo_only() -> SootheConfig:
         wizsearch={"enabled": False},
         datetime={"enabled": False},
         data={"enabled": False},
-        image={"enabled": False},
-        audio={"enabled": False},
-        video={"enabled": False},
         http_requests={"enabled": False},
     )
     for key in list(cfg.subagents.keys()):

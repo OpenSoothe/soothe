@@ -171,6 +171,21 @@ def build_soothe_middleware_stack(
     stack.append(NetworkToolErrorsMiddleware())
     logger.debug("[Middleware] Network tool error recovery enabled")
 
+    # 2c. Cap tool output before graph state / model context
+    from .tool_output_cap import ToolOutputCapMiddleware
+
+    stack.append(ToolOutputCapMiddleware(config=config))
+    logger.debug("[Middleware] Tool output cap enabled")
+
+    # 2d. Progressive builtin-tool loading (optional)
+    progressive_tool_middleware = None
+    if config.progressive_tools.enabled:
+        from .progressive_tools import ProgressiveToolMiddleware
+
+        progressive_tool_middleware = ProgressiveToolMiddleware(config=config)
+        stack.append(progressive_tool_middleware)
+        logger.info("[Middleware] Progressive tool loading enabled")
+
     # 3. System prompt assembly (requires routing_classification from AgentLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
@@ -180,6 +195,7 @@ def build_soothe_middleware_stack(
             tool_trigger_registry=trigger_registry,
             tool_context_registry=context_registry,
             mcp_registry=mcp_registry,
+            progressive_tool_middleware=progressive_tool_middleware,
         )
     )
     logger.info("[Middleware] System prompt middleware enabled")

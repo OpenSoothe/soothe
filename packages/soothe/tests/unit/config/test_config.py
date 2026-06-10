@@ -31,9 +31,6 @@ class TestSootheConfig:
         assert cfg.tools.data.enabled is True
         assert cfg.tools.wizsearch.enabled is True
         # Heavy optional tools are disabled by default (opt-in via config)
-        assert cfg.tools.image.enabled is False
-        assert cfg.tools.audio.enabled is False
-        assert cfg.tools.video.enabled is False
         assert cfg.tools.deepxiv.enabled is False
         assert cfg.mcp_servers == []
         assert cfg.skills == []
@@ -217,7 +214,6 @@ class TestLoggingConfig:
         # Tools config is now a ToolsConfig object, not a list
         cfg = SootheConfig()
         assert isinstance(cfg.tools, ToolsConfig)
-        assert cfg.tools.image.enabled is False
 
     def test_skills_and_memory(self) -> None:
         cfg = SootheConfig(

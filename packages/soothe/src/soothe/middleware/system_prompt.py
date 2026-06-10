@@ -168,6 +168,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         tool_trigger_registry: ToolTriggerRegistry | None = None,
         tool_context_registry: ToolContextRegistry | None = None,
         mcp_registry: Any | None = None,
+        progressive_tool_middleware: Any | None = None,
     ) -> None:
         """Initialize the system prompt middleware.
 
@@ -176,11 +177,14 @@ class SystemPromptMiddleware(AgentMiddleware):
             tool_trigger_registry: Optional registry for tool→section triggers.
             tool_context_registry: Optional registry for tool→context fragments.
             mcp_registry: Optional MCPRegistry for MCP tool listing (RFC-412).
+            progressive_tool_middleware: Optional ``ProgressiveToolMiddleware`` for
+                deferred-tool listing from the full catalog (unfiltered).
         """
         self._config = config
         self._tool_trigger_registry = tool_trigger_registry
         self._tool_context_registry = tool_context_registry
         self._mcp_registry = mcp_registry
+        self._progressive_tool_middleware = progressive_tool_middleware
 
     @staticmethod
     def _langfuse_runnable_config() -> dict[str, Any] | None:
@@ -433,7 +437,11 @@ class SystemPromptMiddleware(AgentMiddleware):
                 load_workspace_project_instructions,
             )
 
-            ws_instructions = load_workspace_project_instructions(workspace)
+            headline_cap = int(self._config.agent.workspace_instructions_max_chars)
+            ws_instructions = load_workspace_project_instructions(
+                workspace,
+                headline_max_chars=headline_cap,
+            )
             if ws_instructions:
                 static_sections.append(ws_instructions)
 
@@ -791,6 +799,62 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         return f"<AVAILABLE_MCP_TOOLS>\n{text}\n</AVAILABLE_MCP_TOOLS>"
 
+    def _compose_available_tools_block(
+        self,
+        state: dict[str, Any] | None,
+        deferred_tools: list[Any] | None,
+    ) -> str | None:
+        """Compose ``<AVAILABLE_TOOLS>`` for deferred builtin tools."""
+        if not self._config.progressive_tools.enabled or not state:
+            return None
+
+        from soothe.toolkits.progressive.budget import format_tools_within_budget
+        from soothe.toolkits.progressive.registry import ProgressiveToolRegistry
+
+        pt = self._config.progressive_tools
+        core = list(pt.core_tools) if pt.core_tools else None
+        if pt.search_tools_enabled:
+            if core is None:
+                from soothe.toolkits.progressive.registry import DEFAULT_CORE_TOOL_NAMES
+
+                core = list(DEFAULT_CORE_TOOL_NAMES)
+            elif "search_tools" not in core:
+                core.append("search_tools")
+        registry = ProgressiveToolRegistry(core_tools=core)
+
+        if deferred_tools is None:
+            return None
+
+        descriptors = registry.descriptors_from_tools(deferred_tools)
+        _, deferred = registry.partition(descriptors)
+        if not deferred:
+            return None
+
+        activation = state.get("tool_activation")
+        if not isinstance(activation, dict):
+            activation = ProgressiveToolRegistry.init_activation_state()
+            state["tool_activation"] = activation
+
+        new_entries = registry.new_for_thread(activation, deferred)
+        if not new_entries:
+            return None
+
+        ctx_limit = int(self._config.agent.loop.context_window_limit)
+        budget_chars = max(0, int(ctx_limit * float(pt.budget_pct)))
+        text, _telemetry = format_tools_within_budget(
+            new_entries,
+            budget_chars=budget_chars,
+            per_entry_cap_chars=int(pt.max_listing_chars_per_entry),
+            min_per_entry_chars=int(pt.min_listing_chars_per_entry),
+            include_preamble=True,
+        )
+        if not text:
+            return None
+
+        registry.mark_sent(activation, [e.name for e in new_entries])
+        state["tool_activation"] = activation
+        return f"<AVAILABLE_TOOLS>\n{text}\n</AVAILABLE_TOOLS>"
+
     def _build_agent_loop_output_contract_section(
         self, config: SootheConfig | None = None
     ) -> str | None:
@@ -931,9 +995,23 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "continue_loop_mode": request.state.get("continue_loop_mode"),
                 "synthesis_scenario": request.state.get("synthesis_scenario"),
                 "skill_activation": request.state.get("skill_activation"),
+                "tool_activation": request.state.get("tool_activation"),
             }
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
+
+        if self._config.progressive_tools.enabled:
+            listing_tools: list[Any] = getattr(request, "tools", None) or []
+            if self._progressive_tool_middleware is not None:
+                full_catalog = self._progressive_tool_middleware.full_tools_for_listing()
+                if full_catalog:
+                    listing_tools = full_catalog
+            tools_block = self._compose_available_tools_block(
+                state_dict,
+                deferred_tools=listing_tools,
+            )
+            if tools_block:
+                optimized_prompt = f"{optimized_prompt}\n\n{tools_block}"
 
         # Extract execution hints from state for user message envelope (RFC-214)
         hints_text = self._extract_execution_hints_from_state(request.state)

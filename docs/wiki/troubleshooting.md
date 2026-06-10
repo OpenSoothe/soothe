@@ -381,10 +381,9 @@ router:
   fast: "openai:gpt-4o-mini"
 ```
 
-3. Enable caching:
-```yaml
-prompt_caching: true
-```
+3. Stabilize the cacheable prefix (RFC-214): keep workspace blocks and tool schemas
+   stable across hops; enable `progressive_tools` and cap `workspace_instructions_max_chars`
+   in `config.yml`. Provider-specific cache APIs are not configured via a single YAML flag.
 
 ### High Memory Usage
 

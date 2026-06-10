@@ -964,6 +964,10 @@ class LoopState(BaseModel):
     invoked_skill_names: set[str] = Field(default_factory=set)
     invoked_skill_bodies: dict[str, str] = Field(default_factory=dict)
 
+    # Progressive builtin-tool loading durability snapshot
+    sent_tool_names: set[str] = Field(default_factory=set)
+    promoted_tool_names: set[str] = Field(default_factory=set)
+
     # RFC-412: MCP progressive disclosure durability snapshot
     sent_mcp_tool_names: set[str] = Field(default_factory=set)
     invoked_mcp_tools: dict[str, dict] = Field(default_factory=dict)

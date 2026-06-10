@@ -26,6 +26,7 @@ from soothe.config.models import (
     PluginConfig,
     ProgressiveMCPConfig,
     ProgressiveSkillsConfig,
+    ProgressiveToolsConfig,
     ReportOutputConfig,
     SecurityConfig,
     SubagentConfig,
@@ -298,6 +299,9 @@ class SootheConfig(BaseSettings):
 
     progressive_skills: ProgressiveSkillsConfig = Field(default_factory=ProgressiveSkillsConfig)
     """RFC-105: Progressive skill listing budget and per-entry caps."""
+
+    progressive_tools: ProgressiveToolsConfig = Field(default_factory=ProgressiveToolsConfig)
+    """Progressive builtin-tool loading: core tier bound, deferred tools listed."""
 
     memory: list[str] = Field(default_factory=list)
     """AGENTS.md file paths passed to MemoryMiddleware."""

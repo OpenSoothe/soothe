@@ -70,8 +70,6 @@ pip install soothe[all]
 # - websearch ([websearch])
 # - tabular processing ([tabular])
 # - document handling ([document])
-# - media processing ([media])
-# - video processing ([video])
 # Optional plugin subagents: install soothe-plugins (see package docs)
 ```
 
