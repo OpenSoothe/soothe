@@ -424,7 +424,7 @@ class HttpRestChannel(Channel):
             """Query daemon memory profiling stats.
 
             Args:
-                mode: One of daemon, gc, snapshot, objects, compare.
+                mode: One of daemon, gc, snapshot, objects, compare, queues, large.
             """
             if profiler is None:
                 raise HTTPException(
@@ -454,11 +454,19 @@ class HttpRestChannel(Channel):
                     return {"memory_stats": stats}
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e)) from e
+            elif mode == "queues":
+                # IG-477: Queue depth metrics for backpressure debugging
+                metrics = await loop.run_in_executor(None, profiler.get_queue_metrics)
+                return {"memory_stats": {"queue_metrics": metrics}}
+            elif mode == "large":
+                # IG-477: Large allocations (>100KB) ranked by size
+                large = await loop.run_in_executor(None, profiler.get_large_allocations)
+                return {"memory_stats": {"large_allocations": large}}
             else:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Unknown mode: {mode!r}. "
-                    "Expected one of: daemon, gc, snapshot, objects, compare",
+                    "Expected one of: daemon, gc, snapshot, objects, compare, queues, large",
                 )
 
     async def start(self) -> None:

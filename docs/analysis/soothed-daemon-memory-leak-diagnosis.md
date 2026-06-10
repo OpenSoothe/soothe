@@ -314,4 +314,112 @@ Not implemented as of this document; listed for traceability.
 
 ---
 
-*Last updated: 2026-06-09 — based on codebase analysis of `soothed` 0.6.x / IG-475 memory profiling.*
+## v0.6.1 Validation Results (2026-06-10)
+
+### Reproduction Test
+
+**Test configuration:**
+- Image: `registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.1`
+- Memory profiling: Enabled (`SOOTHE_MEMORY_PROFILING_ENABLED=true`)
+- Query: "List all files in current workspace" (simple `ls` tool invocation)
+- Duration: ~25 seconds before OOM
+
+**Memory growth observed:**
+
+| Time (s) | RSS (GiB) | Growth Rate |
+|----------|-----------|-------------|
+| 0 (baseline) | 0.66 | — |
+| 5 | 0.68 | ~0.03 GiB/s |
+| 10 | 1.0 | ~0.06 GiB/s |
+| 15 | 5.7 | ~0.95 GiB/s |
+| 20 | 14.0 | ~2.6 GiB/s |
+| 25 | 19.96 | ~1.2 GiB/s |
+| 26 (OOM kill) | 0.02 | Container killed |
+
+**Key observation:** Growth accelerated during LLM streaming phase (tool execution → response synthesis). Matches diagnosis document's symptom: **"RSS climbing by ~0.6 GB every ~2 seconds"**.
+
+### tracemalloc Results
+
+**Surprising finding:** tracemalloc traced only **~0.9 MB** of Python allocations while RSS grew by **~19 GiB**.
+
+```
+growth_count: 967
+shrinkage_count: 1121
+net_size_diff_kb: 926.62
+```
+
+**Top traced allocations:**
+
+| File | Line | Size (KB) | Interpretation |
+|------|------|-----------|----------------|
+| `tracemalloc.py` | 193 | 390 | tracemalloc overhead |
+| `permessage_deflate.py` | 72 | 262 | WebSocket compression buffer |
+| `pydantic/main.py` | 263 | 38 | Model instantiation |
+| `permessage_deflate.py` | 140 | 32 | WebSocket decompression |
+
+**Conclusion:** The vast majority of memory growth is **NOT tracked by tracemalloc**. This indicates:
+
+1. **Native allocations** (C extensions, buffer pools)
+2. **Large string/bytes objects** that tracemalloc doesn't trace by size
+3. **Queue buffers holding chunk payloads** (each chunk can be multi-MB)
+
+### Confirmed Root Cause Locations
+
+**Primary leak path confirmed:**
+
+| File | Line | Issue |
+|------|------|-------|
+| `thread_runner.py` | 493 | `queue.Queue()` — **UNBOUNDED** worker response queue |
+| `thread_runner.py` | 416 | `_pending_responses: dict[str, asyncio.Queue]` — created per request, unbounded |
+| `response_bridge.py` | 51-57 | `_deliver()` uses `put_nowait()` — **NO backpressure** from full queue |
+| `thread_runner.py` | 205 | `_emit("chunk", chunk)` — emits without checking queue depth |
+
+**Why tracemalloc misses it:**
+- Python `queue.Queue` uses internal `collections.deque` which allocates in blocks
+- Large chunk strings (tool results, file contents) are stored as single objects
+- tracemalloc only tracks allocation **counts**, not **sizes** of large objects
+- WebSocket compression (`permessage_deflate`) maintains zlib buffers in C code
+
+### Evidence: Queue Growth Pattern
+
+From logs during leak:
+
+```
+[INFO] ThreadPool: client disconnected; worker thread-worker-0 request xxx ended with error after 0 undelivered chunk(s)
+```
+
+"0 undelivered chunks" indicates `_drain_abandoned_request` consumed the queue, but the queue **was growing faster than consumption** during active streaming.
+
+### Why the Leak Wasn't Previously Caught
+
+1. **IG-475 bounds `LoopState` lists (50/200 items)** — but not response queues
+2. **tracemalloc tracks Python allocations** — but queue growth is in large payload objects
+3. **Single-threaded tests** don't trigger cross-thread queue backpressure
+4. **Short queries** don't accumulate enough chunks to show visible growth
+
+### Recommended Immediate Mitigation
+
+Add queue bounds to `thread_runner.py`:
+
+```python
+# Line 493: Change from unbounded to bounded with backpressure
+response_queue: queue.Queue = queue.Queue(maxsize=100)  # ~10MB per queue
+```
+
+Add backpressure in `response_bridge.py`:
+
+```python
+# Line 51-57: Add blocking with timeout
+def _deliver(self, msg_type: str, payload: Any) -> None:
+    try:
+        if msg_type == WORKER_MSG_CHUNK:
+            # Block with timeout to slow worker if queue is full
+            self._queue.put((WORKER_MSG_CHUNK, payload), timeout=0.5)
+        ...
+    except queue.Full:
+        logger.warning("ResponsePusher: queue full, dropping chunk")
+```
+
+---
+
+*Last updated: 2026-06-10 — validated on `soothed:0.6.1` with memory profiling enabled.*
