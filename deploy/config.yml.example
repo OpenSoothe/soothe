@@ -53,7 +53,6 @@ vector_stores:
 vector_store_router:
   default: "pgvector:soothe_default"
 
-# RFC-621: Workspace host convention — path mapping for container deployments.
 # Maps host paths to container paths so the daemon can access client workspaces.
 workspace_mount:
   host_root: /Users/xiamingchen/Workspace

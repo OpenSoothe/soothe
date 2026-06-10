@@ -59,19 +59,31 @@ def hf_embedding_cache_dir() -> Path:
     return Path.home() / ".cache" / "soothe" / "models" / "huggingface"
 
 
-# Check if sentence_transformers is available
-_has_sentence_transformers = False
+# sentence_transformers is imported lazily on first semantic-similarity use.
+_has_sentence_transformers: bool | None = None
+_SentenceTransformer: type[Any] | None = None
 _transformer_model = None
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 _model_loading_attempted = False
 
-try:
-    from sentence_transformers import SentenceTransformer
 
-    _has_sentence_transformers = True
-    logger.debug("sentence_transformers available, semantic similarity enabled")
-except ImportError:
-    logger.debug("sentence_transformers not available, falling back to keyword similarity")
+def _ensure_sentence_transformers() -> bool:
+    """Import sentence_transformers on first use (avoids ~1-2s cold import at startup)."""
+    global _has_sentence_transformers, _SentenceTransformer
+
+    if _has_sentence_transformers is not None:
+        return _has_sentence_transformers
+
+    try:
+        from sentence_transformers import SentenceTransformer
+
+        _SentenceTransformer = SentenceTransformer
+        _has_sentence_transformers = True
+        logger.debug("sentence_transformers available, semantic similarity enabled")
+    except ImportError:
+        _has_sentence_transformers = False
+        logger.debug("sentence_transformers not available, falling back to keyword similarity")
+    return _has_sentence_transformers
 
 
 def _ensure_model_load_executor() -> ThreadPoolExecutor:
@@ -84,9 +96,9 @@ def _ensure_model_load_executor() -> ThreadPoolExecutor:
     return _model_load_executor
 
 
-def _load_transformer_model_in_thread() -> SentenceTransformer | None:
+def _load_transformer_model_in_thread() -> Any | None:
     """Load the embedding model in a worker thread (may download on first use)."""
-    if not _has_sentence_transformers:
+    if not _ensure_sentence_transformers() or _SentenceTransformer is None:
         return None
     cache_dir = hf_embedding_cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +110,7 @@ def _load_transformer_model_in_thread() -> SentenceTransformer | None:
         logger.debug("Loading embedding model in offline mode (cached locally)")
 
     try:
-        return SentenceTransformer(
+        return _SentenceTransformer(
             EMBEDDING_MODEL_NAME,
             cache_folder=str(cache_dir),
             local_files_only=use_offline,
@@ -107,7 +119,7 @@ def _load_transformer_model_in_thread() -> SentenceTransformer | None:
         # OSError raised when local_files_only=True but model not fully cached
         if use_offline:
             logger.warning("Cached model incomplete, attempting online download: %s", e)
-            return SentenceTransformer(
+            return _SentenceTransformer(
                 EMBEDDING_MODEL_NAME,
                 cache_folder=str(cache_dir),
                 local_files_only=False,
@@ -116,8 +128,8 @@ def _load_transformer_model_in_thread() -> SentenceTransformer | None:
 
 
 def _complete_transformer_model_load(
-    model: SentenceTransformer | None,
-) -> SentenceTransformer | None:
+    model: Any | None,
+) -> Any | None:
     """Store a loaded model globally and mark the load attempt complete."""
     global _transformer_model, _model_loading_attempted
 
@@ -134,7 +146,7 @@ def _complete_transformer_model_load(
     return _transformer_model
 
 
-def _get_transformer_model() -> SentenceTransformer | None:
+def _get_transformer_model() -> Any | None:
     """Load transformer model synchronously (only when no asyncio loop is running).
 
     Never call from a running event-loop thread: use ``async_get_transformer_model()``
@@ -143,7 +155,7 @@ def _get_transformer_model() -> SentenceTransformer | None:
     """
     global _transformer_model, _has_sentence_transformers, _model_loading_attempted
 
-    if not _has_sentence_transformers:
+    if not _ensure_sentence_transformers():
         return None
 
     if _model_loading_attempted:
@@ -177,12 +189,12 @@ def _get_transformer_model() -> SentenceTransformer | None:
             return None
 
 
-async def async_get_transformer_model() -> SentenceTransformer | None:
+async def async_get_transformer_model() -> Any | None:
     """Load the embedding model without blocking the asyncio event loop."""
     global _transformer_model, _has_sentence_transformers, _model_loading_attempted
     global _model_load_async_lock
 
-    if not _has_sentence_transformers:
+    if not _ensure_sentence_transformers():
         return None
     if _transformer_model is not None:
         return _transformer_model
@@ -242,7 +254,7 @@ def is_embedding_model_cached_locally() -> bool:
 
 def embedding_model_ready_without_download() -> bool:
     """Return True when semantic similarity can run without triggering a model download."""
-    if not _has_sentence_transformers:
+    if not _ensure_sentence_transformers():
         return False
     if _transformer_model is not None:
         return True
@@ -602,7 +614,7 @@ def warmup_embedding_model() -> bool:
     """
     logger.info("Warming up embedding model cache at %s", hf_embedding_cache_dir())
 
-    if not _has_sentence_transformers:
+    if not _ensure_sentence_transformers():
         logger.warning("sentence_transformers not available, skipping warmup")
         return False
 

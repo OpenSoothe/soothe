@@ -85,7 +85,7 @@ agent:
 # browser_use requires soothe[browser_use]. Claude Code uses agent.core_agent_backend: claude.
 subagents:
   browser_use:
-    enabled: true
+    enabled: false
 
 # ============================================================
 # OBSERVABILITY
