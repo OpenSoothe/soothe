@@ -315,21 +315,21 @@ tools:
     max_results_per_engine: 10
     timeout: 30
   image:
-    enabled: true
+    enabled: false
   audio:
-    enabled: true
+    enabled: false
   video:
-    enabled: true
+    enabled: false
   http_requests:
     enabled: true
     allow_dangerous_requests: true
     headers: {}
     verify_ssl: true
-  # DeepXiv: Academic paper search and progressive reading (enabled by default)
+  # DeepXiv: Academic paper search and progressive reading (opt-in)
   # Token: set DEEPXIV_API_KEY or DEEPXIV_TOKEN, or override token below
   # Register at https://data.rag.ac.cn (10,000 req/day); omit token for anonymous tier
   deepxiv:
-    enabled: true
+    enabled: false
     token: null
     timeout: 60
     max_retries: 3
