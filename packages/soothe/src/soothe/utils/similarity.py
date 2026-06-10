@@ -5,12 +5,12 @@ Provides reusable similarity calculation for:
 - Loop message similarity detection (future use)
 - Content deduplication and ranking
 
-Uses sentence_transformers when available and cached locally; keyword overlap is
+Uses FastEmbed (ONNX Runtime) when available and cached locally; keyword overlap is
 only used inside ``semantic_similarity`` when encoding fails (not for explore relevance).
 
 Model Cache:
-- ``SOOTHE_HF_CACHE`` env var overrides cache path (used in Docker builds)
-- Default: ``~/.cache/soothe/models/huggingface``
+- ``SOOTHE_EMBEDDING_CACHE`` env var overrides cache path (used in Docker builds)
+- Default: ``~/.cache/soothe/models/embeddings``
 - Use warmup_embedding_model() to pre-download models at daemon startup
 """
 
@@ -42,48 +42,48 @@ _model_load_thread_lock = threading.Lock()
 _model_load_async_lock: asyncio.Lock | None = None
 _MODEL_LOAD_TIMEOUT_SECONDS = 30.0
 
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-def hf_embedding_cache_dir() -> Path:
-    """HuggingFace cache directory for the embedding model (shared across processes).
-
-    Priority:
-    1. ``SOOTHE_HF_CACHE`` env var (for Docker builds and custom paths)
-    2. Default: ``~/.cache/soothe/models/huggingface``
-
-    Docker builds pre-cache models in ``SOOTHE_HF_CACHE`` for faster startup.
-    """
-    env_cache = os.environ.get("SOOTHE_HF_CACHE")
-    if env_cache:
-        return Path(env_cache)
-
-    return Path.home() / ".cache" / "soothe" / "models" / "huggingface"
-
-
-# sentence_transformers is imported lazily on first semantic-similarity use.
-_has_sentence_transformers: bool | None = None
-_SentenceTransformer: type[Any] | None = None
-_transformer_model = None
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+# FastEmbed is imported lazily on first semantic-similarity use.
+_has_fastembed: bool | None = None
+_TextEmbedding: type[Any] | None = None
+_embedding_model = None
 _model_loading_attempted = False
 
 
-def _ensure_sentence_transformers() -> bool:
-    """Import sentence_transformers on first use (avoids ~1-2s cold import at startup)."""
-    global _has_sentence_transformers, _SentenceTransformer
+def embedding_cache_dir() -> Path:
+    """FastEmbed model cache directory (shared across processes).
 
-    if _has_sentence_transformers is not None:
-        return _has_sentence_transformers
+    Priority:
+    1. ``SOOTHE_EMBEDDING_CACHE`` env var (for Docker builds and custom paths)
+    2. Default: ``~/.cache/soothe/models/embeddings``
+
+    Docker builds pre-cache models in ``SOOTHE_EMBEDDING_CACHE`` for faster startup.
+    """
+    env_cache = os.environ.get("SOOTHE_EMBEDDING_CACHE")
+    if env_cache:
+        return Path(env_cache)
+
+    return Path.home() / ".cache" / "soothe" / "models" / "embeddings"
+
+
+def _ensure_fastembed() -> bool:
+    """Import FastEmbed on first use (avoids cold import at startup)."""
+    global _has_fastembed, _TextEmbedding
+
+    if _has_fastembed is not None:
+        return _has_fastembed
 
     try:
-        from sentence_transformers import SentenceTransformer
+        from fastembed import TextEmbedding
 
-        _SentenceTransformer = SentenceTransformer
-        _has_sentence_transformers = True
-        logger.debug("sentence_transformers available, semantic similarity enabled")
+        _TextEmbedding = TextEmbedding
+        _has_fastembed = True
+        logger.debug("fastembed available, semantic similarity enabled")
     except ImportError:
-        _has_sentence_transformers = False
-        logger.debug("sentence_transformers not available, falling back to keyword similarity")
-    return _has_sentence_transformers
+        _has_fastembed = False
+        logger.debug("fastembed not available, falling back to keyword similarity")
+    return _has_fastembed
 
 
 def _ensure_model_load_executor() -> ThreadPoolExecutor:
@@ -91,75 +91,86 @@ def _ensure_model_load_executor() -> ThreadPoolExecutor:
     if _model_load_executor is None:
         _model_load_executor = ThreadPoolExecutor(
             max_workers=1,
-            thread_name_prefix="st_model_load",
+            thread_name_prefix="fe_model_load",
         )
     return _model_load_executor
 
 
-def _load_transformer_model_in_thread() -> Any | None:
+def encode_texts(model: Any, texts: list[str]) -> list[list[float]]:
+    """Encode texts to embedding vectors using a loaded FastEmbed model.
+
+    Args:
+        model: Loaded ``TextEmbedding`` instance.
+        texts: Input strings to embed.
+
+    Returns:
+        One embedding vector per input text.
+    """
+    if not texts:
+        return []
+    embeddings = list(model.embed(texts))
+    return [emb.tolist() for emb in embeddings]
+
+
+def _load_embedding_model_in_thread() -> Any | None:
     """Load the embedding model in a worker thread (may download on first use)."""
-    if not _ensure_sentence_transformers() or _SentenceTransformer is None:
+    if not _ensure_fastembed() or _TextEmbedding is None:
         return None
-    cache_dir = hf_embedding_cache_dir()
+    cache_dir = embedding_cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use local_files_only=True when model is already cached to avoid network timeouts
-    # when HuggingFace Hub is unreachable. Falls back to download mode if not cached.
     use_offline = is_embedding_model_cached_locally()
     if use_offline:
         logger.debug("Loading embedding model in offline mode (cached locally)")
 
     try:
-        return _SentenceTransformer(
-            EMBEDDING_MODEL_NAME,
-            cache_folder=str(cache_dir),
+        return _TextEmbedding(
+            model_name=EMBEDDING_MODEL_NAME,
+            cache_dir=str(cache_dir),
             local_files_only=use_offline,
         )
     except OSError as e:
-        # OSError raised when local_files_only=True but model not fully cached
         if use_offline:
             logger.warning("Cached model incomplete, attempting online download: %s", e)
-            return _SentenceTransformer(
-                EMBEDDING_MODEL_NAME,
-                cache_folder=str(cache_dir),
+            return _TextEmbedding(
+                model_name=EMBEDDING_MODEL_NAME,
+                cache_dir=str(cache_dir),
                 local_files_only=False,
             )
         raise
 
 
-def _complete_transformer_model_load(
-    model: Any | None,
-) -> Any | None:
+def _complete_embedding_model_load(model: Any | None) -> Any | None:
     """Store a loaded model globally and mark the load attempt complete."""
-    global _transformer_model, _model_loading_attempted
+    global _embedding_model, _model_loading_attempted
 
     _model_loading_attempted = True
     if model is None:
-        _transformer_model = None
+        _embedding_model = None
         return None
-    _transformer_model = model
+    _embedding_model = model
     logger.info(
-        "Loaded sentence_transformers model: %s (cache: %s)",
+        "Loaded FastEmbed model: %s (cache: %s)",
         EMBEDDING_MODEL_NAME,
-        hf_embedding_cache_dir(),
+        embedding_cache_dir(),
     )
-    return _transformer_model
+    return _embedding_model
 
 
-def _get_transformer_model() -> Any | None:
-    """Load transformer model synchronously (only when no asyncio loop is running).
+def get_embedding_model() -> Any | None:
+    """Load embedding model synchronously (only when no asyncio loop is running).
 
-    Never call from a running event-loop thread: use ``async_get_transformer_model()``
-    instead. Blocking here (including ``Future.result`` during HF download) stops worker
+    Never call from a running event-loop thread: use ``async_get_embedding_model()``
+    instead. Blocking here (including ``Future.result`` during download) stops worker
     heartbeats and triggers pool stuck-worker termination.
     """
-    global _transformer_model, _has_sentence_transformers, _model_loading_attempted
+    global _embedding_model, _has_fastembed, _model_loading_attempted
 
-    if not _ensure_sentence_transformers():
+    if not _ensure_fastembed():
         return None
 
     if _model_loading_attempted:
-        return _transformer_model
+        return _embedding_model
 
     try:
         asyncio.get_running_loop()
@@ -167,56 +178,56 @@ def _get_transformer_model() -> Any | None:
         pass
     else:
         logger.warning(
-            "_get_transformer_model() called on a running event loop; "
-            "use async_get_transformer_model() to avoid blocking heartbeats"
+            "get_embedding_model() called on a running event loop; "
+            "use async_get_embedding_model() to avoid blocking heartbeats"
         )
-        return _transformer_model
+        return _embedding_model
 
     with _model_load_thread_lock:
         if _model_loading_attempted:
-            return _transformer_model
+            return _embedding_model
         try:
             executor = _ensure_model_load_executor()
-            loaded = executor.submit(_load_transformer_model_in_thread).result(
+            loaded = executor.submit(_load_embedding_model_in_thread).result(
                 timeout=_MODEL_LOAD_TIMEOUT_SECONDS,
             )
-            return _complete_transformer_model_load(loaded)
+            return _complete_embedding_model_load(loaded)
         except Exception as e:
-            logger.warning("Failed to load sentence_transformers model: %s", e)
-            _has_sentence_transformers = False
+            logger.warning("Failed to load FastEmbed model: %s", e)
+            _has_fastembed = False
             _model_loading_attempted = True
-            _transformer_model = None
+            _embedding_model = None
             return None
 
 
-async def async_get_transformer_model() -> Any | None:
+async def async_get_embedding_model() -> Any | None:
     """Load the embedding model without blocking the asyncio event loop."""
-    global _transformer_model, _has_sentence_transformers, _model_loading_attempted
+    global _embedding_model, _has_fastembed, _model_loading_attempted
     global _model_load_async_lock
 
-    if not _ensure_sentence_transformers():
+    if not _ensure_fastembed():
         return None
-    if _transformer_model is not None:
-        return _transformer_model
+    if _embedding_model is not None:
+        return _embedding_model
     if _model_loading_attempted:
-        return _transformer_model
+        return _embedding_model
 
     if _model_load_async_lock is None:
         _model_load_async_lock = asyncio.Lock()
 
     async with _model_load_async_lock:
-        if _transformer_model is not None:
-            return _transformer_model
+        if _embedding_model is not None:
+            return _embedding_model
         if _model_loading_attempted:
-            return _transformer_model
+            return _embedding_model
         try:
             loop = asyncio.get_running_loop()
             executor = _ensure_model_load_executor()
             loaded = await asyncio.wait_for(
-                loop.run_in_executor(executor, _load_transformer_model_in_thread),
+                loop.run_in_executor(executor, _load_embedding_model_in_thread),
                 timeout=_MODEL_LOAD_TIMEOUT_SECONDS,
             )
-            return _complete_transformer_model_load(loaded)
+            return _complete_embedding_model_load(loaded)
         except TimeoutError:
             logger.warning(
                 "Embedding model load timed out after %.0fs",
@@ -225,38 +236,29 @@ async def async_get_transformer_model() -> Any | None:
             _model_loading_attempted = True
             return None
         except Exception as e:
-            logger.warning("Failed to load sentence_transformers model: %s", e)
-            _has_sentence_transformers = False
+            logger.warning("Failed to load FastEmbed model: %s", e)
+            _has_fastembed = False
             _model_loading_attempted = True
-            _transformer_model = None
+            _embedding_model = None
             return None
 
 
-def _embedding_model_snapshot_dir() -> Path:
-    """Directory holding cached snapshots for the configured embedding model."""
-    return (
-        hf_embedding_cache_dir()
-        / f"models--sentence-transformers--{EMBEDDING_MODEL_NAME.replace('/', '--')}"
-        / "snapshots"
-    )
-
-
 def is_embedding_model_cached_locally() -> bool:
-    """Return True when the embedding model artifacts exist locally (no download needed).
+    """Return True when ONNX model artifacts exist locally (no download needed).
 
     Does not load the model or contact the network.
     """
-    snapshots = _embedding_model_snapshot_dir()
-    if not snapshots.is_dir():
+    cache_dir = embedding_cache_dir()
+    if not cache_dir.is_dir():
         return False
-    return any(child.is_dir() and any(child.iterdir()) for child in snapshots.iterdir())
+    return any(path.is_file() for path in cache_dir.rglob("*.onnx"))
 
 
 def embedding_model_ready_without_download() -> bool:
     """Return True when semantic similarity can run without triggering a model download."""
-    if not _ensure_sentence_transformers():
+    if not _ensure_fastembed():
         return False
-    if _transformer_model is not None:
+    if _embedding_model is not None:
         return True
     return is_embedding_model_cached_locally()
 
@@ -301,10 +303,10 @@ def semantic_similarity(
 ) -> float:
     """Calculate semantic similarity between two texts.
 
-    Uses sentence_transformers when available for accurate semantic matching.
-    Falls back to keyword overlap when sentence_transformers is not installed.
+    Uses FastEmbed when available for accurate semantic matching.
+    Falls back to keyword overlap when fastembed is not installed.
 
-    WARNING: This function uses synchronous model.encode() which can block.
+    WARNING: This function uses synchronous embedding which can block.
     For async contexts, use async_semantic_similarity() which has timeout protection.
 
     Args:
@@ -315,24 +317,21 @@ def semantic_similarity(
     Returns:
         Similarity score in range [0, 1].
     """
-    # Normalize and truncate
     text1 = (text1 or "").strip()[:max_length]
     text2 = (text2 or "").strip()[:max_length]
 
     if not text1 or not text2:
         return 0.0
 
-    # Try semantic similarity with transformers
-    model = _get_transformer_model()
+    model = get_embedding_model()
     if model is not None:
         try:
-            embeddings = model.encode([text1, text2])
-            similarity = cosine_similarity(embeddings[0].tolist(), embeddings[1].tolist())
+            vectors = encode_texts(model, [text1, text2])
+            similarity = cosine_similarity(vectors[0], vectors[1])
             return max(0.0, min(1.0, similarity))
         except Exception as e:
             logger.debug("Embedding similarity failed: %s, falling back to keywords", e)
 
-    # Fallback: keyword overlap similarity
     return keyword_similarity(text1, text2)
 
 
@@ -345,30 +344,27 @@ async def async_semantic_similarity(
 ) -> float:
     """Calculate semantic similarity with timeout protection for async contexts.
 
-    Wraps the blocking model.encode() call in a thread pool executor with timeout.
+    Wraps the blocking embed call in a thread pool executor with timeout.
     Falls back to keyword similarity on timeout or embedding failure.
 
     Args:
         text1: First text.
         text2: Second text.
         max_length: Maximum text length for embedding (truncation).
-        timeout_seconds: Timeout for embedding call (default: 30s).
+        timeout_seconds: Timeout for embedding call (default: 10s).
 
     Returns:
         Similarity score in range [0, 1].
     """
-    # Normalize and truncate
     text1 = (text1 or "").strip()[:max_length]
     text2 = (text2 or "").strip()[:max_length]
 
     if not text1 or not text2:
         return 0.0
 
-    # Try semantic similarity with transformers (async with timeout)
-    model = await async_get_transformer_model()
+    model = await async_get_embedding_model()
     if model is not None:
         try:
-            # Run blocking encode() in thread pool with timeout
             global _embedding_executor
             if _embedding_executor is None:
                 _embedding_executor = ThreadPoolExecutor(
@@ -376,11 +372,11 @@ async def async_semantic_similarity(
                 )
 
             async with asyncio.timeout(timeout_seconds):
-                embeddings = await asyncio.get_event_loop().run_in_executor(
+                vectors = await asyncio.get_event_loop().run_in_executor(
                     _embedding_executor,
-                    lambda: model.encode([text1, text2]),
+                    lambda: encode_texts(model, [text1, text2]),
                 )
-            similarity = cosine_similarity(embeddings[0].tolist(), embeddings[1].tolist())
+            similarity = cosine_similarity(vectors[0], vectors[1])
             return max(0.0, min(1.0, similarity))
         except TimeoutError:
             logger.warning(
@@ -390,12 +386,11 @@ async def async_semantic_similarity(
         except Exception as e:
             logger.debug("Embedding similarity failed: %s, falling back to keywords", e)
 
-    # Fallback: keyword overlap similarity
     return keyword_similarity(text1, text2)
 
 
 def keyword_similarity(text1: str, text2: str) -> float:
-    """Calculate keyword overlap similarity (fallback when transformers unavailable).
+    """Calculate keyword overlap similarity (fallback when embeddings unavailable).
 
     Args:
         text1: First text.
@@ -404,14 +399,12 @@ def keyword_similarity(text1: str, text2: str) -> float:
     Returns:
         Similarity score in range [0, 1].
     """
-    # Simple tokenization
     tokens1 = set(text1.lower().split())
     tokens2 = set(text2.lower().split())
 
     if not tokens1 or not tokens2:
         return 0.0
 
-    # Jaccard similarity: intersection / union
     intersection = tokens1 & tokens2
     union = tokens1 | tokens2
 
@@ -482,13 +475,13 @@ def rank_by_similarity(
         return items
 
     if enable_semantic and not embedding_model_ready_without_download():
-        if not _has_sentence_transformers:
-            log_skip_semantic_similarity("sentence_transformers is not installed")
+        if not _has_fastembed:
+            log_skip_semantic_similarity("fastembed is not installed")
         else:
             log_skip_semantic_similarity(
                 "embedding model %s is not cached under %s (download required)",
                 EMBEDDING_MODEL_NAME,
-                hf_embedding_cache_dir(),
+                embedding_cache_dir(),
             )
         return items
 
@@ -498,7 +491,6 @@ def rank_by_similarity(
         similarity = semantic_similarity(content[:200], target) if enable_semantic else 0.0
         scored_items.append((similarity, item))
 
-    # Sort by similarity descending
     scored_items.sort(key=lambda x: x[0], reverse=True)
 
     return [item for _, item in scored_items]
@@ -518,7 +510,7 @@ async def async_calculate_relevance_score(
     Args:
         finding: Finding dict with 'path' and 'snippet' keys.
         search_target: Original search target text.
-        enable_semantic: Enable semantic similarity (requires sentence_transformers).
+        enable_semantic: Enable semantic similarity (requires fastembed).
         threshold_high: Threshold for "high" relevance.
         threshold_medium: Threshold for "medium" relevance.
         timeout_seconds: Timeout for embedding call.
@@ -574,13 +566,13 @@ async def async_rank_by_similarity(
         return items
 
     if enable_semantic and not embedding_model_ready_without_download():
-        if not _has_sentence_transformers:
-            log_skip_semantic_similarity("sentence_transformers is not installed")
+        if not _has_fastembed:
+            log_skip_semantic_similarity("fastembed is not installed")
         else:
             log_skip_semantic_similarity(
                 "embedding model %s is not cached under %s (download required)",
                 EMBEDDING_MODEL_NAME,
-                hf_embedding_cache_dir(),
+                embedding_cache_dir(),
             )
         return items
 
@@ -595,7 +587,6 @@ async def async_rank_by_similarity(
             similarity = 0.0
         scored_items.append((similarity, item))
 
-    # Sort by similarity descending
     scored_items.sort(key=lambda x: x[0], reverse=True)
 
     return [item for _, item in scored_items]
@@ -612,20 +603,18 @@ def warmup_embedding_model() -> bool:
     Returns:
         True if model was successfully downloaded/loaded, False otherwise.
     """
-    logger.info("Warming up embedding model cache at %s", hf_embedding_cache_dir())
+    logger.info("Warming up embedding model cache at %s", embedding_cache_dir())
 
-    if not _ensure_sentence_transformers():
-        logger.warning("sentence_transformers not available, skipping warmup")
+    if not _ensure_fastembed():
+        logger.warning("fastembed not available, skipping warmup")
         return False
 
-    # Try loading the model to trigger download
-    model = _get_transformer_model()
+    model = get_embedding_model()
     if model is not None:
         logger.info("Embedding model warmup successful: %s", EMBEDDING_MODEL_NAME)
         return True
-    else:
-        logger.warning("Embedding model warmup failed")
-        return False
+    logger.warning("Embedding model warmup failed")
+    return False
 
 
 async def async_warmup_embedding_model() -> bool:
@@ -634,7 +623,6 @@ async def async_warmup_embedding_model() -> bool:
     Returns:
         True if model was successfully downloaded/loaded, False otherwise.
     """
-    # Run sync warmup in thread pool to avoid blocking
     global _embedding_executor
     if _embedding_executor is None:
         _embedding_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="embedding")
@@ -649,11 +637,10 @@ async def async_warmup_embedding_model() -> bool:
         return False
 
 
-# Check availability at import time
 def is_semantic_similarity_available() -> bool:
     """Check if semantic similarity can run without downloading the embedding model.
 
     Returns:
-        True when ``sentence_transformers`` is installed and the model is cached or loaded.
+        True when fastembed is installed and the model is cached or loaded.
     """
     return embedding_model_ready_without_download()

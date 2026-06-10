@@ -13,25 +13,25 @@ from soothe_daemon.health.models import CheckStatus
 _REAL_FIND_SPEC = importlib.util.find_spec
 
 
-def _find_spec_no_sentence_transformers(name: str):
-    if name == "sentence_transformers":
+def _find_spec_no_fastembed(name: str):
+    if name == "fastembed":
         return None
     return _REAL_FIND_SPEC(name)
 
 
-def _find_spec_sentence_transformers_installed(name: str):
-    if name == "sentence_transformers":
+def _find_spec_fastembed_installed(name: str):
+    if name == "fastembed":
         return object()  # non-None sentinel
     return _REAL_FIND_SPEC(name)
 
 
 @pytest.mark.asyncio
-async def test_embedding_warmup_skipped_without_sentence_transformers(
+async def test_embedding_warmup_skipped_without_fastembed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         "soothe_daemon.health.checks.embedding_warmup_check.importlib.util.find_spec",
-        _find_spec_no_sentence_transformers,
+        _find_spec_no_fastembed,
     )
     result = await ew.check_embedding_warmup()
     assert result.category == "models"
@@ -46,11 +46,11 @@ async def test_embedding_warmup_warning_empty_cache(
 ) -> None:
     monkeypatch.setattr(
         "soothe_daemon.health.checks.embedding_warmup_check.importlib.util.find_spec",
-        _find_spec_sentence_transformers_installed,
+        _find_spec_fastembed_installed,
     )
     monkeypatch.setattr(
-        "soothe.utils.similarity.hf_embedding_cache_dir",
-        lambda: tmp_path / "hf",
+        "soothe.utils.similarity.embedding_cache_dir",
+        lambda: tmp_path / "embeddings",
     )
     result = await ew.check_embedding_warmup()
     assert result.checks[0].status == CheckStatus.WARNING
@@ -63,13 +63,13 @@ async def test_embedding_warmup_ok_when_weights_present(
 ) -> None:
     monkeypatch.setattr(
         "soothe_daemon.health.checks.embedding_warmup_check.importlib.util.find_spec",
-        _find_spec_sentence_transformers_installed,
+        _find_spec_fastembed_installed,
     )
-    cache = tmp_path / "hf"
+    cache = tmp_path / "embeddings"
     cache.mkdir(parents=True)
-    (cache / "model.safetensors").write_bytes(b"x")
+    (cache / "model.onnx").write_bytes(b"x")
     monkeypatch.setattr(
-        "soothe.utils.similarity.hf_embedding_cache_dir",
+        "soothe.utils.similarity.embedding_cache_dir",
         lambda: cache,
     )
     result = await ew.check_embedding_warmup()
