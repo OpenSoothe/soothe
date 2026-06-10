@@ -129,7 +129,7 @@ vector_store_router:
 # SECURITY
 # ============================================================
 security:
-  allow_paths_outside_workspace: true
+  allow_paths_outside_workspace: false
 
 # ============================================================
 # OPTIMIZATION
