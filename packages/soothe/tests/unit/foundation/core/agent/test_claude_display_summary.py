@@ -1,6 +1,6 @@
-"""Tests for Claude subagent one-line display summary (IG-344)."""
+"""Tests for Claude Code one-line display summary."""
 
-from soothe.subagents.claude.display_summary import claude_text_summary_for_display
+from soothe.foundation.core.agent.claude_display_summary import claude_text_summary_for_display
 
 
 def test_prefers_markdown_heading() -> None:

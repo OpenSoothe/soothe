@@ -78,10 +78,13 @@ class TestSootheConfig:
         assert "explore" in cfg.subagents
         assert "plan" in cfg.subagents
         assert "tacitus" in cfg.subagents
+        assert "browser_use" in cfg.subagents
+        assert "claude" not in cfg.subagents
         # skillify and weaver are community plugins, not built-in
         assert "scout" not in cfg.subagents
-        for name, sub_cfg in cfg.subagents.items():
-            assert sub_cfg.enabled is True, f"{name} should be enabled by default"
+        for name in ("explore", "plan", "tacitus"):
+            assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
+        assert cfg.subagents["browser_use"].enabled is False
 
     def test_assistant_name_default(self) -> None:
         cfg = SootheConfig()

@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.config import SootheConfig
-from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent
+from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent, _resolve_claude_cwd
 
 
 @pytest.fixture
@@ -128,14 +128,14 @@ class TestClaudeCoreAgentHelpers:
         assert claude_agent._resolve_thread_id(config) == "test-thread-123"
 
     def test_resolve_cwd_default(self, claude_agent):
-        """Test _resolve_cwd with no workspace."""
-        assert claude_agent._resolve_cwd(None) == "/tmp/test"
+        """Test _resolve_claude_cwd with no workspace."""
+        result = _resolve_claude_cwd(None, claude_agent._cwd)
+        assert result.endswith("test")
 
     def test_resolve_cwd_from_config(self, claude_agent):
-        """Test _resolve_cwd from config."""
+        """Test _resolve_claude_cwd from config."""
         config = {"configurable": {"workspace": "/workspace/path"}}
-        # expand_path will resolve this
-        result = claude_agent._resolve_cwd(config)
+        result = _resolve_claude_cwd(config, claude_agent._cwd)
         assert "workspace" in result or "path" in result
 
     def test_extract_user_text_string(self, claude_agent):

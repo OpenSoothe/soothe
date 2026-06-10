@@ -1,4 +1,4 @@
-"""One-line summary for Claude subagent completion display (IG-344)."""
+"""One-line summary for Claude Code completion display."""
 
 from __future__ import annotations
 
@@ -38,7 +38,6 @@ def claude_text_summary_for_display(text: str, *, max_len: int = 160) -> str:
     if not chosen:
         chosen = " ".join(raw.split())
 
-    # First sentence / clause (light heuristic)
     for sep in (". ", "! ", "? ", "\n"):
         pos = chosen.find(sep)
         if pos >= 20:
