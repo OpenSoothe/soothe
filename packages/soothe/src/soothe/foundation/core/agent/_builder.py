@@ -131,9 +131,9 @@ class AgentBuilder:
             CoreAgent instance wrapping CompiledStateGraph with typed properties.
         """
         # Route based on core_agent_backend config
-        backend = self._config.agent.core_agent_backend
-        logger.info(f"[Init] core_agent_backend={backend}")
-        if backend == "claude":
+        core_agent_backend = self._config.agent.core_agent_backend
+        logger.info("[Init] core_agent_backend=%s", core_agent_backend)
+        if core_agent_backend == "claude":
             return self._build_claude_agent(
                 memory_store=memory_store,
                 planner=planner,
