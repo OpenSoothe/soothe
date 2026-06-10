@@ -678,26 +678,26 @@ def resolve_subagents(
 
         pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 
-    # If both explore and plan are pending, resolve explore first so plan can
-    # reuse its compiled runnable instead of building a duplicate.
+    # If both explore and plan are pending, register explore first so plan can
+    # reuse the same lazy runnable instead of building a duplicate graph later.
     explore_spec = None
     has_plan = any(n == "plan" for n, _, _ in pending)
     if has_plan:
         explore_entries = [(i, e) for i, e in enumerate(pending) if e[0] == "explore"]
         if explore_entries:
             idx, explore_entry = explore_entries[0]
-            resolved = _resolve_subagents_sequential([explore_entry])
-            if resolved:
-                explore_spec = resolved[0]
-                pending.pop(idx)
-                # Inject the compiled explore runnable into plan's context
-                for i, (n, f, kw) in enumerate(pending):
-                    if n == "plan":
-                        ctx = kw.get("context", {})
-                        ctx["explore_runnable"] = explore_spec["runnable"]
-                        kw["context"] = ctx
-                        pending[i] = (n, f, kw)
-                        break
+            name, factory, kwargs = explore_entry
+            from soothe.runner.resolver._lazy_subagent import lazy_compiled_subagent_spec
+
+            explore_spec = lazy_compiled_subagent_spec(name, factory, kwargs)
+            pending.pop(idx)
+            for i, (n, f, kw) in enumerate(pending):
+                if n == "plan":
+                    ctx = kw.get("context", {})
+                    ctx["explore_runnable"] = explore_spec["runnable"]
+                    kw["context"] = ctx
+                    pending[i] = (n, f, kw)
+                    break
 
     parallel = lazy and len(pending) > 1
     subagents = (
@@ -722,45 +722,26 @@ def resolve_subagents(
 def _resolve_subagents_sequential(
     pending: list[tuple[str, Callable, dict]],
 ) -> list[SubAgent | CompiledSubAgent]:
-    """Build subagent specs one-by-one, skipping failures."""
+    """Register lazy subagent specs one-by-one (graphs compile on first task invoke)."""
     import time
+
+    from soothe.runner.resolver._lazy_subagent import lazy_compiled_subagent_spec
 
     subagents: list[SubAgent | CompiledSubAgent] = []
     for name, factory, kwargs in pending:
         start = time.perf_counter()
         try:
-            spec = _call_subagent_factory(factory, kwargs)
+            spec = lazy_compiled_subagent_spec(name, factory, kwargs)
             elapsed_ms = (time.perf_counter() - start) * 1000
-            logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
+            logger.info("Registered lazy subagent '%s' in %.1fms", name, elapsed_ms)
             subagents.append(spec)
         except Exception:
-            logger.exception("Failed to load subagent '%s'", name)
+            logger.exception("Failed to register subagent '%s'", name)
     return subagents
 
 
 def _resolve_subagents_parallel(
     pending: list[tuple[str, Callable, dict]],
 ) -> list[SubAgent | CompiledSubAgent]:
-    """Build subagent specs concurrently, preserving order."""
-    import time
-    from concurrent.futures import ThreadPoolExecutor
-
-    max_workers = min(len(pending), 4)
-
-    def _build(entry: tuple[str, Callable, dict]) -> SubAgent | CompiledSubAgent:
-        name, factory, kwargs = entry
-        start = time.perf_counter()
-        spec = _call_subagent_factory(factory, kwargs)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
-        return spec
-
-    subagents: list[SubAgent | CompiledSubAgent] = []
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="subagent-load") as pool:
-        futures = [(entry[0], pool.submit(_build, entry)) for entry in pending]
-        for name, future in futures:
-            try:
-                subagents.append(future.result())
-            except Exception:
-                logger.exception("Failed to load subagent '%s'", name)
-    return subagents
+    """Register lazy subagent specs concurrently, preserving order."""
+    return _resolve_subagents_sequential(pending)

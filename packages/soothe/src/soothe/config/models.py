@@ -332,11 +332,11 @@ class ToolsConfig(BaseModel):
         datetime: DateTime tool config.
         data: Data inspection tools config.
         wizsearch: Wizsearch multi-engine search tools config.
-        image: Image analysis tools config.
-        audio: Audio transcription tools config.
-        video: Video analysis tools config.
+        image: Image analysis tools config (disabled by default; opt-in for faster startup).
+        audio: Audio transcription tools config (disabled by default).
+        video: Video analysis tools config (disabled by default).
         http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
-        deepxiv: DeepXiv academic paper search tools (enabled by default).
+        deepxiv: DeepXiv academic paper search tools (disabled by default).
         goaling: Goaling tools config (suggest_goal, add_finding) - RFC-204 Group C.
             Requires proposal_queue from AgentLoop runtime context.
     """
@@ -346,11 +346,11 @@ class ToolsConfig(BaseModel):
     datetime: ToolConfig = Field(default_factory=ToolConfig)
     data: ToolConfig = Field(default_factory=ToolConfig)
     wizsearch: WebSearchConfig = Field(default_factory=WebSearchConfig)
-    image: ToolConfig = Field(default_factory=ToolConfig)
-    audio: ToolConfig = Field(default_factory=ToolConfig)
-    video: ToolConfig = Field(default_factory=ToolConfig)
+    image: ToolConfig = Field(default_factory=lambda: ToolConfig(enabled=False))
+    audio: ToolConfig = Field(default_factory=lambda: ToolConfig(enabled=False))
+    video: ToolConfig = Field(default_factory=lambda: ToolConfig(enabled=False))
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
-    deepxiv: DeepxivToolsConfig = Field(default_factory=DeepxivToolsConfig)
+    deepxiv: DeepxivToolsConfig = Field(default_factory=lambda: DeepxivToolsConfig(enabled=False))
     goaling: ToolConfig = Field(
         default_factory=ToolConfig,  # Enabled by default - safe, just enqueues proposals
         description="Goaling tools (suggest_goal, add_finding). "

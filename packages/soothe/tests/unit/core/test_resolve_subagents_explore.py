@@ -21,13 +21,42 @@ def test_resolve_subagents_passes_config_and_context_to_explore() -> None:
         },
     )
 
-    with patch(
-        "soothe.subagents.explore.implementation.build_explore_engine",
-        return_value=MagicMock(),
+    fake_model = MagicMock()
+    inner_runnable = MagicMock()
+    inner_runnable.invoke.return_value = {"messages": []}
+
+    def _fake_call(factory, kwargs):
+        return {
+            "name": "explore",
+            "description": "explore",
+            "runnable": inner_runnable,
+        }
+
+    with (
+        patch(
+            "soothe.config.settings.SootheConfig.create_chat_model",
+            return_value=fake_model,
+        ),
+        patch(
+            "soothe.plugin.global_registry.is_plugins_loaded",
+            return_value=False,
+        ),
+        patch(
+            "soothe.runner.resolver._resolver_tools._call_subagent_factory",
+            side_effect=_fake_call,
+        ) as factory_mock,
     ):
         specs = resolve_subagents(cfg, lazy=False)
 
-    assert len(specs) == 1
-    spec = specs[0]
-    name = spec.get("name") if isinstance(spec, dict) else getattr(spec, "name", None)
-    assert name == "explore"
+        assert len(specs) == 1
+        spec = specs[0]
+        assert spec.get("name") == "explore"
+        factory_mock.assert_not_called()
+
+        spec["runnable"].invoke({"messages": []})
+        factory_mock.assert_called_once()
+        _factory, kwargs = factory_mock.call_args[0]
+        assert kwargs["config"] is cfg
+        assert "work_dir" in kwargs["context"]
+        assert "thoroughness" not in kwargs
+        assert "max_read_lines" not in kwargs
