@@ -109,7 +109,7 @@ class AgentBuilder:
 
         Built-in Capabilities:
             - Tools: execution, websearch, research, etc.
-            - Subagents: Browser, Claude, Research
+            - Subagents: browser_use, explore, plan, tacitus
             - MCP servers: loaded via configuration
             - Middlewares: policy, system prompt optimization, hints, context, memory
 

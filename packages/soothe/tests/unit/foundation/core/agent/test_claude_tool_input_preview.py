@@ -1,8 +1,8 @@
-"""Tests for Claude tool-use argument preview (IG-219)."""
+"""Tests for Claude tool-use argument preview."""
 
 from __future__ import annotations
 
-from soothe.subagents.claude.implementation import _preview_claude_tool_input
+from soothe.foundation.core.agent.claude_core_agent import _preview_claude_tool_input
 
 
 def test_preview_none_is_ellipsis() -> None:

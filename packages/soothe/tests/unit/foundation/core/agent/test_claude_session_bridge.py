@@ -6,17 +6,16 @@ import sys
 import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.subagents.claude.session_bridge import (
+from soothe.foundation.core.agent.claude_session_bridge import (
     record_claude_session,
     resolve_resume_session_id,
 )
 
 
-# Local mock types for ThreadInfo and ThreadMetadata (no soothe dependency)
 @dataclass
 class MockThreadMetadata:
     """Mock ThreadMetadata for testing."""
@@ -38,7 +37,7 @@ class MockThreadInfo:
 @pytest.fixture(autouse=True)
 def _clear_session_bridge_memory() -> None:
     """Isolate tests that touch the in-process Claude session cache."""
-    import soothe.subagents.claude.session_bridge as bridge
+    import soothe.foundation.core.agent.claude_session_bridge as bridge
 
     bridge._memory_claude_sessions.clear()
     bridge._locks.clear()
@@ -105,8 +104,8 @@ async def test_record_updates_durability() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_claude_sets_resume_and_records_session() -> None:
-    """_run_claude_async passes resume and persists session id from ResultMessage."""
+async def test_astream_sets_resume_and_records_session() -> None:
+    """ClaudeCoreAgent passes resume and persists session id from ResultMessage."""
     last_options: list[object] = []
 
     def _install_fake_claude_sdk() -> None:
@@ -155,38 +154,29 @@ async def test_run_claude_sets_resume_and_records_session() -> None:
         m.query = query
         sys.modules["claude_agent_sdk"] = m
 
+    from soothe.config import SootheConfig
+    from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent
+
     _install_fake_claude_sdk()
     try:
-        with (
-            patch(
-                "soothe.subagents.claude.implementation._resolve_claude_cwd",
-                return_value="/ws",
-            ),
-            patch(
-                "soothe.subagents.claude.implementation._get_soothe_thread_id",
-                return_value="thr1",
-            ),
-            patch(
-                "soothe.subagents.claude.implementation._get_claude_sessions_from_config",
-                return_value={"/ws": "pre-resume"},
-            ),
-            patch(
-                "soothe.subagents.claude.implementation._get_soothe_durability",
-                return_value=None,
-            ),
+        agent = ClaudeCoreAgent(config=SootheConfig(), cwd="/fallback")
+        async for _ in agent.astream(
+            "hi",
+            {
+                "configurable": {
+                    "thread_id": "thr1",
+                    "workspace": "/ws",
+                    "claude_sessions": {"/ws": "pre-resume"},
+                }
+            },
         ):
-            from langchain_core.messages import HumanMessage
-
-            from soothe.subagents.claude.implementation import _build_claude_graph
-
-            g = _build_claude_graph(cwd="/fallback")
-            await g.ainvoke({"messages": [HumanMessage(content="hi")]})
+            pass
     finally:
         sys.modules.pop("claude_agent_sdk", None)
 
     assert last_options
     assert getattr(last_options[0], "resume", None) == "pre-resume"
 
-    import soothe.subagents.claude.session_bridge as bridge
+    import soothe.foundation.core.agent.claude_session_bridge as bridge
 
     assert bridge._memory_claude_sessions[("thr1", "/ws")] == "sess-from-sdk"

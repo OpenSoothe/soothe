@@ -1,10 +1,8 @@
-"""Tests for browser_use and Claude community subagent factories."""
-
-import os
+"""Tests for browser_use community subagent factory."""
 
 import pytest
 
-pytest.importorskip("soothe", reason="browser_use/claude subagents require soothe runtime hooks")
+pytest.importorskip("soothe", reason="browser_use subagent requires soothe runtime hooks")
 
 
 class TestBrowserUseSubagent:
@@ -46,38 +44,4 @@ class TestBrowserUseSubagent:
             disable_telemetry=False,
         )
         assert spec["name"] == "browser_use"
-        assert "runnable" in spec
-
-
-class TestClaudeSubagent:
-    def test_creates_compiled_subagent_dict(self) -> None:
-        from soothe.subagents.claude import create_claude_subagent
-
-        spec = create_claude_subagent()
-        assert spec["name"] == "claude"
-        assert "description" in spec
-        assert "runnable" in spec
-
-    def test_has_runnable(self) -> None:
-        from soothe.subagents.claude import create_claude_subagent
-
-        spec = create_claude_subagent()
-        assert spec["runnable"] is not None
-
-    def test_custom_params(self) -> None:
-        from soothe.subagents.claude import create_claude_subagent
-
-        spec = create_claude_subagent(
-            model="opus",
-            max_turns=10,
-            permission_mode="plan",
-        )
-        assert spec["name"] == "claude"
-        assert "runnable" in spec
-
-    def test_cwd_is_supported(self) -> None:
-        from soothe.subagents.claude import create_claude_subagent
-
-        spec = create_claude_subagent(cwd=os.getcwd())
-        assert spec["name"] == "claude"
         assert "runnable" in spec
