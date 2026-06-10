@@ -357,12 +357,6 @@ tools:
   http_requests:
     enabled: false  # No HTTP requests
 
-agent:
-  code_interpreter:
-    enabled: true
-    memory_limit_mb: 256
-    timeout_seconds: 60
-
 subagents:
   explore:
     enabled: true

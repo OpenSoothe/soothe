@@ -356,21 +356,6 @@ agent:
       thread_inactivity_timeout_hours: 72
 ```
 
-### Code Interpreter (Embedded QuickJS)
-
-```yaml
-agent:
-  code_interpreter:
-    enabled: true
-    ptc_allowlist: []
-    memory_limit_mb: 128
-    timeout_seconds: 30
-    max_ptc_calls: 50
-    max_result_size: 100000
-    console_capture: true
-    snapshot_between_turns: false
-```
-
 ---
 
 ## Tools
