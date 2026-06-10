@@ -8,7 +8,6 @@ This package provides middleware implementations:
 - WorkspaceContextMiddleware: Thread-aware workspace ContextVar management
 - PerTurnModelMiddleware: Per-stream model override for daemon/TUI
 - SootheFilesystemMiddleware: Extended filesystem tools middleware
-- CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
 - FileLockMiddleware: File lock conflict resolution for autopilot mode (RFC-222)
 - MCPToolSearchMiddleware: MCP progressive disclosure telemetry (RFC-412)
 
@@ -28,7 +27,6 @@ if TYPE_CHECKING:
         build_soothe_middleware_stack as build_soothe_middleware_stack,
     )
     from soothe.middleware._utils import create_llm_call_metadata as create_llm_call_metadata
-    from soothe.middleware.code_interpreter import CodeInterpreterMiddleware
     from soothe.middleware.execution_hints import ExecutionHintsMiddleware
     from soothe.middleware.file_lock import FileLockMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
@@ -47,7 +45,6 @@ if TYPE_CHECKING:
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
-    "CodeInterpreterMiddleware",
     "ExecutionHintsMiddleware",
     "FileLockMiddleware",
     "InnerModelCallProfilerMiddleware",
@@ -70,10 +67,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "build_soothe_middleware_stack": (
         "soothe.middleware._builder",
         "build_soothe_middleware_stack",
-    ),
-    "CodeInterpreterMiddleware": (
-        "soothe.middleware.code_interpreter",
-        "CodeInterpreterMiddleware",
     ),
     "create_llm_call_metadata": ("soothe.middleware._utils", "create_llm_call_metadata"),
     "ExecutionHintsMiddleware": ("soothe.middleware.execution_hints", "ExecutionHintsMiddleware"),
