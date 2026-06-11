@@ -32,7 +32,7 @@
 ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 # =============================================================================
-# Stage 1: install wheels, browsers (optional), system libs, warm embedding cache
+# Stage 1: install third-party deps + browsers (optional) — cached layer
 # =============================================================================
 FROM ${PYTHON_BASE} AS deps
 
@@ -78,6 +78,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     fi; \
     uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
+        --index-url https://mirrors.aliyun.com/pypi/simple/ \
         "soothe[${extras}]==${SOOTHE_VERSION}" \
         "${dspec}" \
         ${pip_extras}; \
@@ -85,16 +86,22 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       /app/.venv/bin/python -m playwright install chromium; \
     fi
 
-ENV SOOTHE_EMBEDDING_CACHE=/root/.cache/soothe/models/embeddings
-COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
-# Warmup is optional - model downloads at runtime if cache miss
-RUN /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose || echo "Embedding warmup skipped (will download at runtime)" \
-    && rm -f /tmp/warmup_embedding_model.py
-
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # =============================================================================
-# Stage 2: minimal runtime (venv + browsers (optional) + HF cache, non-root)
+# Stage 2: warm embedding cache (separate layer for better caching)
+# =============================================================================
+FROM deps AS warmup
+
+ENV SOOTHE_EMBEDDING_CACHE=/root/.cache/soothe/models/embeddings
+COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
+RUN mkdir -p /root/.cache/soothe/models/embeddings \
+    && /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
+        || echo "Embedding warmup skipped (will download at runtime)" \
+    && rm -f /tmp/warmup_embedding_model.py
+
+# =============================================================================
+# Stage 3: minimal runtime (venv + browsers + HF cache + jemalloc, non-root)
 # =============================================================================
 FROM ${PYTHON_BASE} AS runtime
 
@@ -117,16 +124,18 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY --from=deps /app/.venv /app/.venv
+COPY --from=warmup /app/.venv /app/.venv
 COPY --from=deps /opt/ms-playwright /opt/ms-playwright
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
+# Install runtime deps: playwright browser libs (if needed) + jemalloc for memory optimization
 RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
     && if [ "${INCLUDE_BROWSER}" = "true" ] && [ -n "$(ls -A /opt/ms-playwright 2>/dev/null)" ]; then \
       /app/.venv/bin/python -m playwright install-deps; \
     fi \
+    && apt-get install -y --no-install-recommends libjemalloc2 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --system soothe \
@@ -134,14 +143,15 @@ RUN useradd --create-home --system soothe \
     && mkdir -p /home/soothe/.cache/soothe/models \
     && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright /home/soothe/.cache
 
-COPY --from=deps --chown=soothe:soothe /root/.cache/soothe/models/embeddings /home/soothe/.cache/soothe/models/embeddings
+COPY --from=warmup --chown=soothe:soothe /root/.cache/soothe/models/embeddings /home/soothe/.cache/soothe/models/embeddings
 
 USER soothe
 WORKDIR /var/lib/soothe
 
 EXPOSE 8765/tcp
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost',8765)); s.close()" || exit 1
+# HTTP healthcheck via /healthz endpoint (more reliable than socket probe)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)" || exit 1
 
 CMD ["python", "-m", "soothe_daemon"]
