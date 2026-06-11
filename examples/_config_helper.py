@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from soothe.config.settings import SootheConfig
 from soothe.config import SOOTHE_HOME
+from soothe.config.settings import SootheConfig
 
 
 def load_example_config() -> SootheConfig:

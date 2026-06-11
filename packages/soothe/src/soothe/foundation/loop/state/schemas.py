@@ -989,14 +989,10 @@ class LoopState(BaseModel):
         description="RoutingClassification for Plan + Execute (IG-349, IG-383).",
     )
 
-    # RFC-223: Thread fork tracking for checkpoint inheritance
+    # Thread tracking for step isolation (IG-477: message injection, no checkpoint fork)
     step_thread_ids: dict[str, str] = Field(
         default_factory=dict,
-        description="Maps step_id → thread_id used for execution (RFC-223).",
-    )
-    thread_fork_sources: dict[str, str] = Field(
-        default_factory=dict,
-        description="Maps thread_id → source thread_id for fork lineage (RFC-223).",
+        description="Maps step_id → thread_id used for execution.",
     )
 
     def add_step_result(self, result: StepResult) -> None:
@@ -1131,6 +1127,10 @@ class LoopState(BaseModel):
 
         # Trim but don't fully clear loop_messages - keep recent context
         self.trim_loop_messages()
+
+        # IG-477补充：清理未绑定的dict，防止跨goal累积
+        self.invoked_skill_bodies.clear()
+        self.cached_mcp_resources.clear()
 
         logger.info(
             "Cleared goal state for thread=%s (iteration=%d)",

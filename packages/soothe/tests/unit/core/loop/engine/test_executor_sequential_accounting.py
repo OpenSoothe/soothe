@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from collections.abc import AsyncIterator
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk
@@ -16,15 +18,23 @@ from soothe.foundation.loop.state.schemas import (
 )
 
 
-async def _empty_agent_stream() -> None:
-    if False:
-        yield None  # pragma: no cover — makes this an async generator
+async def _empty_agent_stream() -> AsyncIterator[Any]:
+    if False:  # pragma: no cover — makes this an async generator
+        yield None
+
+
+def _make_mock_agent() -> MagicMock:
+    mock_agent = MagicMock()
+    # execution_astream is sync and returns an async iterator — not awaitable.
+    mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+    mock_agent.aget_state = AsyncMock(return_value=MagicMock())
+    return mock_agent
 
 
 @pytest.mark.asyncio
 async def test_parallel_single_wave_yields_one_result_per_step() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent = _make_mock_agent()
 
     executor = Executor(mock_agent, max_parallel_steps=4)
     decision = AgentDecision(
@@ -42,13 +52,12 @@ async def test_parallel_single_wave_yields_one_result_per_step() -> None:
     assert len(out) == 2
     assert {r.step_id for r in out} == {"a", "b"}
     assert all(r.success for r in out)
-    assert mock_agent.astream.call_count == 2
+    assert mock_agent.execution_astream.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_parallel_respects_max_parallel_steps_multiple_waves() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent = _make_mock_agent()
 
     executor = Executor(mock_agent, max_parallel_steps=1)
     decision = AgentDecision(
@@ -64,13 +73,12 @@ async def test_parallel_respects_max_parallel_steps_multiple_waves() -> None:
     out = [x async for x in executor.execute(decision, state) if isinstance(x, StepResult)]
 
     assert len(out) == 2
-    assert mock_agent.astream.call_count == 2
+    assert mock_agent.execution_astream.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_plan_with_dependencies_drains_ready_chain() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent = _make_mock_agent()
 
     executor = Executor(mock_agent, max_parallel_steps=4)
     decision = AgentDecision(
@@ -98,12 +106,12 @@ async def test_plan_with_dependencies_drains_ready_chain() -> None:
     out = [x async for x in executor.execute(decision, state) if isinstance(x, StepResult)]
 
     assert [r.step_id for r in out] == ["01", "02", "03"]
-    assert mock_agent.astream.call_count == 3
+    assert mock_agent.execution_astream.call_count == 3
 
 
 def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None:
     """Trailing empty AIMessage after chunks must not produce empty ledger body (IG-373)."""
-    mock_agent = MagicMock()
+    mock_agent = _make_mock_agent()
     executor = Executor(mock_agent, max_parallel_steps=4)
     messages: list = [
         AIMessageChunk(content="Here are the first lines:\n"),
@@ -121,8 +129,7 @@ def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None
 
 @pytest.mark.asyncio
 async def test_parallel_waves_emit_step_wave_queued_for_overflow() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent = _make_mock_agent()
 
     executor = Executor(mock_agent, max_parallel_steps=1)
     decision = AgentDecision(
@@ -146,8 +153,7 @@ async def test_parallel_waves_emit_step_wave_queued_for_overflow() -> None:
 
 @pytest.mark.asyncio
 async def test_parallel_waves_emit_step_wave_start_per_batch() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent = _make_mock_agent()
 
     executor = Executor(mock_agent, max_parallel_steps=1)
     decision = AgentDecision(
@@ -173,8 +179,7 @@ async def test_parallel_waves_emit_step_wave_start_per_batch() -> None:
 
 @pytest.mark.asyncio
 async def test_parallel_waves_respect_max_parallel_steps() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    mock_agent = _make_mock_agent()
 
     executor = Executor(mock_agent, max_parallel_steps=1)
     decision = AgentDecision(
@@ -190,4 +195,4 @@ async def test_parallel_waves_respect_max_parallel_steps() -> None:
     async for _ in executor.execute(decision, state):
         pass
 
-    assert mock_agent.astream.call_count == 2
+    assert mock_agent.execution_astream.call_count == 2

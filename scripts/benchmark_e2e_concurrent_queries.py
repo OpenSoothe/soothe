@@ -26,8 +26,6 @@ import argparse
 import asyncio
 import json
 import logging
-import os
-import signal
 import statistics
 import sys
 import time
@@ -64,7 +62,6 @@ class E2EBenchmarkMetrics:
 
     def to_report(self) -> dict[str, Any]:
         """Generate comprehensive end-to-end benchmark report."""
-        import statistics
 
         if not self.query_latencies:
             return {"error": "No successful queries completed"}
@@ -84,28 +81,40 @@ class E2EBenchmarkMetrics:
                     "avg": statistics.mean(self.query_latencies),
                     "max": max(self.query_latencies),
                     "p50": statistics.median(self.query_latencies),
-                    "p95": statistics.quantiles(self.query_latencies, n=100)[94] if len(self.query_latencies) > 10 else max(self.query_latencies),
-                    "p99": statistics.quantiles(self.query_latencies, n=100)[98] if len(self.query_latencies) > 10 else max(self.query_latencies),
+                    "p95": statistics.quantiles(self.query_latencies, n=100)[94]
+                    if len(self.query_latencies) > 10
+                    else max(self.query_latencies),
+                    "p99": statistics.quantiles(self.query_latencies, n=100)[98]
+                    if len(self.query_latencies) > 10
+                    else max(self.query_latencies),
                 },
             },
             "throughput": {
                 "queries_per_second": {
                     "min": min(self.queries_per_second) if self.queries_per_second else 0,
-                    "avg": statistics.mean(self.queries_per_second) if self.queries_per_second else 0,
+                    "avg": statistics.mean(self.queries_per_second)
+                    if self.queries_per_second
+                    else 0,
                     "max": max(self.queries_per_second) if self.queries_per_second else 0,
                 },
             },
             "resources": {
                 "queue_depth": {
-                    "avg": statistics.mean(self.queue_depth_samples) if self.queue_depth_samples else 0,
+                    "avg": statistics.mean(self.queue_depth_samples)
+                    if self.queue_depth_samples
+                    else 0,
                     "max": max(self.queue_depth_samples) if self.queue_depth_samples else 0,
                 },
                 "task_count": {
-                    "avg": statistics.mean(self.task_count_samples) if self.task_count_samples else 0,
+                    "avg": statistics.mean(self.task_count_samples)
+                    if self.task_count_samples
+                    else 0,
                     "max": max(self.task_count_samples) if self.task_count_samples else 0,
                 },
                 "client_count": {
-                    "avg": statistics.mean(self.client_count_samples) if self.client_count_samples else 0,
+                    "avg": statistics.mean(self.client_count_samples)
+                    if self.client_count_samples
+                    else 0,
                     "max": max(self.client_count_samples) if self.client_count_samples else 0,
                 },
             },
@@ -254,7 +263,9 @@ class ConcurrentQueryBenchmark:
         logger.info(f"Successful queries: {successful_queries}/{self.num_queries}")
         logger.info(f"Throughput: {throughput:.2f} queries/sec")
 
-    async def _send_single_query(self, client: Any, query_id: int, is_warmup: bool = False) -> float:
+    async def _send_single_query(
+        self, client: Any, query_id: int, is_warmup: bool = False
+    ) -> float:
         """Send a single query through a client and measure latency.
 
         Args:
@@ -276,7 +287,6 @@ class ConcurrentQueryBenchmark:
             # 2. loop_subscribe_response -> then send input
             # 3. message/output/status -> query completed
             loop_id = None
-            subscribed = False
             input_sent = False
             received_response = False
             timeout_seconds = 30.0 if not is_warmup else 10.0
@@ -287,16 +297,22 @@ class ConcurrentQueryBenchmark:
                 # Capture loop_id from loop_new_response
                 if event_type == "loop_new_response" and not loop_id:
                     loop_id = event.get("loop_id")
-                    logger.debug(f"Query {query_id} created loop {loop_id[:8] if loop_id else 'None'}")
+                    logger.debug(
+                        f"Query {query_id} created loop {loop_id[:8] if loop_id else 'None'}"
+                    )
                     # Subscribe to the loop for events
                     await client.send_loop_subscribe(loop_id, verbosity="normal")
 
                 # Handle subscribe confirmation - send input after subscribed
-                if event_type in ["loop_subscribe_response", "subscription_confirmed"] and not input_sent:
-                    subscribed = True
+                if (
+                    event_type in ["loop_subscribe_response", "subscription_confirmed"]
+                    and not input_sent
+                ):
                     logger.debug(f"Query {query_id} subscribed to loop, sending input")
                     # Generate unique query
-                    unique_question = f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
+                    unique_question = (
+                        f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
+                    )
                     await client.send_input(loop_id=loop_id, text=unique_question)
                     input_sent = True
 
@@ -340,9 +356,9 @@ class ConcurrentQueryBenchmark:
                 return query_latency_ms
             else:
                 logger.warning(f"Query {query_id} timed out after {timeout_seconds}s")
-                raise asyncio.TimeoutError(f"Query timed out after {timeout_seconds}s")
+                raise TimeoutError(f"Query timed out after {timeout_seconds}s")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Query {query_id} timed out")
             raise
         except Exception as e:
@@ -459,7 +475,9 @@ def print_benchmark_report(report: dict[str, Any]) -> None:
 
     logger.info("\nQuery Performance:")
     logger.info(f"  Total Queries: {summary['total_queries']}")
-    logger.info(f"  Successful: {summary['successful_queries']} ({summary['successful_queries']/summary['total_queries']*100:.1f}%)")
+    logger.info(
+        f"  Successful: {summary['successful_queries']} ({summary['successful_queries'] / summary['total_queries'] * 100:.1f}%)"
+    )
     logger.info(f"  Failed: {summary['failed_queries']}")
     logger.info(f"  Connection Errors: {summary['connection_errors']}")
 
@@ -478,9 +496,15 @@ def print_benchmark_report(report: dict[str, Any]) -> None:
     logger.info(f"  Warmup Duration: {summary['warmup_duration_sec']:.2f}s")
 
     logger.info("\nResource Usage During Load:")
-    logger.info(f"  Queue Depth Avg: {resources['queue_depth']['avg']:.1f} (max: {resources['queue_depth']['max']})")
-    logger.info(f"  Task Count Avg: {resources['task_count']['avg']:.1f} (max: {resources['task_count']['max']})")
-    logger.info(f"  Client Count Avg: {resources['client_count']['avg']:.1f} (max: {resources['client_count']['max']})")
+    logger.info(
+        f"  Queue Depth Avg: {resources['queue_depth']['avg']:.1f} (max: {resources['queue_depth']['max']})"
+    )
+    logger.info(
+        f"  Task Count Avg: {resources['task_count']['avg']:.1f} (max: {resources['task_count']['max']})"
+    )
+    logger.info(
+        f"  Client Count Avg: {resources['client_count']['avg']:.1f} (max: {resources['client_count']['max']})"
+    )
 
     if report["errors"]["connection_errors"]:
         logger.info("\nConnection Errors (first 5):")
@@ -512,7 +536,9 @@ def print_benchmark_report(report: dict[str, Any]) -> None:
 
     if summary["failed_queries"] > summary["total_queries"] * 0.1:  # > 10% failures
         success = False
-        issues.append(f"Failure rate > 10% ({summary['failed_queries']}/{summary['total_queries']})")
+        issues.append(
+            f"Failure rate > 10% ({summary['failed_queries']}/{summary['total_queries']})"
+        )
 
     if success:
         logger.info("✅ BENCHMARK PASSED - All success criteria met")
@@ -527,26 +553,21 @@ def print_benchmark_report(report: dict[str, Any]) -> None:
 
 def main() -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Soothe End-to-End Concurrent Query Benchmark"
-    )
+    parser = argparse.ArgumentParser(description="Soothe End-to-End Concurrent Query Benchmark")
     parser.add_argument(
         "--clients",
         type=int,
         default=3,
-        help="Number of concurrent WebSocket clients (default: 3)"
+        help="Number of concurrent WebSocket clients (default: 3)",
     )
     parser.add_argument(
         "--queries",
         type=int,
         default=10,
-        help="Total number of queries to send (default: 10)"
+        help="Total number of queries to send (default: 10)",
     )
     parser.add_argument(
-        "--warmup",
-        type=int,
-        default=2,
-        help="Number of warmup queries (default: 2)"
+        "--warmup", type=int, default=2, help="Number of warmup queries (default: 2)"
     )
 
     args = parser.parse_args()
@@ -558,16 +579,14 @@ def main() -> int:
     logger.info("  Daemon must be running on ws://127.0.0.1:8765")
     logger.info("  Start with: soothed start")
     logger.info("")
-    logger.info(f"\nConfiguration:")
+    logger.info("\nConfiguration:")
     logger.info(f"  Concurrent Clients: {args.clients}")
     logger.info(f"  Total Queries: {args.queries}")
     logger.info(f"  Warmup Queries: {args.warmup}")
     logger.info("")
 
     benchmark = ConcurrentQueryBenchmark(
-        num_clients=args.clients,
-        num_queries=args.queries,
-        warmup_queries=args.warmup
+        num_clients=args.clients, num_queries=args.queries, warmup_queries=args.warmup
     )
 
     try:
@@ -593,10 +612,12 @@ def main() -> int:
         resources = report["resources"]
         summary = report["summary"]
 
-        if (latency["avg"] <= 5000 and
-            throughput["avg"] >= 1.0 and
-            resources["queue_depth"]["max"] <= 900 and
-            summary["failed_queries"] <= summary["total_queries"] * 0.1):
+        if (
+            latency["avg"] <= 5000
+            and throughput["avg"] >= 1.0
+            and resources["queue_depth"]["max"] <= 900
+            and summary["failed_queries"] <= summary["total_queries"] * 0.1
+        ):
             return 0
         else:
             return 1

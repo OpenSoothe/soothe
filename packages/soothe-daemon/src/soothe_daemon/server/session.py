@@ -95,6 +95,7 @@ class ClientSession:
     transport: Channel
     transport_client: Any  # WebSocket connection or channel-specific handle
     subscriptions: set[str] = field(default_factory=set)
+    # IG-408: Bounded per-client event queue to prevent unbounded growth
     event_queue: asyncio.Queue[dict[str, Any]] = field(
         default_factory=lambda: asyncio.Queue(maxsize=10000)
     )

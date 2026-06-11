@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from collections.abc import AsyncIterator
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import ToolMessage
@@ -59,9 +61,20 @@ def test_default_max_tool_calls_per_step_is_99() -> None:
     assert Executor._max_tool_calls_per_step() == 99
 
 
+def _make_mock_agent(chunks: list) -> MagicMock:
+    async def fake_execution_astream(*_a: object, **_k: object) -> AsyncIterator[Any]:
+        for c in chunks:
+            yield c
+
+    agent = MagicMock()
+    agent.execution_astream = MagicMock(side_effect=fake_execution_astream)
+    agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+    agent.aget_state = AsyncMock(return_value=MagicMock())
+    return agent
+
+
 @pytest.mark.asyncio
 async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
-    agent = MagicMock()
     tool_msgs = [
         (
             (),
@@ -70,12 +83,7 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
         )
         for i in range(_DEFAULT_MAX_TOOL_CALLS_PER_STEP + 5)
     ]
-
-    async def fake_astream(*_a: object, **_k: object):
-        for c in tool_msgs:
-            yield c
-
-    agent.astream = fake_astream
+    agent = _make_mock_agent(tool_msgs)
 
     ex = Executor(agent, max_parallel_steps=1, config=None)
     state = LoopState(goal="g", thread_id="t", max_iterations=3)

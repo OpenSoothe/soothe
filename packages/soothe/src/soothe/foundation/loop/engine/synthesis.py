@@ -194,14 +194,11 @@ class SynthesisGenerator:
 
             graph_config = merge_configs(parent_runnable_config, graph_config)
 
-        async for chunk in self.core_agent.astream(
-            {"messages": messages},
-            config=graph_config,
-            stream_mode=["messages"],
-            subgraphs=False,
-        ):
+        # IG-477: Stream via LLM directly — avoids CoreAgent graph checkpointer
+        # during goal-completion synthesis (same class of leak as execute streaming).
+        async for chunk in self.llm.astream(messages, config=graph_config):
             yield tag_messages_stream_chunk_for_goal_completion(
-                chunk,
+                ((), "messages", (chunk, {})),
                 thread_id=state.thread_id,
                 iteration=state.iteration,
             )
