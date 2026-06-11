@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Soothe daemon — production runtime image (PyPI installs + deps + embedding cache warmup).
 #
 # Build context must be the monorepo root (parent of `packages/`) so `scripts/warmup_embedding_model.py`
@@ -78,7 +77,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     fi; \
     uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
-        --index-url https://mirrors.aliyun.com/pypi/simple/ \
         "soothe[${extras}]==${SOOTHE_VERSION}" \
         "${dspec}" \
         ${pip_extras}; \
