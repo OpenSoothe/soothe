@@ -1,4 +1,8 @@
-"""Langfuse LangChain callback that preserves CoreAgent system prompts on generations (IG-385)."""
+"""Langfuse LangChain callback that preserves CoreAgent system prompts on generations (IG-385).
+
+Also ensures structured output (tool_calls) is properly captured for Langfuse traces
+when using `with_structured_output` with OpenAI-compatible providers.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 
 # Optional dependency - langfuse may not be installed
 try:
@@ -20,6 +24,41 @@ except ImportError:
 from soothe.utils.observability.langfuse_system_hint import get_langfuse_system_prompt_hint
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_structured_output_from_message(message: AIMessage) -> dict[str, Any] | None:
+    """Extract structured output from AIMessage for Langfuse generation output.
+
+    When models return structured output via tool calling, the JSON is in `tool_calls`
+    while `content` may be empty or contain thinking text. This ensures Langfuse
+    captures the actual structured response.
+
+    Args:
+        message: AIMessage from LLM response.
+
+    Returns:
+        Dict with tool_calls for structured output, or None if no tool_calls.
+    """
+    if not hasattr(message, "tool_calls") or not message.tool_calls:
+        return None
+
+    # Format tool_calls for Langfuse (matches their expected structure)
+    tool_calls_data = []
+    for tc in message.tool_calls:
+        # Tool call format: {"name": "...", "args": {...}, "id": "..."}
+        tool_calls_data.append(
+            {
+                "name": tc.get("name", ""),
+                "args": tc.get("args", {}),
+                "id": tc.get("id", ""),
+            }
+        )
+
+    return {
+        "role": "assistant",
+        "content": message.content or "",
+        "tool_calls": tool_calls_data,
+    }
 
 
 def _system_message_has_visible_text(msg: SystemMessage) -> bool:
@@ -327,12 +366,46 @@ if LANGFUSE_AVAILABLE:
             )
 
         def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:
+            """Handle LLM completion, ensuring structured output (tool_calls) is captured.
+
+            Langfuse's default handler may not properly capture tool_calls from structured
+            output responses. This override ensures the full tool_call data is included
+            in the generation output for traces.
+
+            Args:
+                response: LLMResult from the model call.
+                run_id: UUID for this run.
+                **kwargs: Additional arguments including potential output override.
+            """
             traced_input = self._generation_traced_inputs.pop(run_id, None)
+            kwargs = dict(kwargs)
+
             if traced_input is not None:
                 # Parent handler overwrites generation input with kwargs["inputs"], which
                 # lacks middleware-built system text. Inject the patched batch here.
-                kwargs = dict(kwargs)
                 kwargs["inputs"] = traced_input
+
+            # Extract structured output from tool_calls if present
+            # This fixes the issue where Langfuse shows empty {"json": null} for structured output
+            try:
+                if response.generations and response.generations[0]:
+                    gen = response.generations[0][0]
+                    if hasattr(gen, "message") and isinstance(gen.message, AIMessage):
+                        structured_output = _extract_structured_output_from_message(gen.message)
+                        if structured_output is not None:
+                            # Override the output to include tool_calls
+                            kwargs["output"] = structured_output
+                            logger.debug(
+                                "Langfuse: captured structured output with %d tool_calls for run_id=%s",
+                                len(structured_output.get("tool_calls", [])),
+                                run_id,
+                            )
+            except Exception:
+                logger.debug(
+                    "Langfuse: failed to extract structured output (non-fatal)",
+                    exc_info=True,
+                )
+
             return super().on_llm_end(response, run_id=run_id, **kwargs)
 
 

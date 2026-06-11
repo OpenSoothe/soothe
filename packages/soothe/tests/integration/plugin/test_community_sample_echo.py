@@ -61,6 +61,8 @@ def _minimal_config_sample_echo_only() -> SootheConfig:
             runtime_dir=entry.runtime_dir,
         )
     cfg.subagents["sample_echo"] = SubagentConfig(enabled=True)
+    # Disable memory protocol to avoid embedding resolution (no credentials for default OpenAI)
+    cfg.agent.protocols.memory.enabled = False
     return cfg
 
 

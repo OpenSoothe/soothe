@@ -910,42 +910,79 @@ class LLMPlanner:
 
         model = _plan_phase_chat_model(self._model)
 
-        try:
-            lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-generate")
-            plan_result = await _invoke_plan_structured_output(
-                model, plan_messages, plan_schema, config=lf_cfg
-            )
+        # Retry structured output up to 2 times when None returned (IG-xxx)
+        max_retries = 2
+        last_error: Exception | None = None
 
-            if plan_result is None:
-                raise ValueError("PlanGeneration returned None")
+        for attempt in range(max_retries + 1):
+            try:
+                lf_cfg = self._planner_langfuse_run_config(
+                    thread_id=thread_id, phase="plan-generate"
+                )
+                plan_result = await _invoke_plan_structured_output(
+                    model, plan_messages, plan_schema, config=lf_cfg
+                )
 
-            logger.debug(
-                "[Plan] action=%s steps=%d next=%s",
-                plan_result.plan_action,
-                len(plan_result.steps)
-                if plan_result.plan_action == "new" and isinstance(plan_result.steps, list)
-                else 0,
-                preview_first(plan_result.next_action, chars=80),
-            )
+                if plan_result is None:
+                    if attempt < max_retries:
+                        logger.warning(
+                            "[LLMPlanner] PlanGeneration returned None (attempt %d/%d), retrying",
+                            attempt + 1,
+                            max_retries,
+                        )
+                        continue
+                    raise ValueError("PlanGeneration returned None after retries")
 
-            return plan_result, plan_result
+                logger.debug(
+                    "[Plan] action=%s steps=%d next=%s",
+                    plan_result.plan_action,
+                    len(plan_result.steps)
+                    if plan_result.plan_action == "new" and isinstance(plan_result.steps, list)
+                    else 0,
+                    preview_first(plan_result.next_action, chars=80),
+                )
 
-        except asyncio.CancelledError:
-            raise
-        except ValidationError as e:
-            err_parts: list[str] = []
-            for err in e.errors()[:3]:
-                loc = ".".join(str(p) for p in err.get("loc", ()))
-                msg = str(err.get("msg", ""))
-                if loc:
-                    err_parts.append(f"{loc}: {msg}")
-                else:
-                    err_parts.append(msg)
-            detail = "; ".join(err_parts) if err_parts else str(e)
-            logger.warning("[LLMPlanner] PlanGeneration validation failed: %s", detail[:240])
-        except Exception as e:
-            logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
-        # Fallback after validation or other plan-generate failures
+                return plan_result, plan_result
+
+            except asyncio.CancelledError:
+                raise
+            except ValidationError as e:
+                err_parts: list[str] = []
+                for err in e.errors()[:3]:
+                    loc = ".".join(str(p) for p in err.get("loc", ()))
+                    msg = str(err.get("msg", ""))
+                    if loc:
+                        err_parts.append(f"{loc}: {msg}")
+                    else:
+                        err_parts.append(msg)
+                detail = "; ".join(err_parts) if err_parts else str(e)
+                logger.warning("[LLMPlanner] PlanGeneration validation failed: %s", detail[:240])
+                last_error = e
+                if attempt < max_retries:
+                    logger.debug(
+                        "[LLMPlanner] Retrying after validation error (attempt %d/%d)",
+                        attempt + 1,
+                        max_retries,
+                    )
+                    continue
+            except Exception as e:
+                logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
+                last_error = e
+                if attempt < max_retries:
+                    logger.debug(
+                        "[LLMPlanner] Retrying after error (attempt %d/%d)",
+                        attempt + 1,
+                        max_retries,
+                    )
+                    continue
+
+        # Fallback after all retries exhausted
+        error_detail = str(last_error)[:100] if last_error else "unknown"
+        logger.warning(
+            "[LLMPlanner] PlanGeneration failed after %d attempts, using fallback (last error: %s)",
+            max_retries + 1,
+            error_detail,
+        )
         return PlanGeneration(
             plan_action="new",
             type="execute_steps",

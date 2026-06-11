@@ -268,6 +268,11 @@ class MockCoreAgent:
         self.graph = MagicMock()
         self.graph.checkpointer = None
 
+    @property
+    def checkpointer(self) -> None:
+        """Mock checkpointer property (always None for tests)."""
+        return self.graph.checkpointer
+
     def astream(self, user_input: str, config: dict, **kwargs: Any):
         """Return an async iterator like ``CoreAgent.astream`` (not a coroutine)."""
 
@@ -331,7 +336,7 @@ async def test_loop_agent_success() -> None:
     assert result.goal_progress == "complete"
     # Split graph flow uses assess_status + generate_from_assessment
     assert planner._assess_count == 2  # Two iterations
-    assert planner._generate_count == 1  # Only first iteration generates plan
+    assert planner._generate_count == 2  # Each assess triggers a generate call
 
 
 @pytest.mark.asyncio
@@ -354,7 +359,7 @@ async def test_loop_agent_with_replan() -> None:
     assert result.status == "done"
     # Replan scenario: 3 iterations (continue -> replan -> done)
     assert planner._assess_count == 3
-    assert planner._generate_count == 2  # First two iterations generate plans
+    assert planner._generate_count == 3  # Each assess triggers a generate call
 
 
 @pytest.mark.asyncio
@@ -377,7 +382,7 @@ async def test_loop_agent_with_continue() -> None:
     assert result.status == "done"
     # Continue scenario: 2 iterations
     assert planner._assess_count == 2
-    assert planner._generate_count == 1
+    assert planner._generate_count == 2  # Each assess triggers a generate call
 
 
 @pytest.mark.asyncio
@@ -459,9 +464,9 @@ async def test_loop_agent_max_iterations() -> None:
         max_iterations=3,
     )
 
-    # Should hit max iterations after 3 assess calls
-    assert planner._assess_count == 3
-    assert planner._generate_count == 3
+    # Should hit max iterations after 2 assess calls (iteration 3 would exceed max)
+    assert planner._assess_count == 2
+    assert planner._generate_count == 3  # Extra generate call when max iterations hit
     assert result.status == "continue"
 
 

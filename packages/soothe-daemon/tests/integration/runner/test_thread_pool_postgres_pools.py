@@ -22,6 +22,20 @@ _DEFAULT_BASE_DSN = "postgresql://postgres:postgres@127.0.0.1:6432"
 async def _probe_config() -> SootheConfig:
     pytest.importorskip("psycopg_pool")
     base = os.getenv("SOOTHE_TEST_POSTGRES_BASE_DSN", _DEFAULT_BASE_DSN).rstrip("/")
+    # Configure router based on available credentials (Anthropic, then OpenAI default)
+    if os.getenv("ANTHROPIC_API_KEY"):
+        router_config = {
+            "default": "anthropic:claude-sonnet-4-5",
+            "fast": "anthropic:claude-haiku-3-5",
+        }
+        memory_config = {"enabled": False}  # Anthropic doesn't support embeddings
+    elif os.getenv("OPENAI_API_KEY"):
+        router_config = {"default": "openai:gpt-4o-mini", "fast": "openai:gpt-4o-mini"}
+        memory_config = {"enabled": False}
+    else:
+        router_config = {}
+        memory_config = {"enabled": False}
+
     cfg = SootheConfig(
         persistence={
             "default_backend": "postgresql",
@@ -29,7 +43,9 @@ async def _probe_config() -> SootheConfig:
             "checkpointer_pool_size": 3,
             "agentloop_pool_size": 6,
             "postgres_pool_acquire_timeout_seconds": 5,
-        }
+        },
+        router=router_config,
+        agent={"protocols": {"memory": memory_config}},
     )
     dsn = cfg.resolve_postgres_dsn_for_database("checkpoints")
     if "connect_timeout" not in dsn:

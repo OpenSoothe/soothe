@@ -1,5 +1,7 @@
 """Integration tests for runner performance-related wiring (RFC-0008)."""
 
+import os
+
 import pytest
 
 from soothe.config import SootheConfig
@@ -84,8 +86,20 @@ async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
 @pytest.mark.asyncio
 async def test_feature_flags(requires_llm_api):
     """Agentic final-response mode remains a supported toggle."""
-    config1 = SootheConfig()
+    # Configure router based on available credentials
+    if os.getenv("ANTHROPIC_API_KEY"):
+        router_config = {
+            "default": "anthropic:claude-sonnet-4-5",
+            "fast": "anthropic:claude-haiku-3-5",
+        }
+    elif os.getenv("OPENAI_API_KEY"):
+        router_config = {"default": "openai:gpt-4o-mini", "fast": "openai:gpt-4o-mini"}
+    else:
+        router_config = {}
+
+    config1 = SootheConfig(router=router_config) if router_config else SootheConfig()
     config1.agent.loop.final_response = "always_synthesize"
+    config1.agent.protocols.memory.enabled = False  # Anthropic doesn't support embeddings
     runner1 = SootheRunner(config1)
 
     try:
@@ -94,8 +108,9 @@ async def test_feature_flags(requires_llm_api):
     finally:
         await runner1.cleanup()
 
-    config2 = SootheConfig()
+    config2 = SootheConfig(router=router_config) if router_config else SootheConfig()
     config2.agent.loop.final_response = "adaptive"
+    config2.agent.protocols.memory.enabled = False  # Anthropic doesn't support embeddings
     runner2 = SootheRunner(config2)
 
     try:

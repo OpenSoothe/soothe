@@ -35,6 +35,24 @@ def _dsn_with_connect_timeout(dsn: str, seconds: int = 2) -> str:
 
 def _postgres_integration_config() -> SootheConfig:
     base = os.getenv("SOOTHE_TEST_POSTGRES_BASE_DSN", _DEFAULT_BASE_DSN).rstrip("/")
+    # Configure router based on available credentials (order: Anthropic, Dashscope, OpenAI)
+    if os.getenv("ANTHROPIC_API_KEY"):
+        # Anthropic doesn't support embeddings, disable memory for this test
+        router_config = {
+            "default": "anthropic:claude-sonnet-4-5",
+            "fast": "anthropic:claude-haiku-3-5",
+        }
+        memory_config = {"enabled": False}
+    elif os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL"):
+        router_config = {"default": "coding-plan:kimi-k2.5", "fast": "coding-plan:kimi-k2.5"}
+        memory_config = {"enabled": False}
+    elif os.getenv("OPENAI_API_KEY"):
+        router_config = {"default": "openai:gpt-4o-mini", "fast": "openai:gpt-4o-mini"}
+        memory_config = {"enabled": False}
+    else:
+        router_config = {"default": "openai:gpt-4o-mini"}  # Will fail if no credentials
+        memory_config = {"enabled": False}
+
     return SootheConfig(
         persistence={
             "default_backend": "postgresql",
@@ -44,7 +62,9 @@ def _postgres_integration_config() -> SootheConfig:
             "postgres_pool_max_idle_seconds": 30,
             "postgres_pool_max_lifetime_seconds": 300,
             "postgres_pool_acquire_timeout_seconds": 5,
-        }
+        },
+        router=router_config,
+        agent={"protocols": {"memory": memory_config}},
     )
 
 
@@ -104,6 +124,7 @@ async def test_shared_checkpointer_pool_singleton_with_real_db(pg_config: Soothe
 @pytest.mark.asyncio
 async def test_sequential_runner_cleanup_preserves_shared_checkpointer_pool(
     pg_config: SootheConfig,
+    requires_llm_api,
 ) -> None:
     """Regression: per-request pool close caused PoolTimeout under thread_pool load."""
     pools: list[object] = []
