@@ -13,11 +13,6 @@ providers:
     api_base_url: "${DASHSCOPE_BASE_URL}"
     api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - qwen-max
-      - qwen3.5-flash
-      - qwen3.5-plus
-      - MiniMax-M2.5
-      - kimi-k2.5
       - multimodal-embedding-v1
 
   - name: coding-plan
