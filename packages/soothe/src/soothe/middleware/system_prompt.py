@@ -405,15 +405,22 @@ class SystemPromptMiddleware(AgentMiddleware):
         # Block order (RFC-214 cache-friendly; all workspace-stable):
         #   1. base_core
         #   2. <RESPONSE_LANGUAGE_HINT>    (always — moved from user envelope)
-        #   3. <WORKSPACE_RULES>           (when workspace bound)
-        #   4. <WORKSPACE_INSTRUCTIONS>    (when AGENTS.md/CLAUDE.md present)
-        #   5. <ENVIRONMENT>               (always)
-        #   6. <WORKSPACE>                 (when workspace bound)
+        #   3. <AVAILABLE_TOOLS>           (when progressive tools enabled)
+        #   4. <WORKSPACE_RULES>           (when workspace bound)
+        #   5. <WORKSPACE_INSTRUCTIONS>    (when AGENTS.md/CLAUDE.md present)
+        #   6. <ENVIRONMENT>               (always)
+        #   7. <WORKSPACE>                 (when workspace bound)
         # Everything that follows is gated (context/memory/directive/contract)
         # or semi-static (thread/protocols/scenarios/skills/MCP).
         from soothe.foundation.loop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
         static_sections: list[str] = [base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
+
+        # Insert AVAILABLE_TOOLS between RESPONSE_LANGUAGE_HINT and WORKSPACE_RULES
+        deferred_tools = state.get("_deferred_tools_for_listing") if state else None
+        tools_block = self._compose_available_tools_block(state, deferred_tools=deferred_tools)
+        if tools_block:
+            static_sections.append(tools_block)
 
         if workspace:
             static_sections.append(
@@ -998,20 +1005,17 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "tool_activation": request.state.get("tool_activation"),
             }
 
-        optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
-
+        # Pass deferred tools through state so AVAILABLE_TOOLS can be inserted
+        # in the correct position (between RESPONSE_LANGUAGE_HINT and WORKSPACE_RULES)
         if self._config.progressive_tools.enabled:
             listing_tools: list[Any] = getattr(request, "tools", None) or []
             if self._progressive_tool_middleware is not None:
                 full_catalog = self._progressive_tool_middleware.full_tools_for_listing()
                 if full_catalog:
                     listing_tools = full_catalog
-            tools_block = self._compose_available_tools_block(
-                state_dict,
-                deferred_tools=listing_tools,
-            )
-            if tools_block:
-                optimized_prompt = f"{optimized_prompt}\n\n{tools_block}"
+            state_dict["_deferred_tools_for_listing"] = listing_tools
+
+        optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
 
         # Extract execution hints from state for user message envelope (RFC-214)
         hints_text = self._extract_execution_hints_from_state(request.state)

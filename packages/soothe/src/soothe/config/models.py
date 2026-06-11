@@ -336,10 +336,6 @@ class ToolsConfig(BaseModel):
         wizsearch: Wizsearch multi-engine search tools config.
         http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
         deepxiv: DeepXiv academic paper search tools (disabled by default).
-
-    Note:
-        ``suggest_goal`` and ``add_finding`` are not configured here; they load when
-        ``agent.autonomous.enabled`` is true (autopilot).
     """
 
     execution: ToolConfig = Field(default_factory=ToolConfig)

@@ -949,8 +949,8 @@ class Executor:
                 (built from ``state.pending_clarification_answer``) injected as
                 the first ``Command(resume=...)`` to resume after a prior
                 clarification was answered.
-            proposal_queue: Optional ProposalQueue (RFC-204 Group C) for Layer 2
-                tools (suggest_goal, add_finding) to enqueue proposals during execution.
+            proposal_queue: Optional ProposalQueue for autopilot proposals (report_progress,
+                flag_blocker, etc.) during execution.
         """
         self.core_agent = core_agent
         self._checkpointer = checkpointer

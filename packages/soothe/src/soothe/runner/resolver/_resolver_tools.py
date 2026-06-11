@@ -131,13 +131,6 @@ def _call_subagent_factory(factory: Any, kwargs: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _goaling_tools_enabled(config: SootheConfig | None) -> bool:
-    """Goaling tools load only when autopilot is enabled (``agent.autonomous.enabled``)."""
-    if config is None:
-        return False
-    return bool(config.agent.autonomous.enabled)
-
-
 def resolve_tools(
     tools_config: Any,
     *,
@@ -169,14 +162,9 @@ def resolve_tools(
         "wizsearch",
         "http_requests",
         "deepxiv",
-        "goaling",  # RFC-204 Group C: suggest_goal, add_finding (autopilot only)
     ]
     enabled_tools = []
     for name in _tool_groups:
-        if name == "goaling":
-            if _goaling_tools_enabled(config):
-                enabled_tools.append(name)
-            continue
         group_cfg = getattr(tools_config, name, None)
         if group_cfg and group_cfg.enabled:
             enabled_tools.append(name)
@@ -511,31 +499,6 @@ def _resolve_single_tool_group_uncached(
             return [tool_map[name]]
         logger.warning("Tool '%s' not found in DataToolkit", name)
         return []
-
-    # --- Goal management tools (RFC-0016 single-purpose) ---
-    if name == "goals":
-        return []  # Goals are handled separately via resolve_goal_tools
-
-    # Support individual goal tool names (map to consolidated group)
-    if name in ("create_goal", "list_goals", "complete_goal", "fail_goal"):
-        # These require goal_engine, return empty for now
-        # They will be handled via resolve_goal_tools
-        return []
-
-    # --- Goaling tools (RFC-204 Group C: suggest_goal, add_finding) ---
-    # These require proposal_queue from AgentLoop runtime context.
-    # They are injected dynamically during execute when proposal_queue is available.
-    if name == "goaling":
-        from soothe.toolkits.goaling import AddFindingTool, SuggestGoalTool
-
-        # Return tools without queue - queue is injected via ToolRuntime.state
-        return [SuggestGoalTool(), AddFindingTool()]
-
-    if name in ("suggest_goal", "add_finding"):
-        from soothe.toolkits.goaling import AddFindingTool, SuggestGoalTool
-
-        tool_map = {"suggest_goal": SuggestGoalTool, "add_finding": AddFindingTool}
-        return [tool_map[name]()]  # Return without queue - runtime injection
 
     logger.warning("Unknown tool group '%s', skipping.", name)
     return []
