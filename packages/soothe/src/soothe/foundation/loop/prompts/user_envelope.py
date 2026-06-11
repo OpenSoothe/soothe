@@ -144,36 +144,29 @@ def _render_prior_progress_block(
 ) -> str:
     """Render a PriorProgressDigest as the <PRIOR_PROGRESS> envelope block.
 
-    Hard-capped at ``PRIOR_PROGRESS_MAX_CHARS``; trailing evidence lines drop
-    first, then trailing tool lines.
+    Hard-capped at ``PRIOR_PROGRESS_MAX_CHARS``; evidence lines drop when budget exceeded.
+
+    Removed ``tools:`` section entirely — empty argument strings confuse the LLM
+    without providing useful signal. Evidence excerpts remain for progress grounding.
     """
     header = (
         f"iter={digest.iteration} wave={digest.wave_index} "
         f"done={digest.steps_completed} failed={digest.steps_failed} "
         f"hint={digest.derived_progress_hint}"
     )
-    tool_lines = [
-        f"- {t.name}: {json.dumps(t.head, ensure_ascii=False)}" for t in digest.tool_calls
-    ]
     evidence_lines = [f"- {json.dumps(e, ensure_ascii=False)}" for e in digest.evidence_excerpts]
 
-    def _assemble(tools: list[str], evidence: list[str]) -> str:
+    def _assemble(evidence: list[str]) -> str:
         parts = [header]
-        if tools:
-            parts.append("tools:")
-            parts.extend(tools)
         if evidence:
             parts.append("evidence:")
             parts.extend(evidence)
         return "<PRIOR_PROGRESS>\n" + "\n".join(parts) + "\n</PRIOR_PROGRESS>"
 
-    rendered = _assemble(tool_lines, evidence_lines)
+    rendered = _assemble(evidence_lines)
     while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and evidence_lines:
         evidence_lines.pop()
-        rendered = _assemble(tool_lines, evidence_lines)
-    while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and tool_lines:
-        tool_lines.pop()
-        rendered = _assemble(tool_lines, evidence_lines)
+        rendered = _assemble(evidence_lines)
     return rendered
 
 
