@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from collections.abc import AsyncIterator
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,6 +23,18 @@ def _make_step() -> StepAction:
     )
 
 
+def _make_mock_agent(chunks: list) -> MagicMock:
+    async def fake_execution_astream(*_a: object, **_k: object) -> AsyncIterator[Any]:
+        for c in chunks:
+            yield c
+
+    agent = MagicMock()
+    agent.execution_astream = MagicMock(side_effect=fake_execution_astream)
+    agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+    agent.aget_state = AsyncMock(return_value=MagicMock())
+    return agent
+
+
 @pytest.mark.asyncio
 async def test_stream_stops_after_subagent_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     from langchain_core.messages import ToolMessage
@@ -28,18 +42,12 @@ async def test_stream_stops_after_subagent_cap(monkeypatch: pytest.MonkeyPatch) 
     cfg = SootheConfig()
     cfg.agent.loop.max_subagent_tasks_per_wave = 1
 
-    agent = MagicMock()
     chunks: list = [
         ((), "messages", (ToolMessage(content="a", tool_call_id="1", name="task"), {})),
         ((), "messages", (ToolMessage(content="b", tool_call_id="2", name="task"), {})),
         ((), "messages", (ToolMessage(content="c", tool_call_id="3", name="grep"), {})),
     ]
-
-    async def fake_astream(*_a: object, **_k: object):
-        for c in chunks:
-            yield c
-
-    agent.astream = fake_astream
+    agent = _make_mock_agent(chunks)
 
     ex = Executor(agent, max_parallel_steps=1, config=cfg)
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
@@ -68,17 +76,11 @@ async def test_unlimited_subagent_when_cap_zero(monkeypatch: pytest.MonkeyPatch)
     cfg = SootheConfig()
     cfg.agent.loop.max_subagent_tasks_per_wave = 0
 
-    agent = MagicMock()
     chunks: list = [
         ((), "messages", (ToolMessage(content="a", tool_call_id="1", name="task"), {})),
         ((), "messages", (ToolMessage(content="b", tool_call_id="2", name="task"), {})),
     ]
-
-    async def fake_astream(*_a: object, **_k: object):
-        for c in chunks:
-            yield c
-
-    agent.astream = fake_astream
+    agent = _make_mock_agent(chunks)
 
     ex = Executor(agent, max_parallel_steps=1, config=cfg)
     state = LoopState(goal="g", thread_id="t", max_iterations=3)

@@ -15,7 +15,7 @@ from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessag
 
 
 async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:
-    """Empty async generator for mocking agent.astream."""
+    """Empty async generator for mocking agent.execution_astream."""
     if False:  # pragma: no cover - never yields
         yield
 
@@ -23,8 +23,10 @@ async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:
 def _make_mock_agent() -> MagicMock:
     """Create mock agent with async generator execution_astream."""
     mock_agent = MagicMock()
-    mock_agent.execution_astream = AsyncMock(return_value=_empty_async_gen())
+    # execution_astream is sync and returns an async iterator — not awaitable.
+    mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
     mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+    mock_agent.aget_state = AsyncMock(return_value=MagicMock())
     return mock_agent
 
 
@@ -112,7 +114,7 @@ async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
     assert "third" in str(messages[-1].content)
 
     # Thread fork from main (multi-dep fallback)
-    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t__step_C"
 
 
@@ -152,7 +154,7 @@ async def test_singleton_sole_child_reuses_predecessor_thread() -> None:
     )
 
     # Sole-child reuse: B's CoreAgent runs under A's thread, no new namespace.
-    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t__step_A"
     assert state.step_thread_ids.get("B") == "logical-t__step_A"
 
@@ -184,7 +186,7 @@ async def test_no_dep_step_forks_from_main_thread() -> None:
         loop_state=state,
     )
 
-    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t__step_solo"
     assert state.step_thread_ids.get("solo") == "logical-t__step_solo"
 
@@ -209,7 +211,7 @@ async def test_step_without_loop_state_uses_main_thread() -> None:
         loop_state=None,
     )
 
-    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t"
 
 
@@ -316,7 +318,7 @@ async def test_step_without_current_decision_uses_main_thread() -> None:
         loop_state=state,
     )
 
-    cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
+    cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t"
 
 

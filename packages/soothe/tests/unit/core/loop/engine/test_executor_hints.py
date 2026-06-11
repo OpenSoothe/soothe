@@ -1,12 +1,20 @@
 """Unit tests for Executor hint passing."""
 
 import asyncio
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from soothe.foundation.loop.engine.executor import Executor
 from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction
+
+
+async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:
+    """Empty async generator for mocking agent.execution_astream."""
+    if False:  # pragma: no cover - never yields
+        yield
 
 
 class TestExecutorHints:
@@ -16,8 +24,10 @@ class TestExecutorHints:
     async def test_executor_omits_legacy_tools_config_key(self):
         """Executor does not set soothe_step_tools (IG-382)."""
         mock_agent = MagicMock()
-        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        # execution_astream is sync and returns an async iterator — not awaitable.
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -42,8 +52,10 @@ class TestExecutorHints:
     async def test_executor_passes_wire_subagent_hint(self):
         """Test Executor passes wire preferred_subagent via config when routing_hint=subagent."""
         mock_agent = MagicMock()
-        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        # execution_astream is sync and returns an async iterator — not awaitable.
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -68,8 +80,10 @@ class TestExecutorHints:
     async def test_executor_passes_expected_output(self):
         """Test Executor passes expected_output hint via config."""
         mock_agent = MagicMock()
-        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        # execution_astream is sync and returns an async iterator — not awaitable.
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -90,8 +104,10 @@ class TestExecutorHints:
     async def test_executor_handles_missing_hints(self):
         """Test Executor handles steps without optional hints."""
         mock_agent = MagicMock()
-        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        # execution_astream is sync and returns an async iterator — not awaitable.
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -113,9 +129,14 @@ class TestExecutorHints:
     @pytest.mark.asyncio
     async def test_executor_logs_hints(self, caplog):
         """Test Executor logs hint information."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
         mock_agent = MagicMock()
-        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        # execution_astream is sync and returns an async iterator — not awaitable.
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -140,8 +161,10 @@ class TestExecutorHints:
         context arrives via message injection.
         """
         mock_agent = MagicMock()
-        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        # execution_astream is sync and returns an async iterator — not awaitable.
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
         step = StepAction(id="a1b2c3d4", description="Explore slice", expected_output="ok")

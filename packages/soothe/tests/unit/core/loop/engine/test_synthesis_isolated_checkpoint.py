@@ -27,18 +27,31 @@ def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
     assert b.startswith(f"{parent}__synth_gc__")
 
 
+class _RecordingLlm:
+    """Minimal LLM stand-in; avoids MagicMock swallowing ``astream`` assignments."""
+
+    def __init__(self, captured: dict) -> None:
+        self._captured = captured
+
+    def astream(self, messages, config=None, **kwargs):  # noqa: ANN001
+        async def _stream():
+            self._captured["messages"] = list(messages)
+            self._captured["config"] = config
+            if False:  # pragma: no cover — async generator
+                yield None
+
+        return _stream()
+
+
+def _recording_llm(captured: dict) -> _RecordingLlm:
+    return _RecordingLlm(captured)
+
+
 @pytest.mark.asyncio
 async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -> None:
-    """CoreAgent astream must use a fresh thread_id + workspace for checkpointer (IG-302)."""
+    """Synthesis LLM astream must use a fresh thread_id + workspace for checkpointer (IG-302)."""
     captured: dict = {}
-
-    async def recording_astream(graph_input, config=None, **kwargs):  # noqa: ARG001
-        captured["config"] = config
-        if False:
-            yield None
-
-    core = MagicMock()
-    core.astream = recording_astream
+    llm = _recording_llm(captured)
 
     classification = ScenarioClassification(
         scenario="general_summary",
@@ -67,7 +80,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
         ],
     )
 
-    gen = SynthesisGenerator(MagicMock(), core, soothe_config=None)
+    gen = SynthesisGenerator(llm, MagicMock(), soothe_config=None)
     with patch.object(
         SynthesisGenerator,
         "_classify_scenario",
@@ -90,14 +103,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
 async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypatch) -> None:
     """Phase-2 synthesis uses the same run-name convention as execute-step (IG-377 pattern)."""
     captured: dict = {}
-
-    async def recording_astream(graph_input, config=None, **kwargs):  # noqa: ARG001
-        captured["config"] = config
-        if False:
-            yield None
-
-    core = MagicMock()
-    core.astream = recording_astream
+    llm = _recording_llm(captured)
 
     classification = ScenarioClassification(
         scenario="general_summary",
@@ -132,7 +138,7 @@ async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypa
         ],
     )
 
-    gen = SynthesisGenerator(MagicMock(), core, soothe_cfg, loop_id="loop-9")
+    gen = SynthesisGenerator(llm, MagicMock(), soothe_cfg, loop_id="loop-9")
     with patch.object(
         SynthesisGenerator,
         "_classify_scenario",
@@ -152,14 +158,7 @@ async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypa
 async def test_generate_synthesis_uses_projected_context_not_raw_ledger() -> None:
     """Synthesis sends system + projected evidence, excluding plan-phase ledger rows."""
     captured: dict = {}
-
-    async def recording_astream(graph_input, config=None, **kwargs):  # noqa: ARG001
-        captured["messages"] = list(graph_input.get("messages") or [])
-        if False:
-            yield None
-
-    core = MagicMock()
-    core.astream = recording_astream
+    llm = _recording_llm(captured)
 
     classification = ScenarioClassification(
         scenario="general_summary",
@@ -196,7 +195,7 @@ async def test_generate_synthesis_uses_projected_context_not_raw_ledger() -> Non
         step_results=[],
     )
 
-    gen = SynthesisGenerator(MagicMock(), core, soothe_config=None)
+    gen = SynthesisGenerator(llm, MagicMock(), soothe_config=None)
     with patch.object(
         SynthesisGenerator,
         "_classify_scenario",
