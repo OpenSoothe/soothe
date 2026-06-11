@@ -57,7 +57,7 @@ class LoopRuntimeContext:
     # than broadcasting a single concatenated string. ``None`` falls back to
     # broadcasting ``clarification_resume_text``.
     clarification_resume_answers: list[str] | None = None
-    # RFC-204 Group C: ProposalQueue for Layer 2 tools (suggest_goal, add_finding)
+    # ProposalQueue for autopilot proposals (report_progress, flag_blocker, etc.)
     proposal_queue: ProposalQueue | None = None
 
     @property
