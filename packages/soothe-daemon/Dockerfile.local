@@ -1,22 +1,37 @@
-# Local monorepo build — installs soothe + soothe-daemon from source (not PyPI).
+# Soothe daemon — local source build (no PyPI dependency).
 #
-# Build from repo root:
+# Build context must be the monorepo root (parent of `packages/`). Installs from
+# local source directories: packages/soothe-sdk, packages/soothe, packages/soothe-daemon.
+#
+# Build (full image with browser subagent):
 #   docker build -f packages/soothe-daemon/Dockerfile.local \
-#     -t soothed:0.6.2-local .
+#     --build-arg INCLUDE_BROWSER=true \
+#     -t soothed:local .
 #
-# Run:
-#   docker run --rm -p 8765:8765 -v soothe-data:/var/lib/soothe soothed:0.6.2-local
+# Build (slim image without browser subagent):
+#   docker build -f packages/soothe-daemon/Dockerfile.local \
+#     --build-arg INCLUDE_BROWSER=false \
+#     -t soothed:local-slim .
+#
+# Run (unified listener on 8765: WebSocket + REST):
+#   docker run --rm -p 8765:8765 \
+#     -e OPENAI_API_KEY=... \
+#     -v soothe-data:/var/lib/soothe \
+#     soothed:local
 
 ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 # =============================================================================
-# Stage 1: install third-party deps (cached until pyproject.toml changes)
+# Stage 1: install from local source + browsers (optional)
 # =============================================================================
 FROM ${PYTHON_BASE} AS deps
 
+ARG INCLUDE_BROWSER=true
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    UV_COMPILE_BYTECODE=1 \
+    UV_COMPILEBYTECODE=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     SOOTHE_HOME=/var/lib/soothe
 
 RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
@@ -26,38 +41,48 @@ RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/source
 
 WORKDIR /app
 
+# Install uv directly via curl (avoids ghcr.io access for networks with restrictions)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/uv
 
-RUN uv venv /app/.venv
+# Ensure playwright browsers directory exists (empty if INCLUDE_BROWSER=false)
+RUN mkdir -p /opt/ms-playwright
 
-# Copy only dependency metadata (cached until pyproject.toml or VERSION changes)
-# hatch version uses path="../../VERSION" relative to each pyproject.toml
-COPY VERSION /VERSION
-COPY packages/soothe-sdk/pyproject.toml /src/soothe-sdk/pyproject.toml
-COPY packages/soothe/pyproject.toml /src/soothe/pyproject.toml
-COPY packages/soothe-daemon/pyproject.toml /src/soothe-daemon/pyproject.toml
+# Copy VERSION file (hatchling reads version from ../../VERSION relative to package)
+COPY VERSION /app/VERSION
 
-# Create minimal package stubs so hatchling can resolve version + local deps
-RUN mkdir -p /src/soothe-sdk/src/soothe_sdk \
-    && touch /src/soothe-sdk/src/soothe_sdk/__init__.py \
-    && touch /src/soothe-sdk/README.md \
-    && mkdir -p /src/soothe/src/soothe \
-    && touch /src/soothe/src/soothe/__init__.py \
-    && touch /src/soothe/README.md \
-    && mkdir -p /src/soothe-daemon/src/soothe_daemon \
-    && touch /src/soothe-daemon/src/soothe_daemon/__init__.py \
-    && touch /src/soothe-daemon/README.md
+# Copy local packages for source install
+COPY packages/soothe-sdk /app/packages/soothe-sdk
+COPY packages/soothe /app/packages/soothe
+COPY packages/soothe-daemon /app/packages/soothe-daemon
 
-# Install all third-party dependencies (this layer is cached)
-RUN set -eux; \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    set -eux; \
+    if [ "${INCLUDE_BROWSER}" = "true" ]; then \
+      extras="all"; \
+      pip_extras="playwright"; \
+    else \
+      extras="research,tabular,document,github,dashscope,langfuse,claude,semantic"; \
+      pip_extras=""; \
+    fi; \
+    uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
-        --index-url https://mirrors.aliyun.com/pypi/simple/ \
-        "/src/soothe-sdk" \
-        "/src/soothe[research,dashscope,semantic]" \
-        "/src/soothe-daemon"
+        "/app/packages/soothe-sdk" \
+        "/app/packages/soothe[${extras}]" \
+        "/app/packages/soothe-daemon" \
+        ${pip_extras}; \
+    if [ "${INCLUDE_BROWSER}" = "true" ]; then \
+      /app/.venv/bin/python -m playwright install chromium; \
+    fi
 
-# Warmup embedding model (cached separately from deps and source)
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# =============================================================================
+# Stage 2: warm embedding cache (separate layer for better caching)
+# =============================================================================
+FROM deps AS warmup
+
+ENV SOOTHE_EMBEDDING_CACHE=/root/.cache/soothe/models/embeddings
 COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
 RUN mkdir -p /root/.cache/soothe/models/embeddings \
     && /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
@@ -65,60 +90,54 @@ RUN mkdir -p /root/.cache/soothe/models/embeddings \
     && rm -f /tmp/warmup_embedding_model.py
 
 # =============================================================================
-# Stage 2: install actual source code (fast, no network needed)
-# =============================================================================
-FROM deps AS source
-
-COPY packages/soothe-sdk /src/soothe-sdk
-COPY packages/soothe /src/soothe
-COPY packages/soothe-daemon /src/soothe-daemon
-
-RUN uv pip install --python /app/.venv/bin/python --no-deps --reinstall \
-        "/src/soothe-sdk" "/src/soothe" "/src/soothe-daemon"
-
-ENV PATH="/app/.venv/bin:${PATH}"
-
-# =============================================================================
-# Stage 3: minimal runtime (non-root)
+# Stage 3: minimal runtime (venv + browsers + HF cache + jemalloc, non-root)
 # =============================================================================
 FROM ${PYTHON_BASE} AS runtime
 
-LABEL org.opencontainers.image.title="Soothe Daemon (local)" \
-    org.opencontainers.image.description="Soothe daemon built from monorepo source" \
-    org.opencontainers.image.version="0.6.2-local"
+ARG INCLUDE_BROWSER=true
+
+LABEL org.opencontainers.image.title="Soothe Daemon (Local Build)" \
+    org.opencontainers.image.description="Soothe agent orchestration daemon built from local source" \
+    org.opencontainers.image.source="https://github.com/OpenSoothe/soothe"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILEBYTECODE=1 \
     SOOTHE_HOME=/var/lib/soothe \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0 \
     SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED=true \
     SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST=0.0.0.0
 
 WORKDIR /app
 
-COPY --from=source /app/.venv /app/.venv
+COPY --from=warmup /app/.venv /app/.venv
+COPY --from=deps /opt/ms-playwright /opt/ms-playwright
 
 ENV PATH="/app/.venv/bin:${PATH}"
+
+# Install runtime deps: playwright browser libs (if needed) + jemalloc for memory optimization
+RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && if [ "${INCLUDE_BROWSER}" = "true" ] && [ -n "$(ls -A /opt/ms-playwright 2>/dev/null)" ]; then \
+      /app/.venv/bin/python -m playwright install-deps; \
+    fi \
+    && apt-get install -y --no-install-recommends libjemalloc2 \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --system soothe \
     && mkdir -p /var/lib/soothe \
     && mkdir -p /home/soothe/.cache/soothe/models \
-    && chown -R soothe:soothe /var/lib/soothe /home/soothe/.cache
+    && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright /home/soothe/.cache
 
-RUN mkdir -p /home/soothe/.cache/soothe/models/embeddings
-COPY --from=source --chown=soothe:soothe /root/.cache/soothe/models/embeddings/ /home/soothe/.cache/soothe/models/embeddings/
-
-USER root
-RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends libjemalloc2 \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=warmup --chown=soothe:soothe /root/.cache/soothe/models/embeddings /home/soothe/.cache/soothe/models/embeddings
 
 USER soothe
 WORKDIR /var/lib/soothe
 
 EXPOSE 8765/tcp
 
+# HTTP healthcheck via /healthz endpoint (more reliable than socket probe)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)" || exit 1
 
