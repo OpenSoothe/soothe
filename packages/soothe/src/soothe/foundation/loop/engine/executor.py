@@ -58,7 +58,6 @@ from soothe.foundation.loop.engine.predecessor_branch_context import (
     prior_loop_execute_messages,
     transitive_dependency_step_ids,
 )
-from soothe.foundation.loop.engine.thread_fork_manager import ThreadForkManager
 from soothe.foundation.loop.engine.tool_call_args import (
     ToolCallArgsCollector,
     filter_redundant_stream_tool_updates,
@@ -112,6 +111,80 @@ def _wire_subagent_from_routing(routing_classification: Any | None) -> str | Non
         stripped = preferred.strip()
         return stripped or None
     return str(preferred) if preferred is not None else None
+
+
+def _count_dependents(predecessor_id: str, decision: AgentDecision) -> int:
+    """Count how many steps in ``decision`` directly depend on ``predecessor_id``.
+
+    Used for sole-child chain reuse: when only one step depends on a given
+    predecessor, that step can reuse the predecessor's thread_id directly
+    without creating a new namespace.
+    """
+    count = 0
+    for s in getattr(decision, "steps", None) or []:
+        deps = getattr(s, "dependencies", None) or []
+        if predecessor_id in deps:
+            count += 1
+    return count
+
+
+def _select_thread_for_step(
+    step: StepAction,
+    decision: AgentDecision,
+    state: LoopState,
+    main_thread_id: str,
+) -> str:
+    """Select thread_id for a step with sole-child chain reuse optimization.
+
+    IG-477: Thread isolation via __step_<id> namespace for parallel safety.
+    Predecessor context arrives via message injection, not checkpoint fork.
+
+    Strategy:
+    | Direct deps | Predecessor's other dependents | Action                     |
+    |-------------|--------------------------------|----------------------------|
+    | 0           | n/a                            | new __step_<id> thread     |
+    | 1           | 0 (sole child)                 | reuse predecessor's thread |
+    | 1           | ≥1 (has siblings)              | new __step_<id> thread     |
+    | ≥2          | n/a                            | new __step_<id> thread     |
+
+    Returns:
+        Thread_id for the step's CoreAgent execution.
+    """
+    direct_deps = step.dependencies or []
+
+    # No dependencies → fresh isolated thread
+    if not direct_deps:
+        return f"{main_thread_id}__step_{step.id}"
+
+    # Multiple dependencies → fresh isolated thread (predecessor context via message injection)
+    if len(direct_deps) > 1:
+        return f"{main_thread_id}__step_{step.id}"
+
+    # Singleton dependency
+    pred_step_id = direct_deps[0]
+    pred_thread_id = state.step_thread_ids.get(pred_step_id)
+
+    # Predecessor thread not tracked → fresh isolated thread
+    if not pred_thread_id:
+        logger.debug(
+            "Predecessor thread not found for step %s (dep: %s), creating new thread",
+            step.id,
+            pred_step_id,
+        )
+        return f"{main_thread_id}__step_{step.id}"
+
+    # Sole-child optimization: reuse predecessor's thread when no siblings
+    if _count_dependents(pred_step_id, decision) <= 1:
+        logger.debug(
+            "Sole-child reuse: step %s reusing predecessor %s's thread %s",
+            step.id,
+            pred_step_id,
+            pred_thread_id,
+        )
+        return pred_thread_id
+
+    # Has siblings → new isolated thread to prevent namespace collision
+    return f"{main_thread_id}__step_{step.id}"
 
 
 def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
@@ -1008,6 +1081,18 @@ class Executor:
         return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
 
     @staticmethod
+    async def _maybe_aclose_act_stream(stream: Any, *, reason: str) -> None:
+        """Close the graph stream when Act consumption stops early (IG-477)."""
+        aclose = getattr(stream, "aclose", None)
+        if aclose is None:
+            return
+        try:
+            await aclose()
+            logger.debug("Closed Act stream early (%s)", reason)
+        except Exception:  # noqa: BLE001
+            logger.debug("Act stream aclose failed", exc_info=True)
+
+    @staticmethod
     def _build_step_outcome_from_stream(
         *,
         outcomes: list[dict[str, Any]],
@@ -1057,6 +1142,64 @@ class Executor:
             return min(cap, 256)
         return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
 
+    async def _fetch_pending_interrupts_from_state(
+        self,
+        graph_config: dict[str, Any],
+        *,
+        detector: ClarificationDetector | None,
+        capture: ClarificationCapture | None,
+        loop_state_view: LoopStateView | None,
+        origin_node: ClarificationOrigin,
+    ) -> tuple[dict[str, Any], bool, bool]:
+        """Read pending LangGraph interrupts from ``aget_state`` after a stream ends.
+
+        IG-477: Avoid ``stream_mode`` ``updates`` during execute streaming — each update
+        carries a full graph state snapshot (~400 MiB during subgraph tool streaming).
+
+        Returns:
+            Tuple of ``(pending_interrupts, interrupt_occurred, captured_clarification)``.
+        """
+        pending_interrupts: dict[str, Any] = {}
+        interrupt_occurred = False
+        captured_clarification = False
+        clarification_enabled = (
+            detector is not None and capture is not None and loop_state_view is not None
+        )
+        try:
+            graph_state = await self.core_agent.execution_aget_state(config=graph_config)
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to read graph state for interrupt detection", exc_info=True)
+            return pending_interrupts, False, False
+
+        interrupts: tuple[Interrupt, ...] = ()
+        if graph_state is not None:
+            raw = getattr(graph_state, "interrupts", None)
+            if raw:
+                interrupts = tuple(raw)
+            else:
+                tasks = getattr(graph_state, "tasks", None) or ()
+                collected: list[Interrupt] = []
+                for task in tasks:
+                    for interrupt_obj in getattr(task, "interrupts", None) or ():
+                        collected.append(interrupt_obj)
+                interrupts = tuple(collected)
+
+        for interrupt_obj in interrupts:
+            if clarification_enabled and is_ask_user_interrupt(interrupt_obj.value):
+                request = detector.from_interrupt(  # type: ignore[union-attr]
+                    interrupt_obj.value,
+                    interrupt_id=interrupt_obj.id,
+                    origin_node=origin_node,
+                    loop_state=loop_state_view,  # type: ignore[arg-type]
+                )
+                if request is not None:
+                    capture.set(request)  # type: ignore[union-attr]
+                    captured_clarification = True
+                    continue
+            pending_interrupts[interrupt_obj.id] = interrupt_obj.value
+            interrupt_occurred = True
+        return pending_interrupts, interrupt_occurred, captured_clarification
+
     async def _core_agent_astream_with_interrupt_resume(
         self,
         stream_input: dict[str, Any] | Command,
@@ -1086,18 +1229,13 @@ class Executor:
             if resume_answer_payload is not None
             else stream_input
         )
-        clarification_enabled = (
-            detector is not None and capture is not None and loop_state_view is not None
-        )
         while True:
-            interrupt_occurred = False
-            pending_interrupts: dict[str, Any] = {}
-            captured_clarification = False
-            chunk_iter = self.core_agent.astream(
+            chunk_iter = self.core_agent.execution_astream(
                 current_input,
                 config=graph_config,
-                stream_mode=["messages", "updates", "custom"],
+                stream_mode=["messages", "custom"],
                 subgraphs=True,
+                durability="exit",
             )
             try:
                 while True:
@@ -1110,30 +1248,26 @@ class Executor:
 
                     if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                         _namespace, mode, data = chunk
-                        if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
-                            interrupts: list[Interrupt] = data["__interrupt__"]
-                            for interrupt_obj in interrupts:
-                                if clarification_enabled and is_ask_user_interrupt(
-                                    interrupt_obj.value
-                                ):
-                                    request = detector.from_interrupt(  # type: ignore[union-attr]
-                                        interrupt_obj.value,
-                                        interrupt_id=interrupt_obj.id,
-                                        origin_node=origin_node,
-                                        loop_state=loop_state_view,  # type: ignore[arg-type]
-                                    )
-                                    if request is not None:
-                                        capture.set(request)  # type: ignore[union-attr]
-                                        captured_clarification = True
-                                        continue
-                                pending_interrupts[interrupt_obj.id] = interrupt_obj.value
-                                interrupt_occurred = True
+                        if mode == "updates":
+                            # Legacy path: ignore updates if a backend still emits them.
+                            continue
                     yield chunk
-                    if captured_clarification:
-                        # Bubble up to the calling node — do not auto-resume.
-                        return
             except asyncio.CancelledError:
                 raise
+
+            (
+                pending_interrupts,
+                interrupt_occurred,
+                captured_clarification,
+            ) = await self._fetch_pending_interrupts_from_state(
+                graph_config,
+                detector=detector,
+                capture=capture,
+                loop_state_view=loop_state_view,
+                origin_node=origin_node,
+            )
+            if captured_clarification:
+                return
 
             if not interrupt_occurred:
                 return
@@ -2024,8 +2158,8 @@ class Executor:
 
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
-        RFC-223: ThreadForkManager handles checkpoint fork for parallel isolation and
-        predecessor inheritance. Multi-dep steps inject transitive predecessor ledger messages.
+        IG-477: Thread isolation via __step_<id> namespace; predecessor context via message
+        injection (no checkpoint fork). Sole-child chain reuse optimization.
 
         Args:
             step: StepAction with description and optional hints
@@ -2035,8 +2169,8 @@ class Executor:
             git_status: Optional git snapshot for prompt XML (RFC-104).
             continue_loop_mode: True when this loop has prior goals (RFC-225);
                 flows into LangGraph state so middleware injects loop-continuation guidance.
-            loop_state: When set, ThreadForkManager creates isolated thread with inherited
-                checkpoint history; multi-dep steps inject predecessor ledger messages.
+            loop_state: When set, generates isolated thread ID; multi-dep steps inject
+                predecessor ledger messages.
 
         Returns:
             Tuple of ``(events, StepResult, AI messages for IG-199, delegate_final_text)``.
@@ -2061,23 +2195,21 @@ class Executor:
                 wire_subagent,
             )
 
-            # RFC-223: Thread fork for checkpoint inheritance.
-            # Use ThreadForkManager to prepare a forked thread with inherited
-            # history from the predecessor. Sole-child optimization: when a
-            # singleton-dependency step is the only child of its predecessor,
-            # the manager reuses the predecessor's thread directly (no copy).
+            # IG-477: Thread isolation for parallel safety; predecessor context via message injection.
+            # Sole-child chain reuse: when a step is the only dependent of its predecessor,
+            # reuse the predecessor's thread_id directly (no namespace collision with siblings).
             fork_thread_id = thread_id  # Default to main thread
             direct_deps = step.dependencies or []
             is_multi_dep = len(direct_deps) > 1
 
             if loop_state is not None and loop_state.current_decision is not None:
-                fork_manager = ThreadForkManager(self._checkpointer)
-                fork_thread_id = await fork_manager.prepare_thread_for_step(
+                fork_thread_id = _select_thread_for_step(
                     step=step,
                     decision=loop_state.current_decision,
                     state=loop_state,
                     main_thread_id=thread_id,
                 )
+                loop_state.step_thread_ids[step.id] = fork_thread_id
 
             configurable: dict[str, Any] = {
                 "thread_id": fork_thread_id,
@@ -2661,6 +2793,7 @@ class Executor:
                 delegate_task_final_parts.append(clipped)
 
             if stop_act_stream:
+                await self._maybe_aclose_act_stream(stream, reason="act_budget_cap")
                 break
 
             if isinstance(chunk, dict) and "model" not in chunk:

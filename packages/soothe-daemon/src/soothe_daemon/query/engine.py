@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
+# IG-477: cap in-query assistant text accumulation (~100KB)
+_MAX_FULL_RESPONSE_CHARS = 100_000
 
 
 class AsyncCancelOrchestrator:
@@ -631,6 +633,7 @@ class QueryEngine:
             )
 
         full_response: list[str] = []
+        full_response_chars: int = 0  # Track total characters for bounded accumulation
         # Set to True once a phase-tagged loop assistant chunk (plan_direct,
         # goal_completion, autonomous_goal, direct_model, quiz) has been
         # persisted by ThreadLogger._log_message_event. When true, the legacy
@@ -738,7 +741,7 @@ class QueryEngine:
                 )
 
                 async def _process_stream() -> None:
-                    nonlocal chunk_count, warning_sent
+                    nonlocal chunk_count, warning_sent, full_response_chars, full_response
 
                     async for chunk in _stream_chunks():
                         if d._current_query_task and d._current_query_task.done():
@@ -791,7 +794,12 @@ class QueryEngine:
                         )
                         if not namespace and mode == "messages" and is_msg_pair:
                             msg, _metadata = data
-                            full_response.extend(extract_text_from_ai_message(msg))
+                            # IG-477: Apply bounded accumulation to prevent memory leak
+                            text_parts = extract_text_from_ai_message(msg)
+                            for part in text_parts:
+                                if full_response_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
+                                    full_response.append(part)
+                                    full_response_chars += len(part)
                             # Detect phase-tagged loop assistant output so the
                             # finally block can skip the legacy concat row.
                             if not phase_tagged_assistant_written[0]:

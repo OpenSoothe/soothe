@@ -28,14 +28,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from _config_helper import load_example_config
-
 from soothe_sdk.client import (
     WebSocketClient,
     bootstrap_thread_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
-from soothe_sdk.core.types import VerbosityLevel
 
 # Image path configuration
 IMAGE_PATH = Path(__file__).parent.parent / "test_image.jpg"
@@ -61,9 +59,7 @@ def load_image_as_attachment(image_path: Path) -> dict[str, str]:
     # Check file size
     file_size_mb = image_path.stat().st_size / (1024 * 1024)
     if file_size_mb > MAX_IMAGE_SIZE_MB:
-        raise ValueError(
-            f"Image too large: {file_size_mb:.2f} MB (max {MAX_IMAGE_SIZE_MB} MB)"
-        )
+        raise ValueError(f"Image too large: {file_size_mb:.2f} MB (max {MAX_IMAGE_SIZE_MB} MB)")
 
     # Detect MIME type from extension
     suffix = image_path.suffix.lower()
@@ -78,8 +74,7 @@ def load_image_as_attachment(image_path: Path) -> dict[str, str]:
     mime_type = mime_map.get(suffix)
     if not mime_type:
         raise ValueError(
-            f"Unsupported image format: {suffix}. "
-            f"Supported: {', '.join(mime_map.keys())}"
+            f"Unsupported image format: {suffix}. Supported: {', '.join(mime_map.keys())}"
         )
 
     # Load and encode to base64
@@ -139,7 +134,7 @@ async def stream_response_events(client: WebSocketClient) -> None:
 
                     # Special handling for vision-related events
                     if "vision" in event_name.lower() or "image" in event_name.lower():
-                        print(f"  [Vision Event]")
+                        print("  [Vision Event]")
 
                     # Display content for message events
                     if event_name == "ai_message":
@@ -187,7 +182,11 @@ async def stream_response_events(client: WebSocketClient) -> None:
                                 print(f"  [{i}] Human: {preview}")
                             elif isinstance(content, list):
                                 # Multimodal content (text + images)
-                                text_parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+                                text_parts = [
+                                    b.get("text", "")
+                                    for b in content
+                                    if isinstance(b, dict) and b.get("type") == "text"
+                                ]
                                 if text_parts:
                                     preview = text_parts[0][:100]
                                     print(f"  [{i}] Human: {preview}...")
@@ -204,7 +203,11 @@ async def stream_response_events(client: WebSocketClient) -> None:
                                     print(f"      {content}")
                             elif isinstance(content, list):
                                 # Multimodal AI response
-                                text_parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+                                text_parts = [
+                                    b.get("text", "")
+                                    for b in content
+                                    if isinstance(b, dict) and b.get("type") == "text"
+                                ]
                                 for part in text_parts:
                                     if part:
                                         preview = part[:300] if len(part) > 300 else part
@@ -229,6 +232,7 @@ async def stream_response_events(client: WebSocketClient) -> None:
         except Exception as e:
             print(f"\n[Error] Exception while streaming: {e}")
             import traceback
+
             traceback.print_exc()
             break
 
@@ -244,7 +248,7 @@ async def main() -> None:
 
     # Load config
     config = load_example_config()
-    print(f"\n[Config] Loaded configuration")
+    print("\n[Config] Loaded configuration")
 
     # Load image
     try:

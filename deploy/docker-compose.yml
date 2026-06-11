@@ -68,10 +68,14 @@ services:
       SOOTHE_DAEMON_MEMORY_PROFILING__TRACE_DEPTH: ${SOOTHE_MEMORY_PROFILING_TRACE_DEPTH:-25}
       SOOTHE_DAEMON_MEMORY_PROFILING__LOG_GROWTH_THRESHOLD_MB: ${SOOTHE_MEMORY_PROFILING_LOG_GROWTH_THRESHOLD_MB:-100}
       # IG-475: glibc malloc tuning to reduce RSS fragmentation
-      MALLOC_ARENA_MAX: "2"
+      MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-2}
       MALLOC_TRIM_THRESHOLD_: "131072"
       MALLOC_TOP_PAD_: "131072"
       MALLOC_MMAP_THRESHOLD_: "131072"
+      # IG-477: emergency rollback for ephemeral execute graph (default on)
+      SOOTHE_EPHEMERAL_EXECUTE_STREAM: ${SOOTHE_EPHEMERAL_EXECUTE_STREAM:-1}
+      # IG-477: jemalloc lowers sampled RSS vs glibc (override path on amd64)
+      LD_PRELOAD: ${LD_PRELOAD:-/usr/lib/aarch64-linux-gnu/libjemalloc.so.2}
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
@@ -84,7 +88,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4g
+          memory: ${DOCKER_MEM_LIMIT:-4g}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)\""]
       interval: 60s

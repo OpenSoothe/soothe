@@ -495,8 +495,17 @@ def _pool_worker_body(
                             response_queue.put(("cancelled", request_id, None))
                             return
 
-                        # Tag response with request_id for routing
-                        response_queue.put(("chunk", request_id, chunk))
+                        # Tag response with request_id for routing (IG-477: backpressure)
+                        try:
+                            response_queue.put(
+                                ("chunk", request_id, chunk), block=True, timeout=0.5
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Worker %s: response queue full, dropping chunk loop=%s",
+                                worker_id,
+                                req.loop_id,
+                            )
 
                     response_queue.put(("done", request_id, None))
 
@@ -836,7 +845,8 @@ class WorkerPool:
     async def _spawn_worker(self, worker_id: str, config: SootheConfig) -> WorkerProcess:
         """Spawn a single worker process with request/response queues and cancel event."""
         request_queue: Any = self._ctx.Queue()
-        response_queue: Any = self._ctx.Queue()
+        # IG-477: Bound mp response queue so worker subprocess blocks when full
+        response_queue: Any = self._ctx.Queue(maxsize=100)
         cancel_event: Any = self._ctx.Event()
 
         process = self._ctx.Process(
@@ -972,7 +982,19 @@ class WorkerPool:
 
         response_queue = self._pending_responses.get(request_id)
         if response_queue is not None:
-            await response_queue.put((msg_type, payload))
+            if msg_type == "chunk":
+                try:
+                    await asyncio.wait_for(
+                        response_queue.put((msg_type, payload)),
+                        timeout=0.5,
+                    )
+                except TimeoutError:
+                    logger.warning(
+                        "WorkerPool: asyncio response queue full, dropping chunk request_id=%s",
+                        request_id,
+                    )
+            else:
+                await response_queue.put((msg_type, payload))
             if worker.status == WorkerStatus.BUSY:
                 worker.last_heartbeat_at = datetime.now()
         else:
@@ -1371,7 +1393,7 @@ class WorkerPool:
 
                 # Register routing and mark busy before releasing the semaphore so the poll
                 # loop cannot treat this worker as idle and drain a stale response_queue.
-                response_queue = asyncio.Queue()
+                response_queue = asyncio.Queue(maxsize=100)
                 self._pending_responses[request_id] = response_queue
                 self._workers_by_loop_id[request.loop_id] = worker.worker_id
                 worker.mark_busy(request.loop_id, request_id)

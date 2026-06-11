@@ -34,12 +34,15 @@ from typing import Any
 
 from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 from soothe_sdk.client.websocket import WebSocketClient
-from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, extract_tool_call_updates_from_wire_message
-from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 from soothe_sdk.core.subagent_wire import (
     is_allowlisted_subagent_event_type,
     parse_subagent_wire_agent,
 )
+from soothe_sdk.ux.stream_tool_wire import (
+    STREAM_TOOL_CALL_UPDATE,
+    extract_tool_call_updates_from_wire_message,
+)
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
 STREAM_DELIVERY_MODES: list[StreamDeliveryMode] = ["batch", "adaptive", "streaming"]
 
@@ -67,12 +70,16 @@ class EventStats:
 
     # Step description tracking (step_id -> description)
     step_descriptions: dict[str, str] = field(default_factory=dict)
-    step_started_events: list[dict[str, Any]] = field(default_factory=list)  # Raw events for analysis
+    step_started_events: list[dict[str, Any]] = field(
+        default_factory=list
+    )  # Raw events for analysis
     plan_decision_events: list[dict[str, Any]] = field(default_factory=list)  # Plan decision events
 
     # Task delegation tracking
     task_tool_calls: set[str] = field(default_factory=set)
-    task_scopes: dict[str, tuple[str, str, str]] = field(default_factory=dict)  # tool_call_id -> (id, subagent_type, step_id)
+    task_scopes: dict[str, tuple[str, str, str]] = field(
+        default_factory=dict
+    )  # tool_call_id -> (id, subagent_type, step_id)
 
     # Subagent events
     subagent_events_by_type: dict[str, int] = field(default_factory=lambda: defaultdict(int))
@@ -97,7 +104,9 @@ class EventStats:
     # Streaming mode specific metrics
     goal_completion_chunks: int = 0  # messages-mode chunks with phase=goal_completion
     goal_completion_text_chars: int = 0  # total chars across all goal_completion chunks
-    goal_completion_flush_events: int = 0  # number of emitted goal_completion messages (after coalescing)
+    goal_completion_flush_events: int = (
+        0  # number of emitted goal_completion messages (after coalescing)
+    )
     messages_mode_events: int = 0  # total messages-mode events received
     custom_mode_events: int = 0  # total custom-mode events received
     event_timestamps: list[float] = field(default_factory=list)  # timestamps for latency analysis
@@ -134,7 +143,9 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
         # Log all wrapped events for debugging
         logger.debug(
             "Wrapped event: mode=%s namespace=%s data_type=%s",
-            mode, namespace, type(data).__name__
+            mode,
+            namespace,
+            type(data).__name__,
         )
 
         # Handle messages stream events - data is a tuple (message, metadata)
@@ -166,7 +177,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                         "Messages event: type=%s tool_calls=%d chunks=%d",
                         msg_type,
                         len(tool_calls),
-                        len(chunks)
+                        len(chunks),
                     )
 
                     # --- Args accumulation (like TUI's accumulate_tool_call_chunks) ---
@@ -197,18 +208,31 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                             stats.last_active_tool_call_id = tc_id
                             logger.debug(
                                 "Registered pending tool: id=%s name=%s args_str='%s'",
-                                tc_id, tc_name, args_str[:50]
+                                tc_id,
+                                tc_name,
+                                args_str[:50],
                             )
                         # Some providers send final args as a dict on a later chunk
-                        elif tc_id and tc_id in stats.pending_tool_calls and isinstance(tc_args, dict) and tc_args:
+                        elif (
+                            tc_id
+                            and tc_id in stats.pending_tool_calls
+                            and isinstance(tc_args, dict)
+                            and tc_args
+                        ):
                             stats.pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
                             stats.pending_tool_calls[tc_id]["is_complete_json"] = True
                             logger.debug(
                                 "Updated pending tool with dict args: id=%s args=%s",
-                                tc_id, str(tc_args)[:50]
+                                tc_id,
+                                str(tc_args)[:50],
                             )
                         # Subsequent chunks: accumulate partial JSON strings
-                        elif tc_id and tc_id in stats.pending_tool_calls and isinstance(tc_args, str) and tc_args:
+                        elif (
+                            tc_id
+                            and tc_id in stats.pending_tool_calls
+                            and isinstance(tc_args, str)
+                            and tc_args
+                        ):
                             if stats.pending_tool_calls[tc_id].get("is_complete_json"):
                                 # Provider refined args → restart accumulation
                                 stats.pending_tool_calls[tc_id]["args_str"] = tc_args
@@ -218,7 +242,8 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                                 stats.pending_tool_calls[tc_id]["args_str"] += tc_args
                                 logger.debug(
                                     "Accumulated chunk: id=%s args_str='%s'",
-                                    tc_id, stats.pending_tool_calls[tc_id]["args_str"][:50]
+                                    tc_id,
+                                    stats.pending_tool_calls[tc_id]["args_str"][:50],
                                 )
                         # Chunks without id: attach to last active tool (the one being streamed currently)
                         elif tc_args and isinstance(tc_args, str) and tc_args:
@@ -228,7 +253,8 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                                     stats.pending_tool_calls[last_id]["args_str"] += tc_args
                                     logger.debug(
                                         "Attached orphan chunk to last active: id=%s args_str='%s'",
-                                        last_id, stats.pending_tool_calls[last_id]["args_str"][:50]
+                                        last_id,
+                                        stats.pending_tool_calls[last_id]["args_str"][:50],
                                     )
 
                     # Also check tool_calls for complete args (terminal message)
@@ -247,7 +273,8 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                                 stats.pending_tool_calls[tc_id]["_from_terminal"] = True
                                 logger.info(
                                     "Terminal tool_call with args: id=%s args=%s",
-                                    tc_id, str(tc_args)[:100]
+                                    tc_id,
+                                    str(tc_args)[:100],
                                 )
 
                     # Extract tool_call_ids from message (using standard function)
@@ -276,7 +303,10 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
 
                         logger.info(
                             "Tool call ID found: id=%s step=%s type_code=%s tool=%s",
-                            tid, step_id, type_code, tool_info
+                            tid,
+                            step_id,
+                            type_code,
+                            tool_info,
                         )
 
                         if step_id and type_code in ("s", "t"):
@@ -309,7 +339,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                     logger.info(
                         "Custom event payload: type=%s payload=%s",
                         inner_type,
-                        json.dumps(data, separators=(",", ":"))[:300]
+                        json.dumps(data, separators=(",", ":"))[:300],
                     )
 
                 if inner_type == STREAM_TOOL_CALL_UPDATE:
@@ -320,7 +350,9 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
 
                     if tool_call_id:
                         stats.tool_call_ids.add(tool_call_id)
-                        step_id, type_code, task_idx, tool_info = classify_tool_call_id(tool_call_id)
+                        step_id, type_code, task_idx, tool_info = classify_tool_call_id(
+                            tool_call_id
+                        )
 
                         if step_id:
                             stats.unified_tool_call_ids.add(tool_call_id)
@@ -329,17 +361,26 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                             if type_code == "t":
                                 logger.debug(
                                     "Task-level tool: id=%s step=%s task_idx=%s tool=%s",
-                                    tool_call_id, step_id, task_idx, tool_info
+                                    tool_call_id,
+                                    step_id,
+                                    task_idx,
+                                    tool_info,
                                 )
                             elif type_code == "s":
                                 logger.debug(
                                     "Step-level tool: id=%s step=%s tool=%s",
-                                    tool_call_id, step_id, tool_info
+                                    tool_call_id,
+                                    step_id,
+                                    tool_info,
                                 )
                                 if name == "task":
                                     stats.task_tool_calls.add(tool_call_id)
                                     subagent_type = args.get("subagent_type", "?")
-                                    stats.task_scopes[tool_call_id] = (tool_call_id, subagent_type, step_id)
+                                    stats.task_scopes[tool_call_id] = (
+                                        tool_call_id,
+                                        subagent_type,
+                                        step_id,
+                                    )
                         else:
                             stats.legacy_tool_call_ids.add(tool_call_id)
                             stats.errors.append(
@@ -356,7 +397,9 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                     if step_id:
                         logger.debug(
                             "Subagent event: type=%s agent=%s step=%s",
-                            inner_type, agent, step_id
+                            inner_type,
+                            agent,
+                            step_id,
                         )
 
                 elif inner_type == "soothe.cognition.agent_loop.plan.decision":
@@ -368,7 +411,8 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                         if step_id:
                             logger.info(
                                 "Plan decision: step_id=%s description='%s'",
-                                step_id, description[:80]
+                                step_id,
+                                description[:80],
                             )
 
                 elif inner_type == "soothe.cognition.agent_loop.step.started":
@@ -380,7 +424,8 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                         stats.step_descriptions[step_id] = description
                         logger.info(
                             "Step started: step_id=%s description='%s'",
-                            step_id, description[:80]
+                            step_id,
+                            description[:80],
                         )
 
                 elif inner_type == "soothe.cognition.agent_loop.step.completed":
@@ -388,7 +433,8 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                     if step_id:
                         logger.info(
                             "Step completed: step_id=%s success=%s",
-                            step_id, data.get("success", "?")
+                            step_id,
+                            data.get("success", "?"),
                         )
 
                 elif inner_type:
@@ -414,22 +460,29 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                 if type_code == "t":
                     logger.debug(
                         "Task-level tool: id=%s step=%s task_idx=%s tool=%s",
-                        tool_call_id, step_id, task_idx, tool_info
+                        tool_call_id,
+                        step_id,
+                        task_idx,
+                        tool_info,
                     )
                 elif type_code == "s":
                     logger.debug(
                         "Step-level tool: id=%s step=%s tool=%s",
-                        tool_call_id, step_id, tool_info
+                        tool_call_id,
+                        step_id,
+                        tool_info,
                     )
                     if name == "task":
                         stats.task_tool_calls.add(tool_call_id)
                         subagent_type = args.get("subagent_type", "?")
-                        stats.task_scopes[tool_call_id] = (tool_call_id, subagent_type, step_id)
+                        stats.task_scopes[tool_call_id] = (
+                            tool_call_id,
+                            subagent_type,
+                            step_id,
+                        )
             else:
                 stats.legacy_tool_call_ids.add(tool_call_id)
-                stats.errors.append(
-                    f"Legacy tool_call_id without unified format: {tool_call_id}"
-                )
+                stats.errors.append(f"Legacy tool_call_id without unified format: {tool_call_id}")
 
     # Check for subagent wire events (unwrapped)
     elif is_allowlisted_subagent_event_type(event_type):
@@ -440,10 +493,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
 
         step_id = event.get("step_id", "")
         if step_id:
-            logger.debug(
-                "Subagent event: type=%s agent=%s step=%s",
-                event_type, agent, step_id
-            )
+            logger.debug("Subagent event: type=%s agent=%s step=%s", event_type, agent, step_id)
 
     # Check for messages stream events (unwrapped)
     elif event_type == "stream" or event.get("mode") == "messages":
@@ -495,7 +545,11 @@ def print_summary(stats: EventStats) -> None:
     for step_id, tids in sorted(stats.tool_calls_by_step.items()):
         description = stats.step_descriptions.get(step_id, "(no description)")
         print(f"  Step {step_id}: {len(tids)} tool calls")
-        print(f"    description: '{description[:60]}...'" if len(description) > 60 else f"    description: '{description}'")
+        print(
+            f"    description: '{description[:60]}...'"
+            if len(description) > 60
+            else f"    description: '{description}'"
+        )
         for tid in sorted(tids)[:5]:
             _, type_code, task_idx, tool_info = classify_tool_call_id(tid)
             type_label = "step" if type_code == "s" else f"task[{task_idx}]"
@@ -527,11 +581,15 @@ def print_summary(stats: EventStats) -> None:
             steps = plan.get("steps", [])
             execution_mode = plan.get("execution_mode", "unknown")
             iteration = plan.get("iteration", -1)
-            print(f"    Plan #{i+1} (iteration={iteration}, mode={execution_mode}):")
+            print(f"    Plan #{i + 1} (iteration={iteration}, mode={execution_mode}):")
             for step in steps[:5]:
                 step_id = step.get("id", "?")
                 desc = step.get("description", "")
-                print(f"      - {step_id}: '{desc[:50]}...'" if len(desc) > 50 else f"      - {step_id}: '{desc}'")
+                print(
+                    f"      - {step_id}: '{desc[:50]}...'"
+                    if len(desc) > 50
+                    else f"      - {step_id}: '{desc}'"
+                )
 
     print("\n--- Task Delegation ---")
     print(f"  Task tool calls: {len(stats.task_tool_calls)}")
@@ -571,7 +629,9 @@ def print_summary(stats: EventStats) -> None:
                 except json.JSONDecodeError as e:
                     parse_error = str(e)[:50]
 
-            status = "✓ complete" if is_complete else ("✓ terminal" if from_terminal else "⏳ partial")
+            status = (
+                "✓ complete" if is_complete else ("✓ terminal" if from_terminal else "⏳ partial")
+            )
             if parse_error:
                 status = f"⚠ parse error: {parse_error}"
 
@@ -608,12 +668,20 @@ def print_summary(stats: EventStats) -> None:
     print(f"  goal_completion flush events:   {stats.goal_completion_flush_events}")
     print(f"  goal_completion text chars:     {stats.goal_completion_text_chars}")
     if stats.goal_completion_chunks > 0:
-        ratio = stats.goal_completion_text_chars / stats.goal_completion_flush_events if stats.goal_completion_flush_events else 0
+        ratio = (
+            stats.goal_completion_text_chars / stats.goal_completion_flush_events
+            if stats.goal_completion_flush_events
+            else 0
+        )
         print(f"  avg chars per flush:            {ratio:.1f}")
     if len(stats.event_timestamps) >= 2:
         duration = stats.event_timestamps[-1] - stats.event_timestamps[0]
         print(f"  event stream duration:          {duration:.2f}s")
-        print(f"  events/sec:                     {stats.total_events / duration:.1f}" if duration > 0 else "  events/sec: N/A")
+        print(
+            f"  events/sec:                     {stats.total_events / duration:.1f}"
+            if duration > 0
+            else "  events/sec: N/A"
+        )
 
     print("\n" + "=" * 80)
 
@@ -629,7 +697,9 @@ def print_summary(stats: EventStats) -> None:
         print("VERIFICATION FAILED: Validation errors detected")
         return False
     elif has_legacy and not has_unified:
-        print("VERIFICATION INCOMPLETE: Only legacy tool_call_ids found (daemon may not be using IG-416)")
+        print(
+            "VERIFICATION INCOMPLETE: Only legacy tool_call_ids found (daemon may not be using IG-416)"
+        )
         return None
     else:
         print("VERIFICATION INCOMPLETE: No tool_call_ids found in events")
@@ -691,7 +761,12 @@ async def run_verification(
 
         # Subscribe to the loop
         subscribe_request_id = "verify_subscribe"
-        await client.send_loop_subscribe(loop_id, verbosity="debug", stream_delivery=stream_delivery, request_id=subscribe_request_id)
+        await client.send_loop_subscribe(
+            loop_id,
+            verbosity="debug",
+            stream_delivery=stream_delivery,
+            request_id=subscribe_request_id,
+        )
 
         # Wait for subscription confirmation
         subscribed = False
@@ -775,18 +850,43 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
         ("goal_completion chunks", lambda s: s.goal_completion_chunks),
         ("goal_completion flush events", lambda s: s.goal_completion_flush_events),
         ("goal_completion text chars", lambda s: s.goal_completion_text_chars),
-        ("avg chars/flush", lambda s: f"{s.goal_completion_text_chars / s.goal_completion_flush_events:.1f}" if s.goal_completion_flush_events else "N/A"),
+        (
+            "avg chars/flush",
+            lambda s: (
+                f"{s.goal_completion_text_chars / s.goal_completion_flush_events:.1f}"
+                if s.goal_completion_flush_events
+                else "N/A"
+            ),
+        ),
         ("Tool call IDs", lambda s: len(s.tool_call_ids)),
         ("Unified tool call IDs", lambda s: len(s.unified_tool_call_ids)),
         ("Stream tool updates", lambda s: len(s.stream_tool_updates)),
         ("Subagent events", lambda s: sum(s.subagent_events_by_type.values())),
-        ("Event stream duration (s)", lambda s: f"{s.event_timestamps[-1] - s.event_timestamps[0]:.2f}" if len(s.event_timestamps) >= 2 else "N/A"),
-        ("Events/sec", lambda s: f"{s.total_events / (s.event_timestamps[-1] - s.event_timestamps[0]):.1f}" if len(s.event_timestamps) >= 2 and (s.event_timestamps[-1] - s.event_timestamps[0]) > 0 else "N/A"),
+        (
+            "Event stream duration (s)",
+            lambda s: (
+                f"{s.event_timestamps[-1] - s.event_timestamps[0]:.2f}"
+                if len(s.event_timestamps) >= 2
+                else "N/A"
+            ),
+        ),
+        (
+            "Events/sec",
+            lambda s: (
+                f"{s.total_events / (s.event_timestamps[-1] - s.event_timestamps[0]):.1f}"
+                if len(s.event_timestamps) >= 2
+                and (s.event_timestamps[-1] - s.event_timestamps[0]) > 0
+                else "N/A"
+            ),
+        ),
         ("Validation errors", lambda s: len(s.errors)),
     ]
 
     # Column widths
-    mode_col_w = max(len(str(all_stats[m].total_events)) for m in STREAM_DELIVERY_MODES if m in all_stats) + 2
+    mode_col_w = (
+        max(len(str(all_stats[m].total_events)) for m in STREAM_DELIVERY_MODES if m in all_stats)
+        + 2
+    )
     mode_col_w = max(mode_col_w, 8)
 
     # Print header
@@ -795,7 +895,10 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
         if mode in all_stats:
             header += f" {mode:>{mode_col_w}s}"
     print(header)
-    print(f"  {'-' * 30}" + ("-" * (mode_col_w + 1)) * sum(1 for m in STREAM_DELIVERY_MODES if m in all_stats))
+    print(
+        f"  {'-' * 30}"
+        + ("-" * (mode_col_w + 1)) * sum(1 for m in STREAM_DELIVERY_MODES if m in all_stats)
+    )
 
     # Print rows
     for label, getter in metrics:
@@ -814,14 +917,18 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
         s = all_stats[mode]
         if s.goal_completion_chunks > 0 and s.goal_completion_flush_events > 0:
             ratio = s.goal_completion_chunks / s.goal_completion_flush_events
-            print(f"  {mode:>8s}: {s.goal_completion_chunks} raw chunks → {s.goal_completion_flush_events} flush events (coalesce ratio: {ratio:.1f}x)")
+            print(
+                f"  {mode:>8s}: {s.goal_completion_chunks} raw chunks → {s.goal_completion_flush_events} flush events (coalesce ratio: {ratio:.1f}x)"
+            )
         else:
             print(f"  {mode:>8s}: no goal_completion events")
 
     # Explain behavioral expectations
     print("\n--- Expected Behavior ---")
     print("  batch:     goal_completion text suppressed until loop completes → 1 flush event")
-    print("  streaming: every goal_completion chunk emitted individually → flush count ≈ chunk count")
+    print(
+        "  streaming: every goal_completion chunk emitted individually → flush count ≈ chunk count"
+    )
 
     # Validate expectations
     print("\n--- Validation ---")
@@ -839,7 +946,9 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
 
         if mode == "batch":
             if fl <= 1:
-                print(f"  {mode:>8s}: PASS (batch mode produced {fl} flush event(s) for {gc} chunks)")
+                print(
+                    f"  {mode:>8s}: PASS (batch mode produced {fl} flush event(s) for {gc} chunks)"
+                )
             else:
                 print(f"  {mode:>8s}: WARN (batch mode produced {fl} flush events, expected ≤1)")
                 all_pass = False
@@ -847,7 +956,9 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
             if fl == gc:
                 print(f"  {mode:>8s}: PASS (streaming mode: 1:1 chunk-to-flush, {gc} each)")
             else:
-                print(f"  {mode:>8s}: WARN (streaming mode: {gc} chunks → {fl} flush events, expected equal)")
+                print(
+                    f"  {mode:>8s}: WARN (streaming mode: {gc} chunks → {fl} flush events, expected equal)"
+                )
                 all_pass = False
 
     if all_pass:
@@ -869,7 +980,7 @@ async def run_mode_comparison(
 
     for i, mode in enumerate(STREAM_DELIVERY_MODES):
         print(f"\n{'=' * 40}")
-        print(f"  Running mode {i+1}/2: {mode}")
+        print(f"  Running mode {i + 1}/2: {mode}")
         print(f"{'=' * 40}")
 
         logger.info("Starting verification with stream_delivery=%s", mode)
@@ -892,9 +1003,7 @@ async def run_mode_comparison(
 def main() -> int:
     """Main entry point."""
 
-    parser = argparse.ArgumentParser(
-        description="Verify daemon broadcast events without TUI logic"
-    )
+    parser = argparse.ArgumentParser(description="Verify daemon broadcast events without TUI logic")
     parser.add_argument(
         "--daemon-url",
         default="ws://localhost:8765",
@@ -939,11 +1048,13 @@ def main() -> int:
     logger.info("Timeout: %s seconds", args.timeout)
 
     if args.compare_modes:
-        all_stats = asyncio.run(run_mode_comparison(
-            daemon_url=args.daemon_url,
-            test_prompt=args.prompt,
-            timeout=args.timeout,
-        ))
+        all_stats = asyncio.run(
+            run_mode_comparison(
+                daemon_url=args.daemon_url,
+                test_prompt=args.prompt,
+                timeout=args.timeout,
+            )
+        )
 
         # Print individual summaries
         for mode in STREAM_DELIVERY_MODES:
@@ -958,12 +1069,14 @@ def main() -> int:
         return 0
     else:
         logger.info("Stream delivery mode: %s", args.stream_delivery)
-        stats = asyncio.run(run_verification(
-            daemon_url=args.daemon_url,
-            test_prompt=args.prompt,
-            timeout=args.timeout,
-            stream_delivery=args.stream_delivery,
-        ))
+        stats = asyncio.run(
+            run_verification(
+                daemon_url=args.daemon_url,
+                test_prompt=args.prompt,
+                timeout=args.timeout,
+                stream_delivery=args.stream_delivery,
+            )
+        )
 
         result = print_summary(stats)
 

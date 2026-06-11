@@ -108,6 +108,12 @@ RUN useradd --create-home --system soothe \
 RUN mkdir -p /home/soothe/.cache/soothe/models/embeddings
 COPY --from=source --chown=soothe:soothe /root/.cache/soothe/models/embeddings/ /home/soothe/.cache/soothe/models/embeddings/
 
+USER root
+RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libjemalloc2 \
+    && rm -rf /var/lib/apt/lists/*
+
 USER soothe
 WORKDIR /var/lib/soothe
 

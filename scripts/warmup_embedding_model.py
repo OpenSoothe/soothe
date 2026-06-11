@@ -19,7 +19,6 @@ import argparse
 import sys
 from pathlib import Path
 
-
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 

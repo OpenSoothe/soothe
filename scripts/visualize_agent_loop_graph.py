@@ -63,7 +63,9 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         thread_ids=["test_thread"],
         current_thread_id="test_thread",
         status="running",
-        thread_health_metrics=ThreadHealthMetrics(thread_id="test_thread", last_updated=datetime.now(UTC)),
+        thread_health_metrics=ThreadHealthMetrics(
+            thread_id="test_thread", last_updated=datetime.now(UTC)
+        ),
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
@@ -74,8 +76,8 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         started_at=datetime.now(UTC),
     )
 
-    from soothe.core.agent_loop.state.schemas import LoopState
     from soothe.core.agent_loop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.core.agent_loop.state.schemas import LoopState
 
     state = LoopState(
         goal="Test goal",
@@ -152,10 +154,14 @@ def convert_mermaid_to_svg(mermaid_path: Path, svg_path: Path) -> bool:
         result = subprocess.run(
             [
                 "mmdc",
-                "-i", str(mermaid_path),
-                "-o", str(svg_path),
-                "-b", "white",
-                "--scale", "2",
+                "-i",
+                str(mermaid_path),
+                "-o",
+                str(svg_path),
+                "-b",
+                "white",
+                "--scale",
+                "2",
             ],
             capture_output=True,
             text=True,
@@ -214,9 +220,9 @@ def main() -> None:
 
     if not success:
         print("\nTo convert Mermaid to SVG manually:")
-        print(f"  1. Install mermaid-cli: npm install -g @mermaid-js/mermaid-cli")
+        print("  1. Install mermaid-cli: npm install -g @mermaid-js/mermaid-cli")
         print(f"  2. Run: mmdc -i {mermaid_path} -o {svg_path}")
-        print(f"  3. Or use online: https://mermaid.live/")
+        print("  3. Or use online: https://mermaid.live/")
         print(f"  4. Paste the Mermaid content from: {mermaid_path}")
 
     # Also generate ASCII version
