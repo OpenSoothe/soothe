@@ -9,7 +9,7 @@
 #
 # Uses .venv managed by uv for development.
 
-.PHONY: help setup sync sync-verify docker-up docker-down docker-up-daemon docker-down-daemon docker-build docker-build-slim docker-ps docker-logs reset-the-world
+.PHONY: help setup sync sync-verify docker-up docker-down docker-up-daemon docker-down-daemon docker-build docker-build-pypi docker-ps docker-logs reset-the-world
 .PHONY: format format-check lint lint-src lint-fix
 .PHONY: test test-unit test-integration test-coverage build clean
 .PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
@@ -41,8 +41,8 @@ help:
 	@echo "  make setup            - Sync workspace dependencies"
 	@echo "  make docker-up        - Start dev dependencies (pgvector + Langfuse)"
 	@echo "  make docker-down      - Stop dev dependencies"
-	@echo "  make docker-build     - Build local soothed daemon image"
-	@echo "  make docker-build-slim - Build slim daemon image (no browser)"
+	@echo "  make docker-build     - Build soothed:local-slim from source (no browser)"
+	@echo "  make docker-build-pypi - Build soothed from PyPI (requires SOOTHE_VERSION)"
 	@echo "  make docker-up-daemon - Start dev deps + local daemon container"
 	@echo "  make docker-down-daemon - Stop dev deps + daemon container"
 	@echo "  make reset-the-world  - Reset all state and restart"
@@ -94,24 +94,23 @@ docker-down:
 SOOTHE_VERSION := $(shell cat VERSION)
 
 docker-build:
-	@echo "Building soothed:${SOOTHE_VERSION}-local (full image with browser)..."
+	@echo "Building soothed:local-slim from local source (no browser)..."
+	docker build -f packages/soothe-daemon/Dockerfile.local \
+		--build-arg INCLUDE_BROWSER=false \
+		-t soothed:local-slim .
+	@echo "Build complete: soothed:local-slim"
+
+docker-build-pypi:
+	@echo "Building soothed:${SOOTHE_VERSION}-local from PyPI (full image with browser)..."
 	docker build -f packages/soothe-daemon/Dockerfile \
 		--build-arg SOOTHE_VERSION=$(SOOTHE_VERSION) \
 		--build-arg INCLUDE_BROWSER=true \
 		-t soothed:$(SOOTHE_VERSION)-local .
 	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local"
 
-docker-build-slim:
-	@echo "Building soothed:${SOOTHE_VERSION}-local-slim (no browser)..."
-	docker build -f packages/soothe-daemon/Dockerfile \
-		--build-arg SOOTHE_VERSION=$(SOOTHE_VERSION) \
-		--build-arg INCLUDE_BROWSER=false \
-		-t soothed:$(SOOTHE_VERSION)-local-slim .
-	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local-slim"
-
 docker-up-daemon:
-	@echo "Starting dev dependencies + daemon (image: soothed:$(SOOTHE_VERSION)-local)..."
-	SOOTHE_IMAGE=soothed:$(SOOTHE_VERSION)-local docker compose -f docker-compose.dev.yml --profile daemon up -d
+	@echo "Starting dev dependencies + daemon (image: soothed:local-slim)..."
+	SOOTHE_IMAGE=soothed:local-slim docker compose -f docker-compose.dev.yml --profile daemon up -d
 	@echo ""
 	@echo "Stack running. Check status: make docker-ps"
 	@echo "Daemon API: http://localhost:8765"
