@@ -179,7 +179,9 @@ test: sync test-unit test-integration
 test-unit: sync
 	@echo "Running unit tests..."
 	@for pkg in $(PACKAGES); do \
-		test -d "packages/$$pkg/tests/unit" && echo "  $$pkg" && cd packages/$$pkg && uv run pytest tests/unit/ -v --tb=short && cd ../..; \
+		if test -d "packages/$$pkg/tests/unit"; then \
+			echo "  $$pkg" && cd packages/$$pkg && uv run pytest tests/unit/ -v --tb=short && cd ../..; \
+		fi; \
 	done
 
 test-integration: sync
