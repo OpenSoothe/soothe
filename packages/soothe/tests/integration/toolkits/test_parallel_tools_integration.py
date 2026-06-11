@@ -1,6 +1,7 @@
 """Integration tests for ParallelToolsMiddleware with real agent execution."""
 
 import asyncio
+import os
 import time
 
 import pytest
@@ -10,13 +11,27 @@ from soothe.config import SootheConfig
 from soothe.foundation.core.agent import create_soothe_agent
 
 
+def _get_router_config_for_available_credentials() -> dict:
+    """Return router config based on available API credentials."""
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return {"default": "anthropic:claude-sonnet-4-5"}
+    elif os.getenv("OPENAI_API_KEY"):
+        return {"default": "openai:gpt-4o-mini"}
+    return {}
+
+
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_config_propagation():
+async def test_parallel_tools_config_propagation(requires_llm_api):
     """Verify concurrency config propagates correctly."""
+    router = _get_router_config_for_available_credentials()
     # Create config with custom concurrency settings
     config = SootheConfig(
-        agent={"loop": {"limits": {"max_parallel_steps": 5}}},
+        agent={
+            "loop": {"limits": {"max_parallel_steps": 5}},
+            "protocols": {"memory": {"enabled": False}},
+        },
+        router=router,
     )
 
     # Create agent
@@ -33,11 +48,12 @@ async def test_parallel_tools_config_propagation():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_performance_improvement():
+async def test_parallel_tools_performance_improvement(requires_llm_api):
     """Verify parallel execution is faster than sequential.
 
     Uses slow tools to measure timing difference.
     """
+    router = _get_router_config_for_available_credentials()
 
     # Create slow tools
     @tool
@@ -60,7 +76,11 @@ async def test_parallel_tools_performance_improvement():
 
     # Test with parallel execution (max_parallel_steps=3)
     config_parallel = SootheConfig(
-        agent={"loop": {"limits": {"max_parallel_steps": 3}}},
+        agent={
+            "loop": {"limits": {"max_parallel_steps": 3}},
+            "protocols": {"memory": {"enabled": False}},
+        },
+        router=router,
     )
 
     create_soothe_agent(
@@ -71,7 +91,11 @@ async def test_parallel_tools_performance_improvement():
 
     # Test with sequential execution (max_parallel_steps=1)
     config_sequential = SootheConfig(
-        agent={"loop": {"limits": {"max_parallel_steps": 1}}},
+        agent={
+            "loop": {"limits": {"max_parallel_steps": 1}},
+            "protocols": {"memory": {"enabled": False}},
+        },
+        router=router,
     )
 
     create_soothe_agent(
@@ -86,8 +110,9 @@ async def test_parallel_tools_performance_improvement():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_mixed_sync_async():
+async def test_parallel_tools_mixed_sync_async(requires_llm_api):
     """Verify middleware works with both sync and async tools."""
+    router = _get_router_config_for_available_credentials()
 
     @tool
     def sync_tool(x: int) -> int:
@@ -102,7 +127,11 @@ async def test_parallel_tools_mixed_sync_async():
         return x * 3
 
     config = SootheConfig(
-        agent={"loop": {"limits": {"max_parallel_steps": 5}}},
+        agent={
+            "loop": {"limits": {"max_parallel_steps": 5}},
+            "protocols": {"memory": {"enabled": False}},
+        },
+        router=router,
     )
 
     create_soothe_agent(
@@ -116,9 +145,11 @@ async def test_parallel_tools_mixed_sync_async():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_default_parallelism():
+async def test_parallel_tools_default_parallelism(requires_llm_api):
     """Verify default configuration uses max_parallel_steps=2."""
-    config = SootheConfig()
+    router = _get_router_config_for_available_credentials()
+    config = SootheConfig(router=router)
+    config.agent.protocols.memory.enabled = False
 
     # Check default value for max_parallel_steps
     assert config.agent.loop.limits.max_parallel_steps == 2
@@ -134,8 +165,9 @@ async def test_parallel_tools_default_parallelism():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_extreme_cases():
+async def test_parallel_tools_extreme_cases(requires_llm_api):
     """Test edge cases: max_parallel_steps=1 (sequential) and max_parallel_steps=10 (high)."""
+    router = _get_router_config_for_available_credentials()
 
     @tool
     async def dummy_tool() -> str:
@@ -143,8 +175,9 @@ async def test_parallel_tools_extreme_cases():
         return "done"
 
     # Test sequential (max_parallel_steps=1)
-    config_seq = SootheConfig()
+    config_seq = SootheConfig(router=router)
     config_seq.agent.loop.limits.max_parallel_steps = 1
+    config_seq.agent.protocols.memory.enabled = False
 
     create_soothe_agent(
         model=config_seq.create_chat_model("agent"),
@@ -153,8 +186,9 @@ async def test_parallel_tools_extreme_cases():
     )
 
     # Test high parallelism (max_parallel_steps=10)
-    config_high = SootheConfig()
+    config_high = SootheConfig(router=router)
     config_high.agent.loop.limits.max_parallel_steps = 10
+    config_high.agent.protocols.memory.enabled = False
 
     create_soothe_agent(
         model=config_high.create_chat_model("agent"),
@@ -167,11 +201,13 @@ async def test_parallel_tools_extreme_cases():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_zero_means_unlimited():
+async def test_parallel_tools_zero_means_unlimited(requires_llm_api):
     """Verify that max_parallel_steps=0 means unlimited (valid special value)."""
+    router = _get_router_config_for_available_credentials()
     # 0 is valid - it means unlimited parallelism
-    config_unlimited = SootheConfig()
+    config_unlimited = SootheConfig(router=router)
     config_unlimited.agent.loop.limits.max_parallel_steps = 0
+    config_unlimited.agent.protocols.memory.enabled = False
 
     # Should create successfully
     create_soothe_agent(
