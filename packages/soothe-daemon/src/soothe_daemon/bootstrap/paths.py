@@ -4,7 +4,7 @@ from pathlib import Path
 
 from soothe.config import SOOTHE_HOME
 
-_PID_FILENAME = "soothe.pid"
+_PID_FILENAME = "soothed.pid"
 
 
 def _soothe_dir() -> Path:

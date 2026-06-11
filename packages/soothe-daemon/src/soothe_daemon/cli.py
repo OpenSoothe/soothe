@@ -14,7 +14,7 @@ import typer
 
 # Lightweight helpers - avoid heavy imports (soothe.config takes 4.4s, SootheDaemon takes 5+ seconds)
 _SOOTHE_HOME = Path(os.environ.get("SOOTHE_HOME", "~/.soothe")).expanduser()
-_PID_FILENAME = "soothe.pid"
+_PID_FILENAME = "soothed.pid"
 
 
 def _fast_pid_path() -> Path:
@@ -67,7 +67,8 @@ def _is_port_live(host: str, port: int) -> bool:
 def _fast_is_running() -> bool:
     """Check if daemon is running without heavy imports.
 
-    Uses PID file + process check, falls back to port probe.
+    Only uses PID file + process check. No port probe fallback to avoid
+    detecting daemon running in Docker containers (different PID namespace).
     """
     pf = _fast_pid_path()
     if pf.exists():
@@ -76,11 +77,9 @@ def _fast_is_running() -> bool:
             os.kill(pid, 0)  # Check process exists
             return True
         except (ValueError, ProcessLookupError, PermissionError):
-            # PID file stale
+            # PID file stale or process not running
             pass
-    # Fallback: check port (use env-configurable address)
-    host, port = _get_ws_address()
-    return _is_port_live(host, port)
+    return False
 
 
 def _fast_find_pid() -> int | None:
