@@ -230,6 +230,8 @@ class AgentBuilder:
             "[Init] Subagents resolved: %d agents (%.1fms)", len(all_subagents), subagents_ms
         )
 
+        registry = mcp_registry or self._mcp_registry
+
         # Initialize backend
         resolved_backend = backend or self._initialize_backend(resolved_policy)
 
@@ -259,23 +261,39 @@ class AgentBuilder:
         )
 
         install_model_call_profiler(enabled=is_profiler_enabled(self._config))
+
+        def _compile_deep_agent(cp: Checkpointer | None) -> Any:
+            return create_deep_agent(
+                model=resolved_model,
+                tools=all_tools or None,
+                system_prompt=self._config.resolve_system_prompt(),
+                middleware=all_middleware,
+                subagents=all_subagents or None,
+                skills=None,
+                memory=self._config.memory or None,
+                checkpointer=cp,
+                store=store,
+                backend=resolved_backend,
+                interrupt_on=interrupt_on,
+                debug=self._config.debug,
+            )
+
         deep_agent_start = time.perf_counter()
-        graph = create_deep_agent(
-            model=resolved_model,
-            tools=all_tools or None,
-            system_prompt=self._config.resolve_system_prompt(),
-            middleware=all_middleware,
-            subagents=all_subagents or None,
-            skills=None,
-            memory=self._config.memory or None,
-            checkpointer=checkpointer,
-            store=store,
-            backend=resolved_backend,
-            interrupt_on=interrupt_on,
-            debug=self._config.debug,
-        )
+        graph = _compile_deep_agent(checkpointer)
         deep_agent_ms = (time.perf_counter() - deep_agent_start) * 1000
         logger.info("[Init] Deep agent graph created (%.1fms)", deep_agent_ms)
+
+        execute_graph = None
+        if checkpointer is not None:
+            from soothe.foundation.loop.engine.ephemeral_execute_stream import (
+                ephemeral_execute_stream_enabled,
+            )
+
+            if ephemeral_execute_stream_enabled():
+                execute_start = time.perf_counter()
+                execute_graph = _compile_deep_agent(None)
+                execute_ms = (time.perf_counter() - execute_start) * 1000
+                logger.info("[Init] Ephemeral execute graph created (%.1fms, IG-477)", execute_ms)
 
         # Wrap graph in CoreAgent with typed protocol properties
         agent = CoreAgent(
@@ -285,6 +303,7 @@ class AgentBuilder:
             planner=resolved_planner,
             policy=resolved_policy,
             subagents=all_subagents,
+            execute_graph=execute_graph,
         )
 
         total_ms = (time.perf_counter() - create_start) * 1000

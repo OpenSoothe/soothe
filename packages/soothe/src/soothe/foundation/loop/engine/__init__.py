@@ -14,7 +14,6 @@ from .goal_context_manager import GoalContextManager
 from .metadata_generator import generate_outcome_metadata
 from .scenario_classifier import ScenarioClassification
 from .synthesis import SynthesisGenerator
-from .thread_fork_manager import ThreadForkManager
 from .thread_switch_policy import ThreadSwitchPolicyManager
 
 __all__ = [
@@ -29,7 +28,6 @@ __all__ = [
     "GoalContextManager",
     "ScenarioClassification",
     "SynthesisGenerator",
-    "ThreadForkManager",
     "ThreadSwitchPolicyManager",
     "compute_act_wave_finalize",
     "generate_outcome_metadata",

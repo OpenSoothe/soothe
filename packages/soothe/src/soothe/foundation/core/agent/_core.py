@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe.foundation.loop.engine.ephemeral_execute_stream import ephemeral_execute_stream_enabled
 from soothe.utils.text_preview import log_preview
 
 if TYPE_CHECKING:
@@ -111,6 +112,7 @@ class CoreAgent:
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
         subagents: list[SubAgent | CompiledSubAgent] | None = None,
+        execute_graph: CompiledStateGraph | None = None,
     ) -> None:
         """Initialize CoreAgent with graph and protocol instances.
 
@@ -121,8 +123,12 @@ class CoreAgent:
             planner: PlannerProtocol instance (or None if disabled).
             policy: PolicyProtocol instance (or None if disabled).
             subagents: List of configured subagents.
+            execute_graph: Optional twin graph without checkpointer for execute
+                streaming (IG-477). When set and ephemeral execute is enabled,
+                ACT-phase streaming uses this graph instead of ``graph``.
         """
         self._graph = graph
+        self._execute_graph = execute_graph
         self._config = config
         self._memory = memory
         self._planner = planner
@@ -133,6 +139,17 @@ class CoreAgent:
     @property
     def graph(self) -> CompiledStateGraph:
         """Underlying CompiledStateGraph for advanced LangGraph operations."""
+        return self._graph
+
+    @property
+    def execution_graph(self) -> CompiledStateGraph:
+        """Graph used for AgentLoop execute streaming (IG-477).
+
+        Returns the checkpointer-free twin when ephemeral execute is enabled;
+        otherwise the primary ``graph``.
+        """
+        if ephemeral_execute_stream_enabled() and self._execute_graph is not None:
+            return self._execute_graph
         return self._graph
 
     @property
@@ -177,6 +194,7 @@ class CoreAgent:
         *,
         stream_mode: list[str] | None = None,
         subgraphs: bool = False,
+        durability: str | None = None,
     ) -> AsyncIterator[Any]:
         """Execute with Layer 1 streaming interface.
 
@@ -195,6 +213,9 @@ class CoreAgent:
             stream_mode: Optional list of stream modes (e.g., ["messages", "updates", "custom"]).
                 If None, uses LangGraph defaults.
             subgraphs: Whether to include subgraph events in stream (default: False).
+            durability: LangGraph checkpoint durability (``sync``, ``async``, ``exit``).
+                Use ``exit`` during high-volume streaming to avoid per-chunk checkpoint
+                memory spikes (IG-477).
 
         Returns:
             AsyncIterator of StreamChunk events from LangGraph execution.
@@ -229,9 +250,18 @@ class CoreAgent:
 
         if stream_mode:
             return self._graph.astream(
-                graph_input, config or {}, stream_mode=stream_mode, subgraphs=subgraphs
+                graph_input,
+                config or {},
+                stream_mode=stream_mode,
+                subgraphs=subgraphs,
+                durability=durability,
             )
-        return self._graph.astream(graph_input, config or {}, subgraphs=subgraphs)
+        return self._graph.astream(
+            graph_input,
+            config or {},
+            subgraphs=subgraphs,
+            durability=durability,
+        )
 
     async def aget_state(
         self,
@@ -246,6 +276,77 @@ class CoreAgent:
             State snapshot from LangGraph aget_state().
         """
         return await self._graph.aget_state(config=config or {})
+
+    async def ainvoke(
+        self,
+        input_arg: str | dict,
+        config: RunnableConfig | None = None,
+        *,
+        durability: str | None = None,
+    ) -> Any:
+        """Execute graph to completion without streaming.
+
+        Args:
+            input_arg: User text or LangGraph state dict.
+            config: RunnableConfig with thread_id and optional hints.
+            durability: LangGraph checkpoint durability.
+
+        Returns:
+            Final graph state values from ``ainvoke``.
+        """
+        graph_input = _normalize_layer1_input(input_arg)
+        invoke_kwargs: dict[str, Any] = {}
+        if durability is not None:
+            invoke_kwargs["durability"] = durability
+        return await self._graph.ainvoke(graph_input, config or {}, **invoke_kwargs)
+
+    def execution_astream(
+        self,
+        input_arg: str | dict,
+        config: RunnableConfig | None = None,
+        *,
+        stream_mode: list[str] | None = None,
+        subgraphs: bool = False,
+        durability: str | None = None,
+    ) -> AsyncIterator[Any]:
+        """Stream via ``execution_graph`` (IG-477 ephemeral execute path)."""
+        graph_input = _normalize_layer1_input(input_arg)
+        graph = self.execution_graph
+        if stream_mode:
+            return graph.astream(
+                graph_input,
+                config or {},
+                stream_mode=stream_mode,
+                subgraphs=subgraphs,
+                durability=durability,
+            )
+        return graph.astream(
+            graph_input,
+            config or {},
+            subgraphs=subgraphs,
+            durability=durability,
+        )
+
+    async def execution_aget_state(
+        self,
+        config: RunnableConfig | None = None,
+    ) -> Any:
+        """Read state from ``execution_graph`` after an execute stream."""
+        return await self.execution_graph.aget_state(config=config or {})
+
+    async def execution_ainvoke(
+        self,
+        input_arg: str | dict,
+        config: RunnableConfig | None = None,
+        *,
+        durability: str | None = None,
+    ) -> Any:
+        """Invoke ``execution_graph`` without streaming."""
+        graph_input = _normalize_layer1_input(input_arg)
+        invoke_kwargs: dict[str, Any] = {}
+        if durability is not None:
+            invoke_kwargs["durability"] = durability
+        return await self.execution_graph.ainvoke(graph_input, config or {}, **invoke_kwargs)
 
     @classmethod
     def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CoreAgent:
