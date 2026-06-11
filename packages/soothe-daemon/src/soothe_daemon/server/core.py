@@ -1501,9 +1501,8 @@ class SootheDaemon(DaemonHandlersMixin):
         Escalates to SIGKILL if the daemon does not exit within *timeout*
         seconds.
 
-        Handles zombie daemons where PID file is missing but process still runs:
-        1. First tries to stop via PID file
-        2. If no PID file, checks ports and kills process holding them
+        Only stops daemon via PID file - does NOT scan system processes.
+        This prevents accidentally stopping Docker containerized daemons.
 
         Args:
             timeout: Maximum seconds to wait before SIGKILL escalation.
@@ -1514,7 +1513,7 @@ class SootheDaemon(DaemonHandlersMixin):
         stopped = False
         pid: int | None = None
 
-        # 1. Try to stop via PID file first
+        # Only stop via PID file - don't scan system processes (avoids Docker conflicts)
         pf = pid_path()
         if pf.exists():
             try:
@@ -1522,60 +1521,9 @@ class SootheDaemon(DaemonHandlersMixin):
                 os.kill(pid, signal.SIGTERM)
                 stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
             except (ValueError, ProcessLookupError, PermissionError):
-                cleanup_pid()
-                # Continue to check ports
+                pass
 
-        # 2. If PID file approach failed, check for zombie on ports
-        if not stopped:
-            with contextlib.suppress(Exception):
-                cfg = SootheDaemonConfig()
-                # Check WebSocket port
-                if cfg.transports.websocket.enabled:
-                    ws_port = cfg.transports.websocket.port
-                    pid = SootheDaemon._find_port_process(ws_port)
-                    if pid:
-                        os.kill(pid, signal.SIGTERM)
-                        stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
-
-        # 3. Fallback: scan by process name for zombie daemons
-        # Use specific pattern to match main daemon entrypoint only, not worker subprocesses.
-        # Worker subprocesses have "pool_runner" or "_pool_worker" in their command line.
-        if not stopped:
-            import subprocess
-
-            pgrep_path = "/usr/bin/pgrep"
-            with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-                # Find main daemon process (python -m soothe_daemon), not worker subprocesses
-                result = subprocess.run(
-                    [pgrep_path, "-f", "python.*-m soothe_daemon"],
-                    capture_output=True,
-                    text=True,
-                    timeout=2.0,
-                    check=False,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    for pid_str in result.stdout.strip().split("\n"):
-                        try:
-                            pid = int(pid_str)
-                            if pid != os.getpid():  # Don't kill ourselves
-                                # Verify this is main daemon, not a worker subprocess
-                                cmdline_result = subprocess.run(
-                                    ["ps", "-p", str(pid), "-o", "command="],
-                                    capture_output=True,
-                                    text=True,
-                                    timeout=0.2,
-                                    check=False,
-                                )
-                                cmdline = cmdline_result.stdout.strip()
-                                if "pool_runner" not in cmdline and "_pool_worker" not in cmdline:
-                                    os.kill(pid, signal.SIGTERM)
-                                    stopped = (
-                                        SootheDaemon._wait_for_pid_exit(pid, timeout) or stopped
-                                    )
-                        except (ValueError, ProcessLookupError, PermissionError):
-                            continue
-
-        # 4. Cleanup regardless of outcome
+        # Cleanup PID file regardless of outcome
         cleanup_pid()
         return stopped
 
