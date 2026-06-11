@@ -34,7 +34,8 @@ def test_envelope_renders_prior_progress_block_when_fresh() -> None:
     )
     assert "<PRIOR_PROGRESS>" in out
     assert "iter=1 wave=0 done=2 failed=0 hint=high" in out
-    assert '- run_command: "1139"' in out
+    # Tools section removed — only evidence remains
+    assert "- run_command:" not in out
     assert '- "Counted .py: 1139"' in out
 
 
@@ -63,22 +64,25 @@ def test_envelope_keeps_digest_one_iteration_behind() -> None:
     assert "<PRIOR_PROGRESS>" in out
 
 
-def test_envelope_renders_with_empty_heads() -> None:
+def test_envelope_omits_tools_section_entirely() -> None:
+    # IG-XXX: Tools section removed to avoid empty argument strings confusing LLM
     out = build_plan_context_envelope(
         goal="g",
         prior_progress=_digest(
-            tool_calls=[ToolCallHead(name="run_command", head="")],
-            evidence_excerpts=[],
+            tool_calls=[ToolCallHead(name="run_command", head="some args")],
+            evidence_excerpts=["result text"],
             derived_progress_hint="medium",
         ),
         current_iteration=1,
     )
-    assert '- run_command: ""' in out
-    # No evidence section emitted.
-    assert "\nevidence:\n" not in out
+    # No tools section rendered, even with non-empty head
+    assert "tools:" not in out
+    assert "- run_command:" not in out
+    # Evidence still rendered
+    assert '- "result text"' in out
 
 
-def test_envelope_hard_caps_at_600_chars_drops_evidence_first() -> None:
+def test_envelope_hard_caps_at_600_chars_drops_evidence() -> None:
     huge_evidence = ["x" * 199 for _ in range(3)]
     out = build_plan_context_envelope(
         goal="g",
@@ -93,8 +97,8 @@ def test_envelope_hard_caps_at_600_chars_drops_evidence_first() -> None:
     end = out.find("</PRIOR_PROGRESS>") + len("</PRIOR_PROGRESS>")
     block = out[start:end]
     assert len(block) <= PRIOR_PROGRESS_MAX_CHARS
-    # Evidence dropped first; at least one tool line still present.
-    assert "- run_command:" in block
+    # Evidence dropped when budget exceeded; no tools section exists
+    assert "tools:" not in block
 
 
 def test_envelope_treats_no_current_iteration_as_fresh() -> None:
@@ -105,7 +109,7 @@ def test_envelope_treats_no_current_iteration_as_fresh() -> None:
     assert "<PRIOR_PROGRESS>" in out
 
 
-def test_envelope_escapes_quotes_in_heads_and_excerpts() -> None:
+def test_envelope_escapes_quotes_in_excerpts() -> None:
     out = build_plan_context_envelope(
         goal="g",
         prior_progress=_digest(
@@ -114,6 +118,7 @@ def test_envelope_escapes_quotes_in_heads_and_excerpts() -> None:
         ),
         current_iteration=2,
     )
-    # JSON-escaped: inner quotes appear as \" inside the rendered string
-    assert '- run_command: "echo \\"hi\\""' in out
+    # Tools section removed, so no tool escaping check
+    assert "tools:" not in out
+    # Evidence excerpt still JSON-escaped
     assert '- "said: \\"found\\""' in out
