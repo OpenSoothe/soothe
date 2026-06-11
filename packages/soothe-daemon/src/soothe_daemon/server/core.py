@@ -1430,12 +1430,14 @@ class SootheDaemon(DaemonHandlersMixin):
             return pid
 
         # 3. Fallback: check for daemon processes by name
+        # Use specific pattern to match main daemon entrypoint only, not worker subprocesses.
+        # Worker subprocesses have "pool_runner" or "_pool_worker" in their command line.
         import subprocess
 
         pgrep_path = "/usr/bin/pgrep"
         with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
             result = subprocess.run(
-                [pgrep_path, "-f", "soothe_daemon"],
+                [pgrep_path, "-f", "python.*-m soothe_daemon"],
                 capture_output=True,
                 text=True,
                 timeout=0.5,  # 500ms timeout
@@ -1443,8 +1445,23 @@ class SootheDaemon(DaemonHandlersMixin):
             )
             if result.returncode == 0 and result.stdout.strip():
                 pids = result.stdout.strip().split("\n")
-                if pids:
-                    return int(pids[0])
+                # Filter out worker subprocesses (they have pool_runner in cmdline)
+                for pid_str in pids:
+                    try:
+                        pid = int(pid_str)
+                        # Verify this is main daemon, not a worker subprocess
+                        cmdline_result = subprocess.run(
+                            ["ps", "-p", str(pid), "-o", "command="],
+                            capture_output=True,
+                            text=True,
+                            timeout=0.2,
+                            check=False,
+                        )
+                        cmdline = cmdline_result.stdout.strip()
+                        if "pool_runner" not in cmdline and "_pool_worker" not in cmdline:
+                            return pid
+                    except (ValueError, subprocess.TimeoutExpired):
+                        continue
 
         return None
 
@@ -1521,14 +1538,16 @@ class SootheDaemon(DaemonHandlersMixin):
                         stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
 
         # 3. Fallback: scan by process name for zombie daemons
+        # Use specific pattern to match main daemon entrypoint only, not worker subprocesses.
+        # Worker subprocesses have "pool_runner" or "_pool_worker" in their command line.
         if not stopped:
             import subprocess
 
             pgrep_path = "/usr/bin/pgrep"
             with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-                # Find processes running soothe_daemon module
+                # Find main daemon process (python -m soothe_daemon), not worker subprocesses
                 result = subprocess.run(
-                    [pgrep_path, "-f", "soothe_daemon"],
+                    [pgrep_path, "-f", "python.*-m soothe_daemon"],
                     capture_output=True,
                     text=True,
                     timeout=2.0,
@@ -1539,10 +1558,20 @@ class SootheDaemon(DaemonHandlersMixin):
                         try:
                             pid = int(pid_str)
                             if pid != os.getpid():  # Don't kill ourselves
-                                os.kill(pid, signal.SIGTERM)
-                                stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
-                                if stopped:
-                                    break
+                                # Verify this is main daemon, not a worker subprocess
+                                cmdline_result = subprocess.run(
+                                    ["ps", "-p", str(pid), "-o", "command="],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=0.2,
+                                    check=False,
+                                )
+                                cmdline = cmdline_result.stdout.strip()
+                                if "pool_runner" not in cmdline and "_pool_worker" not in cmdline:
+                                    os.kill(pid, signal.SIGTERM)
+                                    stopped = (
+                                        SootheDaemon._wait_for_pid_exit(pid, timeout) or stopped
+                                    )
                         except (ValueError, ProcessLookupError, PermissionError):
                             continue
 
