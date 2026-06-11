@@ -39,7 +39,7 @@ services:
   # Soothe Daemon - orchestration server
   soothed:
     # image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.1
-    image: soothed:0.6.2-local
+    image: soothed:0.6.3-local
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
@@ -53,6 +53,8 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       DASHSCOPE_CP_BASE_URL: ${DASHSCOPE_CP_BASE_URL:-https://coding.dashscope.aliyuncs.com/v1}
       DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY}
+      # Config path - mounted at /app/config.yml
+      SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
       # PostgreSQL connection strings (RFC-612 multi-database)
       SOOTHE_POSTGRES_BASE_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432/soothe_vectors
@@ -74,10 +76,10 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - soothe_daemon_data:/var/lib/soothe
-      - ./config.yml:/var/lib/soothe/config/config.yml:ro
+      - ./config.yml:/app/config.yml:ro  # Mount config to /app instead to avoid directory creation issue
       - ./logs:/var/lib/soothe/logs  # Persist logs for restart analysis
       # RFC-621: Workspace host convention — mount host workspace root.
-      - /Users/xiaming/Workspace:/var/lib/soothe/workspaces
+      - /Users/chenxm/Workspace:/var/lib/soothe/workspaces
     # IG-477: Cap memory to prevent OOM; daemon auto-restarts on limit hit.
     deploy:
       resources:
