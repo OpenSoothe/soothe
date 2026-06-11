@@ -72,7 +72,8 @@ agent:
     limits:
       max_parallel_steps: 4
       max_parallel_tools: 50
-      llm_concurrent_limit: 20
+      llm_rpm_limit: 10000  # effectively disable rate limiting (max allowed)
+      llm_concurrent_limit: 500  # effectively disable concurrent limit (max allowed)
       global_max_llm_calls: 10
       tool_call_limit:
         global_thread_limit: 200
