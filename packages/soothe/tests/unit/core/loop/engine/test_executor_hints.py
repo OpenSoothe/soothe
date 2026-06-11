@@ -1,7 +1,6 @@
 """Unit tests for Executor hint passing."""
 
 import asyncio
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +16,8 @@ class TestExecutorHints:
     async def test_executor_omits_legacy_tools_config_key(self):
         """Executor does not set soothe_step_tools (IG-382)."""
         mock_agent = MagicMock()
-        mock_agent.astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -29,8 +29,8 @@ class TestExecutorHints:
 
         await executor._execute_step_collecting_events(step, "thread-123")
 
-        mock_agent.astream.assert_called_once()
-        call_args = mock_agent.astream.call_args
+        mock_agent.execution_astream.assert_called_once()
+        call_args = mock_agent.execution_astream.call_args
         config = call_args.kwargs["config"]
         configurable = config["configurable"]
 
@@ -42,7 +42,8 @@ class TestExecutorHints:
     async def test_executor_passes_wire_subagent_hint(self):
         """Test Executor passes wire preferred_subagent via config when routing_hint=subagent."""
         mock_agent = MagicMock()
-        mock_agent.astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -57,7 +58,7 @@ class TestExecutorHints:
             step, "thread-456", routing_classification=routing
         )
 
-        call_args = mock_agent.astream.call_args
+        call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
         assert configurable["soothe_step_subagent"] == "explore"
@@ -67,7 +68,8 @@ class TestExecutorHints:
     async def test_executor_passes_expected_output(self):
         """Test Executor passes expected_output hint via config."""
         mock_agent = MagicMock()
-        mock_agent.astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -79,7 +81,7 @@ class TestExecutorHints:
 
         await executor._execute_step_collecting_events(step, "thread-789")
 
-        call_args = mock_agent.astream.call_args
+        call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
         assert configurable["soothe_step_expected_output"] == "Config contents"
@@ -88,7 +90,8 @@ class TestExecutorHints:
     async def test_executor_handles_missing_hints(self):
         """Test Executor handles steps without optional hints."""
         mock_agent = MagicMock()
-        mock_agent.astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -100,7 +103,7 @@ class TestExecutorHints:
 
         await executor._execute_step_collecting_events(step, "thread-000")
 
-        call_args = mock_agent.astream.call_args
+        call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
         assert "soothe_step_tools" not in configurable
@@ -111,7 +114,8 @@ class TestExecutorHints:
     async def test_executor_logs_hints(self, caplog):
         """Test Executor logs hint information."""
         mock_agent = MagicMock()
-        mock_agent.astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
 
         executor = Executor(mock_agent)
 
@@ -129,29 +133,17 @@ class TestExecutorHints:
         assert "wire_subagent=explore" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_executor_thread_fork_creates_isolated_thread(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A no-deps step gets a fresh isolated ``__step_<id>`` thread (RFC-223).
+    async def test_executor_thread_creates_isolated_thread(self) -> None:
+        """A no-deps step gets a fresh isolated ``__step_<id>`` thread (IG-477).
 
-        The fork goes through the in-house ``copy_thread_via_public_api`` helper
-        (LangGraph savers don't implement ``acopy_thread``).
+        No checkpoint fork — thread isolation for parallel safety, predecessor
+        context arrives via message injection.
         """
-        from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
-
-        copy_calls: list[tuple[str, str]] = []
-
-        async def _fake_copy(saver: Any, source: str, target: str) -> int:
-            copy_calls.append((source, target))
-            return 0
-
-        monkeypatch.setattr(tfm_mod, "copy_thread_via_public_api", _fake_copy)
-
         mock_agent = MagicMock()
-        mock_agent.astream = AsyncMock(return_value=iter([]))
-        mock_checkpointer = MagicMock()
+        mock_agent.execution_astream = AsyncMock(return_value=iter([]))
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
 
-        executor = Executor(mock_agent, checkpointer=mock_checkpointer)
+        executor = Executor(mock_agent)
         step = StepAction(id="a1b2c3d4", description="Explore slice", expected_output="ok")
         state = LoopState(
             goal="test",
@@ -171,13 +163,12 @@ class TestExecutorHints:
             loop_state=state,
         )
 
-        call_args = mock_agent.astream.call_args
+        call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
-        # ThreadForkManager creates __step_ prefixed thread
+        # IG-477: creates __step_ prefixed thread for isolation
         assert configurable["thread_id"] == "logical-thread__step_a1b2c3d4"
         assert step_result.thread_id == "logical-thread"
-        # Verify fork copy was invoked once via the in-house helper.
-        assert copy_calls == [("logical-thread", "logical-thread__step_a1b2c3d4")]
+        assert state.step_thread_ids["a1b2c3d4"] == "logical-thread__step_a1b2c3d4"
 
     @pytest.mark.asyncio
     async def test_executor_step_cancelled_error_propagates(self) -> None:
@@ -189,7 +180,7 @@ class TestExecutorHints:
                 yield None  # pragma: no cover
 
         mock_agent = MagicMock()
-        mock_agent.astream = MagicMock(return_value=_cancel_stream())
+        mock_agent.execution_astream = MagicMock(return_value=_cancel_stream())
         executor = Executor(mock_agent)
         step = StepAction(
             id="step-cancel", description="Run cancellable step", expected_output="n/a"

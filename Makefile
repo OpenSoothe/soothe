@@ -8,226 +8,210 @@
 #
 # Uses .venv managed by uv for development.
 
-.PHONY: setup docker-up docker-down reset-the-world sync format format-check lint lint-fix test test-unit test-integration test-coverage build clean help \
-        sdk-publish sdk-publish-test cli-publish cli-publish-test soothe-publish soothe-publish-test daemon-publish daemon-publish-test publish publish-test
-
-# Default target
-help:
-	@echo "Soothe Multi-Package Monorepo"
-	@echo ""
-	@echo "Setup:"
-	@echo "  make setup            - Sync workspace dependencies (creates .venv if needed)"
-	@echo "  make docker-up        - Start docker compose services (Langfuse + pgvector)"
-	@echo "  make docker-down      - Stop docker compose services"
-	@echo "  make reset-the-world  - Reset all state: docker compose down -v + clean ~/.soothe/ (keeps config) + restart"
-	@echo ""
-	@echo "Unified Targets (all packages):"
-	@echo "  make sync             - Sync all workspace packages, all optional extras, and dev deps"
-	@echo "                           (use UV_PYPI_MIRROR=https://... for networks with PyPI issues)"
-	@echo "  make format           - Format all packages"
-	@echo "  make format-check     - Check formatting (for CI)"
-	@echo "  make lint             - Lint all packages"
-	@echo "  make lint-fix         - Auto-fix all linting issues"
-	@echo "  make test             - Test all packages"
-	@echo "  make test-unit        - Run unit tests for all packages"
-	@echo "  make test-integration - Run integration tests"
-	@echo "  make test-coverage    - Run tests with coverage report"
-	@echo "  make build            - Build all packages"
-	@echo "  make clean            - Clean all packages"
-	@echo ""
-	@echo "Publish (per-package):"
-	@echo "  make sdk-publish      - Publish soothe-sdk to PyPI"
-	@echo "  make cli-publish      - Publish soothe-cli to PyPI"
-	@echo "  make soothe-publish   - Publish soothe to PyPI"
-	@echo "  make daemon-publish   - Publish soothe-daemon to PyPI"
-	@echo "  make publish          - Publish all packages to PyPI"
-	@echo ""
-	@echo "Publish to TestPyPI:"
-	@echo "  make sdk-publish-test - Publish soothe-sdk to TestPyPI"
-	@echo "  make cli-publish-test - Publish soothe-cli to TestPyPI"
-	@echo "  make soothe-publish-test - Publish soothe to TestPyPI"
-	@echo "  make daemon-publish-test - Publish soothe-daemon to TestPyPI"
-	@echo "  make publish-test     - Publish all packages to TestPyPI"
+.PHONY: help setup sync sync-verify docker-up docker-down reset-the-world
+.PHONY: format format-check lint lint-src lint-fix
+.PHONY: test test-unit test-integration test-coverage build clean
+.PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
+.PHONY: sdk-publish-test cli-publish-test soothe-publish-test daemon-publish-test publish-test
 
 # ============================================================================
-# Workspace Setup
+# Configuration
 # ============================================================================
 
-# Broken or partial mirrors (e.g. Tsinghua) leave dist-info without wheels.
-# Force PyPI by default, but allow explicit mirror override via UV_PYPI_MIRROR.
-# Usage: make sync UV_PYPI_MIRROR=https://mirrors.aliyun.com/pypi/simple
+PACKAGES = soothe-sdk soothe-cli soothe soothe-daemon
+
 ifdef UV_PYPI_MIRROR
 UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 else
 UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras
 endif
 
+# ============================================================================
+# Help
+# ============================================================================
+
+help:
+	@echo "Soothe Multi-Package Monorepo"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make setup            - Sync workspace dependencies"
+	@echo "  make docker-up        - Start docker compose services"
+	@echo "  make docker-down      - Stop docker compose services"
+	@echo "  make reset-the-world  - Reset all state and restart"
+	@echo ""
+	@echo "Unified Targets:"
+	@echo "  make sync             - Sync all packages + extras + dev deps"
+	@echo "  make format           - Format all packages (src + tests)"
+	@echo "  make format-check     - Check formatting (for CI)"
+	@echo "  make lint             - Lint all packages (src + tests)"
+	@echo "  make lint-src         - Lint only src/ (lighter check)"
+	@echo "  make lint-fix         - Auto-fix linting issues"
+	@echo "  make test             - Run all tests"
+	@echo "  make test-unit        - Run unit tests"
+	@echo "  make test-integration - Run integration tests"
+	@echo "  make test-coverage    - Run tests with coverage"
+	@echo "  make build            - Build all packages"
+	@echo "  make clean            - Clean all artifacts"
+	@echo ""
+	@echo "Publish:"
+	@echo "  make publish          - Publish all to PyPI"
+	@echo "  make publish-test     - Publish all to TestPyPI"
+
+# ============================================================================
+# Workspace Setup
+# ============================================================================
+
 setup:
 	@echo "Syncing workspace dependencies..."
 	$(UV_SYNC)
-	@echo "Workspace ready (.venv created if needed)"
+	@echo "Workspace ready"
 
-# Docker compose shortcuts for development
+sync:
+	@echo "Syncing all workspace packages..."
+	$(UV_SYNC)
+	@$(MAKE) sync-verify
+	@echo "All packages synced"
+
+sync-verify:
+	@.venv/bin/python -c "import importlib.util; pkgs=('psycopg_pool','jsonschema','langfuse'); missing=[p for p in pkgs if importlib.util.find_spec(p) is None]; assert not missing, f'Missing: {missing}'"
+	@echo "Critical dependencies verified"
+
 docker-up:
-	@echo "Starting docker compose services..."
 	docker compose -f docker-compose.dev.yml up -d
-	@echo "Docker services started"
 
 docker-down:
-	@echo "Stopping docker compose services..."
 	docker compose -f docker-compose.dev.yml down
-	@echo "Docker services stopped"
 
-# Reset all state: docker volumes + ~/.soothe/ (keeps config), then restart services
-# Uses development compose file (docker-compose.dev.yml) with Langfuse + pgvector
 reset-the-world:
-	@echo "Resetting the world..."
-	@echo "Stopping docker containers and removing volumes..."
-	docker compose -f docker-compose.dev.yml down -v 2>/dev/null || echo "No docker compose services running"
-	@echo "Cleaning ~/.soothe/ (keeping config/)..."
-	@if [ -d ~/.soothe ]; then \
-		find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; \
-	fi
-	@echo "Starting docker containers..."
-	docker compose -f docker-compose.dev.yml up -d 2>/dev/null || echo "No docker compose services to start"
+	docker compose -f docker-compose.dev.yml down -v 2>/dev/null || true
+	@if [ -d ~/.soothe ]; then find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; fi
+	docker compose -f docker-compose.dev.yml up -d 2>/dev/null || true
 	@echo "World reset complete"
 
 # ============================================================================
-# Unified Targets (all packages)
+# Format & Lint
 # ============================================================================
-
-sync:
-	@echo "Syncing all workspace packages (optional extras + dev dependency group)..."
-	$(UV_SYNC)
-	@$(MAKE) sync-verify
-	@echo "All packages synced with all optional extras and workspace dev dependencies"
-
-sync-verify:
-	@.venv/bin/python -c "\
-import importlib.util; \
-pkgs = ('psycopg_pool', 'jsonschema', 'langfuse'); \
-missing = [p for p in pkgs if importlib.util.find_spec(p) is None]; \
-assert not missing, f'Missing packages after sync (broken mirror?): {missing}'"
-	@echo "Critical daemon dependencies verified (psycopg_pool, jsonschema, langfuse)"
 
 format: sync
 	@echo "Formatting all packages..."
-	cd packages/soothe-sdk && uv run ruff format src/
-	cd packages/soothe-cli && uv run ruff format src/
-	cd packages/soothe && uv run ruff format src/
-	cd packages/soothe-daemon && uv run ruff format src/
-	@echo "All packages formatted"
+	@for pkg in $(PACKAGES); do \
+		paths="src/"; \
+		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		echo "  $$pkg"; \
+		cd packages/$$pkg && uv run ruff format $$paths && cd ../..; \
+	done
+	@echo "Done"
 
 format-check: sync
-	@echo "Checking formatting for all packages..."
-	cd packages/soothe-sdk && uv run ruff format --check src/
-	cd packages/soothe-cli && uv run ruff format --check src/
-	cd packages/soothe && uv run ruff format --check src/
-	cd packages/soothe-daemon && uv run ruff format --check src/
-	@echo "All packages format checked"
+	@echo "Checking formatting..."
+	@failed=0; \
+	for pkg in $(PACKAGES); do \
+		paths="src/"; \
+		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		cd packages/$$pkg && uv run ruff format --check $$paths || failed=1 && cd ../..; \
+	done; \
+	test $$failed -eq 0 && echo "OK" || exit 1
 
 lint: sync
-	@echo "Linting all packages..."
-	cd packages/soothe-sdk && uv run ruff check src/
-	cd packages/soothe-cli && uv run ruff check src/
-	cd packages/soothe && uv run ruff check src/
-	cd packages/soothe-daemon && uv run ruff check src/
-	@echo "All packages linted"
+	@echo "Linting all packages (src + tests)..."
+	@failed=0; \
+	for pkg in $(PACKAGES); do \
+		paths="src/"; \
+		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		echo "  $$pkg"; \
+		cd packages/$$pkg && uv run ruff check $$paths || failed=1 && cd ../..; \
+	done; \
+	test $$failed -eq 0 && echo "Done" || exit 1
+
+lint-src: sync
+	@echo "Linting src/ only..."
+	@for pkg in $(PACKAGES); do \
+		echo "  $$pkg"; \
+		cd packages/$$pkg && uv run ruff check src/ && cd ../..; \
+	done
+	@echo "Done"
 
 lint-fix: sync
-	@echo "Auto-fixing linting issues in all packages..."
-	cd packages/soothe-sdk && uv run ruff check --fix src/
-	cd packages/soothe-cli && uv run ruff check --fix src/
-	cd packages/soothe && uv run ruff check --fix src/
-	cd packages/soothe-daemon && uv run ruff check --fix src/
-	@echo "All packages lint-fixed"
+	@echo "Fixing linting issues..."
+	@for pkg in $(PACKAGES); do \
+		paths="src/"; \
+		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
+		echo "  $$pkg"; \
+		cd packages/$$pkg && uv run ruff check --fix $$paths && cd ../..; \
+	done
+	@echo "Done"
+
+# ============================================================================
+# Tests
+# ============================================================================
 
 test: sync test-unit test-integration
-	@echo "All packages tested"
+	@echo "All tests complete"
 
 test-unit: sync
-	@echo "Running unit tests for all packages..."
-	cd packages/soothe-sdk && uv run pytest tests/unit/ -v
-	cd packages/soothe-cli && uv run pytest tests/unit/ -v
-	cd packages/soothe && uv run pytest tests/unit/ -v
-	cd packages/soothe-daemon && uv run pytest tests/unit/ -v
-	@echo "All unit tests complete"
+	@echo "Running unit tests..."
+	@for pkg in $(PACKAGES); do \
+		test -d "packages/$$pkg/tests/unit" && echo "  $$pkg" && cd packages/$$pkg && uv run pytest tests/unit/ -v --tb=short && cd ../..; \
+	done
 
 test-integration: sync
 	@echo "Running integration tests..."
-	@echo "Note: Integration tests require external services and real LLM API calls"
-	cd packages/soothe && uv run pytest tests/integration/ --run-integration -v
-	cd packages/soothe-daemon && uv run pytest tests/integration/ --run-integration -v
-	@echo "Integration tests complete"
+	@cd packages/soothe && uv run pytest tests/integration/ --run-integration -v && cd ..
+	@cd packages/soothe-daemon && uv run pytest tests/integration/ --run-integration -v && cd ..
 
 test-coverage: sync
-	@echo "Running tests with coverage for all packages..."
-	cd packages/soothe && uv run pytest tests/ --cov=soothe --cov-report=term-missing
-	cd packages/soothe-daemon && uv run pytest tests/ --cov=soothe_daemon --cov-report=term-missing
-	@echo "Coverage reports generated"
+	@cd packages/soothe && uv run pytest tests/ --cov=soothe --cov-report=term-missing && cd ..
+	@cd packages/soothe-daemon && uv run pytest tests/ --cov=soothe_daemon --cov-report=term-missing && cd ..
+
+# ============================================================================
+# Build & Clean
+# ============================================================================
 
 build: sync
 	@echo "Building all packages..."
-	cd packages/soothe-sdk && uv build --out-dir dist
-	cd packages/soothe-cli && uv build --out-dir dist
-	cd packages/soothe && uv build --out-dir dist
-	cd packages/soothe-daemon && uv build --out-dir dist
-	@echo "All packages built"
+	@for pkg in $(PACKAGES); do \
+		echo "  $$pkg"; \
+		cd packages/$$pkg && uv build --out-dir dist && cd ../..; \
+	done
+	@echo "Done"
 
 clean:
-	@echo "Cleaning all package artifacts..."
 	rm -rf packages/*/dist/ packages/*/*.egg-info
 	find packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find packages -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	find packages -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
-	@echo "All packages cleaned"
+	@echo "Done"
 
 # ============================================================================
-# Publish Targets (per-package)
+# Publish
 # ============================================================================
 
 sdk-publish:
-	@echo "Publishing soothe-sdk to PyPI..."
 	cd packages/soothe-sdk && uv publish dist/* --native-tls
-	@echo "soothe-sdk published to PyPI"
-
-sdk-publish-test:
-	@echo "Publishing soothe-sdk to TestPyPI..."
-	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "soothe-sdk published to TestPyPI"
 
 cli-publish:
-	@echo "Publishing soothe-cli to PyPI..."
 	cd packages/soothe-cli && uv publish dist/* --native-tls
-	@echo "soothe-cli published to PyPI"
-
-cli-publish-test:
-	@echo "Publishing soothe-cli to TestPyPI..."
-	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "soothe-cli published to TestPyPI"
 
 soothe-publish:
-	@echo "Publishing soothe to PyPI..."
 	cd packages/soothe && uv publish dist/* --native-tls
-	@echo "soothe published to PyPI"
-
-soothe-publish-test:
-	@echo "Publishing soothe to TestPyPI..."
-	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "soothe published to TestPyPI"
 
 daemon-publish:
-	@echo "Publishing soothe-daemon to PyPI..."
 	cd packages/soothe-daemon && uv publish dist/* --native-tls
-	@echo "soothe-daemon published to PyPI"
-
-daemon-publish-test:
-	@echo "Publishing soothe-daemon to TestPyPI..."
-	cd packages/soothe-daemon && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "soothe-daemon published to TestPyPI"
 
 publish: build sdk-publish cli-publish soothe-publish daemon-publish
-	@echo "All packages published to PyPI"
+	@echo "Published to PyPI"
+
+sdk-publish-test:
+	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
+
+cli-publish-test:
+	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
+
+soothe-publish-test:
+	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
+
+daemon-publish-test:
+	cd packages/soothe-daemon && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
 publish-test: build sdk-publish-test cli-publish-test soothe-publish-test daemon-publish-test
-	@echo "All packages published to TestPyPI"
+	@echo "Published to TestPyPI"

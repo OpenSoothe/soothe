@@ -1,4 +1,4 @@
-"""Executor integration tests for thread fork predecessor handling (RFC-223)."""
+"""Executor integration tests for thread isolation and predecessor message injection (IG-477)."""
 
 from __future__ import annotations
 
@@ -21,21 +21,20 @@ async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:
 
 
 def _make_mock_agent() -> MagicMock:
-    """Create mock agent with async generator astream."""
+    """Create mock agent with async generator execution_astream."""
     mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=_empty_async_gen())
+    mock_agent.execution_astream = AsyncMock(return_value=_empty_async_gen())
+    mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
     return mock_agent
 
 
 def _make_mock_checkpointer() -> MagicMock:
-    """Create mock checkpointer with async copy_thread."""
-    mock_checkpointer = MagicMock()
-    mock_checkpointer.acopy_thread = AsyncMock()
-    return mock_checkpointer
+    """Create mock checkpointer (unused after IG-477 removal)."""
+    return MagicMock()
 
 
 def _astream_messages(mock_agent: MagicMock) -> list:
-    call_args = mock_agent.astream.call_args
+    call_args = mock_agent.execution_astream.call_args
     assert call_args is not None
     payload = call_args.args[0]
     assert isinstance(payload, dict)
@@ -152,11 +151,10 @@ async def test_singleton_sole_child_reuses_predecessor_thread() -> None:
         loop_state=state,
     )
 
-    # Sole-child reuse: B's CoreAgent runs under A's thread, no rename/copy.
+    # Sole-child reuse: B's CoreAgent runs under A's thread, no new namespace.
     cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t__step_A"
     assert state.step_thread_ids.get("B") == "logical-t__step_A"
-    assert state.thread_fork_sources.get("logical-t__step_A") == "logical-t__step_A"
 
 
 @pytest.mark.asyncio
@@ -188,7 +186,7 @@ async def test_no_dep_step_forks_from_main_thread() -> None:
 
     cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t__step_solo"
-    assert state.thread_fork_sources.get("logical-t__step_solo") == "logical-t"
+    assert state.step_thread_ids.get("solo") == "logical-t__step_solo"
 
 
 @pytest.mark.asyncio
@@ -365,50 +363,3 @@ async def test_multi_dep_injection_logs_threadfork(
 
     assert "[ThreadFork]" in caplog.text
     assert "multi-dep" in caplog.text or "injected" in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_fork_copies_main_thread_into_step_namespace(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A no-deps step forks from main into a fresh ``__step_<id>`` namespace.
-
-    The copy goes through ``copy_thread_via_public_api`` (in-house helper)
-    because no LangGraph saver implements ``acopy_thread``.
-    """
-    from soothe.foundation.loop.engine import thread_fork_manager as tfm_mod
-
-    copy_calls: list[tuple[str, str]] = []
-
-    async def _fake_copy(saver: Any, source: str, target: str) -> int:
-        copy_calls.append((source, target))
-        return 0  # main has no checkpoints in this test fixture
-
-    monkeypatch.setattr(tfm_mod, "copy_thread_via_public_api", _fake_copy)
-
-    mock_agent = _make_mock_agent()
-    mock_checkpointer = _make_mock_checkpointer()
-
-    step = StepAction(id="test-step", description="test", expected_output="o")
-    decision = AgentDecision(
-        type="execute_steps",
-        steps=[step],
-        execution_mode="parallel",
-        reasoning="r",
-    )
-    state = LoopState(
-        goal="g",
-        thread_id="main-thread",
-        current_decision=decision,
-        loop_messages=[],
-    )
-    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
-
-    await executor._execute_step_collecting_events(
-        step,
-        "main-thread",
-        loop_state=state,
-    )
-
-    # Fork from main into __step_ namespace (parallel-safe isolation).
-    assert ("main-thread", "main-thread__step_test-step") in copy_calls
