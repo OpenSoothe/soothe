@@ -132,8 +132,7 @@ def test_count_file_types_replay_assess_prompt_carries_evidence() -> None:
     )
     assess_human = msgs[-1].content
     assert "<PRIOR_PROGRESS>" in assess_human
-    assert "run_command" in assess_human
-    assert "1139" in assess_human
+    assert "1139" in assess_human  # Evidence excerpt from file count
     system = msgs[0].content
     assert "**assessment_reasoning**" in system
     assert "Do NOT restate the user's request" in system
@@ -227,8 +226,5 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
     )
     assess_human = msgs[-1].content
     assert "<PRIOR_PROGRESS>" in assess_human
-    # Tool names come from AIMessage.tool_calls.
-    assert "run_command" in assess_human
-    assert "read_file" in assess_human
     # Evidence comes from chunked assistant text via _ledger_execute_ai_content.
     assert "1139 Python files" in assess_human

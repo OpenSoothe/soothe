@@ -190,6 +190,16 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.agent.loop.limits.global_max_llm_calls = 3
     test_config.agent.autonomous.max_iterations = 5
 
+    # Override router if Anthropic credentials available but default provider lacks credentials
+    # This handles the case where config.dev.yml has coding-plan provider but Dashscope keys missing
+    if os.getenv("ANTHROPIC_API_KEY") and not (
+        os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL")
+    ):
+        test_config.router.default = "anthropic:claude-sonnet-4-5"
+        test_config.router.fast = "anthropic:claude-haiku-3-5"
+        # Disable memory since Anthropic doesn't support embeddings
+        test_config.agent.protocols.memory.enabled = False
+
     return test_config
 
 
