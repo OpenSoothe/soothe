@@ -173,18 +173,21 @@ cd /path/to/soothe
 
 ## 4. 下一步计划
 
-### 4.1 P0：Daemon vs Runner 对比剖析
+### 4.1 P0：Native 内存定位（HP-007）
 
-1. **HP-004**：在 running `deploy-soothed-1` 内对 worker 线程 attach memray（或 tracemalloc snapshot API），对比 main vs worker RSS
-2. **HP-005**：临时禁用 `thread_logger.log` / `StreamDeliveryCoalescer` / broadcast，二分定位 daemon 增量
-3. 记录 top allocator 到 §5
+1. execute 流期间采集 **`/proc/<pid>/smaps_rollup`** 或 `memray run --native`（worker 线程 attach）
+2. 对比 **Postgres checkpointer on/off**（临时 `MemorySaver`）对 cgroup 峰值的影响
+3. 对比 **HTTP 流式客户端**（禁用 `stream_usage`、缩小 read buffer）  
+4. 记录到 §5
 
 ```bash
-./scripts/run_hp002_memray.sh   # 隔离 SootheRunner（已完成 HP-002）
-./scripts/query_memory_loop_test.sh 15  # daemon 路径验收
+# 容器内 smaps 采样（execute 第 10–30s）
+docker exec deploy-soothed-1 bash -c 'PID=$(pgrep -f soothe_daemon); grep -E "Rss|Pss" /proc/$PID/smaps_rollup'
+
+./scripts/run_hp005_incontainer.sh   # 同 cgroup exec 对照
 ```
 
-### 4.2 P1：Execute 阶段 heap 剖析（续）
+### 4.2 P1：Daemon vs Runner 对比（已完成 HP-004/005）
 
 - 更小 workspace（空目录）对比 167k 文件仓库  
 - 强制 `LEDGER_DIRECT` 跳过 synthesis，观察峰值是否下降  
@@ -213,6 +216,20 @@ cd /path/to/soothe
 | HP-001 | 2026-06-11 | 本地 host, config.dev.yml | 60 chunks 后停止 | 流中 ~708 MiB；cleanup 后 ~1898 MiB | `importlib` / anthropic vertex (~1.9 MB tracemalloc) | `numpy` import (~1 MB) | 流式阶段 RSS 已跳至 ~725 MiB（execute 起点）；**tracemalloc 对 import 敏感，需 memray 在容器内对完整 query 剖析** |
 | HP-002 | 2026-06-11 | Docker 8g 隔离容器 + memray 1.19.3 | SootheRunner 直跑 list dir（50 chunks 后挂起，1.1 GiB bin） | 进程内 ~1456 MiB @ chunk 50；**无 daemon 级 400 MiB/2s** | `importlib` 71.9%（冷启动） | LangGraph `_execute_step_collecting_events` + `aget_state` 各 ~22% | **隔离 runner 线性暴涨弱于 daemon**；memray 证实 execute 流 + checkpointer 读状态是大头；**非 updates 下游传播问题** |
 | HP-003 | 2026-06-11 | fixed4 daemon 4G | 去掉 `updates` stream_mode | **3811 MiB** | — | — | **无效**：RSS 曲线与 iter 6–13 相同（~400 MiB/2s） |
+| HP-004 | 2026-06-11 | fixed5 daemon 4G | 二分 daemon 层：`drop_chunks` / `minimal` / 单项 bypass | **3777–4093 MiB** | — | — | **全部仍 OOM**；ThreadLogger/coalescer/broadcast/ResponsePusher **非主因** |
+| HP-005 | 2026-06-11 | daemon 容器内 `docker exec` SootheRunner | 与 daemon 同 cgroup，daemon 空闲 | cgroup **3846 MiB @ 26s**；进程 psutil **~173 MiB @ chunk 50** | — | — | **进程 RSS ≪ cgroup RSS** → 主要为 **native / 非 Python 堆** 分配 |
+| HP-006 | 2026-06-11 | 独立 4G 容器（无 daemon）SootheRunner | 同 deploy 网络 + PG | OOM @ ~30s；进程 psutil **~176 MiB @ chunk 50** | — | — | 与 HP-005 相同：**线性 cgroup 增长 + psutil 低估** |
+
+### HP-004 详情
+
+- **脚本**: `scripts/run_hp004_bisect.sh` → `scripts/hp004_results.csv`
+- **结论**: 即使 `SOOTHE_DAEMON_HP004_DROP_CHUNKS=1`（worker 不向 main 推送 chunk）仍 OOM → 泄漏在 **worker 内 LangGraph 执行**，不在 daemon 主循环消费路径
+
+### HP-005 / HP-006 详情
+
+- **关键矛盾**: `psutil.Process.rss` 在 execute 流中仅 ~175 MiB，但 docker cgroup 仍 **~400 MiB/2s** 涨至 4 GiB 后 OOM
+- 与 §3.3 tracemalloc 仅 ~0.9–14 MB 一致：**泄漏主体在 Python 堆外**（HTTP 读缓冲、LangGraph 原生层、glibc arena、PG 驱动等）
+- HP-002（8 GiB 隔离容器）曾报告 chunk1 **1423 MiB** 进程 RSS — 可能与 **8g limit 下更晚 OOM / 不同采样时机** 有关，需用 `/proc/pid/smaps` 复核
 
 ### HP-002 详情
 
