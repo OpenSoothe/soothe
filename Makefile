@@ -9,7 +9,7 @@
 #
 # Uses .venv managed by uv for development.
 
-.PHONY: help setup sync sync-verify docker-up docker-down reset-the-world
+.PHONY: help setup sync sync-verify docker-up docker-down docker-up-daemon docker-down-daemon docker-build docker-build-slim docker-ps docker-logs reset-the-world
 .PHONY: format format-check lint lint-src lint-fix
 .PHONY: test test-unit test-integration test-coverage build clean
 .PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
@@ -39,8 +39,12 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make setup            - Sync workspace dependencies"
-	@echo "  make docker-up        - Start docker compose services"
-	@echo "  make docker-down      - Stop docker compose services"
+	@echo "  make docker-up        - Start dev dependencies (pgvector + Langfuse)"
+	@echo "  make docker-down      - Stop dev dependencies"
+	@echo "  make docker-build     - Build local soothed daemon image"
+	@echo "  make docker-build-slim - Build slim daemon image (no browser)"
+	@echo "  make docker-up-daemon - Start dev deps + local daemon container"
+	@echo "  make docker-down-daemon - Stop dev deps + daemon container"
 	@echo "  make reset-the-world  - Reset all state and restart"
 	@echo ""
 	@echo "Unified Targets:"
@@ -86,8 +90,44 @@ docker-up:
 docker-down:
 	docker compose -f docker-compose.dev.yml down
 
+# Version from VERSION file
+SOOTHE_VERSION := $(shell cat VERSION)
+
+docker-build:
+	@echo "Building soothed:${SOOTHE_VERSION}-local (full image with browser)..."
+	docker build -f packages/soothe-daemon/Dockerfile \
+		--build-arg SOOTHE_VERSION=$(SOOTHE_VERSION) \
+		--build-arg INCLUDE_BROWSER=true \
+		-t soothed:$(SOOTHE_VERSION)-local .
+	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local"
+
+docker-build-slim:
+	@echo "Building soothed:${SOOTHE_VERSION}-local-slim (no browser)..."
+	docker build -f packages/soothe-daemon/Dockerfile \
+		--build-arg SOOTHE_VERSION=$(SOOTHE_VERSION) \
+		--build-arg INCLUDE_BROWSER=false \
+		-t soothed:$(SOOTHE_VERSION)-local-slim .
+	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local-slim"
+
+docker-up-daemon:
+	@echo "Starting dev dependencies + daemon (image: soothed:$(SOOTHE_VERSION)-local)..."
+	SOOTHE_IMAGE=soothed:$(SOOTHE_VERSION)-local docker compose -f docker-compose.dev.yml --profile daemon up -d
+	@echo ""
+	@echo "Stack running. Check status: make docker-ps"
+	@echo "Daemon API: http://localhost:8765"
+	@echo "Langfuse UI: http://localhost:3300"
+
+docker-down-daemon:
+	docker compose -f docker-compose.dev.yml --profile daemon down
+
+docker-ps:
+	docker compose -f docker-compose.dev.yml --profile daemon ps
+
+docker-logs:
+	docker compose -f docker-compose.dev.yml --profile daemon logs -f
+
 reset-the-world:
-	docker compose -f docker-compose.dev.yml down -v 2>/dev/null || true
+	docker compose -f docker-compose.dev.yml --profile daemon down -v 2>/dev/null || true
 	@if [ -d ~/.soothe ]; then find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; fi
 	docker compose -f docker-compose.dev.yml up -d 2>/dev/null || true
 	@echo "World reset complete"

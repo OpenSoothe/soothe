@@ -1,30 +1,63 @@
 # Docker Compose for Soothe development environment
 # RFC-612: Multi-database PostgreSQL architecture
 #
-# Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) starts with the default stack:
+# Profiles:
+#   - default: Dev dependencies only (pgvector + Langfuse observability)
+#   - daemon:  Add local soothed daemon container
+#
+# Usage:
+#   # Start dev dependencies only (default):
 #   docker compose -f docker-compose.dev.yml up -d
+#   make docker-up
+#
+#   # Start dev deps + local daemon (after building image):
+#   docker compose -f docker-compose.dev.yml --profile daemon up -d
+#   make docker-up-daemon
+#
+#   # Build local daemon image first:
+#   make docker-build
+#
+# Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) starts with the default stack.
 # UI/API: http://localhost:3300 — set soothe observability.langfuse.host to match.
 # Stack: langfuse-web + langfuse-worker + Postgres + ClickHouse + Redis + MinIO (Python SDK 3.x).
 # Langfuse app images are pulled from ghcr.io (not Docker Hub) to avoid registry-1.docker.io / auth.docker.io token EOF on some networks.
 # Headless init provisions org + soothe-dev project + API keys + a dev UI user (override via LANGFUSE_INIT_*).
 # Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
-# Fresh Langfuse DB/volumes: docker compose -f docker-compose.dev.yml down -v (removes Langfuse + soothe-pgvector volumes — use selective volume rm to keep soothe-pgvector).
+# Fresh Langfuse DB/volumes: docker compose -f docker-compose.dev.yml down -v (removes Langfuse + soothe-pgvector volumes).
+#
+# Environment variables (set in deploy/.env for daemon profile):
+#   POSTGRES_PASSWORD=...            # PostgreSQL password
+#   DASHSCOPE_API_KEY=...            # DashScope provider key
+#   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
+#   DASHSCOPE_BASE_URL=...           # DashScope API base URL
+#   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
+#   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
+
 services:
+  # ===========================================================================
+  # Dev Dependencies (default profile - always start)
+  # ===========================================================================
+
   soothe-pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
     restart: always
     # Dev: worker_pool max 8 × (checkpointer + agentloop + pgvector + durability stores) needs headroom
     command: ["postgres", "-c", "max_connections=200"]
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      # RFC-612: No default database - init-db.sql creates multiple databases
-      # POSTGRES_DB: vectordb  # Removed - using multi-database architecture
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "6432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - soothe_postgres_data:/var/lib/postgresql/data
       - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    shm_size: 256mb
 
   # --- Langfuse v3 — do not share DB with soothe-pgvector / RFC-612 init script ---
   langfuse-postgres:
@@ -200,8 +233,70 @@ services:
       LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Soothe Dev}
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-SootheLangfuseLocalDev1}
 
+  # ===========================================================================
+  # Daemon Profile (starts local soothed daemon)
+  # ===========================================================================
+
+  soothed:
+    profiles:
+      - daemon
+    image: ${SOOTHE_IMAGE:-soothed:0.6.3-local}
+    restart: unless-stopped
+    depends_on:
+      soothe-pgvector:
+        condition: service_healthy
+    environment:
+      # Provider credentials
+      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      DASHSCOPE_CP_BASE_URL: ${DASHSCOPE_CP_BASE_URL:-https://coding.dashscope.aliyuncs.com/v1}
+      DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY}
+      # Config path - mounted at /app/config.yml
+      SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
+      # PostgreSQL connection strings (RFC-612 multi-database)
+      SOOTHE_POSTGRES_BASE_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432
+      SOOTHE_POSTGRES_VECTORS_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432/soothe_vectors
+      SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
+      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED: true
+      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
+      # IG-475: Memory profiling (tracemalloc) for leak detection
+      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-false}
+      SOOTHE_DAEMON_MEMORY_PROFILING__TRACE_DEPTH: ${SOOTHE_MEMORY_PROFILING_TRACE_DEPTH:-25}
+      SOOTHE_DAEMON_MEMORY_PROFILING__LOG_GROWTH_THRESHOLD_MB: ${SOOTHE_MEMORY_PROFILING_LOG_GROWTH_THRESHOLD_MB:-100}
+      # IG-475: glibc malloc tuning to reduce RSS fragmentation
+      MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-2}
+      MALLOC_TRIM_THRESHOLD_: "131072"
+      MALLOC_TOP_PAD_: "131072"
+      MALLOC_MMAP_THRESHOLD_: "131072"
+      # IG-477: emergency rollback for ephemeral execute graph (default on)
+      SOOTHE_EPHEMERAL_EXECUTE_STREAM: ${SOOTHE_EPHEMERAL_EXECUTE_STREAM:-1}
+      # IG-477: jemalloc lowers sampled RSS vs glibc
+      LD_PRELOAD: ${LD_PRELOAD:-}
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - soothe_daemon_data:/var/lib/soothe
+      - ./deploy/config.yml:/app/config.yml:ro
+      - ./deploy/logs:/var/lib/soothe/logs
+      # RFC-621: Workspace host convention — mount host workspace root.
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-/Users/chenxm/Workspace}:/var/lib/soothe/workspaces
+    # IG-477: Cap memory to prevent OOM; daemon auto-restarts on limit hit.
+    deploy:
+      resources:
+        limits:
+          memory: ${DOCKER_MEM_LIMIT:-4g}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
 volumes:
-  postgres_data:
+  soothe_postgres_data:
+    name: soothe_postgres_data
+  soothe_daemon_data:
+    name: soothe_daemon_data
   langfuse_postgres_data:
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
