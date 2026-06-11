@@ -618,53 +618,6 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
-# soothe goals tools
-# ---------------------------------------------------------------------------
-
-_register(
-    ToolMeta(
-        name="create_goal",
-        display_name="CreateGoal",
-        arg_keys=("description",),
-        category="goals",
-        outcome_type="generic",
-        source="soothe",
-    )
-)
-
-_register(
-    ToolMeta(
-        name="list_goals",
-        display_name="ListGoals",
-        category="goals",
-        outcome_type="generic",
-        source="soothe",
-    )
-)
-
-_register(
-    ToolMeta(
-        name="complete_goal",
-        display_name="CompleteGoal",
-        arg_keys=("goal_id",),
-        category="goals",
-        outcome_type="generic",
-        source="soothe",
-    )
-)
-
-_register(
-    ToolMeta(
-        name="fail_goal",
-        display_name="FailGoal",
-        arg_keys=("goal_id",),
-        category="goals",
-        outcome_type="generic",
-        source="soothe",
-    )
-)
-
-# ---------------------------------------------------------------------------
 # other tools
 # ---------------------------------------------------------------------------
 

@@ -42,11 +42,6 @@ BUILTIN_TOOL_TRIGGERS: dict[str, list[str]] = {
     "ask_about_file": ["WORKSPACE"],
     # Subagents (task tool targets — core: explore, plan, research; plugins add more)
     "tacitus": ["TACITUS_RULES", "context"],
-    # Goal management tools
-    "create_goal": ["THREAD", "PROTOCOLS"],
-    "list_goals": ["THREAD"],
-    "complete_goal": ["THREAD"],
-    "fail_goal": ["THREAD"],
     # Datetime
     "datetime": [],
 }

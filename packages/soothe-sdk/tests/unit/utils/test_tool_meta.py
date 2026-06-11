@@ -129,16 +129,6 @@ class TestOutcomeTypeCoverage:
                 f"{name}: expected subagent, got {meta.outcome_type}"
             )
 
-    def test_goals_tools_have_generic_outcome_type(self) -> None:
-        """Goals tools should have outcome_type='generic'."""
-        goals_tools = ["create_goal", "list_goals", "complete_goal", "fail_goal"]
-        for name in goals_tools:
-            meta = get_tool_meta(name)
-            assert meta is not None
-            assert meta.outcome_type == "generic", (
-                f"{name}: expected generic, got {meta.outcome_type}"
-            )
-
     def test_generic_tools_have_generic_outcome_type(self) -> None:
         """Generic tools should have outcome_type='generic'."""
         generic_tools = ["current_datetime", "ask_user", "compact_conversation", "write_todos"]
@@ -268,7 +258,7 @@ class TestToolMetaRegistry:
                 seen.add(name)
 
     def test_all_canonical_tools_have_arg_keys(self) -> None:
-        no_args_ok = {"compact_conversation", "current_datetime", "list_goals"}
+        no_args_ok = {"compact_conversation", "current_datetime"}
         seen_ids: set[int] = set()
         for name, meta in TOOL_REGISTRY.items():
             if id(meta) in seen_ids:
@@ -346,9 +336,6 @@ class TestDerivedSets:
             "transcribe_audio": "media",
             "get_video_info": "media",
             "analyze_image": "media",
-            "create_goal": "goals",
-            "complete_goal": "goals",
-            "fail_goal": "goals",
         }
         result = get_tool_categories()
         for name, cat in old_cats.items():

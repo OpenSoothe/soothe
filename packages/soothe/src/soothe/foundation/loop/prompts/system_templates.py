@@ -91,14 +91,6 @@ Data inspection tools (single-purpose):
 - ask_about_file: Answer questions about file content (documents use AI, tabular shows schema).\
 """
 
-_GOALS_GUIDE = """\
-Goal management tools (single-purpose):
-- create_goal: Create a new goal for autonomous operation (description, priority 0-100).
-- list_goals: List all goals and their statuses (optional status filter).
-- complete_goal: Mark a goal as successfully completed (goal_id).
-- fail_goal: Mark a goal as failed with reason (goal_id, reason).\
-"""
-
 _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
@@ -119,8 +111,6 @@ Tool selection rules (follow strictly):
 {_SURGICAL_EDIT_GUIDE}
 
 {_DATA_GUIDE}
-
-{_GOALS_GUIDE}
 
 {_RESEARCH_GUIDE}
 
