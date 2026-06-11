@@ -29,8 +29,8 @@ from langchain_core.tools import tool
 # For installed package: from soothe.core import create_soothe_agent; from soothe.config.settings import SootheConfig
 # For local dev: add path and import
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from soothe.core import create_soothe_agent
 from soothe.config import SootheConfig
+from soothe.core import create_soothe_agent
 
 load_dotenv()
 
@@ -128,9 +128,7 @@ async def stream_agent_response(
                 if hasattr(message_obj, "tool_calls") and message_obj.tool_calls:
                     for tc in message_obj.tool_calls:
                         if isinstance(tc, dict):
-                            print(
-                                f"\n[Tool: {tc.get('name', '?')}]", end=" ", flush=True
-                            )
+                            print(f"\n[Tool: {tc.get('name', '?')}]", end=" ", flush=True)
 
             elif isinstance(message_obj, ToolMessage):
                 # Show tool result preview
@@ -170,15 +168,9 @@ async def main() -> None:
         subagents=[],  # No subagents for minimal footprint
     )
 
-    print(
-        f"[Agent] Memory protocol: {type(agent.memory).__name__ if agent.memory else 'None'}"
-    )
-    print(
-        f"[Agent] Planner protocol: {type(agent.planner).__name__ if agent.planner else 'None'}"
-    )
-    print(
-        f"[Agent] Policy protocol: {type(agent.policy).__name__ if agent.policy else 'None'}"
-    )
+    print(f"[Agent] Memory protocol: {type(agent.memory).__name__ if agent.memory else 'None'}")
+    print(f"[Agent] Planner protocol: {type(agent.planner).__name__ if agent.planner else 'None'}")
+    print(f"[Agent] Policy protocol: {type(agent.policy).__name__ if agent.policy else 'None'}")
     print("[Agent] Custom tools: 2")
 
     # Demonstrate agent capabilities

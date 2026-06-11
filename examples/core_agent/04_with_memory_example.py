@@ -20,9 +20,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from soothe import MemoryItem, create_soothe_agent
+
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
-from soothe import MemoryItem, create_soothe_agent
 
 load_dotenv()
 
@@ -99,7 +100,10 @@ async def demonstrate_memory_protocol(agent) -> None:
     print("\n[4] Updating memory content...")
     if stored_ids:
         try:
-            await memory.update(stored_ids[0], "UPDATED: Team now prefers structured concurrency with task groups.")
+            await memory.update(
+                stored_ids[0],
+                "UPDATED: Team now prefers structured concurrency with task groups.",
+            )
             print(f"  Updated: {stored_ids[0][:8]}...")
         except KeyError:
             print("  Update failed: item not found")

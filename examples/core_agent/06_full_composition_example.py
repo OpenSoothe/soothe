@@ -23,9 +23,10 @@ from dotenv import load_dotenv
 from langchain_core.tools import tool
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from soothe import MemoryItem, create_soothe_agent
+
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
-from soothe import MemoryItem, create_soothe_agent
 
 load_dotenv()
 
@@ -150,7 +151,9 @@ async def main() -> None:
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")
-    print(f"[Config] Tools: execution={config.tools.execution.enabled}, web_search={config.tools.web_search.enabled}")
+    print(
+        f"[Config] Tools: execution={config.tools.execution.enabled}, web_search={config.tools.web_search.enabled}"
+    )
 
     # Create CoreAgent with full composition
     # Everything is enabled from config by default

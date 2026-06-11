@@ -1,10 +1,11 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
-# This Makefile manages four packages:
+# This Makefile manages five packages:
 # 1. soothe-sdk        - Shared SDK (WebSocket client, protocol, types)
 # 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
 # 3. soothe            - In-process agent core (library)
 # 4. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
+# 5. soothe-plugins    - Official plugins (built-in tools/subagents)
 #
 # Uses .venv managed by uv for development.
 
@@ -18,7 +19,10 @@
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-sdk soothe-cli soothe soothe-daemon
+PACKAGES = soothe-sdk soothe-cli soothe soothe-daemon soothe-plugins
+
+# Root-level directories to lint (outside packages)
+ROOT_LINT_DIRS = examples scripts
 
 ifdef UV_PYPI_MIRROR
 UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
@@ -100,6 +104,11 @@ format: sync
 		echo "  $$pkg"; \
 		cd packages/$$pkg && uv run ruff format $$paths && cd ../..; \
 	done
+	@echo "Formatting root directories..."
+	@for dir in $(ROOT_LINT_DIRS); do \
+		echo "  $$dir"; \
+		uv run ruff format $$dir; \
+	done
 	@echo "Done"
 
 format-check: sync
@@ -109,6 +118,10 @@ format-check: sync
 		paths="src/"; \
 		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
 		cd packages/$$pkg && uv run ruff format --check $$paths || failed=1 && cd ../..; \
+	done; \
+	for dir in $(ROOT_LINT_DIRS); do \
+		echo "  $$dir"; \
+		uv run ruff format --check $$dir || failed=1; \
 	done; \
 	test $$failed -eq 0 && echo "OK" || exit 1
 
@@ -121,6 +134,11 @@ lint: sync
 		echo "  $$pkg"; \
 		cd packages/$$pkg && uv run ruff check $$paths || failed=1 && cd ../..; \
 	done; \
+	echo "Linting root directories..."; \
+	for dir in $(ROOT_LINT_DIRS); do \
+		echo "  $$dir"; \
+		uv run ruff check $$dir || failed=1; \
+	done; \
 	test $$failed -eq 0 && echo "Done" || exit 1
 
 lint-src: sync
@@ -128,6 +146,11 @@ lint-src: sync
 	@for pkg in $(PACKAGES); do \
 		echo "  $$pkg"; \
 		cd packages/$$pkg && uv run ruff check src/ && cd ../..; \
+	done
+	@echo "Linting root directories..."
+	@for dir in $(ROOT_LINT_DIRS); do \
+		echo "  $$dir"; \
+		uv run ruff check $$dir; \
 	done
 	@echo "Done"
 
@@ -138,6 +161,11 @@ lint-fix: sync
 		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
 		echo "  $$pkg"; \
 		cd packages/$$pkg && uv run ruff check --fix $$paths && cd ../..; \
+	done
+	@echo "Fixing root directories..."
+	@for dir in $(ROOT_LINT_DIRS); do \
+		echo "  $$dir"; \
+		uv run ruff check --fix $$dir; \
 	done
 	@echo "Done"
 
