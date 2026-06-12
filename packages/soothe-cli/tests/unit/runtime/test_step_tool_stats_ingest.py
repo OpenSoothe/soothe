@@ -68,3 +68,30 @@ async def test_wire_update_registers_main_step_tool_with_empty_args() -> None:
     assert handled is True
     assert card.has_tool_call_row("BCO_01:s:read_file:0")
     assert "ReadFile(1)" in card._stats_title_suffix()
+
+
+@pytest.mark.asyncio
+async def test_wire_update_fallback_ingests_subgraph_tool_without_task_binding() -> None:
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    card = CognitionStepMessage("BCO-01", "List workspace", id="stp-wire-subgraph")
+    adapter._current_step_messages["BCO-01"] = card
+    router = StepTaskRouter()
+    router.on_step_started("BCO-01")
+
+    handled = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "BCO_01:t0:ls:0",
+            "name": "ls",
+            "args": {"path": "."},
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+    assert handled is True
+    assert card.has_tool_call_row("BCO_01:t0:ls:0")
