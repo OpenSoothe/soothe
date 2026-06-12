@@ -67,6 +67,15 @@ class AgentLoop:
 
         self.plan_phase = PlanPhase(loop_planner)
 
+        # Eagerly resolve the fast model for scenario classification; None when
+        # router.fast is unset (SynthesisGenerator falls back to planner model).
+        self._fast_llm: Any | None = None
+        if config.router.fast:
+            try:
+                self._fast_llm = config.create_chat_model("fast")
+            except Exception:
+                pass
+
     async def run(
         self,
         goal: str,
