@@ -6,10 +6,10 @@ import pytest
 
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepNode
+from soothe.context.planning import StepPlanManagerAdapter
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
     ContextEngineLedgerAdapter,
-    ContextEnginePlanAdapter,
 )
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
@@ -55,7 +55,7 @@ def _make_step_result(step_id: str, success: bool = True) -> StepResult:
     )
 
 
-# ── ContextEnginePlanAdapter ─────────────────────────────────────────
+# ── StepPlanManagerAdapter ─────────────────────────────────────────
 
 
 class TestPlanAdapterIngestPlan:
@@ -63,7 +63,7 @@ class TestPlanAdapterIngestPlan:
     async def test_ingest_plan_adds_steps_to_ce(self) -> None:
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
 
         steps = [
             StepAction(id="01", description="Step 1"),
@@ -96,7 +96,7 @@ class TestPlanAdapterIngestPlan:
     async def test_ingest_plan_accumulates_history(self) -> None:
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
 
         plan1 = _make_plan_result([StepAction(id="01", description="S1")])
         plan2 = _make_plan_result([StepAction(id="02", description="S2")])
@@ -111,7 +111,7 @@ class TestPlanAdapterGetPlanningContext:
     @pytest.mark.asyncio
     async def test_empty_context_when_no_goal(self) -> None:
         ce = ContextEngine()
-        adapter = ContextEnginePlanAdapter(ce, goal="Test")
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
         ctx = adapter.get_planning_context()
         assert ctx.total_steps == 0
         assert ctx.has_prior_state is False
@@ -129,7 +129,7 @@ class TestPlanAdapterGetPlanningContext:
             StepNode(id="KFA-02", description="S2", status="pending", dependencies=["KFA-01"]),
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.plan_history.append(_make_plan_result())
 
         ctx = adapter.get_planning_context()
@@ -154,14 +154,14 @@ class TestPlanAdapterGetPlanningContext:
     async def test_replan_count_from_history(self) -> None:
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
 
-        adapter.plan_history.append(_make_plan_result())
-        adapter.plan_history.append(_make_plan_result())
-        adapter.plan_history.append(_make_plan_result())
+        adapter.ingest_plan(_make_plan_result([StepAction(id="01", description="S1")]), "KFA", 0)
+        adapter.ingest_plan(_make_plan_result([StepAction(id="02", description="S2")]), "KFA", 1)
+        adapter.ingest_plan(_make_plan_result([StepAction(id="03", description="S3")]), "KFA", 2)
 
         ctx = adapter.get_planning_context()
-        assert ctx.replan_count == 2  # len(history) - 1
+        assert ctx.replan_count == 2  # len(plan_waves) - 1
 
 
 class TestPlanAdapterRecordStepOutcomes:
@@ -177,7 +177,7 @@ class TestPlanAdapterRecordStepOutcomes:
             ],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         results = [
             _make_step_result("KFA-01", success=True),
             _make_step_result("KFA-02", success=False),
@@ -194,14 +194,14 @@ class TestPlanAdapterFormatCompletionDagReport:
     @pytest.mark.asyncio
     async def test_empty_when_no_goals(self) -> None:
         ce = ContextEngine()
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal")
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
         assert adapter.format_completion_dag_report() == ""
 
     @pytest.mark.asyncio
     async def test_report_shows_goal_without_steps(self) -> None:
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
 
         report = adapter.format_completion_dag_report()
         assert "Context Engine Goal DAG" in report
@@ -220,7 +220,7 @@ class TestPlanAdapterFormatCompletionDagReport:
             ],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.plan_history.append(_make_plan_result())
 
         report = adapter.format_completion_dag_report()
@@ -247,7 +247,7 @@ class TestPlanAdapterFormatCompletionDagReport:
             [StepNode(id="02", description="Step 2", status="failed")],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal1.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal1.id)
         adapter.plan_history.append(_make_plan_result())
 
         report = adapter.format_completion_dag_report()
@@ -275,7 +275,7 @@ class TestPlanAdapterFormatCompletionDagReport:
             [StepNode(id="01", description="Sub-step", status="completed")],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test", goal_id=parent.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=parent.id)
         report = adapter.format_completion_dag_report()
         assert "child-1" in report
         assert f"Parent: {parent.id}" in report
@@ -290,9 +290,9 @@ class TestPlanAdapterFormatCompletionDagReport:
             [StepNode(id="01", description="S1", status="completed")],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
-        adapter.plan_history.append(_make_plan_result())
-        adapter.plan_history.append(_make_plan_result())
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+        adapter.ingest_plan(_make_plan_result([StepAction(id="01", description="S1")]), "KFA", 0)
+        adapter.ingest_plan(_make_plan_result([StepAction(id="02", description="S2")]), "KFA", 1)
 
         report = adapter.format_completion_dag_report()
         assert "Replans after first wave: 1" in report
@@ -302,7 +302,7 @@ class TestPlanAdapterDetermineGoalCompletionNeeds:
     @pytest.mark.asyncio
     async def test_llm_only_mode(self) -> None:
         ce = ContextEngine()
-        adapter = ContextEnginePlanAdapter(ce, goal="Test")
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
 
         assert adapter.determine_goal_completion_needs(True, None, "llm_only") is True
         assert adapter.determine_goal_completion_needs(False, None, "llm_only") is False
@@ -311,7 +311,7 @@ class TestPlanAdapterDetermineGoalCompletionNeeds:
 class TestPlanAdapterGoalIdProperty:
     def test_goal_id_getter_setter(self) -> None:
         ce = ContextEngine()
-        adapter = ContextEnginePlanAdapter(ce, goal="Test")
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
         assert adapter.goal_id is None
 
         adapter.goal_id = "abc123"
@@ -421,7 +421,7 @@ class TestDagPlanningContextDuckTyping:
             ],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.plan_history.append(_make_plan_result())
 
         ctx = adapter.get_planning_context()
@@ -463,7 +463,7 @@ class TestDagPlanningContextDuckTyping:
             ],
         )
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.plan_history.append(_make_plan_result())
 
         ctx = adapter.get_planning_context()
@@ -478,7 +478,7 @@ class TestDagPlanningContextDuckTyping:
         from soothe.foundation.loop.prompts.builder import _format_dag_context
 
         ce = ContextEngine()
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal")
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
         ctx = adapter.get_planning_context()
         xml = _format_dag_context(ctx)
         assert xml == ""
