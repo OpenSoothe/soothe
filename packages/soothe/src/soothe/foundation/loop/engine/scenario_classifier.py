@@ -363,7 +363,9 @@ async def classify_synthesis_scenario(
 
     # Build system + user prompts
     system_prompt = _build_classifier_system_prompt()
-    user_prompt = _build_classifier_user_prompt(goal, intent_type, task_complexity, execution_summary)
+    user_prompt = _build_classifier_user_prompt(
+        goal, intent_type, task_complexity, execution_summary
+    )
 
     # Call LLM with structured output
     try:

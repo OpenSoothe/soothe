@@ -9,8 +9,40 @@ from soothe.foundation.loop.planning.ledger_compaction import (
 )
 from soothe.foundation.loop.state.schemas import StatusAssessment
 
+# --- New format tests ---
 
-def test_compact_human_strips_context_info_block() -> None:
+
+def test_compact_human_strips_timestamp_line() -> None:
+    content = (
+        "GOAL:\ndo the thing\n\n"
+        "PRIOR PROGRESS:\nhint=low\n\n"
+        "TIMESTAMP: 2026-06-02T10:19:55+00:00"
+    )
+    out = compact_planning_human_content(content)
+    assert "TIMESTAMP:" not in out
+    assert "2026-06-02" not in out
+    assert "PRIOR PROGRESS:" in out, "non-volatile blocks must be preserved"
+
+
+def test_compact_human_rewrites_goal_to_goal_recap() -> None:
+    content = "GOAL:\nweight stuff\n\nINTENT: agentic (complexity: medium)"
+    out = compact_planning_human_content(content)
+    assert "GOAL:\n" not in out
+    assert "GOAL RECAP:" in out
+    assert "weight stuff" in out
+
+
+def test_compact_human_new_format_is_idempotent() -> None:
+    content = "GOAL:\nx\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
+    once = compact_planning_human_content(content)
+    twice = compact_planning_human_content(once)
+    assert once == twice
+
+
+# --- Legacy XML format tests (dual-format support) ---
+
+
+def test_compact_human_strips_legacy_context_info_block() -> None:
     content = (
         "<USER_QUERY>\ndo the thing\n</USER_QUERY>\n"
         "<PRIOR_PROGRESS>\nhint=low\n</PRIOR_PROGRESS>\n"
@@ -22,7 +54,7 @@ def test_compact_human_strips_context_info_block() -> None:
     assert "<PRIOR_PROGRESS>" in out, "non-volatile blocks must be preserved"
 
 
-def test_compact_human_rewrites_user_query_to_goal_recap() -> None:
+def test_compact_human_rewrites_legacy_user_query_to_goal_recap() -> None:
     content = "<USER_QUERY>\nweight stuff\n</USER_QUERY>\nmore"
     out = compact_planning_human_content(content)
     assert "<USER_QUERY>" not in out
@@ -32,11 +64,14 @@ def test_compact_human_rewrites_user_query_to_goal_recap() -> None:
     assert "weight stuff" in out
 
 
-def test_compact_human_is_idempotent() -> None:
+def test_compact_human_legacy_format_is_idempotent() -> None:
     content = "<USER_QUERY>\nx\n</USER_QUERY>\n<CONTEXT_INFO>\n<date>2026</date>\n</CONTEXT_INFO>"
     once = compact_planning_human_content(content)
     twice = compact_planning_human_content(once)
     assert once == twice
+
+
+# --- Common ---
 
 
 def test_compact_human_passthrough_when_no_markers() -> None:
@@ -55,7 +90,6 @@ def test_compact_plan_assess_drops_assessment_reasoning() -> None:
     content = compact_plan_assess_ai_dump(response)
     assert "assessment_reasoning" not in content
     assert "Initial assessment" not in content
-    # Schema-essential fields survive
     assert "'status':" in content and "'replan'" in content
     assert "'goal_progress':" in content and "'low'" in content
     assert "require_goal_completion" in content

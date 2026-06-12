@@ -22,30 +22,12 @@ PlanPromptPhase = Literal["assess", "generate"]
 
 
 def _format_dag_context(dag_ctx: Any) -> str:
-    """Format DagPlanningContext as XML block for prompt injection."""
+    """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
     if not dag_ctx or not dag_ctx.has_prior_state:
         return ""
-    lines = ["<PLAN_DAG_CONTEXT>"]
-    lines.append(f"- Total steps planned: {dag_ctx.total_steps}")
-    lines.append(f"- Completed: {dag_ctx.completed_steps}")
-    if dag_ctx.failed_step_ids:
-        lines.append(
-            f"- Failed: {len(dag_ctx.failed_step_ids)} (IDs: {', '.join(sorted(dag_ctx.failed_step_ids))})"
-        )
-    if dag_ctx.ready_step_ids:
-        lines.append(f"- Ready to execute: {', '.join(sorted(dag_ctx.ready_step_ids))}")
-    elif dag_ctx.pending_step_ids:
-        lines.append(f"- Pending: {', '.join(sorted(dag_ctx.pending_step_ids))}")
-    lines.append(f"- Dependency chain depth: {dag_ctx.chain_depth}")
-    lines.append(f"- Success rate: {dag_ctx.success_rate:.0%}")
-    if dag_ctx.replan_count > 0:
-        lines.append(f"- Replans: {dag_ctx.replan_count}")
-    if dag_ctx.failed_step_ids:
-        lines.append(
-            "- NOTE: Prior steps failed — propose a DIFFERENT approach, do not retry the same failed steps."
-        )
-    lines.append("</PLAN_DAG_CONTEXT>")
-    return "\n".join(lines)
+    from soothe.foundation.loop.prompts.user_message import _render_dag_status as _render
+
+    return _render(dag_ctx)
 
 
 class PromptBuilder:
@@ -378,28 +360,31 @@ class PromptBuilder:
         plan model sees native human/AI turns instead of a single flattened block.
         Execute-step evidence lives in those ledger messages (IG-368).
 
-        RFC-214: Uses the plan-context envelope which includes:
-        - <USER_QUERY> with goal
-        - Optional <SKILL_REFERENCE> when slash-skill invoked
-        - Optional <PLAN_STEP_ID_HINT> (generate phase)
-        - Optional <PLAN_DAG_CONTEXT> (generate phase)
-        - <CONTEXT_INFO> with timestamp and date
-
-        PRIOR_CONVERSATION is REMOVED - prior thread messages appear as native
-        ledger turns in the message list, maximizing cache hits.
+        Uses scenario-based structured text (GOAL/INTENT/CONTEXT/TASK) instead
+        of XML envelopes.
 
         Args:
             goal: User's goal description
             state: Current loop state with optional plan snapshot
             context: Planning context (unused now - prior conversation is in ledger)
             plan_phase: When ``generate``, append step-id hint and optional DAG context.
-            dag_context: Optional XML-formatted DAG context for progressive planning.
+            dag_context: Optional plain-text DAG context for progressive planning.
+            context_bundle: Optional ContextBundle from ContextEngine.project().
 
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
-        from soothe.foundation.loop.prompts.user_envelope import build_plan_context_envelope
+        from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
         from soothe.foundation.loop.state.schemas import next_goal_local_step_id_start
+
+        builder = UserMessageBuilder()
+
+        # Extract intent from state
+        intent_type = "agentic"
+        task_complexity = "medium"
+        if state.intent and hasattr(state.intent, "intent_type"):
+            intent_type = state.intent.intent_type
+            task_complexity = getattr(state.intent, "task_complexity", "medium")
 
         # Build step ID hint for generate phase
         step_id_hint = None
@@ -410,41 +395,26 @@ class PromptBuilder:
                 ex_a = str(nxt).zfill(width)
                 ex_b = str(nxt + 1).zfill(width)
                 step_id_hint = (
-                    "<PLAN_STEP_ID_HINT>\n"
                     f'This goal already used lower step indices; for plan_action "new", '
                     f"use the next unused local step ids starting with {ex_a} "
-                    f"(e.g. {ex_a}, {ex_b}, …), not 01/02 again.\n"
-                    "</PLAN_STEP_ID_HINT>"
+                    f"(e.g. {ex_a}, {ex_b}, …), not 01/02 again."
                 )
 
-        # Build envelope with timestamp (RFC-214). prior_progress threads
-        # through for both phases; envelope omits the block when absent or stale.
-        envelope = build_plan_context_envelope(
+        common_kwargs = dict(
             goal=goal,
             dag_context=dag_context,
-            step_id_hint=step_id_hint,
-            goal_user_submission=state.goal_user_submission,
             skill_context=state.skill_context,
             prior_progress=getattr(state, "prior_progress", None),
             current_iteration=state.iteration,
+            context_bundle=context_bundle,
+            intent_type=intent_type,
+            task_complexity=task_complexity,
         )
 
-        # RFC-624: Supplementary context from ContextBundle (additive, not replacing)
-        if context_bundle is not None:
-            supplement_parts: list[str] = []
-            if context_bundle.goal_lineage:
-                supplement_parts.append(
-                    f"<GOAL_LINEAGE>\n{context_bundle.goal_lineage}\n</GOAL_LINEAGE>"
-                )
-            if context_bundle.goal_progress:
-                supplement_parts.append(
-                    f"<GOAL_PROGRESS>\n{context_bundle.goal_progress}\n</GOAL_PROGRESS>"
-                )
-            if context_bundle.step_lineage:
-                supplement_parts.append(
-                    f"<STEP_LINEAGE>\n{context_bundle.step_lineage}\n</STEP_LINEAGE>"
-                )
-            if supplement_parts:
-                envelope += "\n" + "\n".join(supplement_parts)
-
-        return envelope
+        if plan_phase == "assess":
+            return builder.build_plan_assess_message(**common_kwargs)
+        else:
+            return builder.build_plan_generate_message(
+                **common_kwargs,
+                step_id_hint=step_id_hint,
+            )
