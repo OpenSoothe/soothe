@@ -707,12 +707,12 @@ def build_tacitus_engine(
             new_results=new_results[:3000],
         )
 
-        # Invoke LLM with timeout
+        # Invoke LLM with timeout (uses higher summarize timeout)
         try:
             resp = _invoke_llm_sync_with_timeout(
                 loop_model,
                 [{"role": "user", "content": prompt}],
-                timeout_sec=_default_config.llm_timeout_sec,
+                timeout_sec=_default_config.summarize_timeout_sec,
                 node_name="summarize",
             )
             integrated = str(resp.content)
@@ -875,12 +875,12 @@ def build_tacitus_engine(
         )
         synth_t0 = time.perf_counter()
 
-        # Invoke LLM with timeout
+        # Invoke LLM with timeout (uses higher synthesize timeout)
         try:
             resp = _invoke_llm_sync_with_timeout(
                 final_model,
                 [{"role": "user", "content": prompt}],
-                timeout_sec=_default_config.llm_timeout_sec,
+                timeout_sec=_default_config.synthesize_timeout_sec,
                 node_name="synthesize",
             )
             answer = str(resp.content)
