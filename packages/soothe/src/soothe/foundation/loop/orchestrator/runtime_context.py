@@ -59,6 +59,9 @@ class LoopRuntimeContext:
     clarification_resume_answers: list[str] | None = None
     # ProposalQueue for autopilot proposals (report_progress, flag_blocker, etc.)
     proposal_queue: ProposalQueue | None = None
+    # RFC-624 Phase 3: ContextEngine instance and ledger adapter (None when CE disabled)
+    context_engine: Any | None = None
+    ce_ledger_adapter: Any | None = None
 
     @property
     def core_agent(self) -> CoreAgent:

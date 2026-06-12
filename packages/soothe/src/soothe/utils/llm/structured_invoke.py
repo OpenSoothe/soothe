@@ -288,6 +288,16 @@ async def invoke_structured_chat(
             raise StructuredOutputError(msg) from exc
 
         _remember_structured_method(chat, method)
+        if result is None:
+            # Provider returned nothing (e.g. model skipped the tool call / JSON
+            # response).  Treat as a retriable failure so we fall through to the
+            # next structured-output method.
+            logger.debug(
+                "structured invoke: method=%s returned None, falling back",
+                method,
+            )
+            last_exc = StructuredOutputError(f"method={method!r} returned None")
+            continue
         data = normalize_structured_result(result)
         if strict:
             post_validate_structured_dict(data, schema)
