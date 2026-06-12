@@ -8,7 +8,13 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from soothe.config.models import GoalContextConfig
-from soothe.foundation.loop.engine.goal_context_manager import GoalContextManager
+from soothe.foundation.loop.engine.goal_context_manager import (
+    GoalContextManager,
+    _extract_critical_files,
+    _extract_key_findings,
+    _extract_result_summary,
+    format_execute_briefing_from_goals,
+)
 from soothe.foundation.loop.state.checkpoint import (
     AgentLoopCheckpoint,
     GoalExecutionRecord,
@@ -450,7 +456,7 @@ Analysis completed:
 - Detected race condition in async handler
 """
 
-    result = goal_context_manager._extract_key_findings(report)
+    result = _extract_key_findings(report)
 
     assert "bottleneck" in result
     assert "memory leak" in result
@@ -466,7 +472,7 @@ Findings:
 3. Unbatched API calls
 """
 
-    result = goal_context_manager._extract_key_findings(report)
+    result = _extract_key_findings(report)
 
     assert "N+1 query" in result
     assert "Missing cache" in result
@@ -477,7 +483,7 @@ def test_extract_key_findings_fallback(goal_context_manager):
     """Key findings extraction fallback truncates long reports."""
     report = "This is a long report without bullet points or numbered items. " * 10
 
-    result = goal_context_manager._extract_key_findings(report)
+    result = _extract_key_findings(report)
 
     assert len(result) <= 153  # 150 chars + "..."
     assert result.endswith("...")
@@ -485,7 +491,7 @@ def test_extract_key_findings_fallback(goal_context_manager):
 
 def test_extract_key_findings_empty_report(goal_context_manager):
     """Key findings extraction returns 'No findings' for empty report."""
-    result = goal_context_manager._extract_key_findings("")
+    result = _extract_key_findings("")
 
     assert result == "No findings"
 
@@ -499,7 +505,7 @@ Changes made:
 - Updated config_manager.py:89
 """
 
-    result = goal_context_manager._extract_critical_files(report)
+    result = _extract_critical_files(report)
 
     assert "user_service.py" in result
     assert "api_client.py" in result
@@ -510,14 +516,14 @@ def test_extract_critical_files_no_matches(goal_context_manager):
     """Critical files extraction returns 'None identified' when no matches."""
     report = "This is a report without file paths."
 
-    result = goal_context_manager._extract_critical_files(report)
+    result = _extract_critical_files(report)
 
     assert result == "None identified"
 
 
 def test_extract_critical_files_empty_report(goal_context_manager):
     """Critical files extraction returns 'None identified' for empty report."""
-    result = goal_context_manager._extract_critical_files("")
+    result = _extract_critical_files("")
 
     assert result == "None identified"
 
@@ -529,7 +535,7 @@ Analysis completed.
 Result: Performance improved by 67%
 """
 
-    result = goal_context_manager._extract_result_summary(report)
+    result = _extract_result_summary(report)
 
     assert "Performance improved by 67%" in result
 
@@ -541,7 +547,7 @@ Task finished.
 Outcome: 3 bottlenecks fixed
 """
 
-    result = goal_context_manager._extract_result_summary(report)
+    result = _extract_result_summary(report)
 
     assert "3 bottlenecks fixed" in result
 
@@ -555,14 +561,14 @@ Analysis:
 All tests passing now
 """
 
-    result = goal_context_manager._extract_result_summary(report)
+    result = _extract_result_summary(report)
 
     assert "All tests passing" in result
 
 
 def test_extract_result_summary_empty_report(goal_context_manager):
     """Result summary extraction returns 'Completed' for empty report."""
-    result = goal_context_manager._extract_result_summary("")
+    result = _extract_result_summary("")
 
     assert result == "Completed"
 
@@ -584,7 +590,7 @@ def test_format_execute_briefing_structure(goal_context_manager):
         )
     ]
 
-    result = goal_context_manager._format_execute_briefing(goals, "thread_B")
+    result = format_execute_briefing_from_goals(goals, "thread_B")
 
     assert "## Previous Goal Context (Thread Switch Recovery)" in result
     assert "**Goal 1**" in result
