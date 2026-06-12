@@ -217,7 +217,7 @@ def ablation_c1_strip_volatile_timestamp_from_recorded(ledger: Ledger) -> Ledger
     """
     import re
 
-    _TIMESTAMP_RE = re.compile(r"\n?TIMESTAMP:.*\n?", re.MULTILINE)
+    timestamp_re = re.compile(r"\n?TIMESTAMP:.*\n?", re.MULTILINE)
     out: Ledger = []
     for m in ledger:
         if (
@@ -226,7 +226,7 @@ def ablation_c1_strip_volatile_timestamp_from_recorded(ledger: Ledger) -> Ledger
             and isinstance(m.content, str)
             and "TIMESTAMP:" in m.content
         ):
-            cleaned = _TIMESTAMP_RE.sub("", m.content).strip()
+            cleaned = timestamp_re.sub("", m.content).strip()
             out.append(m.model_copy(update={"content": cleaned}))
         else:
             out.append(m)

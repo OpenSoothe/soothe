@@ -619,7 +619,7 @@ class PriorProgressDigest(BaseModel):
 
     Refreshed by the executor at the end of every wave (parallel or sequential).
     Consumed by ``plan_assess`` and ``plan_generate`` via the
-    ``<PRIOR_PROGRESS>`` envelope block. Never used as a code-side override
+    ``PRIOR PROGRESS:`` section. Never used as a code-side override
     for the LLM's structured output — the deterministic ``derived_progress_hint``
     is shown verbatim so the LLM can disagree.
 

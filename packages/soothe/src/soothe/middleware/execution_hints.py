@@ -26,8 +26,8 @@ class ExecutionHintsMiddleware(AgentMiddleware):
     """Process Layer 2 execution hints (DEPRECATED per RFC-214).
 
     Previously injected hints into system_prompt. Now does nothing -
-    the executor builds hints directly into the user message envelope
-    <EXECUTION_HINTS> section.
+    the executor builds hints directly into the user message
+    EXECUTION HINTS: section.
 
     This class remains in the middleware stack for backwards compatibility
     but has no effect on prompts.
