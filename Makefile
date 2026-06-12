@@ -9,7 +9,16 @@
 #
 # Uses .venv managed by uv for development.
 
-.PHONY: help setup sync sync-verify docker-up docker-down docker-up-daemon docker-down-daemon docker-build docker-build-pypi docker-ps docker-logs reset-the-world
+.PHONY: help setup sync sync-verify
+.PHONY: docker-dev-up docker-dev-down docker-dev-ps docker-dev-logs
+.PHONY: docker-dev-langfuse-up docker-dev-langfuse-down
+.PHONY: docker-daemon-build docker-daemon-build-pypi
+.PHONY: docker-daemon-up docker-daemon-down docker-daemon-ps docker-daemon-logs
+.PHONY: docker-prod-up docker-prod-down docker-prod-ps docker-prod-logs
+
+# Docker Compose env file (all commands use deploy/.env)
+DOCKER_ENV_FILE := --env-file deploy/.env
+.PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix
 .PHONY: test test-unit test-integration test-coverage build clean
 .PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
@@ -39,16 +48,34 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make setup            - Sync workspace dependencies"
-	@echo "  make docker-up        - Start dev dependencies (pgvector + Langfuse)"
-	@echo "  make docker-down      - Stop dev dependencies"
-	@echo "  make docker-build     - Build soothed:local-slim from source (no browser)"
-	@echo "  make docker-build-pypi - Build soothed from PyPI (requires SOOTHE_VERSION)"
-	@echo "  make docker-up-daemon - Start dev deps + local daemon container"
-	@echo "  make docker-down-daemon - Stop dev deps + daemon container"
-	@echo "  make reset-the-world  - Reset all state and restart"
-	@echo ""
-	@echo "Unified Targets:"
 	@echo "  make sync             - Sync all packages + extras + dev deps"
+	@echo ""
+	@echo "Docker (Dev):"
+	@echo "  make docker-dev-up    - Start dev dependencies (pgvector only)"
+	@echo "  make docker-dev-down  - Stop dev dependencies"
+	@echo "  make docker-dev-ps    - Show dev containers status"
+	@echo "  make docker-dev-logs  - Follow dev container logs"
+	@echo "  make docker-dev-langfuse-up   - Start dev deps + Langfuse observability"
+	@echo "  make docker-dev-langfuse-down - Stop Langfuse stack"
+	@echo ""
+	@echo "Docker (Daemon - Dev):"
+	@echo "  make docker-daemon-build     - Build soothed:local-slim from source (no browser)"
+	@echo "  make docker-daemon-build-pypi - Build soothed from PyPI (requires SOOTHE_VERSION)"
+	@echo "  make docker-daemon-up        - Full dev stack: deps + langfuse + daemon"
+	@echo "  make docker-daemon-down      - Stop dev stack"
+	@echo "  make docker-daemon-ps        - Show daemon stack status"
+	@echo "  make docker-daemon-logs      - Follow daemon logs"
+	@echo ""
+	@echo "Docker (Production):"
+	@echo "  make docker-prod-up    - Start production stack (requires deploy/.env)"
+	@echo "  make docker-prod-down  - Stop production stack"
+	@echo "  make docker-prod-ps    - Show production containers"
+	@echo "  make docker-prod-logs  - Follow production logs"
+	@echo ""
+	@echo "Docker (Reset):"
+	@echo "  make reset-the-world   - Reset all state and restart clean"
+	@echo ""
+	@echo "Quality:"
 	@echo "  make format           - Format all packages (src + tests)"
 	@echo "  make format-check     - Check formatting (for CI)"
 	@echo "  make lint             - Lint all packages (src + tests)"
@@ -84,23 +111,71 @@ sync-verify:
 	@.venv/bin/python -c "import importlib.util; pkgs=('psycopg_pool','jsonschema','langfuse'); missing=[p for p in pkgs if importlib.util.find_spec(p) is None]; assert not missing, f'Missing: {missing}'"
 	@echo "Critical dependencies verified"
 
-docker-up:
-	docker compose -f docker-compose.dev.yml up -d
-
-docker-down:
-	docker compose -f docker-compose.dev.yml down
+# ============================================================================
+# Docker Commands
+# ============================================================================
+#
+# Profiles in docker-compose.yml:
+#   - default:    Dev dependencies (soothe-pgvector only)
+#   - langfuse:   Langfuse v3 observability stack (optional)
+#   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
+#   - production: Registry soothed daemon (deploy; secrets in deploy/.env)
+#
+# Config files:
+#   - Dev:        deploy/config.dev.yml (default)
+#   - Production: deploy/config.prod.yml (via SOOTHE_CONFIG_PATH in .env)
+#
+# Quick reference:
+#   Dev database only:      make docker-dev-up
+#   Dev + Langfuse:        make docker-dev-langfuse-up
+#   Full dev stack:        make docker-daemon-build && make docker-daemon-up
+#   Production deploy:     make docker-prod-up (requires deploy/.env)
 
 # Version from VERSION file
 SOOTHE_VERSION := $(shell cat VERSION)
 
-docker-build:
+# --- Dev Dependencies (default profile: pgvector only) ---------------------
+
+docker-dev-up:
+	@echo "Starting dev dependencies (pgvector)..."
+	docker compose $(DOCKER_ENV_FILE) up -d
+	@echo "Dev database running on port 6432"
+
+docker-dev-down:
+	@echo "Stopping dev dependencies..."
+	docker compose $(DOCKER_ENV_FILE) down
+
+docker-dev-ps:
+	docker compose $(DOCKER_ENV_FILE) ps
+
+docker-dev-logs:
+	docker compose $(DOCKER_ENV_FILE) logs -f soothe-pgvector
+
+# --- Dev + Langfuse (langfuse profile) -------------------------------------
+
+docker-dev-langfuse-up:
+	@echo "Starting dev dependencies + Langfuse observability..."
+	docker compose $(DOCKER_ENV_FILE) --profile langfuse up -d
+	@echo ""
+	@echo "Dev database: port 6432"
+	@echo "Langfuse UI: http://localhost:3300"
+	@echo "Sign-in: dev@soothe.local / SootheLangfuseLocalDev1"
+
+docker-dev-langfuse-down:
+	@echo "Stopping Langfuse stack..."
+	docker compose $(DOCKER_ENV_FILE) --profile langfuse down
+
+# --- Image Build -----------------------------------------------------------
+
+docker-daemon-build:
 	@echo "Building soothed:local-slim from local source (no browser)..."
 	docker build -f packages/soothe-daemon/Dockerfile.local \
 		--build-arg INCLUDE_BROWSER=false \
 		-t soothed:local-slim .
 	@echo "Build complete: soothed:local-slim"
+	@echo "Run with: make docker-daemon-up"
 
-docker-build-pypi:
+docker-daemon-build-pypi:
 	@echo "Building soothed:${SOOTHE_VERSION}-local from PyPI (full image with browser)..."
 	docker build -f packages/soothe-daemon/Dockerfile \
 		--build-arg SOOTHE_VERSION=$(SOOTHE_VERSION) \
@@ -108,28 +183,64 @@ docker-build-pypi:
 		-t soothed:$(SOOTHE_VERSION)-local .
 	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local"
 
-docker-up-daemon:
-	@echo "Starting dev dependencies + daemon (image: soothed:local-slim)..."
-	SOOTHE_IMAGE=soothed:local-slim docker compose -f docker-compose.dev.yml --profile daemon up -d
+# --- Daemon Dev Stack (daemon profile, config.dev.yml) ---------------------
+
+docker-daemon-up:
+	@echo "Starting full dev stack: deps + langfuse + daemon..."
+	SOOTHE_IMAGE=soothed:local-slim docker compose $(DOCKER_ENV_FILE) --profile langfuse --profile daemon up -d
 	@echo ""
-	@echo "Stack running. Check status: make docker-ps"
-	@echo "Daemon API: http://localhost:8765"
-	@echo "Langfuse UI: http://localhost:3300"
+	@echo "Stack running. Check status: make docker-daemon-ps"
+	@echo ""
+	@echo "Services:"
+	@echo "  Daemon API:    http://localhost:8765"
+	@echo "  Langfuse UI:   http://localhost:3300"
+	@echo "  PostgreSQL:    port 6432"
+	@echo ""
+	@echo "Langfuse sign-in: dev@soothe.local / SootheLangfuseLocalDev1"
 
-docker-down-daemon:
-	docker compose -f docker-compose.dev.yml --profile daemon down
+docker-daemon-down:
+	@echo "Stopping dev stack..."
+	docker compose $(DOCKER_ENV_FILE) --profile langfuse --profile daemon down
 
-docker-ps:
-	docker compose -f docker-compose.dev.yml --profile daemon ps
+docker-daemon-ps:
+	docker compose $(DOCKER_ENV_FILE) --profile daemon ps
 
-docker-logs:
-	docker compose -f docker-compose.dev.yml --profile daemon logs -f
+docker-daemon-logs:
+	docker compose $(DOCKER_ENV_FILE) --profile daemon logs -f soothed
+
+# --- Production Deploy (production profile, config.prod.yml) ----------------
+
+docker-prod-up:
+	@echo "Starting production stack..."
+	@if [ ! -f deploy/.env ]; then \
+		echo "ERROR: deploy/.env required for production"; \
+		exit 1; \
+	fi
+	SOOTHE_CONFIG_PATH=./deploy/config.prod.yml \
+		docker compose $(DOCKER_ENV_FILE) --profile production up -d
+	@echo ""
+	@echo "Production stack running. Check status: make docker-prod-ps"
+
+docker-prod-down:
+	@echo "Stopping production stack..."
+	docker compose $(DOCKER_ENV_FILE) --profile production down
+
+docker-prod-ps:
+	docker compose $(DOCKER_ENV_FILE) --profile production ps
+
+docker-prod-logs:
+	docker compose $(DOCKER_ENV_FILE) --profile production logs -f soothed
+
+# --- Reset -----------------------------------------------------------------
 
 reset-the-world:
-	docker compose -f docker-compose.dev.yml --profile daemon down -v 2>/dev/null || true
-	@if [ -d ~/.soothe ]; then find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; fi
-	docker compose -f docker-compose.dev.yml up -d 2>/dev/null || true
-	@echo "World reset complete"
+	@echo "Resetting all Docker state and local data..."
+	docker compose $(DOCKER_ENV_FILE) --profile daemon --profile langfuse down -v 2>/dev/null || true
+	@if [ -d ~/.soothe ]; then \
+		find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; \
+	fi
+	docker compose $(DOCKER_ENV_FILE) up -d 2>/dev/null || true
+	@echo "World reset complete. Dev database restarted."
 
 # ============================================================================
 # Format & Lint

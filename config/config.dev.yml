@@ -1,7 +1,8 @@
 # Local development defaults (DashScope / coding-plan routers, Docker Postgres + Langfuse).
 # Unlisted keys use Soothe Pydantic defaults. Full default-aligned reference: config/config.template.yml.
 #
-# Docker (repo root): docker compose -f docker-compose.dev.yml up -d  → Postgres + pgvector on localhost:6432, Langfuse on :3300
+# Docker (repo root): docker compose up -d  → Postgres + pgvector on localhost:6432
+# Langfuse (optional): docker compose --profile langfuse up -d  → UI on :3300
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local (see docker-compose LANGFUSE_INIT_*). Export DASHSCOPE_*.
 
 # ============================================================
