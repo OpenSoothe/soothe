@@ -15,9 +15,6 @@ import pytest
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepNode
 from soothe.context.planning import StepPlanManagerAdapter
-from soothe.foundation.loop.engine.context_adapters import (
-    ContextEngineLedgerAdapter,
-)
 from soothe.foundation.loop.planning.manager import (
     PlanManager,
 )
@@ -248,7 +245,7 @@ class TestPlanAdapterPlanManagerEquivalence:
 
 
 class TestLedgerAdapterDualWrite:
-    """Verify the ledger adapter's dual-write strategy works correctly."""
+    """Verify _record_ledger_message dual-writes to loop_messages and CE LedgerManager."""
 
     @pytest.mark.asyncio
     async def test_ce_ledger_receives_all_phases(self) -> None:
@@ -258,34 +255,31 @@ class TestLedgerAdapterDualWrite:
         from soothe.foundation.loop.utils.messages import _record_ledger_message
 
         ce = ContextEngine()
-        adapter = ContextEngineLedgerAdapter(ce)
 
         loop_messages: list = []
 
-        # Simulate the 5 phases
+        # Simulate the 5 phases — pass ContextEngine directly
         _record_ledger_message(
-            adapter, HumanMessage(content="Execute step 1"), "execute_step", loop_messages
+            ce, HumanMessage(content="Execute step 1"), "execute_step", loop_messages
+        )
+        _record_ledger_message(ce, AIMessage(content="Step 1 done"), "execute_step", loop_messages)
+        _record_ledger_message(
+            ce, HumanMessage(content="Plan assess"), "plan_assess", loop_messages
         )
         _record_ledger_message(
-            adapter, AIMessage(content="Step 1 done"), "execute_step", loop_messages
+            ce, AIMessage(content="Assessment result"), "plan_assess", loop_messages
         )
         _record_ledger_message(
-            adapter, HumanMessage(content="Plan assess"), "plan_assess", loop_messages
+            ce, HumanMessage(content="Plan generate"), "plan_generate", loop_messages
         )
         _record_ledger_message(
-            adapter, AIMessage(content="Assessment result"), "plan_assess", loop_messages
+            ce, AIMessage(content="Generated plan"), "plan_generate", loop_messages
         )
         _record_ledger_message(
-            adapter, HumanMessage(content="Plan generate"), "plan_generate", loop_messages
+            ce, HumanMessage(content="Goal complete"), "goal_completion", loop_messages
         )
         _record_ledger_message(
-            adapter, AIMessage(content="Generated plan"), "plan_generate", loop_messages
-        )
-        _record_ledger_message(
-            adapter, HumanMessage(content="Goal complete"), "goal_completion", loop_messages
-        )
-        _record_ledger_message(
-            adapter, AIMessage(content="Final output"), "goal_completion", loop_messages
+            ce, AIMessage(content="Final output"), "goal_completion", loop_messages
         )
 
         # loop_messages should have all 8 messages
@@ -307,7 +301,7 @@ class TestLedgerAdapterDualWrite:
 
     @pytest.mark.asyncio
     async def test_non_ce_path_appends_normally(self) -> None:
-        """When ce_ledger_adapter is None, _record_ledger_message just appends."""
+        """When context_engine is None, _record_ledger_message just appends."""
         from langchain_core.messages import HumanMessage
 
         from soothe.foundation.loop.utils.messages import _record_ledger_message

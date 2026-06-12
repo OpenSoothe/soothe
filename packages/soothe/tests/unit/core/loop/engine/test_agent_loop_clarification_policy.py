@@ -61,6 +61,41 @@ def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
     return mock_sm, mock_ckpt, mock_gcm, mock_anchor_mgr
 
 
+def _make_mock_ce() -> Mock:
+    """Build a mock ContextEngine with all required attributes."""
+    from soothe.context.planning.models import CompletionStrategy
+
+    mock_ce = Mock()
+    mock_goal = Mock()
+    mock_goal.id = "test-goal-id"
+    mock_ce.create_goal = AsyncMock(return_value=mock_goal)
+    mock_ce.activate_goal = AsyncMock()
+    mock_ce.save = AsyncMock()
+    mock_ce.complete_goal = AsyncMock()
+    mock_ce.get_all_goals = Mock(return_value=[])
+    mock_ce.ledger = Mock()
+
+    # Mock planning subengine
+    mock_step_planner = Mock()
+    mock_step_planner.ingest_plan = Mock()
+    mock_step_planner.record_step_outcomes = Mock()
+    mock_step_planner.get_planning_context = Mock(return_value=Mock())
+    mock_step_planner.determine_goal_completion_needs = Mock(return_value=False)
+    mock_step_planner.determine_completion_strategy = Mock(
+        return_value=CompletionStrategy.LEDGER_DIRECT
+    )
+    mock_step_planner.format_completion_dag_report = Mock(return_value="")
+
+    mock_planning = Mock()
+    mock_planning.step = mock_step_planner
+    mock_ce.planning = mock_planning
+
+    # Mock semantic loader
+    mock_ce._semantic = Mock()
+
+    return mock_ce
+
+
 @pytest.mark.asyncio
 async def test_run_with_progress_forwards_clarification_policy() -> None:
     """The policy passed to ``run_with_progress`` must reach LoopRuntimeContext."""
@@ -86,6 +121,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
     mock_core.astream = noop_astream
 
     mock_sm, _ckpt, mock_gcm, mock_anchor_mgr = _wire_mocks()
+    mock_ce = _make_mock_ce()
 
     with (
         patch(
@@ -93,8 +129,8 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
-            return_value=mock_gcm,
+            "soothe.context.engine.ContextEngine",
+            return_value=mock_ce,
         ),
         patch(
             "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
@@ -143,6 +179,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
     mock_core.astream = noop_astream
 
     mock_sm, _ckpt, mock_gcm, mock_anchor_mgr = _wire_mocks()
+    mock_ce = _make_mock_ce()
 
     with (
         patch(
@@ -150,8 +187,8 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
-            return_value=mock_gcm,
+            "soothe.context.engine.ContextEngine",
+            return_value=mock_ce,
         ),
         patch(
             "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",

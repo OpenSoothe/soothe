@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.loop.planning.manager import PlanManager
 from soothe.foundation.loop.planning.phase import PlanPhase
 from soothe.foundation.loop.state.manager import AgentLoopStateManager
 from soothe.foundation.loop.state.schemas import (
@@ -25,7 +24,6 @@ from soothe.utils.text_preview import log_preview
 
 from ..orchestrator.nodes.plan_assess import seed_loop_ledger_from_prior_goal
 from .anchor_manager import CheckpointAnchorManager
-from .goal_context_manager import GoalContextManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -213,11 +211,10 @@ class AgentLoop:
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
 
-        # RFC-217: Create GoalContextManager for goal-level context injection
+        # RFC-217: Goal context config for CE-backed goal context injection
         from soothe.config.models import GoalContextConfig
 
         goal_context_config = getattr(self.config.agent.loop, "goal_context", GoalContextConfig())
-        goal_context_manager = GoalContextManager(state_manager, goal_context_config)
 
         # Try to recover from checkpoint (RFC-216: loop-scoped).
         # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
@@ -394,78 +391,74 @@ class AgentLoop:
         async def emit(event_type: str, event_data: Any) -> None:
             await queue.put((event_type, event_data))
 
-        plan_manager: PlanManager
+        plan_manager: Any
 
-        # RFC-624 Phase 3: ContextEngine path (adapter pattern)
+        # RFC-624 Phase 4: ContextEngine is always active
+        from soothe.context.engine import ContextEngine as _ContextEngine
+        from soothe.context.persistence.in_memory import InMemoryContextPersistence
+        from soothe.context.planning import StepPlanManagerAdapter
+
+        from .context_adapters import (
+            ContextEngineGoalContextAdapter,
+        )
+
         ce_config = self.config.agent.loop.context_engine
-        ce_instance = None
-        ce_ledger_adapter = None
 
-        if ce_config.enabled:
-            from soothe.context.engine import ContextEngine as _ContextEngine
-            from soothe.context.persistence.in_memory import InMemoryContextPersistence
-            from soothe.context.planning import StepPlanManagerAdapter
+        persistence = InMemoryContextPersistence()
+        if ce_config.persistence_backend == "file":
+            from pathlib import Path as _Path
 
-            from .context_adapters import (
-                ContextEngineGoalContextAdapter,
-                ContextEngineLedgerAdapter,
+            from soothe.context.persistence.file_backend import FileContextPersistence
+
+            soothe_home = (
+                _Path(self.config.home)
+                if hasattr(self.config, "home")
+                else _Path.home() / ".soothe"
             )
-            from .context_lifecycle import ContextEngineLifecycle
-
-            persistence = InMemoryContextPersistence()
-            if ce_config.persistence_backend == "file":
-                from pathlib import Path as _Path
-
-                from soothe.context.persistence.file_backend import FileContextPersistence
-
-                soothe_home = (
-                    _Path(self.config.home)
-                    if hasattr(self.config, "home")
-                    else _Path.home() / ".soothe"
-                )
-                persistence = FileContextPersistence(
-                    loop_id=state_manager.loop_id,
-                    soothe_home=soothe_home,
-                )
-
-            ce_instance = _ContextEngine(
-                persistence=persistence,
-                soothe_home=Path(self.config.home) if hasattr(self.config, "home") else None,
-                workspace=Path(workspace) if workspace else None,
-            )
-            ce_goal = await ce_instance.create_goal(
-                execution_goal,
-                generating_reasoning="AgentLoop goal",
-                source="user",
-            )
-            await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
-
-            plan_manager = StepPlanManagerAdapter(
-                subengine=ce_instance.planning.step,
-                goal_id=ce_goal.id,
-            )
-            ce_ledger_adapter = ContextEngineLedgerAdapter(ce_instance)
-
-            # Replace GoalContextManager with adapter
-            goal_context_manager = ContextEngineGoalContextAdapter(
-                context_engine=ce_instance,
-                state_manager=state_manager,
-                config=goal_context_config,
+            persistence = FileContextPersistence(
+                loop_id=state_manager.loop_id,
+                soothe_home=soothe_home,
             )
 
-            # RFC-624 Phase 3d: Create lifecycle and load semantic context
-            ce_lifecycle = ContextEngineLifecycle(ce_instance, ce_goal.id)
-            await ce_lifecycle.on_goal_start(
-                workspace=Path(workspace) if workspace else None,
-            )
+        ce_instance = _ContextEngine(
+            persistence=persistence,
+            soothe_home=Path(self.config.home) if hasattr(self.config, "home") else None,
+            workspace=Path(workspace) if workspace else None,
+        )
+        ce_goal = await ce_instance.create_goal(
+            execution_goal,
+            generating_reasoning="AgentLoop goal",
+            source="user",
+        )
+        await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
 
-            logger.info(
-                "ContextEngine path enabled (goal_id=%s, backend=%s)",
-                ce_goal.id,
-                ce_config.persistence_backend,
-            )
-        else:
-            plan_manager = PlanManager(goal=execution_goal)
+        # Load semantic context at goal start
+        try:
+            if workspace:
+                ce_instance._semantic.workspace = Path(workspace)
+                ce_instance._semantic.load_project_instructions()
+                ce_instance._semantic.load_agent_instructions()
+                ce_instance._semantic.load_memory()
+        except Exception:
+            logger.warning("[CE] on_goal_start semantic loading failed", exc_info=True)
+
+        plan_manager = StepPlanManagerAdapter(
+            subengine=ce_instance.planning.step,
+            goal_id=ce_goal.id,
+        )
+
+        # Replace GoalContextManager with CE-backed adapter
+        goal_context_manager = ContextEngineGoalContextAdapter(
+            context_engine=ce_instance,
+            state_manager=state_manager,
+            config=goal_context_config,
+        )
+
+        logger.info(
+            "ContextEngine active (goal_id=%s, backend=%s)",
+            ce_goal.id,
+            ce_config.persistence_backend,
+        )
 
         ctx = LoopRuntimeContext(
             agent_loop=self,
@@ -489,9 +482,8 @@ class AgentLoop:
                 else None
             ),
             proposal_queue=proposal_queue,  # RFC-204 Group C
-            context_engine=ce_instance,  # RFC-624 Phase 3
-            ce_ledger_adapter=ce_ledger_adapter,  # RFC-624 Phase 3
-            ce_lifecycle=ce_lifecycle,  # RFC-624 Phase 3d
+            ce=ce_instance,
+            ce_goal_id=ce_goal.id,
         )
 
         async def pump_graph() -> None:

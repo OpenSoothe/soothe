@@ -7,9 +7,9 @@ import logging
 import time
 from typing import Any
 
+from soothe.context.planning.models import CompletionStrategy
 from soothe.foundation.loop.engine.fallback_summary import generate_user_fallback_summary
 from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
-from soothe.foundation.loop.planning.manager import CompletionStrategy
 from soothe.foundation.loop.state.schemas import LoopState
 from soothe.foundation.loop.utils.messages import (
     LoopAIMessage,
@@ -39,7 +39,7 @@ def _append_goal_completion_ledger_pair(
     iteration_completed: int,
     action: CompletionStrategy,
     final_output: str | None,
-    ce_ledger_adapter: Any | None = None,
+    context_engine: Any | None = None,
 ) -> None:
     """Append RFC-214 Human–AI pair for synthesized or fallback final text (not ledger-direct).
 
@@ -51,7 +51,7 @@ def _append_goal_completion_ledger_pair(
         iteration_completed: Iteration index that just finished (before ``state.iteration`` bump).
         action: Completion strategy used for this goal.
         final_output: Final user-visible text (may be empty).
-        ce_ledger_adapter: Optional ContextEngineLedgerAdapter for dual-write (RFC-624 Phase 3).
+        context_engine: ContextEngine instance for direct LedgerManager writes.
     """
     from soothe.foundation.loop.utils.messages import _record_ledger_message
 
@@ -72,8 +72,8 @@ def _append_goal_completion_ledger_pair(
         iteration=iteration_completed,
         phase="goal_completion",
     )
-    _record_ledger_message(ce_ledger_adapter, human_msg, "goal_completion", state.loop_messages)
-    _record_ledger_message(ce_ledger_adapter, ai_msg, "goal_completion", state.loop_messages)
+    _record_ledger_message(context_engine, human_msg, "goal_completion", state.loop_messages)
+    _record_ledger_message(context_engine, ai_msg, "goal_completion", state.loop_messages)
 
 
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -154,15 +154,13 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             state.thread_id,
         )
 
-    # RFC-624 Phase 3d: Close goal lifecycle + persist CE state
-    if ctx.ce_lifecycle is not None:
-        await ctx.ce_lifecycle.on_goal_complete(status="done", plan_result=plan_result)
-    elif ctx.context_engine is not None:
-        # Backward compat: legacy save when lifecycle not available
+    # RFC-624 Phase 4: Close goal lifecycle + persist CE state
+    if ctx.ce is not None:
         try:
-            await ctx.context_engine.save()
-        except Exception as e:
-            logger.warning("[goal_completion] Failed to persist ContextEngine state: %s", e)
+            await ctx.ce.complete_goal(ctx.ce_goal_id)
+            await ctx.ce.save()
+        except Exception:
+            logger.warning("[goal_completion] CE goal completion failed", exc_info=True)
 
     final_output = None
     used_synthesis_fallback = False
@@ -202,7 +200,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         iteration_completed=iteration_completed,
         action=action,
         final_output=final_output,
-        ce_ledger_adapter=ctx.ce_ledger_adapter,
+        context_engine=ctx.ce,
     )
 
     # Goal_completion only runs when the goal is, in fact, done. Force status="done"
