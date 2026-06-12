@@ -9,8 +9,6 @@
 #   DASHSCOPE_CP_API_KEY     - Coding-Plan provider credential
 #   DASHSCOPE_BASE_URL       - DashScope API base URL
 #   DASHSCOPE_CP_BASE_URL    - Coding-Plan API base URL
-#   POSTGRES_USER            - PostgreSQL username
-#   POSTGRES_PASSWORD        - PostgreSQL password
 
 # =============================================================================
 # LLM Providers
@@ -54,7 +52,7 @@ router:
 # =============================================================================
 persistence:
   default_backend: postgresql
-  postgres_base_dsn: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@soothe-pgvector:5432"
+  postgres_base_dsn: "postgresql://postgres:postgres@soothe-pgvector:5432"
 
 # =============================================================================
 # Vector Stores
@@ -62,10 +60,25 @@ persistence:
 vector_stores:
   - name: pgvector
     provider_type: pgvector
-    dsn: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@soothe-pgvector:5432/soothe_vectors"
+    dsn: "postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors"
 
 vector_store_router:
   default: "pgvector:soothe_default"
+
+# ============================================================
+# OBSERVABILITY
+# ============================================================
+observability:
+  profile_model_calls: false
+  log_file_level: DEBUG
+  langfuse:
+    enabled: true
+    public_key: pk-lf-soothe-local
+    secret_key: sk-lf-soothe-local
+    host: http://langfuse-web:3000
+    trace_name: soothe-dev
+    tags:
+      - soothe
 
 # =============================================================================
 # Workspace Configuration
@@ -73,5 +86,5 @@ vector_store_router:
 # Maps host paths to container paths so daemon can access client workspaces.
 # Set SOOTHE_WORKSPACE_HOST_ROOT in .env to match your host directory.
 workspace_mount:
-  host_root: "${SOOTHE_WORKSPACE_HOST_ROOT:-/workspace}"
+  host_root: /Users/xiamingchen/Workspace
   container_root: /var/lib/soothe/workspaces

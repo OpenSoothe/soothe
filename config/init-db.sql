@@ -19,6 +19,10 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'soothe_vectors')\gexe
 SELECT 'CREATE DATABASE soothe_memory'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'soothe_memory')\gexec
 
+-- Database: langfuse (Langfuse v3 observability — shared PostgreSQL instance)
+SELECT 'CREATE DATABASE langfuse'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'langfuse')\gexec
+
 -- Install pgvector extension in soothe_vectors database
 \c soothe_vectors
 CREATE EXTENSION IF NOT EXISTS vector;

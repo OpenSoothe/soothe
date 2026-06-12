@@ -1,0 +1,75 @@
+# Soothe Production Configuration
+# PostgreSQL persistence + pgvector + DashScope/Coding-Plan providers.
+#
+# This config uses environment variable substitution (${ENV_VAR}).
+# Copy this file to config.yml - no edits needed if .env is configured.
+#
+# Required env vars (set in .env):
+#   DASHSCOPE_API_KEY        - DashScope provider credential
+#   DASHSCOPE_CP_API_KEY     - Coding-Plan provider credential
+#   DASHSCOPE_BASE_URL       - DashScope API base URL
+#   DASHSCOPE_CP_BASE_URL    - Coding-Plan API base URL
+
+# =============================================================================
+# LLM Providers
+# =============================================================================
+providers:
+  # DashScope - Alibaba's LLM platform (OpenAI-compatible)
+  # Models: Qwen, MiniMax, Kimi, multimodal embedding
+  - name: dashscope
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_BASE_URL}"
+    api_key: "${DASHSCOPE_API_KEY}"
+    models:
+      - qwen-max              # Premium reasoning model
+      - multimodal-embedding-v1  # Embedding model
+
+  # Coding-Plan - Alibaba's coding-focused endpoint
+  # Models: GLM, DeepSeek, Qwen coding variants
+  - name: coding-plan
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
+    api_key: "${DASHSCOPE_CP_API_KEY}"
+    models:
+      - glm-5                 # Zhipu AI GLM model
+      - qwen3.6-plus          # Coding-optimized Qwen
+      - kimi-k2.5             # Moonshot AI model
+      - MiniMax-M2.5          # Alternative reasoning
+      - deepseek-v3.2         # DeepSeek reasoning model
+
+# =============================================================================
+# Model Router
+# =============================================================================
+router:
+  default: "coding-plan:glm-5"
+  fast: "coding-plan:kimi-k2.5"
+  think: "coding-plan:glm-5"
+  image: "coding-plan:qwen3.6-plus"
+  embedding: "dashscope:multimodal-embedding-v1"
+
+# =============================================================================
+# Persistence Backend
+# =============================================================================
+persistence:
+  default_backend: postgresql
+  postgres_base_dsn: "postgresql://postgres:postgres@soothe-pgvector:5432"
+
+# =============================================================================
+# Vector Stores
+# =============================================================================
+vector_stores:
+  - name: pgvector
+    provider_type: pgvector
+    dsn: "postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors"
+
+vector_store_router:
+  default: "pgvector:soothe_default"
+
+# =============================================================================
+# Workspace Configuration
+# =============================================================================
+# Maps host paths to container paths so daemon can access client workspaces.
+# Set SOOTHE_WORKSPACE_HOST_ROOT in .env to match your host directory.
+workspace_mount:
+  host_root: /Users/xiamingchen/Workspace
+  container_root: /var/lib/soothe/workspaces
