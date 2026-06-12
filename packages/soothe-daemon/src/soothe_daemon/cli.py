@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import socket
 import subprocess
@@ -37,19 +38,24 @@ app = typer.Typer(
 
 
 # Fast status check helpers - avoid importing SootheDaemon (5+ second import chain)
-# Port can be configured via SOOTHE_WS_PORT env var for fast status checks
+# Port comes from daemon_config.yml (SootheDaemonConfig), not env vars.
 _DEFAULT_WS_HOST = "127.0.0.1"
 _DEFAULT_WS_PORT = 8765
 
 
 def _get_ws_address() -> tuple[str, int]:
-    """Get WebSocket host:port from env (fast) or default.
+    """Get WebSocket host:port from daemon config.
 
-    For full config support, use SootheDaemonConfig (slower).
+    Loads SootheDaemonConfig from default YAML (fast, ~50ms).
+    Falls back to default 127.0.0.1:8765 if config is unavailable.
     """
-    host = os.environ.get("SOOTHE_WS_HOST", _DEFAULT_WS_HOST)
-    port = int(os.environ.get("SOOTHE_WS_PORT", str(_DEFAULT_WS_PORT)))
-    return host, port
+    try:
+        from soothe_daemon.config import SootheDaemonConfig
+
+        cfg = SootheDaemonConfig.from_default_yaml()
+        return cfg.transports.websocket.host, cfg.transports.websocket.port
+    except Exception:
+        return _DEFAULT_WS_HOST, _DEFAULT_WS_PORT
 
 
 def _is_port_live(host: str, port: int) -> bool:
@@ -64,26 +70,65 @@ def _is_port_live(host: str, port: int) -> bool:
         return False
 
 
-def _fast_is_running() -> bool:
+def _find_port_pid(port: int) -> int | None:
+    """Find PID of process listening on a TCP port using lsof.
+
+    Args:
+        port: TCP port number.
+
+    Returns:
+        PID if found, None otherwise.
+    """
+    with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+        result = subprocess.run(
+            ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
+            capture_output=True,
+            text=True,
+            timeout=0.3,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            pids = result.stdout.strip().split("\n")
+            if pids:
+                return int(pids[0])
+    return None
+
+
+def _fast_is_running() -> tuple[bool, bool]:
     """Check if daemon is running without heavy imports.
 
-    Only uses PID file + process check. No port probe fallback to avoid
-    detecting daemon running in Docker containers (different PID namespace).
+    Uses PID file + process check first, then falls back to port probe
+    to detect orphan daemons (PID file missing but process alive on port).
+
+    Returns:
+        Tuple of (is_running, is_orphan). is_orphan is True when the
+        daemon is running but the PID file is missing or stale.
     """
     pf = _fast_pid_path()
     if pf.exists():
         try:
             pid = int(pf.read_text().strip())
             os.kill(pid, 0)  # Check process exists
-            return True
+            return True, False
         except (ValueError, ProcessLookupError, PermissionError):
-            # PID file stale or process not running
-            pass
-    return False
+            # PID file stale, clean it up and fall through to port probe
+            with contextlib.suppress(OSError):
+                pf.unlink()
+
+    # Fallback: port probe to detect orphan daemons
+    host, port = _get_ws_address()
+    if _is_port_live(host, port):
+        return True, True
+
+    return False, False
 
 
 def _fast_find_pid() -> int | None:
-    """Find PID without heavy imports."""
+    """Find PID without heavy imports.
+
+    Checks PID file first, then falls back to lsof to find the
+    process holding the configured WebSocket port.
+    """
     pf = _fast_pid_path()
     if pf.exists():
         try:
@@ -91,8 +136,12 @@ def _fast_find_pid() -> int | None:
             os.kill(pid, 0)
             return pid
         except (ValueError, ProcessLookupError, PermissionError):
-            pass
-    return None
+            with contextlib.suppress(OSError):
+                pf.unlink()
+
+    # Fallback: find PID by port using lsof
+    host, port = _get_ws_address()
+    return _find_port_pid(port)
 
 
 @app.callback(invoke_without_command=True)
@@ -122,10 +171,12 @@ def daemon_start(
     _apply_dotenv_for_daemon_paths(daemon_cfg, config, load_dotenv_adjacent_to_yaml)
     cfg = daemon_cfg.load_soothe_config()
 
-    if _fast_is_running():
+    running, orphan = _fast_is_running()
+    if running:
         pid = _fast_find_pid()
         pid_info = f" (PID: {pid})" if pid else ""
-        typer.echo(f"Daemon is already running{pid_info}.")
+        orphan_info = " [orphan — PID file missing]" if orphan else ""
+        typer.echo(f"Daemon is already running{pid_info}{orphan_info}.")
         raise typer.Exit(code=1)
 
     if foreground:
@@ -167,7 +218,8 @@ def daemon_start(
     # Daemon initialization can take several seconds (runner + transport startup).
     # Model loading timeout is 30s; give 45s total buffer for all startup tasks.
     for _ in range(450):
-        if _fast_is_running():
+        running, _ = _fast_is_running()
+        if running:
             pid = _fast_find_pid()
             host, port = _get_ws_address()
 
@@ -201,12 +253,15 @@ def daemon_stop() -> None:
 @app.command("status")
 def daemon_status() -> None:
     """Show soothed status (fast - no heavy imports)."""
-    running = _fast_is_running()
+    running, orphan = _fast_is_running()
     if not running:
         typer.echo("Daemon status: stopped")
         return
 
-    typer.echo("Daemon status: running")
+    if orphan:
+        typer.echo("Daemon status: running (orphan — PID file missing)")
+    else:
+        typer.echo("Daemon status: running")
 
     # Find PID
     pid = _fast_find_pid()
@@ -228,7 +283,8 @@ def daemon_restart(
     """Restart the Soothe daemon."""
     from soothe_daemon.server import SootheDaemon
 
-    if _fast_is_running():
+    running, _ = _fast_is_running()
+    if running:
         typer.echo("Stopping existing daemon...")
         if not SootheDaemon.stop_running():
             typer.echo("Failed to stop running daemon.", err=True)
@@ -416,7 +472,8 @@ def memory_trace(
     import urllib.error
     import urllib.request
 
-    if not _fast_is_running():
+    running, _ = _fast_is_running()
+    if not running:
         typer.echo("Daemon is not running.", err=True)
         raise typer.Exit(code=1)
 

@@ -15,7 +15,7 @@ runner = CliRunner()
 
 
 def test_status_reports_stopped(monkeypatch) -> None:
-    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: False)
+    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (False, False))
 
     result = runner.invoke(app, ["status"])
 
@@ -26,20 +26,34 @@ def test_status_reports_stopped(monkeypatch) -> None:
 def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
     # Redirect PID path so the test doesn't pick up a real daemon's PID file
     monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
-    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: True)
+    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (True, False))
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 12345)
 
     result = runner.invoke(app, ["status"])
 
     assert result.exit_code == 0
     assert "Daemon status: running" in result.stdout
+    assert "orphan" not in result.stdout
     assert "PID: 12345" in result.stdout
     assert "ws://" in result.stdout
 
 
+def test_status_reports_orphan(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
+    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (True, True))
+    monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 47263)
+
+    result = runner.invoke(app, ["status"])
+
+    assert result.exit_code == 0
+    assert "orphan" in result.stdout
+    assert "PID file missing" in result.stdout
+    assert "PID: 47263" in result.stdout
+
+
 def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
-    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: True)
+    monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (True, False))
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 99)
     # Mock daemon config to not load any file
     daemon_cfg = SootheDaemonConfig()
@@ -60,9 +74,9 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
 
     state = {"calls": 0}
 
-    def _is_running() -> bool:
+    def _is_running() -> tuple[bool, bool]:
         state["calls"] += 1
-        return state["calls"] >= 2
+        return (state["calls"] >= 2, False)
 
     monkeypatch.setattr("soothe_daemon.cli._fast_is_running", _is_running)
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 4242)
