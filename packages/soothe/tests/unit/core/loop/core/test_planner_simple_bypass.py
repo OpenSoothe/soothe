@@ -41,9 +41,9 @@ async def test_simple_query_skips_plan_generate_on_first_cycle() -> None:
     # Step description is the raw user goal so the LLM doesn't echo the
     # synthetic bypass prefix back as an assistant message.
     assert step.description == "count readmes"
-    # The synthetic "I will complete this request directly: ..." label is
+    # The synthetic "I will complete this goal directly: ..." label is
     # retained as the plan's next_action for the audit ledger / UI step header.
-    assert "I will complete this request directly" in result.next_action
+    assert "I will complete this goal directly" in result.next_action
     assert "count readmes" in result.next_action
     # Bypass step must carry a concrete completion contract so the execute-step
     # AI message lands a "## Result" block in the ledger for plan-assess.

@@ -98,7 +98,7 @@ def test_loop_assistant_chunk_is_forwarded() -> None:
 
 def test_plan_direct_chunk_is_forwarded() -> None:
     msg = LoopAIMessageChunk(
-        content="I will complete this request directly: count readmes",
+        content="I will complete this goal directly: count readmes",
         phase="plan_direct",
         thread_id="t-1",
         iteration=0,
