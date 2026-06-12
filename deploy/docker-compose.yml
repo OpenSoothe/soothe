@@ -73,7 +73,7 @@ services:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.yml:/app/config.yml:ro
       - ./logs:/var/lib/soothe/logs
-      - /Users/xiaming/Workspace:/var/lib/soothe/workspaces
+      - ${SOOTHE_HOST_WORKSPACE:-/tmp/workspaces}:/var/lib/soothe/workspaces
     deploy:
       resources:
         limits:
