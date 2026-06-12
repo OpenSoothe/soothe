@@ -24,10 +24,6 @@ providers:
     api_key: "${DASHSCOPE_API_KEY}"
     models:
       - qwen-max              # Premium reasoning model
-      - qwen3.5-flash         # Fast, cost-effective
-      - qwen3.5-plus          # Balanced performance
-      - MiniMax-M2.5          # Alternative reasoning
-      - kimi-k2.5             # Moonshot AI model
       - multimodal-embedding-v1  # Embedding model
 
   # Coding-Plan - Alibaba's coding-focused endpoint
