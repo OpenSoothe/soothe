@@ -136,7 +136,7 @@ def test_loop_assistant_output_message_gets_high_priority() -> None:
     )
 
     plan_direct_msg = LoopAIMessage(
-        content="I will complete this request directly: read file",
+        content="I will complete this goal directly: read file",
         thread_id="t",
         iteration=0,
         phase="plan_direct",

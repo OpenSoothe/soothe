@@ -33,7 +33,7 @@ def test_rich_style_with_textual_selection_blends_backgrounds() -> None:
 async def test_constructor_render_markdown_override_disables_rich_markdown() -> None:
     """Explicit ``render_markdown=False`` renders plain text even when config enables MD."""
     msg = AssistantMessage(
-        "I will complete this request directly: read file",
+        "I will complete this goal directly: read file",
         id="asst-test",
         render_markdown=False,
     )
@@ -43,7 +43,7 @@ async def test_constructor_render_markdown_override_disables_rich_markdown() -> 
 
     await msg.stop_stream()
 
-    body.update.assert_called_with("I will complete this request directly: read file")
+    body.update.assert_called_with("I will complete this goal directly: read file")
     from rich.markdown import Markdown as RichMarkdown
 
     for call in body.update.call_args_list:

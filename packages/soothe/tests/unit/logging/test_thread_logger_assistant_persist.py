@@ -31,7 +31,7 @@ def test_full_loop_ai_message_with_plan_direct_phase_persists_as_conversation_ro
     tmp_path: Path,
 ) -> None:
     logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="t1")
-    msg = AIMessage(content="I will complete this request directly: do thing")
+    msg = AIMessage(content="I will complete this goal directly: do thing")
     msg.phase = "plan_direct"
 
     logger.log(namespace=(), mode="messages", data=(msg, {}))
@@ -42,7 +42,7 @@ def test_full_loop_ai_message_with_plan_direct_phase_persists_as_conversation_ro
     assert len(conv) == 1
     assert conv[0]["role"] == "assistant"
     assert conv[0]["phase"] == "plan_direct"
-    assert conv[0]["text"].startswith("I will complete this request directly")
+    assert conv[0]["text"].startswith("I will complete this goal directly")
 
 
 def test_full_loop_ai_message_with_goal_completion_phase_persists(tmp_path: Path) -> None:

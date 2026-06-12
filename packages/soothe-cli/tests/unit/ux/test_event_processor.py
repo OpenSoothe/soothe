@@ -882,7 +882,7 @@ class TestEventProcessorHeadlessSubgraph:
                     {
                         "type": "ai",
                         "id": "plan-direct",
-                        "content": "I will complete this request directly: count readmes",
+                        "content": "I will complete this goal directly: count readmes",
                         "phase": "plan_direct",
                     },
                     {},
