@@ -14,14 +14,11 @@ import pytest
 
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepNode
+from soothe.context.planning import StepPlanManagerAdapter
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineLedgerAdapter,
-    ContextEnginePlanAdapter,
 )
 from soothe.foundation.loop.planning.manager import (
-    _DAG_DEPENDENCY_THRESHOLD,
-    _LOW_SUCCESS_RATE_THRESHOLD,
-    _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
     PlanManager,
 )
 from soothe.foundation.loop.state.schemas import (
@@ -93,7 +90,7 @@ def _make_loop_state(**overrides: Any) -> MagicMock:
 
 
 class TestPlanAdapterPlanManagerEquivalence:
-    """Verify ContextEnginePlanAdapter produces the same results as PlanManager
+    """Verify StepPlanManagerAdapter produces the same results as PlanManager
     for the same inputs and state."""
 
     @pytest.mark.asyncio
@@ -110,7 +107,7 @@ class TestPlanAdapterPlanManagerEquivalence:
         pm.ingest_plan(plan_result, "KFA", 0)
         pm_ctx = pm.get_planning_context()
 
-        # ContextEnginePlanAdapter path
+        # StepPlanManagerAdapter path
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
         await ce.activate_goal(goal.id, loop_id="loop-1")
@@ -122,7 +119,7 @@ class TestPlanAdapterPlanManagerEquivalence:
             ],
             plan_iteration=0,
         )
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.ingest_plan(plan_result, "KFA", 0)
         ce_ctx = adapter.get_planning_context()
 
@@ -148,7 +145,7 @@ class TestPlanAdapterPlanManagerEquivalence:
         pm.dag.mark_failed("02", _make_step_result("02", success=False))
         pm_ctx = pm.get_planning_context()
 
-        # ContextEnginePlanAdapter path
+        # StepPlanManagerAdapter path
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
         await ce.activate_goal(goal.id, loop_id="loop-1")
@@ -156,7 +153,7 @@ class TestPlanAdapterPlanManagerEquivalence:
             goal.id,
             [StepNode(id="01", description="Step 1"), StepNode(id="02", description="Step 2")],
         )
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.ingest_plan(plan_result, "KFA", 0)
         adapter.record_step_outcomes(
             [
@@ -174,9 +171,20 @@ class TestPlanAdapterPlanManagerEquivalence:
     @pytest.mark.asyncio
     async def test_determine_goal_completion_needs_matches(self) -> None:
         """Both paths make the same goal completion decision for identical state."""
-        ce = ContextEngine()
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal")
+        steps = [_make_step_action("01", "Step 1")]
+        plan_result = _make_plan_result(steps)
+
+        # PlanManager path
         pm = PlanManager(goal="Test goal")
+        pm.ingest_plan(plan_result, "KFA", 0)
+
+        # Adapter path
+        ce = ContextEngine()
+        goal = await ce.create_goal("Test goal")
+        await ce.activate_goal(goal.id, loop_id="loop-1")
+        await ce.add_step(goal.id, StepNode(id="01", description="Step 1"))
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+        adapter.ingest_plan(plan_result, "KFA", 0)
 
         state = _make_loop_state()
 
@@ -192,44 +200,6 @@ class TestPlanAdapterPlanManagerEquivalence:
                     f"Mismatch for mode={mode}, llm_decision={llm_decision}: "
                     f"adapter={adapter_result}, pm={pm_result}"
                 )
-
-    @pytest.mark.asyncio
-    async def test_is_simple_execution_matches(self) -> None:
-        """Both paths agree on whether execution is simple."""
-        steps = [_make_step_action("01", "Step 1")]
-        plan_result = _make_plan_result(steps)
-
-        # PlanManager path
-        pm = PlanManager(goal="Test goal")
-        pm.ingest_plan(plan_result, "KFA", 0)
-
-        # Adapter path
-        ce = ContextEngine()
-        goal = await ce.create_goal("Test goal")
-        await ce.activate_goal(goal.id, loop_id="loop-1")
-        await ce.add_step(goal.id, StepNode(id="01", description="Step 1"))
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
-        adapter.ingest_plan(plan_result, "KFA", 0)
-
-        assert adapter._is_simple_execution() == pm._is_simple_execution()
-
-    @pytest.mark.asyncio
-    async def test_dag_requires_synthesis_matches(self) -> None:
-        """Both paths agree on whether synthesis is required."""
-        state = _make_loop_state()
-
-        # Simple case: single plan, no failures
-        pm = PlanManager(goal="Test goal")
-        pm.ingest_plan(_make_plan_result([_make_step_action("01", "S1")]), "KFA", 0)
-
-        ce = ContextEngine()
-        goal = await ce.create_goal("Test goal")
-        await ce.activate_goal(goal.id, loop_id="loop-1")
-        await ce.add_step(goal.id, StepNode(id="01", description="S1"))
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
-        adapter.ingest_plan(_make_plan_result([_make_step_action("01", "S1")]), "KFA", 0)
-
-        assert adapter._dag_requires_synthesis(state) == pm._dag_requires_synthesis(state)
 
     @pytest.mark.asyncio
     async def test_format_completion_dag_report_matches(self) -> None:
@@ -258,7 +228,7 @@ class TestPlanAdapterPlanManagerEquivalence:
                 StepNode(id="02", description="Second step"),
             ],
         )
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         adapter.ingest_plan(plan_result, "KFA", 0)
         adapter.record_step_outcomes(
             [
@@ -352,20 +322,16 @@ class TestLedgerAdapterDualWrite:
 
 
 class TestNamedConstantsEquivalence:
-    """Verify adapter uses the same constants as PlanManager."""
+    """Verify constants are defined once in completion.py (single source of truth)."""
 
-    def test_threshold_values_match(self) -> None:
-        """The imported constants in context_adapters.py match manager.py values."""
-        from soothe.foundation.loop.engine.context_adapters import (
-            _DAG_DEPENDENCY_THRESHOLD as ADAPTER_DEP,
-        )
-        from soothe.foundation.loop.engine.context_adapters import (
-            _LOW_SUCCESS_RATE_THRESHOLD as ADAPTER_SUCCESS,
-        )
-        from soothe.foundation.loop.engine.context_adapters import (
-            _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS as ADAPTER_SIMPLE,
+    def test_threshold_values_defined(self) -> None:
+        """The constants in completion.py are the canonical definitions."""
+        from soothe.context.planning.completion import (
+            DAG_DEPENDENCY_THRESHOLD,
+            LOW_SUCCESS_RATE_THRESHOLD,
+            SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
         )
 
-        assert ADAPTER_SUCCESS == _LOW_SUCCESS_RATE_THRESHOLD
-        assert ADAPTER_DEP == _DAG_DEPENDENCY_THRESHOLD
-        assert ADAPTER_SIMPLE == _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS
+        assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
+        assert DAG_DEPENDENCY_THRESHOLD == 3
+        assert SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
