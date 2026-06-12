@@ -688,11 +688,12 @@ class AgenticMixin:
 
                 elif event_type == "iteration_completed":
                     # Internal - used for debugging only
+                    # progress is a descriptive string (none/low/medium/high/complete), not numeric
                     logger.debug(
-                        "[Loop] Iteration %d completed (status=%s, progress=%.0f%%)",
+                        "[Loop] Iteration %d completed (status=%s, progress=%s)",
                         event_data["iteration"],
                         event_data["status"],
-                        event_data["progress"] * 100,
+                        event_data["progress"],
                     )
 
                 elif event_type == "completed":
