@@ -76,7 +76,7 @@ class ContextEnginePlanAdapter:
         if decision is None:
             return
 
-        goal = self._ce._dag.get_goal(self._goal_id)
+        goal = self._ce.get_goal_sync(self._goal_id)
         if goal is None:
             return
 
@@ -111,7 +111,7 @@ class ContextEnginePlanAdapter:
         if self._goal_id is None:
             return
 
-        goal = self._ce._dag.get_goal(self._goal_id)
+        goal = self._ce.get_goal_sync(self._goal_id)
         if goal is None:
             return
 
@@ -135,7 +135,7 @@ class ContextEnginePlanAdapter:
         if self._goal_id is None:
             return DagPlanningContext()
 
-        goal = self._ce._dag.get_goal(self._goal_id)
+        goal = self._ce.get_goal_sync(self._goal_id)
         if goal is None:
             return DagPlanningContext()
 
@@ -158,14 +158,13 @@ class ContextEnginePlanAdapter:
         in the GoalStepDAG with its status, metadata, lineage, and nested
         StepDAG. Falls back to the active goal's StepDAG when no goal_id is set.
         """
-        dag = self._ce._dag
-        all_goals = list(dag.goals.values())
+        all_goals = self._ce.get_all_goals()
 
         # Fallback: no goals at all
         if not all_goals:
             if self._goal_id is None:
                 return ""
-            goal = dag.get_goal(self._goal_id)
+            goal = self._ce.get_goal_sync(self._goal_id)
             if goal is None or goal.steps.total_steps == 0:
                 return ""
 
@@ -187,8 +186,17 @@ class ContextEnginePlanAdapter:
         lines.append("")
 
         # Sort goals: failed first, then completed, then by created_at
-        status_order = {"failed": 0, "active": 1, "completed": 2, "pending": 3, "suspended": 4, "cancelled": 5}
-        sorted_goals = sorted(all_goals, key=lambda g: (status_order.get(g.status, 9), g.created_at))
+        status_order = {
+            "failed": 0,
+            "active": 1,
+            "completed": 2,
+            "pending": 3,
+            "suspended": 4,
+            "cancelled": 5,
+        }
+        sorted_goals = sorted(
+            all_goals, key=lambda g: (status_order.get(g.status, 9), g.created_at)
+        )
 
         for goal in sorted_goals:
             status_label = goal.status.upper()
@@ -199,7 +207,7 @@ class ContextEnginePlanAdapter:
 
             # Lineage for sub-goals
             if goal.parent_id:
-                lineage = dag.goal_lineage(goal.id)
+                lineage = self._ce.get_goal_lineage(goal.id)
                 if lineage:
                     lines.append(f"- Lineage: {' > '.join(lineage)}")
 
@@ -278,7 +286,7 @@ class ContextEnginePlanAdapter:
 
         if self._goal_id is None:
             return False
-        goal = self._ce._dag.get_goal(self._goal_id)
+        goal = self._ce.get_goal_sync(self._goal_id)
         if goal is None:
             return False
 
@@ -339,7 +347,7 @@ class ContextEnginePlanAdapter:
         """Check if the DAG represents a simple, single-plan execution."""
         if self._goal_id is None:
             return True
-        goal = self._ce._dag.get_goal(self._goal_id)
+        goal = self._ce.get_goal_sync(self._goal_id)
         if goal is None:
             return True
         step_dag = goal.steps
@@ -367,7 +375,7 @@ class ContextEnginePlanAdapter:
             return True
 
         if self._goal_id is not None:
-            goal = self._ce._dag.get_goal(self._goal_id)
+            goal = self._ce.get_goal_sync(self._goal_id)
             if goal is not None:
                 if goal.steps.failed_steps > 0:
                     logger.info(
@@ -390,7 +398,7 @@ class ContextEnginePlanAdapter:
             return True
 
         if self._goal_id is not None:
-            goal = self._ce._dag.get_goal(self._goal_id)
+            goal = self._ce.get_goal_sync(self._goal_id)
             if goal is not None:
                 failed_count = goal.steps.failed_steps
                 if failed_count > 0:
@@ -448,14 +456,18 @@ class ContextEngineLedgerAdapter:
         from langchain_core.messages import BaseMessage
 
         if isinstance(message, BaseMessage):
-            self._ce._ledger.record_message(message, phase)
+            self._ce.ledger.record_message(message, phase)
 
 
 class ContextEngineGoalContextAdapter:
     """Wraps ContextEngine to provide the same interfaces as GoalContextManager.
 
-    Reads goal history from the GoalStepDAG instead of AgentLoopStateManager,
-    producing identical XML blocks for plan context and execute briefings.
+    Reads goal history from the GoalStepDAG (via ContextEngine public API)
+    instead of AgentLoopStateManager, producing identical XML blocks for plan
+    context and execute briefings.
+
+    Thread switch detection still uses state_manager (that concern is outside
+    CE's scope), but completed goal data comes from the CE DAG.
     """
 
     def __init__(
@@ -471,45 +483,65 @@ class ContextEngineGoalContextAdapter:
     async def get_plan_context(self, limit: int | None = None) -> list[str]:
         """Get previous goal summaries for Plan phase (XML blocks).
 
-        Reads completed goals from the GoalStepDAG and formats them identically
-        to GoalContextManager.get_plan_context().
+        Reads completed goals from the CE GoalStepDAG. Falls back to
+        state_manager if CE has no completed goals.
         """
         if self._config is not None and not getattr(self._config, "enabled", True):
             return []
 
         try:
-            checkpoint = await self._state_manager.load()
-            if not checkpoint or not checkpoint.goal_history:
-                return []
+            if limit is not None:
+                actual_limit = limit
+            elif self._config:
+                actual_limit = getattr(self._config, "plan_limit", 10)
+            else:
+                actual_limit = 10
 
-            current_thread = checkpoint.current_thread_id
-            actual_limit = limit or getattr(self._config, "plan_limit", 10) if self._config else 10
+            # Primary: read from CE DAG
+            all_goals = self._ce.get_all_goals()
+            completed = [g for g in all_goals if g.status == "completed"][-actual_limit:]
 
-            completed_goals = [
-                g
-                for g in checkpoint.goal_history
-                if g.thread_id == current_thread and g.status == "completed"
-            ][-actual_limit:]
-
-            if not completed_goals:
+            if not completed:
+                # Fallback to state_manager if CE has no completed goals
+                if self._state_manager is not None:
+                    checkpoint = await self._state_manager.load()
+                    if checkpoint and checkpoint.goal_history:
+                        current_thread = checkpoint.current_thread_id
+                        completed_goals = [
+                            g
+                            for g in checkpoint.goal_history
+                            if g.thread_id == current_thread and g.status == "completed"
+                        ][-actual_limit:]
+                        if completed_goals:
+                            context_blocks = []
+                            for goal in completed_goals:
+                                context_block = (
+                                    f"<previous_goal>\n"
+                                    f"Goal: {goal.goal_text}\n"
+                                    f"Status: {goal.status}\n"
+                                    f"Thread: {goal.thread_id}\n"
+                                    f"Output:\n{goal.goal_completion}\n"
+                                    f"</previous_goal>"
+                                )
+                                context_blocks.append(context_block)
+                            return context_blocks
                 return []
 
             context_blocks = []
-            for goal in completed_goals:
+            for goal in completed:
+                step_summary = self._render_step_summary(goal)
                 context_block = (
                     f"<previous_goal>\n"
-                    f"Goal: {goal.goal_text}\n"
+                    f"Goal: {goal.description}\n"
                     f"Status: {goal.status}\n"
-                    f"Thread: {goal.thread_id}\n"
-                    f"Output:\n{goal.goal_completion}\n"
+                    f"Output:\n{step_summary}\n"
                     f"</previous_goal>"
                 )
                 context_blocks.append(context_block)
 
             logger.info(
-                "CE Plan context: %d previous goals from thread %s",
+                "CE Plan context: %d previous goals from CE DAG",
                 len(context_blocks),
-                current_thread,
             )
             return context_blocks
 
@@ -520,43 +552,101 @@ class ContextEngineGoalContextAdapter:
     async def get_execute_briefing(self, limit: int | None = None) -> str | None:
         """Get goal briefing for Execute phase (only on thread switch).
 
-        Delegates to the same logic as GoalContextManager since the checkpoint
-        data source is the same.
+        Thread switch detection still uses state_manager. Completed goal
+        data comes from the CE DAG.
         """
         if self._config is not None and not getattr(self._config, "enabled", True):
             return None
 
         try:
-            checkpoint = await self._state_manager.load()
-            if not checkpoint:
-                return None
-
-            if not checkpoint.thread_switch_pending:
-                logger.debug("CE GoalContextAdapter: execute briefing skipped (no thread switch)")
-                return None
-
-            checkpoint.thread_switch_pending = False
-            await self._state_manager.save(checkpoint)
+            # Thread switch detection still needs state_manager
+            current_thread = ""
+            if self._state_manager is not None:
+                checkpoint = await self._state_manager.load()
+                if not checkpoint:
+                    return None
+                if not checkpoint.thread_switch_pending:
+                    logger.debug(
+                        "CE GoalContextAdapter: execute briefing skipped (no thread switch)"
+                    )
+                    return None
+                checkpoint.thread_switch_pending = False
+                await self._state_manager.save(checkpoint)
+                current_thread = checkpoint.current_thread_id
 
             actual_limit = (
                 limit or getattr(self._config, "execute_limit", 10) if self._config else 10
             )
-            previous_goals = [g for g in checkpoint.goal_history if g.status == "completed"][
-                -actual_limit:
-            ]
 
-            if not previous_goals:
+            # Read completed goals from CE DAG
+            all_goals = self._ce.get_all_goals()
+            completed = [g for g in all_goals if g.status == "completed"][-actual_limit:]
+
+            if not completed:
+                # Fallback to state_manager if CE has no completed goals
+                if self._state_manager is not None:
+                    checkpoint = await self._state_manager.load()
+                    if checkpoint and checkpoint.goal_history:
+                        previous_goals = [
+                            g for g in checkpoint.goal_history if g.status == "completed"
+                        ][-actual_limit:]
+                        if previous_goals:
+                            from soothe.foundation.loop.engine.goal_context_manager import (
+                                format_execute_briefing_from_goals,
+                            )
+
+                            return format_execute_briefing_from_goals(
+                                previous_goals, current_thread
+                            )
                 logger.warning(
                     "CE GoalContextAdapter: thread switch but no completed goals for briefing"
                 )
                 return None
 
-            from soothe.foundation.loop.engine.goal_context_manager import (
-                format_execute_briefing_from_goals,
-            )
-
-            return format_execute_briefing_from_goals(previous_goals, checkpoint.current_thread_id)
+            return _format_execute_briefing_from_ce_goals(completed, current_thread)
 
         except Exception as e:
             logger.error("CE GoalContextAdapter: failed to generate execute briefing: %s", e)
             return None
+
+    @staticmethod
+    def _render_step_summary(goal: Any) -> str:
+        """Build a text summary from a GoalNode's completed steps."""
+        if not hasattr(goal, "steps") or not goal.steps.nodes:
+            return ""
+        parts = []
+        for sid in sorted(goal.steps.nodes.keys()):
+            node = goal.steps.nodes[sid]
+            if node.status == "completed":
+                desc = (node.description or "").strip().replace("\n", " ")
+                execution = node.execution
+                if execution and execution.error:
+                    parts.append(f"  - {sid}: {desc} (error: {execution.error})")
+                else:
+                    parts.append(f"  - {sid}: {desc}")
+        return "\n".join(parts) if parts else ""
+
+
+def _format_execute_briefing_from_ce_goals(goals: list, current_thread: str) -> str:
+    """Format CE GoalNode objects as condensed Execute briefing.
+
+    Parallel to ``format_execute_briefing_from_goals()`` but works with
+    GoalNode objects instead of GoalExecutionRecord.
+    """
+    sections = ["## Previous Goal Context (Thread Switch Recovery)\n\n"]
+
+    for i, goal in enumerate(goals, 1):
+        step_summary = ContextEngineGoalContextAdapter._render_step_summary(goal)
+        sections.append(
+            f"**Goal {i}** ({goal.status}):\n"
+            f"Query: {goal.description}\n"
+            f"Steps completed:\n{step_summary}\n\n"
+        )
+
+    sections.append(
+        f"**Current thread**: {current_thread} (new thread, no conversation history)\n"
+        f"**Instruction**: Use previous goal context to inform step execution strategy.\n"
+        f"Reference critical files discovered in prior work. Avoid re-exploring solved problems."
+    )
+
+    return "".join(sections)

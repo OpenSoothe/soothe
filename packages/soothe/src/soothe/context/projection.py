@@ -135,6 +135,20 @@ class ProjectionEngine:
         # Ledger context
         ledger_summary = ledger.render_for_reason(max_chars=cfg.max_ledger_chars)
 
+        ledger_messages: list[dict] = []
+        for msg, phase in ledger.entries():
+            content = getattr(msg, "content", "")
+            if not isinstance(content, str):
+                content = ""
+            ledger_messages.append(
+                {
+                    "type": type(msg).__name__,
+                    "phase": phase,
+                    "content": _truncate(content, 500),
+                }
+            )
+        ledger_messages = ledger_messages[-cfg.max_ledger_messages :]
+
         # Semantic context
         project_instructions = _truncate(
             semantic.load_project_instructions(),
@@ -160,6 +174,7 @@ class ProjectionEngine:
             completed_steps=completed_steps,
             failed_steps=failed_steps,
             ledger_summary=ledger_summary,
+            ledger_messages=ledger_messages,
             project_instructions=project_instructions,
             agent_instructions=agent_instructions,
             memory_instructions=memory_instructions,
