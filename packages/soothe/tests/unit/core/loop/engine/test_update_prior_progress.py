@@ -196,8 +196,8 @@ def test_tool_calls_capped_at_8_across_steps() -> None:
     assert [t.name for t in tcs] == ["t0", "t1", "t2", "t3", "t4", "t5", "u0", "u1"]
 
 
-def test_evidence_uses_ledger_body_with_tool_result_block() -> None:
-    """When ToolMessages happen to be present, evidence carries the LAST_TOOL_RESULT block."""
+def test_evidence_uses_assistant_prose_when_available() -> None:
+    """When ToolMessages and assistant prose are present, evidence uses the prose."""
     ex = _executor()
     state = LoopState(goal="g", thread_id="t1", iteration=0)
     steps = [StepAction(id="s1", description="count", expected_output="counts")]

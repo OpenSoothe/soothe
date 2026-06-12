@@ -675,9 +675,10 @@ ActWaveAnswerProvenance = Literal["root_assistant_stream", "task_tool_aggregate"
 # Cap for joined delegate text and for root assistant text stored on state (memory bound).
 DELEGATE_FINAL_WAVE_CAP = 120_000
 
-# Char budget for the <LAST_TOOL_RESULT> evidence block injected into the
-# execute-step ledger AI body. Plan-assess reads this to grade goal progress
-# on concrete tool output rather than only the AI's prose summary.
+# Char budget for the <LAST_TOOL_RESULT> evidence block used by
+# ``_update_prior_progress`` as a fallback when the assistant produced no
+# prose text. Plan-assess reads this to grade goal progress on concrete
+# tool output rather than only the AI's prose summary.
 LAST_TOOL_RESULT_HEAD_CHARS = 500
 
 
@@ -1878,10 +1879,10 @@ class Executor:
           (e.g. ``run_command(command="find . -name '*.py' | wc -l")``). It
           gives the plan-assess prompt a concrete handle on what was run
           without depending on tool-result text being in ``step_messages``.
-        - Evidence excerpts reuse ``_ledger_execute_ai_content``: the same
-          body the executor wrote into the ledger AI message, which already
-          handles the empty-final-AI/chunked-text case and appends the
-          ``<LAST_TOOL_RESULT>`` block when present.
+        - Evidence excerpts extract assistant prose and tool-result data
+          separately. Tool evidence (from ``_last_tool_result_block``) is
+          included only when the assistant produced no prose text, so
+          plan-assess still sees concrete output for tool-driven steps.
         """
         steps_completed = 0
         steps_failed = 0
@@ -1910,17 +1911,22 @@ class Executor:
                 head = _first_arg_head_for_tool_call(call)
                 tool_calls.append(ToolCallHead(name=name, head=head[:120]))
 
-            # Evidence excerpt: reuse the ledger body extractor so we pick up
-            # chunked-assistant-text and the <LAST_TOOL_RESULT> block.
+            # Evidence excerpt: assistant prose, then tool evidence fallback.
             ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
             final_ai = ai_messages[-1] if ai_messages else None
             excerpt_src = ""
             if final_ai is not None:
-                excerpt_src = self._ledger_execute_ai_content(
-                    messages=step_messages,
-                    final_ai_msg=final_ai,
-                    total_steps=1,
+                from soothe.foundation.loop.utils.stream_normalize import (
+                    extract_text_from_message_content,
+                )
+
+                excerpt_src = extract_text_from_message_content(
+                    getattr(final_ai, "content", None)
                 ).strip()
+                if not excerpt_src:
+                    excerpt_src = self._assemble_assistant_text_from_stream_messages(step_messages).strip()
+            if not excerpt_src:
+                excerpt_src = _last_tool_result_block(step_messages)
             if not excerpt_src:
                 excerpt_src = _outcome_summary_text(step_result.outcome)
             if not excerpt_src and delegate_final:
@@ -2967,11 +2973,8 @@ class Executor:
         assistant-visible text lives in earlier ``AIMessageChunk`` entries — same situation as
         ``_assemble_assistant_text_from_stream_messages`` / Act-wave finalize.
 
-        Appends a ``<LAST_TOOL_RESULT>`` evidence block built from the most
-        recent ``ToolMessage`` so plan-assess sees concrete tool output (a
-        count, a file listing, etc.) instead of only the AI's prose summary.
-        Without this, the assessor classifies tool-driven goals as
-        ``progress=none`` even when the answer is in the tool reply.
+        Tool-result evidence is NOT injected into the ledger message content; it is
+        provided to plan-assess separately via ``PriorProgressDigest.evidence_excerpts``.
 
         Args:
             messages: Full message list from ``_stream_and_collect`` (AI + chunk entries).
@@ -2979,8 +2982,7 @@ class Executor:
             total_steps: Number of steps in this execute wave.
 
         Returns:
-            Non-empty string when any root assistant text or tool evidence
-            exists; otherwise ``""``.
+            Non-empty string when assistant text exists; otherwise ``""``.
         """
         from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
 
@@ -2988,12 +2990,7 @@ class Executor:
         if not direct and total_steps == 1:
             direct = self._assemble_assistant_text_from_stream_messages(messages).strip()
 
-        evidence = _last_tool_result_block(messages)
-        if not direct:
-            return evidence
-        if not evidence:
-            return direct
-        return f"{direct}\n\n{evidence}"
+        return direct
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:
         """Extract meaningful error message from exception.

@@ -31,9 +31,8 @@ def _payload(
     """Production-shaped gather_results entry.
 
     ``_stream_and_collect`` returns only AIMessage/AIMessageChunk in messages;
-    tests that need <LAST_TOOL_RESULT> evidence may pass ToolMessages via
-    ``tool_messages`` (test-only convenience) to exercise the ledger-body
-    fallback chain.
+    tests that need tool-result evidence in PriorProgressDigest may pass
+    ToolMessages via ``tool_messages`` (test-only convenience).
     """
     messages: list = [
         AIMessage(content="", tool_calls=tool_calls),
