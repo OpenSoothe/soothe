@@ -31,4 +31,4 @@ def test_simple_query_expected_output_requires_result_block() -> None:
     sees concrete evidence in the ledger (trace 0e412f regression)."""
     assert "## Result" in SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
     assert "MUST" in SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
-    assert "plain-text" in SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT.lower()
+    assert "restate" in SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT.lower()
