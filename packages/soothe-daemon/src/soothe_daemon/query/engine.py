@@ -644,7 +644,7 @@ class QueryEngine:
         phase_tagged_assistant_written = [False]
 
         async def _run_stream() -> None:
-            from soothe.foundation.core.context.model_override import (
+            from soothe.middleware._model_override import (
                 attach_stream_model_override,
                 reset_stream_model_override,
             )

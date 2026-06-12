@@ -17,9 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from soothe.config import SootheConfig
-    from soothe.foundation.core.context.tool_registry import ToolContextRegistry
-    from soothe.foundation.core.context.trigger_registry import ToolTriggerRegistry
     from soothe.foundation.loop.intention import RoutingClassification  # IG-226
+    from soothe.middleware._tool_context import ToolContextRegistry, ToolTriggerRegistry
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
@@ -362,10 +361,10 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Protocol summary (complex only)
         - Scenario guidance
 
-        NOT in system prompt (moved to user message envelope):
-        - Date/time → <CONTEXT_INFO>
-        - Execution hints → <EXECUTION_HINTS>
-        - Current goal context → ledger / plan turns (not repeated on execute-step envelope)
+        NOT in system prompt (moved to user message):
+        - Date/time → TIMESTAMP:
+        - Execution hints → EXECUTION HINTS:
+        - Current goal context → ledger / plan turns (not repeated on execute-step message)
         - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
 
         Args:
