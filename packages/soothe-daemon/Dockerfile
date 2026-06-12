@@ -4,16 +4,16 @@
 # Build context must be the monorepo root (parent of `packages/`) so `scripts/warmup_embedding_model.py`
 # can be copied. Published wheels are installed from PyPI (same as end users).
 #
-# Build (full image with browser subagent):
+# Build (default — no browser, core extras only):
 #   docker build -f packages/soothe-daemon/Dockerfile \
 #     --build-arg SOOTHE_VERSION=0.5.8 \
 #     -t soothed:latest .
 #
-# Build (slim image without browser subagent):
+# Build (full image with browser subagent):
 #   docker build -f packages/soothe-daemon/Dockerfile \
 #     --build-arg SOOTHE_VERSION=0.5.8 \
-#     --build-arg INCLUDE_BROWSER=false \
-#     -t soothed:slim .
+#     --build-arg INCLUDE_BROWSER=true \
+#     -t soothed:browser .
 #
 # `soothe[all]` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to the
 # latest PyPI release compatible with that pin (PyPI may lag: newer soothe
@@ -39,8 +39,8 @@ FROM ${PYTHON_BASE} AS deps
 ARG SOOTHE_VERSION=0.5.8
 # Empty = latest soothe-daemon on PyPI compatible with pinned soothe[all].
 ARG SOOTHE_DAEMON_VERSION=
-# Include browser subagent dependencies (playwright/chromium). Default: true.
-ARG INCLUDE_BROWSER=true
+# Include browser subagent dependencies (playwright/chromium). Default: false.
+ARG INCLUDE_BROWSER=false
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -73,7 +73,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       extras="all"; \
       pip_extras="playwright"; \
     else \
-      extras="research,tabular,document,github,dashscope,langfuse,claude,semantic"; \
+      extras="document,tabular,github,research,dashscope,semantic"; \
       pip_extras=""; \
     fi; \
     uv venv /app/.venv; \
@@ -105,7 +105,7 @@ RUN mkdir -p /root/.cache/soothe/models/embeddings \
 FROM ${PYTHON_BASE} AS runtime
 
 ARG SOOTHE_VERSION=0.5.8
-ARG INCLUDE_BROWSER=true
+ARG INCLUDE_BROWSER=false
 
 LABEL org.opencontainers.image.title="Soothe Daemon" \
     org.opencontainers.image.description="Soothe agent orchestration daemon (PyPI soothe-daemon + bundled deps)" \
