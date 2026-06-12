@@ -410,6 +410,7 @@ class AgentLoop:
                 ContextEngineGoalContextAdapter,
                 ContextEngineLedgerAdapter,
             )
+            from .context_lifecycle import ContextEngineLifecycle
 
             persistence = InMemoryContextPersistence()
             if ce_config.persistence_backend == "file":
@@ -452,6 +453,12 @@ class AgentLoop:
                 config=goal_context_config,
             )
 
+            # RFC-624 Phase 3d: Create lifecycle and load semantic context
+            ce_lifecycle = ContextEngineLifecycle(ce_instance, ce_goal.id)
+            await ce_lifecycle.on_goal_start(
+                workspace=Path(workspace) if workspace else None,
+            )
+
             logger.info(
                 "ContextEngine path enabled (goal_id=%s, backend=%s)",
                 ce_goal.id,
@@ -484,6 +491,7 @@ class AgentLoop:
             proposal_queue=proposal_queue,  # RFC-204 Group C
             context_engine=ce_instance,  # RFC-624 Phase 3
             ce_ledger_adapter=ce_ledger_adapter,  # RFC-624 Phase 3
+            ce_lifecycle=ce_lifecycle,  # RFC-624 Phase 3d
         )
 
         async def pump_graph() -> None:

@@ -154,14 +154,13 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             state.thread_id,
         )
 
-    # RFC-624: Persist ContextEngine state at goal completion
-    if ctx.context_engine is not None:
+    # RFC-624 Phase 3d: Close goal lifecycle + persist CE state
+    if ctx.ce_lifecycle is not None:
+        await ctx.ce_lifecycle.on_goal_complete(status="done", plan_result=plan_result)
+    elif ctx.context_engine is not None:
+        # Backward compat: legacy save when lifecycle not available
         try:
             await ctx.context_engine.save()
-            logger.debug(
-                "[goal_completion] ContextEngine state persisted (loop=%s)",
-                state_manager.loop_id,
-            )
         except Exception as e:
             logger.warning("[goal_completion] Failed to persist ContextEngine state: %s", e)
 
