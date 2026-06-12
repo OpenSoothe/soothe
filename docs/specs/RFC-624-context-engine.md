@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-12
-**Updated**: 2026-06-12
+**Updated**: 2026-06-13
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (AgentLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-215 (Persistence Backend)
 **Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture)
 
@@ -59,7 +59,9 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 |-------|-------|-----------------------|--------|
 | 1 | Standalone `soothe.context` module | None | Done |
 | 2 | GoalEngine reads/writes through ContextEngine | GoalEngine internal storage replaced | Future |
-| 3 | AgentLoop uses ContextEngine via adapters | Adapters bridge CE to existing interfaces; PromptBuilder, Executor, LangGraph unchanged | This update |
+| 3a | CE Engine Completeness (Sub-project 1) | CE internal: public API, state transitions, callbacks, lossless persistence, compaction | This update |
+| 3b | Adapter Hardening + Projection Wiring (Sub-project 2) | Adapters use public API; ContextBundle wired into prompts | Done |
+| 3c | CE as Primary Path (Sub-project 3) | CE replaces PlanManager/PlanDAG as primary state store | Future |
 
 ---
 
@@ -288,15 +290,20 @@ The existing PostgreSQL/SQLite checkpoint system (`AgentLoopStateManager`) remai
 
 The following gaps were identified between the Phase 1 ContextEngine and what the AgentLoop integration requires:
 
-| Gap | Addition |
-|-----|----------|
-| No `activate_goal()` method | Add `activate_goal(goal_id, loop_id)` — transitions `pending→active`, sets `assigned_loop_id` |
-| No `chain_depth` on `StepDAG` | Add `chain_depth` property (BFS, same algorithm as `PlanDAG.max_chain_depth`) |
-| No composite step ID support | Adapters store composite IDs (`KFA-01`) as `StepNode.id` directly — no CE model change needed |
-| No `plan_history` tracking | `ContextEnginePlanAdapter` maintains its own `plan_history` list — no CE model change needed |
-| No evidence tracking | Not in CE — the adapter reads evidence from `LoopState` directly — no CE model change needed |
-| Ledger serialization is lossy | Acceptable because CE persistence is supplementary — the DB handles full ledger serialization |
-| No `execution_mode` on steps | Not needed — `AgentDecision.execution_mode` stays in `LoopState`, not in `GoalStepDAG` |
+| Gap | Addition | Status |
+|-----|----------|--------|
+| No `activate_goal()` method | Add `activate_goal(goal_id, loop_id)` — transitions `pending→active`, sets `assigned_loop_id` | Done (Phase 3) |
+| No `chain_depth` on `StepDAG` | Add `chain_depth` property (BFS, same algorithm as `PlanDAG.max_chain_depth`) | Done (Phase 3) |
+| No composite step ID support | Adapters store composite IDs (`KFA-01`) as `StepNode.id` directly — no CE model change needed | N/A |
+| No `plan_history` tracking | `ContextEnginePlanAdapter` maintains its own `plan_history` list — no CE model change needed | N/A |
+| No evidence tracking | Not in CE — the adapter reads evidence from `LoopState` directly — no CE model change needed | N/A |
+| Ledger serialization is lossy | Lossless `BaseMessage.model_dump()` round-trip (§18) | Phase 3a |
+| No `execution_mode` on steps | Not needed — `AgentDecision.execution_mode` stays in `LoopState`, not in `GoalStepDAG` | N/A |
+| No public read API | Adapters access `_dag`/`_ledger` directly; add public accessors (§15) | Phase 3a |
+| No cancel/skip/block transitions | Missing state machine methods (§16) | Phase 3a |
+| No event/callback mechanism | Simple callbacks on state transitions (§17) | Phase 3a |
+| Ledger `compact()` is a no-op | Configurable compaction with `compact_fn` (§19) | Phase 3a |
+| `ContextBundle.ledger_messages` always empty | Populate in projection (§20) | Phase 3a |
 
 ### §13 Files to Create or Modify
 
@@ -327,6 +334,196 @@ The following gaps were identified between the Phase 1 ContextEngine and what th
 | `LoopState` schemas | In-memory state model unchanged |
 | `PlanDAG` | Still used by existing path when CE disabled |
 | `dependency_tokens.py` | Both paths use the same `expand_dependency_satisfaction_ids` |
+
+---
+
+## Phase 3a: CE Engine Completeness (Sub-project 1)
+
+### §14 Purpose
+
+Harden ContextEngine into a self-sufficient engine with a complete public API, full state machine, event callbacks, lossless persistence, bounded ledger growth, and complete projection output. This sub-project makes no changes to existing AgentLoop code — it only fills gaps within the `soothe.context` module.
+
+### §15 Public Read API
+
+Adapters currently access `_ce._dag` and `_ce._ledger._entries` directly, creating tight coupling. New synchronous read accessors:
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `get_dag_snapshot()` | `GoalStepDAGSnapshot` | Serializable snapshot of full GoalStepDAG |
+| `get_step_dag(goal_id)` | `StepDAG \| None` | StepDAG for a specific goal |
+| `get_ledger_entries(phases)` | `list[tuple[BaseMessage, str \| None]]` | (message, phase) tuples, filtered by phase |
+| `get_all_goals()` | `list[GoalNode]` | All goals in the DAG |
+| `get_goal_lineage(goal_id)` | `list[str]` | Chain of goal descriptions from root |
+
+These are synchronous (not async) since they read from in-memory state. The existing async methods remain for API consistency.
+
+### §16 Missing State Transitions
+
+**GoalStepDAG** additions:
+
+| Method | Transition | Notes |
+|--------|-----------|-------|
+| `cancel_goal(goal_id)` | → `cancelled` (terminal) | Mirrors `complete_goal`/`fail_goal` |
+| `block_goal(goal_id)` | → `blocked` | Goal waiting on unmet condition |
+| `unblock_goal(goal_id)` | `blocked` → `pending` | Condition resolved |
+
+**ContextEngine** async additions:
+
+| Method | Delegates to | Callback event |
+|--------|-------------|----------------|
+| `cancel_goal(goal_id)` | `GoalStepDAG.cancel_goal()` | `goal_cancelled` |
+| `skip_step(goal_id, step_id)` | `StepDAG.mark_skipped()` | `step_skipped` |
+| `block_goal(goal_id)` | `GoalStepDAG.block_goal()` | `goal_blocked` |
+| `unblock_goal(goal_id)` | `GoalStepDAG.unblock_goal()` | `goal_unblocked` |
+
+### §17 Callback Event Mechanism
+
+Simple synchronous callbacks registered by event name. Fire after state changes complete. Errors in callbacks are caught and logged — they never block the state transition.
+
+**Event types**: `goal_created`, `goal_activated`, `goal_completed`, `goal_failed`, `goal_suspended`, `goal_cancelled`, `goal_blocked`, `goal_unblocked`, `step_completed`, `step_failed`, `step_skipped`.
+
+**API**:
+- `on(event, callback)` — register a callback for an event
+- `off(event, callback)` — unregister a callback
+- `_fire(event, *args)` — internal dispatch, catches errors per callback
+
+Callback signatures by event:
+
+| Event | Signature |
+|-------|-----------|
+| `goal_created` | `(goal_id: str)` |
+| `goal_activated` | `(goal_id: str)` |
+| `goal_completed` | `(goal_id: str)` |
+| `goal_failed` | `(goal_id: str, error: str)` |
+| `goal_suspended` | `(goal_id: str, reason: str)` |
+| `goal_cancelled` | `(goal_id: str)` |
+| `goal_blocked` | `(goal_id: str)` |
+| `goal_unblocked` | `(goal_id: str)` |
+| `step_completed` | `(goal_id: str, step_id: str)` |
+| `step_failed` | `(goal_id: str, step_id: str)` |
+| `step_skipped` | `(goal_id: str, step_id: str)` |
+
+Existing methods (`activate_goal`, `complete_goal`, `fail_goal`, `suspend_goal`, `create_goal`, `complete_step`, `fail_step`) also fire callbacks — not just the new ones.
+
+### §18 Lossless Ledger Persistence
+
+**Problem**: `engine.save()` only serializes `type + content + phase`, losing `ToolMessage`, `tool_calls`, `response_metadata`, `usage_metadata`.
+
+**Solution**: Use `BaseMessage.model_dump()` for serialization and `message_type.model_validate()` for deserialization. Each persisted entry includes `_phase` and `_msg_type` metadata keys alongside the full message dump.
+
+**Backward compatibility**: Old persisted files (with `type + content + phase` only) continue to load — `load()` detects the absence of `_msg_type` and falls back to the old format.
+
+Message type mapping for reconstruction:
+
+| Type name | Class | Notes |
+|-----------|-------|-------|
+| `AIMessage` | `AIMessage` | Direct |
+| `HumanMessage` | `HumanMessage` | Direct |
+| `SystemMessage` | `SystemMessage` | Direct |
+| `ToolMessage` | `ToolMessage` | Direct |
+| `AIMessageChunk` | `AIMessageChunk` | Direct |
+| `LoopAIMessage` | `AIMessage` | Fallback — content preserved |
+| `LoopHumanMessage` | `HumanMessage` | Fallback — content preserved |
+
+If reconstruction fails, fall back to content-only message of the mapped type.
+
+### §19 Ledger Compaction
+
+**Design**: Configurable compaction function passed to `LedgerManager.__init__`. When entries exceed `max_entries` (default 200), the oldest entries are compacted.
+
+- **With `compact_fn`**: The function receives the oldest entries and returns a summary string (or None to skip). The summary replaces those entries as a single `SystemMessage` with `phase="compacted"`.
+- **Without `compact_fn`** (default): Entries beyond `max_entries` are dropped. This matches current behavior where `loop_messages` grows unbounded but is bounded by the projection layer.
+
+Compaction is auto-triggered after each `record_message()` when the count exceeds `max_entries`.
+
+### §20 Complete ContextBundle Projection
+
+**Problem**: `ContextBundle.ledger_messages` is always empty.
+
+**Solution**: Populate in `ProjectionEngine.project()` — structured list of `{type, phase, content}` dicts, bounded by `max_ledger_messages` and per-message content cap of 500 chars. Provides structured ledger access without full BaseMessage objects.
+
+### §21 LedgerManager Public Access
+
+Add `entries(phases)` method returning `(message, phase)` tuples. This replaces direct `_entries` access by both the engine (for persistence) and future adapter code.
+
+### §22 Files to Modify
+
+All changes are within `soothe.context`. No existing AgentLoop code is modified.
+
+| File | Change |
+|------|--------|
+| `packages/soothe/src/soothe/context/engine.py` | Public read API, missing transitions, callback mechanism, lossless save/load |
+| `packages/soothe/src/soothe/context/models.py` | `cancel_goal`, `block_goal`, `unblock_goal` on `GoalStepDAG` |
+| `packages/soothe/src/soothe/context/ledger.py` | `compact()` implementation, `entries()` public method, `max_entries` + `compact_fn` params |
+| `packages/soothe/src/soothe/context/projection.py` | Populate `ledger_messages` in ContextBundle |
+
+### §23 Testing
+
+New unit tests in `packages/soothe/tests/unit/context/`:
+
+- Public read API: `get_dag_snapshot`, `get_step_dag`, `get_ledger_entries`, `get_all_goals`, `get_goal_lineage`
+- State transitions: `cancel_goal`, `skip_step`, `block_goal`/`unblock_goal`
+- Callbacks: registration, firing, error handling, unregistration
+- Lossless persistence: round-trip with Human, AI, Tool, System messages; backward compat with old format
+- Ledger compaction: with and without `compact_fn`
+- Projection: `ledger_messages` populated with bounded content
+
+All existing tests (22 adapter + 9 integration) must continue to pass without modification.
+
+---
+
+## Phase 3b: Adapter Hardening + Projection Wiring (Sub-project 2)
+
+### §24 Purpose
+
+Fix the adapter gap (GoalContextAdapter reads from old state_manager instead of CE DAG), refactor adapters to use the public API from Sub-project 1, and wire ContextBundle into the prompt pipeline as supplementary context when CE is enabled.
+
+### §25 Adapter Hardening
+
+**GoalContextAdapter gap**: Both `get_plan_context()` and `get_execute_briefing()` read from `self._state_manager` (the old `AgentLoopStateManager`) instead of `self._ce` (the ContextEngine). Fix:
+
+- `get_plan_context()`: Read completed goals from `self._ce.get_all_goals()`, filter by `status == "completed"`, format as `<previous_goal>` XML blocks using goal description and step outcomes.
+- `get_execute_briefing()`: Read from CE DAG goals for thread-switch briefing, using `self._ce.get_goal_lineage()` and step summaries.
+
+**Private field access refactor**: All three adapters currently access `self._ce._dag` and `self._ce._ledger._entries` directly. Replace with public API:
+
+- `self._ce._dag.get_goal(goal_id)` → `self._ce.get_step_dag(goal_id)` (for step operations) or keep `await self._ce.get_goal(goal_id)` (for goal-level operations)
+- `self._ce._dag.goals.values()` → `self._ce.get_all_goals()`
+- `self._ce._ledger.get_messages(...)` → `self._ce.get_ledger_entries(...)`
+- `self._ce._ledger.record_message(...)` → `await self._ce.record_message(...)`
+
+### §26 Projection Wiring (Supplementary Injection)
+
+When CE is enabled, `ContextBundle` from `ContextEngine.project()` is injected into the prompt pipeline as supplementary context. No existing context is removed or replaced.
+
+**Integration point**: Add `context_bundle: ContextBundle | None = None` parameter to `PromptBuilder.build_plan_messages()`. Thread it to `_build_system_message()` and `_build_plan_context_human_text()`.
+
+**Supplementary injections when bundle is available**:
+
+| Location | Current | Bundle supplement |
+|----------|---------|-------------------|
+| `_build_system_message` | `load_workspace_project_instructions(workspace)` | Use `bundle.project_instructions` instead of disk read |
+| `_build_system_message` | N/A | Append `bundle.agent_instructions` and `bundle.memory_instructions` if non-empty |
+| `_build_plan_context_human_text` | `<PLAN_DAG_CONTEXT>` from `_format_dag_context()` | Keep current; add `<GOAL_LINEAGE>` block from `bundle.goal_lineage` if non-empty |
+| `_build_plan_context_human_text` | N/A | Add `<GOAL_PROGRESS>` block from `bundle.goal_progress` if non-empty |
+| `_build_plan_context_human_text` | N/A | Add `<STEP_LINEAGE>` block from `bundle.step_lineage` if non-empty |
+
+**When CE is disabled**: `context_bundle` is `None`, all supplementary injections are skipped, behavior is identical to current.
+
+### §27 Files to Modify
+
+| File | Change |
+|------|--------|
+| `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` | Fix GoalContextAdapter to read from CE; refactor all adapters to use public API |
+| `packages/soothe/src/soothe/foundation/loop/prompts/builder.py` | Add `context_bundle` param; supplementary injections |
+| `packages/soothe/src/soothe/foundation/loop/planning/planner.py` | Pass `context_bundle` to `build_plan_messages()` when CE enabled |
+| `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Add `context_bundle` field (computed per planning call) |
+
+### §28 Behavioral Equivalence
+
+When CE is enabled, the supplementary injections add context but do not change existing context. The existing `<PLAN_DAG_CONTEXT>`, `<USER_QUERY>`, `<PRIOR_PROGRESS>`, ledger projection, and system message fragments all remain identical. The only differences are additive: goal lineage, goal progress, step lineage, and pre-loaded project/agent/memory instructions.
+
+When CE is disabled, zero changes — `context_bundle` is `None` and all code paths are guarded.
 
 ---
 
