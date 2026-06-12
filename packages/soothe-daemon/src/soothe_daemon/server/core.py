@@ -1380,9 +1380,15 @@ class SootheDaemon(DaemonHandlersMixin):
         1. PID file with valid process (fast, no config loading)
         2. WebSocket port accepting connections (fallback)
         """
-        # Use default port - avoid config loading for speed
+        # Use daemon config for port - avoid SootheDaemon import but allow YAML override
         ws_host = "127.0.0.1"
         ws_port = 8765
+        with contextlib.suppress(Exception):
+            from soothe_daemon.config import SootheDaemonConfig
+
+            _cfg = SootheDaemonConfig.from_default_yaml()
+            ws_host = _cfg.transports.websocket.host
+            ws_port = _cfg.transports.websocket.port
 
         # 1. Check PID file first (fastest)
         pf = pid_path()
@@ -1424,8 +1430,14 @@ class SootheDaemon(DaemonHandlersMixin):
             else:
                 return pid
 
-        # 2. Check WebSocket port (use default, skip config loading)
-        pid = SootheDaemon._find_port_process(8765)
+        # 2. Check WebSocket port (use daemon config, skip SootheDaemon import)
+        ws_port = 8765
+        with contextlib.suppress(Exception):
+            from soothe_daemon.config import SootheDaemonConfig
+
+            _cfg = SootheDaemonConfig.from_default_yaml()
+            ws_port = _cfg.transports.websocket.port
+        pid = SootheDaemon._find_port_process(ws_port)
         if pid:
             return pid
 
@@ -1501,8 +1513,8 @@ class SootheDaemon(DaemonHandlersMixin):
         Escalates to SIGKILL if the daemon does not exit within *timeout*
         seconds.
 
-        Only stops daemon via PID file - does NOT scan system processes.
-        This prevents accidentally stopping Docker containerized daemons.
+        Checks PID file first, then falls back to finding the process
+        by port (to handle orphan daemons with missing PID files).
 
         Args:
             timeout: Maximum seconds to wait before SIGKILL escalation.
@@ -1513,7 +1525,7 @@ class SootheDaemon(DaemonHandlersMixin):
         stopped = False
         pid: int | None = None
 
-        # Only stop via PID file - don't scan system processes (avoids Docker conflicts)
+        # 1. Try PID file first (fastest, most reliable)
         pf = pid_path()
         if pf.exists():
             try:
@@ -1522,6 +1534,24 @@ class SootheDaemon(DaemonHandlersMixin):
                 stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
             except (ValueError, ProcessLookupError, PermissionError):
                 pass
+
+        # 2. Fallback: find orphan by port (PID file missing/stale)
+        if not stopped:
+            ws_port = 8765
+            with contextlib.suppress(Exception):
+                from soothe_daemon.config import SootheDaemonConfig
+
+                _cfg = SootheDaemonConfig.from_default_yaml()
+                ws_port = _cfg.transports.websocket.port
+            orphan_pid = SootheDaemon._find_port_process(ws_port)
+            if orphan_pid and orphan_pid != pid:
+                logger.info("Found orphan daemon on port %d (PID: %d), stopping", ws_port, orphan_pid)
+                try:
+                    os.kill(orphan_pid, signal.SIGTERM)
+                    stopped = SootheDaemon._wait_for_pid_exit(orphan_pid, timeout)
+                except (ProcessLookupError, PermissionError):
+                    # Process already gone
+                    stopped = True
 
         # Cleanup PID file regardless of outcome
         cleanup_pid()
