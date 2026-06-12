@@ -327,7 +327,7 @@ class WebSearchSource:
     @staticmethod
     def _parse_search_output(raw: str, query: str) -> list[SourceResult]:
         results: list[SourceResult] = []
-        if not raw or "No results found" in raw or "Search failed" in raw:
+        if not raw or "No results found" in raw or "Search failed" in raw or "No search engines available" in raw:
             return results
 
         pattern = re.compile(r"^(\d+)\.\s+(.+?)(?:\s+\(([^)]+)\))?$", re.MULTILINE)
