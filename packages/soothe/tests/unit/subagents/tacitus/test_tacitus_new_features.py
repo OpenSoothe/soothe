@@ -46,6 +46,16 @@ class TestTacitusConfigOptions:
         config = TacitusConfig()
         assert config.llm_timeout_sec == 30.0
 
+    def test_default_summarize_timeout(self):
+        """Default summarize timeout should be 60s (higher than base LLM timeout)."""
+        config = TacitusConfig()
+        assert config.summarize_timeout_sec == 60.0
+
+    def test_default_synthesize_timeout(self):
+        """Default synthesize timeout should be 60s (higher than base LLM timeout)."""
+        config = TacitusConfig()
+        assert config.synthesize_timeout_sec == 60.0
+
     def test_default_synthesis_role_is_fast(self):
         """Default synthesis role should be fast."""
         config = TacitusConfig()
@@ -233,6 +243,8 @@ class TestIntegration:
             min_results_for_termination=5,
             min_source_diversity=3,
             llm_timeout_sec=45.0,
+            summarize_timeout_sec=90.0,
+            synthesize_timeout_sec=90.0,
             synthesis_role="fast",
         )
 
@@ -242,4 +254,6 @@ class TestIntegration:
         assert config.min_results_for_termination == 5
         assert config.min_source_diversity == 3
         assert config.llm_timeout_sec == 45.0
+        assert config.summarize_timeout_sec == 90.0
+        assert config.synthesize_timeout_sec == 90.0
         assert config.synthesis_role == "fast"

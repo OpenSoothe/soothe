@@ -123,7 +123,19 @@ class TacitusConfig(BaseModel):
         default=30.0,
         ge=5.0,
         le=120.0,
-        description="LLM invocation timeout in seconds.",
+        description="LLM invocation timeout in seconds (used by analyze, generate, reflect).",
+    )
+    summarize_timeout_sec: float = Field(
+        default=60.0,
+        ge=10.0,
+        le=180.0,
+        description="Timeout for summarize LLM calls (higher due to larger input).",
+    )
+    synthesize_timeout_sec: float = Field(
+        default=60.0,
+        ge=10.0,
+        le=180.0,
+        description="Timeout for final synthesis LLM call (higher due to larger input).",
     )
 
     # Politeness controls (IG-432 Phase 6)
