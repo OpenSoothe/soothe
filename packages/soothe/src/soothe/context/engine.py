@@ -100,6 +100,28 @@ class ContextEngine:
             return [g for g in self._dag.goals.values() if g.status == status]
         return list(self._dag.goals.values())
 
+    async def activate_goal(self, goal_id: str, loop_id: str | None = None) -> None:
+        """Transition a goal from pending to active.
+
+        Args:
+            goal_id: Goal to activate.
+            loop_id: Optional loop_id to assign.
+
+        Raises:
+            ValueError: If goal not found or not in pending state.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            msg = f"Goal {goal_id} not found"
+            raise ValueError(msg)
+        if goal.status != "pending":
+            msg = f"Goal {goal_id} is {goal.status}, expected pending"
+            raise ValueError(msg)
+        goal.status = "active"
+        goal.assigned_loop_id = loop_id
+        goal.updated_at = datetime.now(UTC)
+        logger.info("Activated goal %s (loop_id=%s)", goal_id, loop_id)
+
     async def complete_goal(self, goal_id: str) -> None:
         self._dag.complete_goal(goal_id)
         logger.info("Completed goal %s", goal_id)
