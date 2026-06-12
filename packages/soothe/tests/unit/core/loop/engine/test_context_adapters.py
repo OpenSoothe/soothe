@@ -192,14 +192,24 @@ class TestPlanAdapterRecordStepOutcomes:
 
 class TestPlanAdapterFormatCompletionDagReport:
     @pytest.mark.asyncio
-    async def test_empty_when_no_steps(self) -> None:
+    async def test_empty_when_no_goals(self) -> None:
         ce = ContextEngine()
-        goal = await ce.create_goal("Test goal")
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = ContextEnginePlanAdapter(ce, goal="Test goal")
         assert adapter.format_completion_dag_report() == ""
 
     @pytest.mark.asyncio
-    async def test_report_contains_step_info(self) -> None:
+    async def test_report_shows_goal_without_steps(self) -> None:
+        ce = ContextEngine()
+        goal = await ce.create_goal("Test goal")
+        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+
+        report = adapter.format_completion_dag_report()
+        assert "Context Engine Goal DAG" in report
+        assert goal.id in report
+        assert "Test goal" in report
+
+    @pytest.mark.asyncio
+    async def test_report_shows_full_goal_dag(self) -> None:
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
         await ce.add_steps(
@@ -214,11 +224,78 @@ class TestPlanAdapterFormatCompletionDagReport:
         adapter.plan_history.append(_make_plan_result())
 
         report = adapter.format_completion_dag_report()
+        assert "Context Engine Goal DAG" in report
+        assert "Goal statistics" in report
+        assert goal.id in report
         assert "KFA-01" in report
         assert "KFA-02" in report
         assert "COMPLETED" in report
         assert "FAILED" in report
-        assert "Execution statistics" in report
+        assert "Step DAG" in report
+
+    @pytest.mark.asyncio
+    async def test_report_shows_multiple_goals(self) -> None:
+        ce = ContextEngine()
+        goal1 = await ce.create_goal("First goal")
+        await ce.add_steps(
+            goal1.id,
+            [StepNode(id="01", description="Step 1", status="completed")],
+        )
+        goal2 = await ce.create_goal("Second goal")
+        await ce.add_steps(
+            goal2.id,
+            [StepNode(id="02", description="Step 2", status="failed")],
+        )
+
+        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal1.id)
+        adapter.plan_history.append(_make_plan_result())
+
+        report = adapter.format_completion_dag_report()
+        assert "Total goals: 2" in report
+        assert goal1.id in report
+        assert goal2.id in report
+        assert "First goal" in report
+        assert "Second goal" in report
+
+    @pytest.mark.asyncio
+    async def test_report_shows_lineage_for_subgoal(self) -> None:
+        from soothe.context.models import GoalNode
+
+        ce = ContextEngine()
+        parent = await ce.create_goal("Parent goal")
+        child = GoalNode(
+            id="child-1",
+            description="Child goal",
+            parent_id=parent.id,
+            source="decomposition",
+        )
+        ce._dag.add_goal(child)
+        await ce.add_steps(
+            child.id,
+            [StepNode(id="01", description="Sub-step", status="completed")],
+        )
+
+        adapter = ContextEnginePlanAdapter(ce, goal="Test", goal_id=parent.id)
+        report = adapter.format_completion_dag_report()
+        assert "child-1" in report
+        assert f"Parent: {parent.id}" in report
+        assert "Lineage:" in report
+
+    @pytest.mark.asyncio
+    async def test_report_shows_replan_count(self) -> None:
+        ce = ContextEngine()
+        goal = await ce.create_goal("Test goal")
+        await ce.add_steps(
+            goal.id,
+            [StepNode(id="01", description="S1", status="completed")],
+        )
+
+        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter.plan_history.append(_make_plan_result())
+        adapter.plan_history.append(_make_plan_result())
+
+        report = adapter.format_completion_dag_report()
+        assert "Replans after first wave: 1" in report
 
 
 class TestPlanAdapterDetermineGoalCompletionNeeds:

@@ -270,7 +270,7 @@ class TestPlanAdapterPlanManagerEquivalence:
 
         # Both reports should contain key structural elements
         assert "Execution statistics" in pm_report
-        assert "Execution statistics" in ce_report
+        assert "Context Engine Goal DAG" in ce_report
         assert "COMPLETED" in pm_report
         assert "COMPLETED" in ce_report
         assert "FAILED" in pm_report
