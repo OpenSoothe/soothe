@@ -60,24 +60,12 @@ ITER0_PLAN_GENERATE_DUMP = (
 )
 
 EXECUTE_STEP_AI_TEXTS = [
-    # Step 01 AI content (final + <LAST_TOOL_RESULT>)
-    (
-        "I enumerated packages/{soothe,soothe-cli,soothe-daemon,soothe-sdk}/src and tests/.\n"
-        "<LAST_TOOL_RESULT>\n"
-        "find packages/*/src -name '*.py' | wc -l → 1247 files\n"
-        "find packages/*/tests -name '*.py' | wc -l → 612 files\n"
-        "</LAST_TOOL_RESULT>"
-    ),
+    # Step 01 AI content (prose only; tool evidence provided separately via PriorProgressDigest)
+    "I enumerated packages/{soothe,soothe-cli,soothe-daemon,soothe-sdk}/src and tests/.",
     # Step 02 AI content
     (
         "Per-package line counts collected via wc -l. Production totals dominate; "
-        "tests are ~30% of production.\n"
-        "<LAST_TOOL_RESULT>\n"
-        "soothe/src: 90870  soothe/tests: 47738\n"
-        "soothe-cli/src: 37303  soothe-cli/tests: 6798\n"
-        "soothe-daemon/src: 32499  soothe-daemon/tests: 16176\n"
-        "soothe-sdk/src: 6474  soothe-sdk/tests: 3456\n"
-        "</LAST_TOOL_RESULT>"
+        "tests are ~30% of production."
     ),
 ]
 

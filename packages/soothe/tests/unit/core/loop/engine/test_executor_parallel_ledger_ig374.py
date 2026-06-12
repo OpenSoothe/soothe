@@ -107,8 +107,8 @@ def test_last_tool_result_block_caps_long_tool_output() -> None:
 
 
 def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
-    """plan-assess regression (trace 0e412f): ledger AI body must carry the
-    final tool output so the assessor can grade concrete progress."""
+    """Ledger AI body carries the assistant prose only; tool output is NOT
+    injected into the message content."""
     mock_agent = object()
     ex = Executor(mock_agent, max_parallel_steps=4)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
@@ -132,8 +132,8 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
     ex._append_parallel_wave_ledger(state, steps, [tup])
     ai_body = state.loop_messages[1].content or ""
     assert "Counted files by extension." in ai_body
-    assert "<LAST_TOOL_RESULT" in ai_body
-    assert "md 33" in ai_body
+    assert "<LAST_TOOL_RESULT" not in ai_body
+    assert "md 33" not in ai_body
 
 
 def test_append_parallel_wave_ledger_uses_outcome_summary_when_no_ai_text() -> None:
