@@ -1068,6 +1068,28 @@ class OutputStreamingConfig(BaseModel):
     )
 
 
+class ContextEngineConfig(BaseModel):
+    """Context Engine integration for AgentLoop (RFC-624 Phase 3).
+
+    When enabled, ContextEngine replaces PlanManager, LoopWorkingMemory,
+    and GoalContextManager as the internal state backend via adapter classes.
+    The existing prompt pipeline, executor, and LangGraph topology remain unchanged.
+
+    Args:
+        enabled: Enable the ContextEngine path (default: false).
+        persistence_backend: Persistence backend type ("file" or "in_memory").
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable ContextEngine as AgentLoop state backend (RFC-624 Phase 3)",
+    )
+    persistence_backend: Literal["file", "in_memory"] = Field(
+        default="file",
+        description="Persistence backend for ContextEngine ('file' or 'in_memory')",
+    )
+
+
 class AgentLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
 
@@ -1219,6 +1241,11 @@ class AgentLoopConfig(BaseModel):
     limits: InfrastructureLimitsConfig = Field(
         default_factory=InfrastructureLimitsConfig,
         description="Infrastructure limits (rate limiting, concurrency, timeouts, tool limits)",
+    )
+
+    context_engine: ContextEngineConfig = Field(
+        default_factory=lambda: ContextEngineConfig(),
+        description="Context Engine integration (RFC-624 Phase 3)",
     )
 
 

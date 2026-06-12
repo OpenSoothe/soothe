@@ -394,7 +394,72 @@ class AgentLoop:
         async def emit(event_type: str, event_data: Any) -> None:
             await queue.put((event_type, event_data))
 
-        plan_manager = PlanManager(goal=execution_goal)
+        plan_manager: PlanManager
+
+        # RFC-624 Phase 3: ContextEngine path (adapter pattern)
+        ce_config = self.config.agent.loop.context_engine
+        ce_instance = None
+        ce_ledger_adapter = None
+
+        if ce_config.enabled:
+            from soothe.context.engine import ContextEngine as _ContextEngine
+            from soothe.context.persistence.in_memory import InMemoryContextPersistence
+
+            from .context_adapters import (
+                ContextEngineGoalContextAdapter,
+                ContextEngineLedgerAdapter,
+                ContextEnginePlanAdapter,
+            )
+
+            persistence = InMemoryContextPersistence()
+            if ce_config.persistence_backend == "file":
+                from pathlib import Path as _Path
+
+                from soothe.context.persistence.file_backend import FileContextPersistence
+
+                soothe_home = (
+                    _Path(self.config.home)
+                    if hasattr(self.config, "home")
+                    else _Path.home() / ".soothe"
+                )
+                persistence = FileContextPersistence(
+                    loop_id=state_manager.loop_id,
+                    soothe_home=soothe_home,
+                )
+
+            ce_instance = _ContextEngine(
+                persistence=persistence,
+                soothe_home=Path(self.config.home) if hasattr(self.config, "home") else None,
+                workspace=Path(workspace) if workspace else None,
+            )
+            ce_goal = await ce_instance.create_goal(
+                execution_goal,
+                generating_reasoning="AgentLoop goal",
+                source="user",
+            )
+            await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+
+            plan_manager = ContextEnginePlanAdapter(
+                context_engine=ce_instance,
+                goal=execution_goal,
+                goal_id=ce_goal.id,
+            )
+            ce_ledger_adapter = ContextEngineLedgerAdapter(ce_instance)
+
+            # Replace GoalContextManager with adapter
+            goal_context_manager = ContextEngineGoalContextAdapter(
+                context_engine=ce_instance,
+                state_manager=state_manager,
+                config=goal_context_config,
+            )
+
+            logger.info(
+                "ContextEngine path enabled (goal_id=%s, backend=%s)",
+                ce_goal.id,
+                ce_config.persistence_backend,
+            )
+        else:
+            plan_manager = PlanManager(goal=execution_goal)
 
         ctx = LoopRuntimeContext(
             agent_loop=self,
@@ -418,6 +483,8 @@ class AgentLoop:
                 else None
             ),
             proposal_queue=proposal_queue,  # RFC-204 Group C
+            context_engine=ce_instance,  # RFC-624 Phase 3
+            ce_ledger_adapter=ce_ledger_adapter,  # RFC-624 Phase 3
         )
 
         async def pump_graph() -> None:
