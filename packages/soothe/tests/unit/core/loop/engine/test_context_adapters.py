@@ -9,7 +9,6 @@ from soothe.context.models import StepNode
 from soothe.context.planning import StepPlanManagerAdapter
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
-    ContextEngineLedgerAdapter,
 )
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
@@ -316,63 +315,6 @@ class TestPlanAdapterGoalIdProperty:
 
         adapter.goal_id = "abc123"
         assert adapter.goal_id == "abc123"
-
-
-# ── ContextEngineLedgerAdapter ───────────────────────────────────────
-
-
-class TestLedgerAdapter:
-    @pytest.mark.asyncio
-    async def test_mirrors_to_both_paths(self) -> None:
-        from langchain_core.messages import HumanMessage
-
-        ce = ContextEngine()
-        adapter = ContextEngineLedgerAdapter(ce)
-
-        loop_messages: list = []
-        msg = HumanMessage(content="test message")
-        adapter.record_message(msg, "execute_step", loop_messages)
-
-        # loop_messages should have the message
-        assert len(loop_messages) == 1
-        assert loop_messages[0] is msg
-
-        # LedgerManager should have it too
-        ledger_msgs = ce._ledger.get_messages(["execute_step"])
-        assert len(ledger_msgs) == 1
-
-    @pytest.mark.asyncio
-    async def test_ignores_non_base_message(self) -> None:
-        ce = ContextEngine()
-        adapter = ContextEngineLedgerAdapter(ce)
-
-        loop_messages: list = []
-        adapter.record_message("not a message", "plan_assess", loop_messages)
-
-        assert len(loop_messages) == 1
-        # LedgerManager should not have non-BaseMessage
-        ledger_msgs = ce._ledger.get_messages()
-        assert len(ledger_msgs) == 0
-
-    @pytest.mark.asyncio
-    async def test_phase_tagging(self) -> None:
-        from langchain_core.messages import AIMessage, HumanMessage
-
-        ce = ContextEngine()
-        adapter = ContextEngineLedgerAdapter(ce)
-
-        loop_messages: list = []
-        adapter.record_message(HumanMessage(content="h1"), "plan_assess", loop_messages)
-        adapter.record_message(AIMessage(content="a1"), "plan_generate", loop_messages)
-        adapter.record_message(HumanMessage(content="h2"), "execute_step", loop_messages)
-
-        assert len(loop_messages) == 3
-
-        plan_msgs = ce._ledger.get_messages(["plan_assess", "plan_generate"])
-        assert len(plan_msgs) == 2
-
-        exec_msgs = ce._ledger.get_messages(["execute_step"])
-        assert len(exec_msgs) == 1
 
 
 # ── ContextEngineGoalContextAdapter ──────────────────────────────────

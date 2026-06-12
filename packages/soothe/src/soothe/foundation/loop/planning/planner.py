@@ -1115,7 +1115,7 @@ class LLMPlanner:
         state: LoopState,
         context: PlanContext,
         *,
-        ce_ledger_adapter: Any | None = None,
+        context_engine: Any | None = None,
     ) -> Any:
         """Assess-only planner call used by split graph flow (RFC-214).
 
@@ -1159,9 +1159,17 @@ class LLMPlanner:
                 phase="plan_assess",
             )
             _record_ledger_message(
-                ce_ledger_adapter, recorded_human, "plan_assess", state.loop_messages
+                context_engine,
+                recorded_human,
+                "plan_assess",
+                state.loop_messages,
             )
-            _record_ledger_message(ce_ledger_adapter, ai_msg, "plan_assess", state.loop_messages)
+            _record_ledger_message(
+                context_engine,
+                ai_msg,
+                "plan_assess",
+                state.loop_messages,
+            )
             logger.debug(
                 "Recorded plan-assess ledger pair: human=%d chars, ai=%d chars",
                 len(str(recorded_human.content)),
@@ -1192,7 +1200,6 @@ class LLMPlanner:
         assessment: Any,
         *,
         plan_manager: Any = None,
-        ce_ledger_adapter: Any | None = None,
         context_engine: Any | None = None,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow, RFC-214).
@@ -1200,7 +1207,7 @@ class LLMPlanner:
         Records the plan-generate user/AI pair in the ledger after the LLM call.
         These messages are NOT injected into CoreAgent thread.
         """
-        from soothe.foundation.loop.planning.manager import (
+        from soothe.context.planning.completion import (
             determine_goal_completion_needs,
         )
         from soothe.foundation.loop.state.schemas import PlanResult
@@ -1213,8 +1220,14 @@ class LLMPlanner:
             )
             require_completion = determine_goal_completion_needs(
                 llm_decision=assessment.require_goal_completion,
-                state=state,
                 mode=gc_mode,
+                dag_failed_steps=sum(1 for r in state.step_results if not r.success),
+                dag_completed_steps=sum(1 for r in state.step_results if r.success),
+                last_execute_wave_parallel_multi_step=state.last_execute_wave_parallel_multi_step,
+                last_wave_hit_subagent_cap=state.last_wave_hit_subagent_cap,
+                current_decision_steps=(
+                    state.current_decision.steps if state.current_decision else None
+                ),
             )
             return PlanResult(
                 status=assessment.status,
@@ -1345,9 +1358,17 @@ class LLMPlanner:
                 phase="plan_generate",
             )
             _record_ledger_message(
-                ce_ledger_adapter, recorded_human, "plan_generate", state.loop_messages
+                context_engine,
+                recorded_human,
+                "plan_generate",
+                state.loop_messages,
             )
-            _record_ledger_message(ce_ledger_adapter, ai_msg, "plan_generate", state.loop_messages)
+            _record_ledger_message(
+                context_engine,
+                ai_msg,
+                "plan_generate",
+                state.loop_messages,
+            )
             logger.debug(
                 "Recorded plan-generate ledger pair: human=%d chars, ai=%d chars",
                 len(str(recorded_human.content)),
@@ -1433,7 +1454,7 @@ class LLMPlanner:
 
                 # Early completion: apply goal-completion policy (IG-298)
                 if assessment.status == "done":
-                    from soothe.foundation.loop.planning.manager import (
+                    from soothe.context.planning.completion import (
                         determine_goal_completion_needs,
                     )
 
@@ -1446,8 +1467,14 @@ class LLMPlanner:
 
                     require_completion = determine_goal_completion_needs(
                         llm_decision=assessment.require_goal_completion,
-                        state=state,
                         mode=gc_mode,
+                        dag_failed_steps=sum(1 for r in state.step_results if not r.success),
+                        dag_completed_steps=sum(1 for r in state.step_results if r.success),
+                        last_execute_wave_parallel_multi_step=state.last_execute_wave_parallel_multi_step,
+                        last_wave_hit_subagent_cap=state.last_wave_hit_subagent_cap,
+                        current_decision_steps=(
+                            state.current_decision.steps if state.current_decision else None
+                        ),
                     )
 
                     logger.debug(

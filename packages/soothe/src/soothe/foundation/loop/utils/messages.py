@@ -13,27 +13,28 @@ if TYPE_CHECKING:
 
 
 def _record_ledger_message(
-    ce_ledger_adapter: Any | None,
+    context_engine: Any | None,
     msg: Any,
     phase: str,
     loop_messages: list[Any],
 ) -> None:
-    """Append a message to loop_messages, mirroring to CE LedgerManager when enabled.
+    """Append a message to loop_messages and CE LedgerManager.
 
-    When ``ce_ledger_adapter`` is not None (CE path enabled), the adapter handles
-    the dual-write: append to ``loop_messages`` AND record in ``LedgerManager``
-    with the phase tag. When None, behaves identically to ``loop_messages.append(msg)``.
+    Always appends to ``loop_messages``. When ``context_engine`` is provided,
+    also records the message in the CE ``LedgerManager`` with the phase tag.
 
     Args:
-        ce_ledger_adapter: ContextEngineLedgerAdapter instance or None.
+        context_engine: ContextEngine instance for direct LedgerManager writes.
         msg: Message to record.
         phase: Phase tag (e.g., "execute_step", "plan_assess", "goal_completion").
         loop_messages: The LoopState.loop_messages list to append to.
     """
-    if ce_ledger_adapter is not None:
-        ce_ledger_adapter.record_message(msg, phase, loop_messages)
-    else:
-        loop_messages.append(msg)
+    loop_messages.append(msg)
+    if context_engine is not None:
+        from langchain_core.messages import BaseMessage
+
+        if isinstance(msg, BaseMessage):
+            context_engine.ledger.record_message(msg, phase)
 
 
 def last_ledger_ai_content(state: LoopState) -> str:

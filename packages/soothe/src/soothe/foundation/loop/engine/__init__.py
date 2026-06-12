@@ -10,7 +10,6 @@ from .executor import (
     StepWaveStart,
     compute_act_wave_finalize,
 )
-from .goal_context_manager import GoalContextManager
 from .metadata_generator import generate_outcome_metadata
 from .scenario_classifier import ScenarioClassification
 from .synthesis import SynthesisGenerator
@@ -25,7 +24,6 @@ __all__ = [
     "Executor",
     "StepWaveQueued",
     "StepWaveStart",
-    "GoalContextManager",
     "ScenarioClassification",
     "SynthesisGenerator",
     "ThreadSwitchPolicyManager",

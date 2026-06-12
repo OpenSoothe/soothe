@@ -55,7 +55,9 @@ class _AskUserPlanner:
         self._generate_count = 0
         self._model = MagicMock()
 
-    async def assess_status(self, goal: str, state: Any, context: PlanContext) -> StatusAssessment:
+    async def assess_status(
+        self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
+    ) -> StatusAssessment:
         self._assess_count += 1
         if self._assess_count == 1:
             return StatusAssessment(
@@ -79,6 +81,7 @@ class _AskUserPlanner:
         assessment: Any,
         *,
         plan_manager: Any = None,
+        context_engine: Any | None = None,
     ) -> PlanResult:
         self._generate_count += 1
         if assessment.status == "done":

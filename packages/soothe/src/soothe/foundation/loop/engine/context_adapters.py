@@ -1,15 +1,14 @@
-"""Context Engine adapters bridging CE to existing AgentLoop interfaces (RFC-624 Phase 3).
+"""Context Engine adapter bridging CE to GoalContextManager interface (RFC-624 Phase 4).
 
-Two adapter classes wrap `ContextEngine` to present identical interfaces to
-existing code, ensuring 100% behavioral equivalence when the ContextEngine path
-is enabled:
+`ContextEngineLedgerAdapter` has been removed — ledger writes now go through
+`_record_ledger_message()` in `soothe.foundation.loop.utils.messages` which
+calls `context_engine.ledger.record_message()` directly.
 
-- `ContextEngineLedgerAdapter` → mirrors ledger writes to both `loop_messages` and `LedgerManager`
-- `ContextEngineGoalContextAdapter` → satisfies `GoalContextManager` interface
+`ContextEnginePlanAdapter` was replaced by `StepPlanManagerAdapter`
+in `soothe.context.planning` (RFC-624 Phase 3c).
 
-Note: `ContextEnginePlanAdapter` has been replaced by `StepPlanManagerAdapter`
-in `soothe.context.planning` (RFC-624 Phase 3c), which delegates to
-`StepPlanningSubengine` instead of duplicating heuristic logic.
+`ContextEngineLifecycle` was removed — lifecycle calls are now inline in
+graph nodes (record_iteration, goal_completion, resolve_decision).
 """
 
 from __future__ import annotations
@@ -23,42 +22,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-
-class ContextEngineLedgerAdapter:
-    """Mirrors ledger writes to both `LoopState.loop_messages` and `LedgerManager`.
-
-    Every append to `loop_messages` is also recorded in `LedgerManager` with
-    the correct phase tag. `project_loop_messages_for_plan()` continues to work
-    on the native `loop_messages` list — the adapter doesn't change how the
-    ledger is consumed by PromptBuilder.
-
-    LedgerManager serves as the persistence/recovery path; `loop_messages`
-    remains the real-time prompt path.
-    """
-
-    def __init__(self, context_engine: ContextEngine) -> None:
-        self._ce = context_engine
-
-    def record_message(
-        self,
-        message: Any,
-        phase: str,
-        loop_messages: list[Any],
-    ) -> None:
-        """Mirror a message to both loop_messages and LedgerManager.
-
-        Args:
-            message: The message to record.
-            phase: Phase tag (e.g., "execute_step", "plan_assess", "plan_generate").
-            loop_messages: The LoopState.loop_messages list to append to.
-        """
-        loop_messages.append(message)
-
-        from langchain_core.messages import BaseMessage
-
-        if isinstance(message, BaseMessage):
-            self._ce.ledger.record_message(message, phase)
 
 
 class ContextEngineGoalContextAdapter:
