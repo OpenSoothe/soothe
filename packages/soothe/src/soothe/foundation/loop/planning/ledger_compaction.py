@@ -7,13 +7,13 @@ Two failure modes show up in practice (trace 19c3ed3):
 1. The recorded AI dump carries the prior `assessment_reasoning` verbatim.
    Structured-output models echo it on the next assess, producing repeated
    reasoning even when fresh evidence has arrived. (Ablation A2.)
-2. The recorded human carries `<USER_QUERY>` and a per-turn `<CONTEXT_INFO>`
-   block. The duplicated goal anchors recency away from the latest evidence
-   (ablation D1), and the volatile timestamp inside `<CONTEXT_INFO>` breaks
-   the prompt-cache prefix on every assess (ablation C1).
+2. The recorded human carries `GOAL:` (or legacy `<USER_QUERY>`) and a per-turn
+   `TIMESTAMP:` line (or legacy `<CONTEXT_INFO>` block). The duplicated goal
+   anchors recency away from the latest evidence (ablation D1), and the volatile
+   timestamp breaks the prompt-cache prefix on every assess (ablation C1).
 
 These helpers apply the three transforms at the single point where the ledger
-pair is recorded so the live LLM call still sees the full rendered envelope —
+pair is recorded so the live LLM call still sees the full rendered message —
 only the *stored* copy is compacted.
 """
 
@@ -22,15 +22,21 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# C1 — `<CONTEXT_INFO>...</CONTEXT_INFO>` is volatile (timestamp/date) and
-# should not enter the cache key when the same envelope is replayed.
+# C1 — Strip volatile timestamp content that breaks prompt-cache prefix.
+# New format: TIMESTAMP: <ISO-8601> (single line)
+_TIMESTAMP_RE = re.compile(r"\n?TIMESTAMP:.*\n?", re.MULTILINE)
+# Legacy format: <CONTEXT_INFO>...</CONTEXT_INFO> (multi-line block)
 _CONTEXT_INFO_RE = re.compile(
     r"\n?<CONTEXT_INFO>.*?</CONTEXT_INFO>\n?",
     re.DOTALL,
 )
 
-# D1 — collapse the recorded `<USER_QUERY>` into a non-anchoring recap tag so
-# the next turn's `<USER_QUERY>` is the only one the model sees as a directive.
+# D1 — Collapse the recorded GOAL: into a non-anchoring GOAL RECAP: so
+# the next turn's GOAL: is the only one the model sees as a directive.
+# New format: "GOAL:" prefix → "GOAL RECAP:"
+_GOAL_PREFIX = "GOAL:"
+_GOAL_RECAP_PREFIX = "GOAL RECAP:"
+# Legacy format: <USER_QUERY>...</USER_QUERY> → <GOAL_RECAP>...</GOAL_RECAP>
 _USER_QUERY_OPEN = "<USER_QUERY>"
 _USER_QUERY_CLOSE = "</USER_QUERY>"
 _GOAL_RECAP_OPEN = "<GOAL_RECAP>"
@@ -46,23 +52,44 @@ _PLAN_ASSESS_LEDGER_FIELDS: frozenset[str] = frozenset(
 def compact_planning_human_content(content: str) -> str:
     """Return ledger-ready content for a recorded plan-phase HumanMessage.
 
-    Applies C1 (strip `<CONTEXT_INFO>`) and D1 (rewrite `<USER_QUERY>` to a
-    non-anchoring `<GOAL_RECAP>`). The original string is returned unchanged
-    when neither marker is present, so this is safe to call on any content.
+    Applies C1 (strip TIMESTAMP:/``<CONTEXT_INFO>``) and D1 (rewrite
+    ``GOAL:``/``<USER_QUERY>`` to non-anchoring ``GOAL RECAP:``/``<GOAL_RECAP>``).
+    The original string is returned unchanged when neither marker is present,
+    so this is safe to call on any content.
+
+    Supports both the new scenario-based text format and the legacy XML format
+    for migration compatibility.
 
     Args:
-        content: Rendered envelope text from ``build_plan_context_envelope``.
+        content: Rendered envelope text from ``UserMessageBuilder`` or
+            ``build_plan_context_envelope``.
 
     Returns:
         Compacted content suitable for ``state.loop_messages``.
     """
     if not isinstance(content, str) or not content:
         return content
-    stripped = _CONTEXT_INFO_RE.sub("", content)
+
+    # C1: strip volatile timestamp content
+    if _CONTEXT_INFO_RE.search(content):
+        # Legacy XML format
+        stripped = _CONTEXT_INFO_RE.sub("", content)
+    elif _TIMESTAMP_RE.search(content):
+        # New text format
+        stripped = _TIMESTAMP_RE.sub("", content)
+    else:
+        stripped = content
+
+    # D1: rewrite anchoring goal directive to non-anchoring recap
     if _USER_QUERY_OPEN in stripped:
+        # Legacy XML format
         stripped = stripped.replace(_USER_QUERY_OPEN, _GOAL_RECAP_OPEN).replace(
             _USER_QUERY_CLOSE, _GOAL_RECAP_CLOSE
         )
+    elif stripped.startswith(_GOAL_PREFIX + "\n") or "\n" + _GOAL_PREFIX in stripped:
+        # New text format: replace GOAL: with GOAL RECAP:
+        stripped = stripped.replace(_GOAL_PREFIX, _GOAL_RECAP_PREFIX, 1)
+
     return stripped.rstrip() + "\n" if stripped.endswith(("\n", "\r")) else stripped.rstrip()
 
 

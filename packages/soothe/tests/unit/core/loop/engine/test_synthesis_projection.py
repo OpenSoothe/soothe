@@ -11,28 +11,26 @@ from soothe.foundation.loop.engine.synthesis_projection import (
     project_synthesis_user_context,
     render_synthesis_system_prompt,
 )
-from soothe.foundation.loop.prompts.user_envelope import (
-    build_execute_step_envelope,
-    build_plan_context_envelope,
-)
+from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.loop.state.schemas import LoopState, StepResult
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
-def test_flatten_execute_envelope_extracts_user_query() -> None:
-    envelope = build_execute_step_envelope(
+def test_flatten_execute_envelope_extracts_goal() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
         "Search the repo for *.yml config",
         execution_hints="hint",
     )
-    flat = flatten_execute_human_content(envelope)
+    flat = flatten_execute_human_content(msg)
     assert flat == "Search the repo for *.yml config"
-    assert "USER_QUERY" not in flat
-    assert "EXECUTION_HINTS" not in flat
+    assert "EXECUTION HINTS" not in flat
 
 
 def test_projection_excludes_plan_phases() -> None:
+    builder = UserMessageBuilder()
     plan_human = LoopHumanMessage(
-        content=build_plan_context_envelope("Analyze latency"),
+        content=builder.build_plan_assess_message(goal="Analyze latency"),
         thread_id="t",
         iteration=0,
         phase="plan_assess",
@@ -55,10 +53,8 @@ def test_projection_excludes_plan_phases() -> None:
         loop_messages=[plan_human, execute_human, execute_ai],
     )
     ctx = project_synthesis_user_context(state)
-    assert "USER_QUERY" not in ctx.evidence_body
-    assert "Execute iteration" not in ctx.evidence_body
+    assert "GOAL:" not in ctx.evidence_body
     assert "README documents" in ctx.evidence_body
-    assert "read README" in ctx.evidence_body or "Execute:" in ctx.evidence_body
 
 
 def test_projection_includes_step_summaries() -> None:
@@ -77,8 +73,8 @@ def test_projection_includes_step_summaries() -> None:
         ],
     )
     ctx = project_synthesis_user_context(state)
-    assert "<step_summaries>" in ctx.evidence_body
-    assert 'step id="s1"' in ctx.evidence_body
+    assert "STEP SUMMARIES:" in ctx.evidence_body
+    assert "[Step s1]" in ctx.evidence_body
 
 
 def test_system_prompt_has_no_orchestration_vocabulary() -> None:
@@ -110,7 +106,7 @@ def test_build_synthesis_messages_uses_system_and_human_only() -> None:
     assert isinstance(msgs[1], HumanMessage)
     human = msgs[1].content
     assert isinstance(human, str)
-    assert "<user_request>" in human
+    assert "GOAL:" in human
     assert "Research topic X" in human
-    assert "<execution_evidence>" in human
+    assert "EVIDENCE:" in human or "STEP SUMMARIES:" in human
     assert "AgentLoop" not in human

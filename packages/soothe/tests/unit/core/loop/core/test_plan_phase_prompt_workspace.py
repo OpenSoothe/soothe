@@ -41,7 +41,7 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     assert "Do NOT ask the user" in system_content
 
     assert "</USER_QUERY>" not in system_content
-    assert "<USER_QUERY>" in human_content
+    assert "GOAL:" in human_content
     assert "analyze architecture" in human_content
 
 
@@ -64,7 +64,7 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     assert "<WORKSPACE_RULES>" in system_content
 
     assert "</USER_QUERY>" not in system_content
-    assert "<USER_QUERY>" in human_content
+    assert "GOAL:" in human_content
     assert "analyze architecture" in human_content
 
 
@@ -118,12 +118,12 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     # Infrastructure appears in the prior thread LoopAIMessage, not plan-context human
     assert "Infrastructure" in messages[2].content
     assert "Infrastructure" not in messages[-1].content
-    # Plan-context human starts with USER_QUERY
-    assert messages[-1].content.strip().startswith("<USER_QUERY>")
+    # Plan-context human starts with GOAL:
+    assert messages[-1].content.strip().startswith("GOAL:")
     assert "</USER_QUERY>" not in system_content
     assert "翻译成中文" in messages[-1].content
-    # CONTEXT_INFO with timestamp/date is now in plan-context human (RFC-214)
-    assert "<CONTEXT_INFO>" in messages[-1].content
+    # TIMESTAMP is in plan-context human (RFC-214)
+    assert "TIMESTAMP:" in messages[-1].content
 
     # FOLLOW_UP_POLICY in SystemMessage (static rule)
     assert "<FOLLOW_UP_POLICY>" in system_content
@@ -181,7 +181,7 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     system = messages[0].content
     plan_human = messages[3].content
     assert "</USER_QUERY>" not in system
-    assert "<USER_QUERY>" in plan_human
+    assert "GOAL:" in plan_human
     assert "read readme" in plan_human
     assert "Execute iteration" not in plan_human
     assert "<AGENTLOOP_HISTORY>" not in system

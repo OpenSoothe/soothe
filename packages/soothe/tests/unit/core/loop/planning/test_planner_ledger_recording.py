@@ -3,8 +3,8 @@
 `LLMPlanner.assess_status` and `LLMPlanner.generate_from_assessment` are the
 two callsites that append (LoopHumanMessage, LoopAIMessage) pairs into
 `state.loop_messages`. After the compaction work, the *recorded* copy must
-have its `<CONTEXT_INFO>` stripped, its `<USER_QUERY>` rewritten to
-`<GOAL_RECAP>`, and (for plan-assess) its dumped `assessment_reasoning`
+have its `TIMESTAMP:` stripped, its `GOAL:` rewritten to
+`GOAL RECAP:`, and (for plan-assess) its dumped `assessment_reasoning`
 dropped.
 """
 
@@ -27,10 +27,11 @@ from soothe.protocols.planner import PlanContext
 
 GOAL = "translate the README into French"
 
+# New scenario-based format for recorded human content
 RECORDED_HUMAN_CONTENT = (
-    f"<USER_QUERY>\n{GOAL}\n</USER_QUERY>\n"
-    "<PRIOR_PROGRESS>\nhint=low\n</PRIOR_PROGRESS>\n"
-    "<CONTEXT_INFO>\n<timestamp>2026-06-02T10:19:55Z</timestamp>\n<date>2026-06-02</date>\n</CONTEXT_INFO>"
+    f"GOAL:\n{GOAL}\n\n"
+    "PRIOR PROGRESS:\nhint=low\n\n"
+    "TIMESTAMP: 2026-06-02T10:19:55+00:00"
 )
 
 
@@ -68,14 +69,13 @@ async def test_assess_status_records_compacted_human_and_dropped_reasoning() -> 
     recorded_human, recorded_ai = state.loop_messages
 
     # C1: volatile timestamp must be gone from the recorded human.
-    assert "<CONTEXT_INFO>" not in recorded_human.content
-    assert "<timestamp>" not in recorded_human.content
-    # D1: <USER_QUERY> is rewritten so it doesn't anchor as a directive.
-    assert "<USER_QUERY>" not in recorded_human.content
-    assert "<GOAL_RECAP>" in recorded_human.content
+    assert "TIMESTAMP:" not in recorded_human.content
+    # D1: GOAL: is rewritten so it doesn't anchor as a directive.
+    assert "GOAL:\n" not in recorded_human.content
+    assert "GOAL RECAP:" in recorded_human.content
     assert GOAL in recorded_human.content
-    # PRIOR_PROGRESS is preserved (not a target of C1/D1).
-    assert "<PRIOR_PROGRESS>" in recorded_human.content
+    # PRIOR PROGRESS is preserved (not a target of C1/D1).
+    assert "PRIOR PROGRESS:" in recorded_human.content
 
     # A2: the LLM's assessment_reasoning must NOT appear in the recorded AI dump.
     assert "assessment_reasoning" not in recorded_ai.content
@@ -127,9 +127,9 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
     recorded_human, recorded_ai = state.loop_messages
 
     # C1 + D1 still apply to plan-generate humans.
-    assert "<CONTEXT_INFO>" not in recorded_human.content
-    assert "<USER_QUERY>" not in recorded_human.content
-    assert "<GOAL_RECAP>" in recorded_human.content
+    assert "TIMESTAMP:" not in recorded_human.content
+    assert "GOAL:\n" not in recorded_human.content
+    assert "GOAL RECAP:" in recorded_human.content
 
     # A2 does NOT apply to plan-generate: the `steps` list and `reasoning`
     # are the value of the recording, so the AI dump stays verbatim.
@@ -140,10 +140,10 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
 @pytest.mark.asyncio
 async def test_recorded_humans_are_cache_stable_across_iterations() -> None:
     """Two assess calls on different iterations record identical human content
-    (modulo PRIOR_PROGRESS, which is rebuilt by the envelope per iteration).
+    (modulo PRIOR PROGRESS, which is rebuilt per iteration).
 
     The point of C1 is that the *recorded* human stops carrying the volatile
-    timestamp, so two calls that share the same goal + PRIOR_PROGRESS produce
+    timestamp, so two calls that share the same goal + PRIOR PROGRESS produce
     byte-identical recordings — the prompt-cache prefix is preserved.
     """
     planner = LLMPlanner(MagicMock())
