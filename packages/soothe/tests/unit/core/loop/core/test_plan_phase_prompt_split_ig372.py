@@ -87,7 +87,7 @@ def test_assess_omits_workspace_rules_and_instructions(tmp_path) -> None:
 
 
 def test_assess_user_query_in_plan_context_user_message_ig376() -> None:
-    """Plan-assess puts goal in user <USER_QUERY>; system has no goal block."""
+    """Plan-assess puts goal in user GOAL:; system has no goal block."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     state.previous_plan = PlanResult(
         status="continue",
@@ -102,14 +102,14 @@ def test_assess_user_query_in_plan_context_user_message_ig376() -> None:
     system = messages[0].content
     human = messages[1].content
     assert "</USER_QUERY>" not in system
-    assert "<USER_QUERY>" in human
+    assert "GOAL:" in human
     assert "read readme" in human
     assert "Execute iteration" not in human
     assert "Plan status:" not in system
 
 
 def test_assess_iteration_zero_user_query_without_iteration_count() -> None:
-    """Assess iteration 0 still produces <USER_QUERY> without iteration count."""
+    """Assess iteration 0 still produces GOAL: without iteration count."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=0, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext(), plan_phase="assess")
@@ -120,7 +120,7 @@ def test_assess_iteration_zero_user_query_without_iteration_count() -> None:
 
 
 def test_generate_user_query_in_plan_context_user_message() -> None:
-    """Plan-generate puts goal in user <USER_QUERY>; system has no goal block."""
+    """Plan-generate puts goal in user GOAL:; system has no goal block."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages(
@@ -131,7 +131,7 @@ def test_generate_user_query_in_plan_context_user_message() -> None:
     human = messages[1].content
     assert "<PLAN_GENERATE>" in system
     assert "</USER_QUERY>" not in system
-    assert "<USER_QUERY>" in human
+    assert "GOAL:" in human
     assert "read readme" in human
     assert "Execute iteration" not in human
 
@@ -143,7 +143,7 @@ def test_generate_includes_plan_step_id_hint_after_prior_steps_ig388() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext(), plan_phase="generate")
     human = messages[1].content
-    assert "<PLAN_STEP_ID_HINT>" in human
+    assert "STEP ID HINT:" in human
     assert "02" in human
     assert "03" in human
 
@@ -154,4 +154,4 @@ def test_assess_does_not_include_plan_step_id_hint_ig388() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext(), plan_phase="assess")
     human = messages[1].content
-    assert "<PLAN_STEP_ID_HINT>" not in human
+    assert "STEP ID HINT:" not in human

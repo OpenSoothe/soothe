@@ -1,97 +1,135 @@
-"""Tests for RFC-214 user message envelopes."""
+"""Tests for RFC-214 user message envelopes (scenario-based format)."""
 
 from __future__ import annotations
 
-from soothe.foundation.loop.prompts.user_envelope import (
-    build_execute_step_envelope,
-    build_plan_context_envelope,
+import warnings
+
+from soothe.foundation.loop.prompts.user_message import (
+    UserMessageBuilder,
+    flatten_user_message_content,
 )
 
 
-def test_execute_envelope_omits_response_language_hint() -> None:
-    """Language hint lives in the system prompt now, not the per-turn envelope."""
-    envelope = build_execute_step_envelope(
+def test_execute_message_omits_response_language_hint() -> None:
+    """Language hint lives in the system prompt now, not the per-turn message."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
         "Read README",
         execution_hints=None,
     )
-    assert "response_language_hint" not in envelope.lower()
-    assert "RESPONSE_LANGUAGE_HINT" not in envelope
-    assert "<CONTEXT_INFO>" in envelope
+    assert "response_language_hint" not in msg.lower()
+    assert "RESPONSE_LANGUAGE_HINT" not in msg
+    assert "TIMESTAMP:" in msg
 
 
-def test_execute_envelope_plain_goal_layout() -> None:
-    envelope = build_execute_step_envelope(
+def test_execute_message_uses_goal_label() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
         "Do the thing",
         execution_hints=None,
     )
-    assert envelope.startswith("<USER_QUERY>")
-    assert "<SKILL_CONTEXT>" not in envelope
-    assert "--- Context ---" in envelope
-    assert envelope.index("</USER_QUERY>") < envelope.index("--- Context ---")
+    assert msg.startswith("GOAL:")
+    assert "Do the thing" in msg
+    assert "SKILL CONTEXT:" not in msg
 
 
-def test_execute_envelope_slash_skill_skill_context_after_user_query() -> None:
-    """Skill reference only in SKILL_CONTEXT, same top-level shape as non-skill."""
+def test_execute_message_skill_context_after_goal() -> None:
+    """Skill reference appears in SKILL CONTEXT section after GOAL."""
     skill_ref = (
         "Skill: demo\n\n"
         "Skill folder: /skills/demo\n"
         "(Additional files may live under this directory — use filesystem tools to "
         "read them when SKILL.md is not sufficient.)\n\n" + ("body line\n" * 5)
     )
-    envelope = build_execute_step_envelope(
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
         "Run the planned step",
         skill_context=skill_ref,
     )
-    assert "<SKILL_CONTEXT>" in envelope
-    assert "Skill: demo" in envelope
-    assert "Skill folder: /skills/demo" in envelope
-    assert "User instruction" not in envelope
-    uq = envelope.index("<USER_QUERY>")
-    sk = envelope.index("<SKILL_CONTEXT>")
-    ctx = envelope.index("--- Context ---")
-    assert uq < sk < ctx
+    assert "SKILL CONTEXT:" in msg
+    assert "Skill: demo" in msg
+    assert "Skill folder: /skills/demo" in msg
+    assert "User instruction" not in msg
+    goal_idx = msg.index("GOAL:")
+    skill_idx = msg.index("SKILL CONTEXT:")
+    assert goal_idx < skill_idx
 
 
-def test_plan_context_envelope_uses_user_query_tag() -> None:
-    """Plan envelope uses <USER_QUERY> (not <GOAL_PROGRESS> nesting)."""
-    envelope = build_plan_context_envelope(
+def test_plan_assess_message_uses_goal_label() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_assess_message(
         goal="write a image understanding pipeline",
-        goal_user_submission="/skill:x fix the bug in auth",
     )
-    assert "<USER_QUERY>" in envelope
-    assert "write a image understanding pipeline" in envelope
-    assert "<GOAL_PROGRESS>" not in envelope
-    assert "<USER_PRIMARY_QUERY>" not in envelope
-    assert "<FULL_GOAL_AND_SKILL_CONTEXT>" not in envelope
-    assert "Execute iteration" not in envelope
+    assert "GOAL:" in msg
+    assert "write a image understanding pipeline" in msg
+    assert "GOAL PROGRESS:" not in msg
+    assert "Execute iteration" not in msg
 
 
-def test_plan_context_envelope_omits_response_language_hint() -> None:
-    """Language hint lives in the system prompt now, not the per-turn envelope."""
-    envelope = build_plan_context_envelope(
+def test_plan_assess_message_omits_response_language_hint() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_assess_message(
         goal="Résumé demandé",
     )
-    assert "response_language_hint" not in envelope.lower()
-    assert "RESPONSE_LANGUAGE_HINT" not in envelope
+    assert "response_language_hint" not in msg.lower()
+    assert "RESPONSE_LANGUAGE_HINT" not in msg
 
 
-def test_plan_context_envelope_skill_reference_when_skill_context_provided() -> None:
-    """skill_context param emits <SKILL_REFERENCE> block after USER_QUERY."""
-    envelope = build_plan_context_envelope(
+def test_plan_assess_message_skill_reference_when_provided() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_assess_message(
         goal="shanghai tomorrow",
         skill_context="Skill: weather\nSkill folder: /skills/weather\n\nWeather skill body here",
     )
-    assert "<SKILL_REFERENCE>" in envelope
-    assert "Weather skill body here" in envelope
-    # SKILL_REFERENCE appears after USER_QUERY
-    uq_idx = envelope.index("</USER_QUERY>")
-    sr_idx = envelope.index("<SKILL_REFERENCE>")
-    assert uq_idx < sr_idx
+    assert "SKILL REFERENCE:" in msg
+    assert "Weather skill body here" in msg
+    goal_idx = msg.index("GOAL:")
+    skill_idx = msg.index("SKILL REFERENCE:")
+    assert goal_idx < skill_idx
 
 
-def test_plan_context_envelope_no_skill_reference_when_absent() -> None:
-    """No <SKILL_REFERENCE> when skill_context is None or empty."""
-    envelope = build_plan_context_envelope(goal="plain goal")
-    assert "<SKILL_REFERENCE>" not in envelope
-    envelope_empty = build_plan_context_envelope(goal="plain goal", skill_context="  ")
-    assert "<SKILL_REFERENCE>" not in envelope_empty
+def test_plan_assess_message_no_skill_reference_when_absent() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_assess_message(goal="plain goal")
+    assert "SKILL REFERENCE:" not in msg
+    msg_empty = builder.build_plan_assess_message(goal="plain goal", skill_context="  ")
+    assert "SKILL REFERENCE:" not in msg_empty
+
+
+def test_plan_generate_message_includes_step_id_hint() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="do stuff",
+        step_id_hint="Next step IDs start at 03",
+    )
+    assert "STEP ID HINT:" in msg
+    assert "03" in msg
+
+
+def test_deprecated_envelope_wrappers_still_work() -> None:
+    """Deprecated wrapper functions delegate to UserMessageBuilder."""
+    from soothe.foundation.loop.prompts.user_envelope import (
+        build_execute_step_envelope,
+        build_plan_context_envelope,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        exec_msg = build_execute_step_envelope("Do it")
+        assert "GOAL:" in exec_msg
+
+        plan_msg = build_plan_context_envelope(goal="Plan this")
+        assert "GOAL:" in plan_msg
+
+
+def test_flatten_user_message_content_extracts_goal() -> None:
+    msg = "GOAL:\nSearch the repo for *.yml config\n\nINTENT: agentic (complexity: medium)"
+    flat = flatten_user_message_content(msg)
+    assert flat == "Search the repo for *.yml config"
+
+
+def test_flatten_user_message_content_legacy_xml() -> None:
+    """Legacy XML format still extractable for backward compat."""
+    msg = "<USER_QUERY>\nSearch the repo\n</USER_QUERY>"
+    flat = flatten_user_message_content(msg)
+    assert flat == "Search the repo"

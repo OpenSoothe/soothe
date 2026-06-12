@@ -7,15 +7,15 @@ with a system prompt that uses only end-user vocabulary.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from soothe.foundation.loop.engine.scenario_classifier import ScenarioClassification
-from soothe.foundation.loop.prompts.user_envelope import (
-    _goal_text_for_execute_step_envelope,
+from soothe.foundation.loop.prompts.user_message import (
+    _goal_text,
+    flatten_user_message_content,
 )
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
@@ -45,35 +45,20 @@ class SynthesisUserContext:
 
 def normalize_user_query(goal: str | None) -> str:
     """Normalize stored goal text for the user-facing synthesis request."""
-    text = _goal_text_for_execute_step_envelope(goal)
+    text = _goal_text(goal)
     if text == "No goal specified":
         return "No request specified"
     return text
 
 
-def _extract_xml_block(text: str, tag: str) -> str | None:
-    pattern = re.compile(rf"<{tag}>\s*(.*?)\s*</{tag}>", re.DOTALL | re.IGNORECASE)
-    match = pattern.search(text)
-    if not match:
-        return None
-    return match.group(1).strip()
-
-
 def flatten_execute_human_content(content: str) -> str:
     """Extract task-focused text from an execute-step human envelope.
 
-    When the message uses the RFC-214 envelope, returns ``<USER_QUERY>``
-    body only. Otherwise returns the raw content unchanged.
+    Handles both the new scenario-based format (extracts GOAL: line)
+    and legacy XML format (extracts <USER_QUERY> body). Returns raw
+    content unchanged when neither marker is present.
     """
-    text = (content or "").strip()
-    if not text:
-        return ""
-
-    user_query = _extract_xml_block(text, "USER_QUERY")
-    if user_query:
-        return user_query
-
-    return text
+    return flatten_user_message_content(content)
 
 
 def _step_evidence_lines(state: LoopState) -> list[str]:
@@ -83,7 +68,7 @@ def _step_evidence_lines(state: LoopState) -> list[str]:
             body = result.to_evidence_string(truncate=False)
         else:
             body = f"Failed: {result.error or 'unknown error'}"
-        lines.append(f'<step id="{result.step_id}">{_xml_escape(body)}</step>')
+        lines.append(f"[Step {result.step_id}] {body}")
     return lines
 
 
@@ -102,17 +87,13 @@ def _execute_transcript_lines(state: LoopState) -> list[str]:
         if isinstance(msg, LoopHumanMessage):
             text = flatten_execute_human_content(extract_text_from_message_content(msg.content))
             if text:
-                lines.append(f"<assistant_task>{_xml_escape(text)}</assistant_task>")
+                lines.append(f"[Task] {text}")
         elif isinstance(msg, LoopAIMessage):
             text = extract_text_from_message_content(msg.content).strip()
             if text:
-                lines.append(f"<finding>{_xml_escape(text)}</finding>")
+                lines.append(f"[Finding] {text}")
 
     return lines
-
-
-def _xml_escape(text: str) -> str:
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def project_synthesis_user_context(
@@ -120,26 +101,23 @@ def project_synthesis_user_context(
     *,
     user_query: str | None = None,
 ) -> SynthesisUserContext:
-    """Build user-safe query + evidence XML from loop state."""
+    """Build user-safe query + evidence text from loop state."""
     query = normalize_user_query(user_query if user_query is not None else state.goal)
 
     parts: list[str] = []
     step_lines = _step_evidence_lines(state)
     if step_lines:
-        parts.append("<step_summaries>")
+        parts.append("STEP SUMMARIES:")
         parts.extend(f"  {line}" for line in step_lines)
-        parts.append("</step_summaries>")
 
     transcript = _execute_transcript_lines(state)
     if transcript:
-        parts.append("<work_transcript>")
+        parts.append("WORK TRANSCRIPT:")
         parts.extend(f"  {line}" for line in transcript)
-        parts.append("</work_transcript>")
 
     if not parts:
-        parts.append(
-            "<work_transcript>\n  <finding>No detailed execution record available.</finding>\n</work_transcript>"
-        )
+        parts.append("WORK TRANSCRIPT:")
+        parts.append("  [Finding] No detailed execution record available.")
 
     evidence_body = "\n".join(parts)
     return SynthesisUserContext(
@@ -156,11 +134,8 @@ def _trim_evidence_body(body: str, max_chars: int) -> str:
 
 
 def build_synthesis_human_payload(context: SynthesisUserContext) -> str:
-    """Return the single human message body for synthesis (XML, user vocabulary only)."""
-    return (
-        f"<user_request>\n{context.user_query}\n</user_request>\n\n"
-        f"<execution_evidence>\n{context.evidence_body}\n</execution_evidence>"
-    )
+    """Return the single human message body for synthesis (structured text, user vocabulary only)."""
+    return f"GOAL:\n{context.user_query}\n\nEVIDENCE:\n{context.evidence_body}"
 
 
 def render_synthesis_system_prompt(classification: ScenarioClassification) -> str:
@@ -185,6 +160,8 @@ def build_synthesis_messages(
     max_chars: int,
 ) -> list[BaseMessage]:
     """Assemble system + human messages for goal-completion synthesis."""
+    from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
+
     context = project_synthesis_user_context(state, user_query=user_query)
     context = SynthesisUserContext(
         user_query=context.user_query,
@@ -194,7 +171,23 @@ def build_synthesis_messages(
         ),
     )
     system_text = render_synthesis_system_prompt(classification)
-    human_text = build_synthesis_human_payload(context)
+
+    # Extract intent from state
+    intent_type = "agentic"
+    task_complexity = "medium"
+    if state.intent and hasattr(state.intent, "intent_type"):
+        intent_type = state.intent.intent_type
+        task_complexity = getattr(state.intent, "task_complexity", "medium")
+
+    builder = UserMessageBuilder()
+    human_text = builder.build_synthesis_message(
+        user_query=context.user_query,
+        state=state,
+        classification=classification,
+        evidence_body=context.evidence_body,
+        intent_type=intent_type,
+        task_complexity=task_complexity,
+    )
 
     while max_chars > 0:
         total = len(system_text) + len(human_text)
@@ -207,7 +200,14 @@ def build_synthesis_messages(
                 context.evidence_body, len(context.evidence_body) - over
             ),
         )
-        human_text = build_synthesis_human_payload(context)
+        human_text = builder.build_synthesis_message(
+            user_query=context.user_query,
+            state=state,
+            classification=classification,
+            evidence_body=context.evidence_body,
+            intent_type=intent_type,
+            task_complexity=task_complexity,
+        )
         if len(context.evidence_body) < 200:
             break
 
