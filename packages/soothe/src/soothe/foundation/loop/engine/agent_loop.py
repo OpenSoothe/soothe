@@ -404,11 +404,11 @@ class AgentLoop:
         if ce_config.enabled:
             from soothe.context.engine import ContextEngine as _ContextEngine
             from soothe.context.persistence.in_memory import InMemoryContextPersistence
+            from soothe.context.planning import StepPlanManagerAdapter
 
             from .context_adapters import (
                 ContextEngineGoalContextAdapter,
                 ContextEngineLedgerAdapter,
-                ContextEnginePlanAdapter,
             )
 
             persistence = InMemoryContextPersistence()
@@ -439,9 +439,8 @@ class AgentLoop:
             )
             await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
 
-            plan_manager = ContextEnginePlanAdapter(
-                context_engine=ce_instance,
-                goal=execution_goal,
+            plan_manager = StepPlanManagerAdapter(
+                subengine=ce_instance.planning.step,
                 goal_id=ce_goal.id,
             )
             ce_ledger_adapter = ContextEngineLedgerAdapter(ce_instance)

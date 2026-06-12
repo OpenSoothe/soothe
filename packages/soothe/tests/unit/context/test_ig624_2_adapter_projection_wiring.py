@@ -8,27 +8,25 @@ from langchain_core.messages import HumanMessage
 from soothe.context.engine import ContextEngine
 from soothe.context.ledger import LedgerManager
 from soothe.context.models import GoalNode, StepExecution, StepNode
+from soothe.context.planning import StepPlanManagerAdapter
 from soothe.context.projection import ContextBundle
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
     ContextEngineLedgerAdapter,
-    ContextEnginePlanAdapter,
     _format_execute_briefing_from_ce_goals,
 )
 from soothe.foundation.loop.planning.manager import DagPlanningContext
 
-# ── ContextEnginePlanAdapter public API ────────────────────────────────
+# ── StepPlanManagerAdapter public API ────────────────────────────────
 
 
 class TestPlanAdapterPublicAPI:
-    def test_ingest_plan_uses_get_goal_sync(self) -> None:
+    def test_ingest_plan_uses_step_planning_subengine(self) -> None:
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")
         ce._dag.add_goal(goal)
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
-        # Verify _ce._dag is never accessed directly
-        # (can't assert negative, but verify the method works)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         from soothe.foundation.loop.state.schemas import AgentDecision, StepAction
 
         decision = AgentDecision(
@@ -57,42 +55,42 @@ class TestPlanAdapterPublicAPI:
         assert "S02" in goal_node.steps.nodes
         assert goal_node.steps.nodes["S02"].dependencies == ["S01"]
 
-    def test_get_planning_context_uses_get_goal_sync(self) -> None:
+    def test_get_planning_context_reads_from_step_subengine(self) -> None:
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")
         ce._dag.add_goal(goal)
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         ctx = adapter.get_planning_context()
         assert isinstance(ctx, DagPlanningContext)
         assert ctx.total_steps == 0
 
-    def test_format_completion_dag_report_uses_get_all_goals(self) -> None:
+    def test_format_completion_dag_report_uses_all_goals(self) -> None:
         ce = ContextEngine()
         g1 = GoalNode(description="Goal 1", status="completed")
         g2 = GoalNode(description="Goal 2", status="active")
         ce._dag.add_goal(g1)
         ce._dag.add_goal(g2)
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test", goal_id=g2.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=g2.id)
         report = adapter.format_completion_dag_report()
         assert "Goal 1" in report
         assert "Goal 2" in report
         assert "Total goals: 2" in report
 
-    def test_heuristic_uses_get_goal_sync(self) -> None:
+    def test_heuristic_delegates_to_completion_module(self) -> None:
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")
         ce._dag.add_goal(goal)
 
-        adapter = ContextEnginePlanAdapter(ce, goal="Test goal", goal_id=goal.id)
+        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
 
         class MockState:
             last_execute_wave_parallel_multi_step = False
             last_wave_hit_subagent_cap = False
             current_decision = None
 
-        result = adapter._heuristic_requires_goal_completion(MockState())
+        result = adapter.determine_goal_completion_needs(False, MockState(), "heuristic_only")
         assert result is False
 
 
