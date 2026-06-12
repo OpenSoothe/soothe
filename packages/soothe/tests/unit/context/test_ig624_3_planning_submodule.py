@@ -754,7 +754,7 @@ class TestStepPlanManagerAdapter:
         assert isinstance(ctx.success_rate, float)
         assert isinstance(ctx.replan_count, int)
 
-    def test_format_dag_context_produces_xml(self) -> None:
+    def test_format_dag_context_produces_text(self) -> None:
         """Verify the DagPlanningContext from adapter works with _format_dag_context."""
         from soothe.foundation.loop.prompts.builder import _format_dag_context
 
@@ -767,10 +767,10 @@ class TestStepPlanManagerAdapter:
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
 
         ctx = adapter.get_planning_context()
-        xml = _format_dag_context(ctx)
+        text = _format_dag_context(ctx)
 
-        assert "<PLAN_DAG_CONTEXT>" in xml
-        assert "</PLAN_DAG_CONTEXT>" in xml
+        assert "Total steps planned: 2" in text
+        assert "KFA-02" in text
 
     def test_format_dag_context_empty_when_no_prior_state(self) -> None:
         from soothe.foundation.loop.prompts.builder import _format_dag_context
@@ -778,8 +778,8 @@ class TestStepPlanManagerAdapter:
         ce = ContextEngine()
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
         ctx = adapter.get_planning_context()
-        xml = _format_dag_context(ctx)
-        assert xml == ""
+        text = _format_dag_context(ctx)
+        assert text == ""
 
 
 # ═══════════════════════════════════════════════════════════════════════

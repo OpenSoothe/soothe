@@ -54,9 +54,9 @@ def test_assess_with_config_still_includes_environment_workspace() -> None:
     assert "<ENVIRONMENT" in system
     assert "<WORKSPACE" in system
     assert "/abs/ws" in system
-    # System prompt may mention <USER_QUERY> in instruction text, but
+    # System prompt may mention GOAL: in instruction text, but
     # the actual user query content is in the human message only.
-    assert "</USER_QUERY>" not in system
+    assert "</USER_QUERY>" not in system  # goal text in human message only
 
 
 def test_assess_omits_workspace_rules_and_instructions(tmp_path) -> None:
@@ -101,7 +101,7 @@ def test_assess_user_query_in_plan_context_user_message_ig376() -> None:
     assert len(messages) == 2
     system = messages[0].content
     human = messages[1].content
-    assert "</USER_QUERY>" not in system
+    assert "</USER_QUERY>" not in system  # goal text in human message only
     assert "GOAL:" in human
     assert "read readme" in human
     assert "Execute iteration" not in human
@@ -130,7 +130,7 @@ def test_generate_user_query_in_plan_context_user_message() -> None:
     system = messages[0].content
     human = messages[1].content
     assert "<PLAN_GENERATE>" in system
-    assert "</USER_QUERY>" not in system
+    assert "</USER_QUERY>" not in system  # goal text in human message only
     assert "GOAL:" in human
     assert "read readme" in human
     assert "Execute iteration" not in human

@@ -1,10 +1,10 @@
 <PLAN_GENERATE>
 Output: plan_action, type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
 
-Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in ``<USER_QUERY>``.
+Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in the GOAL: section.
 
 **Language lock**:
-- Use the same natural language as the current goal statement in ``<USER_QUERY>``.
+- Use the same natural language as the current goal statement in GOAL:.
 - Apply this consistently to ``steps[].description``, ``steps[].expected_output``, ``reasoning``, and ``next_action``.
 - Do not switch output language unless the user explicitly requests another language.
 - Keep code, file paths, identifiers, and quoted literals unchanged.
@@ -18,7 +18,7 @@ Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in 
 - ``final``: ONLY after execute_steps produced sufficient evidence. NEVER at iteration 0.
 
 **steps** fields:
-- ``id``: Short token (``01``, ``02``) or per ``<PLAN_STEP_ID_HINT>``.
+- ``id``: Short token (``01``, ``02``) or per STEP ID HINT:.
 - ``description``: Milestone line (<20 words). Executor handles fine-grained work.
 - ``expected_output``: Checkable completion signal.
 - ``dependencies``: Optional; step ids this depends on.

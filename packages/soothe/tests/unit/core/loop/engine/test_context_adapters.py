@@ -391,7 +391,7 @@ class TestDagPlanningContextDuckTyping:
         assert ctx.replan_count == 0
 
     @pytest.mark.asyncio
-    async def test_format_dag_context_produces_xml(self) -> None:
+    async def test_format_dag_context_produces_text(self) -> None:
         """Verify the DagPlanningContext from adapter works with _format_dag_context."""
         from soothe.foundation.loop.prompts.builder import _format_dag_context
 
@@ -409,11 +409,10 @@ class TestDagPlanningContextDuckTyping:
         adapter.plan_history.append(_make_plan_result())
 
         ctx = adapter.get_planning_context()
-        xml = _format_dag_context(ctx)
+        text = _format_dag_context(ctx)
 
-        assert "<PLAN_DAG_CONTEXT>" in xml
-        assert "</PLAN_DAG_CONTEXT>" in xml
-        assert "KFA-02" in xml
+        assert "Total steps planned: 2" in text
+        assert "KFA-02" in text
 
     @pytest.mark.asyncio
     async def test_format_dag_context_empty_when_no_prior_state(self) -> None:
@@ -422,5 +421,5 @@ class TestDagPlanningContextDuckTyping:
         ce = ContextEngine()
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")
         ctx = adapter.get_planning_context()
-        xml = _format_dag_context(ctx)
-        assert xml == ""
+        text = _format_dag_context(ctx)
+        assert text == ""

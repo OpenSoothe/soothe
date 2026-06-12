@@ -68,9 +68,9 @@ class PromptBuilder:
         - Projected ``state.loop_messages`` ledger (IG-380): native ``LoopHumanMessage`` /
           ``LoopAIMessage`` turns, optionally tail-trimmed when ``agentic.plan_prompt_ledger`` caps
           are set; persisted ``loop_messages`` are never modified.
-        - LoopHumanMessage: ``<USER_QUERY>`` (goal) for both ``assess`` and
+        - LoopHumanMessage: ``GOAL:`` (goal) for both ``assess`` and
           ``generate``, plus optional ``<PRIOR_CONVERSATION>`` when ``recent_messages`` is set
-          (IG-371: no WM block on this human), and optional ``<PLAN_DAG_CONTEXT>`` for generate phase.
+          (IG-371: no WM block on this human), and optional ``DAG STATUS:`` for generate phase.
 
         Ledger precedes the plan-context human so ``plan-assess`` / ``plan-generate`` see execute
         evidence as prior turns, then goal/iteration context in the following user message.
@@ -184,7 +184,7 @@ class PromptBuilder:
           only), then conditional blocks, ENVIRONMENT, WORKSPACE.
 
         Goal is supplied in the plan-context user message
-        (``<USER_QUERY>``), not in the system prompt.
+        (``GOAL:``), not in the system prompt.
 
         Args:
             context: Planning context with workspace, capabilities
@@ -308,7 +308,7 @@ class PromptBuilder:
         """
         parts: list[str] = []
 
-        # Goal line for non-plan human paths (plan phase uses ``<USER_QUERY>`` on plan-context human).
+        # Goal line for non-plan human paths (plan phase uses ``GOAL:`` on plan-context human).
         parts.append(f"Goal: {goal}\n")
 
         # Working memory excerpt (RFC-203)
