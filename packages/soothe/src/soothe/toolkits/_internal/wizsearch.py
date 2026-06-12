@@ -217,23 +217,6 @@ def _build_result_payload(result: object) -> str:
     return "\n".join(parts)
 
 
-def _log_engine_diagnostics(engines: list[str]) -> None:
-    """Log diagnostic information about search engine configurations.
-
-    Args:
-        engines: List of engine names to check.
-    """
-    if "tavily" in engines:
-        tavily_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("WIZSEARCH_TAVILY_API_KEY")
-        if not tavily_key:
-            logger.warning("Tavily API key NOT FOUND - Tavily search will fail")
-
-    https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
-    if https_proxy or http_proxy:
-        logger.info("Proxy configured: HTTPS=%s, HTTP=%s", https_proxy, http_proxy)
-
-
 def _validate_engine_config(engines: list[str]) -> list[dict[str, Any]]:
     """Validate configuration for requested engines and return warnings.
 
@@ -257,6 +240,12 @@ def _validate_engine_config(engines: list[str]) -> list[dict[str, Any]]:
                         "action": "Set TAVILY_API_KEY or WIZSEARCH_TAVILY_API_KEY environment variable",
                     }
                 )
+
+    if not warnings:
+        https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+        if https_proxy or http_proxy:
+            logger.info("Proxy configured: HTTPS=%s, HTTP=%s", https_proxy, http_proxy)
 
     return warnings
 
@@ -300,12 +289,20 @@ async def perform_wizsearch_search(
     if debug_mode:
         logger.info("Wizsearch debug mode enabled: fail_silently=False, output_suppression=False")
 
-    _log_engine_diagnostics(default_engines)
     validation_warnings = _validate_engine_config(default_engines)
     for warning in validation_warnings:
         logger.warning(
             "Engine %s: %s - %s", warning["engine"], warning["issue"], warning["message"]
         )
+
+    # Short-circuit when every requested engine is misconfigured
+    all_misconfigured = len(validation_warnings) > 0 and len(validation_warnings) == len(
+        default_engines
+    )
+    if all_misconfigured:
+        issues = "; ".join(f"{w['engine']}: {w['issue']}" for w in validation_warnings)
+        logger.warning("All search engines unavailable (%s), skipping search", issues)
+        return f'No search engines available for "{query}" ({issues})'
 
     try:
         with capture_subagent_output("wizsearch", suppress=not debug_mode):
@@ -321,7 +318,7 @@ async def perform_wizsearch_search(
             _save_raw_results(query, result)
             return _build_result_payload(result)
     except Exception as exc:
-        logger.exception("Search failed with engines %s", default_engines)
+        logger.warning("Search failed with engines %s: %s", default_engines, exc)
 
         return f'Search failed for "{query}": {exc}'
 
