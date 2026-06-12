@@ -43,8 +43,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         context=context,
         assessment=assessment,
         plan_manager=plan_manager,
-        ce_ledger_adapter=ctx.ce_ledger_adapter,
-        context_engine=ctx.context_engine,  # RFC-624 Phase 3d: CE projection
+        context_engine=ctx.ce,
     )
 
     ctx.scratch.plan_result = plan_result

@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.loop.engine.anchor_manager import CheckpointAnchorManager
-from soothe.foundation.loop.engine.goal_context_manager import GoalContextManager
-from soothe.foundation.loop.planning.manager import PlanManager
 from soothe.foundation.loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.foundation.loop.state.manager import AgentLoopStateManager
 from soothe.foundation.loop.state.schemas import LoopState
@@ -34,8 +32,8 @@ class LoopRuntimeContext:
     agent_loop: AgentLoop
     state_manager: AgentLoopStateManager
     anchor_manager: CheckpointAnchorManager
-    goal_context_manager: GoalContextManager
-    plan_manager: PlanManager | Any  # PlanManager or StepPlanManagerAdapter (duck-typed)
+    goal_context_manager: Any  # GoalContextManager or ContextEngineGoalContextAdapter (duck-typed)
+    plan_manager: Any  # StepPlanManagerAdapter (duck-typed, 5-method contract)
     checkpoint: AgentLoopCheckpoint
     goal_record: GoalExecutionRecord | None
     continue_loop_mode: bool
@@ -59,11 +57,9 @@ class LoopRuntimeContext:
     clarification_resume_answers: list[str] | None = None
     # ProposalQueue for autopilot proposals (report_progress, flag_blocker, etc.)
     proposal_queue: ProposalQueue | None = None
-    # RFC-624 Phase 3: ContextEngine instance and ledger adapter (None when CE disabled)
-    context_engine: Any | None = None
-    ce_ledger_adapter: Any | None = None
-    # RFC-624 Phase 3d: CE lifecycle manager (encapsulates all CE interactions)
-    ce_lifecycle: Any | None = None
+    # RFC-624 Phase 4: ContextEngine is always active
+    ce: Any | None = None  # ContextEngine instance
+    ce_goal_id: str | None = None  # Active goal ID in CE
 
     @property
     def core_agent(self) -> CoreAgent:

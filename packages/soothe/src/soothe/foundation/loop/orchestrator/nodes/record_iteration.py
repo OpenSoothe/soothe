@@ -37,9 +37,24 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # Record step outcomes in the plan DAG
     plan_manager.record_step_outcomes(step_results)
 
-    # RFC-624 Phase 3d: async step feedback + CE persistence
-    if ctx.ce_lifecycle is not None:
-        await ctx.ce_lifecycle.on_steps_executed(step_results)
+    # RFC-624 Phase 4: async step feedback + CE persistence
+    if ctx.ce is not None:
+        try:
+            from soothe.context.models import StepExecution
+
+            for r in step_results:
+                execution = StepExecution(
+                    duration_ms=r.duration_ms,
+                    thread_id=r.thread_id,
+                    error=r.error,
+                )
+                if r.success:
+                    await ctx.ce.complete_step(ctx.ce_goal_id, r.step_id, execution)
+                else:
+                    await ctx.ce.fail_step(ctx.ce_goal_id, r.step_id, execution)
+            await ctx.ce.save()
+        except Exception:
+            logger.warning("[record_iteration] CE step feedback failed", exc_info=True)
 
     iteration_completed = state.iteration
     state.iteration += 1

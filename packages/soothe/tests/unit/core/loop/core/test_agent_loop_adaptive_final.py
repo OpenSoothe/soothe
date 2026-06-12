@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
+from soothe.context.planning.models import CompletionStrategy
 from soothe.foundation.loop import AgentLoop
 from soothe.foundation.loop.state.schemas import PlanResult
 
@@ -36,20 +37,39 @@ def _make_done_plan_result() -> PlanResult:
     )
 
 
-@pytest.mark.asyncio
-async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> None:
-    """When synthesis is skipped, CoreAgent astream must not run for the final report."""
-    calls = 0
+def _make_mock_ce() -> Mock:
+    """Build a mock ContextEngine with all required attributes."""
+    mock_ce = Mock()
+    mock_goal = Mock()
+    mock_goal.id = "test-goal-id"
+    mock_ce.create_goal = AsyncMock(return_value=mock_goal)
+    mock_ce.activate_goal = AsyncMock()
+    mock_ce.save = AsyncMock()
+    mock_ce.complete_goal = AsyncMock()
+    mock_ce.get_all_goals = Mock(return_value=[])
+    mock_ce.ledger = Mock()
 
-    async def counting_astream(*args, **kwargs):  # noqa: ARG002
-        nonlocal calls
-        calls += 1
-        if False:
-            yield None
+    mock_step_planner = Mock()
+    mock_step_planner.ingest_plan = Mock()
+    mock_step_planner.record_step_outcomes = Mock()
+    mock_step_planner.get_planning_context = Mock(return_value=Mock())
+    mock_step_planner.determine_goal_completion_needs = Mock(return_value=False)
+    mock_step_planner.determine_completion_strategy = Mock(
+        return_value=CompletionStrategy.LEDGER_DIRECT
+    )
+    mock_step_planner.format_completion_dag_report = Mock(return_value="")
 
-    mock_core = _make_mock_core_with_checkpointer()
-    mock_core.astream = counting_astream
+    mock_planning = Mock()
+    mock_planning.step = mock_step_planner
+    mock_ce.planning = mock_planning
 
+    mock_ce._semantic = Mock()
+
+    return mock_ce
+
+
+def _make_mock_state_manager() -> tuple[Mock, Mock, Mock]:
+    """Create mock state manager, checkpoint, and goal record."""
     mock_gr = Mock()
     mock_gr.loop_messages = []
     mock_ckpt = Mock()
@@ -66,12 +86,28 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_sm.finalize_goal = AsyncMock()
     mock_sm.close = AsyncMock()
 
-    mock_gcm = Mock()
-    mock_gcm.get_plan_context = AsyncMock(return_value=[])
+    return mock_sm, mock_ckpt, mock_gr
 
+
+@pytest.mark.asyncio
+async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> None:
+    """When synthesis is skipped, CoreAgent astream must not run for the final report."""
+    calls = 0
+
+    async def counting_astream(*args, **kwargs):  # noqa: ARG002
+        nonlocal calls
+        calls += 1
+        if False:
+            yield None
+
+    mock_core = _make_mock_core_with_checkpointer()
+    mock_core.astream = counting_astream
+
+    mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
+    mock_ce = _make_mock_ce()
 
     with (
         patch(
@@ -79,8 +115,8 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
-            return_value=mock_gcm,
+            "soothe.context.engine.ContextEngine",
+            return_value=mock_ce,
         ),
         patch(
             "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
@@ -117,28 +153,11 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = counting_astream
 
-    mock_gr = Mock()
-    mock_gr.loop_messages = []
-    mock_ckpt = Mock()
-    mock_ckpt.goal_history = []
-    mock_ckpt.loop_messages = []
-
-    mock_sm = Mock()
-    mock_sm.loop_id = "loop-test"
-    mock_sm.load = AsyncMock(return_value=None)
-    mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
-    mock_sm.start_new_goal = Mock(return_value=mock_gr)
-    mock_sm.save = AsyncMock()
-    mock_sm.record_iteration = AsyncMock()
-    mock_sm.finalize_goal = AsyncMock()
-    mock_sm.close = AsyncMock()
-
-    mock_gcm = Mock()
-    mock_gcm.get_plan_context = AsyncMock(return_value=[])
-
+    mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
+    mock_ce = _make_mock_ce()
 
     with (
         patch(
@@ -146,8 +165,8 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
-            return_value=mock_gcm,
+            "soothe.context.engine.ContextEngine",
+            return_value=mock_ce,
         ),
         patch(
             "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
@@ -178,28 +197,11 @@ async def test_completed_payload_for_summary_path() -> None:
     mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = AsyncMock()
 
-    mock_gr = Mock()
-    mock_gr.loop_messages = []
-    mock_ckpt = Mock()
-    mock_ckpt.goal_history = []
-    mock_ckpt.loop_messages = []
-
-    mock_sm = Mock()
-    mock_sm.loop_id = "loop-test"
-    mock_sm.load = AsyncMock(return_value=None)
-    mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
-    mock_sm.start_new_goal = Mock(return_value=mock_gr)
-    mock_sm.save = AsyncMock()
-    mock_sm.record_iteration = AsyncMock()
-    mock_sm.finalize_goal = AsyncMock()
-    mock_sm.close = AsyncMock()
-
-    mock_gcm = Mock()
-    mock_gcm.get_plan_context = AsyncMock(return_value=[])
-
+    mock_sm, _mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
+    mock_ce = _make_mock_ce()
 
     with (
         patch(
@@ -207,8 +209,8 @@ async def test_completed_payload_for_summary_path() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
-            return_value=mock_gcm,
+            "soothe.context.engine.ContextEngine",
+            return_value=mock_ce,
         ),
         patch(
             "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
@@ -237,31 +239,15 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
     mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = AsyncMock()
 
-    mock_gr = Mock()
-    mock_gr.loop_messages = []
-    mock_ckpt = Mock()
-    mock_ckpt.goal_history = []
-    mock_ckpt.loop_messages = []
+    mock_sm, mock_ckpt, _mock_gr = _make_mock_state_manager()
     mock_ckpt.status = "idle"
     mock_ckpt.current_thread_id = "legacy-thread"
     mock_ckpt.thread_ids = ["legacy-thread"]
 
-    mock_sm = Mock()
-    mock_sm.loop_id = "loop-test"
-    mock_sm.load = AsyncMock(return_value=None)
-    mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
-    mock_sm.start_new_goal = Mock(return_value=mock_gr)
-    mock_sm.save = AsyncMock()
-    mock_sm.record_iteration = AsyncMock()
-    mock_sm.finalize_goal = AsyncMock()
-    mock_sm.close = AsyncMock()
-
-    mock_gcm = Mock()
-    mock_gcm.get_plan_context = AsyncMock(return_value=[])
-
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
+    mock_ce = _make_mock_ce()
 
     with (
         patch(
@@ -269,8 +255,8 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.GoalContextManager",
-            return_value=mock_gcm,
+            "soothe.context.engine.ContextEngine",
+            return_value=mock_ce,
         ),
         patch(
             "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
