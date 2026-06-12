@@ -35,7 +35,7 @@ class LoopRuntimeContext:
     state_manager: AgentLoopStateManager
     anchor_manager: CheckpointAnchorManager
     goal_context_manager: GoalContextManager
-    plan_manager: PlanManager
+    plan_manager: PlanManager | Any  # PlanManager or StepPlanManagerAdapter (duck-typed)
     checkpoint: AgentLoopCheckpoint
     goal_record: GoalExecutionRecord | None
     continue_loop_mode: bool

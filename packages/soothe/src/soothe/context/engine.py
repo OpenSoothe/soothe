@@ -99,6 +99,23 @@ class ContextEngine:
         self._persistence = persistence or InMemoryContextPersistence()
         self._callbacks: dict[str, list[Callable]] = {}
 
+        # Planning submodule (RFC-624 Phase 3c)
+        from soothe.context.planning import (
+            GoalPlanningSubengine,
+            GoalScheduler,
+            PlanningFacade,
+            StepPlanningSubengine,
+        )
+
+        self._step_planner = StepPlanningSubengine(self._dag)
+        self._goal_planner = GoalPlanningSubengine(self._dag)
+        self._scheduler = GoalScheduler(self._dag)
+        self._planning_facade = PlanningFacade(
+            step=self._step_planner,
+            goal=self._goal_planner,
+            scheduler=self._scheduler,
+        )
+
     # ── Callback mechanism ────────────────────────────────────────
 
     def on(self, event: EngineEvent, callback: Callable) -> None:
@@ -152,6 +169,11 @@ class ContextEngine:
     def ledger(self) -> LedgerManager:
         """Access the underlying LedgerManager for sync operations."""
         return self._ledger
+
+    @property
+    def planning(self):
+        """Access the planning submodule (step, goal, scheduler)."""
+        return self._planning_facade
 
     # ── Goal management ──────────────────────────────────────────
 
