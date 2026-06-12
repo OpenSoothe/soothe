@@ -281,6 +281,81 @@ def test_on_chain_end_no_patch_when_no_hint_captured() -> None:
     assert chain_run not in handler._mirrored_chain_inputs
 
 
+def test_sanitize_cancelled_error_replaces_object_sentinel() -> None:
+    """LangGraph cancels tasks with ``task.cancel(object())``; str() of that is unreadable."""
+    import asyncio
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    sentinel = object()
+    raw = asyncio.CancelledError(sentinel)
+    assert "<object object at" in str(raw)
+
+    sanitized = SootheLangfuseCallbackHandler._sanitize_cancelled_error(raw)
+    assert isinstance(sanitized, asyncio.CancelledError)
+    assert str(sanitized) == "Cancelled"
+
+
+def test_sanitize_cancelled_error_passes_through_other_errors() -> None:
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    err = RuntimeError("boom")
+    assert SootheLangfuseCallbackHandler._sanitize_cancelled_error(err) is err
+
+
+def test_on_chain_error_sanitizes_cancelled_error() -> None:
+    pytest.importorskip("langfuse")
+    import asyncio
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    chain_run = uuid4()
+    handler._mirrored_chain_inputs[chain_run] = {"messages": []}
+
+    raw = asyncio.CancelledError(object())
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_chain_error", return_value=None) as parent:
+        handler.on_chain_error(raw, run_id=chain_run)
+        forwarded_error = parent.call_args[0][0]
+        assert isinstance(forwarded_error, asyncio.CancelledError)
+        assert str(forwarded_error) == "Cancelled"
+    assert chain_run not in handler._mirrored_chain_inputs
+
+
+def test_on_llm_error_sanitizes_cancelled_error() -> None:
+    pytest.importorskip("langfuse")
+    import asyncio
+    from unittest.mock import patch as mpatch
+
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    handler = object.__new__(SootheLangfuseCallbackHandler)
+    handler._system_hint_by_thread = {}
+    handler._generation_traced_inputs = {}
+    handler._mirrored_chain_inputs = {}
+    handler._mirrored_chain_prompts = {}
+    handler.runs = {}
+    handler._child_to_parent_run_id_map = {}
+
+    raw = asyncio.CancelledError(object())
+    run_id = uuid4()
+    langchain_handler = SootheLangfuseCallbackHandler.__mro__[1]
+    with mpatch.object(langchain_handler, "on_llm_error", return_value=None) as parent:
+        handler.on_llm_error(raw, run_id=run_id)
+        forwarded_error = parent.call_args[0][0]
+        assert isinstance(forwarded_error, asyncio.CancelledError)
+        assert str(forwarded_error) == "Cancelled"
+
+
 def test_on_chain_error_cleans_up_tracking() -> None:
     pytest.importorskip("langfuse")
     from unittest.mock import patch as mpatch

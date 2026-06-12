@@ -6,6 +6,7 @@ when using `with_structured_output` with OpenAI-compatible providers.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 from uuid import UUID
@@ -350,6 +351,18 @@ if LANGFUSE_AVAILABLE:
                 outputs, run_id=run_id, parent_run_id=parent_run_id, **kwargs
             )
 
+        @staticmethod
+        def _sanitize_cancelled_error(error: BaseException) -> BaseException:
+            """Replace unreadable ``<object object at 0x...>`` in CancelledError status messages.
+
+            LangGraph's ``AsyncBackgroundExecutor`` cancels tasks with ``task.cancel(object())``,
+            making ``str(CancelledError)`` render as the useless ``<object object at 0x...>``.
+            Return a clean CancelledError so Langfuse records a readable status message.
+            """
+            if isinstance(error, asyncio.CancelledError):
+                return asyncio.CancelledError("Cancelled")
+            return error
+
         def on_chain_error(
             self,
             error: BaseException,
@@ -362,7 +375,28 @@ if LANGFUSE_AVAILABLE:
             self._mirrored_chain_inputs.pop(run_id, None)
             self._mirrored_chain_prompts.pop(run_id, None)
             return super().on_chain_error(
-                error, run_id=run_id, parent_run_id=parent_run_id, tags=tags, **kwargs
+                self._sanitize_cancelled_error(error),
+                run_id=run_id,
+                parent_run_id=parent_run_id,
+                tags=tags,
+                **kwargs,
+            )
+
+        def on_llm_error(
+            self,
+            error: BaseException,
+            *,
+            run_id: UUID,
+            parent_run_id: UUID | None = None,
+            tags: list[str] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            return super().on_llm_error(
+                self._sanitize_cancelled_error(error),
+                run_id=run_id,
+                parent_run_id=parent_run_id,
+                tags=tags,
+                **kwargs,
             )
 
         def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:
