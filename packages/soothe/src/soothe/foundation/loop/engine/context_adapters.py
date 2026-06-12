@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepExecution, StepNode
 from soothe.foundation.loop.planning.manager import (
+    _DAG_DEPENDENCY_THRESHOLD,
+    _LOW_SUCCESS_RATE_THRESHOLD,
+    _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
     CompletionStrategy,
     DagPlanningContext,
     FinalResponseMode,
@@ -201,18 +204,26 @@ class ContextEnginePlanAdapter:
     ) -> bool:
         """Delegate to existing heuristics — identical logic to PlanManager."""
         if mode == "llm_only":
+            logger.debug("CEPlanAdapter: goal completion mode=llm_only, decision=%s", llm_decision)
             return llm_decision
         if mode == "heuristic_only":
-            return self._heuristic_requires_goal_completion(state)
+            result = self._heuristic_requires_goal_completion(state)
+            logger.debug("CEPlanAdapter: goal completion mode=heuristic_only, result=%s", result)
+            return result
         if llm_decision:
+            logger.debug("CEPlanAdapter: goal completion LLM decided True")
             return True
-        return self._heuristic_requires_goal_completion(state)
+        result = self._heuristic_requires_goal_completion(state)
+        logger.debug("CEPlanAdapter: goal completion hybrid, heuristic=%s", result)
+        return result
 
     def _heuristic_requires_goal_completion(self, state: Any) -> bool:
         """Same heuristic as PlanManager._heuristic_requires_goal_completion."""
         if getattr(state, "last_execute_wave_parallel_multi_step", False):
+            logger.info("CEPlanAdapter: goal completion required (parallel multi-step)")
             return True
         if getattr(state, "last_wave_hit_subagent_cap", False):
+            logger.info("CEPlanAdapter: goal completion required (subagent cap hit)")
             return True
 
         if self._goal_id is None:
@@ -225,15 +236,20 @@ class ContextEnginePlanAdapter:
         if failed_count > 0:
             total = goal.steps.completed_steps + failed_count
             success_rate = goal.steps.completed_steps / total if total > 0 else 0.0
-            if success_rate < 0.6:
+            if success_rate < _LOW_SUCCESS_RATE_THRESHOLD:
+                logger.info(
+                    "CEPlanAdapter: goal completion required (low success rate: %.0f%%)",
+                    success_rate * 100,
+                )
                 return True
 
         if state.current_decision:
             has_deps = any(
-                step.dependencies and len(step.dependencies) >= 3
+                step.dependencies and len(step.dependencies) >= _DAG_DEPENDENCY_THRESHOLD
                 for step in state.current_decision.steps
             )
             if has_deps:
+                logger.info("CEPlanAdapter: goal completion required (deep DAG dependencies)")
                 return True
 
         return False
@@ -277,29 +293,50 @@ class ContextEnginePlanAdapter:
         if goal is None:
             return True
         step_dag = goal.steps
-        return (
+        result = (
             len(self.plan_history) <= 1
             and not any(n.dependencies for n in step_dag.nodes.values())
             and step_dag.failed_steps == 0
-            and step_dag.total_steps <= 2
+            and step_dag.total_steps <= _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS
         )
+        logger.debug(
+            "CEPlanAdapter: simple_execution=%s (plans=%d, steps=%d)",
+            result,
+            len(self.plan_history),
+            step_dag.total_steps,
+        )
+        return result
 
     def _dag_requires_synthesis(self, state: LoopState) -> bool:
         """Check whether DAG complexity warrants synthesis."""
         if len(self.plan_history) >= 2:
+            logger.info(
+                "CEPlanAdapter: synthesis required (multiple plan waves: %d)",
+                len(self.plan_history),
+            )
             return True
 
         if self._goal_id is not None:
             goal = self._ce._dag.get_goal(self._goal_id)
             if goal is not None:
                 if goal.steps.failed_steps > 0:
+                    logger.info(
+                        "CEPlanAdapter: synthesis required (failed steps: %d)",
+                        goal.steps.failed_steps,
+                    )
                     return True
                 if goal.steps.chain_depth >= 3:
+                    logger.info(
+                        "CEPlanAdapter: synthesis required (chain depth: %d)",
+                        goal.steps.chain_depth,
+                    )
                     return True
 
         if getattr(state, "last_wave_hit_subagent_cap", False):
+            logger.info("CEPlanAdapter: synthesis required (subagent cap hit)")
             return True
         if getattr(state, "last_execute_wave_parallel_multi_step", False):
+            logger.info("CEPlanAdapter: synthesis required (parallel multi-step)")
             return True
 
         if self._goal_id is not None:
@@ -309,15 +346,20 @@ class ContextEnginePlanAdapter:
                 if failed_count > 0:
                     total = goal.steps.completed_steps + failed_count
                     success_rate = goal.steps.completed_steps / total if total > 0 else 0.0
-                    if success_rate < 0.6:
+                    if success_rate < _LOW_SUCCESS_RATE_THRESHOLD:
+                        logger.info(
+                            "CEPlanAdapter: synthesis required (low success rate: %.0f%%)",
+                            success_rate * 100,
+                        )
                         return True
 
         if state.current_decision:
             has_deps = any(
-                step.dependencies and len(step.dependencies) >= 3
+                step.dependencies and len(step.dependencies) >= _DAG_DEPENDENCY_THRESHOLD
                 for step in state.current_decision.steps
             )
             if has_deps:
+                logger.info("CEPlanAdapter: synthesis required (deep DAG dependencies)")
                 return True
 
         return False
@@ -440,6 +482,7 @@ class ContextEngineGoalContextAdapter:
                 return None
 
             if not checkpoint.thread_switch_pending:
+                logger.debug("CE GoalContextAdapter: execute briefing skipped (no thread switch)")
                 return None
 
             checkpoint.thread_switch_pending = False
@@ -453,15 +496,16 @@ class ContextEngineGoalContextAdapter:
             ]
 
             if not previous_goals:
+                logger.warning(
+                    "CE GoalContextAdapter: thread switch but no completed goals for briefing"
+                )
                 return None
 
-            from soothe.foundation.loop.engine.goal_context_manager import GoalContextManager
+            from soothe.foundation.loop.engine.goal_context_manager import (
+                format_execute_briefing_from_goals,
+            )
 
-            gcm = GoalContextManager.__new__(GoalContextManager)
-            gcm._state_manager = self._state_manager
-            gcm._config = self._config
-
-            return gcm._format_execute_briefing(previous_goals, checkpoint.current_thread_id)
+            return format_execute_briefing_from_goals(previous_goals, checkpoint.current_thread_id)
 
         except Exception as e:
             logger.error("CE GoalContextAdapter: failed to generate execute briefing: %s", e)

@@ -72,7 +72,11 @@ from soothe.foundation.loop.state.schemas import (
     StepResult,
     ToolCallHead,
 )
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.utils.messages import (
+    LoopAIMessage,
+    LoopHumanMessage,
+    _record_ledger_message,
+)
 from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 from soothe.utils.network_errors import (
     format_tool_network_error as _format_tool_network_error,
@@ -1021,6 +1025,7 @@ class Executor:
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
         proposal_queue: Any | None = None,  # RFC-204 Group C
+        ce_ledger_adapter: Any | None = None,  # RFC-624 Phase 3
     ) -> None:
         """Initialize Execute phase.
 
@@ -1047,6 +1052,8 @@ class Executor:
                 clarification was answered.
             proposal_queue: Optional ProposalQueue for autopilot proposals (report_progress,
                 flag_blocker, etc.) during execution.
+            ce_ledger_adapter: Optional ContextEngineLedgerAdapter for dual-write
+                ledger recording (RFC-624 Phase 3).
         """
         self.core_agent = core_agent
         self._checkpointer = checkpointer
@@ -1059,6 +1066,7 @@ class Executor:
         self._clarification_loop_state_view = clarification_loop_state_view
         self._clarification_resume_answer_payload = clarification_resume_answer_payload
         self._proposal_queue = proposal_queue
+        self._ce_ledger_adapter = ce_ledger_adapter
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -1772,15 +1780,18 @@ class Executor:
             )
             if isinstance(raw, Exception):
                 err_text = str(raw).strip() or repr(raw)
-                state.loop_messages.append(human_msg)
-                state.loop_messages.append(
-                    LoopAIMessage(
-                        content=f"Step failed: {err_text}",
-                        thread_id=state.thread_id,
-                        iteration=state.iteration,
-                        phase="execute_step",
-                        step_id=step.id,
-                    )
+                ai_err_msg = LoopAIMessage(
+                    content=f"Step failed: {err_text}",
+                    thread_id=state.thread_id,
+                    iteration=state.iteration,
+                    phase="execute_step",
+                    step_id=step.id,
+                )
+                _record_ledger_message(
+                    self._ce_ledger_adapter, human_msg, "execute_step", state.loop_messages
+                )
+                _record_ledger_message(
+                    self._ce_ledger_adapter, ai_err_msg, "execute_step", state.loop_messages
                 )
                 continue
 
@@ -1823,16 +1834,19 @@ class Executor:
                         content = lb
 
             meta = getattr(final_ai, "response_metadata", {}) if final_ai is not None else {}
-            state.loop_messages.append(human_msg)
-            state.loop_messages.append(
-                LoopAIMessage(
-                    content=content,
-                    thread_id=state.thread_id,
-                    iteration=state.iteration,
-                    phase="execute_step",
-                    step_id=step.id,
-                    response_metadata=meta,
-                )
+            ai_msg = LoopAIMessage(
+                content=content,
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+                phase="execute_step",
+                step_id=step.id,
+                response_metadata=meta,
+            )
+            _record_ledger_message(
+                self._ce_ledger_adapter, human_msg, "execute_step", state.loop_messages
+            )
+            _record_ledger_message(
+                self._ce_ledger_adapter, ai_msg, "execute_step", state.loop_messages
             )
 
         # RFC-227: refresh per-wave digest for plan-assess / plan-generate grounding.

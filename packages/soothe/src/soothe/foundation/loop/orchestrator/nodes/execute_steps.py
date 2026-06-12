@@ -112,6 +112,7 @@ def _append_ask_user_loop_messages(
     answers: tuple[str, ...],
     source: str,
     confidence: float | None,
+    ce_ledger_adapter: Any | None = None,
 ) -> None:
     """Mirror the executor (Execute → AI) ledger pattern for ask_user steps.
 
@@ -119,6 +120,8 @@ def _append_ask_user_loop_messages(
     next planning iteration. Without this pair the planner re-asks the same
     clarification because it has no record of what was asked or answered.
     """
+    from soothe.foundation.loop.utils.messages import _record_ledger_message
+
     questions_block = _format_ask_user_questions(questions)
     answers_block = _format_ask_user_answers(
         questions, answers, source=source, confidence=confidence
@@ -139,8 +142,8 @@ def _append_ask_user_loop_messages(
         phase="execute_step",
         step_id=step_id,
     )
-    state.loop_messages.append(human)
-    state.loop_messages.append(ai)
+    _record_ledger_message(ce_ledger_adapter, human, "execute_step", state.loop_messages)
+    _record_ledger_message(ce_ledger_adapter, ai, "execute_step", state.loop_messages)
 
 
 async def _record_and_emit_step_completed(
@@ -268,6 +271,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 answers=planner_ask_answers,
                 source=planner_ask_source,
                 confidence=planner_ask_confidence,
+                ce_ledger_adapter=ctx.ce_ledger_adapter,
             )
             await _record_and_emit_step_completed(
                 ctx, result=synth_result, step_desc=step_desc_local
@@ -397,6 +401,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             answers=planner_ask_answers,
             source=planner_ask_source,
             confidence=planner_ask_confidence,
+            ce_ledger_adapter=ctx.ce_ledger_adapter,
         )
         await _record_and_emit_step_completed(ctx, result=synth_result, step_desc=step_desc)
 
@@ -454,6 +459,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         clarification_loop_state_view=clarification_view,
         clarification_resume_answer_payload=resume_answer_payload,
         proposal_queue=ctx.proposal_queue,  # RFC-204 Group C
+        ce_ledger_adapter=ctx.ce_ledger_adapter,  # RFC-624 Phase 3
     )
     async for item in run_executor.execute(
         decision=decision,
