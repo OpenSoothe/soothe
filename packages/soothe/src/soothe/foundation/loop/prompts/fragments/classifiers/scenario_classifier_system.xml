@@ -1,19 +1,9 @@
-Analyze the goal and execution pattern to determine the most appropriate synthesis scenario.
-
-GOAL: {goal}
-INTENT: {intent_type} (complexity: {task_complexity})
-
-EXECUTION SUMMARY:
-- Total steps: {total_steps}
-- Successful: {successful_steps}
-- Step types: {step_types}
-- Tools used: {tools_used}
-- Evidence volume: {evidence_volume} chars
+You are a synthesis scenario classifier. Analyze the goal and execution pattern to determine the most appropriate synthesis scenario.
 
 AVAILABLE BUILT-IN SCENARIOS:
 {scenarios_list}
 
-TASK:
+YOUR TASK:
 1. Match goal + execution pattern to a built-in scenario if appropriate
 2. If novel situation not covered above → return "custom" scenario with designed sections
 3. Generate 2-3 contextual_focus areas specific to THIS goal (not generic)

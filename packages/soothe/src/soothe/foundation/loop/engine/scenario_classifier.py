@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from soothe.foundation.loop.prompts.fragments import SCENARIO_CLASSIFIER_PROMPT_FRAGMENT
+from soothe.foundation.loop.prompts.fragments import (
+    SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT,
+    SCENARIO_CLASSIFIER_USER_FRAGMENT,
+)
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -159,29 +162,23 @@ def _extract_execution_summary(state: LoopState) -> dict:
     }
 
 
-def _build_classifier_prompt(
+def _build_classifier_system_prompt() -> str:
+    """Build system prompt with task instructions, scenario list, and output schema."""
+    scenarios_list = "\n".join(
+        f"{i + 1}. {name} - {_SCENARIO_DESCRIPTIONS.get(name, 'General synthesis')}"
+        for i, name in enumerate(BUILTIN_SCENARIOS.keys())
+    )
+    return SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT.format(scenarios_list=scenarios_list)
+
+
+def _build_classifier_user_prompt(
     goal: str,
     intent_type: str,
     task_complexity: str,
     execution_summary: dict,
 ) -> str:
-    """Build classifier prompt for scenario classification (IG-300).
-
-    Args:
-        goal: User's goal description.
-        intent_type: Intent classification (quiz/agentic).
-        task_complexity: Task complexity (minimal/simple/medium/complex).
-        execution_summary: Execution metadata dict.
-
-    Returns:
-        Complete classifier prompt text.
-    """
-    scenarios_list = "\n".join(
-        f"{i + 1}. {name} - {_SCENARIO_DESCRIPTIONS.get(name, 'General synthesis')}"
-        for i, name in enumerate(BUILTIN_SCENARIOS.keys())
-    )
-
-    return SCENARIO_CLASSIFIER_PROMPT_FRAGMENT.format(
+    """Build per-request user prompt with goal, intent, and execution summary."""
+    return SCENARIO_CLASSIFIER_USER_FRAGMENT.format(
         goal=goal,
         intent_type=intent_type,
         task_complexity=task_complexity,
@@ -190,7 +187,6 @@ def _build_classifier_prompt(
         step_types=execution_summary["step_types"],
         tools_used=execution_summary["tools_used"],
         evidence_volume=execution_summary["evidence_volume"],
-        scenarios_list=scenarios_list,
     )
 
 
@@ -365,12 +361,13 @@ async def classify_synthesis_scenario(
         )
         return heuristic
 
-    # Build classifier prompt
-    prompt = _build_classifier_prompt(goal, intent_type, task_complexity, execution_summary)
+    # Build system + user prompts
+    system_prompt = _build_classifier_system_prompt()
+    user_prompt = _build_classifier_user_prompt(goal, intent_type, task_complexity, execution_summary)
 
     # Call LLM with structured output
     try:
-        from langchain_core.messages import HumanMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
 
         from soothe.utils.observability.langfuse import build_traced_config
 
@@ -382,7 +379,10 @@ async def classify_synthesis_scenario(
             session_id=getattr(state, "thread_id", None),
             run_name="soothe:scenario-classify",
         )
-        response = await llm_client.ainvoke([HumanMessage(content=prompt)], config=invoke_config)
+        response = await llm_client.ainvoke(
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)],
+            config=invoke_config,
+        )
 
         # Parse JSON response into ScenarioClassification
         classification = _parse_classification_response(response.content)
