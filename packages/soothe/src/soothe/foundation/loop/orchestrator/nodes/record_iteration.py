@@ -37,6 +37,10 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # Record step outcomes in the plan DAG
     plan_manager.record_step_outcomes(step_results)
 
+    # RFC-624 Phase 3d: async step feedback + CE persistence
+    if ctx.ce_lifecycle is not None:
+        await ctx.ce_lifecycle.on_steps_executed(step_results)
+
     iteration_completed = state.iteration
     state.iteration += 1
     state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)

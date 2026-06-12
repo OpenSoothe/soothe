@@ -62,6 +62,8 @@ class LoopRuntimeContext:
     # RFC-624 Phase 3: ContextEngine instance and ledger adapter (None when CE disabled)
     context_engine: Any | None = None
     ce_ledger_adapter: Any | None = None
+    # RFC-624 Phase 3d: CE lifecycle manager (encapsulates all CE interactions)
+    ce_lifecycle: Any | None = None
 
     @property
     def core_agent(self) -> CoreAgent:
