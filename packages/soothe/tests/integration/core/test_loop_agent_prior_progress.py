@@ -57,7 +57,7 @@ def _payload(
 
 def test_count_file_types_replay_assess_prompt_carries_evidence() -> None:
     """After 3 successful tool-call waves for file-count steps, the next
-    plan-assess prompt must contain <PRIOR_PROGRESS> with tool names and an
+    plan-assess prompt must contain PRIOR PROGRESS: with tool names and an
     evidence excerpt — no goal restatement.
     """
     state = LoopState(
@@ -130,7 +130,7 @@ def test_count_file_types_replay_assess_prompt_carries_evidence() -> None:
         "count all file types of the project", state, PlanContext(), plan_phase="assess"
     )
     assess_human = msgs[-1].content
-    assert "<PRIOR_PROGRESS>" in assess_human
+    assert "PRIOR PROGRESS:" in assess_human
     assert "1139" in assess_human  # Evidence excerpt from file count
     system = msgs[0].content
     assert "**assessment_reasoning**" in system
@@ -158,7 +158,7 @@ def test_replay_also_visible_to_plan_generate() -> None:
         "count files", state, PlanContext(), plan_phase="generate"
     )
     gen_human = msgs[-1].content
-    assert "<PRIOR_PROGRESS>" in gen_human
+    assert "PRIOR PROGRESS:" in gen_human
     assert "1139" in gen_human
 
 
@@ -181,7 +181,7 @@ def test_stale_digest_drops_out_of_prompt_after_two_iterations() -> None:
     msgs = PromptBuilder().build_plan_messages(
         "count files", state, PlanContext(), plan_phase="assess"
     )
-    assert "<PRIOR_PROGRESS>" not in msgs[-1].content
+    assert "PRIOR PROGRESS:" not in msgs[-1].content
 
 
 def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
@@ -224,6 +224,6 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
         "count files", state, PlanContext(), plan_phase="assess"
     )
     assess_human = msgs[-1].content
-    assert "<PRIOR_PROGRESS>" in assess_human
+    assert "PRIOR PROGRESS:" in assess_human
     # Evidence comes from chunked assistant text via _ledger_execute_ai_content.
     assert "1139 Python files" in assess_human

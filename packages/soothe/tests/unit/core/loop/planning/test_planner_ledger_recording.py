@@ -29,9 +29,7 @@ GOAL = "translate the README into French"
 
 # New scenario-based format for recorded human content
 RECORDED_HUMAN_CONTENT = (
-    f"GOAL:\n{GOAL}\n\n"
-    "PRIOR PROGRESS:\nhint=low\n\n"
-    "TIMESTAMP: 2026-06-02T10:19:55+00:00"
+    f"GOAL:\n{GOAL}\n\nPRIOR PROGRESS:\nhint=low\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
 )
 
 

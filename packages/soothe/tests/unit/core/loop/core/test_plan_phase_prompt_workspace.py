@@ -25,7 +25,7 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
         "analyze architecture", state, ctx, plan_phase="generate"
     )
 
-    # Assess: system + optional ledger + plan-context human with <USER_QUERY>
+    # Assess: system + optional ledger + plan-context human with GOAL:
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], LoopHumanMessage)
@@ -40,7 +40,7 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     assert "<WORKSPACE_RULES>" in system_content
     assert "Do NOT ask the user" in system_content
 
-    assert "</USER_QUERY>" not in system_content
+    assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
     assert "GOAL:" in human_content
     assert "analyze architecture" in human_content
 
@@ -63,7 +63,7 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     assert "/abs/path/to/repo" in system_content
     assert "<WORKSPACE_RULES>" in system_content
 
-    assert "</USER_QUERY>" not in system_content
+    assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
     assert "GOAL:" in human_content
     assert "analyze architecture" in human_content
 
@@ -120,7 +120,7 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     assert "Infrastructure" not in messages[-1].content
     # Plan-context human starts with GOAL:
     assert messages[-1].content.strip().startswith("GOAL:")
-    assert "</USER_QUERY>" not in system_content
+    assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
     assert "翻译成中文" in messages[-1].content
     # TIMESTAMP is in plan-context human (RFC-214)
     assert "TIMESTAMP:" in messages[-1].content
@@ -180,7 +180,7 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     assert "First lines of README" in messages[2].content
     system = messages[0].content
     plan_human = messages[3].content
-    assert "</USER_QUERY>" not in system
+    assert "</USER_QUERY>" not in system  # goal text lives in human message only
     assert "GOAL:" in plan_human
     assert "read readme" in plan_human
     assert "Execute iteration" not in plan_human

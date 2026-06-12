@@ -14,9 +14,7 @@ from soothe.foundation.loop.state.schemas import StatusAssessment
 
 def test_compact_human_strips_timestamp_line() -> None:
     content = (
-        "GOAL:\ndo the thing\n\n"
-        "PRIOR PROGRESS:\nhint=low\n\n"
-        "TIMESTAMP: 2026-06-02T10:19:55+00:00"
+        "GOAL:\ndo the thing\n\nPRIOR PROGRESS:\nhint=low\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
     )
     out = compact_planning_human_content(content)
     assert "TIMESTAMP:" not in out

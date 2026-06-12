@@ -211,7 +211,7 @@ async def test_generate_synthesis_uses_projected_context_not_raw_ledger() -> Non
     assert isinstance(msgs[1], HumanMessage)
     human = msgs[1].content
     assert isinstance(human, str)
-    assert "<user_request>" in human
+    assert "GOAL:" in human
     assert "README says hello" in human
     assert "Plan assess context" not in human
     assert "AgentLoop" not in human.lower()

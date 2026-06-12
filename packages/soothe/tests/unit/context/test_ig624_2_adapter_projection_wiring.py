@@ -326,11 +326,11 @@ class TestPromptBuilderContextBundle:
         human_msgs = [m for m in messages if isinstance(m, LoopHumanMessage)]
         assert len(human_msgs) >= 1
         human_content = str(human_msgs[0].content)
-        assert "<GOAL_LINEAGE>" in human_content
+        assert "GOAL LINEAGE:" in human_content
         assert "Root → Child" in human_content
-        assert "<GOAL_PROGRESS>" in human_content
+        assert "GOAL PROGRESS:" in human_content
         assert "2/5 completed" in human_content
-        assert "<STEP_LINEAGE>" in human_content
+        assert "STEP LINEAGE:" in human_content
         assert "Reasoning trace here" in human_content
 
     def test_build_plan_messages_empty_bundle_fields_omitted(self) -> None:
@@ -360,9 +360,9 @@ class TestPromptBuilderContextBundle:
         human_msgs = [m for m in messages if isinstance(m, LoopHumanMessage)]
         if human_msgs:
             human_content = str(human_msgs[0].content)
-            assert "<GOAL_LINEAGE>" not in human_content
-            assert "<GOAL_PROGRESS>" not in human_content
-            assert "<STEP_LINEAGE>" not in human_content
+            assert "GOAL LINEAGE:" not in human_content
+            assert "GOAL PROGRESS:" not in human_content
+            assert "STEP LINEAGE:" not in human_content
 
 
 # ── ContextEngine.get_goal_sync() ───────────────────────────────────────
