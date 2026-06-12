@@ -294,6 +294,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         goal=state.goal,
         state=state,
         context=context,
+        ce_ledger_adapter=ctx.ce_ledger_adapter,
     )
     ctx.scratch.plan_assessment = assessment
 

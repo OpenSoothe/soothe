@@ -103,6 +103,8 @@ class PlanPhase:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        ce_ledger_adapter: Any | None = None,
     ) -> StatusAssessment:
         """Run assess-only planner call for the current iteration."""
         self._prepare_state_evidence(state)
@@ -113,7 +115,9 @@ class PlanPhase:
             len(state.action_history),
             len(state.step_results),
         )
-        return await self._loop_planner.assess_status(goal=goal, state=state, context=context)
+        return await self._loop_planner.assess_status(
+            goal=goal, state=state, context=context, ce_ledger_adapter=ce_ledger_adapter
+        )
 
     async def generate_from_assessment(
         self,
@@ -123,6 +127,7 @@ class PlanPhase:
         assessment: StatusAssessment,
         *,
         plan_manager: Any = None,
+        ce_ledger_adapter: Any | None = None,
     ) -> PlanResult:
         """Run plan-generate call after assess determined work remains."""
         self._prepare_state_evidence(state)
@@ -138,6 +143,7 @@ class PlanPhase:
             context=context,
             assessment=assessment,
             plan_manager=plan_manager,
+            ce_ledger_adapter=ce_ledger_adapter,
         )
         return self.finalize_plan_result(state=state, context=context, result=result)
 

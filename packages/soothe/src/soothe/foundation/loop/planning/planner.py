@@ -1114,6 +1114,8 @@ class LLMPlanner:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        ce_ledger_adapter: Any | None = None,
     ) -> Any:
         """Assess-only planner call used by split graph flow (RFC-214).
 
@@ -1143,7 +1145,7 @@ class LLMPlanner:
                 compact_plan_assess_ai_dump,
                 compact_planning_human_content,
             )
-            from soothe.foundation.loop.utils.messages import LoopAIMessage
+            from soothe.foundation.loop.utils.messages import LoopAIMessage, _record_ledger_message
 
             # Compact the recorded pair so the next assess sees a cache-stable
             # human and no prior `assessment_reasoning` anchor (A2 + C1 + D1).
@@ -1156,8 +1158,10 @@ class LLMPlanner:
                 iteration=state.iteration,
                 phase="plan_assess",
             )
-            state.loop_messages.append(recorded_human)
-            state.loop_messages.append(ai_msg)
+            _record_ledger_message(
+                ce_ledger_adapter, recorded_human, "plan_assess", state.loop_messages
+            )
+            _record_ledger_message(ce_ledger_adapter, ai_msg, "plan_assess", state.loop_messages)
             logger.debug(
                 "Recorded plan-assess ledger pair: human=%d chars, ai=%d chars",
                 len(str(recorded_human.content)),
@@ -1188,6 +1192,7 @@ class LLMPlanner:
         assessment: Any,
         *,
         plan_manager: Any = None,
+        ce_ledger_adapter: Any | None = None,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow, RFC-214).
 
@@ -1307,7 +1312,7 @@ class LLMPlanner:
             from soothe.foundation.loop.planning.ledger_compaction import (
                 compact_planning_human_content,
             )
-            from soothe.foundation.loop.utils.messages import LoopAIMessage
+            from soothe.foundation.loop.utils.messages import LoopAIMessage, _record_ledger_message
 
             # Compact the recorded human so cache stays warm and the goal is
             # not duplicated as a directive (C1 + D1). The AI dump for
@@ -1325,8 +1330,10 @@ class LLMPlanner:
                 iteration=state.iteration,
                 phase="plan_generate",
             )
-            state.loop_messages.append(recorded_human)
-            state.loop_messages.append(ai_msg)
+            _record_ledger_message(
+                ce_ledger_adapter, recorded_human, "plan_generate", state.loop_messages
+            )
+            _record_ledger_message(ce_ledger_adapter, ai_msg, "plan_generate", state.loop_messages)
             logger.debug(
                 "Recorded plan-generate ledger pair: human=%d chars, ai=%d chars",
                 len(str(recorded_human.content)),
