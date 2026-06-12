@@ -105,8 +105,10 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     state.iteration += 1
     state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)
 
-    # IG-475: Clear all goal execution state to prevent memory leak
-    # This resets decision, step_results, evidence, working_memory for the next query
+    # IG-475: Snapshot step_results before clearing so synthesis (scenario
+    # classifier + evidence projection) still sees them.  Clear after synthesis.
+    pre_clear_step_results = list(state.step_results)
+
     state.clear_goal_state()
     ctx.scratch.decision = None
     ctx.scratch.step_results = []
@@ -132,6 +134,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         agent_loop.core_agent,
         agent_loop.config,
         loop_id=ctx.state_manager.loop_id,
+        fast_llm_client=agent_loop._fast_llm,
     )
 
     action = plan_manager.determine_completion_strategy(
@@ -169,6 +172,9 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         final_output = last_ledger_ai_content(state)
         logger.info("Goal completion: action=ledger_direct chars=%d", len(final_output or ""))
     elif action == CompletionStrategy.SYNTHESIZE:
+        # Restore step_results so scenario classifier + evidence projection
+        # can read execution metadata (they were cleared by IG-475 above).
+        state.step_results = pre_clear_step_results
         logger.info("Goal completion: action=synthesis starting stream")
         accum = GoalCompletionAccumState()
         chunk_count = 0
@@ -191,8 +197,13 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         if not final_output:
             used_synthesis_fallback = True
             final_output = generate_user_fallback_summary(state, plan_result)
+        # Re-clear step_results after synthesis consumed them (IG-475)
+        state.step_results = []
     elif action == CompletionStrategy.SUMMARY:
+        # Restore step_results so fallback summary can read execution metadata.
+        state.step_results = pre_clear_step_results
         final_output = generate_user_fallback_summary(state, plan_result)
+        state.step_results = []
         logger.info("Goal completion: action=summary chars=%d", len(final_output or ""))
 
     _append_goal_completion_ledger_pair(
@@ -232,7 +243,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         "completed",
         {
             "result": updated_result,
-            "step_results_count": len(state.step_results),
+            "step_results_count": len(pre_clear_step_results),
             "skip_goal_completion_wire_duplicate": skip_goal_completion_wire_duplicate,
         },
     )

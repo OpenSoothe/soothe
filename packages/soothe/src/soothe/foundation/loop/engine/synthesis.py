@@ -74,16 +74,20 @@ class SynthesisGenerator:
         soothe_config: SootheConfig | None = None,
         *,
         loop_id: str | None = None,
+        fast_llm_client: BaseChatModel | None = None,
     ) -> None:
         """Initialize synthesis generator with LLM client and CoreAgent.
 
         Args:
-            llm_client: Fast model for scenario classification (Phase 1).
+            llm_client: Model for synthesis streaming (Phase 2).
             core_agent: CoreAgent for synthesis execution with streaming (Phase 2).
             soothe_config: Optional daemon config for evidence budgeting (IG-317).
             loop_id: Optional loop identifier for Langfuse trace correlation.
+            fast_llm_client: Fast model for scenario classification (Phase 1).
+                Falls back to ``llm_client`` when not provided.
         """
         self.llm = llm_client
+        self._classify_llm = fast_llm_client or llm_client
         self.core_agent = core_agent
         self._soothe_config = soothe_config
         self._loop_id = loop_id
@@ -101,7 +105,7 @@ class SynthesisGenerator:
         """
         try:
             return await classify_synthesis_scenario(
-                goal, state, self.llm, soothe_config=self._soothe_config
+                goal, state, self._classify_llm, soothe_config=self._soothe_config
             )
         except Exception:
             logger.warning("Classifier failed, using fallback", exc_info=True)

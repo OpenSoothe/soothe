@@ -261,6 +261,65 @@ def _parse_classification_response(content: object) -> ScenarioClassification:
     raise ValueError("Empty scenario classification response")
 
 
+def _heuristic_classify(
+    goal: str,
+    intent_type: str,
+    execution_summary: dict,
+) -> ScenarioClassification | None:
+    """Fast-path heuristic classification that skips the LLM call.
+
+    Returns ``None`` when the heuristic cannot confidently classify (caller
+    should fall through to the LLM path).
+    """
+    total_steps = execution_summary["total_steps"]
+    successful_steps = execution_summary["successful_steps"]
+    step_types = execution_summary["step_types"]
+    evidence_volume = execution_summary["evidence_volume"]
+
+    # Single-step execution → general_summary is sufficient
+    if total_steps <= 1:
+        return ScenarioClassification(
+            scenario="general_summary",
+            sections=list(BUILTIN_SCENARIOS["general_summary"]),
+            contextual_focus=[f"Summarize result for: {goal[:120]}"],
+            evidence_emphasis="Present the single step outcome directly",
+        )
+
+    # No successful steps (all failed) → investigation_summary
+    if successful_steps == 0 and total_steps > 0:
+        return ScenarioClassification(
+            scenario="investigation_summary",
+            sections=list(BUILTIN_SCENARIOS["investigation_summary"]),
+            contextual_focus=["Identify root cause of failures", "Summarize troubleshooting steps"],
+            evidence_emphasis="Group error patterns; highlight root causes",
+        )
+
+    # High step count + mixed step types → analysis_report
+    has_tool = any(t not in ("unknown", "llm_call") for t in step_types)
+    if total_steps >= 4 and has_tool:
+        return ScenarioClassification(
+            scenario="analysis_report",
+            sections=list(BUILTIN_SCENARIOS["analysis_report"]),
+            contextual_focus=[
+                f"Aggregate findings across {total_steps} steps",
+                "Highlight key metrics and outcomes",
+            ],
+            evidence_emphasis="Summarize tool outputs by concern, not chronologically",
+        )
+
+    # Low evidence volume + agentic intent → general_summary
+    if evidence_volume < 2000 and intent_type == "agentic":
+        return ScenarioClassification(
+            scenario="general_summary",
+            sections=list(BUILTIN_SCENARIOS["general_summary"]),
+            contextual_focus=[f"Summarize key findings for: {goal[:120]}"],
+            evidence_emphasis="Present key outcomes concisely",
+        )
+
+    # Could not confidently classify — fall through to LLM
+    return None
+
+
 async def classify_synthesis_scenario(
     goal: str,
     state: LoopState,
@@ -270,8 +329,9 @@ async def classify_synthesis_scenario(
 ) -> ScenarioClassification:
     """Classify synthesis scenario from goal + intent + execution pattern (IG-300).
 
-    Uses fast model to analyze goal context and execution pattern, then suggests
-    appropriate scenario structure with contextual focus and evidence emphasis.
+    Uses a heuristic fast-path for obvious cases, then falls back to the LLM
+    for ambiguous ones.  The LLM call uses the supplied ``llm_client`` which
+    should be a *fast* model (not a reasoning/think model).
 
     Args:
         goal: User's goal description.
@@ -294,6 +354,16 @@ async def classify_synthesis_scenario(
 
     # Extract execution summary
     execution_summary = _extract_execution_summary(state)
+
+    # Heuristic fast-path: skip LLM for obvious cases
+    heuristic = _heuristic_classify(goal, intent_type, execution_summary)
+    if heuristic is not None:
+        logger.info(
+            "Scenario classifier (heuristic): scenario=%s steps=%d",
+            heuristic.scenario,
+            execution_summary["total_steps"],
+        )
+        return heuristic
 
     # Build classifier prompt
     prompt = _build_classifier_prompt(goal, intent_type, task_complexity, execution_summary)
@@ -318,7 +388,7 @@ async def classify_synthesis_scenario(
         classification = _parse_classification_response(response.content)
 
         logger.info(
-            "Scenario classifier: scenario=%s sections=%d focus_items=%d",
+            "Scenario classifier (llm): scenario=%s sections=%d focus_items=%d",
             classification.scenario,
             len(classification.sections),
             len(classification.contextual_focus),
