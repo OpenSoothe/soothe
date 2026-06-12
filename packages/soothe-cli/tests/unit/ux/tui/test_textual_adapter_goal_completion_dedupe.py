@@ -71,7 +71,7 @@ def test_plan_direct_prose_must_not_count_as_flushed_main_answer() -> None:
     """Simple-bypass plan line is not the goal answer; must not dedupe goal_completion."""
     adapter = _make_adapter()
     adapter._last_main_flushed_assistant_prose = (
-        "I will complete this request directly: read 10 lines of project readme"
+        "I will complete this goal directly: read 10 lines of project readme"
     )
     assert not _tui_goal_completion_matches_prior_main_visible_answer(
         adapter,

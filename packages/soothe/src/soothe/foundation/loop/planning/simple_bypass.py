@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SIMPLE_QUERY_DIRECT_PREFIX = "I will complete this request directly:"
+SIMPLE_QUERY_DIRECT_PREFIX = "I will complete this goal directly:"
 
 # expected_output for bypass steps. Flows into the user envelope's
 # <EXECUTION_HINTS> block, which the LLM treats as the step's completion

@@ -206,7 +206,7 @@ def test_collect_cognition_card_replay_surfaces_assistant_conversation_rows() ->
         {
             "kind": "conversation",
             "role": "assistant",
-            "text": "I will complete this request directly: count all file types",
+            "text": "I will complete this goal directly: count all file types",
             "phase": "plan_direct",
             "timestamp": "2026-06-04T10:00:05+00:00",
         },
@@ -236,7 +236,7 @@ def test_collect_cognition_card_replay_surfaces_assistant_conversation_rows() ->
     assert MessageType.ASSISTANT in types, "plan_direct + goal_completion text must be replayed"
     assistants = [c for c in cards if c.type == MessageType.ASSISTANT]
     assert len(assistants) == 2
-    assert assistants[0].content.startswith("I will complete this request directly")
+    assert assistants[0].content.startswith("I will complete this goal directly")
     assert "Total: 2480 files" in assistants[1].content
     # User conversation rows must NOT be replayed (they would duplicate the
     # checkpoint HumanMessage card emitted by convert_messages_to_data).
