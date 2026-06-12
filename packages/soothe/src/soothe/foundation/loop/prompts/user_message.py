@@ -14,15 +14,11 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.loop.engine.scenario_classifier import (
-    _SCENARIO_DESCRIPTIONS,
-    BUILTIN_SCENARIOS,
-    ScenarioClassification,
-    _extract_execution_summary,
-)
-
 if TYPE_CHECKING:
     from soothe.context.projection import ContextBundle
+    from soothe.foundation.loop.engine.scenario_classifier import (
+        ScenarioClassification,
+    )
     from soothe.foundation.loop.state.schemas import LoopState, PriorProgressDigest
 
 # Strip legacy AgentLoop suffix accidentally baked into goal text or stored checkpoints.
@@ -360,6 +356,12 @@ class UserMessageBuilder:
         Returns:
             Structured text message for the synthesis HumanMessage.
         """
+        from soothe.foundation.loop.engine.scenario_classifier import (
+            _SCENARIO_DESCRIPTIONS,
+            BUILTIN_SCENARIOS,
+            _extract_execution_summary,
+        )
+
         exec_summary = _extract_execution_summary(state)
 
         sections: list[tuple[str, str]] = [

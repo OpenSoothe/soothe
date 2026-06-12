@@ -21,7 +21,7 @@ def test_fragment_documents_assessment_reasoning_field() -> None:
 
 def test_fragment_anchors_reasoning_on_prior_progress() -> None:
     text = _FRAGMENT_TEXT
-    assert "<PRIOR_PROGRESS>" in text
+    assert "PRIOR PROGRESS:" in text
     # Both phrasings of the prior_progress mention exist in the field section.
     assert "cite a tool that ran" in text or "evidence excerpt" in text
 

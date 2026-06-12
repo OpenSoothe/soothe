@@ -1,7 +1,7 @@
 """Integration tests for AgentLoop execution hints (RFC-214).
 
 Execution hints are delivered in the per-turn user message envelope
-(``<EXECUTION_HINTS>`` via ``build_execute_step_envelope``), not by mutating
+(``EXECUTION HINTS:`` section via ``build_execute_step_envelope``), not by mutating
 ``system_prompt``. ``ExecutionHintsMiddleware.abefore_agent`` is a no-op kept
 for stack compatibility.
 """
@@ -65,23 +65,20 @@ class TestExecutionHintsEnvelopeIntegration:
         assert state["system_prompt"] == original
 
     def test_envelope_includes_subagent_and_expected_output(self) -> None:
-        """Executor-format hints appear inside <EXECUTION_HINTS>."""
+        """Executor-format hints appear inside EXECUTION HINTS: section."""
         hints = _execution_hints_text(subagent="tacitus", expected_output="Page summary")
         assert hints is not None
         envelope = build_execute_step_envelope(
             "Open the page",
             execution_hints=hints,
         )
-        assert "<EXECUTION_HINTS>" in envelope
-        assert "</EXECUTION_HINTS>" in envelope
+        assert "EXECUTION HINTS:" in envelope
         assert "Suggested subagent: tacitus" in envelope
         assert "Expected output: Page summary" in envelope
         assert "Consider using the suggested approach first" in envelope
-        uq = envelope.find("<USER_QUERY>")
-        ctx = envelope.find("--- Context ---")
-        dyn = envelope.find("<DYNAMIC_CONTEXT>")
-        assert 0 <= uq < ctx < dyn
-        assert "<CURRENT_GOAL>" not in envelope
+        goal_idx = envelope.index("GOAL:")
+        hints_idx = envelope.index("EXECUTION HINTS:")
+        assert 0 <= goal_idx < hints_idx
 
     def test_envelope_expected_output_only(self) -> None:
         """Hints may omit subagent when only expected_output is set."""
@@ -91,15 +88,15 @@ class TestExecutionHintsEnvelopeIntegration:
             "Read file",
             execution_hints=hints,
         )
-        assert "<EXECUTION_HINTS>" in envelope
+        assert "EXECUTION HINTS:" in envelope
         assert "Expected output: File contents" in envelope
         assert "Suggested subagent:" not in envelope
 
     def test_envelope_omits_hints_block_when_empty(self) -> None:
-        """No step metadata → no <EXECUTION_HINTS> section."""
+        """No step metadata → no EXECUTION HINTS: section."""
         envelope = build_execute_step_envelope(
             "Plain step",
             execution_hints=None,
         )
-        assert "<EXECUTION_HINTS>" not in envelope
-        assert "<USER_QUERY>" in envelope
+        assert "EXECUTION HINTS:" not in envelope
+        assert "GOAL:" in envelope

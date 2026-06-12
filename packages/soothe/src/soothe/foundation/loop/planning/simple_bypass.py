@@ -4,8 +4,8 @@ from __future__ import annotations
 
 SIMPLE_QUERY_DIRECT_PREFIX = "I will complete this goal directly:"
 
-# expected_output for bypass steps. Flows into the user envelope's
-# <EXECUTION_HINTS> block, which the LLM treats as the step's completion
+# expected_output for bypass steps. Flows into the user message's
+# EXECUTION HINTS: section, which the LLM treats as the step's completion
 # contract. The "## Result" requirement forces the final assistant message
 # to restate the answer in plain text so plan-assess sees concrete evidence
 # in the ledger rather than only narration about tool calls.

@@ -103,10 +103,10 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
     plan = build_plan_context_envelope(
         goal="g",
     )
-    assert "<USER_QUERY>" in execute
-    assert "<USER_QUERY>" in plan
-    assert "<CONTEXT_INFO>" in execute
-    assert "<CONTEXT_INFO>" in plan
+    assert "GOAL:" in execute
+    assert "GOAL:" in plan
+    assert "TIMESTAMP:" in execute
+    assert "TIMESTAMP:" in plan
 
 
 def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:
