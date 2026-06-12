@@ -67,7 +67,6 @@ agent:
     plan_prompt_ledger:
       plan_ledger_max_messages: 20
     context_engine:
-      enabled: true
       persistence_backend: "file"
     limits:
       max_parallel_steps: 4

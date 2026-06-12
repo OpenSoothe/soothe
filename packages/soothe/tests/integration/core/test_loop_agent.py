@@ -53,7 +53,9 @@ class MockLoopPlanner:
         # AgentLoop goal completion constructs ``SynthesisGenerator(loop_planner._model, ...)``.
         self._model = MagicMock()
 
-    async def assess_status(self, goal: str, state, context: PlanContext):
+    async def assess_status(
+        self, goal: str, state, context: PlanContext, *, context_engine: Any | None = None
+    ):
         """Assess-only call for split graph flow."""
         from soothe.foundation.loop.state.schemas import StatusAssessment
 
@@ -129,6 +131,7 @@ class MockLoopPlanner:
         assessment,
         *,
         plan_manager: Any = None,
+        context_engine: Any | None = None,
     ):
         """Generate plan after assessment (split graph flow)."""
         self._generate_count += 1
@@ -395,7 +398,7 @@ async def test_loop_agent_max_iterations() -> None:
             self._assess_count = 0
             self._generate_count = 0
 
-        async def assess_status(self, goal, state, context):
+        async def assess_status(self, goal, state, context, *, context_engine: Any | None = None):
             """Assess-only: always needs more work."""
             self._assess_count += 1
             return StatusAssessment(
@@ -406,7 +409,14 @@ async def test_loop_agent_max_iterations() -> None:
             )
 
         async def generate_from_assessment(
-            self, goal, state, context, assessment, *, plan_manager: Any = None
+            self,
+            goal,
+            state,
+            context,
+            assessment,
+            *,
+            plan_manager: Any = None,
+            context_engine: Any | None = None,
         ):
             """Generate: always new steps."""
             self._generate_count += 1
@@ -481,7 +491,7 @@ async def test_loop_agent_parallel_execution() -> None:
             self._generate_count = 0
             self._model = MagicMock()
 
-        async def assess_status(self, goal, state, context):
+        async def assess_status(self, goal, state, context, *, context_engine: Any | None = None):
             """Assess-only for parallel execution."""
             self._assess_count += 1
             if self._assess_count == 1:
@@ -499,7 +509,14 @@ async def test_loop_agent_parallel_execution() -> None:
             )
 
         async def generate_from_assessment(
-            self, goal, state, context, assessment, *, plan_manager: Any = None
+            self,
+            goal,
+            state,
+            context,
+            assessment,
+            *,
+            plan_manager: Any = None,
+            context_engine: Any | None = None,
         ):
             """Generate parallel steps."""
             self._generate_count += 1

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from langchain_core.messages import HumanMessage
 
 from soothe.context.engine import ContextEngine
 from soothe.context.ledger import LedgerManager
@@ -12,7 +11,6 @@ from soothe.context.planning import StepPlanManagerAdapter
 from soothe.context.projection import ContextBundle
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
-    ContextEngineLedgerAdapter,
     _format_execute_briefing_from_ce_goals,
 )
 from soothe.foundation.loop.planning.manager import DagPlanningContext
@@ -92,33 +90,6 @@ class TestPlanAdapterPublicAPI:
 
         result = adapter.determine_goal_completion_needs(False, MockState(), "heuristic_only")
         assert result is False
-
-
-# ── ContextEngineLedgerAdapter public API ───────────────────────────────
-
-
-class TestLedgerAdapterPublicAPI:
-    def test_record_message_uses_ledger_property(self) -> None:
-        ce = ContextEngine()
-        adapter = ContextEngineLedgerAdapter(ce)
-        loop_messages: list = []
-
-        adapter.record_message(HumanMessage(content="hello"), "execute_step", loop_messages)
-
-        assert len(loop_messages) == 1
-        entries = ce.get_ledger_entries()
-        assert len(entries) == 1
-        assert entries[0][1] == "execute_step"
-
-    def test_record_non_base_message_skipped_in_ledger(self) -> None:
-        ce = ContextEngine()
-        adapter = ContextEngineLedgerAdapter(ce)
-        loop_messages: list = []
-
-        adapter.record_message("plain string", "test", loop_messages)
-        assert len(loop_messages) == 1
-        # Non-BaseMessage should not go to ledger
-        assert len(ce.get_ledger_entries()) == 0
 
 
 # ── ContextEngineGoalContextAdapter CE DAG reads ───────────────────────

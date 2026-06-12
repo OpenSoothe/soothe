@@ -78,6 +78,13 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
     ctx.scratch.plan_result = merged
     ctx.plan_manager.ingest_plan(merged, state.plan_id, state.iteration)
 
+    # RFC-624 Phase 4: persist CE state after plan ingestion
+    if ctx.ce is not None:
+        try:
+            await ctx.ce.save()
+        except Exception:
+            logger.warning("[resolve_decision] CE save failed", exc_info=True)
+
     await ctx.emit(
         "plan_decision",
         {

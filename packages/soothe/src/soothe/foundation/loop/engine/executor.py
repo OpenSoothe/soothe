@@ -91,8 +91,6 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.foundation.core.agent import CoreAgent
 
-    from .goal_context_manager import GoalContextManager
-
 logger = logging.getLogger(__name__)
 
 # Per execute-step cap on root-graph tool results consumed from the Act stream.
@@ -1019,14 +1017,14 @@ class Executor:
         checkpointer: Any | None = None,
         max_parallel_steps: int = 16,
         config: SootheConfig | None = None,
-        goal_context_manager: GoalContextManager | None = None,
+        goal_context_manager: Any | None = None,
         loop_id: str | None = None,
         clarification_detector: ClarificationDetector | None = None,
         clarification_capture: ClarificationCapture | None = None,
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
         proposal_queue: Any | None = None,  # RFC-204 Group C
-        ce_ledger_adapter: Any | None = None,  # RFC-624 Phase 3
+        context_engine: Any | None = None,  # RFC-624 Phase 4
     ) -> None:
         """Initialize Execute phase.
 
@@ -1053,8 +1051,8 @@ class Executor:
                 clarification was answered.
             proposal_queue: Optional ProposalQueue for autopilot proposals (report_progress,
                 flag_blocker, etc.) during execution.
-            ce_ledger_adapter: Optional ContextEngineLedgerAdapter for dual-write
-                ledger recording (RFC-624 Phase 3).
+            context_engine: Optional ContextEngine instance for dual-write
+                ledger recording (RFC-624 Phase 4).
         """
         self.core_agent = core_agent
         self._checkpointer = checkpointer
@@ -1067,7 +1065,7 @@ class Executor:
         self._clarification_loop_state_view = clarification_loop_state_view
         self._clarification_resume_answer_payload = clarification_resume_answer_payload
         self._proposal_queue = proposal_queue
-        self._ce_ledger_adapter = ce_ledger_adapter
+        self._context_engine = context_engine
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -1789,10 +1787,10 @@ class Executor:
                     step_id=step.id,
                 )
                 _record_ledger_message(
-                    self._ce_ledger_adapter, human_msg, "execute_step", state.loop_messages
+                    self._context_engine, human_msg, "execute_step", state.loop_messages
                 )
                 _record_ledger_message(
-                    self._ce_ledger_adapter, ai_err_msg, "execute_step", state.loop_messages
+                    self._context_engine, ai_err_msg, "execute_step", state.loop_messages
                 )
                 continue
 
@@ -1844,10 +1842,10 @@ class Executor:
                 response_metadata=meta,
             )
             _record_ledger_message(
-                self._ce_ledger_adapter, human_msg, "execute_step", state.loop_messages
+                self._context_engine, human_msg, "execute_step", state.loop_messages
             )
             _record_ledger_message(
-                self._ce_ledger_adapter, ai_msg, "execute_step", state.loop_messages
+                self._context_engine, ai_msg, "execute_step", state.loop_messages
             )
 
         # RFC-227: refresh per-wave digest for plan-assess / plan-generate grounding.
