@@ -152,48 +152,98 @@ class ContextEnginePlanAdapter:
         )
 
     def format_completion_dag_report(self) -> str:
-        """Render from GoalStepDAG instead of PlanDAG, same output format."""
-        if self._goal_id is None:
-            return ""
+        """Render the full GoalStepDAG with all goals and nested step DAGs.
 
-        goal = self._ce._dag.get_goal(self._goal_id)
-        if goal is None:
-            return ""
+        When CE is enabled, produces a hierarchical report showing every goal
+        in the GoalStepDAG with its status, metadata, lineage, and nested
+        StepDAG. Falls back to the active goal's StepDAG when no goal_id is set.
+        """
+        dag = self._ce._dag
+        all_goals = list(dag.goals.values())
 
-        step_dag = goal.steps
-        if step_dag.total_steps == 0:
-            return ""
-
-        ctx = self.get_planning_context()
-        failed_n = len(ctx.failed_step_ids)
-        pending_n = len(ctx.pending_step_ids)
+        # Fallback: no goals at all
+        if not all_goals:
+            if self._goal_id is None:
+                return ""
+            goal = dag.get_goal(self._goal_id)
+            if goal is None or goal.steps.total_steps == 0:
+                return ""
 
         lines: list[str] = [
-            "### Plan DAG (at goal completion)",
+            "### Context Engine Goal DAG (at goal completion)",
             "",
-            "**Execution statistics**",
-            f"- Planned steps (nodes): {ctx.total_steps}",
-            f"- Completed: {ctx.completed_steps}",
-            f"- Failed: {failed_n}",
-            f"- Pending (not executed): {pending_n}",
-            f"- Max dependency chain depth: {ctx.chain_depth}",
-            f"- Success rate over executed steps: {ctx.success_rate:.0%}",
-            f"- Distinct plan waves ingested: {len(self.plan_history)}",
         ]
-        if ctx.replan_count > 0:
-            lines.append(f"- Replans after first wave: {ctx.replan_count}")
-        lines.extend(["", "**Steps**", ""])
-        for cid in sorted(step_dag.nodes.keys()):
-            node = step_dag.nodes[cid]
-            dep_s = ", ".join(sorted(node.dependencies)) if node.dependencies else "—"
-            status_label = node.status.upper()
-            desc = (node.description or "").replace("\n", " ").strip()
-            if len(desc) > 280:
-                desc = desc[:277] + "..."
-            lines.append(f"- **{cid}** — {status_label}")
-            lines.append(f"  - Depends on: {dep_s}")
-            if desc:
-                lines.append(f"  - {desc}")
+
+        # Goal-level statistics
+        status_counts: dict[str, int] = {}
+        for g in all_goals:
+            status_counts[g.status] = status_counts.get(g.status, 0) + 1
+        lines.append("**Goal statistics**")
+        lines.append(f"- Total goals: {len(all_goals)}")
+        for status in ("active", "completed", "failed", "pending", "suspended", "cancelled"):
+            count = status_counts.get(status, 0)
+            if count:
+                lines.append(f"- {status.capitalize()}: {count}")
+        lines.append("")
+
+        # Sort goals: failed first, then completed, then by created_at
+        status_order = {"failed": 0, "active": 1, "completed": 2, "pending": 3, "suspended": 4, "cancelled": 5}
+        sorted_goals = sorted(all_goals, key=lambda g: (status_order.get(g.status, 9), g.created_at))
+
+        for goal in sorted_goals:
+            status_label = goal.status.upper()
+            lines.append(f"**Goal {goal.id}** — {status_label}")
+            lines.append(f"- Description: {goal.description}")
+            lines.append(f"- Source: {goal.source}, Priority: {goal.priority}")
+            lines.append(f"- Parent: {goal.parent_id or '—'}")
+
+            # Lineage for sub-goals
+            if goal.parent_id:
+                lineage = dag.goal_lineage(goal.id)
+                if lineage:
+                    lines.append(f"- Lineage: {' > '.join(lineage)}")
+
+            if goal.thread_id:
+                lines.append(f"- Thread: {goal.thread_id}")
+            if goal.assigned_loop_id:
+                lines.append(f"- Loop: {goal.assigned_loop_id}")
+            if goal.total_tokens_used:
+                lines.append(f"- Tokens used: {goal.total_tokens_used}")
+
+            # Nested StepDAG
+            step_dag = goal.steps
+            if step_dag.total_steps > 0:
+                executed = step_dag.completed_steps + step_dag.failed_steps
+                success_pct = f"{step_dag.success_rate:.0%}" if executed else "N/A"
+                lines.append("")
+                lines.append(
+                    f"  **Step DAG** "
+                    f"({step_dag.total_steps} steps, "
+                    f"completed={step_dag.completed_steps}, "
+                    f"failed={step_dag.failed_steps}, "
+                    f"depth={step_dag.chain_depth}, "
+                    f"success={success_pct})"
+                )
+                for cid in sorted(step_dag.nodes.keys()):
+                    node = step_dag.nodes[cid]
+                    dep_s = ", ".join(sorted(node.dependencies)) if node.dependencies else "—"
+                    step_status = node.status.upper()
+                    desc = (node.description or "").replace("\n", " ").strip()
+                    if len(desc) > 280:
+                        desc = desc[:277] + "..."
+                    lines.append(f"  - **{cid}** — {step_status}")
+                    lines.append(f"    - Depends on: {dep_s}")
+                    if desc:
+                        lines.append(f"    - {desc}")
+
+            lines.append("")
+
+        # Plan wave metadata
+        lines.append(f"Distinct plan waves ingested: {len(self.plan_history)}")
+        replan_count = max(0, len(self.plan_history) - 1)
+        if replan_count > 0:
+            lines.append(f"Replans after first wave: {replan_count}")
+
         return "\n".join(lines).strip()
 
     def determine_goal_completion_needs(
