@@ -1924,7 +1924,9 @@ class Executor:
                     getattr(final_ai, "content", None)
                 ).strip()
                 if not excerpt_src:
-                    excerpt_src = self._assemble_assistant_text_from_stream_messages(step_messages).strip()
+                    excerpt_src = self._assemble_assistant_text_from_stream_messages(
+                        step_messages
+                    ).strip()
             if not excerpt_src:
                 excerpt_src = _last_tool_result_block(step_messages)
             if not excerpt_src:

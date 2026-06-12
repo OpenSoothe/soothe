@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
+    from soothe.context.projection import ContextBundle
     from soothe.foundation.loop.state.schemas import LoopState
     from soothe.protocols.planner import PlanContext
 
@@ -76,6 +77,7 @@ class PromptBuilder:
         *,
         plan_phase: PlanPromptPhase = "assess",
         dag_context: str | None = None,
+        context_bundle: ContextBundle | None = None,
     ) -> list[BaseMessage]:
         """Build SystemMessage + plan context + ledger for Plan phase (RFC-207, RFC-214).
 
@@ -98,6 +100,9 @@ class PromptBuilder:
             plan_phase: ``assess`` = instructions aligned to ``StatusAssessment``; ``generate`` =
                 execution policies + instructions aligned to ``PlanGeneration`` only (IG-372, IG-329).
             dag_context: Optional XML-formatted DAG context for progressive planning (generate phase).
+            context_bundle: Optional ContextBundle from ContextEngine.project() (RFC-624).
+                When provided, supplementary context (goal lineage, progress, instructions)
+                is injected into the prompt. When None, behavior is unchanged.
 
         Returns:
             Messages to send to the plan LLM: system, ledger copies, prior thread messages,
@@ -109,9 +114,15 @@ class PromptBuilder:
             context,
             state,
             plan_phase=plan_phase,
+            context_bundle=context_bundle,
         )
         human_content = self._build_plan_context_human_text(
-            goal, state, context, plan_phase=plan_phase, dag_context=dag_context
+            goal,
+            state,
+            context,
+            plan_phase=plan_phase,
+            dag_context=dag_context,
+            context_bundle=context_bundle,
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -174,6 +185,7 @@ class PromptBuilder:
         state: LoopState | None = None,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        context_bundle: ContextBundle | None = None,
     ) -> str:
         """Construct static context: policies, instructions, environment, workspace.
 
@@ -196,6 +208,8 @@ class PromptBuilder:
             context: Planning context with workspace, capabilities
             state: Optional loop state for iteration limits and capability context
             plan_phase: Which planner LLM call this system prompt serves (IG-372).
+            context_bundle: Optional ContextBundle (RFC-624). When provided, project/agent/memory
+                instructions from the bundle replace or supplement disk reads.
         """
         from soothe.foundation.loop.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
@@ -240,13 +254,32 @@ class PromptBuilder:
                 "</WORKSPACE_RULES>\n"
             )
             # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable
-            from soothe.foundation.loop.prompts.project_instructions import (
-                load_workspace_project_instructions,
-            )
+            # RFC-624: Use context_bundle.project_instructions when available (skip disk read)
+            if context_bundle is not None and context_bundle.project_instructions:
+                parts.append(context_bundle.project_instructions + "\n")
+            else:
+                from soothe.foundation.loop.prompts.project_instructions import (
+                    load_workspace_project_instructions,
+                )
 
-            ws_instructions = load_workspace_project_instructions(context.workspace)
-            if ws_instructions:
-                parts.append(ws_instructions + "\n")
+                ws_instructions = load_workspace_project_instructions(context.workspace)
+                if ws_instructions:
+                    parts.append(ws_instructions + "\n")
+
+        # RFC-624: Supplementary instructions from ContextBundle
+        if context_bundle is not None:
+            if context_bundle.agent_instructions:
+                parts.append(
+                    "<AGENT_INSTRUCTIONS>\n"
+                    + context_bundle.agent_instructions
+                    + "\n</AGENT_INSTRUCTIONS>\n"
+                )
+            if context_bundle.memory_instructions:
+                parts.append(
+                    "<MEMORY_INSTRUCTIONS>\n"
+                    + context_bundle.memory_instructions
+                    + "\n</MEMORY_INSTRUCTIONS>\n"
+                )
 
         # Prior conversation follow-up policy (static when prior conversation exists)
         if context.recent_messages:
@@ -337,6 +370,7 @@ class PromptBuilder:
         *,
         plan_phase: PlanPromptPhase = "assess",
         dag_context: str | None = None,
+        context_bundle: ContextBundle | None = None,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -385,7 +419,7 @@ class PromptBuilder:
 
         # Build envelope with timestamp (RFC-214). prior_progress threads
         # through for both phases; envelope omits the block when absent or stale.
-        return build_plan_context_envelope(
+        envelope = build_plan_context_envelope(
             goal=goal,
             dag_context=dag_context,
             step_id_hint=step_id_hint,
@@ -394,3 +428,23 @@ class PromptBuilder:
             prior_progress=getattr(state, "prior_progress", None),
             current_iteration=state.iteration,
         )
+
+        # RFC-624: Supplementary context from ContextBundle (additive, not replacing)
+        if context_bundle is not None:
+            supplement_parts: list[str] = []
+            if context_bundle.goal_lineage:
+                supplement_parts.append(
+                    f"<GOAL_LINEAGE>\n{context_bundle.goal_lineage}\n</GOAL_LINEAGE>"
+                )
+            if context_bundle.goal_progress:
+                supplement_parts.append(
+                    f"<GOAL_PROGRESS>\n{context_bundle.goal_progress}\n</GOAL_PROGRESS>"
+                )
+            if context_bundle.step_lineage:
+                supplement_parts.append(
+                    f"<STEP_LINEAGE>\n{context_bundle.step_lineage}\n</STEP_LINEAGE>"
+                )
+            if supplement_parts:
+                envelope += "\n" + "\n".join(supplement_parts)
+
+        return envelope

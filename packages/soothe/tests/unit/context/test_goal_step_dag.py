@@ -62,6 +62,40 @@ class TestGoalStepDAGLifecycle:
         dag = GoalStepDAG()
         dag.complete_goal("missing")
 
+    def test_cancel_goal(self) -> None:
+        dag = GoalStepDAG()
+        goal = GoalNode(description="Test")
+        dag.add_goal(goal)
+        dag.cancel_goal(goal.id)
+        assert dag.goals[goal.id].status == "cancelled"
+
+    def test_block_goal(self) -> None:
+        dag = GoalStepDAG()
+        goal = GoalNode(description="Test")
+        dag.add_goal(goal)
+        dag.block_goal(goal.id)
+        assert dag.goals[goal.id].status == "blocked"
+
+    def test_unblock_goal(self) -> None:
+        dag = GoalStepDAG()
+        goal = GoalNode(description="Test")
+        dag.add_goal(goal)
+        dag.block_goal(goal.id)
+        assert dag.goals[goal.id].status == "blocked"
+        dag.unblock_goal(goal.id)
+        assert dag.goals[goal.id].status == "pending"
+
+    def test_unblock_non_blocked_is_noop(self) -> None:
+        dag = GoalStepDAG()
+        goal = GoalNode(description="Test", status="active")
+        dag.add_goal(goal)
+        dag.unblock_goal(goal.id)
+        assert dag.goals[goal.id].status == "active"
+
+    def test_cancel_nonexistent_is_noop(self) -> None:
+        dag = GoalStepDAG()
+        dag.cancel_goal("missing")
+
 
 class TestGoalStepDAGScheduling:
     def test_ready_goals_pending_only(self) -> None:

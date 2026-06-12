@@ -1193,6 +1193,7 @@ class LLMPlanner:
         *,
         plan_manager: Any = None,
         ce_ledger_adapter: Any | None = None,
+        context_engine: Any | None = None,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow, RFC-214).
 
@@ -1273,8 +1274,21 @@ class LLMPlanner:
 
                 dag_context = _format_dag_context(dag_ctx)
 
+        # RFC-624: Build ContextBundle from ContextEngine when available
+        context_bundle = None
+        if context_engine is not None:
+            try:
+                context_bundle = await context_engine.project()
+            except Exception:
+                logger.debug("ContextEngine.project() failed, proceeding without bundle")
+
         generate_messages = self._prompt_builder.build_plan_messages(
-            goal, state, context, plan_phase="generate", dag_context=dag_context
+            goal,
+            state,
+            context,
+            plan_phase="generate",
+            dag_context=dag_context,
+            context_bundle=context_bundle,
         )
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
@@ -1355,6 +1369,7 @@ class LLMPlanner:
         context: PlanContext,
         *,
         plan_manager: Any = None,
+        context_engine: Any | None = None,
     ) -> Any:
         """Plan execution using two-call architecture (RFC-604).
 
@@ -1368,9 +1383,21 @@ class LLMPlanner:
         max_retries = 3
         result = None
 
+        # RFC-624: Build ContextBundle from ContextEngine when available
+        context_bundle = None
+        if context_engine is not None:
+            try:
+                context_bundle = await context_engine.project()
+            except Exception:
+                logger.debug("ContextEngine.project() failed, proceeding without bundle")
+
         for attempt in range(max_retries):
             assess_messages = self._prompt_builder.build_plan_messages(
-                goal, state, context, plan_phase="assess"
+                goal,
+                state,
+                context,
+                plan_phase="assess",
+                context_bundle=context_bundle,
             )
             messages_for_retry = assess_messages
             generate_messages: list[Any] = []
@@ -1491,7 +1518,12 @@ class LLMPlanner:
                                 dag_context = _format_dag_context(dag_ctx)
 
                         generate_messages = self._prompt_builder.build_plan_messages(
-                            goal, state, context, plan_phase="generate", dag_context=dag_context
+                            goal,
+                            state,
+                            context,
+                            plan_phase="generate",
+                            dag_context=dag_context,
+                            context_bundle=context_bundle,
                         )
                         messages_for_retry = generate_messages
                         t_plan = time.perf_counter()

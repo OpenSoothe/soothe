@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +34,16 @@ class LedgerManager:
 
     max_inline_chars: int = 4000
     max_entry_chars_before_spill: int = 1500
+    max_entries: int = 200
+    compact_fn: Callable[[list[_LedgerEntry]], str | None] | None = None
     _entries: list[_LedgerEntry] = field(default_factory=list)
     _step_lines: list[str] = field(default_factory=list)
 
     def record_message(self, message: BaseMessage, phase: str) -> None:
         """Append a message to the ledger with phase metadata."""
         self._entries.append(_LedgerEntry(message=message, phase=phase))
+        if len(self._entries) > self.max_entries:
+            self.compact()
 
     def get_messages(self, phases: list[str] | None = None) -> list[BaseMessage]:
         """Return messages, optionally filtered by phase."""
@@ -92,8 +97,42 @@ class LedgerManager:
         return out
 
     def compact(self) -> None:
-        """Compact old messages (placeholder for future summarization)."""
-        pass
+        """Compact old entries when count exceeds max_entries.
+
+        If a compact_fn is provided, it receives the oldest entries and returns
+        a summary string (or None to skip compaction). The summary replaces
+        those entries as a single SystemMessage.
+
+        If no compact_fn is set, entries beyond max_entries are dropped.
+        """
+        if len(self._entries) <= self.max_entries:
+            return
+
+        excess = len(self._entries) - self.max_entries
+        old_entries = self._entries[:excess]
+
+        if self.compact_fn is not None:
+            try:
+                summary = self.compact_fn(old_entries)
+            except Exception:
+                logger.warning("Compaction function failed, dropping oldest entries", exc_info=True)
+                self._entries = self._entries[excess:]
+                return
+            if summary:
+                self._entries = [
+                    _LedgerEntry(message=SystemMessage(content=summary), phase="compacted"),
+                    *self._entries[excess:],
+                ]
+                return
+
+        self._entries = self._entries[excess:]
+
+    def entries(self, phases: list[str] | None = None) -> list[tuple[BaseMessage, str | None]]:
+        """Return (message, phase) tuples, optionally filtered by phase."""
+        if phases is None:
+            return [(e.message, e.phase) for e in self._entries]
+        phase_set = set(phases)
+        return [(e.message, e.phase) for e in self._entries if e.phase in phase_set]
 
     def record_step_result(
         self,
