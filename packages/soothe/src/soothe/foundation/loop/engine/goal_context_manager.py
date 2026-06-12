@@ -13,6 +13,138 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def format_execute_briefing_from_goals(goals: list, current_thread: str) -> str:
+    """Format previous goals as condensed Execute briefing.
+
+    Standalone function extracted from GoalContextManager._format_execute_briefing
+    so both GoalContextManager and ContextEngineGoalContextAdapter can call it
+    without fragile ``__new__()`` patterns.
+
+    Args:
+        goals: Completed GoalExecutionRecord instances.
+        current_thread: Current thread_id (new thread after switch).
+
+    Returns:
+        Markdown-formatted briefing string.
+    """
+    sections = ["## Previous Goal Context (Thread Switch Recovery)\n\n"]
+
+    for i, goal in enumerate(goals, 1):
+        key_findings = _extract_key_findings(goal.goal_completion)
+        critical_files = _extract_critical_files(goal.goal_completion)
+        result_summary = _extract_result_summary(goal.goal_completion)
+
+        sections.append(
+            f"**Goal {i}** ({goal.thread_id}, {goal.status} in {goal.iteration} iterations):\n"
+            f"Query: {goal.goal_text}\n"
+            f"Key findings: {key_findings}\n"
+            f"Critical files: {critical_files}\n"
+            f"Result: {result_summary}\n\n"
+        )
+
+    sections.append(
+        f"**Current thread**: {current_thread} (new thread, no conversation history)\n"
+        f"**Instruction**: Use previous goal context to inform step execution strategy.\n"
+        f"Reference critical files discovered in prior work. Avoid re-exploring solved problems."
+    )
+
+    return "".join(sections)
+
+
+def _extract_key_findings(report: str) -> str:
+    """Extract key findings summary from final report.
+
+    Heuristic: Extract first 3 bullet points or numbered items.
+
+    Args:
+        report: Goal completion content
+
+    Returns:
+        Condensed key findings (max 150 chars)
+    """
+    if not report:
+        return "No findings"
+
+    patterns = [
+        r"^(\d+)\.\s+(.+)",
+        r"^-\s+(.+)",
+        r"^\*\s+(.+)",
+    ]
+
+    findings = []
+    for line in report.split("\n")[:20]:
+        line = line.strip()
+        for pattern in patterns:
+            match = re.match(pattern, line)
+            if match:
+                text = match.group(2) if len(match.groups()) > 1 else match.group(1)
+                findings.append(text.strip())
+                if len(findings) >= 3:
+                    break
+
+    if not findings:
+        return report[:150].rstrip() + "..."
+
+    return "; ".join(findings[:3])
+
+
+def _extract_critical_files(report: str) -> str:
+    """Extract critical file paths from final report.
+
+    Pattern: filename.py:number or filename.py
+
+    Args:
+        report: Goal completion content
+
+    Returns:
+        Comma-separated file list (max 5 files)
+    """
+    if not report:
+        return "None identified"
+
+    pattern = r"\b([a-zA-Z_][a-zA-Z0-9_-]*\.[a-zA-Z]{1,10})(:\d+)?\b"
+    matches = re.findall(pattern, report)
+
+    files = [f[0] for f in matches[:5]]
+
+    if not files:
+        return "None identified"
+
+    return ", ".join(files)
+
+
+def _extract_result_summary(report: str) -> str:
+    """Extract result/outcome summary from final report.
+
+    Heuristic: Look for "Result:", "Outcome:", "Completed:", or
+    last substantive line before trailing whitespace.
+
+    Args:
+        report: Goal completion content
+
+    Returns:
+        Result summary (max 100 chars)
+    """
+    if not report:
+        return "Completed"
+
+    markers = ["Result:", "Outcome:", "Completed:", "Performance:", "Summary:"]
+    for marker in markers:
+        if marker in report:
+            start = report.find(marker) + len(marker)
+            end = report.find("\n", start)
+            if end == -1:
+                end = len(report)
+            result = report[start:end].strip()
+            return result[:100].rstrip() + "..." if len(result) > 100 else result
+
+    lines = [line.strip() for line in report.split("\n") if line.strip()]
+    if lines:
+        return lines[-1][:100].rstrip() + "..."
+
+    return "Completed"
+
+
 class GoalContextManager:
     """Unified goal-level context provider for AgentLoop.
 
@@ -170,141 +302,11 @@ class GoalContextManager:
                 return None
 
             # Format as condensed briefing
-            return self._format_execute_briefing(previous_goals, checkpoint.current_thread_id)
+            return format_execute_briefing_from_goals(previous_goals, checkpoint.current_thread_id)
 
         except Exception as e:
             logger.error("Failed to generate execute briefing: %s", e)
             return None
 
-    def _format_execute_briefing(self, goals: list, current_thread: str) -> str:
-        """Format previous goals as condensed Execute briefing.
 
-        Args:
-            goals: Completed GoalExecutionRecord instances
-            current_thread: Current thread_id (new thread after switch)
-
-        Returns:
-            Markdown-formatted briefing string
-        """
-        sections = ["## Previous Goal Context (Thread Switch Recovery)\n\n"]
-
-        for i, goal in enumerate(goals, 1):
-            key_findings = self._extract_key_findings(goal.goal_completion)
-            critical_files = self._extract_critical_files(goal.goal_completion)
-            result_summary = self._extract_result_summary(goal.goal_completion)
-
-            sections.append(
-                f"**Goal {i}** ({goal.thread_id}, {goal.status} in {goal.iteration} iterations):\n"
-                f"Query: {goal.goal_text}\n"
-                f"Key findings: {key_findings}\n"
-                f"Critical files: {critical_files}\n"
-                f"Result: {result_summary}\n\n"
-            )
-
-        sections.append(
-            f"**Current thread**: {current_thread} (new thread, no conversation history)\n"
-            f"**Instruction**: Use previous goal context to inform step execution strategy.\n"
-            f"Reference critical files discovered in prior work. Avoid re-exploring solved problems."
-        )
-
-        return "".join(sections)
-
-    def _extract_key_findings(self, report: str) -> str:
-        """Extract key findings summary from final report.
-
-        Heuristic: Extract first 3 bullet points or numbered items.
-
-        Args:
-            report: Goal completion content
-
-        Returns:
-            Condensed key findings (max 150 chars)
-        """
-        if not report:
-            return "No findings"
-
-        # Look for bullet/number patterns
-        patterns = [
-            r"^(\d+)\.\s+(.+)",  # "1. item"
-            r"^-\s+(.+)",  # "- item"
-            r"^\*\s+(.+)",  # "* item"
-        ]
-
-        findings = []
-        for line in report.split("\n")[:20]:  # Scan first 20 lines
-            line = line.strip()
-            for pattern in patterns:
-                match = re.match(pattern, line)
-                if match:
-                    # For numbered patterns, extract the text after the number
-                    text = match.group(2) if len(match.groups()) > 1 else match.group(1)
-                    findings.append(text.strip())
-                    if len(findings) >= 3:
-                        break
-
-        if not findings:
-            # Fallback: first 150 chars
-            return report[:150].rstrip() + "..."
-
-        return "; ".join(findings[:3])
-
-    def _extract_critical_files(self, report: str) -> str:
-        """Extract critical file paths from final report.
-
-        Pattern: filename.py:number or filename.py
-
-        Args:
-            report: Goal completion content
-
-        Returns:
-            Comma-separated file list (max 5 files)
-        """
-        if not report:
-            return "None identified"
-
-        # Pattern: file.ext or file.ext:number
-        pattern = r"\b([a-zA-Z_][a-zA-Z0-9_-]*\.[a-zA-Z]{1,10})(:\d+)?\b"
-        matches = re.findall(pattern, report)
-
-        files = [f[0] for f in matches[:5]]
-
-        if not files:
-            return "None identified"
-
-        return ", ".join(files)
-
-    def _extract_result_summary(self, report: str) -> str:
-        """Extract result/outcome summary from final report.
-
-        Heuristic: Look for "Result:", "Outcome:", "Completed:", or
-        last substantive line before trailing whitespace.
-
-        Args:
-            report: Goal completion content
-
-        Returns:
-            Result summary (max 100 chars)
-        """
-        if not report:
-            return "Completed"
-
-        # Look for explicit result markers
-        markers = ["Result:", "Outcome:", "Completed:", "Performance:", "Summary:"]
-        for marker in markers:
-            if marker in report:
-                start = report.find(marker) + len(marker)
-                end = report.find("\n", start)
-                if end == -1:
-                    end = len(report)
-                result = report[start:end].strip()
-                return result[:100].rstrip() + "..." if len(result) > 100 else result
-
-        # Fallback: last non-empty line
-        lines = [line.strip() for line in report.split("\n") if line.strip()]
-        if lines:
-            return lines[-1][:100].rstrip() + "..."
-
-        return "Completed"
-
-
-__all__ = ["GoalContextManager"]
+__all__ = ["GoalContextManager", "format_execute_briefing_from_goals"]

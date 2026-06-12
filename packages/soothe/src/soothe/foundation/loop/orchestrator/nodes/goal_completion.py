@@ -39,6 +39,7 @@ def _append_goal_completion_ledger_pair(
     iteration_completed: int,
     action: CompletionStrategy,
     final_output: str | None,
+    ce_ledger_adapter: Any | None = None,
 ) -> None:
     """Append RFC-214 Human–AI pair for synthesized or fallback final text (not ledger-direct).
 
@@ -50,28 +51,29 @@ def _append_goal_completion_ledger_pair(
         iteration_completed: Iteration index that just finished (before ``state.iteration`` bump).
         action: Completion strategy used for this goal.
         final_output: Final user-visible text (may be empty).
+        ce_ledger_adapter: Optional ContextEngineLedgerAdapter for dual-write (RFC-624 Phase 3).
     """
+    from soothe.foundation.loop.utils.messages import _record_ledger_message
+
     text = (final_output or "").strip()
     if not text or action == CompletionStrategy.LEDGER_DIRECT:
         return
-    state.loop_messages.append(
-        LoopHumanMessage(
-            content=_GOAL_COMPLETION_LEDGER_HUMAN,
-            thread_id=state.thread_id,
-            iteration=iteration_completed,
-            goal_summary=(state.goal[:200] if state.goal else None),
-            workspace=state.workspace,
-            phase="goal_completion",
-        )
+    human_msg = LoopHumanMessage(
+        content=_GOAL_COMPLETION_LEDGER_HUMAN,
+        thread_id=state.thread_id,
+        iteration=iteration_completed,
+        goal_summary=(state.goal[:200] if state.goal else None),
+        workspace=state.workspace,
+        phase="goal_completion",
     )
-    state.loop_messages.append(
-        LoopAIMessage(
-            content=text,
-            thread_id=state.thread_id,
-            iteration=iteration_completed,
-            phase="goal_completion",
-        )
+    ai_msg = LoopAIMessage(
+        content=text,
+        thread_id=state.thread_id,
+        iteration=iteration_completed,
+        phase="goal_completion",
     )
+    _record_ledger_message(ce_ledger_adapter, human_msg, "goal_completion", state.loop_messages)
+    _record_ledger_message(ce_ledger_adapter, ai_msg, "goal_completion", state.loop_messages)
 
 
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -190,6 +192,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         iteration_completed=iteration_completed,
         action=action,
         final_output=final_output,
+        ce_ledger_adapter=ctx.ce_ledger_adapter,
     )
 
     # Goal_completion only runs when the goal is, in fact, done. Force status="done"
