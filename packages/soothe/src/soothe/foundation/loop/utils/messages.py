@@ -50,8 +50,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
         state: LoopState with populated ``loop_messages``.
 
     Returns:
-        Stripped content of the last non-planning AI message, or empty string
-        if none found.
+        Content of the last non-planning AI message, or empty string if none found.
     """
     planning_phases = {"plan_assess", "plan_generate"}
     for msg in reversed(state.loop_messages):
