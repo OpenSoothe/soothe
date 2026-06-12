@@ -192,9 +192,9 @@ agent:
       plan_ledger_max_total_chars: 0
       plan_ledger_max_message_chars: 0
 
-    # Context Engine integration (RFC-624 Phase 3). Default off — existing path untouched.
+    # Context Engine integration (RFC-624 Phase 3). Default on for new installs.
     context_engine:
-      enabled: false
+      enabled: true
       persistence_backend: "file"  # "file" | "in_memory"
 
     # Infrastructure limits (rate limiting, concurrency, timeouts)

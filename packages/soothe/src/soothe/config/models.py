@@ -1081,7 +1081,7 @@ class ContextEngineConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=False,
+        default=True,
         description="Enable ContextEngine as AgentLoop state backend (RFC-624 Phase 3)",
     )
     persistence_backend: Literal["file", "in_memory"] = Field(

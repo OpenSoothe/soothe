@@ -344,6 +344,9 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         )
         ctx.scratch.plan_result = plan_result
         plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
+        # RFC-624 Phase 3d: persist CE state after plan ingestion
+        if ctx.ce_lifecycle is not None:
+            await ctx.ce_lifecycle.on_plan_ingested(plan_result, state.plan_id, state.iteration)
         await ctx.emit(
             "plan",
             {
@@ -390,6 +393,9 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         )
         ctx.scratch.plan_result = plan_result
         plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
+        # RFC-624 Phase 3d: persist CE state after plan ingestion
+        if ctx.ce_lifecycle is not None:
+            await ctx.ce_lifecycle.on_plan_ingested(plan_result, state.plan_id, state.iteration)
         await ctx.emit(
             "plan",
             {
