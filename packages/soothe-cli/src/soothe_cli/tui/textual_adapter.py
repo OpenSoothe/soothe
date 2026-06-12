@@ -564,6 +564,48 @@ def _resolve_step_widget_for_tool(
     return None
 
 
+def _fallback_ingest_subgraph_tool_on_step_card(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    lookup_id: str,
+    display_key: str,
+    tool_name: str,
+    args: dict[str, Any],
+    raw_args: str = "",
+    ns_key: tuple[str, ...],
+) -> bool:
+    """Best-effort fallback when namespace routing cannot resolve a parent task.
+
+    This keeps subgraph tool activity visible on the step card (as orphan rows)
+    instead of dropping it entirely when task binding arrives late or never.
+    """
+    lookup = str(lookup_id or "").strip()
+    display = str(display_key or "").strip()
+    if not lookup:
+        return False
+    if is_inner_subgraph_task_tool_id(lookup):
+        return False
+    parsed_sid, type_code, _, _ = parse_unified_tool_call_id(lookup)
+    bound_step_id = parsed_sid or router.step_id_for_tool(lookup)
+    step_w = _resolve_step_widget_for_tool(
+        adapter,
+        router,
+        bound_step_id=bound_step_id,
+        ns_key=ns_key,
+    )
+    if step_w is None:
+        return False
+    row_id = lookup if type_code == "t" else (display or lookup)
+    if step_w.has_tool_call_row(row_id):
+        step_w.update_tool_args(row_id, args)
+    else:
+        step_w.add_tool_call(row_id, tool_name, args, raw_args=raw_args)
+    adapter._tool_to_step[row_id] = step_w
+    adapter._tool_display_by_call_id[row_id] = step_w
+    return True
+
+
 async def sync_pending_step_cards_from_plan(
     adapter: TextualUIAdapter,
     *,
@@ -912,7 +954,7 @@ async def apply_tool_call_wire_update(
 
     _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     if display_key:
-        router.try_route_subgraph_tool(
+        routed = router.try_route_subgraph_tool(
             ns_key=ns_key,
             lookup_id=tcid,
             display_key=display_key,
@@ -922,6 +964,16 @@ async def apply_tool_call_wire_update(
             tool_to_step=adapter._tool_to_step,
             tool_display_by_call_id=adapter._tool_display_by_call_id,
         )
+        if not routed:
+            _fallback_ingest_subgraph_tool_on_step_card(
+                adapter,
+                router,
+                lookup_id=tcid,
+                display_key=display_key,
+                tool_name=name,
+                args=display_args,
+                ns_key=ns_key,
+            )
     return True
 
 
@@ -2344,7 +2396,7 @@ async def execute_task_textual(
                                             ns_key, str(lookup_id), task_scope=ts_disp
                                         )
                                         display_key = display_key or str(lookup_id)
-                                        router.try_route_subgraph_tool(
+                                        routed = router.try_route_subgraph_tool(
                                             ns_key=ns_key,
                                             lookup_id=str(lookup_id),
                                             display_key=display_key,
@@ -2355,6 +2407,17 @@ async def execute_task_textual(
                                             tool_to_step=adapter._tool_to_step,
                                             tool_display_by_call_id=adapter._tool_display_by_call_id,
                                         )
+                                        if not routed:
+                                            _fallback_ingest_subgraph_tool_on_step_card(
+                                                adapter,
+                                                router,
+                                                lookup_id=str(lookup_id),
+                                                display_key=display_key,
+                                                tool_name=buffer_name,
+                                                args=parsed_args,
+                                                raw_args=raw_args_stream,
+                                                ns_key=ns_key,
+                                            )
 
                                 tool_call_buffers.pop(buffer_key, None)
 

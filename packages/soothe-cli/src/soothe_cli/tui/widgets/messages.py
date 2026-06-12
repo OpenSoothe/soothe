@@ -1511,6 +1511,8 @@ class CognitionStepMessage(Vertical):
             return True
         if self._iter_task_delegation_rows():
             return True
+        if self._orphan_subgraph_tool_rows_for_preview():
+            return True
         return bool(self._main_agent_tool_rows_for_preview())
 
     @staticmethod
@@ -1528,6 +1530,43 @@ class CognitionStepMessage(Vertical):
     def _main_agent_tool_rows_for_preview(self) -> list[_StepToolRow]:
         """Direct main-agent tool rows (excludes task delegations and subgraph tools)."""
         return [r for r in self._rows if self._row_counts_for_step_status_line(r)]
+
+    def _orphan_subgraph_tool_rows_for_preview(self) -> list[_StepToolRow]:
+        """Subgraph tool rows whose parent task delegation row is missing.
+
+        Some streams deliver ``t`` tool rows before/without a visible ``s:task`` row.
+        Keep these rows visible on the step card so users still see tool activity.
+        """
+        task_parent_ids: set[str] = set()
+        for task_row in self._iter_task_delegation_rows():
+            key = self._task_delegation_dedupe_key(task_row)
+            if key:
+                task_parent_ids.add(key)
+
+        out: list[_StepToolRow] = []
+        for row in self._rows:
+            if row.is_task_row:
+                continue
+            if not self._row_belongs_to_step(row):
+                continue
+            tcid = str(row.tool_call_id or "").strip()
+            if not tcid:
+                continue
+            if is_step_level_task_tool_id(tcid) or is_inner_subgraph_task_tool_id(tcid):
+                continue
+            parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
+            if parsed_sid and parsed_sid != self._step_id:
+                continue
+
+            parent_id = str(row.parent_tool_call_id or "").strip()
+            if parent_id and is_step_level_task_tool_id(parent_id):
+                parent_id = normalize_step_task_tool_call_id(self._step_id, parent_id)
+            has_visible_parent = bool(parent_id and parent_id in task_parent_ids)
+
+            # Keep unresolved/unparented task-subgraph tool rows visible.
+            if type_code == "t" and not has_visible_parent:
+                out.append(row)
+        return out
 
     def _append_tool_activity_lines(
         self,
@@ -1927,7 +1966,8 @@ class CognitionStepMessage(Vertical):
 
         task_rows = self._iter_task_delegation_rows()
         main_preview = self._latest_preview_rows(self._main_agent_tool_rows_for_preview())
-        if not task_rows and not main_preview and not self._subagent_notes:
+        orphan_preview = self._latest_preview_rows(self._orphan_subgraph_tool_rows_for_preview())
+        if not task_rows and not main_preview and not orphan_preview and not self._subagent_notes:
             if not self._subagent_notes_by_task:
                 return Content("")
 
@@ -2003,6 +2043,17 @@ class CognitionStepMessage(Vertical):
             self._append_tool_activity_lines(
                 parts,
                 main_preview,
+                gutter=branch_gutter,
+                g=g,
+                colors=colors,
+                animate_running=self._status == "running",
+            )
+
+        if orphan_preview:
+            first_block = False
+            self._append_tool_activity_lines(
+                parts,
+                orphan_preview,
                 gutter=branch_gutter,
                 g=g,
                 colors=colors,
