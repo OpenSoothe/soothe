@@ -820,6 +820,29 @@ def _last_tool_result_block(messages: list[BaseMessage]) -> str:
     return ""
 
 
+def _outcome_summary_text(outcome: dict[str, Any] | None) -> str:
+    """Normalize ``outcome['output_summary']`` into plain text.
+
+    ``create_output_summary`` returns ``{"first": "...", "last": "..."}``.
+    We should surface non-empty parts, but avoid stringifying empty dict payloads
+    into evidence like ``"{'first': '', 'last': ''}"``.
+    """
+    if not isinstance(outcome, dict):
+        return ""
+    summary = outcome.get("output_summary")
+    if summary is None:
+        return ""
+    if isinstance(summary, str):
+        return summary.strip()
+    if isinstance(summary, dict):
+        first = str(summary.get("first", "") or "").strip()
+        last = str(summary.get("last", "") or "").strip()
+        if first and last:
+            return f"{first}\n...\n{last}"
+        return first or last
+    return ""
+
+
 @dataclass(frozen=True, slots=True)
 class ActWaveFinalizeSnapshot:
     """Resolved user-visible text for the last Execute wave and how it was obtained."""
@@ -1778,6 +1801,8 @@ class Executor:
                         content = extract_text_from_message_content(
                             getattr(final_ai, "content", None)
                         ).strip()
+                if not content:
+                    content = _outcome_summary_text(step_result.outcome)
                 df = (delegate_final or "").strip()
                 if not content and df:
                     content = (
@@ -1882,6 +1907,8 @@ class Executor:
                     final_ai_msg=final_ai,
                     total_steps=1,
                 ).strip()
+            if not excerpt_src:
+                excerpt_src = _outcome_summary_text(step_result.outcome)
             if not excerpt_src and delegate_final:
                 excerpt_src = (delegate_final or "").strip()
             if not excerpt_src:
@@ -2634,6 +2661,7 @@ class Executor:
             stop_act_stream = False
             for msg in iter_messages_for_act_aggregation(chunk):
                 if isinstance(msg, ToolMessage):
+                    messages.append(msg)
                     tool_call_count += 1
                     tool_call_id = msg.tool_call_id
                     tool_name = msg.name or "unknown"
@@ -2757,7 +2785,39 @@ class Executor:
 
             subgraph_tool_updates: list[tuple[tuple[str, ...], dict[str, Any]]] = []
             for ns_tuple, tm in iter_namespaced_tool_messages(chunk):
+                messages.append(tm)
                 subgraph_tool_call_count += 1
+                text_out = extract_text_from_message_content(getattr(tm, "content", None))
+                if text_out and str(getattr(tm, "name", "") or "") != "task":
+                    limits = (
+                        self._config.agent.loop.limits
+                        if self._config and hasattr(self._config, "agent")
+                        else None
+                    )
+                    tname = str(getattr(tm, "name", "") or "unknown")
+                    if limits is not None:
+                        max_tool_output_chars = (
+                            int(limits.code_exec_max_output_chars)
+                            if get_outcome_type(tname) == "code_exec"
+                            else int(limits.tool_output_max_chars)
+                        )
+                    else:
+                        max_tool_output_chars = (
+                            DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+                            if get_outcome_type(tname) == "code_exec"
+                            else DEFAULT_TOOL_OUTPUT_CHARS
+                        )
+                    if len(text_out) > max_tool_output_chars:
+                        chunks.append(
+                            preview(
+                                text_out,
+                                mode="chars",
+                                first=max_tool_output_chars // 2,
+                                last=max_tool_output_chars // 2,
+                            )
+                        )
+                    else:
+                        chunks.append(text_out)
                 body_preview = log_preview(
                     extract_text_from_message_content(getattr(tm, "content", "")),
                     chars=160,

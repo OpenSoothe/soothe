@@ -343,6 +343,21 @@ def test_step_first_level_shows_latest_five_main_tools() -> None:
     assert "Grep(m1)" not in text
 
 
+def test_orphan_subgraph_tool_rows_still_render_on_step_card() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan only", id="stp-orphan-subgraph")
+    # No visible task delegation row, but subgraph tool row arrived.
+    card.add_tool_call(
+        "ABC_01:t0:ls:0",
+        "ls",
+        {"path": "."},
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+
+    assert card._has_task_activity_body()
+    text = _plain(card._step_task_activity_content())
+    assert "ListFiles(.)" in text
+
+
 def test_combined_task_and_main_tools() -> None:
     card = CognitionStepMessage("ABC-01", "Mixed", id="stp-mixed-preview")
     card.add_tool_call(

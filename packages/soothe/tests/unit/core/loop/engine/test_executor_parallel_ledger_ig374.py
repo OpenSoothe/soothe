@@ -8,6 +8,7 @@ from soothe.foundation.loop.engine.executor import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     Executor,
     _last_tool_result_block,
+    _outcome_summary_text,
 )
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
@@ -133,3 +134,35 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
     assert "Counted files by extension." in ai_body
     assert "<LAST_TOOL_RESULT" in ai_body
     assert "md 33" in ai_body
+
+
+def test_append_parallel_wave_ledger_uses_outcome_summary_when_no_ai_text() -> None:
+    """When assistant text is empty, use execute output summary before placeholder."""
+    mock_agent = object()
+    ex = Executor(mock_agent, max_parallel_steps=4)
+    state = LoopState(goal="list files", thread_id="t1", iteration=1, max_iterations=8)
+    steps = [StepAction(id="s1", description="list files", expected_output="listing")]
+    tup = (
+        [],
+        StepResult(
+            step_id="s1",
+            success=True,
+            outcome={"type": "generic", "output_summary": "Result: README.md pyproject.toml src/"},
+            duration_ms=10,
+            thread_id="t1",
+            tool_call_count=1,
+        ),
+        [],
+        "",
+    )
+    ex._append_parallel_wave_ledger(state, steps, [tup])
+    ai_body = state.loop_messages[1].content or ""
+    assert "Step completed with no AI text captured" not in ai_body
+    assert "Result: README.md pyproject.toml src/" in ai_body
+
+
+def test_outcome_summary_text_ignores_empty_summary_dict() -> None:
+    assert _outcome_summary_text({"output_summary": {"first": "", "last": ""}}) == ""
+    assert _outcome_summary_text({"output_summary": {"first": "A", "last": ""}}) == "A"
+    assert _outcome_summary_text({"output_summary": {"first": "", "last": "Z"}}) == "Z"
+    assert _outcome_summary_text({"output_summary": {"first": "A", "last": "Z"}}) == "A\n...\nZ"

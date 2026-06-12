@@ -48,10 +48,25 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 # Ensure playwright browsers directory exists (empty if INCLUDE_BROWSER=false)
 RUN mkdir -p /opt/ms-playwright
 
-# Copy VERSION file (hatchling reads version from ../../VERSION relative to package)
+# Copy only metadata first so dependency layer remains cacheable across source edits.
 COPY VERSION /app/VERSION
+COPY packages/soothe-sdk/pyproject.toml /app/packages/soothe-sdk/pyproject.toml
+COPY packages/soothe-sdk/README.md /app/packages/soothe-sdk/README.md
+COPY packages/soothe/pyproject.toml /app/packages/soothe/pyproject.toml
+COPY packages/soothe/README.md /app/packages/soothe/README.md
+COPY packages/soothe-daemon/pyproject.toml /app/packages/soothe-daemon/pyproject.toml
+COPY packages/soothe-daemon/README.md /app/packages/soothe-daemon/README.md
+COPY scripts/build_runtime_requirements.py /app/scripts/build_runtime_requirements.py
 
-# Copy local packages for source install
+RUN --mount=type=cache,target=/root/.cache/uv \
+    set -eux; \
+    if [ "${INCLUDE_BROWSER}" = "true" ]; then browser_arg="--include-browser"; else browser_arg=""; fi; \
+    python /app/scripts/build_runtime_requirements.py --app-root /app ${browser_arg} --output /tmp/requirements.runtime.txt; \
+    uv venv /app/.venv; \
+    uv pip install --python /app/.venv/bin/python -r /tmp/requirements.runtime.txt; \
+    rm -f /tmp/requirements.runtime.txt
+
+# Copy local packages after third-party dependencies are cached.
 COPY packages/soothe-sdk /app/packages/soothe-sdk
 COPY packages/soothe /app/packages/soothe
 COPY packages/soothe-daemon /app/packages/soothe-daemon
@@ -60,17 +75,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     set -eux; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \
       extras="all"; \
-      pip_extras="playwright"; \
     else \
       extras="research,dashscope,semantic,langfuse"; \
-      pip_extras=""; \
     fi; \
-    uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
+        --no-deps \
         "/app/packages/soothe-sdk" \
         "/app/packages/soothe[${extras}]" \
-        "/app/packages/soothe-daemon" \
-        ${pip_extras}; \
+        "/app/packages/soothe-daemon"; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \
       /app/.venv/bin/python -m playwright install chromium; \
     fi
