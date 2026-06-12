@@ -1,37 +1,53 @@
-# Docker Compose for Soothe development environment
+# Docker Compose for Soothe development and production deployment
 # RFC-612: Multi-database PostgreSQL architecture
 #
 # Profiles:
-#   - default: Dev dependencies only (pgvector + Langfuse observability)
-#   - daemon:  Add local soothed daemon container
+#   - default:    Dev dependencies (soothe-pgvector)
+#   - langfuse:   Langfuse v3 observability stack (optional)
+#   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
+#   - production: Registry soothed daemon (deploy; set secrets in deploy/.env)
 #
 # Usage:
-#   # Start dev dependencies only (default):
-#   docker compose -f docker-compose.dev.yml up -d
+#   # Dev dependencies only (default):
+#   docker compose up -d
 #   make docker-up
 #
-#   # Start dev deps + local daemon (after building image):
-#   docker compose -f docker-compose.dev.yml --profile daemon up -d
+#   # Dev deps + Langfuse UI/API:
+#   docker compose --profile langfuse up -d
+#
+#   # Dev deps + local daemon (after building image):
+#   docker compose --profile daemon up -d
 #   make docker-up-daemon
 #
-#   # Build local daemon image first:
-#   make docker-build
+#   # Production stack (from repo root, secrets in deploy/.env):
+#   docker compose --env-file deploy/.env --profile production up -d
 #
-# Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) starts with the default stack.
-# UI/API: http://localhost:3300 — set soothe observability.langfuse.host to match.
-# Stack: langfuse-web + langfuse-worker + Postgres + ClickHouse + Redis + MinIO (Python SDK 3.x).
+#   # Build local daemon image first:
+#   make docker-daemon-build
+#
+# Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) requires --profile langfuse.
+# UI (browser): http://localhost:3300 — deploy/config.dev.yml uses http://langfuse-web:3000 for the daemon container.
+# Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector.
+# Internal Langfuse backends use langfuse-internal (no host routes). langfuse-web also joins
+# langfuse-edge so Docker can publish port 3300 to the host.
 # Langfuse app images are pulled from ghcr.io (not Docker Hub) to avoid registry-1.docker.io / auth.docker.io token EOF on some networks.
 # Headless init provisions org + soothe-dev project + API keys + a dev UI user (override via LANGFUSE_INIT_*).
 # Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
-# Fresh Langfuse DB/volumes: docker compose -f docker-compose.dev.yml down -v (removes Langfuse + soothe-pgvector volumes).
+# Fresh Langfuse DB/volumes: docker compose --profile langfuse down -v
 #
-# Environment variables (set in deploy/.env for daemon profile):
+# Environment variables (set in deploy/.env for daemon/production profiles):
 #   POSTGRES_PASSWORD=...            # PostgreSQL password
+#   POSTGRES_PORT=5432               # Production host port (default dev: 6432)
+#   POSTGRES_BIND_IP=127.0.0.1       # Production bind address (default dev: 0.0.0.0)
+#   LANGFUSE_WEB_PORT=3300           # Langfuse UI host port (--profile langfuse)
+#   LANGFUSE_WEB_BIND_IP=127.0.0.1   # Langfuse UI bind address (default: all interfaces)
 #   DASHSCOPE_API_KEY=...            # DashScope provider key
 #   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
 #   DASHSCOPE_BASE_URL=...           # DashScope API base URL
 #   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
 #   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
+#   SOOTHE_CONFIG_PATH=./deploy/config.dev.yml   # Dev daemon config (default)
+#   SOOTHE_CONFIG_PATH=./deploy/config.prod.yml  # Production daemon config
 
 services:
   # ===========================================================================
@@ -40,14 +56,25 @@ services:
 
   soothe-pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
-    restart: always
-    # Dev: worker_pool max 8 × (checkpointer + agentloop + pgvector + durability stores) needs headroom
-    command: ["postgres", "-c", "max_connections=200"]
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=64MB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    networks:
+      - soothe-db
+      - langfuse-internal
     ports:
-      - "6432:5432"
+      - target: 5432
+        published: ${POSTGRES_PORT:-6432}
+        host_ip: ${POSTGRES_BIND_IP:-0.0.0.0}
     volumes:
       - soothe_postgres_data:/var/lib/postgresql/data
       - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
@@ -58,27 +85,24 @@ services:
       retries: 12
       start_period: 20s
     shm_size: 256mb
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
 
-  # --- Langfuse v3 — do not share DB with soothe-pgvector / RFC-612 init script ---
-  langfuse-postgres:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/postgres:17.5-alpine3.21
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d langfuse"]
-      interval: 3s
-      timeout: 3s
-      retries: 15
-      start_period: 20s
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: langfuse
-    volumes:
-      - langfuse_postgres_data:/var/lib/postgresql/data
-
+  # --- Langfuse v3 — shares soothe-pgvector (langfuse DB in config/init-db.sql) ---
   langfuse-clickhouse:
+    profiles:
+      - langfuse
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/clickhouse:24.8
     restart: unless-stopped
+    networks:
+      - langfuse-internal
     user: "101:101"
     environment:
       CLICKHOUSE_DB: default
@@ -102,8 +126,12 @@ services:
       start_period: 20s
 
   langfuse-redis:
+    profiles:
+      - langfuse
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/redis:8-alpine3.21
     restart: unless-stopped
+    networks:
+      - langfuse-internal
     command: >
       redis-server
       --requirepass ${LANGFUSE_REDIS_PASSWORD:-myredissecret}
@@ -119,14 +147,16 @@ services:
       retries: 10
 
   langfuse-minio:
+    profiles:
+      - langfuse
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/minio:RELEASE.2025-05-24T17-08-30Z
     restart: unless-stopped
+    networks:
+      - langfuse-internal
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-minio}
       MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
-    ports:
-      - "127.0.0.1:19090:9000"
     expose:
       - "9000"
       - "9001"
@@ -140,7 +170,11 @@ services:
       start_period: 15s
 
   langfuse-minio-init:
+    profiles:
+      - langfuse
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/minio-mc:latest
+    networks:
+      - langfuse-internal
     depends_on:
       langfuse-minio:
         condition: service_healthy
@@ -157,10 +191,14 @@ services:
     restart: "no"
 
   langfuse-worker:
+    profiles:
+      - langfuse
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/langfuse-worker:3
     restart: unless-stopped
+    networks:
+      - langfuse-internal
     depends_on:
-      langfuse-postgres:
+      soothe-pgvector:
         condition: service_healthy
       langfuse-clickhouse:
         condition: service_healthy
@@ -176,7 +214,7 @@ services:
       - "3030"
     environment: &langfuse_app_env
       NEXTAUTH_URL: http://localhost:3300
-      DATABASE_URL: postgresql://postgres:postgres@langfuse-postgres:5432/langfuse
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432/langfuse
       SALT: ${LANGFUSE_SALT:-langfuse_local_salt_min32chars_please}
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       TELEMETRY_ENABLED: "false"
@@ -200,15 +238,20 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
       LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
-      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://127.0.0.1:19090
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
 
   langfuse-web:
+    profiles:
+      - langfuse
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/langfuse:3
     restart: unless-stopped
+    networks:
+      - langfuse-internal
+      - langfuse-edge
     depends_on:
-      langfuse-postgres:
+      soothe-pgvector:
         condition: service_healthy
       langfuse-clickhouse:
         condition: service_healthy
@@ -219,7 +262,9 @@ services:
       langfuse-minio-init:
         condition: service_completed_successfully
     ports:
-      - "3300:3000"
+      - target: 3000
+        published: ${LANGFUSE_WEB_PORT:-3300}
+        host_ip: ${LANGFUSE_WEB_BIND_IP:-0.0.0.0}
     environment:
       <<: *langfuse_app_env
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-langfuse_local_nextauth_secret_min32chars}
@@ -234,23 +279,33 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-SootheLangfuseLocalDev1}
 
   # ===========================================================================
-  # Daemon Profile (starts local soothed daemon)
+  # Soothe Daemon (dev: daemon profile | deploy: production profile)
   # ===========================================================================
 
   soothed:
     profiles:
       - daemon
-    image: ${SOOTHE_IMAGE:-soothed:0.6.3-local}
+      - production
+    image: ${SOOTHE_IMAGE:-registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:${SOOTHE_VERSION:-0.6.4}}
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
         condition: service_healthy
+      langfuse-web:
+        condition: service_started
+        required: false
+    networks:
+      - soothe-db
+      - soothe-app
+      - langfuse-internal
+      # langfuse-web listens on langfuse-edge only; daemon must join edge to reach :3000
+      - langfuse-edge
     environment:
       # Provider credentials
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       DASHSCOPE_CP_BASE_URL: ${DASHSCOPE_CP_BASE_URL:-https://coding.dashscope.aliyuncs.com/v1}
-      DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY}
+      DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY:-}
       # Config path - mounted at /app/config.yml
       SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
       # PostgreSQL connection strings (RFC-612 multi-database)
@@ -276,28 +331,46 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - soothe_daemon_data:/var/lib/soothe
-      - ./deploy/config.yml:/app/config.yml:ro
+      - ${SOOTHE_CONFIG_PATH:-./deploy/config.dev.yml}:/app/config.yml:ro
       - ./deploy/logs:/var/lib/soothe/logs
       # RFC-621: Workspace host convention — mount host workspace root.
-      - ${SOOTHE_WORKSPACE_HOST_ROOT:-/Users/chenxm/Workspace}:/var/lib/soothe/workspaces
-    # IG-477: Cap memory to prevent OOM; daemon auto-restarts on limit hit.
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-${SOOTHE_HOST_WORKSPACE:-/Users/chenxm/Workspace}}:/var/lib/soothe/workspaces
     deploy:
       resources:
         limits:
           memory: ${DOCKER_MEM_LIMIT:-4g}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)\""]
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=5)" || exit 1
       interval: 60s
-      timeout: 10s
+      timeout: 15s
       retries: 5
       start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "200m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  soothe-db:
+    driver: bridge
+  soothe-app:
+    driver: bridge
+  langfuse-internal:
+    driver: bridge
+    internal: true
+  langfuse-edge:
+    driver: bridge
 
 volumes:
   soothe_postgres_data:
     name: soothe_postgres_data
   soothe_daemon_data:
     name: soothe_daemon_data
-  langfuse_postgres_data:
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
   langfuse_minio_data:

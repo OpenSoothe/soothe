@@ -2,25 +2,23 @@
 # Copy this file to .env and configure before deployment.
 
 # =============================================================================
-# PostgreSQL Configuration
-# =============================================================================
-
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_secure_postgres_password_here
-
-# =============================================================================
 # DashScope Provider (Qwen, MiniMax, Kimi, Embedding)
 # =============================================================================
 
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-DASHSCOPE_API_KEY=your_dashscope_api_key_here
+DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
 
 # =============================================================================
 # Coding-Plan Provider (GLM, DeepSeek)
 # =============================================================================
 
 DASHSCOPE_CP_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
-DASHSCOPE_CP_API_KEY=your_coding_plan_api_key_here
+DASHSCOPE_CP_API_KEY=${DASHSCOPE_API_KEY}
 
 SOOTHE_VERSION=0.6.5
-SOOTHE_HOST_WORKSPACE=/Users/chenxm/Workspace
+SOOTHE_HOST_WORKSPACE=/Users/xiamingchen/Workspace
+
+# Daemon config mounted into container (see docker-compose.yml soothed volumes)
+# Dev (default): deploy/config.dev.yml
+# Production:     deploy/config.prod.yml
+SOOTHE_CONFIG_PATH=./deploy/config.dev.yml

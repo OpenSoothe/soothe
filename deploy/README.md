@@ -6,12 +6,19 @@ This directory contains all essential files for production deployment of Soothe 
 
 ## Files in This Directory
 
-### 1. docker-compose.yml
-Production Docker Compose stack with minimal services:
+### 1. Docker Compose (repo root)
+
+Production stack is defined in `../docker-compose.yml` at the repository root. This directory supplies daemon config YAML, `.env`, and `init-db.sql` (also mirrored under `config/init-db.sql`).
+
+Config files:
+- `config.dev.yml` — local/Docker dev (default via `SOOTHE_CONFIG_PATH`)
+- `config.prod.yml` — production deploy (`make docker-prod-up` sets this)
+
+Services (with `--profile production`):
 - `soothe-pgvector` - PostgreSQL 17 + pgvector extension
 - `soothed` - Soothe daemon server
-- Exposed on standard port 5432 (PostgreSQL) and 8765 (daemon)
-- **Critical**: config.yml mounted at `/var/lib/soothe/config/config.yml` (daemon default path)
+- Exposed on port 5432 (PostgreSQL) and 8765 (daemon) when `POSTGRES_PORT=5432` and `POSTGRES_BIND_IP=127.0.0.1` in `.env`
+- **Critical**: `deploy/config.dev.yml` or `deploy/config.prod.yml` mounted at `/app/config.yml` in the container
 
 ### 2. .env.example
 Environment variables template with:
@@ -27,19 +34,12 @@ cp .env.example .env
 vim .env  # Set your actual API keys and passwords
 ```
 
-### 3. config.yml.example
-Agent configuration template with:
-- DashScope provider (Qwen, MiniMax, Kimi models)
-- Coding-Plan provider (GLM, DeepSeek models)
-- Router configuration (default/fast/think/image models)
-- PostgreSQL persistence backend
-- pgvector vector store
+### 3. config.dev.yml / config.prod.yml
+Agent configuration for Docker daemon (`soothed` service):
+- `config.dev.yml` — dev defaults (Postgres at `soothe-pgvector:5432`, debug logging)
+- `config.prod.yml` — production tuning
 
-**Usage**:
-```bash
-cp config.yml.example config.yml
-# No edits needed - uses environment variables from .env
-```
+Select via `SOOTHE_CONFIG_PATH` in `.env` (default: `./deploy/config.dev.yml`).
 
 ### 4. init-db.sql
 PostgreSQL initialization script (RFC-612 multi-database architecture):
@@ -71,27 +71,40 @@ vim .env
 # Note: NO OPENAI_API_KEY needed - custom providers work with explicit credentials
 ```
 
-### Step 2: Create config.yml
+### Step 2: Choose daemon config
+
+Dev (default):
 
 ```bash
-# Create config.yml from example
-cp config.yml.example config.yml
+# deploy/.env
+SOOTHE_CONFIG_PATH=./deploy/config.dev.yml
+```
 
-# No edits needed - environment variables are referenced via ${ENV_VAR} syntax
+Production:
+
+```bash
+# deploy/.env
+SOOTHE_CONFIG_PATH=./deploy/config.prod.yml
 ```
 
 ### Step 3: Deploy Stack
 
 ```bash
-# Start PostgreSQL + pgvector
-docker compose up -d
+# From repository root — dev Docker daemon
+cd ..
+docker compose --env-file deploy/.env --profile production up -d
+
+# Or use Makefile targets:
+#   make docker-daemon-up   # local image + config.dev.yml
+#   make docker-prod-up     # registry image + config.prod.yml
 
 # Verify services
-docker compose ps
+docker compose --profile production ps
 
 # Expected output:
 # NAME                  STATUS        PORTS
 # soothe-pgvector-1     Up (healthy)  127.0.0.1:5432->5432/tcp
+# soothed-1             Up (healthy)  127.0.0.1:8765->8765/tcp
 ```
 
 ### Step 4: Verify Database Initialization
@@ -112,11 +125,11 @@ docker compose exec soothe-pgvector psql -U postgres -l
 
 ### Step 5: Verify Daemon Startup
 
-The soothe daemon is included in docker-compose.yml and starts automatically:
+The soothe daemon starts with the `production` profile:
 
 ```bash
-# Check daemon status
-docker compose ps
+# Check daemon status (from repo root)
+docker compose --profile production ps
 
 # Expected output:
 # NAME                  STATUS        PORTS
@@ -439,7 +452,7 @@ volumes:
 
 ```
 soothe/deploy/
-├── docker-compose.yml          # Production stack definition
+├── ../docker-compose.yml       # Unified stack (use --profile production from repo root)
 ├── .env.example                # Environment variables template
 ├── config.yml.example          # Agent configuration template
 ├── init-db.sql                 # PostgreSQL multi-database initialization

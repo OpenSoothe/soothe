@@ -202,13 +202,18 @@ def main(
 
 from soothe_cli.cli.commands.autopilot_cmd import app as _autopilot_app  # noqa: E402
 from soothe_cli.cli.commands.loop_cmd import loop_app as _loop_app  # noqa: E402
+from soothe_cli.cli.commands.status_cmd import status_app as _status_app  # noqa: E402
 
+# status_app has custom default behavior (shows combined status), skip add_help_alias
 for _sub_app, _name in (
     (_loop_app, "loop"),
     (_autopilot_app, "autopilot"),
 ):
     add_help_alias(_sub_app)
     app.add_typer(_sub_app, name=_name)
+
+# status_app has its own callback for default behavior
+app.add_typer(_status_app, name="status")
 
 
 # ---------------------------------------------------------------------------
