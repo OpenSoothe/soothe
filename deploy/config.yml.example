@@ -43,19 +43,10 @@ providers:
 # Model Router
 # =============================================================================
 router:
-  # Default model for general queries
   default: "coding-plan:glm-5"
-
-  # Fast model for quick responses (lower cost)
   fast: "coding-plan:kimi-k2.5"
-
-  # Thinking model for complex reasoning tasks
   think: "coding-plan:glm-5"
-
-  # Vision model for image understanding
   image: "coding-plan:qwen3.6-plus"
-
-  # Embedding model for vector search
   embedding: "dashscope:multimodal-embedding-v1"
 
 # =============================================================================
@@ -63,7 +54,6 @@ router:
 # =============================================================================
 persistence:
   default_backend: postgresql
-  # Base DSN for PostgreSQL - creates connections to multiple databases
   postgres_base_dsn: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@soothe-pgvector:5432"
 
 # =============================================================================
@@ -72,14 +62,7 @@ persistence:
 vector_stores:
   - name: pgvector
     provider_type: pgvector
-    # Dedicated vectors database (RFC-612 multi-database architecture)
     dsn: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@soothe-pgvector:5432/soothe_vectors"
-    pool_size: 4
-    # Optional: HNSW index configuration for better search performance
-    index_config:
-      index_type: hnsw
-      m: 16
-      ef_construction: 64
 
 vector_store_router:
   default: "pgvector:soothe_default"
