@@ -272,6 +272,27 @@ class GoalStepDAG(BaseModel):
             goal.assigned_loop_id = None
             goal.updated_at = datetime.now(UTC)
 
+    def cancel_goal(self, goal_id: str) -> None:
+        """Transition goal to cancelled (terminal state)."""
+        goal = self.goals.get(goal_id)
+        if goal is not None:
+            goal.status = "cancelled"
+            goal.updated_at = datetime.now(UTC)
+
+    def block_goal(self, goal_id: str) -> None:
+        """Transition goal to blocked."""
+        goal = self.goals.get(goal_id)
+        if goal is not None:
+            goal.status = "blocked"
+            goal.updated_at = datetime.now(UTC)
+
+    def unblock_goal(self, goal_id: str) -> None:
+        """Transition goal from blocked back to pending."""
+        goal = self.goals.get(goal_id)
+        if goal is not None and goal.status == "blocked":
+            goal.status = "pending"
+            goal.updated_at = datetime.now(UTC)
+
     # ── Scheduling ──────────────────────────────────────────────
 
     def ready_goals(self, limit: int = 1) -> list[GoalNode]:

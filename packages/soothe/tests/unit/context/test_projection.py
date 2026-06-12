@@ -1,6 +1,7 @@
 """Tests for ProjectionEngine (soothe.context.projection)."""
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.context.ledger import LedgerManager
 from soothe.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
@@ -144,3 +145,52 @@ class TestContextBundle:
         assert bundle.goal_progress == ""
         assert bundle.pending_steps == []
         assert bundle.total_tokens_used == 0
+
+
+class TestProjectionLedgerMessages:
+    @pytest.mark.asyncio
+    async def test_ledger_messages_populated(self) -> None:
+        engine = ProjectionEngine()
+        dag, goal = _make_dag_with_goal(status="active")
+        ledger = LedgerManager()
+        ledger.record_message(HumanMessage(content="exec msg"), "execute_step")
+        ledger.record_message(AIMessage(content="result"), "execute_step")
+        semantic = SemanticLoader()
+        bundle = await engine.project(dag, ledger, semantic)
+        assert len(bundle.ledger_messages) == 2
+        assert bundle.ledger_messages[0]["type"] == "HumanMessage"
+        assert bundle.ledger_messages[0]["phase"] == "execute_step"
+        assert bundle.ledger_messages[0]["content"] == "exec msg"
+        assert bundle.ledger_messages[1]["type"] == "AIMessage"
+
+    @pytest.mark.asyncio
+    async def test_ledger_messages_bounded(self) -> None:
+        cfg = ProjectionConfig(max_ledger_messages=3)
+        engine = ProjectionEngine(cfg)
+        dag, goal = _make_dag_with_goal(status="active")
+        ledger = LedgerManager()
+        for i in range(10):
+            ledger.record_message(HumanMessage(content=f"msg{i}"), "test")
+        semantic = SemanticLoader()
+        bundle = await engine.project(dag, ledger, semantic)
+        assert len(bundle.ledger_messages) <= 3
+
+    @pytest.mark.asyncio
+    async def test_ledger_messages_content_capped(self) -> None:
+        engine = ProjectionEngine()
+        dag, goal = _make_dag_with_goal(status="active")
+        ledger = LedgerManager()
+        ledger.record_message(HumanMessage(content="x" * 1000), "test")
+        semantic = SemanticLoader()
+        bundle = await engine.project(dag, ledger, semantic)
+        assert len(bundle.ledger_messages) == 1
+        assert len(bundle.ledger_messages[0]["content"]) <= 500
+
+    @pytest.mark.asyncio
+    async def test_ledger_messages_empty_when_no_messages(self) -> None:
+        engine = ProjectionEngine()
+        dag = GoalStepDAG()
+        ledger = LedgerManager()
+        semantic = SemanticLoader()
+        bundle = await engine.project(dag, ledger, semantic)
+        assert bundle.ledger_messages == []
