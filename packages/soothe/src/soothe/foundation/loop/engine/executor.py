@@ -2286,8 +2286,10 @@ class Executor:
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
-            # Build user message envelope with execution hints (RFC-214)
-            from soothe.foundation.loop.prompts.user_envelope import build_execute_step_envelope
+            # Build user message with execution hints (RFC-214)
+            from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
+
+            _user_msg_builder = UserMessageBuilder()
 
             graph_input_messages: list[BaseMessage] = []
 
@@ -2344,12 +2346,12 @@ class Executor:
                     ". ".join(hints_parts) + ". Consider using the suggested approach first."
                 )
 
-            envelope = build_execute_step_envelope(
+            envelope = _user_msg_builder.build_execute_step_message(
                 step.description,
                 execution_hints=execution_hints,
                 skill_context=loop_state.skill_context if loop_state else None,
             )
-            logger.debug("[Human Message Envelope] %s", log_preview(envelope, chars=150))
+            logger.debug("[Human Message] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(
                 content=envelope,
                 thread_id=thread_id,
@@ -2925,7 +2927,9 @@ class Executor:
         Returns:
             List of LoopHumanMessage instances (one per step)
         """
-        from soothe.foundation.loop.prompts.user_envelope import build_execute_step_envelope
+        from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
+
+        _batch_builder = UserMessageBuilder()
 
         wire_subagent = _wire_subagent_from_routing(getattr(state, "routing_classification", None))
         messages = []
@@ -2942,7 +2946,7 @@ class Executor:
                     ". ".join(hints_parts) + ". Consider using the suggested approach first."
                 )
 
-            envelope = build_execute_step_envelope(
+            envelope = _batch_builder.build_execute_step_message(
                 step.description,
                 execution_hints=execution_hints,
                 skill_context=state.skill_context,

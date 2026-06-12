@@ -9,7 +9,7 @@ measures how candidate ablations change the prompt:
 - char/approx-token count of the prompt
 - cache-prefix stability across iterations (sha256 of the system message)
 - presence of the iter=0 `assessment_reasoning` text (anchor signal)
-- number of duplicated `<USER_QUERY>` blocks
+- number of duplicated `GOAL:` blocks
 
 These are *structural* signals — they don't run an LLM. A real LLM-based pass
 can be wired in later by feeding the rendered messages of each condition into
@@ -82,11 +82,9 @@ def _plan_context_human(content: str, *, iteration: int, phase: str) -> LoopHuma
 
 def _build_baseline_ledger() -> list[LoopHumanMessage | LoopAIMessage]:
     """The 8-turn ledger that plan-assess #2 sees (RFC-214 projection)."""
-    # iter=0 plan-assess turn (envelope text is built by PromptBuilder in production;
-    # here we use a representative envelope-shaped string so the anchor test is realistic).
+    # iter=0 plan-assess turn (scenario-based format with GOAL: and TIMESTAMP:)
     iter0_plan_assess_human = _plan_context_human(
-        f"<USER_QUERY>\n{GOAL}\n</USER_QUERY>\n"
-        "<CONTEXT_INFO>\n<timestamp>2026-06-02T10:19:55Z</timestamp>\n<date>2026-06-02</date>\n</CONTEXT_INFO>",
+        f"GOAL:\n{GOAL}\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00",
         iteration=0,
         phase="plan_assess",
     )
@@ -97,8 +95,7 @@ def _build_baseline_ledger() -> list[LoopHumanMessage | LoopAIMessage]:
         phase="plan_assess",
     )
     iter0_plan_generate_human = _plan_context_human(
-        f"<USER_QUERY>\n{GOAL}\n</USER_QUERY>\n"
-        "<CONTEXT_INFO>\n<timestamp>2026-06-02T10:19:58Z</timestamp>\n<date>2026-06-02</date>\n</CONTEXT_INFO>",
+        f"GOAL:\n{GOAL}\n\nTIMESTAMP: 2026-06-02T10:19:58+00:00",
         iteration=0,
         phase="plan_generate",
     )
@@ -209,37 +206,38 @@ def ablation_b1_drop_all_planning_turns(ledger: Ledger) -> Ledger:
 
 
 def ablation_b2_keep_only_prior_progress(ledger: Ledger) -> Ledger:
-    """Drop *all* ledger — model relies on PRIOR_PROGRESS digest alone."""
+    """Drop *all* ledger — model relies on PRIOR PROGRESS digest alone."""
     return []
 
 
-def ablation_c1_strip_volatile_context_from_recorded(ledger: Ledger) -> Ledger:
-    """Remove `<CONTEXT_INFO>` blocks from recorded planning humans.
+def ablation_c1_strip_volatile_timestamp_from_recorded(ledger: Ledger) -> Ledger:
+    """Remove TIMESTAMP: lines from recorded planning humans.
 
     Models the cache-friendly version that doesn't burn the prefix on every turn.
     """
+    import re
+
+    _TIMESTAMP_RE = re.compile(r"\n?TIMESTAMP:.*\n?", re.MULTILINE)
     out: Ledger = []
     for m in ledger:
         if (
             isinstance(m, LoopHumanMessage)
             and m.phase in {"plan_assess", "plan_generate"}
             and isinstance(m.content, str)
-            and "<CONTEXT_INFO>" in m.content
+            and "TIMESTAMP:" in m.content
         ):
-            head, _, rest = m.content.partition("<CONTEXT_INFO>")
-            _, _, tail = rest.partition("</CONTEXT_INFO>")
-            cleaned = (head + tail).strip()
+            cleaned = _TIMESTAMP_RE.sub("", m.content).strip()
             out.append(m.model_copy(update={"content": cleaned}))
         else:
             out.append(m)
     return out
 
 
-def ablation_d1_collapse_user_query_in_recorded(ledger: Ledger) -> Ledger:
-    """Replace `<USER_QUERY>...</USER_QUERY>` in recorded planning humans with a recap tag.
+def ablation_d1_collapse_goal_in_recorded(ledger: Ledger) -> Ledger:
+    """Replace GOAL: in recorded planning humans with GOAL RECAP:.
 
     Eliminates the duplicated-goal anchoring (the recap appears in past turns;
-    the current turn still carries `<USER_QUERY>`).
+    the current turn still carries GOAL:).
     """
     out: Ledger = []
     for m in ledger:
@@ -247,11 +245,9 @@ def ablation_d1_collapse_user_query_in_recorded(ledger: Ledger) -> Ledger:
             isinstance(m, LoopHumanMessage)
             and m.phase in {"plan_assess", "plan_generate"}
             and isinstance(m.content, str)
-            and "<USER_QUERY>" in m.content
+            and "GOAL:\n" in m.content
         ):
-            replaced = m.content.replace("<USER_QUERY>", "<GOAL_RECAP>").replace(
-                "</USER_QUERY>", "</GOAL_RECAP>"
-            )
+            replaced = m.content.replace("GOAL:", "GOAL RECAP:", 1)
             out.append(m.model_copy(update={"content": replaced}))
         else:
             out.append(m)
@@ -270,7 +266,7 @@ class PromptMetrics:
     approx_tokens: int  # chars/4 (rough English-mix heuristic)
     system_sha: str
     anchor_present: bool
-    duplicated_user_query_count: int
+    duplicated_goal_count: int
     message_count: int
 
 
@@ -281,7 +277,7 @@ def _approx_tokens(text: str) -> int:
 def _measure(name: str, msgs: list) -> PromptMetrics:
     system_content = msgs[0].content if msgs else ""
     all_content = "\n".join(getattr(m, "content", "") for m in msgs)
-    # `<USER_QUERY>` appears in PLAN_ASSESS_INSTRUCTIONS as documentation; only count
+    # GOAL: appears in plan instructions as documentation; only count
     # occurrences *outside* the system message so the metric reflects ledger pollution.
     ledger_content = "\n".join(getattr(m, "content", "") for m in msgs[1:])
     return PromptMetrics(
@@ -290,7 +286,7 @@ def _measure(name: str, msgs: list) -> PromptMetrics:
         approx_tokens=_approx_tokens(all_content),
         system_sha=hashlib.sha256(system_content.encode("utf-8")).hexdigest()[:12],
         anchor_present=ITER0_ASSESSMENT_REASONING in all_content,
-        duplicated_user_query_count=ledger_content.count("<USER_QUERY>"),
+        duplicated_goal_count=ledger_content.count("GOAL:\n"),
         message_count=len(msgs),
     )
 
@@ -309,8 +305,8 @@ CONDITIONS: list[tuple[str, Callable[[Ledger], Ledger]]] = [
     ("A2_compress_plan_assess_ai", ablation_a2_compress_plan_assess_ai),
     ("B1_drop_all_planning", ablation_b1_drop_all_planning_turns),
     ("B2_only_prior_progress", ablation_b2_keep_only_prior_progress),
-    ("C1_strip_volatile_context", ablation_c1_strip_volatile_context_from_recorded),
-    ("D1_collapse_user_query", ablation_d1_collapse_user_query_in_recorded),
+    ("C1_strip_volatile_timestamp", ablation_c1_strip_volatile_timestamp_from_recorded),
+    ("D1_collapse_goal", ablation_d1_collapse_goal_in_recorded),
 ]
 
 
@@ -331,13 +327,13 @@ def _run_all_conditions() -> dict[str, PromptMetrics]:
 
 
 def test_baseline_carries_anchor_and_duplicated_goal() -> None:
-    """The bug shape: prior assessment_reasoning text and duplicated <USER_QUERY> are both present."""
+    """The bug shape: prior assessment_reasoning text and duplicated GOAL: are both present."""
     results = _run_all_conditions()
     base = results["baseline"]
     assert base.anchor_present, "baseline must contain the iter=0 assessment_reasoning text"
     # 2 recorded planning humans + 1 current plan-context human = 3 occurrences.
-    assert base.duplicated_user_query_count >= 3, (
-        f"baseline should show duplicated <USER_QUERY>; got {base.duplicated_user_query_count}"
+    assert base.duplicated_goal_count >= 3, (
+        f"baseline should show duplicated GOAL:; got {base.duplicated_goal_count}"
     )
 
 
@@ -347,8 +343,8 @@ def test_a1_removes_anchor_and_drops_planning_pair() -> None:
     base = results["baseline"]
     assert not a1.anchor_present, "A1 must remove the iter=0 assessment_reasoning text"
     assert a1.message_count == base.message_count - 2
-    # plan_generate still uses <USER_QUERY>, plus current turn = 2 occurrences.
-    assert a1.duplicated_user_query_count == 2
+    # plan_generate still uses GOAL:, plus current turn = 2 occurrences.
+    assert a1.duplicated_goal_count == 2
 
 
 def test_a2_removes_anchor_keeps_pair() -> None:
@@ -368,8 +364,8 @@ def test_b1_drops_all_planning_turns() -> None:
     assert not b1.anchor_present
     # Drop 4 (2 plan_assess + 2 plan_generate).
     assert b1.message_count == base.message_count - 4
-    # Only the current plan-context human carries <USER_QUERY>.
-    assert b1.duplicated_user_query_count == 1
+    # Only the current plan-context human carries GOAL:.
+    assert b1.duplicated_goal_count == 1
 
 
 def test_b2_minimal_ledger_just_digest() -> None:
@@ -380,13 +376,13 @@ def test_b2_minimal_ledger_just_digest() -> None:
     assert b2.message_count == 2
     assert b2.total_chars < base.total_chars
     assert not b2.anchor_present
-    assert b2.duplicated_user_query_count == 1
+    assert b2.duplicated_goal_count == 1
 
 
 def test_c1_makes_recorded_humans_cache_stable() -> None:
-    """Recorded planning humans must lose their volatile <CONTEXT_INFO>."""
+    """Recorded planning humans must lose their volatile TIMESTAMP:."""
     baseline_ledger = _build_baseline_ledger()
-    c1_ledger = ablation_c1_strip_volatile_context_from_recorded(baseline_ledger)
+    c1_ledger = ablation_c1_strip_volatile_timestamp_from_recorded(baseline_ledger)
     base_recorded_humans = [
         m
         for m in baseline_ledger
@@ -397,17 +393,17 @@ def test_c1_makes_recorded_humans_cache_stable() -> None:
         for m in c1_ledger
         if isinstance(m, LoopHumanMessage) and m.phase in {"plan_assess", "plan_generate"}
     ]
-    assert all("<CONTEXT_INFO>" in m.content for m in base_recorded_humans)
-    assert all("<CONTEXT_INFO>" not in m.content for m in c1_recorded_humans)
+    assert all("TIMESTAMP:" in m.content for m in base_recorded_humans)
+    assert all("TIMESTAMP:" not in m.content for m in c1_recorded_humans)
     # Anchor still present (C1 targets cache, not anchor).
     assert ITER0_ASSESSMENT_REASONING in "\n".join(m.content for m in c1_ledger)
 
 
-def test_d1_dedupes_user_query() -> None:
+def test_d1_dedupes_goal() -> None:
     results = _run_all_conditions()
-    d1 = results["D1_collapse_user_query"]
-    # Only the current plan-context human still carries <USER_QUERY>.
-    assert d1.duplicated_user_query_count == 1
+    d1 = results["D1_collapse_goal"]
+    # Only the current plan-context human still carries GOAL:.
+    assert d1.duplicated_goal_count == 1
     # Anchor still present (D1 targets recency anchor, not the prior-reasoning anchor).
     assert d1.anchor_present
 
@@ -430,7 +426,7 @@ def test_ablation_report_summary(capsys) -> None:
     lines = [
         "",
         f"{'condition':<30} {'msgs':>4} {'chars':>6} {'~tok':>5} "
-        f"{'anchor':>6} {'<UQ>':>4}  delta_chars",
+        f"{'anchor':>6} {'GOAL:':>4}  delta_chars",
         "-" * 80,
     ]
     for name, _ in CONDITIONS:
@@ -440,7 +436,7 @@ def test_ablation_report_summary(capsys) -> None:
         lines.append(
             f"{r.name:<30} {r.message_count:>4} {r.total_chars:>6} "
             f"{r.approx_tokens:>5} {str(r.anchor_present):>6} "
-            f"{r.duplicated_user_query_count:>4}  {delta_str}"
+            f"{r.duplicated_goal_count:>4}  {delta_str}"
         )
     print("\n".join(lines))
     captured = capsys.readouterr()

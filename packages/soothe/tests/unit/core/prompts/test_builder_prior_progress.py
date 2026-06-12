@@ -24,7 +24,7 @@ def test_assess_phase_includes_prior_progress_when_present() -> None:
     ctx = PlanContext()
     msgs = PromptBuilder().build_plan_messages("g", state, ctx, plan_phase="assess")
     assess_human = msgs[-1].content
-    assert "<PRIOR_PROGRESS>" in assess_human
+    assert "PRIOR PROGRESS:" in assess_human
     assert "hint=high" in assess_human
     assert "found marker 42" in assess_human
 
@@ -34,7 +34,7 @@ def test_generate_phase_includes_prior_progress_when_present() -> None:
     ctx = PlanContext()
     msgs = PromptBuilder().build_plan_messages("g", state, ctx, plan_phase="generate")
     gen_human = msgs[-1].content
-    assert "<PRIOR_PROGRESS>" in gen_human
+    assert "PRIOR PROGRESS:" in gen_human
     assert "found marker 42" in gen_human
 
 
@@ -44,7 +44,7 @@ def test_both_phases_omit_block_when_prior_progress_absent() -> None:
     builder = PromptBuilder()
     for phase in ("assess", "generate"):
         msgs = builder.build_plan_messages("g", state, ctx, plan_phase=phase)
-        assert "<PRIOR_PROGRESS>" not in msgs[-1].content
+        assert "PRIOR PROGRESS:" not in msgs[-1].content
 
 
 def test_stale_digest_omitted_from_both_phases() -> None:
@@ -54,7 +54,7 @@ def test_stale_digest_omitted_from_both_phases() -> None:
     builder = PromptBuilder()
     for phase in ("assess", "generate"):
         msgs = builder.build_plan_messages("g", state, ctx, plan_phase=phase)
-        assert "<PRIOR_PROGRESS>" not in msgs[-1].content
+        assert "PRIOR PROGRESS:" not in msgs[-1].content
 
 
 def test_response_language_hint_in_plan_system_prompt_not_user_envelope() -> None:
