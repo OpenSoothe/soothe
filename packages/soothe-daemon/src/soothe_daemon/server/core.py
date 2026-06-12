@@ -1545,7 +1545,9 @@ class SootheDaemon(DaemonHandlersMixin):
                 ws_port = _cfg.transports.websocket.port
             orphan_pid = SootheDaemon._find_port_process(ws_port)
             if orphan_pid and orphan_pid != pid:
-                logger.info("Found orphan daemon on port %d (PID: %d), stopping", ws_port, orphan_pid)
+                logger.info(
+                    "Found orphan daemon on port %d (PID: %d), stopping", ws_port, orphan_pid
+                )
                 try:
                     os.kill(orphan_pid, signal.SIGTERM)
                     stopped = SootheDaemon._wait_for_pid_exit(orphan_pid, timeout)
