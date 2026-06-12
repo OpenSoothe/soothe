@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-12
+**Updated**: 2026-06-12
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (AgentLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-215 (Persistence Backend)
 **Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture)
 
@@ -12,7 +13,9 @@
 
 ## Abstract
 
-This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and AgentLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence. Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing GoalEngine or AgentLoop; later phases wire it in as a replacement for their internal context storage.
+This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and AgentLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence.
+
+Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into AgentLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop.
 
 ---
 
@@ -22,7 +25,7 @@ This RFC introduces `ContextEngine`, a unified interface for context management 
 
 Soothe's context handling is scattered across multiple modules with overlapping responsibilities:
 
-1. **GoalEngine** (`autopilot/engine/engine.py`) owns a flat `dict[str, Goal]` for goal DAG management — scheduling, status transitions, dependencies. Goals carry no lineage (why they were created) and no execution records.
+1. **GoalEngine** (`autopilot/engine/engine.py`) owns a flat `dict[str, Goal]` for goal DAG management — scheduling, status transitions, dependencies. Goals carry no lineage and no execution records.
 
 2. **AgentLoop** maintains `PlanDAG` (step-level DAG), `LoopWorkingMemory` (step outcome summaries), and `loop_messages` (full message ledger). These are separate data structures with no unified model.
 
@@ -38,7 +41,8 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 2. **Lineage tracking**: Goals and steps record their generating reasoning, enabling context projection to show *why* decisions were made.
 3. **Structured projection**: A single `ContextBundle` data model output by ContextEngine, rendered by existing prompt templates.
 4. **Standalone development**: Phase 1 builds ContextEngine without modifying existing code.
-5. **Migration path**: Clear phases for wiring ContextEngine into GoalEngine and AgentLoop as a replacement.
+5. **Behavioral equivalence**: Phase 3 integration preserves identical behavior to the current AgentLoop — same prompts, same step IDs, same ledger format.
+6. **Incremental migration**: A config flag enables the ContextEngine path without removing the existing path.
 
 ### Non-Goals
 
@@ -49,305 +53,97 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 
 ---
 
+## Integration Path
+
+| Phase | Scope | Existing code changes | Status |
+|-------|-------|-----------------------|--------|
+| 1 | Standalone `soothe.context` module | None | Done |
+| 2 | GoalEngine reads/writes through ContextEngine | GoalEngine internal storage replaced | Future |
+| 3 | AgentLoop uses ContextEngine via adapters | Adapters bridge CE to existing interfaces; PromptBuilder, Executor, LangGraph unchanged | This update |
+
+---
+
 ## Solution
 
 ### Architecture Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ soothe.context (new standalone module)                        │
+│ soothe.context (standalone module)                            │
 │                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │ ContextEngine                                             │ │
-│  │  • GoalStepDAG: unified goal + nested step DAGs          │ │
-│  │  • LedgerManager: loop message ledger                    │ │
-│  │  • SemanticLoader: CLAUDE.md/AGENTS.md/MEMORY.md        │ │
-│  │  • ProjectionEngine: builds ContextBundle                │ │
-│  │  • PersistenceBackend: durability (pluggable)            │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ContextEngine                                                 │
+│   • GoalStepDAG: unified goal + nested step DAGs              │
+│   • LedgerManager: loop message ledger                        │
+│   • SemanticLoader: CLAUDE.md/AGENTS.md/MEMORY.md            │
+│   • ProjectionEngine: builds ContextBundle                    │
+│   • PersistenceBackend: durability (pluggable)                │
 │                                                                │
 │  Data Models:                                                  │
-│  • GoalNode, StepNode, StepExecution                          │
-│  • GoalStepDAG, StepDAG                                       │
-│  • ContextBundle (projection output)                          │
-│  • GoalStepDAGSnapshot (persistence format)                   │
+│   • GoalNode, StepNode, StepExecution                         │
+│   • GoalStepDAG, StepDAG                                      │
+│   • ContextBundle (projection output)                         │
+│   • GoalStepDAGSnapshot (persistence format)                  │
 └──────────────────────────────────────────────────────────────┘
-          ↓ ContextBundle (structured data)
+          ↓ Phase 3: Adapter pattern
 ┌──────────────────────────────────────────────────────────────┐
-│ Prompt Templates (existing, unchanged at this phase)          │
+│ Context Adapters                                              │
+│  • ContextEnginePlanAdapter → PlanManager interface           │
+│  • ContextEngineLedgerAdapter → mirrors to LedgerManager     │
+│  • ContextEngineGoalContextAdapter → GoalContextManager iface │
 └──────────────────────────────────────────────────────────────┘
-          ↓ Rendered messages
+          ↓ Identical interfaces
 ┌──────────────────────────────────────────────────────────────┐
-│ CoreAgent (existing, unchanged at this phase)                 │
+│ Existing AgentLoop (unchanged)                                │
+│  • PromptBuilder — same XML fragments                         │
+│  • Executor — same step execution                             │
+│  • LangGraph — same node topology                             │
+│  • Step ID allocator — same KFA-01 composite IDs              │
+│  • Ledger writers — same LoopHumanMessage/LoopAIMessage       │
+│  • AgentLoopStateManager — same DB persistence                │
 └──────────────────────────────────────────────────────────────┘
 ```
-
-### Integration Path
-
-| Phase | Scope | Existing code changes |
-|-------|-------|-----------------------|
-| 1 (this RFC) | Standalone `soothe.context` module | None |
-| 2 | GoalEngine reads/writes through ContextEngine | GoalEngine internal storage replaced |
-| 3 | AgentLoop uses ContextEngine for plan/ledger | PlanDAG, LoopWorkingMemory, loop_messages replaced |
 
 ---
 
-## Specification
+## Phase 1: Standalone Module (Done)
 
 ### §1 Status Types
 
-```python
-GoalStatus = Literal[
-    "pending", "active", "completed", "failed",
-    "suspended", "blocked", "validated",
-    "awaiting_clarification", "cancelled",
-]
+`GoalStatus` includes 9 states: `pending`, `active`, `completed`, `failed`, `suspended`, `blocked`, `validated`, `awaiting_clarification`, `cancelled`. `TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})` — goals in these states satisfy dependency checks.
 
-TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
+`StepStatus` includes 4 states: `pending`, `completed`, `failed`, `skipped`.
 
-StepStatus = Literal["pending", "completed", "failed", "skipped"]
-```
+### §2 Data Model: Unified Goal+Step DAG
 
-`GoalStatus` aligns with existing `GoalEngine` status values (RFC-200, RFC-204). `TERMINAL_STATES` mirrors `autopilot/engine/models.py` — goals in these states satisfy dependency checks. Note that `failed` and `cancelled` are terminal: a goal whose dependency failed is considered "ready" (it will discover the failure during execution).
+The core data model is a two-level DAG: `GoalStepDAG` contains `GoalNode` entries, each embedding a `StepDAG` of `StepNode` entries.
 
-`StepStatus` includes `"skipped"` for steps that were bypassed during replanning, matching `PriorStepSummary.outcome` and `StepSummary.outcome` in `autopilot/engine/models.py`.
+**GoalNode** represents a goal with: status, priority, nesting (`parent_id`), hard dependencies (`depends_on`), soft dependencies (`informs`), conflicts (`conflicts_with`), an embedded `StepDAG`, lineage fields (`generating_reasoning`, `source`), and observability fields (`total_tokens_used`, `thread_id`, `assigned_loop_id`).
 
-### §2 GoalNode
+**StepNode** represents a step within a goal with: status, intra-goal dependencies, lineage (`plan_iteration`, `reasoning_trace`), and an optional `StepExecution` record.
 
-```python
-class GoalNode(BaseModel):
-    """Single goal in the unified Goal+Step DAG."""
+**StepExecution** captures a CoreAgent run: serialized input/output messages, token usage, duration, error, and thread ID.
 
-    id: str
-    description: str
-    priority: int = 50
-    status: GoalStatus = "pending"
+**StepDAG** provides: `add_step`, `ready_steps` (with dependency token expansion mirroring `expand_dependency_satisfaction_ids`), status transitions (`mark_completed`, `mark_failed`, `mark_skipped`), stats properties (`total_steps`, `success_rate`), and `chain_depth` (BFS-based longest dependency chain, matching `PlanDAG.max_chain_depth`).
 
-    # Nesting: goal can be subgoal of another goal
-    parent_id: str | None = None
+**GoalStepDAG** provides: goal lifecycle (`add_goal`, `complete_goal`, `fail_goal`, `suspend_goal`), scheduling (`ready_goals` mirroring `GoalEngine._filter_ready_candidates`, `active_goals`), lineage (`goal_lineage`), persistence (`snapshot`, `restore_from_snapshot`), and recovery (`recover_active_goals`).
 
-    # Dependencies: goal-level DAG edges
-    depends_on: list[str] = Field(default_factory=list)
+Design decisions:
 
-    # Soft dependencies and conflicts (RFC-204)
-    informs: list[str] = Field(default_factory=list)
-    conflicts_with: list[str] = Field(default_factory=list)
+- **StepDAG embedded in GoalNode**: Steps are goal-scoped — no cross-goal step dependencies. Embedding makes GoalNode the atomic unit of persistence.
+- **Lineage via `generating_reasoning`**: Stores the reasoning that produced a goal. Enables context projection to show *why* a goal exists.
+- **`source` field**: Tracks origin (`user`, `directive`, `file_discovery`, `decomposition`) for observability and projection filtering.
+- **`StepExecution` stored as serialized dicts**: For persistence portability. At runtime, `LedgerManager` holds `BaseMessage` objects; on step completion, ContextEngine serializes into `StepExecution` for durability.
+- **Scheduling semantics**: `ready_goals()` filters by `status == "pending"`, checks hard dependencies (`depends_on` all in `TERMINAL_STATES`), checks conflicts (`conflicts_with` no active goal), sorts by `(-priority, created_at)`.
 
-    # Nested step DAG (embedded, goal-scoped)
-    steps: StepDAG = Field(default_factory=StepDAG)
+### §3 Context Projection
 
-    # Lineage: why this goal exists
-    generating_reasoning: str | None = None
-    source: Literal["user", "directive", "file_discovery", "decomposition"] = "user"
+**ContextBundle** is a structured data model (not a rendered string) containing: goal context (`active_goal`, `goal_progress`), step context (`pending_steps`, `completed_steps`, `failed_steps`), ledger context (`ledger_summary`, `ledger_messages`), semantic context (`project_instructions`, `agent_instructions`, `memory_instructions`), lineage context (`goal_lineage`, `step_lineage`), and observability metadata (`total_tokens_used`, `goal_dag_summary`).
 
-    # Observability
-    total_tokens_used: int = 0
-    thread_id: str | None = None
-    assigned_loop_id: str | None = None
+**ProjectionConfig** bounds the output: `max_goals=5`, `max_steps_per_goal=10`, `max_ledger_chars=4000`, `max_ledger_messages=20`, `max_lineage_chars=2000`, `max_project_instructions_chars=8000`.
 
-    # Timestamps
-    created_at: datetime
-    updated_at: datetime
-```
+**ProjectionEngine** builds a `ContextBundle` from `GoalStepDAG` + `LedgerManager` + `SemanticLoader`, bounding each section per `ProjectionConfig`.
 
-**Design decisions**:
-
-- **StepDAG embedded in GoalNode**: Steps are goal-scoped — no cross-goal step dependencies. Embedding makes `GoalNode` the atomic unit of persistence and matches the dependency model. A global step index can be added later as an optimization.
-- **Lineage via `generating_reasoning`**: Stores the reasoning that produced this goal (e.g., plan-assess LLM output, directive text, user input). Enables context projection to show *why* a goal exists.
-- **`source` field**: Tracks origin for observability and projection filtering.
-
-### §3 StepNode and StepExecution
-
-```python
-class StepNode(BaseModel):
-    """Single step within a goal's step DAG."""
-
-    id: str
-    description: str
-    status: StepStatus = "pending"
-
-    # Step-level dependencies (within same goal only)
-    dependencies: list[str] = Field(default_factory=list)
-
-    # Lineage: reasoning that generated this step
-    plan_iteration: int = 0
-    reasoning_trace: str | None = None
-
-    # Execution record (populated after CoreAgent runs)
-    execution: StepExecution | None = None
-
-
-class StepExecution(BaseModel):
-    """Record of CoreAgent execution for a step."""
-
-    input_messages: list[dict] = Field(default_factory=list)
-    output_messages: list[dict] = Field(default_factory=list)
-    tokens_used: int = 0
-    duration_ms: int = 0
-    error: str | None = None
-    thread_id: str | None = None
-```
-
-**Design decisions**:
-
-- **`StepExecution.input_messages/output_messages` stored as serialized dicts** rather than `BaseMessage` objects, for persistence portability. At runtime, `LedgerManager` holds `BaseMessage` objects. When a step completes, `ContextEngine` serializes relevant messages into `StepExecution` for durability. On recovery, these dicts are deserialized back to `BaseMessage` to rehydrate the `LedgerManager`.
-- **Step dependencies strictly within same goal** — cross-goal coordination flows through goal-level `depends_on`. Steps can depend on goal completion (not specific steps in other goals) via the goal dependency boundary.
-- **`reasoning_trace`** captures the plan-assess or plan-generate reasoning that produced this step, enabling lineage projection.
-
-### §4 StepDAG
-
-```python
-class StepDAG(BaseModel):
-    """DAG of steps for a single goal."""
-
-    nodes: dict[str, StepNode] = Field(default_factory=dict)
-
-    def add_step(self, step: StepNode) -> None: ...
-
-    def ready_steps(self) -> set[str]:
-        """Pending steps whose dependencies are all satisfied.
-
-        Uses dependency token expansion (mirrors
-        ``expand_dependency_satisfaction_ids`` from
-        ``loop/planning/dependency_tokens.py``) to resolve composite
-        step IDs and their local numeric aliases.
-        """
-        ...
-
-    def completed_steps(self) -> set[str]: ...
-    def failed_steps(self) -> set[str]: ...
-    def pending_steps(self) -> set[str]: ...
-
-    def mark_completed(self, step_id: str, execution: StepExecution) -> None: ...
-    def mark_failed(self, step_id: str, execution: StepExecution) -> None: ...
-    def mark_skipped(self, step_id: str) -> None: ...
-
-    @property
-    def total_steps(self) -> int: ...
-    @property
-    def success_rate(self) -> float: ...
-```
-
-### §5 GoalStepDAG
-
-```python
-class GoalStepDAG(BaseModel):
-    """Top-level DAG of goals, each containing nested step DAGs."""
-
-    goals: dict[str, GoalNode] = Field(default_factory=dict)
-
-    # Goal lifecycle
-    def add_goal(self, goal: GoalNode) -> None: ...
-    def get_goal(self, goal_id: str) -> GoalNode | None: ...
-    def complete_goal(self, goal_id: str) -> None: ...
-    def fail_goal(self, goal_id: str, error: str) -> None: ...
-    def suspend_goal(self, goal_id: str, reason: str) -> None: ...
-
-    # Scheduling (same logic as GoalEngine._filter_ready_candidates)
-    def ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Goals whose deps are satisfied, sorted by priority desc / created_at asc."""
-        ...
-
-    def active_goals(self) -> list[GoalNode]: ...
-
-    # Lineage
-    def goal_lineage(self, goal_id: str) -> list[str]:
-        """Return chain of goal descriptions from root to this goal."""
-        ...
-
-    # Snapshot for persistence
-    def snapshot(self) -> GoalStepDAGSnapshot: ...
-    def restore_from_snapshot(self, snapshot: GoalStepDAGSnapshot) -> None: ...
-
-    # Recovery
-    def recover_active_goals(self) -> list[str]:
-        """Reset goals stuck in 'active' to 'pending' (crash recovery)."""
-        ...
-```
-
-**Scheduling semantics**: `ready_goals()` mirrors `GoalEngine._filter_ready_candidates()` — filters by `status == "pending"` (goals in `suspended`, `awaiting_clarification`, or other non-pending states are excluded), checks hard dependencies (`depends_on` all in `TERMINAL_STATES`), checks conflicts (`conflicts_with` no active goal), sorts by `(-priority, created_at)`.
-
-### §6 Context Projection
-
-#### ContextBundle
-
-```python
-class ContextBundle(BaseModel):
-    """Structured output of ContextEngine.project() for prompt templates.
-
-    This is not a rendered string — it is structured data that prompt
-    templates render into appropriate message sections.
-    """
-
-    # Goal context
-    active_goal: GoalNode | None = None
-    goal_progress: str = ""
-
-    # Step context
-    pending_steps: list[StepNode] = Field(default_factory=list)
-    completed_steps: list[StepNode] = Field(default_factory=list)
-    failed_steps: list[StepNode] = Field(default_factory=list)
-
-    # Ledger context
-    ledger_summary: str = ""
-    ledger_messages: list[dict] = Field(default_factory=list)
-
-    # Semantic context
-    project_instructions: str = ""
-    agent_instructions: str = ""
-    memory_instructions: str = ""
-
-    # Lineage context (for reasoning)
-    goal_lineage: str = ""
-    step_lineage: str = ""
-
-    # Observability metadata
-    total_tokens_used: int = 0
-    goal_dag_summary: str = ""
-```
-
-#### ProjectionConfig
-
-```python
-class ProjectionConfig(BaseModel):
-    """Limits for bounded projection."""
-
-    max_goals: int = 5
-    max_steps_per_goal: int = 10
-    max_ledger_chars: int = 4000
-    max_ledger_messages: int = 20
-    max_lineage_chars: int = 2000
-    max_project_instructions_chars: int = 8000
-```
-
-#### ProjectionEngine
-
-```python
-class ProjectionEngine:
-    """Builds a ContextBundle from ContextEngine state, bounded by ProjectionConfig."""
-
-    def __init__(self, config: ProjectionConfig | None = None) -> None: ...
-
-    async def project(
-        self,
-        dag: GoalStepDAG,
-        ledger: list[BaseMessage],
-        goal_id: str | None = None,
-    ) -> ContextBundle:
-        """Build ContextBundle for a specific goal (or the active goal).
-
-        Args:
-            dag: Current GoalStepDAG state.
-            ledger: Current loop message ledger.
-            goal_id: Target goal. If None, uses the active goal.
-
-        Returns:
-            Bounded ContextBundle for prompt template rendering.
-        """
-        ...
-```
-
-**Bounding strategy per section**:
+Bounding strategy per section:
 
 | Section | Source | Bounding strategy |
 |---------|--------|-------------------|
@@ -360,91 +156,27 @@ class ProjectionEngine:
 | `goal_lineage` | GoalStepDAG.goal_lineage() | Chain of descriptions, max `max_lineage_chars` |
 | `step_lineage` | StepNode.reasoning_trace | Recent reasoning, max `max_lineage_chars` |
 
-### §7 LedgerManager
+### §4 LedgerManager
 
-Replaces `LoopWorkingMemory` and the `loop_messages` list in AgentLoop state.
+Replaces `LoopWorkingMemory` and the `loop_messages` list in AgentLoop state. Provides:
 
-```python
-class LedgerManager:
-    """Manages the loop message ledger with compaction support."""
+- `record_message(message, phase)` — append with phase metadata
+- `get_messages(phases)` — filter by phase list
+- `project_for_plan(config)` — all phases, bounded by config limits
+- `project_for_core_agent()` — execute_step phase only, plus phase=None HumanMessage/AIMessage for compatibility
+- `compact()` — summarize old messages (placeholder)
+- `record_step_result(step_id, description, output, error, success)` — replaces `LoopWorkingMemory.record_step_result`
+- `render_for_reason(max_chars)` — condensed text output
 
-    def __init__(self, max_inline_chars: int = 4000) -> None: ...
+**Ledger-DAG relationship**: LedgerManager is the runtime fast path for message recording and phase-filtered retrieval. The DAG-based recovery is the durability path — after crash recovery, `StepExecution` data is deserialized back into `BaseMessage` objects and the LedgerManager is rehydrated. At runtime, both are kept in sync by `ContextEngine`.
 
-    def record_message(self, message: BaseMessage, phase: str) -> None:
-        """Append a message to the ledger with phase metadata."""
-        ...
+### §5 SemanticLoader
 
-    def get_messages(self, phases: list[str] | None = None) -> list[BaseMessage]:
-        """Return messages, optionally filtered by phase."""
-        ...
+Loads static project instruction files from `workspace` then `SOOTHE_HOME`: `load_project_instructions()` (CLAUDE.md), `load_agent_instructions()` (AGENTS.md), `load_memory()` (MEMORY.md). All methods return empty string on missing files (graceful degradation).
 
-    def project_for_plan(self, config: ProjectionConfig | None = None) -> list[BaseMessage]:
-        """Return ledger messages for plan prompts (all phases)."""
-        ...
+### §6 Persistence
 
-    def project_for_core_agent(self) -> list[BaseMessage]:
-        """Return only execute_step phase messages for CoreAgent.
-
-        Also includes non-loop plain HumanMessage/AIMessage objects
-        (phase=None) for compatibility with early ledger entries.
-        """
-        ...
-
-    def compact(self) -> None:
-        """Compact old messages (summarize or spill to disk)."""
-        ...
-
-    def record_step_result(
-        self,
-        step_id: str,
-        description: str,
-        output: str | None,
-        error: str | None,
-        success: bool,
-    ) -> None:
-        """Record step outcome (replaces LoopWorkingMemory.record_step_result)."""
-        ...
-```
-
-**Relationship between LedgerManager and DAG**: LedgerManager is the runtime fast path for message recording and phase-filtered retrieval. The DAG-based recovery is the persistence/durability path — after crash recovery, `StepExecution` data is deserialized back into `BaseMessage` objects and the LedgerManager is rehydrated. At runtime, LedgerManager and StepExecution are kept in sync by `ContextEngine`: recording a step completion writes to both.
-
-### §8 SemanticLoader
-
-```python
-class SemanticLoader:
-    """Loads static project instruction files for semantic context."""
-
-    def __init__(self, soothe_home: Path | None = None) -> None: ...
-
-    def load_project_instructions(self) -> str:
-        """Load CLAUDE.md content."""
-        ...
-
-    def load_agent_instructions(self) -> str:
-        """Load AGENTS.md content."""
-        ...
-
-    def load_memory(self) -> str:
-        """Load MEMORY.md content."""
-        ...
-```
-
-### §9 Persistence
-
-#### ContextPersistenceProtocol
-
-```python
-class ContextPersistenceProtocol(Protocol):
-    """Backend for GoalStepDAG and ledger durability."""
-
-    async def save_dag(self, dag: GoalStepDAG) -> None: ...
-    async def load_dag(self) -> GoalStepDAG | None: ...
-    async def save_ledger(self, messages: list[dict]) -> None: ...
-    async def load_ledger(self) -> list[dict]: ...
-    async def clear(self) -> None: ...
-```
-
-#### Implementations
+**ContextPersistenceProtocol** defines 5 async methods: `save_dag`, `load_dag`, `save_ledger`, `load_ledger`, `clear`.
 
 | Backend | Use case | Phase |
 |---------|----------|-------|
@@ -452,90 +184,155 @@ class ContextPersistenceProtocol(Protocol):
 | `FileContextPersistence` | Single-process durability | 1 |
 | `PostgresContextPersistence` | Multi-process, crash recovery | Future |
 
-`FileContextPersistence` stores JSON under `SOOTHE_HOME/data/context_engine/{thread_id}/`:
-- `goal_step_dag.json` — serialized GoalStepDAG
-- `ledger.json` — serialized message ledger
+`FileContextPersistence` stores JSON under `SOOTHE_HOME/data/context_engine/{loop_id}/` with atomic writes (`.tmp` + `rename`).
 
-### §10 ContextEngine Interface
+### §7 ContextEngine Interface
 
-```python
-class ContextEngine:
-    """Unified context management for goals, steps, ledger, and projection."""
+ContextEngine composes GoalStepDAG, LedgerManager, SemanticLoader, ProjectionEngine, and a PersistenceBackend.
 
-    def __init__(
-        self,
-        persistence: ContextPersistenceProtocol | None = None,
-        projection_config: ProjectionConfig | None = None,
-        soothe_home: Path | None = None,
-    ) -> None:
-        self._dag = GoalStepDAG()
-        self._ledger = LedgerManager()
-        self._semantic = SemanticLoader(soothe_home)
-        self._projection = ProjectionEngine(projection_config)
-        self._persistence = persistence or InMemoryContextPersistence()
+**Goal management**: `create_goal`, `get_goal`, `list_goals`, `complete_goal`, `fail_goal`, `suspend_goal`, `activate_goal` (transitions pending→active, sets `assigned_loop_id`).
 
-    # ── Goal management ──────────────────────────────────────
+**Step management**: `add_step`, `add_steps`, `complete_step`, `fail_step`.
 
-    async def create_goal(
-        self,
-        description: str,
-        *,
-        priority: int = 50,
-        parent_id: str | None = None,
-        depends_on: list[str] | None = None,
-        generating_reasoning: str | None = None,
-        source: str = "user",
-        **kwargs,
-    ) -> GoalNode: ...
+**Ledger management**: `record_message`, `get_ledger`.
 
-    async def get_goal(self, goal_id: str) -> GoalNode | None: ...
-    async def list_goals(self, status: str | None = None) -> list[GoalNode]: ...
-    async def complete_goal(self, goal_id: str) -> None: ...
-    async def fail_goal(self, goal_id: str, error: str) -> None: ...
-    async def suspend_goal(self, goal_id: str, reason: str) -> None: ...
+**Projection**: `project` → delegates to ProjectionEngine.
 
-    # ── Step management ──────────────────────────────────────
+**Persistence**: `save`, `load`.
 
-    async def add_step(self, goal_id: str, step: StepNode) -> None: ...
+**Recovery**: `recover` — resets goals stuck in `active` to `pending`.
 
-    async def add_steps(
-        self, goal_id: str, steps: list[StepNode], plan_iteration: int = 0
-    ) -> None: ...
+### §8 Module Structure
 
-    async def complete_step(
-        self, goal_id: str, step_id: str, execution: StepExecution
-    ) -> None: ...
-
-    async def fail_step(
-        self, goal_id: str, step_id: str, execution: StepExecution
-    ) -> None: ...
-
-    # ── Ledger management ────────────────────────────────────
-
-    async def record_message(self, message: BaseMessage, phase: str) -> None: ...
-    async def get_ledger(self, phases: list[str] | None = None) -> list[BaseMessage]: ...
-
-    # ── Projection ───────────────────────────────────────────
-
-    async def project(self, goal_id: str | None = None) -> ContextBundle: ...
-
-    # ── Persistence ──────────────────────────────────────────
-
-    async def save(self) -> None: ...
-    async def load(self) -> bool: ...
-
-    # ── Recovery ─────────────────────────────────────────────
-
-    async def recover(self) -> list[str]:
-        """Reset goals stuck in 'active' to 'pending' after crash."""
-        ...
 ```
+packages/soothe/src/soothe/context/
+├── __init__.py              # Public API
+├── models.py                # GoalNode, StepNode, StepExecution, StepDAG, GoalStepDAG, GoalStepDAGSnapshot
+├── engine.py                # ContextEngine
+├── projection.py            # ProjectionEngine, ContextBundle, ProjectionConfig
+├── ledger.py                # LedgerManager
+├── semantic.py              # SemanticLoader
+├── persistence/
+│   ├── __init__.py          # ContextPersistenceProtocol + conditional FileContextPersistence
+│   ├── base.py              # Protocol definition
+│   ├── in_memory.py         # InMemoryContextPersistence
+│   └── file_backend.py      # FileContextPersistence
+```
+
+---
+
+## Phase 3: AgentLoop Integration
+
+### Design Principle: State Backend Swap with Adapter Pattern
+
+ContextEngine replaces the internal state management of AgentLoop (`PlanManager`, `LoopWorkingMemory`, `GoalContextManager`) while the existing prompt builders, executor, step ID allocators, and ledger writers remain completely unchanged. A config flag selects the path.
+
+**Constraint: 100% behavioral equivalence.** When the ContextEngine path is enabled, the system must produce identical outputs to the current Plan-Exec loop — same SystemMessage fragments, same composite step IDs, same DAG context XML, same LoopHumanMessage/LoopAIMessage ledger entries, same evidence summaries.
+
+### §9 Adapter Layer
+
+Three adapter classes wrap `ContextEngine` to present identical interfaces to the existing code:
+
+#### ContextEnginePlanAdapter
+
+Wraps ContextEngine to satisfy the `PlanManager` interface. The existing orchestrator nodes (`plan_assess`, `plan_generate`, `resolve_decision`, `record_iteration`) call the adapter as if it were `PlanManager`.
+
+| Method | Mapping |
+|--------|---------|
+| `ingest_plan(plan_result, plan_id, iteration)` | Maps `PlanResult.steps` → `ContextEngine.add_steps()`, preserving composite step IDs (`KFA-01`) as `StepNode.id` values |
+| `record_step_outcomes(step_results)` | Maps each `StepResult` → `ContextEngine.complete_step()` or `fail_step()` |
+| `get_planning_context() → DagPlanningContext` | Reads `GoalStepDAG` stats and constructs `DagPlanningContext` with identical fields: `pending_step_ids`, `failed_step_ids`, `ready_step_ids`, `chain_depth`, `success_rate`, `replan_count`, `total_steps`, `completed_steps` |
+| `format_completion_dag_report() → str` | Renders from `GoalStepDAG` instead of `PlanDAG`, same output format |
+| `determine_goal_completion_needs(...)` | Delegates to existing heuristics (unchanged logic) |
+| `determine_completion_strategy(...)` | Delegates to existing heuristics (unchanged logic) |
+
+The adapter also maintains `plan_history: list[PlanResult]` and computes `replan_count` from plan history length — matching `PlanManager.plan_history`.
+
+**Key insight**: `_format_dag_context()` (in `builder.py`) uses duck typing on its parameter, accessing exactly 9 attributes: `has_prior_state`, `total_steps`, `completed_steps`, `failed_step_ids`, `ready_step_ids`, `pending_step_ids`, `chain_depth`, `success_rate`, `replan_count`. The adapter's `get_planning_context()` returns a `DagPlanningContext` dataclass providing all of these, so `_format_dag_context` works without modification.
+
+#### ContextEngineLedgerAdapter
+
+Mirrors ledger writes to both `LoopState.loop_messages` (existing prompt pipeline) and `LedgerManager` (persistence and recovery).
+
+- Every append to `loop_messages` is also recorded in `LedgerManager` with the correct phase tag.
+- `project_loop_messages_for_plan()` continues to work on the native `loop_messages` list — the adapter doesn't change how the ledger is consumed by `PromptBuilder`.
+- `LedgerManager` serves as the persistence/recovery path; `loop_messages` remains the real-time prompt path.
+
+This dual-write approach is the simplest way to maintain behavioral equivalence: `PromptBuilder` and `Executor` never see a different data structure.
+
+#### ContextEngineGoalContextAdapter
+
+Wraps ContextEngine to provide the same `get_plan_context()` and `get_execute_briefing()` interfaces as `GoalContextManager`, reading from `GoalStepDAG` goal history instead of `AgentLoopStateManager.goal_history`.
+
+### §10 Config Flag
+
+```yaml
+agent:
+  loop:
+    context_engine:
+      enabled: false           # default off — existing path untouched
+      persistence_backend: "file"  # "file" | "in_memory"
+```
+
+When `enabled: false`, zero behavioral changes. The adapters are never instantiated. When `enabled: true`, the adapters wrap a `ContextEngine` instance and mirror state.
+
+### §11 Persistence Strategy
+
+The existing PostgreSQL/SQLite checkpoint system (`AgentLoopStateManager`) remains the primary persistence path. ContextEngine's file persistence supplements it:
+
+- **During `record_iteration`**: Existing `state_manager.record_iteration()` persists the full checkpoint to DB. Additionally, `context_engine.save()` persists the DAG and ledger to files.
+- **During recovery**: Existing DB-based recovery runs first. `ContextEngine.load()` supplements by restoring DAG state for the ContextEngine's in-memory model.
+- **Rationale**: CE file persistence captures the GoalStepDAG and LedgerManager state for quick recovery without DB deserialization. The DB remains the authoritative checkpoint store. This avoids replacing the proven DB persistence layer while gaining CE's structured recovery benefits.
+
+### §12 Required Additions to ContextEngine
+
+The following gaps were identified between the Phase 1 ContextEngine and what the AgentLoop integration requires:
+
+| Gap | Addition |
+|-----|----------|
+| No `activate_goal()` method | Add `activate_goal(goal_id, loop_id)` — transitions `pending→active`, sets `assigned_loop_id` |
+| No `chain_depth` on `StepDAG` | Add `chain_depth` property (BFS, same algorithm as `PlanDAG.max_chain_depth`) |
+| No composite step ID support | Adapters store composite IDs (`KFA-01`) as `StepNode.id` directly — no CE model change needed |
+| No `plan_history` tracking | `ContextEnginePlanAdapter` maintains its own `plan_history` list — no CE model change needed |
+| No evidence tracking | Not in CE — the adapter reads evidence from `LoopState` directly — no CE model change needed |
+| Ledger serialization is lossy | Acceptable because CE persistence is supplementary — the DB handles full ledger serialization |
+| No `execution_mode` on steps | Not needed — `AgentDecision.execution_mode` stays in `LoopState`, not in `GoalStepDAG` |
+
+### §13 Files to Create or Modify
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` | All three adapter classes |
+| `packages/soothe/tests/unit/core/loop/engine/test_context_adapters.py` | Adapter unit tests |
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `packages/soothe/src/soothe/context/engine.py` | Add `activate_goal()` method |
+| `packages/soothe/src/soothe/context/models.py` | Add `chain_depth` property to `StepDAG` |
+| `packages/soothe/src/soothe/config/models.py` | Add `ContextEngineConfig` to `AgentLoopConfig` |
+| `config/config.template.yml` | Add `context_engine` section |
+| `config/config.dev.yml` | Add matching section |
+
+**Not modified (by design):**
+
+| Component | Reason |
+|-----------|--------|
+| `PromptBuilder` | Adapter produces identical `DagPlanningContext` |
+| `Executor` | Step execution is independent of state backend |
+| `LangGraph topology` | Node graph and routing unchanged |
+| `LoopState` schemas | In-memory state model unchanged |
+| `PlanDAG` | Still used by existing path when CE disabled |
+| `dependency_tokens.py` | Both paths use the same `expand_dependency_satisfaction_ids` |
 
 ---
 
 ## Data Flow
 
-### Goal creation → Step execution → Completion
+### Phase 1: Standalone ContextEngine
 
 ```
 User Goal
@@ -573,7 +370,47 @@ ContextEngine.complete_goal(goal_id)
   → GoalNode.status = "completed"
 ```
 
-### Ledger recovery from GoalStepDAG
+### Phase 3: AgentLoop Integration (when CE enabled)
+
+```
+AgentLoop.run_with_progress(goal, ...)
+  │
+  ├─ Create ContextEngine (with FileContextPersistence)
+  ├─ Create adapters wrapping ContextEngine
+  ├─ Pass adapter as plan_manager to orchestrator nodes
+  │
+  ▼
+LangGraph iteration cycle (unchanged topology):
+  │
+  plan_assess / plan_generate
+  │  → PromptBuilder builds messages (unchanged)
+  │  → LLM returns PlanResult
+  │
+  ▼
+resolve_decision
+  │  → allocate_plan_id, assign_plan_step_ids (unchanged)
+  │  → Adapter.ingest_plan() records steps in ContextEngine
+  │
+  ▼
+execute
+  │  → Executor runs steps (unchanged)
+  │  → LedgerAdapter mirrors writes to both loop_messages and LedgerManager
+  │
+  ▼
+record_iteration
+  │  → state_manager.record_iteration() → DB (unchanged)
+  │  → context_engine.save() → file backup (new)
+  │
+  ▼
+  ... loop until goal complete ...
+  │
+  ▼
+goal_completion
+  │  → Adapter.get_planning_context() → DagPlanningContext (unchanged format)
+  │  → Existing completion strategy logic (unchanged)
+```
+
+### Ledger Recovery from GoalStepDAG
 
 The loop message ledger is always derivable from the GoalStepDAG. Given a `GoalStepDAG`, the ledger is reconstructed by:
 
@@ -596,67 +433,6 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 
 ---
 
-## Module Structure
-
-```
-packages/soothe/src/soothe/context/
-├── __init__.py              # Public API: ContextEngine, ContextBundle, GoalNode, StepNode
-├── models.py                # GoalNode, StepNode, StepExecution, StepDAG, GoalStepDAG, GoalStepDAGSnapshot
-├── engine.py                # ContextEngine (main orchestrator)
-├── projection.py            # ProjectionEngine, ContextBundle, ProjectionConfig
-├── ledger.py                # LedgerManager
-├── semantic.py              # SemanticLoader
-├── persistence/
-│   ├── __init__.py          # ContextPersistenceProtocol
-│   ├── base.py              # Protocol definition
-│   ├── in_memory.py         # InMemoryContextPersistence
-│   └── file_backend.py      # FileContextPersistence
-```
-
----
-
-## Testing Strategy
-
-### Unit tests (`packages/soothe/tests/unit/context/`)
-
-| Test file | Coverage |
-|-----------|----------|
-| `test_goal_step_dag.py` | DAG scheduling, dependency resolution, cycle detection, depth limits |
-| `test_step_dag.py` | Step readiness, completion, failure, dependency satisfaction |
-| `test_projection.py` | ContextBundle building, limit enforcement, section bounding |
-| `test_ledger_manager.py` | Message recording, phase filtering, compaction, spill |
-| `test_semantic_loader.py` | File loading, missing files, content truncation |
-| `test_persistence.py` | Save/load/clear cycle, snapshot/restore |
-
-### Integration tests (`packages/soothe/tests/integration/context/`)
-
-| Test file | Coverage |
-|-----------|----------|
-| `test_context_engine_lifecycle.py` | Full goal creation → step execution → completion flow |
-| `test_recovery.py` | Crash simulation, reload, active goal reset |
-| `test_ledger_recovery_from_dag.py` | Reconstruct ledger from GoalStepDAG step executions |
-
----
-
-## Migration Path (Future Phases)
-
-### Phase 2: GoalEngine integration
-
-- GoalEngine reads/writes goals through ContextEngine instead of internal `_goals` dict
-- `GoalEngine.create_goal()` becomes a thin wrapper delegating to `ContextEngine.create_goal()`
-- ContextProjector reads from ContextEngine instead of GoalDispatchContextStore
-- Backward-compatible: GoalEngine's public API unchanged, internal storage replaced
-
-### Phase 3: AgentLoop integration
-
-- AgentLoop's `PlanDAG` replaced by `GoalNode.steps` (StepDAG)
-- `LoopWorkingMemory` replaced by `LedgerManager`
-- `loop_messages` replaced by `LedgerManager` with phase tagging
-- `plan_ledger_projection.py` renders from `ContextBundle` instead of raw `loop_messages`
-- AgentLoop orchestrator nodes call ContextEngine methods instead of direct state mutation
-
----
-
 ## Invariants
 
 1. `GoalStepDAG` is the single source of truth for goal and step data within `soothe.context`.
@@ -665,3 +441,25 @@ packages/soothe/src/soothe/context/
 4. The message ledger is derivable from the GoalStepDAG (via `StepExecution` records).
 5. `ContextPersistenceProtocol` implementations must support atomic save/load (no partial writes).
 6. `ContextEngine` does not depend on `GoalEngine`, `AgentLoop`, or `CoreAgent` — it is standalone.
+7. When the ContextEngine path is enabled in AgentLoop, all adapter outputs must be indistinguishable from the current Plan-Exec loop outputs (behavioral equivalence).
+8. The existing AgentLoop path (CE disabled) must remain completely untouched — zero behavioral changes.
+
+---
+
+## Migration Path (Future Phases)
+
+### Phase 2: GoalEngine Integration
+
+- GoalEngine reads/writes goals through ContextEngine instead of internal `_goals` dict
+- `GoalEngine.create_goal()` becomes a thin wrapper delegating to `ContextEngine.create_goal()`
+- ContextProjector reads from ContextEngine instead of GoalDispatchContextStore
+- Backward-compatible: GoalEngine's public API unchanged, internal storage replaced
+
+### Phase 3: AgentLoop Integration (this update)
+
+- AgentLoop's `PlanManager` replaced by `ContextEnginePlanAdapter`
+- `LoopWorkingMemory` + `loop_messages` mirrored to `LedgerManager` via `ContextEngineLedgerAdapter`
+- `GoalContextManager` replaced by `ContextEngineGoalContextAdapter`
+- Config flag `agent.loop.context_engine.enabled` selects the path
+- Existing prompt pipeline, executor, and LangGraph topology remain unchanged
+- DB persistence remains primary; CE file persistence supplements for DAG state

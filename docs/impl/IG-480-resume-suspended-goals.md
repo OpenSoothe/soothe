@@ -1,4 +1,4 @@
-# IG-295: Fix Proposal Tools Not Loaded + Add Resume Command
+# IG-480: Fix Proposal Tools Not Loaded + Add Resume Command
 
 ## Goal
 1. Fix the root cause where `suggest_goal` and `add_finding` proposal tools were never loaded into the agent's available tools

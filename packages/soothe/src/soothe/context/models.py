@@ -143,6 +143,42 @@ class StepDAG(BaseModel):
             node.status = "skipped"
 
     @property
+    def chain_depth(self) -> int:
+        """Longest dependency chain in the DAG (BFS, same as PlanDAG.max_chain_depth)."""
+        if not self.nodes:
+            return 0
+
+        satisfied = _expand_dependency_satisfaction_ids(self.completed_step_ids())
+
+        dependents: dict[str, list[str]] = {cid: [] for cid in self.nodes}
+        in_degree: dict[str, int] = {cid: 0 for cid in self.nodes}
+        for cid, node in self.nodes.items():
+            for dep in node.dependencies:
+                if dep in satisfied:
+                    continue
+                if dep in dependents:
+                    dependents[dep].append(cid)
+                    in_degree[cid] += 1
+
+        from collections import deque
+
+        depth: dict[str, int] = {cid: 1 for cid in self.nodes}
+        queue = deque(cid for cid, deg in in_degree.items() if deg == 0)
+        max_depth = 1
+
+        while queue:
+            current = queue.popleft()
+            current_depth = depth[current]
+            max_depth = max(max_depth, current_depth)
+            for dep in dependents[current]:
+                depth[dep] = max(depth[dep], current_depth + 1)
+                in_degree[dep] -= 1
+                if in_degree[dep] == 0:
+                    queue.append(dep)
+
+        return max_depth
+
+    @property
     def total_steps(self) -> int:
         return len(self.nodes)
 

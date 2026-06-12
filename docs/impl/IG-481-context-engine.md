@@ -1,6 +1,6 @@
-# IG-624: Context Engine Implementation
+# IG-481: Context Engine Implementation
 
-**IG**: 624
+**IG**: 481
 **RFC**: 624
 **Title**: Context Engine — Unified Context Management
 **Status**: Draft
