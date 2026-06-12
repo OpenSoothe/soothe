@@ -65,7 +65,8 @@ QUIZ_RESPONSE_GUIDE_FRAGMENT = _read("system/response_guides/quiz_response.xml")
 
 INTENT_CLASSIFICATION_PROMPT_FRAGMENT = _read("classifiers/intent_classification.xml")
 INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = _read("classifiers/intent_classification_retry.xml")
-SCENARIO_CLASSIFIER_PROMPT_FRAGMENT = _read("classifiers/scenario_classifier.xml")
+SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read("classifiers/scenario_classifier_system.xml", strip=True)
+SCENARIO_CLASSIFIER_USER_FRAGMENT = _read("classifiers/scenario_classifier_user.xml", strip=True)
 CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT = _read("classifiers/criticality_assessment.xml")
 
 
@@ -90,7 +91,8 @@ __all__ = [
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
     "QUIZ_RESPONSE_GUIDE_FRAGMENT",
     "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",
-    "SCENARIO_CLASSIFIER_PROMPT_FRAGMENT",
+    "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
+    "SCENARIO_CLASSIFIER_USER_FRAGMENT",
     "SIMPLE_SYSTEM_PROMPT_FRAGMENT",
     "STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT",
 ]
