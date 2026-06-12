@@ -254,12 +254,12 @@ lint: sync
 		paths="src/"; \
 		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff check $$paths || failed=1 && cd ../..; \
+		cd packages/$$pkg && uv run ruff format --check $$paths && uv run ruff check $$paths || failed=1 && cd ../..; \
 	done; \
 	echo "Linting root directories..."; \
 	for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff check $$dir || failed=1; \
+		uv run ruff format --check $$dir && uv run ruff check $$dir || failed=1; \
 	done; \
 	test $$failed -eq 0 && echo "Done" || exit 1
 
@@ -267,27 +267,27 @@ lint-src: sync
 	@echo "Linting src/ only..."
 	@for pkg in $(PACKAGES); do \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff check src/ && cd ../..; \
+		cd packages/$$pkg && uv run ruff format --check src/ && uv run ruff check src/ && cd ../..; \
 	done
 	@echo "Linting root directories..."
 	@for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff check $$dir; \
+		uv run ruff format --check $$dir && uv run ruff check $$dir; \
 	done
 	@echo "Done"
 
 lint-fix: sync
-	@echo "Fixing linting issues..."
+	@echo "Fixing linting and formatting issues..."
 	@for pkg in $(PACKAGES); do \
 		paths="src/"; \
 		test -d "packages/$$pkg/tests" && paths="src/ tests/"; \
 		echo "  $$pkg"; \
-		cd packages/$$pkg && uv run ruff check --fix $$paths && cd ../..; \
+		cd packages/$$pkg && uv run ruff format $$paths && uv run ruff check --fix $$paths && cd ../..; \
 	done
 	@echo "Fixing root directories..."
 	@for dir in $(ROOT_LINT_DIRS); do \
 		echo "  $$dir"; \
-		uv run ruff check --fix $$dir; \
+		uv run ruff format $$dir && uv run ruff check --fix $$dir; \
 	done
 	@echo "Done"
 
