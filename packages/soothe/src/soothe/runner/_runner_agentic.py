@@ -1,4 +1,4 @@
-"""Layer 2 Agentic Loop Runner (RFC-0008).
+"""Layer 2 StrangeLoop Runner (RFC-0008).
 
 Implements Plan → Execute loop using StrangeLoop (RFC-201).
 """
@@ -13,12 +13,12 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.events import (
-    AgenticLoopCompletedEvent,
-    AgenticLoopStartedEvent,
-    AgenticPlanDecisionEvent,
-    AgenticStepCompletedEvent,
-    AgenticStepQueuedEvent,
-    AgenticStepStartedEvent,
+    StrangeLoopCompletedEvent,
+    StrangeLoopPlanDecisionEvent,
+    StrangeLoopStartedEvent,
+    StrangeLoopStepCompletedEvent,
+    StrangeLoopStepQueuedEvent,
+    StrangeLoopStepStartedEvent,
 )
 from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.clarification.events import (
@@ -439,7 +439,7 @@ class AgenticMixin:
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
         yield _custom(
-            AgenticLoopStartedEvent(
+            StrangeLoopStartedEvent(
                 thread_id=tid,
                 goal=display_goal,
                 max_iterations=max_iterations,
@@ -553,7 +553,7 @@ class AgenticMixin:
                         event_data.get("execution_mode", ""),
                     )
                     yield _custom(
-                        AgenticPlanDecisionEvent(
+                        StrangeLoopPlanDecisionEvent(
                             iteration=int(event_data.get("iteration", 0)),
                             steps=list(event_data.get("steps") or []),
                             execution_mode=str(event_data.get("execution_mode", "")),
@@ -563,7 +563,7 @@ class AgenticMixin:
                 elif event_type == "step_started":
                     # Level 2: Step description (clip — Reason can embed a full brief; avoids TUI duplicate wall)
                     yield _custom(
-                        AgenticStepStartedEvent(
+                        StrangeLoopStepStartedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             description=_clip_agentic_step_description(event_data["description"]),
                         ).to_dict()
@@ -571,7 +571,7 @@ class AgenticMixin:
 
                 elif event_type == "step_queued":
                     yield _custom(
-                        AgenticStepQueuedEvent(
+                        StrangeLoopStepQueuedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             description=_clip_agentic_step_description(event_data["description"]),
                         ).to_dict()
@@ -588,7 +588,7 @@ class AgenticMixin:
 
                     clarification = event_data.get("clarification")
                     yield _custom(
-                        AgenticStepCompletedEvent(
+                        StrangeLoopStepCompletedEvent(
                             step_id=str(event_data.get("step_id", "")),
                             success=success,
                             summary=summary[:100],
@@ -733,7 +733,7 @@ class AgenticMixin:
                         )
 
                     yield _custom(
-                        AgenticLoopCompletedEvent(
+                        StrangeLoopCompletedEvent(
                             thread_id=tid,
                             status=final_result.status,
                             goal_progress=final_result.goal_progress,

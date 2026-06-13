@@ -296,15 +296,6 @@ class StrangeLoopContextCompactionEvent(LifecycleEvent):
     summary_preview: str | None = None
 
 
-AgenticLoopStartedEvent = StrangeLoopStartedEvent
-AgenticLoopCompletedEvent = StrangeLoopCompletedEvent
-AgenticPlanDecisionEvent = StrangeLoopPlanDecisionEvent
-AgenticStepStartedEvent = StrangeLoopStepStartedEvent
-AgenticStepQueuedEvent = StrangeLoopStepQueuedEvent
-AgenticStepCompletedEvent = StrangeLoopStepCompletedEvent
-ContextCompactionEvent = StrangeLoopContextCompactionEvent
-
-
 # ---------------------------------------------------------------------------
 # Protocol events
 # ---------------------------------------------------------------------------
@@ -683,52 +674,52 @@ _reg(
     summary_template="Daemon heartbeat: state={state}",
 )
 
-# -- Agentic Loop (RFC-0008) -------------------------------------------------
+# -- Strange Loop (RFC-0008) -------------------------------------------------
 _reg(
     STRANGE_LOOP_STARTED,
-    AgenticLoopStartedEvent,
+    StrangeLoopStartedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="{goal}",
     priority=EventPriority.HIGH,
 )
 _reg(
     STRANGE_LOOP_COMPLETED,
-    AgenticLoopCompletedEvent,
+    StrangeLoopCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Done: {completion_summary}",
     priority=EventPriority.HIGH,
 )
 _reg(
     STRANGE_LOOP_PLAN_DECISION,
-    AgenticPlanDecisionEvent,
+    StrangeLoopPlanDecisionEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Act plan · {execution_mode}",
     priority=EventPriority.HIGH,
 )
 _reg(
     STRANGE_LOOP_STEP_STARTED,
-    AgenticStepStartedEvent,
+    StrangeLoopStepStartedEvent,
     verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
     priority=EventPriority.HIGH,
 )
 _reg(
     STRANGE_LOOP_STEP_QUEUED,
-    AgenticStepQueuedEvent,
+    StrangeLoopStepQueuedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Queued: {description}",
     priority=EventPriority.HIGH,
 )
 _reg(
     STRANGE_LOOP_STEP_COMPLETED,
-    AgenticStepCompletedEvent,
+    StrangeLoopStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
     priority=EventPriority.HIGH,
 )
 _reg(
     STRANGE_LOOP_CONTEXT_COMPACTED,
-    ContextCompactionEvent,
+    StrangeLoopContextCompactionEvent,
     verbosity=VerbosityTier.INTERNAL,
     summary_template="Context compacted: {tokens_before} → {tokens_after} tokens",
     priority=EventPriority.NORMAL,

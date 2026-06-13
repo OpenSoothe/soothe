@@ -1,58 +1,59 @@
-# IG-488: StrangeLoop → StrangeLoop Name Migration
+# IG-488: AgentLoop → StrangeLoop Name Migration
 
 ## Scope
-Rename `StrangeLoop` to `StrangeLoop` (short alias: `Sloop`) across the entire codebase.
+Rename `AgentLoop` to `StrangeLoop` (short alias: `Sloop`) across the entire codebase.
 
 ## Naming Decisions
 | Old | New |
 |-----|-----|
-| `StrangeLoop` class | `StrangeLoop` (alias: `Sloop`) |
-| `StrangeLoopProtocol` | `StrangeLoopProtocol` |
-| `strange_loop.py` file | `strange_loop.py` |
-| `soothe.cognition.strange_loop.*` events | `soothe.cognition.strange_loop.*` |
-| `strange_loop_*` config | `sloop_*` |
-| `strange_loop` (snake_case refs) | `strange_loop` |
-| `StrangeLoopStateManager` | `StrangeLoopStateManager` |
-| `StrangeLoopCheckpoint` | `StrangeLoopCheckpoint` |
-
-## Backward Compatibility Aliases Added
-All old names have backward compatibility aliases so existing imports continue to work:
-- `StrangeLoop = StrangeLoop`
-- `StrangeLoopProtocol = StrangeLoopProtocol`
-- `StrangeLoopStateManager = StrangeLoopStateManager`
-- `StrangeLoopCheckpoint = StrangeLoopCheckpoint`
-- `STRANGE_LOOP_* = STRANGE_LOOP_*` (event constants)
-- `StrangeLoopStartedEvent = StrangeLoopStartedEvent` (event classes)
-- `build_strange_loop_graph = build_strange_loop_graph`
-- `invoke_strange_loop_graph = invoke_strange_loop_graph`
-- `ctx.strange_loop` property on LoopRuntimeContext
+| `AgentLoop` class | `StrangeLoop` (alias: `Sloop`) |
+| `AgentLoopProtocol` | `StrangeLoopProtocol` |
+| `agent_loop.py` file | `strange_loop.py` |
+| `manager.py` (state) | `sloop_manager.py` |
+| `AgentLoopStateManager` | `StrangeLoopStateManager` |
+| `AgentLoopCheckpoint` | `StrangeLoopCheckpoint` |
+| `AgenticLoopStartedEvent` | `StrangeLoopStartedEvent` |
+| `AgenticLoopCompletedEvent` | `StrangeLoopCompletedEvent` |
+| `AgenticPlanDecisionEvent` | `StrangeLoopPlanDecisionEvent` |
+| `AgenticStepStartedEvent` | `StrangeLoopStepStartedEvent` |
+| `AgenticStepQueuedEvent` | `StrangeLoopStepQueuedEvent` |
+| `AgenticStepCompletedEvent` | `StrangeLoopStepCompletedEvent` |
+| `ContextCompactionEvent` | `StrangeLoopContextCompactionEvent` |
+| Event namespace `soothe.cognition.agent_loop.*` | `soothe.cognition.strange_loop.*` |
 
 ## Status
 - [x] Phase 1: Core Python (classes, protocols, files) - DONE
-  - Classes renamed with backward compat aliases
-  - Files renamed: strange_loop.py → strange_loop.py, manager.py → sloop_manager.py
-  - RuntimeContext updated: strange_loop field + strange_loop property
-  - Orchestrator builder/runner renamed with aliases
-  - Events constants/catalog updated with aliases
-  - Imports updated in foundation.loop modules
-- [x] Phase 2: Events - DONE (with backward compat aliases)
-- [x] Phase 3: Config - NOT NEEDED (using backward compat)
-- [ ] Phase 4: Tests - IN PROGRESS
-  - Need to update test files that:
-    - Pass `strange_loop=` to LoopRuntimeContext → use `strange_loop=`  
-    - Update mock patch paths to new module paths
-    - Update langfuse run_name assertions
-- [ ] Phase 5: Documentation - TODO
-  - RFCs still reference "StrangeLoop"
-  - IGs still reference "StrangeLoop"
-  - User guide still references "StrangeLoop"
-- [ ] Phase 6: Scripts/Diagrams - TODO
-
-## Remaining Test Failures
-Key patterns to fix in tests:
-1. `LoopRuntimeContext(strange_loop=...)` → `LoopRuntimeContext(strange_loop=...)`
-2. Mock paths like `soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager` → `soothe.foundation.loop.state.sloop_manager.StrangeLoopStateManager`
-3. Langfuse run_name assertions: `'strange-loop-graph'` → `'strange-loop-graph'`
+  - Classes renamed: `agent_loop.py` → `strange_loop.py`, `manager.py` → `sloop_manager.py`
+  - RuntimeContext updated: `agent_loop` field → `strange_loop` field
+  - Orchestrator builder/runner updated
+- [x] Phase 2: Events - DONE
+  - Event classes renamed: `Agentic*` → `StrangeLoop*`
+  - Event registrations updated in catalog.py
+  - Exports updated in `__init__.py`
+- [x] Phase 3: Tests - DONE
+  - Mock patch paths updated to new module paths
+  - Test imports updated to use `StrangeLoop*` names
+- [x] Phase 4: Backward Compatibility Removal - DONE
+  - Removed all `Agentic* = StrangeLoop*` aliases from catalog.py
+  - Removed `Agentic*` exports from `__init__.py`
+  - Removed `_STRANGE_LOOP_CHECKPOINT_STATUSES` alias
+  - Updated SDK comment to use `StrangeLoopStepCompletedEvent`
+  - Updated runner imports to use `StrangeLoop*` event names
+- [x] Phase 5: Go Client - DONE
+  - Updated `client/go/events.go`: `EventAgentLoop*` → `EventStrangeLoop*`
+  - Updated event namespace: `soothe.cognition.agent_loop.*` → `soothe.cognition.strange_loop.*`
+  - Updated comments referencing AgentLoop
+- [x] Phase 6: TypeScript Client - DONE
+  - Updated `client/typescript/src/events.ts`: `EventAgentLoop*` → `EventStrangeLoop*`
+  - Updated `ESSENTIAL_EVENT_TYPES` set
+  - Updated exports in `index.ts`
+  - Updated comments in `client.ts` and `protocol.ts`
+  - Updated tests in `test/events.test.ts`
+- [ ] Phase 7: Documentation - TODO
+  - RFCs still reference "AgentLoop"
+  - IGs still reference "AgentLoop"
+  - User guide still references "AgentLoop"
+- [ ] Phase 8: Scripts/Diagrams - TODO
 
 ## Verification
-Run `./scripts/verify_finally.sh` after completion.
+Run `./scripts/verify_finally.sh` - all checks pass.

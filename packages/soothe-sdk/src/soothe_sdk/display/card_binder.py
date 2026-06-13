@@ -494,7 +494,7 @@ def collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageD
                 # Mirror live in-place mutation of CognitionStepMessage:
                 # transition phase/duration/tools to the later event but
                 # preserve the description (the schema for
-                # AgenticStepCompletedEvent omits ``description`` — only
+                # StrangeLoopStepCompletedEvent omits ``description`` — only
                 # ``step.started`` carries it).
                 cards[existing] = merge_step_progress(cards[existing], msg_data)
                 continue

@@ -32,15 +32,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 
 from .catalog import (
     REGISTRY,
-    AgenticLoopCompletedEvent,
-    # Agentic loop events
-    AgenticLoopStartedEvent,
-    AgenticPlanDecisionEvent,
-    AgenticStepCompletedEvent,
-    AgenticStepQueuedEvent,
-    AgenticStepStartedEvent,
     CheckpointSavedEvent,
-    ContextCompactionEvent,
     DaemonHeartbeatEvent,
     EventMeta,
     EventPriority,
@@ -68,6 +60,7 @@ from .catalog import (
     PolicyCheckedEvent,
     PolicyDeniedEvent,
     RecoveryResumedEvent,
+    # StrangeLoop events
     StrangeLoopCompletedEvent,
     StrangeLoopContextCompactionEvent,
     StrangeLoopPlanDecisionEvent,
@@ -234,20 +227,15 @@ __all__ = [
     "CheckpointSavedEvent",
     "RecoveryResumedEvent",
     "DaemonHeartbeatEvent",
-    "AgenticLoopStartedEvent",
-    "AgenticLoopCompletedEvent",
-    "AgenticPlanDecisionEvent",
-    "StrangeLoopPlanDecisionEvent",
+    # StrangeLoop events
     "StrangeLoopStartedEvent",
     "StrangeLoopCompletedEvent",
+    "StrangeLoopPlanDecisionEvent",
     "StrangeLoopStepStartedEvent",
     "StrangeLoopStepQueuedEvent",
     "StrangeLoopStepCompletedEvent",
     "StrangeLoopContextCompactionEvent",
-    "AgenticStepQueuedEvent",
-    "AgenticStepStartedEvent",
-    "AgenticStepCompletedEvent",
-    "ContextCompactionEvent",
+    # Other events
     "MemoryRecalledEvent",
     "MemoryStoredEvent",
     "PlanCreatedEvent",
@@ -267,9 +255,6 @@ __all__ = [
     "make_subagent_tool_started",
     "make_subagent_tool_completed",
     "make_subagent_tool_failed",
-    # RFC-411 event replay was removed when RFC-413 superseded it.
-    # ``soothe.core.events.replay`` is gone; the daemon's
-    # ``LoopCardManager`` owns reattach replay now.
 ]
 
 
