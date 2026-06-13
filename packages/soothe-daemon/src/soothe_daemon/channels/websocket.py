@@ -418,6 +418,13 @@ class WebSocketChannel(Channel):
                     message_str = await websocket.receive_text()
                 except WebSocketDisconnect:
                     break
+                except RuntimeError as e:
+                    # Starlette raises RuntimeError when WebSocket is not connected
+                    # (e.g., client disconnected before accept completed)
+                    if "not connected" in str(e).lower():
+                        logger.debug("[WS] Client disconnected before receive: %s", e)
+                        break
+                    raise
 
                 try:
                     msg_dict = decode_websocket_text(message_str)
