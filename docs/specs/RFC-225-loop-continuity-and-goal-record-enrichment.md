@@ -15,7 +15,7 @@
 
 ## 1. Abstract
 
-This RFC defines the loop as the single unit of conversational continuity in AgentLoop. Intent classification produces only `quiz | agentic`; whether an agentic query continues an in-flight conversation is derived structurally from the persisted checkpoint, not from the classifier. The per-goal record (`GoalExecutionRecord`) is enriched to retain the latest plan DAG, accumulated step results, and the evidence ledger, so the AgentLoop checkpoint becomes the durable orchestration log across all goals within a loop. Status terminology is aligned with this model (`ready_for_next_goal` → `idle`; `continue_thread_mode` → `continue_loop_mode`).
+This RFC defines the loop as the single unit of conversational continuity in StrangeLoop. Intent classification produces only `quiz | agentic`; whether an agentic query continues an in-flight conversation is derived structurally from the persisted checkpoint, not from the classifier. The per-goal record (`GoalExecutionRecord`) is enriched to retain the latest plan DAG, accumulated step results, and the evidence ledger, so the StrangeLoop checkpoint becomes the durable orchestration log across all goals within a loop. Status terminology is aligned with this model (`ready_for_next_goal` → `idle`; `continue_thread_mode` → `continue_loop_mode`).
 
 ---
 
@@ -25,9 +25,9 @@ This RFC defines the loop as the single unit of conversational continuity in Age
 
 This RFC defines:
 
-- The runtime model for intent classification: a two-value `intent_type` (`quiz | agentic`) and the structural derivation of `continue_loop_mode` from the loaded checkpoint inside `AgentLoop`.
-- The orchestration ownership boundary between the AgentLoop checkpoint and the LangChain checkpointer.
-- The enriched layout of `GoalExecutionRecord` and the associated `AgentLoopCheckpoint` status vocabulary.
+- The runtime model for intent classification: a two-value `intent_type` (`quiz | agentic`) and the structural derivation of `continue_loop_mode` from the loaded checkpoint inside `StrangeLoop`.
+- The orchestration ownership boundary between the StrangeLoop checkpoint and the LangChain checkpointer.
+- The enriched layout of `GoalExecutionRecord` and the associated `StrangeLoopCheckpoint` status vocabulary.
 - The migration / compatibility contract for legacy persisted checkpoint values and stale intent strings.
 - The rename of `continue_thread_*` to `continue_loop_*` and `_THREAD_CONTINUATION_GUIDE` to `_LOOP_CONTINUATION_GUIDE`.
 
@@ -50,9 +50,9 @@ Commit `184bf0e1` collapsed the LLM intent classifier's structured output to `qu
 1. **Semantic mismatch.** Whether a query continues an existing conversation is structural — does the loop have prior goals? — not a property of the user's intent. The classifier should not encode loop topology.
 2. **Functional regression.** `GoalEngine` is recreated per request in solo mode (the daemon binds it only in autopilot flows), so `list_goals()` is always empty and `continue_thread` is always `False`. The entire same-loop continuation pathway is dead code in non-autopilot use.
 
-Meanwhile, `AgentLoopCheckpoint` already persists `goal_history` across requests within the same `loop_id` (PostgreSQL or SQLite), so the correct signal exists — it is being read from the wrong place. And while the per-goal record (`GoalExecutionRecord`) holds the conversation ledger (`loop_messages`), it does not retain the plan DAG, per-step results, or evidence — so cross-goal context within a loop must be reconstructed from the conversation alone, and post-mortem inspection of completed goals has no structured artifact.
+Meanwhile, `StrangeLoopCheckpoint` already persists `goal_history` across requests within the same `loop_id` (PostgreSQL or SQLite), so the correct signal exists — it is being read from the wrong place. And while the per-goal record (`GoalExecutionRecord`) holds the conversation ledger (`loop_messages`), it does not retain the plan DAG, per-step results, or evidence — so cross-goal context within a loop must be reconstructed from the conversation alone, and post-mortem inspection of completed goals has no structured artifact.
 
-This RFC corrects the structural derivation, removes dead code, enriches the per-goal record to make the AgentLoop checkpoint the canonical orchestration log, and renames status / flag identifiers so the loop-centric model is honestly named in the source.
+This RFC corrects the structural derivation, removes dead code, enriches the per-goal record to make the StrangeLoop checkpoint the canonical orchestration log, and renames status / flag identifiers so the loop-centric model is honestly named in the source.
 
 ---
 
@@ -60,8 +60,8 @@ This RFC corrects the structural derivation, removes dead code, enriches the per
 
 1. **A `loop_id` is the unit of continuity.** Within one loop, every agentic query continues on the main thread. Loop boundaries (`/clear`, fresh start) are the only events that reset goal context.
 2. **Intent classification answers one question.** Quiz vs. agentic. Structural state (does the loop have prior goals?) is derived, never classified.
-3. **Single source of truth for "continue".** One flag, derived once in `AgentLoop` from the loaded checkpoint, flows where needed. No parallel state in `LoopState`.
-4. **AgentLoop checkpoint owns orchestration history; LangChain checkpointer owns message state.** A loop has one main thread (`main_thread_id = loop_id`) plus any forked threads from `ThreadForkManager` (RFC-223). LangChain checkpoints exist per `thread_id` for raw messages and tool calls. AgentLoop checkpoint references thread_ids but does not duplicate message content.
+3. **Single source of truth for "continue".** One flag, derived once in `StrangeLoop` from the loaded checkpoint, flows where needed. No parallel state in `LoopState`.
+4. **StrangeLoop checkpoint owns orchestration history; LangChain checkpointer owns message state.** A loop has one main thread (`main_thread_id = loop_id`) plus any forked threads from `ThreadForkManager` (RFC-223). LangChain checkpoints exist per `thread_id` for raw messages and tool calls. StrangeLoop checkpoint references thread_ids but does not duplicate message content.
 5. **The per-goal record is the durable orchestration log.** Each `GoalExecutionRecord` retains the latest plan DAG, accumulated step results, and the evidence ledger — sufficient for resume, audit, and continuation context.
 
 ---
@@ -89,7 +89,7 @@ Removed:
 
 ### 5.2 Structural Derivation of `continue_loop_mode`
 
-The agentic runner (`core/runner/_runner_agentic.py`) MUST NOT consult `GoalEngine` to determine continuation. `AgentLoop.run_with_progress()` MUST derive `continue_loop_mode` exactly once, immediately after `state_manager.load()` and before any branch-specific checkpoint mutation:
+The agentic runner (`core/runner/_runner_agentic.py`) MUST NOT consult `GoalEngine` to determine continuation. `StrangeLoop.run_with_progress()` MUST derive `continue_loop_mode` exactly once, immediately after `state_manager.load()` and before any branch-specific checkpoint mutation:
 
 ```
 continue_loop_mode :=
@@ -113,12 +113,12 @@ One `loop_id` ↔ one main thread (`main_thread_id = loop_id`) ↔ many short-li
   - `main_thread_id` (= loop_id): CoreAgent orchestration thread (Plan node, single-step Execute).
   - Forked `thread_id`s: per-step branches that inherit predecessor history.
   Untouched by this RFC.
-- **AgentLoop checkpoint** — keyed by `loop_id` only. Holds the orchestration ledger: goals, plans, step outcomes, evidence, and the orchestration Human-AI message pairs (`loop_messages`). References thread_ids in `thread_ids` and `GoalExecutionRecord.thread_id` but does not duplicate message-level content.
+- **StrangeLoop checkpoint** — keyed by `loop_id` only. Holds the orchestration ledger: goals, plans, step outcomes, evidence, and the orchestration Human-AI message pairs (`loop_messages`). References thread_ids in `thread_ids` and `GoalExecutionRecord.thread_id` but does not duplicate message-level content.
 
 ### 5.4 State Flow
 
 ```
-Runner                  AgentLoop                              Executor / Middleware
+Runner                  StrangeLoop                              Executor / Middleware
 ─────────────           ────────────────────                   ───────────────────────────
 classify_intent()       load checkpoint
 returns quiz|agentic    derive continue_loop_mode (once)
@@ -143,7 +143,7 @@ On goal completion, transient `LoopState` fields (`current_decision.plan_result`
 
 ## 6. Data Model
 
-### 6.1 `AgentLoopCheckpoint`
+### 6.1 `StrangeLoopCheckpoint`
 
 No new top-level fields. Two changes:
 
@@ -151,7 +151,7 @@ No new top-level fields. Two changes:
 2. `schema_version`: bumped `"3.1"` → `"3.2"` to signal the per-goal enrichment.
 
 ```
-AgentLoopCheckpoint:
+StrangeLoopCheckpoint:
   # Identity
   loop_id: str
   thread_ids: list[str]
@@ -287,16 +287,16 @@ The following constructs MUST be removed:
 | Item | Reason |
 |---|---|
 | `LoopState.continue_thread: bool` (`core/loop/state/schemas.py`) | Written but never read; pure dead field. |
-| The `state.continue_thread = True` write block in `AgentLoop` | Follows from dropping the field. |
+| The `state.continue_thread = True` write block in `StrangeLoop` | Follows from dropping the field. |
 | `IntentHint.CONTINUE_THREAD`, `IntentHint.NEW_GOAL` enum values | Both bypass paths unreachable; `parse_intent_hint()` already returns `None` (with warning) on unknown values, so external clients sending these strings degrade gracefully. |
 | `intent_type` string in LangGraph state (`executor._execute_graph_input`, middleware scenario branches) | Replaced by `continue_loop_mode: bool` flowing through state. |
-| `GoalEngine.list_goals()` structural check in `core/runner/_runner_agentic.py` | Broken in solo mode; replaced by checkpoint-based derivation in `AgentLoop`. |
+| `GoalEngine.list_goals()` structural check in `core/runner/_runner_agentic.py` | Broken in solo mode; replaced by checkpoint-based derivation in `StrangeLoop`. |
 
 The following constructs are retained as the single source of truth:
 
 | Item | Role |
 |---|---|
-| `LoopRuntimeContext.continue_loop_mode: bool` | Canonical flag. Derived once in `AgentLoop`; passed to `plan_assess` and injected into graph state. |
+| `LoopRuntimeContext.continue_loop_mode: bool` | Canonical flag. Derived once in `StrangeLoop`; passed to `plan_assess` and injected into graph state. |
 | `continue_loop_plan_bootstrap_allowed()` | Plan-bootstrap gating; takes the bool. |
 | `_LOOP_CONTINUATION_GUIDE` | System-prompt section; middleware injects when `state["continue_loop_mode"]` is `True`. |
 | `seed_loop_ledger_from_prior_goal()` | Already runs unconditionally for any same-loop new goal. |
@@ -307,7 +307,7 @@ The following constructs are retained as the single source of truth:
 
 This is a clean cut. No backward-compatibility shims are introduced.
 
-- **`AgentLoopCheckpoint.status`** rename: persisted rows that hold the legacy literal `"ready_for_next_goal"` will fail Pydantic validation on load. Operators MUST start a fresh checkpoint (`/clear` mints a new `loop_id`) or migrate offline. The validator set `_AGENT_LOOP_CHECKPOINT_STATUSES` lists only the new vocabulary.
+- **`StrangeLoopCheckpoint.status`** rename: persisted rows that hold the legacy literal `"ready_for_next_goal"` will fail Pydantic validation on load. Operators MUST start a fresh checkpoint (`/clear` mints a new `loop_id`) or migrate offline. The validator set `_STRANGE_LOOP_CHECKPOINT_STATUSES` lists only the new vocabulary.
 - **`GoalExecutionRecord`** new fields default to `None` / empty collection — old rows that lack the `extras_jsonb` column deserialize to empty enrichment; this is field-default behavior, not a compat shim.
 - **External clients** sending `intent_hint=continue_thread` / `new_goal`: `parse_intent_hint()` already returns `None` with a `logger.warning` on unknown values, so the daemon protocol degrades to "no hint" — but the values are no longer documented as supported.
 - **`schema_version`** bump `"3.1"` → `"3.2"` is informational metadata.
@@ -324,7 +324,7 @@ TUI: mints fresh loop_id = L1
 User: "list large files in repo"
 Runner:
   classify_intent("list large files...") → IntentClassification(intent_type="agentic", ...)
-AgentLoop.run_with_progress(loop_id=L1):
+StrangeLoop.run_with_progress(loop_id=L1):
   checkpoint = state_manager.load()           # None
   continue_loop_mode = False                  # no checkpoint, no history
   state.intent = IntentClassification(...)    # no continue_thread field anywhere
@@ -340,7 +340,7 @@ AgentLoop.run_with_progress(loop_id=L1):
 User (same loop L1): "summarize them"
 Runner:
   classify_intent("summarize them") → IntentClassification(intent_type="agentic", ...)
-AgentLoop.run_with_progress(loop_id=L1):
+StrangeLoop.run_with_progress(loop_id=L1):
   checkpoint = state_manager.load()
   # checkpoint.status == "idle", goal_history >= 1
   continue_loop_mode = True
@@ -356,13 +356,13 @@ AgentLoop.run_with_progress(loop_id=L1):
 ## 11. Relationship to Other RFCs
 
 - **RFC-201 (Agentic Goal Execution Loop)** — This RFC tightens the runtime model of intent and continuation; the plan / execute control flow defined by RFC-201 is unchanged.
-- **RFC-214 (AgentLoop Loop-Message Surface)** — `loop_messages` semantics in `GoalExecutionRecord` are preserved; this RFC adds adjacent fields (plan, step_results, evidence_ledger).
-- **RFC-216 (AgentLoop Multi-Thread Lifecycle)** — Status vocabulary inherited from RFC-216 is updated (`ready_for_next_goal` → `idle`). The `loop_id`-centric continuity contract is reaffirmed.
+- **RFC-214 (StrangeLoop Loop-Message Surface)** — `loop_messages` semantics in `GoalExecutionRecord` are preserved; this RFC adds adjacent fields (plan, step_results, evidence_ledger).
+- **RFC-216 (StrangeLoop Multi-Thread Lifecycle)** — Status vocabulary inherited from RFC-216 is updated (`ready_for_next_goal` → `idle`). The `loop_id`-centric continuity contract is reaffirmed.
 - **RFC-217 (Goal Context Management)** — Unchanged. `thread_switch_pending` and `GoalContextManager` continue to operate as specified.
-- **RFC-218 (AgentLoop Checkpoint Tree Architecture)** — Schema layout follows RFC-218 conventions; the schema bump to `3.2` is recorded here.
-- **RFC-220 (LangGraph AgentLoop Orchestrator)** — The Plan / Execute orchestration nodes consume the new `continue_loop_mode` state key; node graph topology is unchanged.
+- **RFC-218 (StrangeLoop Checkpoint Tree Architecture)** — Schema layout follows RFC-218 conventions; the schema bump to `3.2` is recorded here.
+- **RFC-220 (LangGraph StrangeLoop Orchestrator)** — The Plan / Execute orchestration nodes consume the new `continue_loop_mode` state key; node graph topology is unchanged.
 - **RFC-222 (Autopilot Goal Engine Architecture)** — Out of scope; autopilot's `GoalEngine` usage is unaffected. This RFC only removes a broken solo-mode consumer of `GoalEngine` inside the agentic runner.
-- **RFC-223 (Thread Inheritance with Checkpoint Forking)** — Authoritative for the LangChain thread model. This RFC reaffirms the boundary between AgentLoop checkpoint and LangChain checkpointer.
+- **RFC-223 (Thread Inheritance with Checkpoint Forking)** — Authoritative for the LangChain thread model. This RFC reaffirms the boundary between StrangeLoop checkpoint and LangChain checkpointer.
 - **RFC-224 (Automatic Context Window Management)** — Independent; context-window policies operate per LangChain thread and are unaffected by this RFC.
 
 ---
@@ -377,6 +377,6 @@ AgentLoop.run_with_progress(loop_id=L1):
 
 ## 13. Conclusion
 
-A loop is a conversation. Within one loop, every agentic query is, by structure, a continuation of the loop's prior work; only loop boundaries reset goal context. Pushing this truth out of the intent classifier and into the checkpoint removes a class of broken indirection (solo-mode `GoalEngine` reads), eliminates dead state (`LoopState.continue_thread`), and aligns the source vocabulary (`continue_loop_mode`, `idle`) with the design. Enriching the per-goal record to carry the plan DAG, step results, and evidence makes the AgentLoop checkpoint the canonical orchestration log — durable, recoverable, and inspectable — while leaving the LangChain checkpointer's message-level ownership undisturbed.
+A loop is a conversation. Within one loop, every agentic query is, by structure, a continuation of the loop's prior work; only loop boundaries reset goal context. Pushing this truth out of the intent classifier and into the checkpoint removes a class of broken indirection (solo-mode `GoalEngine` reads), eliminates dead state (`LoopState.continue_thread`), and aligns the source vocabulary (`continue_loop_mode`, `idle`) with the design. Enriching the per-goal record to carry the plan DAG, step results, and evidence makes the StrangeLoop checkpoint the canonical orchestration log — durable, recoverable, and inspectable — while leaving the LangChain checkpointer's message-level ownership undisturbed.
 
 > Classify intent. Derive continuity. Persist the orchestration. Let the checkpointer keep the conversation.

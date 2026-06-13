@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
+from soothe.foundation.loop.state.persistence.manager import StrangeLoopCheckpointPersistenceManager
 from soothe.foundation.workspace import (
     cleanup_anonymous_workspaces,
     cleanup_legacy_per_loop_workspaces,
@@ -108,7 +108,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._handle_sigint_shutdown = handle_sigint_shutdown
 
         # Shared persistence manager (avoids per-RPC pool creation/teardown)
-        self._persistence_manager = AgentLoopCheckpointPersistenceManager(config=self._config)
+        self._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=self._config)
 
         # Resolve daemon workspace (ephemeral TEMP unless SOOTHE_WORKSPACE set)
         self._daemon_workspace = resolve_daemon_workspace()

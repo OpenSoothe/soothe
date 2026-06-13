@@ -13,7 +13,7 @@
 
 ## Abstract
 
-This RFC defines a checkpoint-based thread inheritance mechanism for step execution in AgentLoop. Steps with singleton dependencies fork from their predecessor's checkpoint to inherit full conversation history (tool calls, messages, artifacts). Steps with multiple dependencies fork from the main thread and use message injection for predecessor context. This design achieves two goals: (1) main thread ID alignment with loop_id, and (2) efficient history inheritance via LangGraph's `acopy_thread()` API instead of deep-copying messages.
+This RFC defines a checkpoint-based thread inheritance mechanism for step execution in StrangeLoop. Steps with singleton dependencies fork from their predecessor's checkpoint to inherit full conversation history (tool calls, messages, artifacts). Steps with multiple dependencies fork from the main thread and use message injection for predecessor context. This design achieves two goals: (1) main thread ID alignment with loop_id, and (2) efficient history inheritance via LangGraph's `acopy_thread()` API instead of deep-copying messages.
 
 ---
 
@@ -422,7 +422,7 @@ Step D (depends on B + C):
 - Integration tests
 
 ### Phase 3: Thread ID Alignment
-- Ensure main thread_id equals loop_id throughout AgentLoop
+- Ensure main thread_id equals loop_id throughout StrangeLoop
 - Verify existing tests pass
 
 ### Phase 4: Cleanup
@@ -438,16 +438,16 @@ Step D (depends on B + C):
 | Checkpoint storage bloat | Fork cleanup after goal; limit depth if needed |
 | Race condition in parallel fork | `acopy_thread` atomic; isolated writes |
 | Existing tests fail | Thread naming internal; verify behavior not IDs |
-| Solo mode compatibility | ThreadForkManager only in AgentLoop; solo unchanged |
+| Solo mode compatibility | ThreadForkManager only in StrangeLoop; solo unchanged |
 
 ---
 
 ## References
 
-- RFC-201: AgentLoop Plan-Execute Loop Architecture
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture
 - RFC-214: Unified message ledger (`predecessor_execute_messages_for_branch`)
-- RFC-216: AgentLoop Multi-Thread Lifecycle
-- RFC-218: AgentLoop Checkpoint Tree Architecture
+- RFC-216: StrangeLoop Multi-Thread Lifecycle
+- RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-222: Autopilot and Goal Engine Architecture (loop_id, loop pool)
 - RFC-452: Unified Thread Management Architecture
 - LangGraph Checkpointer API: `acopy_thread(source_thread_id, target_thread_id)`

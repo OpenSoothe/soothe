@@ -325,7 +325,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
 
 
 def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
-    """AgentLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
+    """StrangeLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(

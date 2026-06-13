@@ -168,7 +168,7 @@ Claude Code has a mature MCP system (~5K LOC) with patterns directly applicable:
 
 #### Flow 6: Iteration boundary snapshot
 
-1. `AgentLoop` at iteration boundary copies `state["mcp_activation"]` into `LoopState` fields.
+1. `StrangeLoop` at iteration boundary copies `state["mcp_activation"]` into `LoopState` fields.
 2. On resume, rehydrates `state["mcp_activation"]` from `LoopState`.
 
 #### Flow 7: list_changed notification
@@ -274,7 +274,7 @@ class ProgressiveMCPConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Fraction of AgentLoopConfig.context_window_limit (chars, not tokens) "
+            "Fraction of StrangeLoopConfig.context_window_limit (chars, not tokens) "
             "available for the <AVAILABLE_MCP_TOOLS> listing per turn."
         ),
     )
@@ -458,7 +458,7 @@ class MCPToolSearchMiddleware(AgentMiddleware):
 
     async def abefore_agent(self, state, runtime) -> dict | None:
         """Lazy-init state['mcp_activation'] if missing; rehydrate from
-        LoopState snapshot if AgentLoop placed it there."""
+        LoopState snapshot if StrangeLoop placed it there."""
 
     # Does NOT use modify_request for the <AVAILABLE_MCP_TOOLS> block.
     # Delegates to SystemPromptOptimizationMiddleware._compose_mcp_tools_block(state).
@@ -651,7 +651,7 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | `middleware/_builder.py` | Add `mcp_registry` param; insert `MCPToolSearchMiddleware` at position 1c (after SkillActivation, before ToolConcurrency) |
 | `middleware/system_prompt_optimization.py` | Add `_compose_mcp_tools_block(state)` method; wire into `_get_prompt_for_complexity` |
 | `core/loop/state/schemas.py:860` | Add `sent_mcp_tool_names`, `invoked_mcp_tools`, `disabled_mcp_servers`, `cached_mcp_resources` |
-| `core/loop/engine/agent_loop.py` | Iteration-boundary snapshot/rehydrate of `state["mcp_activation"]` ↔ `LoopState` |
+| `core/loop/engine/strange_loop.py` | Iteration-boundary snapshot/rehydrate of `state["mcp_activation"]` ↔ `LoopState` |
 | `skills/catalog.py:127` | Merge `mcp_registry.prompts` into wire entries with `source="mcp"` |
 | `soothe_daemon/server.py` (near lines 87-116) | Add `self._mcp_registry`; call `initialize()` in `start()`, `shutdown()` on signal |
 | `soothe_daemon/health/checks/mcp_check.py` | Rewrite: validate `server.name`, check command/path, use `MCPRegistry.connection_status()` |
@@ -779,7 +779,7 @@ soothe daemon start --config /tmp/mcp-test.yml
 
 - [RFC-100: CoreAgent Runtime](RFC-100-coreagent-runtime.md)
 - [RFC-105: Progressive Skill Loading](RFC-105-progressive-skill-loading.md)
-- [RFC-214: AgentLoop Loop Message Surface](RFC-214-agentloop-loop-message-surface.md)
+- [RFC-214: StrangeLoop Loop Message Surface](RFC-214-agentloop-loop-message-surface.md)
 - [RFC-406: Policy Protocol Architecture](RFC-406-policy-protocol-architecture.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
 - [Design Draft: MCP Management](../drafts/2026-05-29-mcp-management-design.md)

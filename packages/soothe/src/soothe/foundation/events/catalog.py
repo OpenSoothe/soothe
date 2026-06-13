@@ -44,14 +44,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 
 # Import ALL event type constants from single source of truth
 from .constants import (
-    AGENT_LOOP_COMPLETED,
-    AGENT_LOOP_CONTEXT_COMPACTED,
-    AGENT_LOOP_PLAN_DECISION,
-    AGENT_LOOP_STARTED,
-    AGENT_LOOP_STEP_COMPLETED,
-    AGENT_LOOP_STEP_QUEUED,
-    AGENT_LOOP_STEP_STARTED,
-    # Cognition - AgentLoop
+    # Cognition - StrangeLoop
     AUTOPILOT_CHECKPOINT_SAVED,
     AUTOPILOT_DREAMING_ENTERED,
     AUTOPILOT_DREAMING_EXITED,
@@ -100,6 +93,13 @@ from .constants import (
     POLICY_DENIED,
     # Lifecycle - Recovery
     RECOVERY_RESUMED,
+    STRANGE_LOOP_COMPLETED,
+    STRANGE_LOOP_CONTEXT_COMPACTED,
+    STRANGE_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_STARTED,
+    STRANGE_LOOP_STEP_COMPLETED,
+    STRANGE_LOOP_STEP_QUEUED,
+    STRANGE_LOOP_STEP_STARTED,
 )
 
 # ---------------------------------------------------------------------------
@@ -198,19 +198,21 @@ class DaemonHeartbeatEvent(LifecycleEvent):
 
 
 # ---------------------------------------------------------------------------
-# Agentic loop events (RFC-0008)
+# StrangeLoop events (RFC-0008) - formerly Agentic loop events
 # ---------------------------------------------------------------------------
 
 
-class AgenticLoopStartedEvent(LifecycleEvent):
-    type: Literal["soothe.cognition.agent_loop.started"] = "soothe.cognition.agent_loop.started"
+class StrangeLoopStartedEvent(LifecycleEvent):
+    type: Literal["soothe.cognition.strange_loop.started"] = "soothe.cognition.strange_loop.started"
     thread_id: str
     goal: str
     max_iterations: int
 
 
-class AgenticLoopCompletedEvent(LifecycleEvent):
-    type: Literal["soothe.cognition.agent_loop.completed"] = "soothe.cognition.agent_loop.completed"
+class StrangeLoopCompletedEvent(LifecycleEvent):
+    type: Literal["soothe.cognition.strange_loop.completed"] = (
+        "soothe.cognition.strange_loop.completed"
+    )
     thread_id: str
     status: str
     goal_progress: Literal[
@@ -225,38 +227,38 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     total_steps: int = 0
 
 
-class AgenticPlanDecisionEvent(LifecycleEvent):
+class StrangeLoopPlanDecisionEvent(LifecycleEvent):
     """Planned act steps for this iteration (includes not-yet-ready steps)."""
 
-    type: Literal["soothe.cognition.agent_loop.plan.decision"] = (
-        "soothe.cognition.agent_loop.plan.decision"
+    type: Literal["soothe.cognition.strange_loop.plan.decision"] = (
+        "soothe.cognition.strange_loop.plan.decision"
     )
     iteration: int = 0
     steps: list[dict[str, Any]] = []  # noqa: RUF012
     execution_mode: str = ""
 
 
-class AgenticStepStartedEvent(LifecycleEvent):
+class StrangeLoopStepStartedEvent(LifecycleEvent):
     """Level 2: Step description in three-level tree (RFC-0020)."""
 
-    type: Literal["soothe.cognition.agent_loop.step.started"] = (
-        "soothe.cognition.agent_loop.step.started"
+    type: Literal["soothe.cognition.strange_loop.step.started"] = (
+        "soothe.cognition.strange_loop.step.started"
     )
     step_id: str
     description: str
 
 
-class AgenticStepQueuedEvent(LifecycleEvent):
+class StrangeLoopStepQueuedEvent(LifecycleEvent):
     """Ready step waiting for a later execute batch (concurrency cap)."""
 
-    type: Literal["soothe.cognition.agent_loop.step.queued"] = (
-        "soothe.cognition.agent_loop.step.queued"
+    type: Literal["soothe.cognition.strange_loop.step.queued"] = (
+        "soothe.cognition.strange_loop.step.queued"
     )
     step_id: str
     description: str
 
 
-class AgenticStepCompletedEvent(LifecycleEvent):
+class StrangeLoopStepCompletedEvent(LifecycleEvent):
     """Level 3: Step result in three-level tree (RFC-0020).
 
     For ``ask_user`` steps resolved by veritas / interactive relay, the optional
@@ -265,8 +267,8 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     veritas confidence so live UIs can render the Q&A on the step card.
     """
 
-    type: Literal["soothe.cognition.agent_loop.step.completed"] = (
-        "soothe.cognition.agent_loop.step.completed"
+    type: Literal["soothe.cognition.strange_loop.step.completed"] = (
+        "soothe.cognition.strange_loop.step.completed"
     )
     step_id: str
     success: bool
@@ -276,7 +278,7 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     clarification: dict[str, Any] | None = None
 
 
-class ContextCompactionEvent(LifecycleEvent):
+class StrangeLoopContextCompactionEvent(LifecycleEvent):
     """Context window compaction event (RFC-224).
 
     Emitted when automatic context compaction occurs to stay within
@@ -284,14 +286,23 @@ class ContextCompactionEvent(LifecycleEvent):
     for observability.
     """
 
-    type: Literal["soothe.cognition.agent_loop.context.compacted"] = (
-        "soothe.cognition.agent_loop.context.compacted"
+    type: Literal["soothe.cognition.strange_loop.context.compacted"] = (
+        "soothe.cognition.strange_loop.context.compacted"
     )
     thread_id: str
     tokens_before: int
     tokens_after: int
     messages_removed: int
     summary_preview: str | None = None
+
+
+AgenticLoopStartedEvent = StrangeLoopStartedEvent
+AgenticLoopCompletedEvent = StrangeLoopCompletedEvent
+AgenticPlanDecisionEvent = StrangeLoopPlanDecisionEvent
+AgenticStepStartedEvent = StrangeLoopStepStartedEvent
+AgenticStepQueuedEvent = StrangeLoopStepQueuedEvent
+AgenticStepCompletedEvent = StrangeLoopStepCompletedEvent
+ContextCompactionEvent = StrangeLoopContextCompactionEvent
 
 
 # ---------------------------------------------------------------------------
@@ -674,49 +685,49 @@ _reg(
 
 # -- Agentic Loop (RFC-0008) -------------------------------------------------
 _reg(
-    AGENT_LOOP_STARTED,
+    STRANGE_LOOP_STARTED,
     AgenticLoopStartedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="{goal}",
     priority=EventPriority.HIGH,
 )
 _reg(
-    AGENT_LOOP_COMPLETED,
+    STRANGE_LOOP_COMPLETED,
     AgenticLoopCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Done: {completion_summary}",
     priority=EventPriority.HIGH,
 )
 _reg(
-    AGENT_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_PLAN_DECISION,
     AgenticPlanDecisionEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Act plan · {execution_mode}",
     priority=EventPriority.HIGH,
 )
 _reg(
-    AGENT_LOOP_STEP_STARTED,
+    STRANGE_LOOP_STEP_STARTED,
     AgenticStepStartedEvent,
     verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
     priority=EventPriority.HIGH,
 )
 _reg(
-    AGENT_LOOP_STEP_QUEUED,
+    STRANGE_LOOP_STEP_QUEUED,
     AgenticStepQueuedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Queued: {description}",
     priority=EventPriority.HIGH,
 )
 _reg(
-    AGENT_LOOP_STEP_COMPLETED,
+    STRANGE_LOOP_STEP_COMPLETED,
     AgenticStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
     priority=EventPriority.HIGH,
 )
 _reg(
-    AGENT_LOOP_CONTEXT_COMPACTED,
+    STRANGE_LOOP_CONTEXT_COMPACTED,
     ContextCompactionEvent,
     verbosity=VerbosityTier.INTERNAL,
     summary_template="Context compacted: {tokens_before} → {tokens_after} tokens",

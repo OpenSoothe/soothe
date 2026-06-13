@@ -1,9 +1,9 @@
 """File Lock Middleware for Autopilot mode (RFC-222).
 
-Enforces file lock conflicts across AgentLoop workers in autopilot mode.
+Enforces file lock conflicts across StrangeLoop workers in autopilot mode.
 Intercepts file-mutating tools (``edit_file``, ``write_file``,
 ``delete_file``) via langchain's ``awrap_tool_call`` hook and checks
-``FileLockRegistry`` for conflicts with other AgentLoops.
+``FileLockRegistry`` for conflicts with other StrangeLoops.
 
 Behavior:
 - Same loop edits same file → ALLOW (lock holder)
@@ -73,7 +73,7 @@ class FileLockMiddleware(AgentMiddleware):
 
         Args:
             file_registry: Shared FileLockRegistry from GoalEngine.
-            loop_id: Current AgentLoop's ID.
+            loop_id: Current StrangeLoop's ID.
             goal_id: Current goal's ID.
             internal_bus: Optional InternalEventBus override (singleton by default).
         """

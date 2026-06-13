@@ -21,7 +21,8 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     1. plan_assess node (normal flow)
     2. bounded_evidence_gather (fresh-loop bypass, IG-476)
     """
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     plan_manager = ctx.plan_manager
     assessment = ctx.scratch.plan_assessment
@@ -36,8 +37,8 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     if assessment.assessment_reasoning and "Fresh-loop bypass" in assessment.assessment_reasoning:
         logger.info("[PlanGenerate] Using fresh-loop bypass assessment")
 
-    context = agent_loop._build_plan_context(state)
-    plan_result = await agent_loop.plan_phase.generate_from_assessment(
+    context = strange_loop._build_plan_context(state)
+    plan_result = await strange_loop.plan_phase.generate_from_assessment(
         goal=state.goal,
         state=state,
         context=context,

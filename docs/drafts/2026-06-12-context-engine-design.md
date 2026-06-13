@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-ContextEngine provides a unified interface for context management across Soothe's GoalEngine (goal-level) and AgentLoop (execution-level). It consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, project instructions — into a single module with clear ownership boundaries.
+ContextEngine provides a unified interface for context management across Soothe's GoalEngine (goal-level) and StrangeLoop (execution-level). It consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, project instructions — into a single module with clear ownership boundaries.
 
 ContextEngine is independent from `ContextProtocol` (RFC-000). ContextProtocol remains the orchestrator's cognitive knowledge ledger; ContextEngine focuses on unifying the execution-level context that currently lives across `GoalEngine._goals`, `PlanDAG`, `LoopWorkingMemory`, and `loop_messages`.
 
@@ -14,7 +14,7 @@ ContextEngine is independent from `ContextProtocol` (RFC-000). ContextProtocol r
 - Semantic memory: CLAUDE.md, AGENTS.md, MEMORY.md (static project instructions)
 - Unified Goal+Step DAG with lineage tracking
 - ContextBundle projection (structured data output for prompt templates)
-- Standalone module in `soothe.context` — no changes to existing GoalEngine or AgentLoop
+- Standalone module in `soothe.context` — no changes to existing GoalEngine or StrangeLoop
 
 ### Deferred (future phases)
 
@@ -22,7 +22,7 @@ ContextEngine is independent from `ContextProtocol` (RFC-000). ContextProtocol r
 - Episodic memory: distilled working history
 - RAG / vector store integration
 - Wiring ContextEngine into GoalEngine (goal management delegation)
-- Wiring ContextEngine into AgentLoop (plan/ledger replacement)
+- Wiring ContextEngine into StrangeLoop (plan/ledger replacement)
 - Postgres-backed persistence
 
 ## 3. Architecture
@@ -63,7 +63,7 @@ ContextEngine is independent from `ContextProtocol` (RFC-000). ContextProtocol r
 
 1. **Phase 1** (this design): Build `soothe.context` as standalone module with full functionality. Existing code unchanged.
 2. **Phase 2**: Wire ContextEngine into GoalEngine — goal management reads/writes through ContextEngine instead of internal `._goals`.
-3. **Phase 3**: Wire ContextEngine into AgentLoop — PlanDAG, LoopWorkingMemory, and loop_messages replaced by ContextEngine.
+3. **Phase 3**: Wire ContextEngine into StrangeLoop — PlanDAG, LoopWorkingMemory, and loop_messages replaced by ContextEngine.
 
 ## 4. Core Data Structures
 
@@ -320,7 +320,7 @@ Projection logic per section:
 
 ## 6. LedgerManager
 
-Replaces `LoopWorkingMemory` and the `loop_messages` list in AgentLoop state.
+Replaces `LoopWorkingMemory` and the `loop_messages` list in StrangeLoop state.
 
 ```python
 class LedgerManager:
@@ -544,7 +544,7 @@ This ensures the ledger is always derivable from the DAG, making it a view rathe
 
 | Scenario | Behavior |
 |----------|----------|
-| Step execution failure | `StepNode.status = "failed"`, `execution.error` set. Goal remains active. AgentLoop decides replan vs fail-goal. |
+| Step execution failure | `StepNode.status = "failed"`, `execution.error` set. Goal remains active. StrangeLoop decides replan vs fail-goal. |
 | Goal failure | `GoalNode.status = "failed"`. Dependent goals remain blocked (dependencies not met). |
 | Persistence failure | In-memory fallback with warning log. Query and projection continue; durability degraded. |
 | Crash recovery | On `load()`, `recover()` resets active goals to pending. Steps with no execution reset to pending. |
@@ -597,10 +597,10 @@ packages/soothe/src/soothe/context/
 - ContextProjector reads from ContextEngine instead of GoalDispatchContextStore
 - Backward-compatible: GoalEngine's public API unchanged, internal storage replaced
 
-### Phase 3: AgentLoop integration
+### Phase 3: StrangeLoop integration
 
-- AgentLoop's `PlanDAG` replaced by `GoalNode.steps` (StepDAG)
+- StrangeLoop's `PlanDAG` replaced by `GoalNode.steps` (StepDAG)
 - `LoopWorkingMemory` replaced by `LedgerManager`
 - `loop_messages` replaced by `LedgerManager` with phase tagging
 - `plan_ledger_projection.py` renders from `ContextBundle` instead of raw `loop_messages`
-- AgentLoop orchestrator nodes call ContextEngine methods instead of direct state mutation
+- StrangeLoop orchestrator nodes call ContextEngine methods instead of direct state mutation

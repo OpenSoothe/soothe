@@ -698,5 +698,5 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
 
 # IG-273: ``generate_goal_completion_from_checkpoint`` (previously defined here)
 # was removed because no code path invoked it. Goal completion synthesis is
-# driven through ``AgentLoop._run_goal_completion_synthesis`` using the live
+# driven through ``StrangeLoop._run_goal_completion_synthesis`` using the live
 # thread messages, not a post-hoc checkpoint synthesis helper.

@@ -1,6 +1,6 @@
-"""SQLite backend for AgentLoop checkpoint persistence.
+"""SQLite backend for StrangeLoop checkpoint persistence.
 
-RFC-215: AgentLoop Persistence Backend Architecture
+RFC-215: StrangeLoop Persistence Backend Architecture
 IG-055: Backend-agnostic implementation with connection pooling
 """
 
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiosqlite
 
-from soothe.foundation.loop.state.persistence.base_backend import AgentLoopPersistenceBackend
+from soothe.foundation.loop.state.persistence.base_backend import StrangeLoopPersistenceBackend
 
 if TYPE_CHECKING:
     pass
@@ -43,8 +43,8 @@ _GOAL_RECORD_COLUMN_MIGRATIONS: dict[str, str] = {
 }
 
 
-class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
-    """SQLite backend for AgentLoop checkpoint persistence.
+class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
+    """SQLite backend for StrangeLoop checkpoint persistence.
 
     IG-055: Backend-agnostic implementation with instance-level connection pooling.
     """
@@ -139,7 +139,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         current_thread_id: str,
         status: str = "running",
     ) -> None:
-        """Register new AgentLoop in database."""
+        """Register new StrangeLoop in database."""
         await self._writer_to_thread(
             self._register_loop_sync,
             loop_id,

@@ -214,4 +214,4 @@ async def test_generate_synthesis_uses_projected_context_not_raw_ledger() -> Non
     assert "GOAL:" in human
     assert "README says hello" in human
     assert "Plan assess context" not in human
-    assert "AgentLoop" not in human.lower()
+    assert "StrangeLoop" not in human.lower()

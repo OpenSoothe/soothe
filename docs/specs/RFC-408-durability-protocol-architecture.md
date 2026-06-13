@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines DurabilityProtocol, Soothe's thread lifecycle persistence interface for durability-by-default design. DurabilityProtocol provides thread creation, resume, suspend, archive, and metadata management operations. This protocol manages thread lifecycle state, while AgentLoop checkpoint persistence (CheckpointEnvelope) is handled separately in RFC-203 (Layer 2 implementation).
+This RFC defines DurabilityProtocol, Soothe's thread lifecycle persistence interface for durability-by-default design. DurabilityProtocol provides thread creation, resume, suspend, archive, and metadata management operations. This protocol manages thread lifecycle state, while StrangeLoop checkpoint persistence (CheckpointEnvelope) is handled separately in RFC-203 (Layer 2 implementation).
 
 ---
 
@@ -122,7 +122,7 @@ class ThreadFilter(BaseModel):
 All agent state persistable and resumable:
 - Thread lifecycle managed by DurabilityProtocol
 - Conversation state managed by langgraph checkpointer
-- AgentLoop checkpoint managed by CheckpointEnvelope (RFC-203)
+- StrangeLoop checkpoint managed by CheckpointEnvelope (RFC-203)
 - Context ledger managed by ContextProtocol (RFC-400)
 
 **Separation**: DurabilityProtocol manages thread metadata + lifecycle, NOT execution state (which is CheckpointEnvelope in Layer 2).
@@ -245,7 +245,7 @@ async def _pre_stream(thread_id: str | None):
         # Resume existing thread
         thread_info = await durability.resume_thread(thread_id)
         context.restore(thread_id)
-        # AgentLoop checkpoint loaded separately (RFC-203)
+        # StrangeLoop checkpoint loaded separately (RFC-203)
     else:
         # Create new thread
         thread_info = await durability.create_thread(
@@ -259,7 +259,7 @@ async def _post_stream(thread_id: str):
         metadata={"plan_summary": plan.summary},
     )
     context.persist(thread_id)
-    # AgentLoop checkpoint saved separately (RFC-203)
+    # StrangeLoop checkpoint saved separately (RFC-203)
 ```
 
 ---
@@ -280,7 +280,7 @@ async def _post_stream(thread_id: str):
 ## References
 
 - RFC-000: System Conceptual Design (§5 Durable by default)
-- RFC-203: AgentLoop State & Memory (CheckpointEnvelope - Layer 2 implementation)
+- RFC-203: StrangeLoop State & Memory (CheckpointEnvelope - Layer 2 implementation)
 - RFC-400: ContextProtocol (context persistence)
 - RFC-001: Core Modules Architecture (original Module 5)
 
@@ -292,7 +292,7 @@ async def _post_stream(thread_id: str):
 - Consolidated RFC-001 Module 5 (DurabilityProtocol) with thread lifecycle management
 - Separated from CheckpointEnvelope (Layer 2 implementation in RFC-203) to avoid overlap
 - Defined thread lifecycle states (active/suspended/archived) and metadata persistence
-- Clarified separation: DurabilityProtocol = thread metadata + lifecycle, CheckpointEnvelope = AgentLoop execution state
+- Clarified separation: DurabilityProtocol = thread metadata + lifecycle, CheckpointEnvelope = StrangeLoop execution state
 - Maintained durable-by-default design principle
 
 ---

@@ -86,15 +86,22 @@ GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 PLAN_CREATED = "soothe.cognition.plan.created"
 PLAN_REFLECTED = "soothe.cognition.plan.reflected"
 
-# AgentLoop cognition
-AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
-AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
-AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
-AGENT_LOOP_STEP_QUEUED = "soothe.cognition.agent_loop.step.queued"
-AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
-AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
-AGENT_LOOP_REASONED = "soothe.cognition.agent_loop.reasoned"
-AGENT_LOOP_CONTEXT_COMPACTED = "soothe.cognition.agent_loop.context.compacted"  # RFC-224
+# StrangeLoop cognition
+STRANGE_LOOP_STARTED = "soothe.cognition.strange_loop.started"
+STRANGE_LOOP_COMPLETED = "soothe.cognition.strange_loop.completed"
+STRANGE_LOOP_STEP_STARTED = "soothe.cognition.strange_loop.step.started"
+STRANGE_LOOP_STEP_QUEUED = "soothe.cognition.strange_loop.step.queued"
+STRANGE_LOOP_STEP_COMPLETED = "soothe.cognition.strange_loop.step.completed"
+STRANGE_LOOP_PLAN_DECISION = "soothe.cognition.strange_loop.plan.decision"
+STRANGE_LOOP_REASONED = "soothe.cognition.strange_loop.reasoned"
+STRANGE_LOOP_CONTEXT_COMPACTED = "soothe.cognition.strange_loop.context.compacted"  # RFC-224
+
+STRANGE_LOOP_STEP_STARTED = STRANGE_LOOP_STEP_STARTED
+STRANGE_LOOP_STEP_QUEUED = STRANGE_LOOP_STEP_QUEUED
+STRANGE_LOOP_STEP_COMPLETED = STRANGE_LOOP_STEP_COMPLETED
+STRANGE_LOOP_PLAN_DECISION = STRANGE_LOOP_PLAN_DECISION
+STRANGE_LOOP_REASONED = STRANGE_LOOP_REASONED
+STRANGE_LOOP_CONTEXT_COMPACTED = STRANGE_LOOP_CONTEXT_COMPACTED
 
 # Branch cognition (client UX)
 BRANCH_CREATED = "soothe.cognition.branch.created"
@@ -117,14 +124,14 @@ ERROR = "soothe.error.general.failed"
 HISTORY_REPLAY_COMPLETE = REPLAY_COMPLETE
 
 __all__ = [
-    "AGENT_LOOP_COMPLETED",
-    "AGENT_LOOP_CONTEXT_COMPACTED",
-    "AGENT_LOOP_PLAN_DECISION",
-    "AGENT_LOOP_REASONED",
-    "AGENT_LOOP_STARTED",
-    "AGENT_LOOP_STEP_COMPLETED",
-    "AGENT_LOOP_STEP_QUEUED",
-    "AGENT_LOOP_STEP_STARTED",
+    "STRANGE_LOOP_COMPLETED",
+    "STRANGE_LOOP_CONTEXT_COMPACTED",
+    "STRANGE_LOOP_PLAN_DECISION",
+    "STRANGE_LOOP_REASONED",
+    "STRANGE_LOOP_STARTED",
+    "STRANGE_LOOP_STEP_COMPLETED",
+    "STRANGE_LOOP_STEP_QUEUED",
+    "STRANGE_LOOP_STEP_STARTED",
     "AUTOPILOT_CHECKPOINT_SAVED",
     "AUTOPILOT_DREAMING_ENTERED",
     "AUTOPILOT_DREAMING_EXITED",
@@ -176,4 +183,12 @@ __all__ = [
     "POLICY_DENIED",
     "RECOVERY_RESUMED",
     "REPLAY_COMPLETE",
+    "STRANGE_LOOP_COMPLETED",
+    "STRANGE_LOOP_CONTEXT_COMPACTED",
+    "STRANGE_LOOP_PLAN_DECISION",
+    "STRANGE_LOOP_REASONED",
+    "STRANGE_LOOP_STARTED",
+    "STRANGE_LOOP_STEP_COMPLETED",
+    "STRANGE_LOOP_STEP_QUEUED",
+    "STRANGE_LOOP_STEP_STARTED",
 ]

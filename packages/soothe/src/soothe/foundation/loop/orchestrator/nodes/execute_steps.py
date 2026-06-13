@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.foundation.events.constants import AGENT_LOOP_CONTEXT_COMPACTED
+from soothe.foundation.events.constants import STRANGE_LOOP_CONTEXT_COMPACTED
 from soothe.foundation.loop.clarification import (
     ClarificationCapture,
     ClarificationDetector,
@@ -49,7 +49,7 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         plan_summary = getattr(plan_result, "plan_reasoning", None) or getattr(
             plan_result, "next_action", None
         )
-    # goal_user_submission holds the original user line (set by agent_loop.continue_goal).
+    # goal_user_submission holds the original user line (set by strange_loop.continue_goal).
     # Fall back to goal when goal_user_submission is None (e.g. autopilot or legacy paths).
     user_request = getattr(state, "goal_user_submission", None) or getattr(state, "goal", "")
     return LoopStateView(
@@ -199,7 +199,8 @@ async def _record_and_emit_step_completed(
 
 async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> dict[str, Any]:
     """Run ready steps, stream events, apply step results to ``LoopState``."""
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias for backward compat
     state = ctx.loop_state
     state_manager = ctx.state_manager
     goal_context_manager = ctx.goal_context_manager
@@ -406,7 +407,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         await _record_and_emit_step_completed(ctx, result=synth_result, step_desc=step_desc)
 
     # RFC-223: Pass checkpointer for thread fork inheritance
-    checkpointer = agent_loop.core_agent.checkpointer
+    checkpointer = strange_loop.core_agent.checkpointer
 
     # IG-462 Branch 2: when the planner emits a kind="ask_user" step in this
     # wave, surface it to the clarification relay BEFORE running the executor.
@@ -448,10 +449,10 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         clarification_view = _build_loop_state_view(ctx)
 
     run_executor = Executor(
-        agent_loop.core_agent,
+        strange_loop.core_agent,
         checkpointer=checkpointer,
-        max_parallel_steps=agent_loop.config.agent.loop.limits.max_parallel_steps,
-        config=agent_loop.config,
+        max_parallel_steps=strange_loop.config.agent.loop.limits.max_parallel_steps,
+        config=strange_loop.config,
         goal_context_manager=goal_context_manager,
         loop_id=ctx.state_manager.loop_id,
         clarification_detector=clarification_detector,
@@ -524,16 +525,16 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     ctx.scratch.step_results = step_results
 
     # RFC-224: Check context window and compact if needed
-    if checkpointer is not None and agent_loop.config is not None:
+    if checkpointer is not None and strange_loop.config is not None:
         try:
-            context_manager = ContextWindowManager(checkpointer, agent_loop.config)
+            context_manager = ContextWindowManager(checkpointer, strange_loop.config)
             compaction_result = await context_manager.check_and_compact_if_needed(
                 state.thread_id,
                 state,
             )
             if compaction_result is not None:
                 await ctx.emit(
-                    AGENT_LOOP_CONTEXT_COMPACTED,
+                    STRANGE_LOOP_CONTEXT_COMPACTED,
                     {
                         "thread_id": compaction_result.thread_id,
                         "tokens_before": compaction_result.tokens_before,

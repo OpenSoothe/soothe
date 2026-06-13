@@ -2,9 +2,9 @@
 
 ## 1. Purpose
 
-Complete the AgentLoop integration of ContextEngine (RFC-624 Phase 3) by wiring the ledger adapter into all message-writing call sites, fixing behavioral gaps in existing adapters, and adding integration tests that prove 100% behavioral equivalence with the non-CE path.
+Complete the StrangeLoop integration of ContextEngine (RFC-624 Phase 3) by wiring the ledger adapter into all message-writing call sites, fixing behavioral gaps in existing adapters, and adding integration tests that prove 100% behavioral equivalence with the non-CE path.
 
-The adapters and AgentLoop wiring were implemented in a prior session. The remaining work is making the dual-write strategy functional and verifying equivalence.
+The adapters and StrangeLoop wiring were implemented in a prior session. The remaining work is making the dual-write strategy functional and verifying equivalence.
 
 ## 2. Scope
 
@@ -131,11 +131,11 @@ The `_format_execute_briefing` method on `GoalContextManager` becomes a thin wra
 
 ### 5.1 Test Strategy
 
-A parameterized test that runs the same AgentLoop scenario with CE enabled and disabled, then compares observable outputs.
+A parameterized test that runs the same StrangeLoop scenario with CE enabled and disabled, then compares observable outputs.
 
 ### 5.2 Test Location
 
-`packages/soothe/tests/integration/loop/test_ce_agent_loop_equivalence.py`
+`packages/soothe/tests/integration/loop/test_ce_strange_loop_equivalence.py`
 
 ### 5.3 Test Design
 
@@ -145,9 +145,9 @@ async def test_plan_execute_complete_equivalence(ce_enabled):
     """Run a single plan→execute→complete cycle with and without CE.
     Assert identical observable outputs."""
     config = make_config(context_engine_enabled=ce_enabled)
-    agent_loop = AgentLoop(core_agent=mock_core, loop_planner=mock_planner, config=config)
+    strange_loop = StrangeLoop(core_agent=mock_core, loop_planner=mock_planner, config=config)
 
-    result = await agent_loop.run(goal="Test goal", thread_id="test-thread")
+    result = await strange_loop.run(goal="Test goal", thread_id="test-thread")
 
     # Collect results for comparison
     # ... verify plan_result, loop_messages content, DAG report
@@ -190,7 +190,7 @@ async def test_ce_non_ce_output_equivalence():
 | `foundation/loop/orchestrator/nodes/goal_completion.py` | Modify | Replace append with `_record_ledger_message` (1 pair) |
 | `foundation/loop/engine/context_adapters.py` | Modify | Add named constants, logging, remove `__new__()` hack |
 | `foundation/loop/engine/goal_context_manager.py` | Modify | Extract `format_execute_briefing_from_goals()` |
-| `tests/integration/loop/test_ce_agent_loop_equivalence.py` | Add | Integration test for behavioral equivalence |
+| `tests/integration/loop/test_ce_strange_loop_equivalence.py` | Add | Integration test for behavioral equivalence |
 
 ## 7. Risk and Mitigations
 

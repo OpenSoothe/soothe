@@ -1,4 +1,4 @@
-"""PostgreSQL schema initialization for AgentLoop persistence.
+"""PostgreSQL schema initialization for StrangeLoop persistence.
 
 Schema is defined as ordered SQL scripts under
 ``soothe/core/persistence/sql/soothe_checkpoints/`` and applied on pool open
@@ -21,7 +21,7 @@ AGENTLOOP_POSTGRES_DATABASE = "soothe_checkpoints"
 
 
 async def initialize_agentloop_postgres_schema(pool: AsyncConnectionPool) -> None:
-    """Apply pending SQL migrations for AgentLoop persistence tables.
+    """Apply pending SQL migrations for StrangeLoop persistence tables.
 
     Called when the shared pool or dedicated backend pool opens (daemon start,
     process restart, or first backend use).
@@ -32,11 +32,11 @@ async def initialize_agentloop_postgres_schema(pool: AsyncConnectionPool) -> Non
     applied = await run_database_migrations(pool, AGENTLOOP_POSTGRES_DATABASE)
     if applied:
         logger.info(
-            "AgentLoop PostgreSQL schema upgraded (applied migrations: %s)",
+            "StrangeLoop PostgreSQL schema upgraded (applied migrations: %s)",
             ", ".join(applied),
         )
     else:
-        logger.debug("AgentLoop PostgreSQL schema already up to date")
+        logger.debug("StrangeLoop PostgreSQL schema already up to date")
 
 
 __all__ = ["AGENTLOOP_POSTGRES_DATABASE", "initialize_agentloop_postgres_schema"]

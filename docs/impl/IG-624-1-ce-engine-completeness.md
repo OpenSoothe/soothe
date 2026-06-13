@@ -9,7 +9,7 @@
 
 ## Objective
 
-Harden `soothe.context` into a self-sufficient engine with a complete public API, full state machine, event callbacks, lossless persistence, bounded ledger growth, and complete projection output. No changes to existing AgentLoop code.
+Harden `soothe.context` into a self-sufficient engine with a complete public API, full state machine, event callbacks, lossless persistence, bounded ledger growth, and complete projection output. No changes to existing StrangeLoop code.
 
 ## Implementation Steps
 
@@ -195,6 +195,6 @@ All existing adapter (22) + integration (9) tests must pass without modification
 
 - All 6 component changes implemented and tested
 - All existing tests pass without modification
-- No changes to `context_adapters.py` or any AgentLoop code
+- No changes to `context_adapters.py` or any StrangeLoop code
 - `ContextBundle.ledger_messages` populated on projection
 - Full BaseMessage round-trip persistence with backward compat

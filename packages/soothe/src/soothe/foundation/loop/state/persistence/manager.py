@@ -1,6 +1,6 @@
-"""AgentLoop checkpoint persistence manager.
+"""StrangeLoop checkpoint persistence manager.
 
-RFC-215: AgentLoop Persistence Backend Architecture
+RFC-215: StrangeLoop Persistence Backend Architecture
 IG-055: Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
 """
 
@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AgentLoopCheckpointPersistenceManager:
-    """Manager for AgentLoop checkpoint persistence.
+class StrangeLoopCheckpointPersistenceManager:
+    """Manager for StrangeLoop checkpoint persistence.
 
     IG-055: Backend-agnostic delegation pattern.
     Respects persistence.default_backend configuration (PostgreSQL or SQLite).
@@ -56,7 +56,7 @@ class AgentLoopCheckpointPersistenceManager:
             db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
             self._backend = SQLitePersistenceBackend(db_path=db_path, pool_size=5)
 
-        logger.info("AgentLoop persistence manager initialized: backend=%s", backend_type)
+        logger.info("StrangeLoop persistence manager initialized: backend=%s", backend_type)
 
     async def register_loop(
         self,
@@ -65,10 +65,10 @@ class AgentLoopCheckpointPersistenceManager:
         current_thread_id: str,
         status: str = "running",
     ) -> None:
-        """Register a new AgentLoop in the database.
+        """Register a new StrangeLoop in the database.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             thread_ids: List of thread IDs associated with this loop.
             current_thread_id: Current active thread ID.
             status: Loop status (default: "running").
@@ -176,7 +176,7 @@ class AgentLoopCheckpointPersistenceManager:
         """Save iteration checkpoint anchor with thread cross-reference.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             iteration: Iteration number.
             thread_id: Thread where checkpoint belongs (cross-reference).
             checkpoint_id: CoreAgent checkpoint_id.
@@ -211,7 +211,7 @@ class AgentLoopCheckpointPersistenceManager:
         """Get checkpoint anchors for iteration range (failure analysis).
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             start_iteration: Start iteration (inclusive).
             end_iteration: End iteration (inclusive).
 
@@ -229,7 +229,7 @@ class AgentLoopCheckpointPersistenceManager:
         """Get all thread checkpoint_ids for a loop (cross-reference map).
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
 
         Returns:
             Dict: {thread_id: [checkpoint_id_1, checkpoint_id_2, ...]}
@@ -263,7 +263,7 @@ class AgentLoopCheckpointPersistenceManager:
 
         Args:
             branch_id: Unique branch identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             iteration: Iteration where failure occurred.
             thread_id: Thread where failure occurred (cross-reference).
             root_checkpoint_id: Checkpoint where branch started.
@@ -302,7 +302,7 @@ class AgentLoopCheckpointPersistenceManager:
 
         Args:
             branch_id: Branch identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             failure_insights: Structured failure analysis.
             avoid_patterns: Patterns to avoid in retry.
             suggested_adjustments: Retry suggestions.
@@ -326,7 +326,7 @@ class AgentLoopCheckpointPersistenceManager:
         """Get all failed branches for loop (history reconstruction).
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             include_pruned: Include pruned branches (for audit).
 
         Returns:
@@ -349,7 +349,7 @@ class AgentLoopCheckpointPersistenceManager:
         """Prune old branches (soft delete with pruned_at timestamp).
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             retention_days: Keep branches created within this period.
 
         Returns:
@@ -378,7 +378,7 @@ class AgentLoopCheckpointPersistenceManager:
 
         Args:
             goal_id: Goal identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             thread_id: Thread where goal executes.
             goal_text: Goal description.
             iteration: Current iteration number.
@@ -413,7 +413,7 @@ class AgentLoopCheckpointPersistenceManager:
 
         Args:
             goal_id: Goal identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             status: Final goal status.
             goal_completion: Generated goal completion content.
             evidence_summary: Condensed evidence summary.
@@ -458,7 +458,7 @@ class AgentLoopCheckpointPersistenceManager:
         Path: data/loops/{loop_id}/goals/{goal_id}/report.md
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             goal_id: Goal identifier.
             description: Goal description.
             summary: Goal summary.
@@ -519,7 +519,7 @@ class AgentLoopCheckpointPersistenceManager:
         Path: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/report.md
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             goal_id: Goal identifier.
             step_id: Step identifier.
             description: Step description.
@@ -564,4 +564,4 @@ class AgentLoopCheckpointPersistenceManager:
             logger.debug("Closed persistence backend pool")
 
 
-__all__ = ["AgentLoopCheckpointPersistenceManager"]
+__all__ = ["StrangeLoopCheckpointPersistenceManager"]

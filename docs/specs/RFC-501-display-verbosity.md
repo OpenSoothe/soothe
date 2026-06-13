@@ -246,13 +246,13 @@ Subagent tool calls that cannot resolve a parent task card are **suppressed** (I
 ```python
 # Agentic loop events
 register_event(
-    AgenticLoopStartedEvent,
+    StrangeLoopStartedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="● Goal: {goal}",
 )
 
 register_event(
-    AgenticLoopCompletedEvent,
+    StrangeLoopCompletedEvent,
     verbosity=VerbosityTier.QUIET,
     summary_template="● Goal: {goal} (complete, {steps} steps)",
 )

@@ -51,7 +51,7 @@ class ToolConcurrencyMiddleware(AgentMiddleware):
 
     The semaphore is thread-local (ContextVar), so different threads/tasks have
     independent limits. Call `init_tool_concurrency_for_thread()` at the start of
-    each AgentLoop/CoreAgent stream to set the limit.
+    each StrangeLoop/CoreAgent stream to set the limit.
 
     Note: This middleware does NOT have a constructor with limit parameter because
     the limit is set per-thread via ContextVar, not per-middleware instance.
@@ -105,7 +105,7 @@ def set_tool_semaphore(sem: asyncio.Semaphore | None) -> None:
 def init_tool_concurrency_for_thread(limit: int = DEFAULT_MAX_PARALLEL_TOOLS) -> None:
     """Initialize tool concurrency semaphore for the current thread.
 
-    Call this at the start of AgentLoop execution or CoreAgent stream to
+    Call this at the start of StrangeLoop execution or CoreAgent stream to
     establish a per-thread concurrency budget.
 
     Args:

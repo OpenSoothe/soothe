@@ -1,6 +1,6 @@
 """Layer 2 Agentic Loop Runner (RFC-0008).
 
-Implements Plan → Execute loop using AgentLoop (RFC-201).
+Implements Plan → Execute loop using StrangeLoop (RFC-201).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
-from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -20,7 +20,7 @@ from soothe.foundation.events import (
     AgenticStepQueuedEvent,
     AgenticStepStartedEvent,
 )
-from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.clarification.events import (
     ClarificationAnsweredEvent,
     ClarificationDeferredEvent,
@@ -88,10 +88,10 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
     """
     try:
         from soothe.foundation.loop.state.persistence import (
-            AgentLoopCheckpointPersistenceManager,
+            StrangeLoopCheckpointPersistenceManager,
         )
 
-        pm = AgentLoopCheckpointPersistenceManager(config=config)
+        pm = StrangeLoopCheckpointPersistenceManager(config=config)
     except Exception:
         logger.debug(
             "Loop heartbeat unavailable for %s; persistence manager init failed",
@@ -371,7 +371,7 @@ class AgenticMixin:
         *,
         thread_id: str | None = None,
         workspace: str | None = None,
-        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
         preferred_subagent: str | None = None,
         intent_hint: IntentHint | None = None,
         clarification_mode: str | None = None,
@@ -380,7 +380,7 @@ class AgenticMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
-        Implements Reason → Act via AgentLoop with RFC-0020 progress events.
+        Implements Reason → Act via StrangeLoop with RFC-0020 progress events.
 
         Args:
             user_input: Goal description to execute
@@ -404,12 +404,12 @@ class AgenticMixin:
         await self._ensure_checkpointer_initialized()
 
         # RFC-225: intent classification is quiz vs. agentic only.
-        # Loop continuation is derived structurally inside AgentLoop from the
+        # Loop continuation is derived structurally inside StrangeLoop from the
         # loaded checkpoint, not by the runner.
         #
         # When the caller flags this turn as a clarification answer (RFC-622),
         # skip classification entirely: a bare word like "soothe" would
-        # otherwise classify as quiz and short-circuit the AgentLoop, never
+        # otherwise classify as quiz and short-circuit the StrangeLoop, never
         # reaching the orchestrator's Command(resume=...) path. The
         # orchestrator runner verifies the actual pending state and falls back
         # to a normal turn if no clarification is really pending.
@@ -426,7 +426,7 @@ class AgenticMixin:
                 user_input[:50],
             )
 
-            # Fast path: skip AgentLoop entirely for quiz (greetings + trivia)
+            # Fast path: skip StrangeLoop entirely for quiz (greetings + trivia)
             if intent_classification.intent_type == "quiz":
                 async for chunk in self._run_quiz(
                     user_input, tid, classification=intent_classification
@@ -452,12 +452,12 @@ class AgenticMixin:
             )
             return
 
-        loop_agent = AgentLoop(
+        loop_agent = StrangeLoop(
             core_agent=self._agent,
             loop_planner=self._planner,
             config=self._config,
         )
-        agent_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
+        strange_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
 
         # IG-406: Get shared PostgreSQL pool for high-concurrency support
         shared_pool = await self.get_agentloop_shared_pool()
@@ -473,7 +473,7 @@ class AgenticMixin:
                 mode=clarification_mode,
                 human_attached=True,
                 thread_id=tid,
-                loop_id=agent_loop_id,
+                loop_id=strange_loop_id,
             )
         except Exception:
             logger.exception(
@@ -503,13 +503,13 @@ class AgenticMixin:
         # While the loop runs, tick `updated_at` so periodic reconciliation can
         # trust the timestamp as a freshness signal and avoid demoting a live
         # `status="running"` row to `idle`.
-        heartbeat_handle = _start_loop_heartbeat(self._config, agent_loop_id)
+        heartbeat_handle = _start_loop_heartbeat(self._config, strange_loop_id)
 
         try:
             async for event_type, event_data in loop_agent.run_with_progress(
                 goal=user_input,
                 thread_id=tid,
-                loop_id=agent_loop_id,
+                loop_id=strange_loop_id,
                 workspace=workspace,
                 git_status=git_status,
                 max_iterations=max_iterations,
@@ -754,18 +754,18 @@ class AgenticMixin:
                     # so loops that produced any AI output are immune to empty-loop GC.
                     try:
                         from soothe.foundation.loop.state.persistence import (
-                            AgentLoopCheckpointPersistenceManager,
+                            StrangeLoopCheckpointPersistenceManager,
                         )
 
-                        _pm = AgentLoopCheckpointPersistenceManager(config=self._config)
+                        _pm = StrangeLoopCheckpointPersistenceManager(config=self._config)
                         try:
-                            await _pm.increment_loop_message_count(agent_loop_id, ai=1)
+                            await _pm.increment_loop_message_count(strange_loop_id, ai=1)
                         finally:
                             await _pm.close()
                     except Exception:
                         logger.warning(
                             "Failed to increment ai_message_count for loop %s",
-                            agent_loop_id,
+                            strange_loop_id,
                             exc_info=True,
                         )
         finally:

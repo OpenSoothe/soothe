@@ -76,7 +76,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 - **[Core Modules Overview](core/README.md)** ⭐ - Core framework architecture
   - **[Agent Factory](core/agent-factory.md)** - CoreAgent construction and runtime
   - **[SootheRunner](core/runner.md)** - Protocol-orchestrated execution
-  - **[AgentLoop](core/agent-loop.md)** - Plan-Execute loop for single goals
+  - **[StrangeLoop](core/agent-loop.md)** - Plan-Execute loop for single goals
   - **[GoalEngine](core/goal-engine.md)** - Autonomous goal management
   - **[Event System](core/events.md)** - Event infrastructure and registration
   - **[Protocol Resolver](core/resolver.md)** - Protocol wiring from config
@@ -113,12 +113,12 @@ soothe -p "List all Python files in the current directory and count lines of cod
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ GoalEngine: Autonomous Goal Management (RFC-200)           │
-│ • Manages goal DAGs, delegates single goals to AgentLoop   │
+│ • Manages goal DAGs, delegates single goals to StrangeLoop   │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update     │
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ AgentLoop: Agentic Goal Execution (RFC-201)                 │
+│ StrangeLoop: Agentic Goal Execution (RFC-201)                 │
 │ • Executes single goals through Plan → Execute iterations   │
 │ • Loop: Plan → Execute (max ~8 iterations)                 │
 └─────────────────────────────────────────────────────────────┘
@@ -144,7 +144,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
 |  - GoalEngine: Autonomous Goal Management            |
-|  - AgentLoop: Agentic Goal Execution                 |
+|  - StrangeLoop: Agentic Goal Execution                 |
 |  - CoreAgent: Runtime                                |
 |  - ContextProtocol, MemoryProtocol,                  |
 |    PlannerProtocol, PolicyProtocol,                  |

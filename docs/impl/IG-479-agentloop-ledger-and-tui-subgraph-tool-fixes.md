@@ -1,4 +1,4 @@
-# IG-479: AgentLoop Ledger and TUI Subgraph Tool Visibility Fixes
+# IG-479: StrangeLoop Ledger and TUI Subgraph Tool Visibility Fixes
 
 ## Goal
 

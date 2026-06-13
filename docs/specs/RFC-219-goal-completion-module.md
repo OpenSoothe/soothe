@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines a modular architecture for AgentLoop goal completion logic, extracting the complex decision tree from monolithic orchestration code into a dedicated GoalCompletionModule with clear separation of concerns. The module encapsulates all decisions and execution logic for producing user-visible goal completion responses, making AgentLoop orchestration simpler, testable, and extensible.
+This RFC defines a modular architecture for StrangeLoop goal completion logic, extracting the complex decision tree from monolithic orchestration code into a dedicated GoalCompletionModule with clear separation of concerns. The module encapsulates all decisions and execution logic for producing user-visible goal completion responses, making StrangeLoop orchestration simpler, testable, and extensible.
 
 **Runner wire:** The `goal_completion` node sets **`skip_goal_completion_wire_duplicate`** on the `completed` payload when streamed **`synthesize`** already delivered `phase=goal_completion` on **`messages`**. The agentic runner emits **`loop_assistant_messages_chunk(..., phase="goal_completion")`** when the flag is **false** — including **`ledger_direct`**, because headless mode suppresses execute-phase lines and needs this replay for stdout (RFC-500 / IG-343). TUI routing for loop-tagged AI is defined in **RFC-500**.
 
@@ -22,13 +22,13 @@ This RFC defines a modular architecture for AgentLoop goal completion logic, ext
 
 **Current Issues** (RFC-201 §90-97):
 
-1. **Monolithic Logic**: ~200 lines of goal completion code embedded in `agent_loop.py:run_with_progress()` main orchestration method
+1. **Monolithic Logic**: ~200 lines of goal completion code embedded in `strange_loop.py:run_with_progress()` main orchestration method
 2. **Mixed Concerns**: Response categorization, synthesis policy decisions, LLM calls, and prompt construction all intertwined
-3. **Hard to Test**: Complex branching logic (planner_skip → direct → synthesis → summary) requires mocking entire AgentLoop
+3. **Hard to Test**: Complex branching logic (planner_skip → direct → synthesis → summary) requires mocking entire StrangeLoop
 4. **Hard to Maintain**: Multiple decision points, nested conditionals, scattered state access
 5. **Hard to Extend**: Adding new completion modes requires modifying core orchestration loop
 
-**Current Architecture** (lines 329-523 in agent_loop.py):
+**Current Architecture** (lines 329-523 in strange_loop.py):
 
 ```
 if plan_result.is_done():
@@ -42,7 +42,7 @@ if plan_result.is_done():
     - State updates
 ```
 
-This violates **separation of concerns** (RFC-001 §28) and makes AgentLoop orchestration harder to reason about.
+This violates **separation of concerns** (RFC-001 §28) and makes StrangeLoop orchestration harder to reason about.
 
 ---
 
@@ -54,17 +54,17 @@ Extract goal completion logic into dedicated module hierarchy:
 
 ```
 packages/soothe/src/soothe/core/
-├── agent_loop/
+├── strange_loop/
 │   ├── policies/goal_completion_policy.py   # DEPRECATED → migrated to PlanManager
 │   ├── core/plan_dag.py                     # Unified DAG of all planned steps
 │   ├── core/plan_manager.py                 # Plan orchestration + completion strategy
 │   ├── analysis/synthesis.py                # synthesis helper(s)
-│   ├── core/agent_loop.py                   # invokes goal-completion flow
+│   ├── core/strange_loop.py                   # invokes goal-completion flow
 │   ├── core/plan_phase.py
 │   └── core/executor.py
-└── runner/                                  # wires AgentLoop + streaming (e.g. _runner_agentic)
+└── runner/                                  # wires StrangeLoop + streaming (e.g. _runner_agentic)
 ```
-*(Historical draft showed `cognition/agent_loop/completion/`; implementation lives under `core/` per IG consolidation.)*
+*(Historical draft showed `cognition/strange_loop/completion/`; implementation lives under `core/` per IG consolidation.)*
 
 ### PlanDAG: Unified Plan DAG
 
@@ -141,10 +141,10 @@ class PlanManager:
 ### Clean Architecture Principles
 
 **Separation of Concerns** (RFC-001 §28):
-- **Policy Layer**: `agent_loop/core/plan_manager.py` (PlanManager, CompletionStrategy enum) and config (`SootheConfig.agentic.final_response`)
-- **Execution / synthesis**: `agent_loop/analysis/synthesis.py`, `agent_loop/core/agent_loop.py`, runner modules under `core/runner/`
-- **Plan DAG**: `agent_loop/core/plan_dag.py` (PlanDAG data structure)
-- *(Historical draft referenced `cognition/agent_loop/completion/*`; code now lives under `packages/soothe/src/soothe/core/`.)*
+- **Policy Layer**: `strange_loop/core/plan_manager.py` (PlanManager, CompletionStrategy enum) and config (`SootheConfig.agentic.final_response`)
+- **Execution / synthesis**: `strange_loop/analysis/synthesis.py`, `strange_loop/core/strange_loop.py`, runner modules under `core/runner/`
+- **Plan DAG**: `strange_loop/core/plan_dag.py` (PlanDAG data structure)
+- *(Historical draft referenced `cognition/strange_loop/completion/*`; code now lives under `packages/soothe/src/soothe/core/`.)*
 
 **Dependency Rule** (Clean Architecture):
 - Orchestration → PlanManager → PlanDAG → State schemas
@@ -341,7 +341,7 @@ class SynthesisExecutor:
     
     def _build_synthesis_prompt(self, goal: str, category: ResponseLengthCategory) -> str:
         """Construct synthesis prompt with length guidance."""
-        # (Move prompt construction logic from agent_loop.py)
+        # (Move prompt construction logic from strange_loop.py)
         ...
 ```
 
@@ -380,12 +380,12 @@ def _is_simple_execution(self) -> bool:
 
 ---
 
-## Integration with AgentLoop
+## Integration with StrangeLoop
 
-### Simplified agent_loop.py
+### Simplified strange_loop.py
 
 ```python
-# In agent_loop.py:run_with_progress()
+# In strange_loop.py:run_with_progress()
 if plan_result.is_done():
     # Delegate to GoalCompletionModule (10 lines instead of 200)
     completion_module = GoalCompletionModule(
@@ -409,9 +409,9 @@ if plan_result.is_done():
 ```
 
 **Benefits**:
-- ✅ AgentLoop orchestration is simple and readable (10 lines vs 200)
+- ✅ StrangeLoop orchestration is simple and readable (10 lines vs 200)
 - ✅ Goal completion logic is encapsulated and testable
-- ✅ Strategies are extensible (add new strategy without touching AgentLoop)
+- ✅ Strategies are extensible (add new strategy without touching StrangeLoop)
 - ✅ Clean separation: orchestration vs execution vs policy
 
 ---
@@ -458,7 +458,7 @@ def test_goal_completion_module_produces_output():
 
 1. Add new strategy class in `completion_strategies.py`
 2. Update `select_strategy()` decision tree
-3. No changes to AgentLoop orchestration
+3. No changes to StrangeLoop orchestration
 
 ```python
 class AdaptiveSummaryStrategy(CompletionStrategy):
@@ -473,7 +473,7 @@ if should_use_adaptive_summary(state, plan_result):
     return AdaptiveSummaryStrategy()
 ```
 
-**Zero impact on AgentLoop core orchestration**.
+**Zero impact on StrangeLoop core orchestration**.
 
 ---
 
@@ -482,11 +482,11 @@ if should_use_adaptive_summary(state, plan_result):
 **IG-297 Implementation Plan** (original goal completion extraction):
 
 1. Create module structure (`completion/` directory)
-2. Extract ResponseCategorizer (lines 343-377 from agent_loop.py)
-3. Extract SynthesisExecutor (lines 419-489 from agent_loop.py)
-4. Extract CompletionStrategies (lines 391-495 decision tree from agent_loop.py)
+2. Extract ResponseCategorizer (lines 343-377 from strange_loop.py)
+3. Extract SynthesisExecutor (lines 419-489 from strange_loop.py)
+4. Extract CompletionStrategies (lines 391-495 decision tree from strange_loop.py)
 5. Create GoalCompletionModule orchestrator
-6. Simplify agent_loop.py (replace ~200 lines with module call)
+6. Simplify strange_loop.py (replace ~200 lines with module call)
 7. Add unit tests for each module
 8. Run verification suite
 
@@ -511,7 +511,7 @@ if should_use_adaptive_summary(state, plan_result):
 
 ## Success Criteria
 
-- ✅ AgentLoop orchestration simplified (< 50 lines for goal completion)
+- ✅ StrangeLoop orchestration simplified (< 50 lines for goal completion)
 - ✅ Each completion module unit-testable
 - ✅ Clear separation of concerns (policy → execution → classification)
 - ✅ Extensible strategy pattern

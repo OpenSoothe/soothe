@@ -578,7 +578,7 @@ def build_stream_config(
     * Including the SDK version here ensures it survives the merge.
 
     Args:
-        loop_id: Active AgentLoop id (stored under LangGraph ``configurable.thread_id``).
+        loop_id: Active StrangeLoop id (stored under LangGraph ``configurable.thread_id``).
         assistant_id: The agent/assistant identifier, if any.
         sandbox_type: Sandbox provider name for trace metadata, or `None` if no
             sandbox is active.

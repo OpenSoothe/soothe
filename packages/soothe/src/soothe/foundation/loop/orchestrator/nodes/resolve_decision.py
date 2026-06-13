@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Allocate plan ids, merge keep/new semantics, stash decision on scratch."""
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     plan_result = ctx.scratch.plan_result
 
@@ -31,7 +32,7 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         )
         return {"last_outcome": "fatal"}
 
-    decision = agent_loop._resolve_decision(plan_result, state)
+    decision = strange_loop._resolve_decision(plan_result, state)
     if decision is None:
         # Guard: create fallback decision when LLM returned type="final" at iteration 0
         if state.iteration == 0 and len(state.step_results) == 0:

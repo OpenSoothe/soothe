@@ -246,4 +246,4 @@ Depends On:  fae9b5a3
 
 - WebSocket IPC commands (already implemented per RFC-228)
 - Desktop app integration (RFC-700)
-- AgentLoop loop management (separate concept, uses `soothe loop` commands)
+- StrangeLoop loop management (separate concept, uses `soothe loop` commands)

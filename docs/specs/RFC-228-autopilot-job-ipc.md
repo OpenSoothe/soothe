@@ -47,7 +47,7 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 | **Job** | Root Goal submitted to AutopilotService | RFC-700 §2.2 |
 | **AutopilotService** | Daemon-owned singleton managing GoalEngine and WorkerPool | RFC-222 §86-89 |
 | **GoalEngine** | DAG-based goal management within AutopilotService | RFC-222 §75-89, RFC-200 |
-| **Worker** | AgentLoop subprocess assigned to execute a goal | RFC-222 §95-104 |
+| **Worker** | StrangeLoop subprocess assigned to execute a goal | RFC-222 §95-104 |
 | **Worker loop_id** | Namespaced `autopilot__w001`, `autopilot__w002`, etc. | RFC-222 §467-468 |
 
 ## Protocol Specification
@@ -239,7 +239,7 @@ Cancels job and all descendant goals.
 1. Set root goal status to `failed` with reason "cancelled"
 2. Traverse DAG, set all descendant goals to `failed`
 3. Release all assigned workers
-4. Workers terminate their AgentLoop execution
+4. Workers terminate their StrangeLoop execution
 5. Return confirmation
 
 ### job_dag

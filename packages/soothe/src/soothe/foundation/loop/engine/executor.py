@@ -1,4 +1,4 @@
-"""Execute phase logic for AgentLoop (RFC-201).
+"""Execute phase logic for StrangeLoop (RFC-201).
 
 Act-wave visible answer resolution is integrated here (IG-355, IG-356, IG-357).
 
@@ -1248,7 +1248,7 @@ class Executor:
         - Action-approval interrupts are auto-approved (unchanged).
         - ``ask_user`` interrupts, when ``detector``/``capture`` are provided,
           are written to ``capture`` and the stream returns early so the
-          AgentLoop can route to ``await_clarification`` (RFC-622).
+          StrangeLoop can route to ``await_clarification`` (RFC-622).
         - When ``resume_answer_payload`` is set, the first CoreAgent call
           uses it as the initial ``Command(resume=...)`` (re-entry after the
           policy answered a prior clarification).
@@ -1534,7 +1534,7 @@ class Executor:
     def _assemble_assistant_text_from_stream_messages(self, messages: list[BaseMessage]) -> str:
         """Extract assistant-visible text from CoreAgent stream message list.
 
-        Matches the selection rules used for AgentLoop final-report streaming: prefer
+        Matches the selection rules used for StrangeLoop final-report streaming: prefer
         concatenated ``AIMessageChunk`` text over a trailing non-chunk ``AIMessage``.
 
         Args:

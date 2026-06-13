@@ -17,8 +17,8 @@ from soothe.foundation.loop.orchestrator.nodes.plan_assess import node_plan_asse
 from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.loop.state.checkpoint import (
-    AgentLoopCheckpoint,
     GoalExecutionRecord,
+    StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
@@ -59,9 +59,9 @@ def _make_active_goal(goal: str = "fix to add trace metadata") -> GoalExecutionR
 def _make_checkpoint(
     prior: GoalExecutionRecord,
     active: GoalExecutionRecord,
-) -> AgentLoopCheckpoint:
+) -> StrangeLoopCheckpoint:
     now = datetime.now(UTC)
-    return AgentLoopCheckpoint(
+    return StrangeLoopCheckpoint(
         loop_id="loop-test",
         thread_ids=["tid"],
         current_thread_id="tid",
@@ -90,8 +90,8 @@ def _make_ctx(
         thread_id="tid",
     )
 
-    agent_loop = MagicMock()
-    agent_loop._build_plan_context = MagicMock(
+    strange_loop = MagicMock()
+    strange_loop._build_plan_context = MagicMock(
         return_value=MagicMock(available_capabilities=["read_file", "run_python"]),
     )
 
@@ -101,7 +101,7 @@ def _make_ctx(
         emitted.append((event_type, event_data))
 
     return LoopRuntimeContext(
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-test"),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),
@@ -126,8 +126,8 @@ async def test_continuation_plan_generate_sets_status_assessment() -> None:
         goal_progress="none",
     )
 
-    agent_loop = ctx.agent_loop
-    agent_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
+    strange_loop = ctx.strange_loop
+    strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
 
     result = await node_plan_assess(ctx, {})
 
@@ -152,8 +152,8 @@ async def test_continuation_bootstrap_still_sets_plan_result() -> None:
         goal_progress="low",
     )
 
-    agent_loop = ctx.agent_loop
-    agent_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
+    strange_loop = ctx.strange_loop
+    strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
 
     result = await node_plan_assess(ctx, {})
 
@@ -172,7 +172,7 @@ async def test_continuation_bootstrap_emits_single_combined_reason_card() -> Non
         reasoning="Pure translation; no new tools needed.",
         goal_progress="low",
     )
-    ctx.agent_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
+    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
 
     async def emit(event_type: str, event_data: object) -> None:
         if isinstance(event_data, dict):

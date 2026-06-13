@@ -5,9 +5,9 @@ yields the canonical ``(namespace, mode, data)`` stream
 extended with ``soothe.*`` custom events for protocol observability.
 
 RFC-0008 adds agentic loop: default execution mode with Reason → Act
-iterative refinement loop (RFC-201) via ``AgentLoop`` and the compiled
+iterative refinement loop (RFC-201) via ``StrangeLoop`` and the compiled
 loop graph (RFC-220). DAG-style multi-step execution is implemented
-inside the AgentLoop execute phase (``StepScheduler`` / ``Executor``),
+inside the StrangeLoop execute phase (``StepScheduler`` / ``Executor``),
 not as a separate runner mixin.
 
 RFC-222 Phase D: the legacy in-process autonomous multi-goal loop has
@@ -197,7 +197,7 @@ class SootheRunner(
         # Client-visible loop id for the active ``astream`` (daemon loop scope / logging).
         self._client_loop_id_for_stream: str | None = None
 
-        # IG-406: Shared PostgreSQL pool for AgentLoop state persistence
+        # IG-406: Shared PostgreSQL pool for StrangeLoop state persistence
         # Initialized lazily in async context for high-concurrency support
         self._agentloop_shared_pool: Any = None  # SharedPostgreSQLPool | None
 
@@ -268,10 +268,10 @@ class SootheRunner(
         )
 
     async def get_agentloop_shared_pool(self) -> Any:
-        """Get or initialize the shared PostgreSQL pool for AgentLoop state.
+        """Get or initialize the shared PostgreSQL pool for StrangeLoop state.
 
         IG-406: Singleton pool for high-concurrency (200+ threads) support.
-        Pool is shared across all AgentLoopStateManager instances.
+        Pool is shared across all StrangeLoopStateManager instances.
 
         Returns:
             SharedPostgreSQLPool instance if PostgreSQL configured, None for SQLite.
@@ -381,7 +381,7 @@ class SootheRunner(
         """Clean up resources during shutdown.
 
         Stops background indexer tasks and closes connection pools.
-        IG-406: Closes shared AgentLoop PostgreSQL pool at daemon shutdown.
+        IG-406: Closes shared StrangeLoop PostgreSQL pool at daemon shutdown.
         """
         if self._checkpointer_pool is not None:
             try:
@@ -404,7 +404,7 @@ class SootheRunner(
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 
-        # IG-406: Clear reference to shared AgentLoop PostgreSQL pool
+        # IG-406: Clear reference to shared StrangeLoop PostgreSQL pool
         # NOTE: Do NOT close the global singleton here - it's shared across all threads
         # in thread_pool mode. Pool is closed at daemon shutdown via LoopRunnerFactory.
         self._agentloop_shared_pool = None
@@ -533,7 +533,7 @@ class SootheRunner(
         **Two execution modes** (selected in priority order):
         - ``autopilot_job`` set (RFC-222 revised): daemon-dispatched goal, runs
           ``_run_single_autopilot_goal`` which hydrates from the bundle and
-          emits a ``GoalCompletionChunk`` at the end. AgentLoop never sees the
+          emits a ``GoalCompletionChunk`` at the end. StrangeLoop never sees the
           DAG. ``user_input`` is ignored.
         - Default (RFC-201): Agentic loop with Reason → Act iteration.
 
@@ -544,12 +544,12 @@ class SootheRunner(
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
             max_iterations: Override max iterations from config.
-            preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
+            preferred_subagent: Optional subagent hint merged into StrangeLoop (IG-349).
             client_loop_id: Daemon client loop scope for logging and stream correlation.
             intent_hint: Suggested intent to bypass LLM classification. When ``quiz``,
                 skips the intent classification LLM call.
             autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
-                Worker hydrates AgentLoop from ``autopilot_job.merged_context`` and runs
+                Worker hydrates StrangeLoop from ``autopilot_job.merged_context`` and runs
                 ``autopilot_job.goal_description``; ``user_input`` is ignored. Emits a
                 ``GoalCompletionChunk`` exactly once before the terminal chunk.
                 ``None`` (default) keeps today's behavior.
@@ -594,7 +594,7 @@ class SootheRunner(
             )
 
             # RFC-222 revised: autopilot-dispatched job takes priority
-            # over autonomous= flag. AgentLoop runs the single goal hydrated
+            # over autonomous= flag. StrangeLoop runs the single goal hydrated
             # from the bundle; ignores user_input.
             if autopilot_job is not None:
                 async for chunk in self._run_single_autopilot_goal(

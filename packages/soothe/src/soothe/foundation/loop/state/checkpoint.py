@@ -1,4 +1,4 @@
-"""AgentLoop Checkpoint Models (RFC-216, RFC-214).
+"""StrangeLoop Checkpoint Models (RFC-216, RFC-214).
 
 Defines step-level semantic traces for agentic goal execution.
 RFC-216 extends to multi-thread spanning with infinite lifecycle.
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     # protocols.loop_planner (RFC-225 / IG-445).
     from soothe.foundation.loop.state.schemas import EvidenceEntry, PlanResult, StepResult
 
-_AGENT_LOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
+_SLOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
 
 
 class WorkingMemoryEntry(BaseModel):
@@ -175,8 +175,8 @@ class GoalExecutionRecord(BaseModel):
     completed_at: datetime | None = None
 
 
-class AgentLoopCheckpoint(BaseModel):
-    """Complete AgentLoop state (RFC-216: multi-thread spanning)."""
+class StrangeLoopCheckpoint(BaseModel):
+    """Complete StrangeLoop state (RFC-216: multi-thread spanning)."""
 
     # Identity (RFC-216: loop_id independent of thread)
     loop_id: str  # UUID
@@ -226,8 +226,8 @@ def normalize_checkpoint_data(
     """Fill defaults for partial checkpoint blobs stored by daemon registration.
 
     PostgreSQL ``register_loop`` / ``update_loop_metadata`` persist a minimal JSONB
-    document for daemon bookkeeping. ``AgentLoopStateManager.load()`` expects a full
-    ``AgentLoopCheckpoint`` schema.
+    document for daemon bookkeeping. ``StrangeLoopStateManager.load()`` expects a full
+    ``StrangeLoopCheckpoint`` schema.
     """
     out = dict(data)
     resolved_loop_id = out.get("loop_id") or loop_id
@@ -260,10 +260,13 @@ def normalize_checkpoint_data(
     out.setdefault("schema_version", "3.3")
 
     status = out.get("status")
-    if status not in _AGENT_LOOP_CHECKPOINT_STATUSES:
+    if status not in _SLOOP_CHECKPOINT_STATUSES:
         out["status"] = "idle"
     elif status == "running" and not out.get("goal_history"):
         # Daemon metadata-only row after bind (status=running, no goals yet).
         out["status"] = "idle"
 
     return out
+
+
+_STRANGE_LOOP_CHECKPOINT_STATUSES = _SLOOP_CHECKPOINT_STATUSES

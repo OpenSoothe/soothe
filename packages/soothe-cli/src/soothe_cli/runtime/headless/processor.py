@@ -110,7 +110,7 @@ class EventProcessor:
 
     @property
     def loop_id(self) -> str:
-        """Active AgentLoop id from daemon status frames."""
+        """Active StrangeLoop id from daemon status frames."""
         return self._state.loop_id
 
     @property

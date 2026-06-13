@@ -1,7 +1,7 @@
-# RFC-216: AgentLoop Multi-Thread Infinite Lifecycle
+# RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle
 
 **RFC**: 216
-**Title**: AgentLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
+**Title**: StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-16
@@ -9,21 +9,21 @@
 
 ## Abstract
 
-This RFC defines an architecture for AgentLoop to span multiple LangGraph threads with infinite lifecycle, enabling automatic thread switching when current thread becomes problematic. The loop maintains complete goal execution history across threads, performs semantic goal-thread relevance analysis (LLM-based) before execution, and automatically transfers essential knowledge via /recall when switching threads. This architecture provides seamless continuation, execution context isolation, and extensible policy-based thread management.
+This RFC defines an architecture for StrangeLoop to span multiple LangGraph threads with infinite lifecycle, enabling automatic thread switching when current thread becomes problematic. The loop maintains complete goal execution history across threads, performs semantic goal-thread relevance analysis (LLM-based) before execution, and automatically transfers essential knowledge via /recall when switching threads. This architecture provides seamless continuation, execution context isolation, and extensible policy-based thread management.
 
 ## Motivation
 
 ### Current Problem
 
-AgentLoop checkpoint is goal-scoped: each new goal on the same thread initializes a fresh checkpoint (iteration=0, empty history), discarding previous goal execution traces. This creates two critical issues:
+StrangeLoop checkpoint is goal-scoped: each new goal on the same thread initializes a fresh checkpoint (iteration=0, empty history), discarding previous goal execution traces. This creates two critical issues:
 
-1. **Same-thread continuation failure**: When user sends "translate to chinese" on thread where "count readme files" completed, AgentLoop loses previous final_report context, causing agent to ask "请提供需要翻译成中文的文本" instead of translating the previous report.
+1. **Same-thread continuation failure**: When user sends "translate to chinese" on thread where "count readme files" completed, StrangeLoop loses previous final_report context, causing agent to ask "请提供需要翻译成中文的文本" instead of translating the previous report.
 
 2. **Thread context pollution**: LangGraph threads accumulate message history unbounded. When message history grows too large (100K+ tokens), execution becomes slow and expensive. No mechanism to reset execution context while preserving loop-level knowledge.
 
 ### Proposed Solution
 
-AgentLoop becomes an abstract orchestration entity spanning multiple threads:
+StrangeLoop becomes an abstract orchestration entity spanning multiple threads:
 
 - **Infinite lifecycle**: Loop persists across multiple goals and multiple threads (status flow: `ready_for_next_goal` → `running` → `ready_for_next_goal` → ... → `finalized`)
 - **Multi-thread spanning**: Loop has unique `loop_id` (independent of thread_id), tracks thread history (`thread_ids` list), can switch between threads
@@ -37,7 +37,7 @@ AgentLoop becomes an abstract orchestration entity spanning multiple threads:
 
 ### Core Concept
 
-**AgentLoop = Abstract orchestration entity spanning multiple threads**
+**StrangeLoop = Abstract orchestration entity spanning multiple threads**
 
 - **Identity**: `loop_id` (UUID, independent of thread_id)
 - **Thread binding**: `current_thread_id` (active thread) + `thread_ids` (all threads loop has operated on)
@@ -51,16 +51,16 @@ AgentLoop becomes an abstract orchestration entity spanning multiple threads:
 
 This RFC extends RFC-203 (Layer 2 Unified State Model) and `RFC-201-agentloop-plan-execute-loop.md` (Agentic Goal Execution):
 
-- **Layer 2 AgentLoop**: Manages Plan → Execute loop across multiple threads
+- **Layer 2 StrangeLoop**: Manages Plan → Execute loop across multiple threads
 - **Layer 1 CoreAgent**: Executes on specific thread (LangGraph thread_id)
 - **Thread switching**: Layer 2 decides when to switch, Layer 1 executes on new thread
 
 ## Data Models
 
-### AgentLoopCheckpoint (v2.0)
+### StrangeLoopCheckpoint (v2.0)
 
 ```python
-class AgentLoopCheckpoint(BaseModel):
+class StrangeLoopCheckpoint(BaseModel):
     """Abstract loop checkpoint spanning multiple threads."""
 
     # Identity
@@ -232,14 +232,14 @@ class GoalThreadRelevanceAnalysis(BaseModel):
 
 **Process**:
 1. Generate `loop_id` (UUID)
-2. Create AgentLoopCheckpoint:
+2. Create StrangeLoopCheckpoint:
    - `loop_id = generated_uuid`
    - `thread_ids = [thread_id]`  # First thread
    - `current_thread_id = thread_id`
    - `status = "ready_for_next_goal"`
    - `goal_history = []`
    - `thread_health_metrics = ThreadHealthMetrics(thread_id=thread_id)`
-3. Save to `SOOTHE_HOME/runs/{loop_id}/agent_loop_checkpoint.json`
+3. Save to `SOOTHE_HOME/runs/{loop_id}/strange_loop_checkpoint.json`
 
 ### Goal Execution Start
 
@@ -296,7 +296,7 @@ class GoalThreadRelevanceAnalysis(BaseModel):
 **Process**:
 1. Generate final_report via CoreAgent
 2. Update GoalExecutionRecord: `status="completed"`, `final_report=...`
-3. Update AgentLoopCheckpoint:
+3. Update StrangeLoopCheckpoint:
    - `status="ready_for_next_goal"`
    - `total_goals_completed += 1`
    - Update `thread_health_metrics` (reset consecutive_goal_failures on success)
@@ -391,7 +391,7 @@ if policy.goal_thread_relevance_check_enabled:
 SOOTHE_HOME/
   runs/
     {loop_id}/  # Loop checkpoint directory
-      agent_loop_checkpoint.json  # Loop checkpoint (v2.0)
+      strange_loop_checkpoint.json  # Loop checkpoint (v2.0)
       loop/
         step-{goal_id}-{step_id}-{seq}.md  # Working memory spill files
 
@@ -414,7 +414,7 @@ SOOTHE_HOME/
 **checkpoint.py**:
 - Add GoalExecutionRecord (thread_id field)
 - Add ThreadHealthMetrics, ThreadSwitchPolicy, GoalThreadRelevanceAnalysis
-- Extend AgentLoopCheckpoint (loop_id, thread_ids, thread_health_metrics)
+- Extend StrangeLoopCheckpoint (loop_id, thread_ids, thread_health_metrics)
 
 **state_manager.py**:
 - Update initialize(loop_id, thread_id)
@@ -429,7 +429,7 @@ SOOTHE_HOME/
 - analyze_goal_thread_relevance() (LLM invocation)
 - build_thread_summary(), parse_llm_analysis_response()
 
-**agent_loop.py**:
+**strange_loop.py**:
 - Modify run_with_progress() (loop_id primary key, thread switching logic)
 - Add _should_switch_thread(), _execute_thread_switch()
 - Add _analyze_goal_thread_relevance(), _update_thread_health_metrics()
@@ -446,7 +446,7 @@ SOOTHE_HOME/
 
 ### Phase 1: Schema & State Manager
 - Add new models (ThreadHealthMetrics, ThreadSwitchPolicy, GoalThreadRelevanceAnalysis)
-- Extend AgentLoopCheckpoint schema
+- Extend StrangeLoopCheckpoint schema
 - Update state_manager methods (initialize, load, save, thread switch logic)
 
 ### Phase 2: Thread Switching Policy
@@ -454,7 +454,7 @@ SOOTHE_HOME/
 - Implement policy evaluation logic
 - Add custom trigger extensibility
 
-### Phase 3: AgentLoop Integration
+### Phase 3: StrangeLoop Integration
 - Modify run_with_progress() for multi-thread execution
 - Add thread health monitoring
 - Add goal-thread relevance analysis integration
@@ -497,7 +497,7 @@ SOOTHE_HOME/
 ## Changelog
 
 **2026-04-16 (created)**:
-- Initial RFC for AgentLoop multi-thread infinite lifecycle
+- Initial RFC for StrangeLoop multi-thread infinite lifecycle
 - Automatic thread switching with extensible policy
 - Goal-thread relevance analysis (LLM semantic evaluation)
 - Auto /recall knowledge transfer

@@ -21,7 +21,7 @@ Refactor Soothe's persistence architecture to enforce production-grade storage, 
 Soothe currently has **5 major persistence scenarios** with fragmented backend options and inconsistent validation:
 
 1. **LangGraph Checkpoints** - CoreAgent execution state
-2. **AgentLoop Checkpoints** - Loop orchestration metadata  
+2. **StrangeLoop Checkpoints** - Loop orchestration metadata  
 3. **Thread Metadata** - DurabilityProtocol thread lifecycle
 4. **Vector Stores** - Context/memory embeddings
 5. **Memory Backends** - MemU long-term user memory
@@ -121,7 +121,7 @@ persistence:
 | Purpose | PostgreSQL DB | SQLite File | Contents |
 |---------|---------------|-------------|----------|
 | LangGraph Checkpoints | soothe_checkpoints | langgraph_checkpoints.db | CoreAgent state |
-| AgentLoop Checkpoints | soothe_checkpoints | loop_checkpoints.db | Loop metadata (same PG db) |
+| StrangeLoop Checkpoints | soothe_checkpoints | loop_checkpoints.db | Loop metadata (same PG db) |
 | Thread Metadata | soothe_metadata | metadata.db | DurabilityProtocol ThreadInfo |
 | Vector Embeddings | soothe_vectors | vectors.db | pgvector/sqlite_vec |
 | User Memory | soothe_memory | memory.db | MemU long-term memory |
@@ -557,7 +557,7 @@ class PostgreSQLPersistStore:
 
 ## Related RFCs
 
-- **RFC-215**: AgentLoop Persistence Backend Architecture (loop_checkpoints.db)
+- **RFC-215**: StrangeLoop Persistence Backend Architecture (loop_checkpoints.db)
 - **RFC-0002**: Core Modules Architecture (DurabilityProtocol, VectorStoreProtocol)
 - **RFC-0013**: Daemon Multi-Transport Configuration (production deployment)
 

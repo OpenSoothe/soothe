@@ -9,11 +9,11 @@
 
 **Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
 
-> **Compatibility note (2026-05-28)**: RFC-222 revised replaces the **inverted control flow** described in §"Pull-Based Architecture" and §"AgentLoop ↔ GoalEngine Integration" with **autopilot push** — daemon's `AutopilotService` dispatches goals to AgentLoop workers; AgentLoop never sees `GoalEngine`. The following sections of this RFC remain authoritative: §"GoalEngine Responsibilities", §"Backoff Reasoning Architecture", §"EvidenceBundle Schema", §"GoalEngine Internal Backoff Application", §"Goal Directives". The §"GoalContext Construction for Plan Phase" section uses `GoalContext` in the RFC-200 sense (DAG snapshot for backoff); RFC-222's distinct concept is named `GoalDispatchContextBundle` to avoid collision.
+> **Compatibility note (2026-05-28)**: RFC-222 revised replaces the **inverted control flow** described in §"Pull-Based Architecture" and §"StrangeLoop ↔ GoalEngine Integration" with **autopilot push** — daemon's `AutopilotService` dispatches goals to StrangeLoop workers; StrangeLoop never sees `GoalEngine`. The following sections of this RFC remain authoritative: §"GoalEngine Responsibilities", §"Backoff Reasoning Architecture", §"EvidenceBundle Schema", §"GoalEngine Internal Backoff Application", §"Goal Directives". The §"GoalContext Construction for Plan Phase" section uses `GoalContext` in the RFC-200 sense (DAG snapshot for backoff); RFC-222's distinct concept is named `GoalDispatchContextBundle` to avoid collision.
 
 ## Abstract
 
-This RFC defines GoalEngine, Soothe's autonomous goal management system for long-running complex workflows. GoalEngine manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. **Per RFC-222 (revised 2026-05-28)**, execution is driven by the daemon-owned `AutopilotService` which dispatches goals to subprocess AgentLoop workers via a job contract. AgentLoop emits a completion chunk that the daemon's autopilot consumes to advance the DAG. GoalEngine itself remains the authoritative state machine for goal lifecycle, backoff reasoning, and DAG semantics. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines GoalEngine, Soothe's autonomous goal management system for long-running complex workflows. GoalEngine manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. **Per RFC-222 (revised 2026-05-28)**, execution is driven by the daemon-owned `AutopilotService` which dispatches goals to subprocess StrangeLoop workers via a job contract. StrangeLoop emits a completion chunk that the daemon's autopilot consumes to advance the DAG. GoalEngine itself remains the authoritative state machine for goal lifecycle, backoff reasoning, and DAG semantics. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 
@@ -25,9 +25,9 @@ Soothe operates through a hierarchical execution model with three distinct level
 GoalEngine: Autonomous Goal Management (this RFC)
   ├─ Scope: Long-running complex workflows, multi-goal DAGs
   ├─ Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
-  └─ Delegation: PERFORM invokes AgentLoop's full Plan → Execute loop
+  └─ Delegation: PERFORM invokes StrangeLoop's full Plan → Execute loop
 
-AgentLoop: Agentic Goal Execution (RFC-201)
+StrangeLoop: Agentic Goal Execution (RFC-201)
   ├─ Scope: Single-goal execution through iterative refinement
   ├─ Loop: Plan → Execute (max iterations: ~8)
   └─ Delegation: Execute invokes CoreAgent for step execution
@@ -43,21 +43,21 @@ GoalEngine operates at the highest abstraction level, focusing on goal lifecycle
 
 - **Goal DAG orchestration**: Create, schedule, and manage goals with dependencies
 - **Goal-level planning**: Decompose complex objectives into goal DAGs
-- **Delegation to AgentLoop**: PERFORM stage invokes AgentLoop's complete loop
-- **Goal DAG reflection**: Evaluate progress across multiple goals using AgentLoop PlanResult
+- **Delegation to StrangeLoop**: PERFORM stage invokes StrangeLoop's complete loop
+- **Goal DAG reflection**: Evaluate progress across multiple goals using StrangeLoop PlanResult
 - **Dynamic goal restructuring**: Mutate goal DAG based on execution learning
 - **Large iteration budgets**: Support complex problem solving (10-50+ iterations)
 
-### Integration with AgentLoop
+### Integration with StrangeLoop
 
-**AgentLoop Goal Pull Architecture** (Inverted Control Flow):
+**StrangeLoop Goal Pull Architecture** (Inverted Control Flow):
 
-AgentLoop actively queries GoalEngine for goal assignment (pull-based). GoalEngine provides goal state service, never invokes AgentLoop.
+StrangeLoop actively queries GoalEngine for goal assignment (pull-based). GoalEngine provides goal state service, never invokes StrangeLoop.
 
 ```python
-# AgentLoop initialization (run_with_progress)
+# StrangeLoop initialization (run_with_progress)
 async def run_with_progress(...):
-    # PULL: AgentLoop queries GoalEngine for current goal
+    # PULL: StrangeLoop queries GoalEngine for current goal
     goal_engine = config.resolve_goal_engine()
     current_goal = goal_engine.get_next_ready_goal()  # Pull-based assignment
     
@@ -65,7 +65,7 @@ async def run_with_progress(...):
         logger.info("No goals ready for execution")
         return None
     
-    # AgentLoop owns execution loop
+    # StrangeLoop owns execution loop
     thread_id = f"{base_tid}__goal_{current_goal.id}"
     state = LoopState(
         current_goal_id=current_goal.id,
@@ -73,10 +73,10 @@ async def run_with_progress(...):
         thread_id=thread_id,
     )
     
-    # Execute AgentLoop Plan → Execute loop (AgentLoop drives)
+    # Execute StrangeLoop Plan → Execute loop (StrangeLoop drives)
     plan_result = await self.run_iteration(state)
     
-    # REPORT: AgentLoop reports completion to GoalEngine
+    # REPORT: StrangeLoop reports completion to GoalEngine
     if plan_result.status == "done":
         goal_engine.complete_goal(
             goal_id=current_goal.id,
@@ -88,13 +88,13 @@ async def run_with_progress(...):
 
 **Goal Pull Integration Contract**:
 
-| Trigger | AgentLoop Action | GoalEngine Response |
+| Trigger | StrangeLoop Action | GoalEngine Response |
 |---------|------------------|---------------------|
 | Goal assignment | `get_next_ready_goal()` | Return highest-priority DAG-satisfied goal |
 | Goal completion | `complete_goal(goal_id, plan_result)` | Update goal status, store GoalReport |
 | Goal failure | `fail_goal(goal_id, evidence)` | Apply BackoffReasoner, mutate DAG |
 
-**Architectural Principle**: AgentLoop drives execution timing, GoalEngine provides goal state service. GoalEngine never invokes AgentLoop (inverted control flow).
+**Architectural Principle**: StrangeLoop drives execution timing, GoalEngine provides goal state service. GoalEngine never invokes StrangeLoop (inverted control flow).
 
 ## Loop Model
 
@@ -117,7 +117,7 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
     |
     +-- for each executing goal (PERFORM stage):
            |
-           +-- Delegate to AgentLoop's Plan → Execute loop
+           +-- Delegate to StrangeLoop's Plan → Execute loop
            |      Receive: PlanResult with evidence_summary, goal_progress
            |
            +-- REFLECT stage:
@@ -151,9 +151,9 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
 ### Iteration Semantics
 
 - **Max iterations**: Large budget (10-50+) for complex problem solving
-- **Goal lifecycle**: Create → Activate → Execute (via AgentLoop) → Reflect → Complete/Fail
+- **Goal lifecycle**: Create → Activate → Execute (via StrangeLoop) → Reflect → Complete/Fail
 - **DAG scheduling**: Goals execute when dependencies satisfied, parallel batches when independent
-- **Evidence flow**: AgentLoop PlanResult → GoalEngine REFLECT → goal directives → DAG restructuring
+- **Evidence flow**: StrangeLoop PlanResult → GoalEngine REFLECT → goal directives → DAG restructuring
 
 ## Components
 
@@ -184,7 +184,7 @@ class Goal(BaseModel):
 - `create_goal(description, priority, parent_id)` → Goal
 - `next_goal()` → Goal | None (backward-compatible single-goal)
 - `ready_goals(limit)` → list[Goal] (DAG-satisfied, activated goals)
-- `complete_goal(goal_id, plan_result)` → None (mark completed with AgentLoop evidence)
+- `complete_goal(goal_id, plan_result)` → None (mark completed with StrangeLoop evidence)
 - `fail_goal(goal_id, evidence, allow_retry)` → BackoffDecision | None (apply backoff reasoning)
 - `list_goals(status)` → list[Goal]
 - `get_goal(goal_id)` → Goal | None (query goal metadata)
@@ -195,7 +195,7 @@ class Goal(BaseModel):
 - `add_dependencies(goal_id, depends_on)` → None (cycle-safe)
 - `validate_dependency(goal_id, depends_on)` → bool
 
-**Service Provider Role**: GoalEngine never invokes AgentLoop (inverted control flow). AgentLoop queries GoalEngine via pull-based API.
+**Service Provider Role**: GoalEngine never invokes StrangeLoop (inverted control flow). StrangeLoop queries GoalEngine via pull-based API.
 
 **DAG Scheduling**:
 - `ready_goals(limit)` returns goals whose `depends_on` are all completed
@@ -203,7 +203,7 @@ class Goal(BaseModel):
 - Returned goals activated (status: "pending" → "active")
 - Parallel execution when `len(ready_goals) > 1`
 
-**Integration with Layer 2**: GoalEngine provides goal state service. AgentLoop queries via `get_next_ready_goal()`, reports via `complete_goal()` / `fail_goal()` (§48-82).
+**Integration with Layer 2**: GoalEngine provides goal state service. StrangeLoop queries via `get_next_ready_goal()`, reports via `complete_goal()` / `fail_goal()` (§48-82).
 
 ### 2. GoalBackoffReasoner (`packages/soothe/src/soothe/core/goal_engine/backoff_reasoner.py`)
 
@@ -232,7 +232,7 @@ class BackoffDecision(BaseModel):
 
 ### Shared Evidence Contract (Canonical)
 
-Layer 2 and Layer 3 exchange failure and progress evidence through a shared contract to avoid schema drift across AgentLoop, GoalEngine, and context ingestion.
+Layer 2 and Layer 3 exchange failure and progress evidence through a shared contract to avoid schema drift across StrangeLoop, GoalEngine, and context ingestion.
 
 ```python
 class EvidenceBundle(BaseModel):
@@ -302,14 +302,14 @@ class GoalBackoffReasoner:
 class GoalEngine:
     """Layer 3 Goal Lifecycle Manager (Service Provider).
     
-    Provides goal state service for AgentLoop queries.
-    Never invokes AgentLoop (inverted control flow).
+    Provides goal state service for StrangeLoop queries.
+    Never invokes StrangeLoop (inverted control flow).
     """
     
     def get_next_ready_goal(self) -> Goal | None:
         """Get next goal ready for execution (DAG-satisfied, highest priority).
         
-        Called by: AgentLoop before starting Layer 2 loop.
+        Called by: StrangeLoop before starting Layer 2 loop.
         
         Returns:
             Goal with dependencies satisfied, or None if no goals ready.
@@ -329,7 +329,7 @@ class GoalEngine:
     ) -> None:
         """Mark goal completed with Layer 2 execution evidence.
         
-        Called by: AgentLoop after successful Plan → Execute loop.
+        Called by: StrangeLoop after successful Plan → Execute loop.
         
         Args:
             goal_id: Completed goal identifier.
@@ -358,7 +358,7 @@ class GoalEngine:
     ) -> BackoffDecision | None:
         """Mark goal failed with evidence, apply backoff reasoning.
         
-        Called by: AgentLoop when Layer 2 execution fails.
+        Called by: StrangeLoop when Layer 2 execution fails.
         
         Args:
             goal_id: Failed goal identifier.
@@ -373,7 +373,7 @@ class GoalEngine:
         - Apply BackoffDecision (DAG restructuring)
         - Reset backoff target goal to "pending"
         
-        Encapsulation: AgentLoop never calls BackoffReasoner directly.
+        Encapsulation: StrangeLoop never calls BackoffReasoner directly.
         """
         goal = self._goals[goal_id]
         goal.status = "failed"
@@ -420,25 +420,25 @@ autonomous:
 - **Layer 2 (RFC-201)**: Produces execution evidence and failure context via `EvidenceBundle`
 - **Layer 3 (RFC-200)**: Defines and executes GoalBackoffReasoner policy and BackoffDecision
 - **Shared contract**: EvidenceBundle (RFC-200 §14-22) with structured + narrative fields
-- **Encapsulation**: AgentLoop never calls BackoffReasoner directly; GoalEngine owns backoff reasoning
+- **Encapsulation**: StrangeLoop never calls BackoffReasoner directly; GoalEngine owns backoff reasoning
 
 **Integration Pattern** (Layer 2 → Layer 3 handoff):
 
 ```python
-# AgentLoop.Executor failure detection
+# StrangeLoop.Executor failure detection
 async def execute(self, decision: AgentDecision, state: LoopState):
     try:
         results = await self.core_agent.astream(...)
         
         if execution_failed(results):
-            # BUILD: AgentLoop constructs EvidenceBundle
+            # BUILD: StrangeLoop constructs EvidenceBundle
             evidence = EvidenceBundleBuilder().build_from_plan_result(
                 plan_result=state.last_plan_result,
                 wave_metrics=state.last_wave_metrics,  # RFC-201 §236-245
                 iteration=state.iteration,
             )
             
-            # HANDOFF: AgentLoop → GoalEngine with evidence
+            # HANDOFF: StrangeLoop → GoalEngine with evidence
             goal_engine = self.config.resolve_goal_engine()
             backoff_decision = await goal_engine.fail_goal(
                 goal_id=state.current_goal_id,
@@ -495,7 +495,7 @@ class EvidenceBundle(BaseModel):
 **GoalEngine Internal Backoff Application**:
 
 ```python
-# GoalEngine internal (encapsulated, not called by AgentLoop)
+# GoalEngine internal (encapsulated, not called by StrangeLoop)
 def _apply_backoff_decision(self, decision: BackoffDecision) -> None:
     """Apply backoff decision to Goal DAG (GoalEngine internal).
     
@@ -546,7 +546,7 @@ autonomous:
 
 **Dependency-Driven Retrieval Architecture**:
 
-AgentLoop Plan phase requires dependency-aware context synthesized from GoalEngine goal metadata and ContextProtocol retrieval.
+StrangeLoop Plan phase requires dependency-aware context synthesized from GoalEngine goal metadata and ContextProtocol retrieval.
 
 **Synthesis Strategy**:
 1. **GoalEngine.get_goal()** → current goal metadata (priority, dependencies)
@@ -563,7 +563,7 @@ AgentLoop Plan phase requires dependency-aware context synthesized from GoalEngi
 
 ```python
 class PlanContext(BaseModel):
-    """Dependency-aware context for AgentLoop Plan phase."""
+    """Dependency-aware context for StrangeLoop Plan phase."""
     
     entries: list[ContextEntry]
     """Combined entries: dependency + current + previous goals.
@@ -579,7 +579,7 @@ class PlanContext(BaseModel):
     """Synthesis metadata: goal_id, priority, dependencies, entry counts."""
 ```
 
-**Integration Point**: AgentLoop calls `GoalContextConstructor.construct_plan_context(goal_id)` before Plan phase (PULL #1 integration). GoalEngine dependencies drive ContextProtocol retrieval.
+**Integration Point**: StrangeLoop calls `GoalContextConstructor.construct_plan_context(goal_id)` before Plan phase (PULL #1 integration). GoalEngine dependencies drive ContextProtocol retrieval.
 
 **Architectural Principle**: Prerequisite goal execution history provides critical constraints and learned patterns for planning. Goal dependencies define relevant context scope.
 
@@ -964,8 +964,8 @@ class GoalFileWatcher:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: AgentLoop Plan-Execute Loop
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Unified AgentLoop Plan-Execute Loop
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: StrangeLoop Plan-Execute Loop
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Unified StrangeLoop Plan-Execute Loop
 
 ## Changelog
 

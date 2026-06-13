@@ -121,11 +121,11 @@ When user selects a directory without `.soothe/`:
 |-----------|-------------|
 | Definition | Root Goal submitted to daemon's AutopilotService |
 | Daemon entity | Goal with status managed by GoalEngine (RFC-200, RFC-222) |
-| Spawns | Child Goals (subgoals) assigned to AgentLoop workers by WorkerPool |
+| Spawns | Child Goals (subgoals) assigned to StrangeLoop workers by WorkerPool |
 | UI view | DAG visualization + loop observation |
 | Creation | Job creation dialog → submits goal to AutopilotService |
 
-**Goal-to-Worker Assignment**: Workers (AgentLoop subprocesses) are fungible and assigned by WorkerPool (RFC-222 §95-104). A goal's `assigned_loop_id` references the worker currently executing it. Child goals may reuse parent's worker (lineage-aware assignment) or spawn new workers.
+**Goal-to-Worker Assignment**: Workers (StrangeLoop subprocesses) are fungible and assigned by WorkerPool (RFC-222 §95-104). A goal's `assigned_loop_id` references the worker currently executing it. Child goals may reuse parent's worker (lineage-aware assignment) or spawn new workers.
 
 ### 3. SQLite Schema
 

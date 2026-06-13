@@ -1,7 +1,7 @@
-# RFC-207: AgentLoop Thread Management & Goal Context
+# RFC-207: StrangeLoop Thread Management & Goal Context
 
 **RFC**: 207
-**Title**: AgentLoop Thread Management & Goal Context
+**Title**: StrangeLoop Thread Management & Goal Context
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines AgentLoop thread lifecycle management and goal context integration, consolidating thread lifecycle (multi-thread spanning), goal context manager (previous goal injection), thread relationship module (similarity-based context), and executor thread coordination. AgentLoop threads span multiple CoreAgent executions with goal-level context bridging thread switches while maintaining architectural isolation between loop history (goals) and thread history (messages).
+This RFC defines StrangeLoop thread lifecycle management and goal context integration, consolidating thread lifecycle (multi-thread spanning), goal context manager (previous goal injection), thread relationship module (similarity-based context), and executor thread coordination. StrangeLoop threads span multiple CoreAgent executions with goal-level context bridging thread switches while maintaining architectural isolation between loop history (goals) and thread history (messages).
 
 ---
 
@@ -20,7 +20,7 @@ This RFC defines AgentLoop thread lifecycle management and goal context integrat
 
 ### Thread Lifecycle Model
 
-AgentLoop executions span multiple CoreAgent threads:
+StrangeLoop executions span multiple CoreAgent threads:
 - **Primary thread**: User query thread (conversation history)
 - **Thread switches**: Switch to new threads for health/performance reasons
 - **Thread spanning**: Loop checkpoint spans multiple thread IDs
@@ -40,8 +40,8 @@ class ThreadHealthMetrics(BaseModel):
     """Error rate in recent executions."""
     last_updated: datetime
 
-class AgentLoopCheckpoint(BaseModel):
-    """AgentLoop state spanning multiple threads."""
+class StrangeLoopCheckpoint(BaseModel):
+    """StrangeLoop state spanning multiple threads."""
 
     # Thread spanning
     thread_ids: list[str] = []
@@ -73,7 +73,7 @@ class AgentLoopCheckpoint(BaseModel):
 - Performance degradation detected
 
 ```python
-def check_thread_health(checkpoint: AgentLoopCheckpoint) -> bool:
+def check_thread_health(checkpoint: StrangeLoopCheckpoint) -> bool:
     """Determine if thread switch needed."""
     health = checkpoint.thread_health_metrics[checkpoint.current_thread_id]
     return (
@@ -104,9 +104,9 @@ def execute_thread_switch(new_thread_id: str) -> None:
 
 ### Unified Goal-Level Context Provider
 
-AgentLoop mirrors CoreAgent's context separation pattern:
+StrangeLoop mirrors CoreAgent's context separation pattern:
 - **CoreAgent**: Conversation history (thread state) vs execution context (configurable briefings)
-- **AgentLoop**: Goal-level history (loop checkpoint) vs iteration context (LoopState excerpts)
+- **StrangeLoop**: Goal-level history (loop checkpoint) vs iteration context (LoopState excerpts)
 
 **Key constraint**: Keep loop history (goals) separate from thread history (messages).
 
@@ -114,7 +114,7 @@ AgentLoop mirrors CoreAgent's context separation pattern:
 
 ```python
 class GoalContextManager:
-    """Unified goal-level context provider for AgentLoop.
+    """Unified goal-level context provider for StrangeLoop.
 
     Injection rules:
     - Plan phase: ALWAYS inject previous goal summaries (LLM needs goal-level
@@ -128,7 +128,7 @@ class GoalContextManager:
 
     def __init__(
         self,
-        state_manager: AgentLoopStateManager,
+        state_manager: StrangeLoopStateManager,
         config: GoalContextConfig,
         embedding_model: Embeddings,
     ) -> None:
@@ -156,11 +156,11 @@ class GoalContextManager:
 
 ### Plan Phase Integration
 
-Inject previous goal context at AgentLoop initialization:
+Inject previous goal context at StrangeLoop initialization:
 
 ```python
 async def run_with_progress(...):
-    state_manager = AgentLoopStateManager(thread_id, workspace)
+    state_manager = StrangeLoopStateManager(thread_id, workspace)
     goal_context_manager = GoalContextManager(state_manager, config.goal_context)
 
     # Inject previous goal context
@@ -408,8 +408,8 @@ agentic:
 
 ## References
 
-- RFC-201: AgentLoop Plan-Execute Loop Architecture
-- RFC-203: AgentLoop State & Memory Architecture
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture
+- RFC-203: StrangeLoop State & Memory Architecture
 - RFC-216: Loop Multi-Thread Lifecycle (original source)
 - RFC-217: Goal Context Management (original source)
 
@@ -426,4 +426,4 @@ agentic:
 
 ---
 
-*AgentLoop thread management with lifecycle spanning, goal context bridging, similarity-based context construction, and executor coordination.*
+*StrangeLoop thread management with lifecycle spanning, goal context bridging, similarity-based context construction, and executor coordination.*

@@ -146,7 +146,7 @@ docker compose exec soothe-pgvector psql -U postgres -l
 ```
 
 **RFC-612 Multi-database architecture**:
-- `soothe_checkpoints`: LangGraph + AgentLoop state
+- `soothe_checkpoints`: LangGraph + StrangeLoop state
 - `soothe_metadata`: Thread lifecycle metadata
 - `soothe_vectors`: Embedding vectors (pgvector)
 - `soothe_memory`: Long-term semantic memory

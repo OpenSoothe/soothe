@@ -180,10 +180,10 @@ The legacy `history_replay`, `loop_reattached`, and `replay_complete` frames are
 2. `CardBinder.bind(user_input)` → `CardMutation(op="create", kind="user_message", ...)`.
 3. `DisplayCardLedger.apply(mutation)` → appends to `cards.jsonl`, sets in-memory state, returns the new card.
 4. Daemon publishes `card.created` frame on the loop's subscription topic.
-5. Loop graph executes: `agent_loop.step.started` → binder creates `step` card → `card.created`.
+5. Loop graph executes: `strange_loop.step.started` → binder creates `step` card → `card.created`.
 6. Tool call streams in (`messages` mode AIMessage with tool_calls) → binder binds to the open step card → `card.updated` adds a tool row.
 7. Tool result streams in (`messages` mode ToolMessage) → binder matches by `tool_call_id` → `card.updated` completes the tool row.
-8. `agent_loop.step.completed` → binder finalizes the step → `card.finalized`.
+8. `strange_loop.step.completed` → binder finalizes the step → `card.finalized`.
 9. Final consolidated assistant text emitted → binder creates `assistant_text` card → `card.created`.
 
 Throughout, `CardBinder` runs in a dedicated asyncio task fed by a bounded queue so it never blocks the live event publish path (see §10.2).
@@ -261,7 +261,7 @@ Inferred from the current TUI widget set; covers everything the live UI renders 
 | `assistant_text` | `content` (markdown), `timestamp` | Final consolidated body per turn |
 | `step` | `step_id`, `description`, `phase`, `tool_rows[]`, `success?`, `duration_ms?`, `tool_call_count?`, `summary?` | Tool rows bound from `messages`-mode tool calls; phase ∈ `{running, success, error}` |
 | `cognition_plan` | `iteration`, `action`, `status`, `assessment?`, `strategy?` | Updated as plan reflects |
-| `cognition_reason` | `iteration`, `content` | Per `soothe.cognition.agent_loop.reasoned` |
+| `cognition_reason` | `iteration`, `content` | Per `soothe.cognition.strange_loop.reasoned` |
 | `subagent` | `task`, `progress[]`, `success?` | Roll-up of subagent stream — not one card per chunk |
 | `error` | `code`, `message`, `context?` | From `soothe.error.*` events |
 | `system_notice` | `content`, `kind` (e.g., `loop_switch`, `summarization`, `clarification`) | `/loops` switch banners, summarization notices, clarification relays |
@@ -309,7 +309,7 @@ The client decode complexity is bounded — diffs are shallow per-field merges o
 
 ### 10.4 Relationship to RFC-411
 
-RFC-411 (Event Stream Replay & History Reconstruction) proposed reconstructing a chronological event stream from the AgentLoop checkpoint tree on reattach, then replaying those events through the live TUI pipeline. The reconstruction has shipped (`soothe.core.events.replay.reconstructor`) but:
+RFC-411 (Event Stream Replay & History Reconstruction) proposed reconstructing a chronological event stream from the StrangeLoop checkpoint tree on reattach, then replaying those events through the live TUI pipeline. The reconstruction has shipped (`soothe.core.events.replay.reconstructor`) but:
 
 * The reconstructed stream only emits iteration boundaries + branch events — too sparse to rebuild cards.
 * The daemon's `handle_loop_reattach` emits frames the SDK explicitly filters out as stale.

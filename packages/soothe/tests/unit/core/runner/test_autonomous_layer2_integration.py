@@ -1,4 +1,4 @@
-"""Tests for GoalEngine → AgentLoop delegation (IG-154)."""
+"""Tests for GoalEngine → StrangeLoop delegation (IG-154)."""
 
 from unittest.mock import AsyncMock, Mock
 
@@ -51,7 +51,7 @@ def test_plan_result_to_goal_result_conversion():
 
 @pytest.mark.asyncio
 async def test_agentloop_delegation_basic():
-    """Test basic AgentLoop delegation from GoalEngine."""
+    """Test basic StrangeLoop delegation from GoalEngine."""
     from soothe.config import SootheConfig
     from soothe.runner import SootheRunner
 
@@ -119,9 +119,9 @@ async def test_planner_reflect_with_agentloop_result():
         agentloop_result=goal_result,
     )
 
-    # Verify reflection uses AgentLoop result
+    # Verify reflection uses StrangeLoop result
     assert reflection is not None
-    assert "AgentLoop" in reflection.assessment
+    assert "StrangeLoop" in reflection.assessment
     assert "95%" in reflection.assessment or "progress" in reflection.assessment
     assert not reflection.should_revise  # Completed goal
     # Completed goals may have zero directives (no further action needed)
@@ -130,7 +130,7 @@ async def test_planner_reflect_with_agentloop_result():
 
 @pytest.mark.asyncio
 async def test_planner_reflect_with_failed_agentloop_result():
-    """Test planner generates recovery directives for failed AgentLoop result."""
+    """Test planner generates recovery directives for failed StrangeLoop result."""
     from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
@@ -245,9 +245,9 @@ def test_goal_result_serialization():
 
 @pytest.mark.asyncio
 async def test_agentloop_run_with_progress_interface():
-    """Verify AgentLoop.run_with_progress() interface matches expectations."""
+    """Verify StrangeLoop.run_with_progress() interface matches expectations."""
     from soothe.foundation.core.agent import CoreAgent
-    from soothe.foundation.loop import AgentLoop
+    from soothe.foundation.loop import StrangeLoop
 
     # Mock CoreAgent
     mock_core_agent = Mock(spec=CoreAgent)
@@ -257,18 +257,18 @@ async def test_agentloop_run_with_progress_interface():
     mock_planner = Mock()
     mock_planner.plan = AsyncMock()
 
-    # Create AgentLoop
-    agent_loop = AgentLoop(
+    # Create StrangeLoop
+    strange_loop = StrangeLoop(
         core_agent=mock_core_agent,
         loop_planner=mock_planner,
         config=Mock(),
     )
 
     # Verify run_with_progress exists
-    assert hasattr(agent_loop, "run_with_progress")
+    assert hasattr(strange_loop, "run_with_progress")
 
     # Test would verify event stream format:
-    # async for event_type, event_data in agent_loop.run_with_progress(...):
+    # async for event_type, event_data in strange_loop.run_with_progress(...):
     #   assert event_type in ("iteration_started", "plan", "completed")
     #   assert isinstance(event_data, dict)
 
@@ -289,12 +289,12 @@ if __name__ == "__main__":
 
     print("\nRunning async tests...")
     asyncio.run(test_planner_reflect_with_agentloop_result())
-    print("✅ Planner reflect with AgentLoop result test passed")
+    print("✅ Planner reflect with StrangeLoop result test passed")
 
     asyncio.run(test_planner_reflect_with_failed_agentloop_result())
-    print("✅ Planner reflect with failed AgentLoop result test passed")
+    print("✅ Planner reflect with failed StrangeLoop result test passed")
 
     asyncio.run(test_planner_reflect_without_agentloop_result())
-    print("✅ Planner reflect without AgentLoop result test passed")
+    print("✅ Planner reflect without StrangeLoop result test passed")
 
-    print("\n✅ All IG-154 AgentLoop integration tests passed!")
+    print("\n✅ All IG-154 StrangeLoop integration tests passed!")

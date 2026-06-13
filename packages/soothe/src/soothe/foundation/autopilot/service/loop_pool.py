@@ -1,6 +1,6 @@
 """Loop pool models for AutopilotService (RFC-222).
 
-This module defines data models for managing AgentLoop worker pools:
+This module defines data models for managing StrangeLoop worker pools:
 - LoopHandle: Individual loop state (active, idle, history)
 - LoopPool: Pool management (max capacity, goal-to-loop mapping)
 """
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 
 class LoopHandle(BaseModel):
-    """Handle for an AgentLoop worker in the pool.
+    """Handle for an StrangeLoop worker in the pool.
 
     Tracks loop state, current goal assignment, and execution history.
     Used for lineage-aware loop reuse and idle timeout management.
@@ -119,7 +119,7 @@ class LoopHandle(BaseModel):
 
 
 class LoopPool(BaseModel):
-    """Pool of AgentLoop workers for AutopilotService.
+    """Pool of StrangeLoop workers for AutopilotService.
 
     Manages loop creation, assignment, and release. Tracks
     goal-to-loop mapping for lineage reuse.

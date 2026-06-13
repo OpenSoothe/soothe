@@ -1,7 +1,7 @@
 """Internal EventBus for AL ↔ GE ↔ AP coordination (RFC-222).
 
 This module provides an in-memory async event dispatch system for
-internal coordination between AgentLoop, GoalEngine, and AutopilotService.
+internal coordination between StrangeLoop, GoalEngine, and AutopilotService.
 Internal events use the `soothe.internal.*` namespace and never leak
 to external clients (WebSocket, TUI).
 

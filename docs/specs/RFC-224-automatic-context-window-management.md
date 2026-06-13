@@ -20,7 +20,7 @@ This RFC extends RFC-223 thread inheritance with automatic context window manage
 
 ### Current Behavior
 
-AgentLoop tracks `total_tokens_used` and `context_percentage_consumed` in `LoopState`, but these metrics are informational only. When the context window fills:
+StrangeLoop tracks `total_tokens_used` and `context_percentage_consumed` in `LoopState`, but these metrics are informational only. When the context window fills:
 
 1. LLM calls fail with `ContextOverflowError` or provider-specific limit errors
 2. Goal execution halts or produces degraded reasoning quality
@@ -37,10 +37,10 @@ AgentLoop tracks `total_tokens_used` and `context_percentage_consumed` in `LoopS
 
 ## Configuration
 
-### New Fields in AgentLoopConfig
+### New Fields in StrangeLoopConfig
 
 ```python
-class AgentLoopConfig(BaseModel):
+class StrangeLoopConfig(BaseModel):
     # Existing fields...
     context_window_limit: int = Field(default=200000)
 
@@ -158,7 +158,7 @@ class ContextCompactionResult:
 
 
 class ContextWindowManager:
-    """Manages automatic context window compaction for AgentLoop threads."""
+    """Manages automatic context window compaction for StrangeLoop threads."""
 
     def __init__(
         self,
@@ -364,7 +364,7 @@ Step threads (`{loop_id}__step_{step_id}`) are typically short-lived (one execut
 
 ## Migration Path
 
-1. Add configuration fields to `AgentLoopConfig`
+1. Add configuration fields to `StrangeLoopConfig`
 2. Implement `ContextWindowManager` component
 3. Integrate deepagents SummarizationMiddleware API
 4. Add orchestrator integration point
@@ -389,7 +389,7 @@ Step threads (`{loop_id}__step_{step_id}`) are typically short-lived (one execut
 ## References
 
 - RFC-223: Thread Inheritance with LangGraph Checkpoint Forking
-- RFC-201: AgentLoop Plan-Execute Loop Architecture
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture
 - RFC-214: Unified Message Ledger
 - deepagents SummarizationMiddleware
 

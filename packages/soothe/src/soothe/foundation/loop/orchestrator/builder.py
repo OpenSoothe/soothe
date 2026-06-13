@@ -1,7 +1,7 @@
-"""Compile the Agent Loop LangGraph (RFC-220).
+"""Compile the Strange Loop LangGraph (RFC-220).
 
 The graph checkpoint namespace uses ``loop_id`` via ``configurable.thread_id`` when a
-checkpointer is attached. Persistence for goals remains ``AgentLoopStateManager``.
+checkpointer is attached. Persistence for goals remains ``StrangeLoopStateManager``.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def _is_real_checkpointer(obj: Any) -> bool:
     return isinstance(obj, BaseCheckpointSaver)
 
 
-def build_agent_loop_graph(ctx: LoopRuntimeContext):
+def build_strange_loop_graph(ctx: LoopRuntimeContext):
     """Build and compile the Loop orchestrator graph (RFC-220 topology).
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
@@ -191,7 +191,7 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
         },
     )
 
-    checkpointer = core_agent_checkpointer(ctx.agent_loop)
+    checkpointer = core_agent_checkpointer(ctx.strange_loop)
     if _is_real_checkpointer(checkpointer):
         return graph.compile(checkpointer=checkpointer)
     return graph.compile()

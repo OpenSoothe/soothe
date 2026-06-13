@@ -1,15 +1,15 @@
-"""Tests for partial AgentLoop checkpoint blob normalization."""
+"""Tests for partial StrangeLoop checkpoint blob normalization."""
 
 from __future__ import annotations
 
 from soothe.foundation.loop.state.checkpoint import (
-    AgentLoopCheckpoint,
+    StrangeLoopCheckpoint,
     normalize_checkpoint_data,
 )
 
 
 def test_normalize_register_loop_stub_validates() -> None:
-    """Daemon register_loop + bind metadata must load as AgentLoopCheckpoint."""
+    """Daemon register_loop + bind metadata must load as StrangeLoopCheckpoint."""
     loop_id = "019e3ffb-f20a-7d42-9733-e0f819bd8797"
     thread_id = "019e3ffc-a1b2-7c33-9629-3c16e1953caf"
     partial = {
@@ -22,7 +22,7 @@ def test_normalize_register_loop_stub_validates() -> None:
     }
 
     normalized = normalize_checkpoint_data(partial, loop_id=loop_id)
-    checkpoint = AgentLoopCheckpoint.model_validate(normalized)
+    checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
 
     assert checkpoint.loop_id == loop_id
     assert checkpoint.current_thread_id == thread_id
@@ -42,5 +42,5 @@ def test_normalize_created_status_maps_to_ready() -> None:
         },
         loop_id="loop-a",
     )
-    checkpoint = AgentLoopCheckpoint.model_validate(normalized)
+    checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
     assert checkpoint.status == "idle"

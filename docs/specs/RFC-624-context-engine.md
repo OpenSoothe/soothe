@@ -6,16 +6,16 @@
 **Kind**: Architecture Design
 **Created**: 2026-06-12
 **Updated**: 2026-06-12
-**Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (AgentLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-215 (Persistence Backend)
+**Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-215 (Persistence Backend)
 **Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture)
 
 ---
 
 ## Abstract
 
-This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and AgentLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence.
+This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and StrangeLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence.
 
-Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into AgentLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop.
+Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into StrangeLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop.
 
 ---
 
@@ -27,7 +27,7 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 
 1. **GoalEngine** (`autopilot/engine/engine.py`) owns a flat `dict[str, Goal]` for goal DAG management — scheduling, status transitions, dependencies. Goals carry no lineage and no execution records.
 
-2. **AgentLoop** maintains `PlanDAG` (step-level DAG), `LoopWorkingMemory` (step outcome summaries), and `loop_messages` (full message ledger). These are separate data structures with no unified model.
+2. **StrangeLoop** maintains `PlanDAG` (step-level DAG), `LoopWorkingMemory` (step outcome summaries), and `loop_messages` (full message ledger). These are separate data structures with no unified model.
 
 3. **Autopilot Context** has `GoalDispatchContextStore` + `ContextProjector` for parent goal contributions — a partial context projection mechanism limited to autopilot mode.
 
@@ -41,7 +41,7 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 2. **Lineage tracking**: Goals and steps record their generating reasoning, enabling context projection to show *why* decisions were made.
 3. **Structured projection**: A single `ContextBundle` data model output by ContextEngine, rendered by existing prompt templates.
 4. **Standalone development**: Phase 1 builds ContextEngine without modifying existing code.
-5. **Behavioral equivalence**: Phase 3 integration preserves identical behavior to the current AgentLoop — same prompts, same step IDs, same ledger format.
+5. **Behavioral equivalence**: Phase 3 integration preserves identical behavior to the current StrangeLoop — same prompts, same step IDs, same ledger format.
 6. **Incremental migration**: A config flag enables the ContextEngine path without removing the existing path.
 
 ### Non-Goals
@@ -62,7 +62,7 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 | 3a | CE Engine Completeness (Sub-project 1) | CE internal: public API, state transitions, callbacks, lossless persistence, compaction | Done |
 | 3b | Adapter Hardening + Projection Wiring (Sub-project 2) | Adapters use public API; ContextBundle wired into prompts | Done |
 | 3c | CE Planning Submodule (Sub-project 3) | `soothe.context.planning` submodule: StepPlanningSubengine, GoalPlanningSubengine, GoalScheduler, PlanningFacade; eliminates adapter heuristic duplication | Done |
-| 3d | CE-AgentLoop Full Integration (Sub-project 4) | Wire CE into AgentLoop as fully functional parallel path; close 5 integration gaps | This update |
+| 3d | CE-StrangeLoop Full Integration (Sub-project 4) | Wire CE into StrangeLoop as fully functional parallel path; close 5 integration gaps | This update |
 
 ---
 
@@ -96,13 +96,13 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 └──────────────────────────────────────────────────────────────┘
           ↓ Identical interfaces
 ┌──────────────────────────────────────────────────────────────┐
-│ Existing AgentLoop (unchanged)                                │
+│ Existing StrangeLoop (unchanged)                                │
 │  • PromptBuilder — same XML fragments                         │
 │  • Executor — same step execution                             │
 │  • LangGraph — same node topology                             │
 │  • Step ID allocator — same KFA-01 composite IDs              │
 │  • Ledger writers — same LoopHumanMessage/LoopAIMessage       │
-│  • AgentLoopStateManager — same DB persistence                │
+│  • StrangeLoopStateManager — same DB persistence                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -161,7 +161,7 @@ Bounding strategy per section:
 
 ### §4 LedgerManager
 
-Replaces `LoopWorkingMemory` and the `loop_messages` list in AgentLoop state. Provides:
+Replaces `LoopWorkingMemory` and the `loop_messages` list in StrangeLoop state. Provides:
 
 - `record_message(message, phase)` — append with phase metadata
 - `get_messages(phases)` — filter by phase list
@@ -224,11 +224,11 @@ packages/soothe/src/soothe/context/
 
 ---
 
-## Phase 3: AgentLoop Integration
+## Phase 3: StrangeLoop Integration
 
 ### Design Principle: State Backend Swap with Adapter Pattern
 
-ContextEngine replaces the internal state management of AgentLoop (`PlanManager`, `LoopWorkingMemory`, `GoalContextManager`) while the existing prompt builders, executor, step ID allocators, and ledger writers remain completely unchanged. A config flag selects the path.
+ContextEngine replaces the internal state management of StrangeLoop (`PlanManager`, `LoopWorkingMemory`, `GoalContextManager`) while the existing prompt builders, executor, step ID allocators, and ledger writers remain completely unchanged. A config flag selects the path.
 
 **Constraint: 100% behavioral equivalence.** When the ContextEngine path is enabled, the system must produce identical outputs to the current Plan-Exec loop — same SystemMessage fragments, same composite step IDs, same DAG context XML, same LoopHumanMessage/LoopAIMessage ledger entries, same evidence summaries.
 
@@ -265,7 +265,7 @@ This dual-write approach is the simplest way to maintain behavioral equivalence:
 
 #### ContextEngineGoalContextAdapter
 
-Wraps ContextEngine to provide the same `get_plan_context()` and `get_execute_briefing()` interfaces as `GoalContextManager`, reading from `GoalStepDAG` goal history instead of `AgentLoopStateManager.goal_history`.
+Wraps ContextEngine to provide the same `get_plan_context()` and `get_execute_briefing()` interfaces as `GoalContextManager`, reading from `GoalStepDAG` goal history instead of `StrangeLoopStateManager.goal_history`.
 
 ### §10 Config Flag
 
@@ -281,7 +281,7 @@ When `enabled: false`, zero behavioral changes. The adapters are never instantia
 
 ### §11 Persistence Strategy
 
-The existing PostgreSQL/SQLite checkpoint system (`AgentLoopStateManager`) remains the primary persistence path. ContextEngine's file persistence supplements it:
+The existing PostgreSQL/SQLite checkpoint system (`StrangeLoopStateManager`) remains the primary persistence path. ContextEngine's file persistence supplements it:
 
 - **During `record_iteration`**: Existing `state_manager.record_iteration()` persists the full checkpoint to DB. Additionally, `context_engine.save()` persists the DAG and ledger to files.
 - **During recovery**: Existing DB-based recovery runs first. `ContextEngine.load()` supplements by restoring DAG state for the ContextEngine's in-memory model.
@@ -289,7 +289,7 @@ The existing PostgreSQL/SQLite checkpoint system (`AgentLoopStateManager`) remai
 
 ### §12 Required Additions to ContextEngine
 
-The following gaps were identified between the Phase 1 ContextEngine and what the AgentLoop integration requires:
+The following gaps were identified between the Phase 1 ContextEngine and what the StrangeLoop integration requires:
 
 | Gap | Addition | Status |
 |-----|----------|--------|
@@ -321,7 +321,7 @@ The following gaps were identified between the Phase 1 ContextEngine and what th
 |------|--------|
 | `packages/soothe/src/soothe/context/engine.py` | Add `activate_goal()` method |
 | `packages/soothe/src/soothe/context/models.py` | Add `chain_depth` property to `StepDAG` |
-| `packages/soothe/src/soothe/config/models.py` | Add `ContextEngineConfig` to `AgentLoopConfig` |
+| `packages/soothe/src/soothe/config/models.py` | Add `ContextEngineConfig` to `StrangeLoopConfig` |
 | `config/config.template.yml` | Add `context_engine` section |
 | `config/config.dev.yml` | Add matching section |
 
@@ -342,7 +342,7 @@ The following gaps were identified between the Phase 1 ContextEngine and what th
 
 ### §14 Purpose
 
-Harden ContextEngine into a self-sufficient engine with a complete public API, full state machine, event callbacks, lossless persistence, bounded ledger growth, and complete projection output. This sub-project makes no changes to existing AgentLoop code — it only fills gaps within the `soothe.context` module.
+Harden ContextEngine into a self-sufficient engine with a complete public API, full state machine, event callbacks, lossless persistence, bounded ledger growth, and complete projection output. This sub-project makes no changes to existing StrangeLoop code — it only fills gaps within the `soothe.context` module.
 
 ### §15 Public Read API
 
@@ -449,7 +449,7 @@ Add `entries(phases)` method returning `(message, phase)` tuples. This replaces 
 
 ### §22 Files to Modify
 
-All changes are within `soothe.context`. No existing AgentLoop code is modified.
+All changes are within `soothe.context`. No existing StrangeLoop code is modified.
 
 | File | Change |
 |------|--------|
@@ -481,7 +481,7 @@ Fix the adapter gap (GoalContextAdapter reads from old state_manager instead of 
 
 ### §25 Adapter Hardening
 
-**GoalContextAdapter gap**: Both `get_plan_context()` and `get_execute_briefing()` read from `self._state_manager` (the old `AgentLoopStateManager`) instead of `self._ce` (the ContextEngine). Fix:
+**GoalContextAdapter gap**: Both `get_plan_context()` and `get_execute_briefing()` read from `self._state_manager` (the old `StrangeLoopStateManager`) instead of `self._ce` (the ContextEngine). Fix:
 
 - `get_plan_context()`: Read completed goals from `self._ce.get_all_goals()`, filter by `status == "completed"`, format as `<previous_goal>` XML blocks using goal description and step outcomes.
 - `get_execute_briefing()`: Read from CE DAG goals for thread-switch briefing, using `self._ce.get_goal_lineage()` and step summaries.
@@ -584,7 +584,7 @@ class StepPlanManagerAdapter:
     def format_completion_dag_report(self) -> str: ...
 ```
 
-`ContextEnginePlanAdapter` is removed. `agent_loop.py` wires `StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=ce_goal.id)` instead.
+`ContextEnginePlanAdapter` is removed. `strange_loop.py` wires `StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=ce_goal.id)` instead.
 
 ### §33 Planning Models
 
@@ -627,17 +627,17 @@ class PlanningFacade:
 | `packages/soothe/src/soothe/context/planning/scheduling.py` | New: `GoalScheduler` |
 | `packages/soothe/src/soothe/context/engine.py` | Add planning subengines and `planning` property |
 | `packages/soothe/src/soothe/foundation/loop/planning/manager.py` | Delegate heuristics to `completion.py`; import `DagPlanningContext` and `CompletionStrategy` from `soothe.context.planning.models` |
-| `packages/soothe/src/soothe/foundation/loop/engine/agent_loop.py` | Wire `StepPlanManagerAdapter` instead of `ContextEnginePlanAdapter` |
+| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Wire `StepPlanManagerAdapter` instead of `ContextEnginePlanAdapter` |
 | `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` | Remove `ContextEnginePlanAdapter` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Update `plan_manager` type to accept `PlanManager | StepPlanManagerAdapter` |
 
 ---
 
-## Phase 3d: CE-AgentLoop Full Integration (Sub-project 4)
+## Phase 3d: CE-StrangeLoop Full Integration (Sub-project 4)
 
 ### §36 Purpose
 
-Wire ContextEngine into AgentLoop as a fully functional parallel path, closing 5 integration gaps that remain from Phases 3a–3c. When CE is enabled, every graph node correctly interacts with CE — goal lifecycle, step feedback, projection, persistence, and semantic loading all function. When CE is disabled, zero behavioral change.
+Wire ContextEngine into StrangeLoop as a fully functional parallel path, closing 5 integration gaps that remain from Phases 3a–3c. When CE is enabled, every graph node correctly interacts with CE — goal lifecycle, step feedback, projection, persistence, and semantic loading all function. When CE is disabled, zero behavioral change.
 
 ### §37 Gap Analysis
 
@@ -657,7 +657,7 @@ New class `ContextEngineLifecycle` encapsulates all CE interactions for one goal
 
 ```python
 class ContextEngineLifecycle:
-    """All ContextEngine interactions for one AgentLoop goal run.
+    """All ContextEngine interactions for one StrangeLoop goal run.
 
     CE disabled → all methods are no-ops.
     CE enabled → each method handles goal lifecycle, step feedback,
@@ -677,7 +677,7 @@ class ContextEngineLifecycle:
 
 | Hook | Called From | CE Actions |
 |------|------------|------------|
-| `on_goal_start()` | `agent_loop` startup | `semantic.load(workspace)` |
+| `on_goal_start()` | `strange_loop` startup | `semantic.load(workspace)` |
 | `on_plan_ingested(plan_result, plan_id, iteration)` | `plan_assess`, `resolve_decision` (after `ingest_plan`) | `save()` |
 | `on_steps_executed(step_results)` | `record_iteration` (after `record_step_outcomes`) | `complete_step()`/`fail_step()` async + `save()` |
 | `on_goal_complete(status, plan_result)` | `goal_completion` | `complete_goal()`/`fail_goal()` + `save()` |
@@ -688,7 +688,7 @@ class ContextEngineLifecycle:
 
 ### §39 Integration Points per Graph Node
 
-#### agent_loop.py (startup)
+#### strange_loop.py (startup)
 
 Current CE path already creates CE instance, goal, and adapters. Additions:
 
@@ -788,7 +788,7 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 
 ### §45 Backward Compatibility
 
-- **CE disabled**: `ContextEngineLifecycle(None, None)`. All methods are no-ops. `enabled` returns `False`. Graph node guards (`if ctx.ce_lifecycle and ctx.ce_lifecycle.enabled`) skip all CE calls. Zero behavioral change from current AgentLoop.
+- **CE disabled**: `ContextEngineLifecycle(None, None)`. All methods are no-ops. `enabled` returns `False`. Graph node guards (`if ctx.ce_lifecycle and ctx.ce_lifecycle.enabled`) skip all CE calls. Zero behavioral change from current StrangeLoop.
 - **CE enabled**: All existing prompt fragments remain identical. `ContextBundle` is additive only. The `StepPlanningSubengine` produces the same `DagPlanningContext` with the same 9 attributes. The `format_completion_dag_report()` output uses the hierarchical CE DAG format but contains equivalent information.
 - **Existing tests**: All existing tests continue to pass. New tests verify the CE-specific behavior.
 
@@ -798,14 +798,14 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 |------|--------|
 | `packages/soothe/src/soothe/foundation/loop/engine/context_lifecycle.py` | **New**: `ContextEngineLifecycle` class |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Add `ce_lifecycle` field |
-| `packages/soothe/src/soothe/foundation/loop/engine/agent_loop.py` | Create lifecycle, call `on_goal_start()` |
+| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Create lifecycle, call `on_goal_start()` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py` | Call `on_plan_ingested()` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_generate.py` | Pass `context_bundle` from lifecycle |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Call `on_steps_executed()` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/goal_completion.py` | Replace `ce.save()` with `on_goal_complete()` |
 | `packages/soothe/src/soothe/config/models.py` | Flip `enabled` default to `True` |
 | `packages/soothe/tests/unit/core/loop/engine/test_context_lifecycle.py` | **New**: lifecycle unit tests |
-| `packages/soothe/tests/integration/context/test_ce_agent_loop_equivalence.py` | Add lifecycle + goal completion tests |
+| `packages/soothe/tests/integration/context/test_ce_strange_loop_equivalence.py` | Add lifecycle + goal completion tests |
 
 ### §47 Acceptance Criteria
 
@@ -858,10 +858,10 @@ ContextEngine.complete_goal(goal_id)
   → GoalNode.status = "completed"
 ```
 
-### Phase 3: AgentLoop Integration (when CE enabled)
+### Phase 3: StrangeLoop Integration (when CE enabled)
 
 ```
-AgentLoop.run_with_progress(goal, ...)
+StrangeLoop.run_with_progress(goal, ...)
   │
   ├─ Create ContextEngine (with FileContextPersistence)
   ├─ Create adapters wrapping ContextEngine
@@ -916,7 +916,7 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 
 | Scenario | Behavior |
 |----------|----------|
-| Step execution failure | `StepNode.status = "failed"`, `execution.error` set. Goal remains active. AgentLoop decides replan vs fail-goal. |
+| Step execution failure | `StepNode.status = "failed"`, `execution.error` set. Goal remains active. StrangeLoop decides replan vs fail-goal. |
 | Goal failure | `GoalNode.status = "failed"`. Dependent goals remain blocked (dependencies not met). |
 | Persistence failure | In-memory fallback with warning log. Query and projection continue; durability degraded. |
 | Crash recovery | On `load()`, `recover()` resets active goals to pending. Steps with no execution reset to pending. |
@@ -931,9 +931,9 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 3. `ContextBundle` is a read-only projection; mutation happens through `ContextEngine` methods only.
 4. The message ledger is derivable from the GoalStepDAG (via `StepExecution` records).
 5. `ContextPersistenceProtocol` implementations must support atomic save/load (no partial writes).
-6. `ContextEngine` does not depend on `GoalEngine`, `AgentLoop`, or `CoreAgent` — it is standalone.
-7. When the ContextEngine path is enabled in AgentLoop, all adapter outputs must be indistinguishable from the current Plan-Exec loop outputs (behavioral equivalence).
-8. The existing AgentLoop path (CE disabled) must remain completely untouched — zero behavioral changes.
+6. `ContextEngine` does not depend on `GoalEngine`, `StrangeLoop`, or `CoreAgent` — it is standalone.
+7. When the ContextEngine path is enabled in StrangeLoop, all adapter outputs must be indistinguishable from the current Plan-Exec loop outputs (behavioral equivalence).
+8. The existing StrangeLoop path (CE disabled) must remain completely untouched — zero behavioral changes.
 9. `ContextEngineLifecycle` is the sole entry point for CE interactions from graph nodes — nodes never call CE methods directly.
 10. CE failures must never propagate to graph nodes — the plan-exec loop continues regardless of CE errors.
 
@@ -948,9 +948,9 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 - ContextProjector reads from ContextEngine instead of GoalDispatchContextStore
 - Backward-compatible: GoalEngine's public API unchanged, internal storage replaced
 
-### Phase 3: AgentLoop Integration
+### Phase 3: StrangeLoop Integration
 
-- AgentLoop's `PlanManager` replaced by `StepPlanManagerAdapter` wrapping `StepPlanningSubengine` (Phase 3c)
+- StrangeLoop's `PlanManager` replaced by `StepPlanManagerAdapter` wrapping `StepPlanningSubengine` (Phase 3c)
 - `ContextEnginePlanAdapter` removed — heuristic duplication eliminated via `completion.py` (Phase 3c)
 - `LoopWorkingMemory` + `loop_messages` mirrored to `LedgerManager` via `ContextEngineLedgerAdapter` (Phase 3)
 - `GoalContextManager` replaced by `ContextEngineGoalContextAdapter` (Phase 3)

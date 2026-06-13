@@ -1,4 +1,4 @@
-"""Agent loop events for agentic execution."""
+"""Strange loop events for agentic execution."""
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ from soothe.foundation.events import VerbosityTier, register_event
 class LoopAgentReasonEvent(ProtocolEvent):
     """User-visible progress after the Plan phase (Plan-Execute loop)."""
 
-    type: Literal["soothe.cognition.agent_loop.reasoned"] = "soothe.cognition.agent_loop.reasoned"
+    type: Literal["soothe.cognition.strange_loop.reasoned"] = (
+        "soothe.cognition.strange_loop.reasoned"
+    )
     status: str
     progress: str
     next_action: str

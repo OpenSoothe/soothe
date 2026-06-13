@@ -2,13 +2,13 @@
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.loop.orchestrator.builder import build_agent_loop_graph
+from soothe.foundation.loop.orchestrator.builder import build_strange_loop_graph
 
 
-def test_agent_loop_graph_exposes_rfc220_named_nodes() -> None:
+def test_strange_loop_graph_exposes_rfc220_named_nodes() -> None:
     """Compiled graph includes normative node ids from RFC-220 §Loop Graph Topology."""
     ctx = MagicMock()
-    compiled = build_agent_loop_graph(ctx)
+    compiled = build_strange_loop_graph(ctx)
     graph = compiled.get_graph()
     names = set(graph.nodes)
 

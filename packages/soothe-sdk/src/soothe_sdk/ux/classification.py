@@ -25,7 +25,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     matching the `_DOMAIN_DEFAULT_TIER` mapping from `event_catalog.py`.
 
     Args:
-        event_type: The event type string (e.g., "soothe.cognition.agent_loop.started").
+        event_type: The event type string (e.g., "soothe.cognition.strange_loop.started").
         namespace: Subagent namespace tuple (for non-soothe events).
 
     Returns:

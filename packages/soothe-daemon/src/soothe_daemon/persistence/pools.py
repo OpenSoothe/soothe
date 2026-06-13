@@ -26,7 +26,7 @@ async def preopen_shared_postgres_pools(
     config: SootheConfig,
     daemon_config: DaemonConfig,
 ) -> None:
-    """Pre-open shared AgentLoop and checkpointer pools in thread_pool mode."""
+    """Pre-open shared StrangeLoop and checkpointer pools in thread_pool mode."""
     if not uses_postgresql_persistence(config) or not daemon_config.thread_pool.enabled:
         return
 
@@ -49,13 +49,13 @@ async def release_idle_shared_postgres_pools() -> None:
 
 
 async def close_shared_postgres_pools() -> None:
-    """Close shared AgentLoop and checkpointer pools at daemon shutdown."""
+    """Close shared StrangeLoop and checkpointer pools at daemon shutdown."""
     try:
         from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
         from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
         await SharedPostgreSQLPool.close_shared_instance()
-        logger.info("Shared AgentLoop PostgreSQL pool closed")
+        logger.info("Shared StrangeLoop PostgreSQL pool closed")
         await SharedCheckpointerPool.close_shared_instance()
         logger.info("Shared checkpointer PostgreSQL pool closed")
     except ImportError:

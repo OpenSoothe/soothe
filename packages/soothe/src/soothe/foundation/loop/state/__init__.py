@@ -1,11 +1,10 @@
 """State management and persistence."""
 
 from .checkpoint import (
-    AgentLoopCheckpoint,
     GoalExecutionRecord,
+    StrangeLoopCheckpoint,
     WorkingMemoryState,
 )
-from .manager import AgentLoopStateManager
 from .schemas import (
     AgentDecision,
     EvidenceEntry,
@@ -14,6 +13,7 @@ from .schemas import (
     StepAction,
     StepResult,
 )
+from .sloop_manager import StrangeLoopStateManager
 from .working_memory import LoopWorkingMemory
 
 # RFC-225 / IG-445: resolve the forward refs in GoalExecutionRecord after
@@ -28,13 +28,13 @@ GoalExecutionRecord.model_rebuild(
 
 __all__ = [
     "AgentDecision",
-    "AgentLoopCheckpoint",
-    "AgentLoopStateManager",
     "EvidenceEntry",
     "GoalExecutionRecord",
     "LoopState",
     "LoopWorkingMemory",
     "PlanResult",
+    "StrangeLoopCheckpoint",
+    "StrangeLoopStateManager",
     "StepAction",
     "StepResult",
     "WorkingMemoryState",

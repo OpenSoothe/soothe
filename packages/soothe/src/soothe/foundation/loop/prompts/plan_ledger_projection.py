@@ -1,4 +1,4 @@
-"""Project AgentLoop ledger messages for plan-assess / plan-generate (IG-380, RFC-214).
+"""Project StrangeLoop ledger messages for plan-assess / plan-generate (IG-380, RFC-214).
 
 RFC-214: The complete ledger includes all phases (plan_assess, plan_generate,
 execute_step). Plan prompts see the full ledger for cache maximization.

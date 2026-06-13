@@ -215,11 +215,11 @@ class SootheConfig(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _merge_top_level_agent_loop_yaml(cls, data: Any) -> Any:
-        """Fold legacy top-level ``agent_loop:`` into ``agent.loop`` (IG-407)."""
+    def _merge_top_level_strange_loop_yaml(cls, data: Any) -> Any:
+        """Fold legacy top-level ``strange_loop:`` into ``agent.loop`` (IG-407)."""
         if not isinstance(data, dict):
             return data
-        legacy_loop = data.pop("agent_loop", None)
+        legacy_loop = data.pop("strange_loop", None)
         if not isinstance(legacy_loop, dict):
             return data
 

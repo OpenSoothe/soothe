@@ -74,8 +74,8 @@ uv run pytest tests/
 ```
 packages/soothe/tests/unit/
 ├── core/
-│   ├── agent_loop/
-│   │   ├── test_agent_loop_graph.py
+│   ├── strange_loop/
+│   │   ├── test_strange_loop_graph.py
 │   │   ├── test_execute_node.py
 │   │   └── test_plan_node.py
 │   ├── events/
@@ -155,13 +155,13 @@ python scripts/benchmark_e2e_concurrent_queries.py
 Tests are placed **close to the code they test**:
 
 ```
-packages/soothe/src/soothe/core/agent_loop/
+packages/soothe/src/soothe/core/strange_loop/
 ├── __init__.py
 ├── graph.py
 ├── nodes.py
 ├── events.py          # Event definitions
 
-packages/soothe/tests/unit/core/agent_loop/
+packages/soothe/tests/unit/core/strange_loop/
 ├── test_graph.py      # Tests for graph.py
 ├── test_nodes.py      # Tests for nodes.py
 ├── test_events.py     # Tests for events.py
@@ -434,11 +434,11 @@ exclude_lines = [
 
 ```bash
 # 1. Make code changes
-vim packages/soothe/src/soothe/core/agent_loop/graph.py
+vim packages/soothe/src/soothe/core/strange_loop/graph.py
 
 # 2. Run relevant unit tests
 cd packages/soothe
-uv run pytest tests/unit/core/agent_loop/test_graph.py -v
+uv run pytest tests/unit/core/strange_loop/test_graph.py -v
 
 # 3. Format and lint
 make format
@@ -603,13 +603,13 @@ def test_with_realistic_data(realistic_goal):
 
 ```bash
 # Verbose output
-pytest -v tests/unit/core/agent_loop/test_graph.py
+pytest -v tests/unit/core/strange_loop/test_graph.py
 
 # Detailed traceback
-pytest --tb=long tests/unit/core/agent_loop/test_graph.py
+pytest --tb=long tests/unit/core/strange_loop/test_graph.py
 
 # Show local variables on failure
-pytest --tb=long --showlocals tests/unit/core/agent_loop/test_graph.py
+pytest --tb=long --showlocals tests/unit/core/strange_loop/test_graph.py
 ```
 
 ### Debug Mode

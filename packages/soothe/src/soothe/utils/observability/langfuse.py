@@ -246,7 +246,7 @@ def merge_langfuse_runnable_config(
         inherit_callbacks_from: When set and already carries the same ``SootheLangfuseCallbackHandler``
             instance as would be attached, skip appending the handler again so a later
             ``merge_configs(langgraph_parent, child)`` does not register duplicate Langfuse
-            callbacks (goal-completion synthesis nested under the AgentLoop graph).
+            callbacks (goal-completion synthesis nested under the StrangeLoop graph).
         fresh_handler: When True, creates a new handler instance (not cached) to ensure
             independent trace_id and avoid OpenTelemetry context nesting. Use for
             standalone LLM calls that should not nest under subsequent graph traces.
@@ -401,7 +401,7 @@ def build_traced_config(
 def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
     """Same root run label as ``build_loop_graph_invoke_config`` / LangGraph ``run_name``."""
     tn = (trace_name or "").strip()
-    return f"{tn}:agent-loop-graph" if tn else "agent-loop-graph"
+    return f"{tn}:strange-loop-graph" if tn else "strange-loop-graph"
 
 
 def _merge_trace_fields_via_ingestion(
@@ -459,7 +459,7 @@ def patch_langfuse_trace_goal_io(
     """Set Langfuse trace-level ``name`` / ``input`` / ``output`` for the loop graph run (IG-395).
 
     Prefer merging via the Langfuse ingestion ``trace-create`` path so the trace row keeps the
-    AgentLoop display name and does not gain an extra ``soothe-goal-trace-io`` observation.
+    StrangeLoop display name and does not gain an extra ``soothe-goal-trace-io`` observation.
     Falls back to ``start_span(...).update_trace(...)`` when ingestion is unavailable.
 
     Args:

@@ -12,7 +12,7 @@
 
 Execution protocols define the interfaces for running agents and delegating work:
 
-1. **LoopRunnerProtocol**: AgentLoop runner orchestration
+1. **LoopRunnerProtocol**: StrangeLoop runner orchestration
 2. **RemoteAgentProtocol**: Remote agent invocation (ACP, A2A, LangGraph)
 3. **ToolkitProtocol**: Tool collection interface
 
@@ -22,7 +22,7 @@ These protocols form the execution layer, coordinating agent runs, tool invocati
 
 ### Purpose
 
-- **AgentLoop orchestration**: Run complete Plan → Execute loops
+- **StrangeLoop orchestration**: Run complete Plan → Execute loops
 - **Subprocess execution**: Worker pool management
 - **Streaming**: Real-time result streaming
 - **Timeout management**: Execution timeout and cancellation
@@ -31,7 +31,7 @@ These protocols form the execution layer, coordinating agent runs, tool invocati
 
 ```python
 class LoopRunnerProtocol(Protocol):
-    """Protocol for AgentLoop runner orchestration.
+    """Protocol for StrangeLoop runner orchestration.
     
     Orchestrates complete Plan → Execute loops, handling subprocess
     execution, streaming, and timeout management.
@@ -41,7 +41,7 @@ class LoopRunnerProtocol(Protocol):
         self,
         request: LoopRunRequest,
     ) -> AsyncIterator[StreamChunk]:
-        """Run AgentLoop and stream results.
+        """Run StrangeLoop and stream results.
         
         Args:
             request: LoopRunRequest with all parameters.
@@ -145,7 +145,7 @@ StreamChunk = tuple[tuple[str, ...], str, Any]
 **Location**: `packages/soothe/src/soothe/core/runner/`  
 
 **Features**:
-- Complete AgentLoop orchestration
+- Complete StrangeLoop orchestration
 - Worker pool management
 - Timeout handling
 - Checkpoint persistence
@@ -155,7 +155,7 @@ StreamChunk = tuple[tuple[str, ...], str, Any]
 **Implementation Pattern**:
 ```python
 class SootheRunner(LoopRunnerProtocol):
-    """Runner implementation with full AgentLoop orchestration."""
+    """Runner implementation with full StrangeLoop orchestration."""
     
     async def run(
         self,
@@ -168,7 +168,7 @@ class SootheRunner(LoopRunnerProtocol):
         loop_config = self._configure_loop(request)
         
         # Run agent loop with streaming
-        async for chunk in self._agent_loop.astream(
+        async for chunk in self._strange_loop.astream(
             input=request.user_input,
             config=loop_config,
             stream_mode=["messages", "updates", "custom"],
@@ -393,7 +393,7 @@ Runner execution flow:
    ↓
 2. Resolve workspace and configuration
    ↓
-3. Initialize AgentLoop
+3. Initialize StrangeLoop
    ↓
 4. Loop iteration:
    a. LoopPlanner.plan() → PlanResult
@@ -510,7 +510,7 @@ Tests verify:
 
 ## Related Documentation
 
-- [AgentLoop Architecture](../agentloop.md)
+- [StrangeLoop Architecture](../agentloop.md)
 - [Planner Protocol](planner.md)
 - [Plugin System](../plugins.md)
 - [Tool Registry](../tool-registry.md)

@@ -1,4 +1,4 @@
-"""Project AgentLoop state into user-safe synthesis context (RFC-603, RFC-214).
+"""Project StrangeLoop state into user-safe synthesis context (RFC-603, RFC-214).
 
 Synthesis must not receive raw ``loop_messages`` (plan envelopes, ledger stubs, or
 orchestration metadata). This module builds a bounded evidence payload and pairs it

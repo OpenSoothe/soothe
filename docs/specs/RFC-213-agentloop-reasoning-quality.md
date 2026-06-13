@@ -1,7 +1,7 @@
-# RFC-213: AgentLoop Reasoning Quality & Robustness
+# RFC-213: StrangeLoop Reasoning Quality & Robustness
 
 **RFC**: 213
-**Title**: AgentLoop Reasoning Quality & Robustness
+**Title**: StrangeLoop Reasoning Quality & Robustness
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
@@ -14,7 +14,7 @@
 
 ## Abstract
 
-This RFC defines AgentLoop reasoning quality enhancements through two-phase Plan architecture. Current runtime behavior removes progressive-planning requirements and instead grounds `plan-generate` with a bounded pre-generate evidence probe before generation. `PlanGeneration` now emits flattened decision fields rather than a nested `decision` object.
+This RFC defines StrangeLoop reasoning quality enhancements through two-phase Plan architecture. Current runtime behavior removes progressive-planning requirements and instead grounds `plan-generate` with a bounded pre-generate evidence probe before generation. `PlanGeneration` now emits flattened decision fields rather than a nested `decision` object.
 
 ---
 
@@ -107,7 +107,7 @@ Two-phase Plan architecture improves token efficiency by separating status asses
 
 ### Implementation
 
-Normative field lists and merge behavior: **RFC-604** and `soothe.core.agent_loop.state.schemas` (`StatusAssessment`, `PlanGeneration`, `PlanResult`). Code entry point: `soothe.core.agent_loop.core.planner.LLMPlanner.plan()` (assess then conditional generate; IG-372 prompt split, IG-329 trimmed plan-generate schema).
+Normative field lists and merge behavior: **RFC-604** and `soothe.core.strange_loop.state.schemas` (`StatusAssessment`, `PlanGeneration`, `PlanResult`). Code entry point: `soothe.core.strange_loop.core.planner.LLMPlanner.plan()` (assess then conditional generate; IG-372 prompt split, IG-329 trimmed plan-generate schema).
 
 ### Token Efficiency
 
@@ -129,7 +129,7 @@ At a high level: `plan()` builds `plan_phase="assess"` messages, invokes structu
 ### Combined Reasoning Process
 
 ```
-AgentLoop Iteration:
+StrangeLoop Iteration:
   ├─ PLAN Phase:
   │   ├─ Two-Phase Plan Architecture:
   │   │   ├─ Phase 1: StatusAssessment
@@ -201,8 +201,8 @@ agentic:
 
 ## References
 
-- RFC-200: AgentLoop Plan-Execute Loop Architecture
-- RFC-203: AgentLoop State & Memory Architecture
+- RFC-200: StrangeLoop Plan-Execute Loop Architecture
+- RFC-203: StrangeLoop State & Memory Architecture
 - RFC-603: Reasoning Quality Progressive Actions (original source); **§3.2** documents `goal_progress` as assess-model output only (IG-376)
 - RFC-604: Plan Phase Robustness (original source); abstract notes `goal_progress` / `confidence` post-processing split
 - RFC-214: Loop message surface — plan-context `Goal` + `Execute iteration` header for assess
@@ -223,4 +223,4 @@ agentic:
 
 ---
 
-*AgentLoop reasoning quality through progressive evidence-driven strategy refinement and two-phase Plan architecture for token efficiency.*
+*StrangeLoop reasoning quality through progressive evidence-driven strategy refinement and two-phase Plan architecture for token efficiency.*

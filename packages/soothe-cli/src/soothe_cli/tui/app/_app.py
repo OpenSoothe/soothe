@@ -156,7 +156,7 @@ class SootheApp(
             daemon_config: Loaded Soothe configuration (WebSocket URL, etc.).
             assistant_id: Agent identifier for memory storage.
             cwd: Current working directory to display.
-            resume_loop_id: Initial AgentLoop id when attaching to an existing loop.
+            resume_loop_id: Initial StrangeLoop id when attaching to an existing loop.
             initial_prompt: Optional prompt to auto-submit when session starts.
             initial_skill: Optional skill name to invoke when session starts.
             mcp_server_info: MCP server metadata for the `/mcp` viewer.
@@ -174,7 +174,7 @@ class SootheApp(
 
         self._cwd = str(cwd) if cwd else str(Path.cwd())
 
-        # Active AgentLoop id; LangGraph stores it as configurable.thread_id.
+        # Active StrangeLoop id; LangGraph stores it as configurable.thread_id.
         # Named `_lc_loop_id` to avoid colliding with Textual's App._thread_id.
         self._lc_loop_id = resume_loop_id
 

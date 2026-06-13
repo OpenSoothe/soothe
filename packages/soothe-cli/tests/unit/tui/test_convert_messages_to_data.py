@@ -84,7 +84,7 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
             "kind": "event",
             "timestamp": "2026-04-20T15:41:26.946+00:00",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.started",
+                "type": "soothe.cognition.strange_loop.step.started",
                 "step_id": "s1",
                 "description": "aware",
             },
@@ -93,7 +93,7 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
             "kind": "event",
             "timestamp": "2026-04-20T15:41:27.100",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.started",
+                "type": "soothe.cognition.strange_loop.step.started",
                 "step_id": "s2",
                 "description": "naive",
             },
@@ -176,7 +176,7 @@ def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() 
     assert MessageType.COGNITION_REASON in types
 
 
-def test_agent_loop_completed_event_is_dropped() -> None:
+def test_strange_loop_completed_event_is_dropped() -> None:
     """Completion event is a status transition, not a chat card.
 
     The goal_completion text (persisted as a conversation row) is the
@@ -188,7 +188,7 @@ def test_agent_loop_completed_event_is_dropped() -> None:
         "timestamp": "2026-04-20T15:41:28.000+00:00",
         "metadata": {
             "data": {
-                "type": "soothe.cognition.agent_loop.completed",
+                "type": "soothe.cognition.strange_loop.completed",
                 "status": "completed",
                 "summary": "Goal done",
             }
@@ -207,7 +207,7 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
             "timestamp": "2026-04-20T15:41:25.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.started",
+                    "type": "soothe.cognition.strange_loop.started",
                     "goal": "Implement feature X",
                     "max_iterations": 5,
                 }
@@ -218,7 +218,7 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
             "timestamp": "2026-04-20T15:41:26.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.reasoned",
+                    "type": "soothe.cognition.strange_loop.reasoned",
                     "next_action": "",
                     "status": "continue",
                     "iteration": 2,
@@ -233,7 +233,7 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
             "timestamp": "2026-04-20T15:41:27.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.step.started",
+                    "type": "soothe.cognition.strange_loop.step.started",
                     "step_id": "S_3",
                     "description": "Collect final evidence",
                 }
@@ -285,7 +285,7 @@ def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
     """Replay must merge step.started + step.completed into one card per step_id.
 
     Live mode mutates the same CognitionStepMessage widget in place (see
-    textual_adapter.py:`AGENT_LOOP_STEP_COMPLETED`). Two separate cards on
+    textual_adapter.py:`STRANGE_LOOP_STEP_COMPLETED`). Two separate cards on
     replay leave the started card stuck at "Running..." while a duplicate
     "(step) Completed" card appears next to it. The merge must also keep
     the description from ``step.started`` — the
@@ -297,7 +297,7 @@ def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
             "timestamp": "2026-04-20T15:41:25.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.step.started",
+                    "type": "soothe.cognition.strange_loop.step.started",
                     "step_id": "S_1",
                     "description": "Scan project directory",
                 }
@@ -308,7 +308,7 @@ def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
             "timestamp": "2026-04-20T15:41:30.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.step.completed",
+                    "type": "soothe.cognition.strange_loop.step.completed",
                     "step_id": "S_1",
                     # NOTE: no `description` here, mirroring the production schema.
                     "success": True,
@@ -338,7 +338,7 @@ def test_collect_cognition_card_replay_drops_goal_tree_pin() -> None:
             "timestamp": "2026-04-20T15:41:20.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.started",
+                    "type": "soothe.cognition.strange_loop.started",
                     "goal": "count all file types",
                     "max_iterations": 99,
                 }
@@ -350,13 +350,13 @@ def test_collect_cognition_card_replay_drops_goal_tree_pin() -> None:
 
 
 def test_convert_event_drops_completion_with_metadata() -> None:
-    """agent_loop.completed is dropped even when metadata carries rich fields."""
+    """strange_loop.completed is dropped even when metadata carries rich fields."""
     event = {
         "kind": "event",
         "timestamp": "2026-04-20T15:43:00.000+00:00",
         "metadata": {
             "data": {
-                "type": "soothe.cognition.agent_loop.completed",
+                "type": "soothe.cognition.strange_loop.completed",
                 "status": "completed",
                 "goal_progress": "complete",
                 "total_steps": 3,
@@ -378,7 +378,7 @@ def test_collect_cognition_card_replay_keeps_started_when_completed_missing() ->
             "timestamp": "2026-04-20T15:41:25.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.step.started",
+                    "type": "soothe.cognition.strange_loop.step.started",
                     "step_id": "S_orphan",
                     "description": "Half-finished work",
                 }
@@ -400,7 +400,7 @@ def test_convert_loop_events_dedupes_step_progress_pair() -> None:
             "timestamp": "2026-04-20T15:41:25.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.step.started",
+                    "type": "soothe.cognition.strange_loop.step.started",
                     "step_id": "S_2",
                     "description": "Aggregate counts",
                 }
@@ -411,7 +411,7 @@ def test_convert_loop_events_dedupes_step_progress_pair() -> None:
             "timestamp": "2026-04-20T15:41:32.000+00:00",
             "metadata": {
                 "data": {
-                    "type": "soothe.cognition.agent_loop.step.completed",
+                    "type": "soothe.cognition.strange_loop.step.completed",
                     "step_id": "S_2",
                     "description": "Aggregate counts",
                     "success": True,

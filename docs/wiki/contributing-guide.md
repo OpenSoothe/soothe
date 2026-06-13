@@ -140,8 +140,8 @@ Use single backticks for inline code in docstrings:
 
 ### Naming Conventions
 
-- **Modules**: `snake_case` (e.g., `agent_loop.py`)
-- **Classes**: `PascalCase` (e.g., `AgentLoop`)
+- **Modules**: `snake_case` (e.g., `strange_loop.py`)
+- **Classes**: `PascalCase` (e.g., `StrangeLoop`)
 - **Functions**: `snake_case` (e.g., `create_agent`)
 - **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_ITERATIONS`)
 - **Private**: `_leading_underscore` (e.g., `_internal_method`)
@@ -177,14 +177,14 @@ if TYPE_CHECKING:
 
 ```bash
 # 1. Make code changes
-vim packages/soothe/src/soothe/core/agent_loop/graph.py
+vim packages/soothe/src/soothe/core/strange_loop/graph.py
 
 # 2. Write/update tests
-vim packages/soothe/tests/unit/core/agent_loop/test_graph.py
+vim packages/soothe/tests/unit/core/strange_loop/test_graph.py
 
 # 3. Run relevant tests
 cd packages/soothe
-uv run pytest tests/unit/core/agent_loop/test_graph.py -v
+uv run pytest tests/unit/core/strange_loop/test_graph.py -v
 
 # 4. Format code
 make format
@@ -333,13 +333,13 @@ PR will be merged after:
 Place tests **close to the code they test**:
 
 ```
-packages/soothe/src/soothe/core/agent_loop/
+packages/soothe/src/soothe/core/strange_loop/
 ├── __init__.py
 ├── graph.py
 ├── nodes.py
 ├── events.py
 
-packages/soothe/tests/unit/core/agent_loop/
+packages/soothe/tests/unit/core/strange_loop/
 ├── test_graph.py      # Tests for graph.py
 ├── test_nodes.py      # Tests for nodes.py
 ├── test_events.py     # Tests for events.py
@@ -388,7 +388,7 @@ class MyImplementation:
 Use concrete module names instead:
 
 - ❌ "Layer 1" → ✅ "CoreAgent"
-- ❌ "Layer 2" → ✅ "AgentLoop"
+- ❌ "Layer 2" → ✅ "StrangeLoop"
 - ❌ "Layer 3" → ✅ "GoalEngine"
 
 Apply to: docstrings, comments, log messages, documentation.
@@ -467,7 +467,7 @@ Add RFC-222 AutopilotService for background goal execution.
 Enables 24/7 autonomous operation without human intervention.
 
 - AutopilotService manages goal queue
-- Worker pool dispatches goals to AgentLoop
+- Worker pool dispatches goals to StrangeLoop
 - Context projection for parent→child lineage
 
 Implements: RFC-222

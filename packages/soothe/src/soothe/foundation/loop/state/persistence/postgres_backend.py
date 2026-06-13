@@ -1,6 +1,6 @@
-"""PostgreSQL backend for AgentLoop persistence (RFC-612, IG-055).
+"""PostgreSQL backend for StrangeLoop persistence (RFC-612, IG-055).
 
-Backend-agnostic implementation supporting full AgentLoop persistence operations.
+Backend-agnostic implementation supporting full StrangeLoop persistence operations.
 Uses shared soothe_checkpoints database with 4 tables: agentloop_checkpoints,
 checkpoint_anchors, failed_branches, goal_records.
 
@@ -19,19 +19,19 @@ from typing import TYPE_CHECKING, Any
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from soothe.foundation.loop.state.persistence.base_backend import AgentLoopPersistenceBackend
+from soothe.foundation.loop.state.persistence.base_backend import StrangeLoopPersistenceBackend
 from soothe.foundation.loop.state.persistence.postgres_schema import (
     initialize_agentloop_postgres_schema,
 )
 
 if TYPE_CHECKING:
-    from soothe.foundation.loop.state.checkpoint import AgentLoopCheckpoint
+    from soothe.foundation.loop.state.checkpoint import StrangeLoopCheckpoint
 
 logger = logging.getLogger(__name__)
 
 
-class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
-    """PostgreSQL backend for AgentLoop persistence (RFC-612, IG-055).
+class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
+    """PostgreSQL backend for StrangeLoop persistence (RFC-612, IG-055).
 
     Backend-agnostic implementation using shared soothe_checkpoints database
     with separate tables for checkpoints, anchors, branches, and goals.
@@ -71,7 +71,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 self._pool = None
             else:
                 msg = (
-                    "AgentLoop PostgreSQL backend: shared connection pool is closed "
+                    "StrangeLoop PostgreSQL backend: shared connection pool is closed "
                     "(daemon shutdown or pool closed elsewhere)."
                 )
                 raise RuntimeError(msg)
@@ -104,21 +104,21 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
             self._pool = pool
             logger.info(
-                "AgentLoop PostgreSQL backend initialized (soothe_checkpoints database, table=agentloop_checkpoints, pool=%d)",
+                "StrangeLoop PostgreSQL backend initialized (soothe_checkpoints database, table=agentloop_checkpoints, pool=%d)",
                 self.pool_size,
             )
 
             return self._pool
 
     async def _initialize_schema(self, pool: AsyncConnectionPool) -> None:
-        """Recreate AgentLoop tables using the canonical PostgreSQL schema."""
+        """Recreate StrangeLoop tables using the canonical PostgreSQL schema."""
         await initialize_agentloop_postgres_schema(pool)
 
-    async def save_checkpoint(self, checkpoint: AgentLoopCheckpoint) -> None:
-        """Save AgentLoop checkpoint to PostgreSQL.
+    async def save_checkpoint(self, checkpoint: StrangeLoopCheckpoint) -> None:
+        """Save StrangeLoop checkpoint to PostgreSQL.
 
         Args:
-            checkpoint: AgentLoopCheckpoint to save.
+            checkpoint: StrangeLoopCheckpoint to save.
         """
         pool = await self._ensure_pool()
 
@@ -145,14 +145,14 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
                 logger.debug("Saved checkpoint: loop=%s", loop_id)
 
-    async def load_checkpoint(self, loop_id: str) -> AgentLoopCheckpoint | None:
-        """Load AgentLoop checkpoint from PostgreSQL.
+    async def load_checkpoint(self, loop_id: str) -> StrangeLoopCheckpoint | None:
+        """Load StrangeLoop checkpoint from PostgreSQL.
 
         Args:
             loop_id: Loop identifier to load.
 
         Returns:
-            AgentLoopCheckpoint if found, None otherwise.
+            StrangeLoopCheckpoint if found, None otherwise.
         """
         pool = await self._ensure_pool()
 
@@ -170,7 +170,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     return None
 
                 from soothe.foundation.loop.state.checkpoint import (
-                    AgentLoopCheckpoint,
+                    StrangeLoopCheckpoint,
                     normalize_checkpoint_data,
                 )
 
@@ -178,10 +178,10 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     dict(result["checkpoint_data"]),
                     loop_id=loop_id,
                 )
-                return AgentLoopCheckpoint.model_validate(checkpoint_data)
+                return StrangeLoopCheckpoint.model_validate(checkpoint_data)
 
     async def delete_checkpoint(self, loop_id: str) -> None:
-        """Delete AgentLoop checkpoint from PostgreSQL.
+        """Delete StrangeLoop checkpoint from PostgreSQL.
 
         Args:
             loop_id: Loop identifier to delete.
@@ -202,7 +202,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
     async def list_checkpoints(
         self, thread_id: str | None = None, status: str | None = None
     ) -> list[dict[str, Any]]:
-        """List AgentLoop checkpoints with optional filters.
+        """List StrangeLoop checkpoints with optional filters.
 
         Args:
             thread_id: Filter by thread_id (optional).
@@ -266,7 +266,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             self._pool = None
             logger.debug("Closed PostgreSQL backend pool (owned)")
             self._pool = None
-            logger.info("AgentLoop PostgreSQL backend closed")
+            logger.info("StrangeLoop PostgreSQL backend closed")
 
     # IG-055: Implement abstract interface methods
 
@@ -277,10 +277,10 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         current_thread_id: str,
         status: str = "running",
     ) -> None:
-        """Register new AgentLoop in database.
+        """Register new StrangeLoop in database.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             thread_ids: List of thread IDs associated with this loop.
             current_thread_id: Current active thread ID.
             status: Loop status (default: "running").
@@ -368,11 +368,11 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
     async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
         """Partially update loop metadata fields.
 
-        RFC-225: ``status`` is owned by ``AgentLoop`` once the loop has any
+        RFC-225: ``status`` is owned by ``StrangeLoop`` once the loop has any
         ``goal_history``. Status writes from the daemon path (pre-query
         bookkeeping) are silently dropped for established loops to avoid
         clobbering ``finalize_goal``'s ``"idle"`` back to ``"running"``,
-        which would cause AgentLoop to take the invalid-index re-init path
+        which would cause StrangeLoop to take the invalid-index re-init path
         and lose prior goal context. Status writes are honored only when
         the loop has no goals yet (initial registration / bind).
         """
@@ -399,7 +399,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         pool = await self._ensure_pool()
 
         # RFC-225: drop ``status`` from external metadata writes when the loop
-        # already has goals. AgentLoop is the authoritative writer in that case.
+        # already has goals. StrangeLoop is the authoritative writer in that case.
         if "status" in updates:
             async with pool.connection() as conn:
                 async with conn.cursor() as cur:
@@ -421,7 +421,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             if history_len > 0:
                 logger.debug(
                     "Dropping external status write for loop=%s "
-                    "(goal_history len=%d; AgentLoop owns status)",
+                    "(goal_history len=%d; StrangeLoop owns status)",
                     loop_id,
                     history_len,
                 )
@@ -744,7 +744,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         """Save iteration checkpoint anchor.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             iteration: Iteration number.
             thread_id: Thread where checkpoint belongs.
             checkpoint_id: CoreAgent checkpoint_id.
@@ -805,7 +805,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         """Query checkpoint anchors for iteration range.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             start: Start iteration (inclusive).
             end: End iteration (inclusive).
 
@@ -837,7 +837,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         """Query checkpoint anchors for specific thread in loop.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             thread_id: Thread identifier.
 
         Returns:
@@ -877,7 +877,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
         Args:
             branch_id: Branch identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             iteration: Iteration where failure occurred.
             thread_id: Thread identifier.
             root_checkpoint_id: Root checkpoint before failure.
@@ -929,7 +929,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
         Args:
             branch_id: Branch identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             failure_insights: Failure analysis insights.
             avoid_patterns: Patterns to avoid.
             suggested_adjustments: Suggested strategy adjustments.
@@ -965,7 +965,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         """Query failed branches for loop.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             limit: Maximum branches to return.
 
         Returns:
@@ -996,7 +996,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
         """Prune old failed branches.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             max_age_days: Maximum age in days.
 
         Returns:
@@ -1042,7 +1042,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
         Args:
             goal_id: Goal identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             goal_text: Goal description.
             thread_id: Thread identifier.
             iteration: Iteration number.
@@ -1088,7 +1088,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
         Args:
             goal_id: Goal identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             status: Goal status.
             goal_completion: Goal completion summary.
             evidence_summary: Evidence summary.

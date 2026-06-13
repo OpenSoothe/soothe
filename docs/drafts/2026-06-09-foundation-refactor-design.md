@@ -8,7 +8,7 @@
 
 ## Abstract
 
-Refactor `soothe.core` into `soothe.foundation` with clear three-layer separation (CoreAgent, AgentLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
+Refactor `soothe.core` into `soothe.foundation` with clear three-layer separation (CoreAgent, StrangeLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
 
 ---
 
@@ -65,11 +65,11 @@ soothe/
 │   │   │   └── workspace.py
 │   │   └── quiz_messages.py      # Quiz/clarification messages
 │   │
-│   ├── loop/                      # Layer 2: AgentLoop orchestration
-│   │   ├── __init__.py           # Re-exports AgentLoop, LoopState, PlanResult
+│   ├── loop/                      # Layer 2: StrangeLoop orchestration
+│   │   ├── __init__.py           # Re-exports StrangeLoop, LoopState, PlanResult
 │   │   ├── engine/               # Plan-Execute engine
 │   │   │   ├── __init__.py
-│   │   │   ├── agent_loop.py    # AgentLoop main class
+│   │   │   ├── strange_loop.py    # StrangeLoop main class
 │   │   │   ├── executor.py      # Step execution
 │   │   │   ├── synthesis.py     # Result synthesis
 │   │   │   ├── anchor_manager.py
@@ -220,7 +220,7 @@ soothe/
 │   ├── persistence.py            # AsyncPersistStore (existing)
 │   │
 │   ├── core_agent.py             # NEW: CoreAgentProtocol
-│   ├── agent_loop.py             # NEW: AgentLoopProtocol (optional)
+│   ├── strange_loop.py             # NEW: StrangeLoopProtocol (optional)
 │   └── autopilot.py              # NEW: AutopilotProtocol (optional)
 │
 ├── backends/                      # Protocol implementations (unchanged)
@@ -330,10 +330,10 @@ class CoreAgentProtocol(Protocol):
 
 ---
 
-## AgentLoopProtocol Definition (Optional)
+## StrangeLoopProtocol Definition (Optional)
 
 ```python
-# soothe/protocols/agent_loop.py
+# soothe/protocols/strange_loop.py
 from typing import Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -343,15 +343,15 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
-class AgentLoopProtocol(Protocol):
-    """Layer 2 AgentLoop interface - Plan-Execute orchestration.
+class StrangeLoopProtocol(Protocol):
+    """Layer 2 StrangeLoop interface - Plan-Execute orchestration.
 
-    AgentLoop executes single goals through iterative refinement:
+    StrangeLoop executes single goals through iterative refinement:
     - Plan: LLM reasoning with goal-directed evaluation
     - Execute: Step execution via CoreAgentProtocol
     - Judge: Progress assessment toward goal
 
-    This protocol enables alternative AgentLoop implementations while
+    This protocol enables alternative StrangeLoop implementations while
     maintaining CoreAgent isolation (Loop knows Core, Core doesn't know Loop).
     """
 
@@ -375,7 +375,7 @@ class AgentLoopProtocol(Protocol):
         cls,
         config: SootheConfig,
         core_agent: CoreAgentProtocol,
-    ) -> AgentLoopProtocol:
+    ) -> StrangeLoopProtocol:
         """Factory method requiring CoreAgentProtocol dependency.
 
         Args:
@@ -383,7 +383,7 @@ class AgentLoopProtocol(Protocol):
             core_agent: CoreAgentProtocol instance for execution
 
         Returns:
-            AgentLoopProtocol instance ready for iteration.
+            StrangeLoopProtocol instance ready for iteration.
         """
         ...
 ```
@@ -409,10 +409,10 @@ class AutopilotProtocol(Protocol):
     - Goal DAG orchestration (create, schedule, dependencies)
     - Goal lifecycle (pending, active, completed, failed)
     - Backoff reasoning on failure
-    - Dispatch to AgentLoop workers
+    - Dispatch to StrangeLoop workers
 
     This protocol enables alternative Autopilot implementations while
-    maintaining AgentLoop isolation (Autopilot dispatches to Loop,
+    maintaining StrangeLoop isolation (Autopilot dispatches to Loop,
     Loop doesn't know Autopilot internals).
     """
 
@@ -477,7 +477,7 @@ class AutopilotProtocol(Protocol):
 |--------|-------|
 | `from soothe.core import CoreAgent` | `from soothe.foundation.core import CoreAgent` |
 | `from soothe.core.agent import create_soothe_agent` | `from soothe.foundation.core.agent import create_soothe_agent` |
-| `from soothe.core.loop import AgentLoop` | `from soothe.foundation.loop import AgentLoop` |
+| `from soothe.core.loop import StrangeLoop` | `from soothe.foundation.loop import StrangeLoop` |
 | `from soothe.core.loop.state.schemas import LoopState` | `from soothe.foundation.loop.state.schemas import LoopState` |
 | `from soothe.core.goal_engine import GoalEngine` | `from soothe.foundation.autopilot import GoalEngine` |
 | `from soothe.core.autopilot import AutopilotService` | `from soothe.foundation.autopilot import AutopilotService` |
@@ -517,7 +517,7 @@ def __getattr__(name: str) -> Any:
 ### Phase 1: Create Protocol Interfaces (Low Risk)
 
 1. Add `soothe.protocols/core_agent.py` with CoreAgentProtocol
-2. Add `soothe.protocols/agent_loop.py` with AgentLoopProtocol
+2. Add `soothe.protocols/strange_loop.py` with StrangeLoopProtocol
 3. Add `soothe.protocols/autopilot.py` with AutopilotProtocol
 4. Update protocol `__init__.py` exports
 5. Verify existing implementations satisfy protocols
@@ -624,7 +624,7 @@ Run `./scripts/verify_finally.sh` after each phase:
 ## References
 
 - RFC-000: System Conceptual Design (three-layer architecture)
-- RFC-201: AgentLoop Plan-Execute Loop Architecture
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture
 - RFC-200: Autonomous Goal Management Loop
 - RFC-100: CoreAgent runtime (implicit in agent/ module)
 - IG-276: Core Directory Refactoring (prior work)

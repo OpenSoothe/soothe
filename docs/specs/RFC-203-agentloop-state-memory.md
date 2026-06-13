@@ -1,7 +1,7 @@
-# RFC-203: AgentLoop State & Memory Architecture
+# RFC-203: StrangeLoop State & Memory Architecture
 
 **RFC**: 203
-**Title**: AgentLoop State & Memory Architecture
+**Title**: StrangeLoop State & Memory Architecture
 **Status**: Draft
 **Kind**: Architecture Design / Impl Interface
 **Created**: 2026-04-17
@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines AgentLoop state management architecture combining LoopState unified model, Loop Working Memory bounded scratchpad, and Loop Unified State Checkpoint progressive persistence. AgentLoop state spans working memory (iteration-bounded), wave metrics (evidence-driven), and checkpoint envelope (durable persistence). This consolidation unifies state management concerns previously fragmented across multiple RFCs.
+This RFC defines StrangeLoop state management architecture combining LoopState unified model, Loop Working Memory bounded scratchpad, and Loop Unified State Checkpoint progressive persistence. StrangeLoop state spans working memory (iteration-bounded), wave metrics (evidence-driven), and checkpoint envelope (durable persistence). This consolidation unifies state management concerns previously fragmented across multiple RFCs.
 
 ---
 
@@ -22,7 +22,7 @@ This RFC defines AgentLoop state management architecture combining LoopState uni
 
 ```python
 class LoopState(BaseModel):
-    """AgentLoop unified state model spanning iterations."""
+    """StrangeLoop unified state model spanning iterations."""
 
     # Wave execution metrics (inform Plan decisions)
     last_wave_tool_call_count: int = 0
@@ -119,7 +119,7 @@ Implementations **must** create parent directories before writing. Spill files c
 
 ```python
 class LoopWorkingMemoryProtocol(Protocol):
-    """Working memory protocol for AgentLoop."""
+    """Working memory protocol for StrangeLoop."""
 
     def __init__(
         self,
@@ -146,17 +146,17 @@ class LoopWorkingMemoryProtocol(Protocol):
         """Return single prompt section (empty if disabled/no entries)."""
 
     def clear() -> None:
-        """Reset for new goal (optional; AgentLoop may create fresh instance)."""
+        """Reset for new goal (optional; StrangeLoop may create fresh instance)."""
 ```
 
 ### Concrete Implementations
 
-- **`LoopWorkingMemory`**: In-memory deque/list + spill writer (`soothe.core.agent_loop.state.working_memory`)
+- **`LoopWorkingMemory`**: In-memory deque/list + spill writer (`soothe.core.strange_loop.state.working_memory`)
 - **`NullLoopWorkingMemory`**: No-op when disabled (optional)
 
 ### Integration Points
 
-1. **Loop start**: Runner/AgentLoop constructs working memory from config
+1. **Loop start**: Runner/StrangeLoop constructs working memory from config
 2. **Post-Execute**: After each batch of `StepResult`, call `record_step_result` for each
 3. **Pre-Plan**: `build_loop_plan_prompt` receives `working_memory_excerpt: str` from `render_for_reason()`
 
@@ -193,7 +193,7 @@ agentic:
 
 ```python
 class CheckpointEnvelope(BaseModel):
-    """Progressive checkpoint model for AgentLoop state."""
+    """Progressive checkpoint model for StrangeLoop state."""
 
     version: int = 1
     """Checkpoint schema version."""
@@ -247,7 +247,7 @@ def _pre_stream(thread_id: str):
     # 3. Load checkpoint envelope
     envelope = artifact_store.load_checkpoint()
 
-    # 4. Restore AgentLoop state
+    # 4. Restore StrangeLoop state
     if envelope and envelope.status == "in_progress":
         # Restore GoalEngine (Layer 3)
         if envelope.mode == "autonomous":
@@ -407,9 +407,9 @@ agentic:
 
 ## References
 
-- RFC-200: AgentLoop Plan-Execute Loop Architecture
+- RFC-200: StrangeLoop Plan-Execute Loop Architecture
 - RFC-100: CoreAgent Runtime
-- RFC-207: AgentLoop Thread Management & Goal Context
+- RFC-207: StrangeLoop Thread Management & Goal Context
 - RFC-400: ContextProtocol (separate unbounded knowledge system)
 
 ---
@@ -425,4 +425,4 @@ agentic:
 
 ---
 
-*AgentLoop state management through LoopState metrics, working memory bounded scratchpad, and progressive checkpoint persistence.*
+*StrangeLoop state management through LoopState metrics, working memory bounded scratchpad, and progressive checkpoint persistence.*

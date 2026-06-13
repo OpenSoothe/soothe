@@ -1,4 +1,4 @@
-"""Schemas for AgentLoop execution (RFC-201, IG-153, RFC-214)."""
+"""Schemas for StrangeLoop execution (RFC-201, IG-153, RFC-214)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.protocols.planner import planner_outcome_text_preview
 
@@ -718,7 +718,7 @@ def plan_generation_model_for_iteration(iteration: int) -> type[PlanGeneration]:
     """Structured-output schema for plan-generate, with a first-wave step cap when needed.
 
     Args:
-        iteration: AgentLoop iteration (0 = first plan-generate for a new goal).
+        iteration: StrangeLoop iteration (0 = first plan-generate for a new goal).
 
     Returns:
         ``PlanGeneration`` for iteration > 0; a subclass capped at ``FIRST_WAVE_MAX_STEPS`` steps
@@ -906,7 +906,7 @@ class LoopState(BaseModel):
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     git_status: dict[str, Any] | None = None
     iteration: int = 0
-    max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 
     current_decision: AgentDecision | None = None
     plan_id: str | None = None

@@ -1,6 +1,6 @@
-# CE-AgentLoop Full Integration Design
+# CE-StrangeLoop Full Integration Design
 
-RFC-624 Phase 3d: Wire ContextEngine into AgentLoop as a fully functional parallel path, closing all remaining gaps.
+RFC-624 Phase 3d: Wire ContextEngine into StrangeLoop as a fully functional parallel path, closing all remaining gaps.
 
 ## Context
 
@@ -24,7 +24,7 @@ New class `ContextEngineLifecycle` encapsulates all CE interactions for one goal
 
 ```python
 class ContextEngineLifecycle:
-    """All ContextEngine interactions for one AgentLoop goal run.
+    """All ContextEngine interactions for one StrangeLoop goal run.
 
     CE disabled → all methods are no-ops.
     CE enabled → each method handles goal lifecycle, step feedback,
@@ -44,7 +44,7 @@ class ContextEngineLifecycle:
 
 | Hook | Called From | CE Actions |
 |------|------------|------------|
-| `on_goal_start()` | agent_loop startup | `semantic.load(workspace)` |
+| `on_goal_start()` | strange_loop startup | `semantic.load(workspace)` |
 | `on_plan_ingested(plan_result, plan_id, iteration)` | plan_assess, resolve_decision (after `ingest_plan`) | `save()` |
 | `on_steps_executed(step_results)` | record_iteration (after `record_step_outcomes`) | `complete_step()`/`fail_step()` async + `save()` |
 | `on_goal_complete(status, plan_result)` | goal_completion | `complete_goal()`/`fail_goal()` + `save()` |
@@ -57,7 +57,7 @@ All lifecycle methods catch and log exceptions. CE failures never propagate to g
 
 ## Integration Points per Graph Node
 
-### agent_loop.py (startup)
+### strange_loop.py (startup)
 
 Current CE path already creates CE instance, goal, and adapters. Additions:
 - Create `ContextEngineLifecycle(ce_instance, ce_goal.id)` and store on `LoopRuntimeContext`
@@ -153,7 +153,7 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 
 ## Backward Compatibility
 
-- **CE disabled**: `ContextEngineLifecycle(None, None)`. All methods are no-ops. `enabled` returns False. Graph node guards (`if ctx.ce_lifecycle and ctx.ce_lifecycle.enabled`) skip all CE calls. Zero behavioral change from current AgentLoop.
+- **CE disabled**: `ContextEngineLifecycle(None, None)`. All methods are no-ops. `enabled` returns False. Graph node guards (`if ctx.ce_lifecycle and ctx.ce_lifecycle.enabled`) skip all CE calls. Zero behavioral change from current StrangeLoop.
 - **CE enabled**: All existing prompt fragments remain identical. ContextBundle is additive only. The StepPlanningSubengine produces the same `DagPlanningContext` with the same 9 attributes. The `format_completion_dag_report()` output uses the hierarchical CE DAG format but contains equivalent information.
 - **Existing tests**: All 2600+ tests continue to pass. New tests verify the CE-specific behavior.
 
@@ -163,14 +163,14 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 |------|--------|
 | `packages/soothe/src/soothe/foundation/loop/engine/context_lifecycle.py` | **New**: ContextEngineLifecycle class |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Add `ce_lifecycle` field |
-| `packages/soothe/src/soothe/foundation/loop/engine/agent_loop.py` | Create lifecycle, call `on_goal_start()` |
+| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Create lifecycle, call `on_goal_start()` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py` | Call `on_plan_ingested()` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_generate.py` | Pass `context_bundle` from lifecycle |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Call `on_steps_executed()` |
 | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/goal_completion.py` | Replace `ce.save()` with `on_goal_complete()` |
 | `packages/soothe/src/soothe/config/models.py` | Flip `enabled` default to True |
 | `packages/soothe/tests/unit/core/loop/engine/test_context_lifecycle.py` | **New**: lifecycle unit tests |
-| `packages/soothe/tests/integration/context/test_ce_agent_loop_equivalence.py` | Add lifecycle + goal completion tests |
+| `packages/soothe/tests/integration/context/test_ce_strange_loop_equivalence.py` | Add lifecycle + goal completion tests |
 
 ## Acceptance Criteria
 

@@ -109,4 +109,4 @@ def test_build_synthesis_messages_uses_system_and_human_only() -> None:
     assert "GOAL:" in human
     assert "Research topic X" in human
     assert "EVIDENCE:" in human or "STEP SUMMARIES:" in human
-    assert "AgentLoop" not in human
+    assert "StrangeLoop" not in human

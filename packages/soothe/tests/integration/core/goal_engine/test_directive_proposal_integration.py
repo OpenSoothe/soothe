@@ -35,7 +35,7 @@ class TestDirectiveProposalIntegration:
     async def test_reactive_path_directives_create_subgoals(self, goal_engine: GoalEngine):
         """Reactive path: Reflection directives create subgoals.
 
-        Simulates what happens when AgentLoop's Reflection phase generates
+        Simulates what happens when StrangeLoop's Reflection phase generates
         GoalDirectives based on step failure analysis.
         """
         # Get parent goal ID
@@ -141,7 +141,7 @@ class TestDirectiveProposalIntegration:
         """Integration point: both paths merge in GoalCompletionChunk.
 
         This simulates the full flow:
-        1. AgentLoop runs with proposal_queue
+        1. StrangeLoop runs with proposal_queue
         2. Reflection generates reactive directives
         3. ProposalQueue drained for proactive directives
         4. Both merged in GoalCompletionChunk.goal_directives

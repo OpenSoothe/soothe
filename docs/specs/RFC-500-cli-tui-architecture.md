@@ -60,7 +60,7 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 
 **Naming**: `soothe.<component>.<action>`. Subagent: `soothe.<subagent>.<action>`, Protocol: `soothe.<protocol>.<action>`.
 
-**AgentLoop output contract note** (IG-304, IG-317, RFC-614):
+**StrangeLoop output contract note** (IG-304, IG-317, RFC-614):
 - Execute-phase assistant prose is daemon-suppressed for user-facing **stdout**; the TUI still receives `messages` tuples for routing.
 - Live execute observability is carried by tool telemetry (`ToolMessage` + AI tool-call metadata).
 - Final user-facing answer text (goal completion, quiz, autonomous summaries, direct-model replies) is emitted on the **`messages`** stream as loop-tagged AI message chunks with a **`phase`** field (for example `goal_completion`), not as `soothe.output.goal_completion.*` custom events.
@@ -73,7 +73,7 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 | Goal completion / synthesis | `goal_completion` | **`AssistantMessage`** card only (all LangGraph namespaces) |
 
 **Runner replay (`loop_assistant_messages_chunk`)**  
-After `completed`, the runner emits **one** phased `goal_completion` chunk when `skip_goal_completion_wire_duplicate=False`. AgentLoop sets the flag **true** only after a **successful streamed `synthesize`** (body already arrived on `messages` via `stream_event`). It stays **false** for **`ledger_direct`** and **`summary`** so **headless** stdout still receives an answer: execute-phase prose is suppressed there (IG-343), and without this replay there would be no `goal_completion` line to print.
+After `completed`, the runner emits **one** phased `goal_completion` chunk when `skip_goal_completion_wire_duplicate=False`. StrangeLoop sets the flag **true** only after a **successful streamed `synthesize`** (body already arrived on `messages` via `stream_event`). It stays **false** for **`ledger_direct`** and **`summary`** so **headless** stdout still receives an answer: execute-phase prose is suppressed there (IG-343), and without this replay there would be no `goal_completion` line to print.
 
 **Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`), following the same `messages` + `phase` contract. Slash routes such as `/research` or `/explore` set `preferred_subagent` as a planner hint; they do not bypass the streaming contract.
 
@@ -92,7 +92,7 @@ After `completed`, the runner emits **one** phased `goal_completion` chunk when 
 
 For detailed rendering (two-level tool call trees, special tool behaviors, plan visualization), see **IG-053: CLI/TUI Event Progress Clarity**. Rendering is implementation-level, documented in IGs.
 
-When the agent loop emits `soothe.cognition.agent_loop.step.started` / `step.completed` for the **main** stream (and no goal-tree aggregate card is active), the TUI folds main-agent tool calls into a single **step card** (`CognitionStepMessage`): the header summarizes counts by tool display name (e.g. `Grep(2), List(4)`), and each invocation is one CLI-style row (`format_tool_cli_style_command` → result status). The `task` tool still mounts the existing subagent tool card for internal activity; a matching `task` row appears on the step card with the same row format. See **IG-402**.
+When the agent loop emits `soothe.cognition.strange_loop.step.started` / `step.completed` for the **main** stream (and no goal-tree aggregate card is active), the TUI folds main-agent tool calls into a single **step card** (`CognitionStepMessage`): the header summarizes counts by tool display name (e.g. `Grep(2), List(4)`), and each invocation is one CLI-style row (`format_tool_cli_style_command` → result status). The `task` tool still mounts the existing subagent tool card for internal activity; a matching `task` row appears on the step card with the same row format. See **IG-402**.
 
 ### Three-Phase Execution
 
@@ -100,7 +100,7 @@ When the agent loop emits `soothe.cognition.agent_loop.step.started` / `step.com
 Thread management → Context restoration → Policy check → Context projection → Memory recall → Plan creation → Enriched input assembly.
 
 **Phase 2: LangGraph Stream**
-`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. Interrupt loop (AgentLoop executor): collect `__interrupt__`, auto-approve in-process, resume with `Command(resume=...)`. See RFC-200 for StepScheduler multi-step execution.
+`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. Interrupt loop (StrangeLoop executor): collect `__interrupt__`, auto-approve in-process, resume with `Command(resume=...)`. See RFC-200 for StepScheduler multi-step execution.
 
 **Phase 3: Protocol Post-processing**
 Context ingestion → Context persistence → Memory storage → Plan reflection → Thread persistence via `ThreadContextManager`.
@@ -216,7 +216,7 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 ## Security
 
-TUI inherits `PolicyProtocol` enforcement (`deny` blocks tools; `need_approval` is advisory only). LangGraph tool interrupts are auto-resumed in the AgentLoop executor; the TUI does not block on approval menus.
+TUI inherits `PolicyProtocol` enforcement (`deny` blocks tools; `need_approval` is advisory only). LangGraph tool interrupts are auto-resumed in the StrangeLoop executor; the TUI does not block on approval menus.
 
 ## References
 
@@ -224,7 +224,7 @@ TUI inherits `PolicyProtocol` enforcement (`deny` blocks tools; `need_approval` 
 - RFC-001: Core modules architecture
 - RFC-400: Context protocol architecture
 - RFC-402: Memory protocol architecture
-- RFC-201: Unified AgentLoop execution (replaces deprecated RFC-202)
+- RFC-201: Unified StrangeLoop execution (replaces deprecated RFC-202)
 - RFC-450: Unified daemon communication
 - RFC-501: VerbosityTier unification
 

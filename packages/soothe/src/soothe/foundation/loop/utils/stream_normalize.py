@@ -1,4 +1,4 @@
-"""Normalize LangGraph ``astream`` chunks for AgentLoop Act and finalize paths.
+"""Normalize LangGraph ``astream`` chunks for StrangeLoop Act and finalize paths.
 
 ``CompiledStateGraph.astream`` can emit 3-tuples ``(namespace, mode, data)``,
 2-tuples ``(mode, data)``, dict updates with ``{"model": {"messages": [...]}}``,
@@ -177,7 +177,7 @@ def update_goal_completion_from_message(state: GoalCompletionAccumState, msg: Ba
     """Update goal-completion accumulators from one streamed AI message.
 
     Prefers accumulated chunk text over a sparse final :class:`~langchain_core.messages.AIMessage`
-    when both exist (same policy as the previous inline loop in ``AgentLoop``).
+    when both exist (same policy as the previous inline loop in ``StrangeLoop``).
 
     Args:
         state: Mutable accumulator state.

@@ -355,7 +355,7 @@ class AppResult:
     """Exit code (0 for success, non-zero for error)."""
 
     loop_id: str | None
-    """The final AgentLoop id at shutdown (may change if the user switched loops)."""
+    """The final StrangeLoop id at shutdown (may change if the user switched loops)."""
 
     session_stats: SessionStats = field(default_factory=SessionStats)
     """Cumulative usage stats across all turns in the session."""

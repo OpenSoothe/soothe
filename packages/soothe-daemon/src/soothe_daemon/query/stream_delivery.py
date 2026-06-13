@@ -3,7 +3,7 @@
 Three goal_completion delivery modes (IG-441):
 
 - ``batch``: Buffer entire goal_completion synthesis, emit one ``AIMessageChunk``
-  with ``chunk_position="last"`` at ``agent_loop.completed``. No real-time
+  with ``chunk_position="last"`` at ``strange_loop.completed``. No real-time
   visibility — intended for headless automation.
 
 - ``adaptive`` (default): Two-phase streaming.
@@ -13,7 +13,7 @@ Three goal_completion delivery modes (IG-441):
   2. *Chunked-streaming phase* — once threshold crossed the coalescer
      buffers further chunks and emits intermediate ``AIMessageChunk`` blocks
      when either ``adaptive_block_chars`` of text or ``adaptive_block_interval_s``
-     elapse since the last block. The final block at ``agent_loop.completed``
+     elapse since the last block. The final block at ``strange_loop.completed``
      carries ``chunk_position="last"``. Each block reuses the same
      ``phase="goal_completion"`` tag so the TUI continues appending to the same
      ``AssistantMessage`` card (see IG-440 for chunk identity preservation).
@@ -40,7 +40,7 @@ from typing import Any, Literal
 from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
-from soothe_sdk.core.events import AGENT_LOOP_COMPLETED
+from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
 from soothe_sdk.ux.loop_stream import assistant_output_phase
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
@@ -249,7 +249,7 @@ class StreamDeliveryCoalescer:
 
     @property
     def turn_complete_pending(self) -> bool:
-        """True after ``agent_loop.completed`` was ingested (caller should signal idle)."""
+        """True after ``strange_loop.completed`` was ingested (caller should signal idle)."""
         return self._turn_complete_pending
 
     @property
@@ -311,7 +311,11 @@ class StreamDeliveryCoalescer:
                 return out_prefix + [(ns, mode, data)]
             return out_prefix
 
-        if mode == "custom" and isinstance(data, dict) and data.get("type") == AGENT_LOOP_COMPLETED:
+        if (
+            mode == "custom"
+            and isinstance(data, dict)
+            and data.get("type") == STRANGE_LOOP_COMPLETED
+        ):
             out = self._flush_all_text_buffers(final=True)
             out.extend(self._flush_goal_completion(final=True))
             out.append((ns, mode, data))
@@ -546,7 +550,7 @@ class StreamDeliveryCoalescer:
         """Route a goal_completion message through the active delivery phase.
 
         - ``batch``: always accumulate; ``_flush_goal_completion(final=True)``
-          emits a single message at agent_loop.completed.
+          emits a single message at strange_loop.completed.
         - ``streaming``: passthrough each chunk; track cumulative chars and
           transition to ``chunked_streaming`` once ``adaptive_threshold_chars``
           is reached.
@@ -713,7 +717,7 @@ class StreamDeliveryCoalescer:
     def _flush_goal_completion(self, *, final: bool) -> list[tuple[tuple[str, ...], str, Any]]:
         """Flush remaining buffered goal_completion text.
 
-        Called at stream end (``flush``) and on ``agent_loop.completed``. The
+        Called at stream end (``flush``) and on ``strange_loop.completed``. The
         text may be empty if the entire synthesis was already streamed (pure
         adaptive streaming phase) or if the chunked-streaming blocks emptied
         the buffer between block flushes. file_output_threshold short-circuits
@@ -747,7 +751,7 @@ class StreamDeliveryCoalescer:
 
         In adaptive chunked-streaming, a large one-shot message can emit an
         intermediate block and leave the goal_completion buffer empty before
-        ``agent_loop.completed`` arrives. Clients still need a terminal marker
+        ``strange_loop.completed`` arrives. Clients still need a terminal marker
         to finalize streaming state.
         """
         if self._gc is None:
@@ -809,7 +813,7 @@ class StreamDeliveryCoalescer:
 
 
 __all__ = [
-    "AGENT_LOOP_COMPLETED",
+    "STRANGE_LOOP_COMPLETED",
     "StreamDeliveryCoalescer",
     "StreamDeliveryMode",
     "_plain_text_ai_message",

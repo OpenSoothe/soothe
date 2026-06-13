@@ -117,7 +117,7 @@ class PolicyContext(BaseModel):
 
     Args:
         active_permissions: The currently granted permissions.
-        scope_id: Opaque execution scope for audit (e.g. AgentLoop id).
+        scope_id: Opaque execution scope for audit (e.g. StrangeLoop id).
         workspace: Absolute workspace root for stream-scoped filesystem policy
             (from LangGraph ``configurable["workspace"]``), when available.
     """

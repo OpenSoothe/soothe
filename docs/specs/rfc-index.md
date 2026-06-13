@@ -86,19 +86,19 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 ---
 
-### AgentLoop & Cognition (2xx)
+### StrangeLoop & Cognition (2xx)
 
 - **RFC-200**: [Autonomous Goal Management Loop](RFC-200-autonomous-goal-management.md)
   - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-03-15
 
-- **RFC-201**: [AgentLoop Plan-Execute Loop Architecture (Consolidated Layer 2)](RFC-201-agentloop-plan-execute-loop.md)
+- **RFC-201**: [StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)](RFC-201-agentloop-plan-execute-loop.md)
   - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-04-17
 
-- **RFC-203**: [AgentLoop State & Memory Architecture](RFC-203-agentloop-state-memory.md)
+- **RFC-203**: [StrangeLoop State & Memory Architecture](RFC-203-agentloop-state-memory.md)
   - Kind: Architecture Design / Impl Interface
   - Status: Draft
   - Created: 2026-04-17
@@ -113,7 +113,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-08
 
-- **RFC-207**: [AgentLoop Thread Management & Goal Context](RFC-207-agentloop-thread-context-lifecycle.md)
+- **RFC-207**: [StrangeLoop Thread Management & Goal Context](RFC-207-agentloop-thread-context-lifecycle.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
@@ -123,7 +123,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-10
 
-- **RFC-213**: [AgentLoop Reasoning Quality & Robustness](RFC-213-agentloop-reasoning-quality.md)
+- **RFC-213**: [StrangeLoop Reasoning Quality & Robustness](RFC-213-agentloop-reasoning-quality.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
@@ -134,22 +134,22 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-05-03
 
-- **RFC-215**: [AgentLoop Persistence Backend Architecture](RFC-215-agentloop-persistence-backend.md)
+- **RFC-215**: [StrangeLoop Persistence Backend Architecture](RFC-215-agentloop-persistence-backend.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
 
-- **RFC-216**: [AgentLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching](RFC-216-agentloop-multithread-lifecycle.md)
+- **RFC-216**: [StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching](RFC-216-agentloop-multithread-lifecycle.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-16
 
-- **RFC-217**: [Goal Context Management for AgentLoop](RFC-217-goal-context-management.md)
+- **RFC-217**: [Goal Context Management for StrangeLoop](RFC-217-goal-context-management.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-218**: [AgentLoop Checkpoint Tree Architecture](RFC-218-agentloop-checkpoint-tree-architecture.md)
+- **RFC-218**: [StrangeLoop Checkpoint Tree Architecture](RFC-218-agentloop-checkpoint-tree-architecture.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
@@ -376,7 +376,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-04-11
-  - Depends on: RFC-201 (AgentLoop Plan-Execute Loop)
+  - Depends on: RFC-201 (StrangeLoop Plan-Execute Loop)
   - Authors: Claude Sonnet 4.6
 
 - **RFC-605**: [Explore Subagent and Parallel Spawning](RFC-605-explore-subagent-parallel-spawning.md)
@@ -462,14 +462,14 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-06-02
   - Supersedes: Empty-answer auto-resume behavior currently encoded in `core/loop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
-  - Depends on: RFC-220 (Agentic Goal Execution / AgentLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
+  - Depends on: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)
   - Authors: Soothe Team
 
 - **RFC-623**: [Veritas Auto-Mode Robustness](RFC-623-veritas-auto-mode-robustness.md)
   - Kind: Implementation Interface Design
   - Status: Draft
   - Created: 2026-06-03
-  - Depends on: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / AgentLoop), RFC-403 (Unified Event Naming)
+  - Depends on: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-403 (Unified Event Naming)
   - Authors: Soothe Team
 
 ---
@@ -495,7 +495,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-102 | Secure Filesystem Path Handling and Security Polic | 2026-03-18 |
 | RFC-104 | Dynamic System Context Injection | 2026-03-31 |
 | RFC-200 | Autonomous Goal Management Loop | 2026-03-15 |
-| RFC-201 | AgentLoop Plan-Execute Loop Architecture (Consolid | 2026-04-17 |
+| RFC-201 | StrangeLoop Plan-Execute Loop Architecture (Consolid | 2026-04-17 |
 | RFC-204 | Autopilot Mode (Layer 3 Extension) | 2026-04-03 |
 | RFC-219 | Goal Completion Module Architecture | 2026-04-28 |
 | RFC-301 | Protocol Registry | 2026-03-31 |
@@ -542,7 +542,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 |-------|----------|-------|
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 6 |
-| 2xx | AgentLoop & Cognition | 23 |
+| 2xx | StrangeLoop & Cognition | 23 |
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 13 |
 | 5xx | CLI & TUI | 6 |

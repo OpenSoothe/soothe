@@ -97,7 +97,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 **Medium/Complex path**:
 - Proceeds to pre-stream preparation
 - Loads memory and context projections
-- Enters AgentLoop agentic execution
+- Enters StrangeLoop agentic execution
 
 ---
 
@@ -136,12 +136,12 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 
 ---
 
-### Phase 3: AgentLoop Plan phase (per iteration)
+### Phase 3: StrangeLoop Plan phase (per iteration)
 
 **When**: Each iteration of the agentic loop (up to 8 times max)
 **Model**: Reasoning model (role="reasoning")
 **Purpose**: Assess progress and produce next plan fragment
-**Location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (Plan phase / `LLMPlanner.plan()`; historical `reason.py` removed)
+**Location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (Plan phase / `LLMPlanner.plan()`; historical `reason.py` removed)
 
 #### Call Frequency Pattern
 
@@ -290,7 +290,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 **When**: Each step in the AgentDecision (parallel or sequential)
 **Model**: Default model (role="default") or subagent-specific model
 **Purpose**: Execute tools/subagents to accomplish step goal
-**Location**: `packages/soothe/src/soothe/core/agent_loop/core/executor.py`
+**Location**: `packages/soothe/src/soothe/core/strange_loop/core/executor.py`
 
 #### Thread Isolation Strategy
 
@@ -641,7 +641,7 @@ results = await asyncio.gather([
 - Output length, call counts, duration
 - Success/failure status
 
-**AgentLoop Plan phase**:
+**StrangeLoop Plan phase**:
 - Aggregates evidence for progress assessment
 - Truncated summaries (max 600 chars)
 - Working memory integration
@@ -739,11 +739,11 @@ This section analyzes the message flow between Layer 1 CoreAgent and Layer 2 Loo
 
 **Storage Location**: `packages/soothe/src/soothe/core/runner/_runner_phases.py` lines 307-324
 
-#### 2. What is passed to the AgentLoop Plan phase
+#### 2. What is passed to the StrangeLoop Plan phase
 
 **Layer 2's Independent Checkpoint** (RFC-203):
 
-From `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` lines 124-137:
+From `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` lines 124-137:
 
 ```python
 # Layer 2 uses its OWN checkpoint, not Layer 1 messages
@@ -800,7 +800,7 @@ Layer 1 → Layer 2:
 
 #### 3. What's Passed to Next Iteration
 
-**LoopState Carried Forward** (from `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`):
+**LoopState Carried Forward** (from `packages/soothe/src/soothe/core/strange_loop/state/schemas.py`):
 
 ```python
 # State passed to next iteration
@@ -823,7 +823,7 @@ state.total_tokens_used
 state.context_percentage_consumed
 ```
 
-**Loop Continuity Mechanism** (`packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` lines 158-346):
+**Loop Continuity Mechanism** (`packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` lines 158-346):
 
 ```python
 while state.iteration < state.max_iterations:
@@ -859,7 +859,7 @@ while state.iteration < state.max_iterations:
 
 **Created at**:
 - CLI user input (`packages/soothe/src/soothe/core/runner/_runner_phases.py` line 796)
-- Executor for Act phase (`packages/soothe/src/soothe/core/agent_loop/core/executor.py` lines 370, 531)
+- Executor for Act phase (`packages/soothe/src/soothe/core/strange_loop/core/executor.py` lines 370, 531)
 
 **Stored in**:
 - Layer 1 checkpointer (full conversation)
@@ -867,21 +867,21 @@ while state.iteration < state.max_iterations:
 
 **Passed to**:
 - Layer 1 CoreAgent.astream() (current turn)
-- AgentLoop Plan phase (as XML excerpts)
+- StrangeLoop Plan phase (as XML excerpts)
 - Next iteration (as `reason_conversation_excerpts` in state)
 
 #### AIMessage
 
 **Created at**:
 - Model response (Layer 1 execution)
-- Executor accumulation (`packages/soothe/src/soothe/core/agent_loop/core/executor.py` line 667)
+- Executor accumulation (`packages/soothe/src/soothe/core/strange_loop/core/executor.py` line 667)
 
 **Stored in**:
 - Layer 1 checkpointer (with tool calls)
 - Layer 2 checkpoint (derived excerpts)
 
 **Passed to**:
-- AgentLoop Plan phase (as `<assistant>` XML excerpts)
+- StrangeLoop Plan phase (as `<assistant>` XML excerpts)
 - Next iteration (in `previous_reason.user_summary`)
 
 #### ToolMessage
@@ -892,7 +892,7 @@ while state.iteration < state.max_iterations:
 
 **Stored in**:
 - Layer 1 checkpointer ONLY
-- NOT passed to the AgentLoop Plan phase
+- NOT passed to the StrangeLoop Plan phase
 
 **Evidence flow**:
 - ToolMessage.content → StepResult.output → state.step_results
@@ -1034,16 +1034,16 @@ Translation scenario (contamination risk):
 - `packages/soothe/src/soothe/core/runner/_runner_agentic.py`: Thread loading (lines 191-195)
 
 **Layer 2 State Management**:
-- `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`: Checkpoint recovery (lines 124-137)
-- `packages/soothe/src/soothe/core/agent_loop/state/state_manager.py`: AgentLoop checkpoint operations
-- `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`: LoopState schema definition
+- `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py`: Checkpoint recovery (lines 124-137)
+- `packages/soothe/src/soothe/core/strange_loop/state/state_manager.py`: StrangeLoop checkpoint operations
+- `packages/soothe/src/soothe/core/strange_loop/state/schemas.py`: LoopState schema definition
 
 **Message Formatting**:
 - `packages/soothe/src/soothe/core/runner/_runner_phases.py`: XML excerpt formatting (lines 259-296)
 
 **Evidence Accumulation**:
-- `packages/soothe/src/soothe/core/agent_loop/core/planner.py`: Evidence aggregation (lines 35-62)
-- `packages/soothe/src/soothe/core/agent_loop/core/executor.py`: Step result collection
+- `packages/soothe/src/soothe/core/strange_loop/core/planner.py`: Evidence aggregation (lines 35-62)
+- `packages/soothe/src/soothe/core/strange_loop/core/executor.py`: Step result collection
 
 ---
 
@@ -1122,9 +1122,9 @@ Translation scenario (contamination risk):
 - `packages/soothe/src/soothe/core/runner/_runner_phases.py`: Stream phases
 
 **Loop Agent**:
-- `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`: AgentLoop class
-- `packages/soothe/src/soothe/core/agent_loop/core/planner.py`: Reason phase
-- `packages/soothe/src/soothe/core/agent_loop/core/executor.py`: Act executor
+- `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py`: StrangeLoop class
+- `packages/soothe/src/soothe/core/strange_loop/core/planner.py`: Reason phase
+- `packages/soothe/src/soothe/core/strange_loop/core/executor.py`: Act executor
 
 **Middleware Stack**:
 - `packages/soothe/src/soothe/core/middleware/_builder.py`: Stack construction

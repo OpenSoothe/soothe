@@ -4,7 +4,7 @@ Single source of truth for completion strategy determination. Extracted from
 PlanManager to eliminate duplication with ContextEnginePlanAdapter.
 
 All functions take primitive/keyword arguments rather than LoopState or PlanDAG,
-preserving ContextEngine's independence from AgentLoop (RFC-624 invariant).
+preserving ContextEngine's independence from StrangeLoop (RFC-624 invariant).
 """
 
 from __future__ import annotations

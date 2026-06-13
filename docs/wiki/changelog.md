@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | **0.5.x** | 2025-01+ | Current development - RFC-220 loop orchestrator, deployment guides |
 | **0.4.x** | 2024-Q4 | Protocol consolidation, multi-package monorepo, RFC-612 PostgreSQL |
 | **0.3.x** | 2024-Q3 | Daemon multi-transport (WebSocket, HTTP REST), event system |
-| **0.2.x** | 2024-Q2 | CoreAgent + AgentLoop, autonomous goal execution |
+| **0.2.x** | 2024-Q2 | CoreAgent + StrangeLoop, autonomous goal execution |
 | **0.1.x** | 2024-Q1 | Initial prototype - basic agent runtime |
 
 ---
@@ -32,10 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- RFC-224: Automatic context window management for AgentLoop
+- RFC-224: Automatic context window management for StrangeLoop
 - RFC-621: Workspace host convention for container deployments
 - IG-434: Unified autonomous + autopilot configuration in `agent.autonomous`
-- IG-407: Unified agent_loop configuration under `agent.loop`
+- IG-407: Unified strange_loop configuration under `agent.loop`
 - IG-052: Event system optimization with `register_event()` public API
 
 ### Fixed
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - RFC-220 Loop Orchestrator
 
-**Major feature**: LangGraph-based AgentLoop orchestrator with evidence validation.
+**Major feature**: LangGraph-based StrangeLoop orchestrator with evidence validation.
 
 - **Loop Graph topology**: Plan → Execute → Assess → Adapt cycles
 - **Evidence validation**: Plan-assess validates execution evidence
@@ -94,7 +94,7 @@ agent:
     poll_interval: 5
 ```
 
-**IG-407**: Unified agent_loop configuration under `agent.loop`.
+**IG-407**: Unified strange_loop configuration under `agent.loop`.
 
 All loop-related fields moved to nested structure:
 ```yaml
@@ -151,7 +151,7 @@ agent:
 
 ```
 PostgreSQL Cluster:
-├── soothe_checkpoints  (LangGraph + AgentLoop)
+├── soothe_checkpoints  (LangGraph + StrangeLoop)
 ├── soothe_metadata     (Durability metadata)
 ├── soothe_vectors      (pgvector embeddings)
 └── soothe_memory       (MemU long-term memory)
@@ -189,11 +189,11 @@ Resolver maps config to backend implementations.
 **Refactoring pattern**: Tests moved close to code they test.
 
 ```
-packages/soothe/src/soothe/core/agent_loop/
+packages/soothe/src/soothe/core/strange_loop/
 ├── graph.py
 ├── nodes.py
 
-packages/soothe/tests/unit/core/agent_loop/
+packages/soothe/tests/unit/core/strange_loop/
 ├── test_graph.py
 ├── test_nodes.py
 ```
@@ -292,12 +292,12 @@ See [Thread Management Guide](thread-management.md).
 
 ## [0.2.0] - 2024-Q2
 
-### Added - AgentLoop
+### Added - StrangeLoop
 
 **RFC-201**: Agentic goal execution with Plan → Execute iterations.
 
 ```
-User Query → AgentLoop
+User Query → StrangeLoop
   ↓
 PLAN phase
   - Decompose goal
@@ -395,7 +395,7 @@ Breaking changes documented with:
 
 Major features reference RFCs:
 - RFC-100: CoreAgent runtime
-- RFC-201: AgentLoop execution
+- RFC-201: StrangeLoop execution
 - RFC-220: Loop orchestrator
 - RFC-400: Daemon multi-transport
 - RFC-612: PostgreSQL multi-database
@@ -425,10 +425,10 @@ agent:
     max_loops: 4
 ```
 
-2. **Unified agent_loop config**:
+2. **Unified strange_loop config**:
 ```yaml
 # Before (0.4.x)
-agent_loop:
+strange_loop:
   max_iterations: 10
 
 # After (0.5.x)

@@ -18,7 +18,7 @@ The core package (`soothe.core`) implements Soothe's protocol-orchestrated agent
 │                                                     │
 │  • agent/        CoreAgent factory                 │
 │  • runner/       SootheRunner orchestration        │
-│  • loop/         AgentLoop (Plan-Execute)          │
+│  • loop/         StrangeLoop (Plan-Execute)          │
 │  • goal_engine/  GoalEngine (autonomous management)│
 │  • events/       Event system                      │
 │  • workspace/    Workspace resolution              │
@@ -47,7 +47,7 @@ Soothe's execution architecture is organized into three hierarchical levels:
 **Loop**: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
 **Module**: `goal_engine/`
 
-### Level 2: AgentLoop - Agentic Goal Execution
+### Level 2: StrangeLoop - Agentic Goal Execution
 **RFC**: [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)
 **Scope**: Single-goal execution through iterative refinement
 **Loop**: Plan → Execute (max ~8 iterations)
@@ -90,7 +90,7 @@ Key responsibilities:
 
 ---
 
-### AgentLoop
+### StrangeLoop
 **Module**: `soothe.core.loop`
 **Purpose**: Plan-Execute loop for single-goal execution
 
@@ -100,7 +100,7 @@ Key responsibilities:
 - Goal-directed evaluation
 - Adaptive execution
 
-**Documentation**: [AgentLoop](agent-loop.md)
+**Documentation**: [StrangeLoop](agent-loop.md)
 
 ---
 
@@ -213,7 +213,7 @@ Key components:
 |-----|-------|--------|
 | [RFC-100](../../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime | `agent/` |
 | [RFC-200](../../specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management | `goal_engine/` |
-| [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md) | AgentLoop Plan-Execute Loop | `loop/` |
+| [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop | `loop/` |
 | [RFC-001](../../specs/RFC-001-core-modules-architecture.md) | Core Protocol Modules | Multiple |
 
 ---
@@ -246,13 +246,13 @@ async for event in runner.run("query"):
     print(event)
 ```
 
-### AgentLoop
+### StrangeLoop
 ```python
-from soothe.core.loop import AgentLoop
+from soothe.core.loop import StrangeLoop
 from soothe.config import SootheConfig
 
 config = SootheConfig.from_file("config.yml")
-loop = AgentLoop(config)
+loop = StrangeLoop(config)
 
 # Run plan-execute loop
 result = await loop.run_with_progress(goal="Analyze codebase")

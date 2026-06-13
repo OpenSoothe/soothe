@@ -21,13 +21,13 @@ def _ctx(
     *,
     loop_state: LoopState,
     plan_manager: PlanManager,
-    agent_loop: Mock,
+    strange_loop: Mock,
     state_manager: Mock,
     plan_result: PlanResult,
 ) -> LoopRuntimeContext:
     scratch = LoopPhaseScratch(plan_result=plan_result, iteration_perf_start=None)
     return LoopRuntimeContext(
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=state_manager,
         anchor_manager=Mock(),
         goal_context_manager=Mock(),
@@ -49,11 +49,11 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     pm = PlanManager(goal="do thing")
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
 
-    agent_loop = Mock()
-    agent_loop.loop_planner = Mock()
-    agent_loop.loop_planner._model = Mock()
-    agent_loop.core_agent = Mock()
-    agent_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -65,7 +65,7 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     ctx = _ctx(
         loop_state=loop_state,
         plan_manager=pm,
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=sm,
         plan_result=plan_result,
     )
@@ -126,11 +126,11 @@ async def test_goal_completion_logs_planning_dag_at_info(
     )
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
 
-    agent_loop = Mock()
-    agent_loop.loop_planner = Mock()
-    agent_loop.loop_planner._model = Mock()
-    agent_loop.core_agent = Mock()
-    agent_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -142,7 +142,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     ctx = _ctx(
         loop_state=loop_state,
         plan_manager=pm,
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=sm,
         plan_result=plan_result,
     )
@@ -180,11 +180,11 @@ async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
     pm = PlanManager(goal="g")
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
 
-    agent_loop = Mock()
-    agent_loop.loop_planner = Mock()
-    agent_loop.loop_planner._model = Mock()
-    agent_loop.core_agent = Mock()
-    agent_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -193,7 +193,7 @@ async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
     ctx = _ctx(
         loop_state=loop_state,
         plan_manager=pm,
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=sm,
         plan_result=plan_result,
     )
@@ -219,11 +219,11 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     pm = PlanManager(goal="g")
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SUMMARY)
 
-    agent_loop = Mock()
-    agent_loop.loop_planner = Mock()
-    agent_loop.loop_planner._model = Mock()
-    agent_loop.core_agent = Mock()
-    agent_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -232,7 +232,7 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     ctx = _ctx(
         loop_state=loop_state,
         plan_manager=pm,
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=sm,
         plan_result=plan_result,
     )
@@ -298,11 +298,11 @@ async def test_ledger_direct_filters_out_planning_messages_for_final_output() ->
     pm = PlanManager(goal="g")
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
 
-    agent_loop = Mock()
-    agent_loop.loop_planner = Mock()
-    agent_loop.loop_planner._model = Mock()
-    agent_loop.core_agent = Mock()
-    agent_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -311,7 +311,7 @@ async def test_ledger_direct_filters_out_planning_messages_for_final_output() ->
     ctx = _ctx(
         loop_state=loop_state,
         plan_manager=pm,
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=sm,
         plan_result=plan_result,
     )

@@ -15,7 +15,7 @@ The live TUI display is correct and complete: cognition cards, step cards, tool 
 
 On resume, the transcript is missing or wrong in:
 
-- **Cognition / step cards** (`agent_loop.step.started`, `step.completed`, `reasoned`) — partly present, but step→tool binding is unreliable.
+- **Cognition / step cards** (`strange_loop.step.started`, `step.completed`, `reasoned`) — partly present, but step→tool binding is unreliable.
 - **User messages** — present when persisted via `ThreadLogger.log_user_input`, but not always linked to the iteration that consumed them.
 - **Assistant streamed text** — only the final consolidated body is persisted; per-step `LoopAIMessage(phase=execute_step)` fragments are lost or mis-attributed.
 - **Subagent cards** — completely absent (subagent domain is classified `INTERNAL` and never persisted).
@@ -89,11 +89,11 @@ ThreadLogger     ──┘   (single                │                     (TUI
 
 Subscribes to the daemon's internal event bus. Translates raw events into card mutations:
 
-- `agent_loop.step.started` → `StepCard.create(step_id, description, phase="running")`
+- `strange_loop.step.started` → `StepCard.create(step_id, description, phase="running")`
 - `tool_call` (messages-mode) → bind to current open `StepCard` by `step_id` → `StepCard.add_tool_row(tool_call_id, name, args_preview)`
 - `tool_result` (messages-mode) → match by `tool_call_id` → `StepCard.complete_tool_row(tool_call_id, status, output_preview)`
-- `agent_loop.step.completed` → `StepCard.finalize(step_id, success, duration_ms, tool_count, summary)`
-- `agent_loop.reasoned` → `CognitionCard.create_or_update(iteration, action, assessment, strategy)`
+- `strange_loop.step.completed` → `StepCard.finalize(step_id, success, duration_ms, tool_count, summary)`
+- `strange_loop.reasoned` → `CognitionCard.create_or_update(iteration, action, assessment, strategy)`
 - Subagent stream chunks → `SubagentCard.append_progress(...)` (rolled up — not one card per chunk)
 - `LoopAIMessage(phase=execute_step)` → append to current `StepCard.body`
 - Final consolidated assistant text → `AssistantTextCard.create(content)`
@@ -163,7 +163,7 @@ Inferred from current TUI widget set:
 | `assistant_text` | content (markdown), timestamp | Final consolidated body per turn |
 | `step` | step_id, description, phase, tool_rows[], success, duration_ms, summary | Tool rows bound from messages-mode tool calls |
 | `cognition_plan` | iteration, action, status, assessment, strategy | Updated as plan reflects |
-| `cognition_reason` | iteration, content | Per `agent_loop.reasoned` event |
+| `cognition_reason` | iteration, content | Per `strange_loop.reasoned` event |
 | `subagent` | task, progress[], success | Roll-up of subagent stream |
 | `error` | code, message, context | From `soothe.error.*` events |
 | `system_notice` | content, kind | `/loops` switch banners, summarization notices |

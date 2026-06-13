@@ -2,9 +2,9 @@
 
 Ensures thread/loop isolation:
 - data/threads/ (CoreAgent Layer 1)
-- data/loops/ (AgentLoop Layer 2)
+- data/loops/ (StrangeLoop Layer 2)
 
-RFC-215: AgentLoop Persistence Backend Architecture
+RFC-215: StrangeLoop Persistence Backend Architecture
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ THREADS_DATA_DIR = "data/threads"
 """Directory for CoreAgent thread runtime data (Layer 1)."""
 
 LOOPS_DATA_DIR = "data/loops"
-"""Directory for AgentLoop checkpoint data (Layer 2)."""
+"""Directory for StrangeLoop checkpoint data (Layer 2)."""
 
 
 class PersistenceDirectoryManager:
@@ -71,7 +71,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loops_directory() -> Path:
-        """Get AgentLoop loops base directory path.
+        """Get StrangeLoop loops base directory path.
 
         Returns:
             Path to data/loops/ directory.
@@ -82,7 +82,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loop_directory(loop_id: str) -> Path:
-        """Get AgentLoop loop directory path.
+        """Get StrangeLoop loop directory path.
 
         Args:
             loop_id: Loop identifier.
@@ -96,7 +96,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_goal_directory(loop_id: str, goal_id: str) -> Path:
-        """Get AgentLoop goal directory path.
+        """Get StrangeLoop goal directory path.
 
         Args:
             loop_id: Loop identifier.
@@ -111,7 +111,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_step_directory(loop_id: str, goal_id: str, step_id: str) -> Path:
-        """Get AgentLoop step directory path.
+        """Get StrangeLoop step directory path.
 
         Args:
             loop_id: Loop identifier.
@@ -135,10 +135,10 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loop_checkpoint_path() -> Path:
-        """Get AgentLoop global checkpoint database path (IG-055: unified SQLite).
+        """Get StrangeLoop global checkpoint database path (IG-055: unified SQLite).
 
         Returns:
-            Path to shared soothe_checkpoints.db (managed by AgentLoop + LangGraph).
+            Path to shared soothe_checkpoints.db (managed by StrangeLoop + LangGraph).
             Table: agentloop_checkpoints (separate from LangGraph checkpoint tables).
         """
         from soothe_sdk.client.config import SOOTHE_DATA_DIR
@@ -147,7 +147,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loop_metadata_path(loop_id: str) -> Path:
-        """Get AgentLoop loop metadata.json path.
+        """Get StrangeLoop loop metadata.json path.
 
         Returns:
             Path to loop's metadata.json (human-readable quick access).
@@ -157,7 +157,7 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loop_working_memory_dir(loop_id: str) -> Path:
-        """Get AgentLoop working memory spill directory.
+        """Get StrangeLoop working memory spill directory.
 
         Returns:
             Path to loop's working_memory/ directory.

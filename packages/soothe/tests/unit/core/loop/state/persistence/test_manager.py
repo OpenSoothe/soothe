@@ -1,4 +1,4 @@
-"""Unit tests for AgentLoop persistence manager.
+"""Unit tests for StrangeLoop persistence manager.
 
 Tests for:
 - Directory manager (thread/loop isolation)
@@ -14,7 +14,7 @@ from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 from soothe.foundation.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
+    StrangeLoopCheckpointPersistenceManager,
 )
 from soothe.foundation.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
 
@@ -145,7 +145,7 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager(None)
+        manager = StrangeLoopCheckpointPersistenceManager(None)
 
         # Use unique loop_id to avoid global database conflicts
         unique_loop_id = f"test_loop_{uuid.uuid4().hex[:8]}"
@@ -196,7 +196,7 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager(None)
+        manager = StrangeLoopCheckpointPersistenceManager(None)
 
         execution_summary = {
             "status": "success",
@@ -254,7 +254,7 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager(None)
+        manager = StrangeLoopCheckpointPersistenceManager(None)
 
         # Use unique IDs to avoid global database conflicts
         unique_id = uuid.uuid4().hex[:8]
@@ -314,7 +314,7 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager(None)
+        manager = StrangeLoopCheckpointPersistenceManager(None)
 
         # Use unique IDs to avoid conflicts across tests
         unique_id = uuid.uuid4().hex[:8]
@@ -392,7 +392,7 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager(None)
+        manager = StrangeLoopCheckpointPersistenceManager(None)
 
         # Use unique loop_id to avoid global database conflicts
         unique_loop_id = f"test_loop_threads_{uuid.uuid4().hex[:8]}"

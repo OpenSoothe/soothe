@@ -11,11 +11,11 @@ This document defines the terminology and naming conventions used in this projec
 | Term | Definition | Introduced In |
 |------|------------|---------------|
 | CoreAgent | Foundation runtime for Soothe's execution architecture. Handles tool/subagent execution via LangGraph CompiledStateGraph, created by `create_soothe_agent()`. Operates at the lowest level with Model → Tools → Model loop. | RFC-100 |
-| AgentLoop | Single-goal execution through iterative Plan-Execute cycles. Agentic goal execution for single-goal completion via iterative refinement. Operates at the middle level with Plan → Execute → Assess loop (max ~8 iterations). | RFC-201 |
+| StrangeLoop | Single-goal execution through iterative Plan-Execute cycles. Agentic goal execution for single-goal completion via iterative refinement. Operates at the middle level with Plan → Execute → Assess loop (max ~8 iterations). | RFC-201 |
 | GoalEngine | Autonomous goal management with multi-goal DAGs, scheduling, and long-running workflows. Operates at the highest level with Goal → PLAN → PERFORM → REFLECT loop. Daemon-owned singleton service. | RFC-222 |
-| LoopState | Persistent execution state across plan-execute cycles in AgentLoop. Contains plan, progress, metrics, and execution context. LangGraph state schema. | RFC-201 |
+| LoopState | Persistent execution state across plan-execute cycles in StrangeLoop. Contains plan, progress, metrics, and execution context. LangGraph state schema. | RFC-201 |
 
-**Naming Convention**: Use concrete module names (CoreAgent, AgentLoop, GoalEngine) instead of abstract "Layer N" terminology. This improves clarity and follows CLAUDE.md Rule #9.
+**Naming Convention**: Use concrete module names (CoreAgent, StrangeLoop, GoalEngine) instead of abstract "Layer N" terminology. This improves clarity and follows CLAUDE.md Rule #9.
 
 ### Domain Terms
 
@@ -141,11 +141,11 @@ This document defines the terminology and naming conventions used in this projec
 | Term | Definition | Introduced In |
 |------|------------|---------------|
 | Loop | A continuous conversational unit identified by `loop_id`. Spans many goals and survives across user turns until the user starts a new loop (`/clear`). The unit of continuity for agentic intent. | RFC-216, RFC-225 |
-| `continue_loop_mode` | Boolean derived once in `AgentLoop` immediately after `state_manager.load()`. True when the loaded checkpoint has prior goals and is alive (`status ∈ {running, idle}`). Replaces the prior `continue_thread_mode` flag. | RFC-225 |
+| `continue_loop_mode` | Boolean derived once in `StrangeLoop` immediately after `state_manager.load()`. True when the loaded checkpoint has prior goals and is alive (`status ∈ {running, idle}`). Replaces the prior `continue_thread_mode` flag. | RFC-225 |
 | Intent Type | Two-value LLM classification: `quiz` (greeting / thanks / trivia answerable without tools) or `agentic` (everything else). Whether an agentic query continues a loop is derived structurally, not classified. | RFC-225 |
 | Quiz Fast-Path | Pre-stream short-circuit when `IntentClassification.intent_type == "quiz"`; uses the LLM's piggybacked `quiz_response` to skip the agent loop entirely. | RFC-225 |
-| Idle (loop status) | `AgentLoopCheckpoint.status == "idle"` — loop is alive between goals. Renamed from the legacy value `ready_for_next_goal`; legacy persisted values are coerced on load. | RFC-225 |
-| Goal Record | `GoalExecutionRecord` — durable per-goal log inside `AgentLoopCheckpoint.goal_history`. Carries the latest plan DAG (`current_plan`), accumulated `step_results`, `evidence_ledger`, `completed_step_ids`, `plan_revision_count`, the orchestration `loop_messages` ledger, and final output. Sufficient to recover the goal's plan DAG with execution overlay without external lookup. | RFC-216, RFC-225 |
+| Idle (loop status) | `StrangeLoopCheckpoint.status == "idle"` — loop is alive between goals. Renamed from the legacy value `ready_for_next_goal`; legacy persisted values are coerced on load. | RFC-225 |
+| Goal Record | `GoalExecutionRecord` — durable per-goal log inside `StrangeLoopCheckpoint.goal_history`. Carries the latest plan DAG (`current_plan`), accumulated `step_results`, `evidence_ledger`, `completed_step_ids`, `plan_revision_count`, the orchestration `loop_messages` ledger, and final output. Sufficient to recover the goal's plan DAG with execution overlay without external lookup. | RFC-216, RFC-225 |
 | Plan DAG Recoverability | Invariant that the full DAG of any persisted goal — nodes, edges, execution mode, planner metadata, done-node overlay, per-node outcomes — is recoverable from `GoalExecutionRecord` alone. | RFC-225 |
 | `_LOOP_CONTINUATION_GUIDE` | System-prompt section injected by `system_prompt` when `state["continue_loop_mode"]` is `True`. Renamed from `_THREAD_CONTINUATION_GUIDE`. | RFC-225 |
 | `seed_loop_ledger_from_prior_goal()` | Seeds a new goal's `loop_messages` from the immediately prior completed goal in the same loop. Runs unconditionally for any same-loop new goal. Renamed from `seed_continue_thread_ledger_from_prior_goal()`. | RFC-225 |
@@ -156,14 +156,14 @@ This document defines the terminology and naming conventions used in this projec
 |------|------------|---------------|
 | Clarification Relay | CoreAgent → user → CoreAgent loop to resolve ambiguity without stopping the agent loop. When CoreAgent cannot confidently answer, it emits a `ClarificationRequest` event, suspends itself, waits for user clarification via `await_clarification` node, then resumes with the clarified answer. | RFC-622 |
 | Veritas | Agent node that performs structured yes/no confidence checking for core agent answers. Checks whether CoreAgent has enough information to confidently respond to user. Emits `ClarificationDeferredError` when confidence is insufficient. | RFC-622 |
-| Interactive Fallback | Mechanism allowing AgentLoop to auto-retry Veritas failures up to N times before raising `ClarificationDeferredError` to the orchestrator. Prevents immediate loop exit on transient issues. | RFC-623 |
+| Interactive Fallback | Mechanism allowing StrangeLoop to auto-retry Veritas failures up to N times before raising `ClarificationDeferredError` to the orchestrator. Prevents immediate loop exit on transient issues. | RFC-623 |
 | `ClarificationPolicy` | Config knob controlling Veritas behavior: `max_defer_attempts` (N), `confidence_threshold`, `auto_retry_on_defer_kind`. | RFC-622 |
 | `ClarificationRequest` | Event payload: `{question, context, urgency, timeout_hint}`. Sent from daemon to client when CoreAgent needs clarification. | RFC-622 |
 | `ClarificationAnswer` | Event payload: `{original_question, answer, source}`. User response to a clarification request. | RFC-622 |
-| `ClarificationDeferredError` | Exception raised after N Veritas failures. Signals AgentLoop to either retry with different parameters or exit goal with clarification status. | RFC-622, RFC-623 |
+| `ClarificationDeferredError` | Exception raised after N Veritas failures. Signals StrangeLoop to either retry with different parameters or exit goal with clarification status. | RFC-622, RFC-623 |
 | `DeferKind` | Enum in Veritas response: `ambiguous`, `insufficient_context`, `contradiction`, `other`. Used by Interactive Fallback to decide retry strategy. | RFC-623 |
 | `VeritasAnswerSchema` | Pydantic model for Veritas structured output: `{can_answer: bool, defer_kind: DeferKind | null, reasoning: str}`. | RFC-622, RFC-623 |
-| `await_clarification` Node | AgentLoop state node that suspends execution, sends clarification request to client, and waits for user input. Resumes when `ClarificationAnswer` arrives. | RFC-622 |
+| `await_clarification` Node | StrangeLoop state node that suspends execution, sends clarification request to client, and waits for user input. Resumes when `ClarificationAnswer` arrives. | RFC-622 |
 | `awaiting_clarification` | LoopState status flag indicating CoreAgent is suspended waiting for user clarification. | RFC-622 |
 | `defer_kind` (event field) | Field in `ClarificationDeferredError` event indicating why Veritas deferred. Used by downstream handlers for categorization. | RFC-623 |
 | `invoke_structured_chat` | Veritas helper that calls the model with `VeritasAnswerSchema` to check confidence. Returns structured `can_answer` decision. | RFC-623 |

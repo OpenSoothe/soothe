@@ -13,7 +13,7 @@ import logging
 import random
 from typing import Any, Literal
 
-from soothe.foundation.loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
+from soothe.foundation.loop.state.checkpoint import GoalExecutionRecord, StrangeLoopCheckpoint
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -68,14 +68,14 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
 ]
 
 
-def _prior_goal_summaries(checkpoint: AgentLoopCheckpoint) -> list[dict]:
+def _prior_goal_summaries(checkpoint: StrangeLoopCheckpoint) -> list[dict]:
     """Compact summary of completed prior goals for the continuation_assess prompt.
 
     Excludes the active (new) goal at the end of ``goal_history`` and any
     non-completed records. Data is drawn from RFC-225 enrichment fields.
 
     Args:
-        checkpoint: Current AgentLoopCheckpoint with goal_history.
+        checkpoint: Current StrangeLoopCheckpoint with goal_history.
 
     Returns:
         List of dicts (one per completed prior goal) with keys:
@@ -99,7 +99,7 @@ def _prior_goal_summaries(checkpoint: AgentLoopCheckpoint) -> list[dict]:
 
 
 def seed_loop_ledger_from_prior_goal(
-    checkpoint: AgentLoopCheckpoint,
+    checkpoint: StrangeLoopCheckpoint,
     new_goal: GoalExecutionRecord,
     thread_id: str,
 ) -> None:
@@ -208,15 +208,16 @@ def build_continue_loop_bootstrap_plan(
 
 async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Run assess phase and decide whether generation is needed."""
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     plan_manager = ctx.plan_manager
-    context = agent_loop._build_plan_context(state)
+    context = strange_loop._build_plan_context(state)
 
     # RFC-226: iter=0 continuation discriminator.
     # Only fires when this loop already has at least one completed prior goal,
     # state is a true first plan (no step results, recovery is clean), and
-    # the structural continue_loop_mode flag is set by AgentLoop.
+    # the structural continue_loop_mode flag is set by StrangeLoop.
     if (
         state.iteration == 0
         and ctx.continue_loop_mode
@@ -233,7 +234,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     ):
         prior_goals = _prior_goal_summaries(ctx.checkpoint)
         if prior_goals:
-            assessment = await agent_loop.loop_planner.assess_continuation(
+            assessment = await strange_loop.loop_planner.assess_continuation(
                 current_goal=state.goal,
                 prior_goals=prior_goals,
                 capabilities=context.available_capabilities,
@@ -290,7 +291,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
             return {"assess_route": "continue_generate"}
 
-    assessment = await agent_loop.plan_phase.assess_status(
+    assessment = await strange_loop.plan_phase.assess_status(
         goal=state.goal,
         state=state,
         context=context,
@@ -317,8 +318,8 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
 
         gc_mode = (
-            agent_loop.config.agent.loop.goal_completion_mode
-            if agent_loop.config is not None
+            strange_loop.config.agent.loop.goal_completion_mode
+            if strange_loop.config is not None
             else "llm_only"
         )
         require_completion = plan_manager.determine_goal_completion_needs(
@@ -337,7 +338,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             require_goal_completion=require_completion,
             full_output=state.last_execute_assistant_text,
         )
-        plan_result = agent_loop.plan_phase.finalize_plan_result(
+        plan_result = strange_loop.plan_phase.finalize_plan_result(
             state=state,
             context=context,
             result=plan_result,
@@ -370,8 +371,8 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             assessment.goal_progress,
         )
         gc_mode = (
-            agent_loop.config.agent.loop.goal_completion_mode
-            if agent_loop.config is not None
+            strange_loop.config.agent.loop.goal_completion_mode
+            if strange_loop.config is not None
             else "llm_only"
         )
         require_completion = plan_manager.determine_goal_completion_needs(
@@ -389,7 +390,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             next_action="Goal progress sufficient for completion",
             require_goal_completion=require_completion,
         )
-        plan_result = agent_loop.plan_phase.finalize_plan_result(
+        plan_result = strange_loop.plan_phase.finalize_plan_result(
             state=state,
             context=context,
             result=plan_result,

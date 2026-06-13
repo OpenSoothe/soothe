@@ -85,8 +85,8 @@ class RunArtifactStore:
     Provides atomic checkpoint writes and a manifest of tracked artifacts.
     Scope limited to CoreAgent (Layer 1) data: checkpoint.json, artifacts/, manifest.json.
 
-    Note: Goal/step reports (Layer 2 AgentLoop data) are managed by
-    AgentLoopCheckpointPersistenceManager in ``$SOOTHE_HOME/data/loops/{loop_id}/``.
+    Note: Goal/step reports (Layer 2 StrangeLoop data) are managed by
+    StrangeLoopCheckpointPersistenceManager in ``$SOOTHE_HOME/data/loops/{loop_id}/``.
 
     Always uses the durability thread id (not synthetic per-goal ids).
 

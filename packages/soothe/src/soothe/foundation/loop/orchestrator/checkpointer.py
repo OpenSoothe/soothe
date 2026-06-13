@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe.foundation.loop.engine.agent_loop import AgentLoop
+    from soothe.foundation.loop.engine.strange_loop import StrangeLoop
 
 
-def core_agent_checkpointer(agent_loop: AgentLoop) -> Any | None:
+def core_agent_checkpointer(strange_loop: StrangeLoop) -> Any | None:
     """Return the LangGraph checkpointer wired on CoreAgent, if any."""
     try:
-        graph = getattr(agent_loop.core_agent, "graph", None)
+        graph = getattr(strange_loop.core_agent, "graph", None)
         if graph is None:
             return None
         return getattr(graph, "checkpointer", None)

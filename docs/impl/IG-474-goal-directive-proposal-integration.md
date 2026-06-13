@@ -200,7 +200,7 @@ def _goal_completion_chunk(
 3. Update `_run_single_autopilot_goal()` to extract and pass directives:
 
 ```python
-# After AgentLoop completes, before emitting completion chunk:
+# After StrangeLoop completes, before emitting completion chunk:
 reflection_directives = _extract_reflection_directives(plan_result)
 
 # Merge with proposal_directives (Phase C.3 will add this)
@@ -316,7 +316,7 @@ Already covered in Step 2 of Phase C.1. No separate implementation needed.
 | File | Change |
 |------|--------|
 | `core/loop/orchestrator/runtime_context.py` | Add `proposal_queue: ProposalQueue | None` field |
-| `core/loop/engine/agent_loop.py` | Accept `proposal_queue` parameter, pass to LoopRuntimeContext |
+| `core/loop/engine/strange_loop.py` | Accept `proposal_queue` parameter, pass to LoopRuntimeContext |
 | `core/runner/_runner_autopilot_worker.py` | Create queue, drain, convert proposals to directives |
 
 ### Step 1: Proposal Toolkit Package
@@ -449,9 +449,9 @@ class LoopRuntimeContext:
     proposal_queue: ProposalQueue | None = None  # RFC-204 Group C
 ```
 
-### Step 3: AgentLoop.run_with_progress() Parameter
+### Step 3: StrangeLoop.run_with_progress() Parameter
 
-**File**: `core/loop/engine/agent_loop.py`
+**File**: `core/loop/engine/strange_loop.py`
 
 Add parameter and pass through:
 
@@ -487,15 +487,15 @@ from soothe.core.goal_engine.proposal_queue import ProposalQueue
 async def _run_single_autopilot_goal(...) -> AsyncGenerator[StreamChunk, None]:
     proposal_queue = ProposalQueue()  # NEW
 
-    # Pass to AgentLoop
-    async for event_type, event_data in agent_loop.run_with_progress(
+    # Pass to StrangeLoop
+    async for event_type, event_data in strange_loop.run_with_progress(
         ...,
         proposal_queue=proposal_queue,  # NEW
     ):
         ...
 ```
 
-2. Drain and convert after AgentLoop completes:
+2. Drain and convert after StrangeLoop completes:
 
 ```python
 # Drain proposals and convert to directives
@@ -572,14 +572,14 @@ Run `./scripts/verify_finally.sh` after each phase.
 
 1. `GoalEngine.apply_directives()` handles all six actions
 2. `GoalCompletionChunk.goal_directives` populated from Reflection
-3. `suggest_goal` tool available in AgentLoop execution
+3. `suggest_goal` tool available in StrangeLoop execution
 4. Integration test: tool → queue → chunk → apply → DAG shows subgoal
 
 ---
 
 ## Dependencies
 
-- None beyond existing GoalEngine, Runner, AgentLoop code
+- None beyond existing GoalEngine, Runner, StrangeLoop code
 
 ---
 

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Visualize AgentLoop LangGraph as SVG.
+"""Visualize StrangeLoop LangGraph as SVG.
 
 This script:
-1. Builds the AgentLoop graph structure
+1. Builds the StrangeLoop graph structure
 2. Generates Mermaid diagram syntax
 3. Converts Mermaid to SVG using mermaid-cli (if installed)
 
 Usage:
-    python scripts/visualize_agent_loop_graph.py
+    python scripts/visualize_strange_loop_graph.py
 
 Requirements:
     - mermaid-cli (mmdc) for SVG output: npm install -g @mermaid-js/mermaid-cli
 
 Output:
-    - docs/diagrams/agent_loop_graph.mmd  (Mermaid source)
-    - docs/diagrams/agent_loop_graph.svg   (SVG diagram)
+    - docs/diagrams/strange_loop_graph.mmd  (Mermaid source)
+    - docs/diagrams/strange_loop_graph.svg   (SVG diagram)
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages/soothe/src"))
 
 from soothe.config import SootheConfig
-from soothe.core.agent_loop.orchestrator.builder import build_agent_loop_graph
-from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.core.strange_loop.orchestrator.builder import build_strange_loop_graph
+from soothe.core.strange_loop.orchestrator.runtime_context import LoopRuntimeContext
 
 
 def create_mock_runtime_context() -> LoopRuntimeContext:
@@ -39,11 +39,11 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     config = SootheConfig()
 
     # Mock required components
-    mock_agent_loop = MagicMock()
-    mock_agent_loop.config = config
-    mock_agent_loop.core_agent = MagicMock()
-    mock_agent_loop.loop_planner = MagicMock()
-    mock_agent_loop.loop_planner._model = MagicMock()
+    mock_strange_loop = MagicMock()
+    mock_strange_loop.config = config
+    mock_strange_loop.core_agent = MagicMock()
+    mock_strange_loop.loop_planner = MagicMock()
+    mock_strange_loop.loop_planner._model = MagicMock()
 
     mock_state_manager = MagicMock()
     mock_state_manager.loop_id = "test_loop"
@@ -52,13 +52,13 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_goal_context_manager = MagicMock()
     mock_plan_manager = MagicMock()
 
-    from soothe.core.agent_loop.state.checkpoint import (
-        AgentLoopCheckpoint,
+    from soothe.core.strange_loop.state.checkpoint import (
         GoalExecutionRecord,
+        StrangeLoopCheckpoint,
         ThreadHealthMetrics,
     )
 
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["test_thread"],
         current_thread_id="test_thread",
@@ -76,8 +76,8 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         started_at=datetime.now(UTC),
     )
 
-    from soothe.core.agent_loop.orchestrator.phase_scratch import LoopPhaseScratch
-    from soothe.core.agent_loop.state.schemas import LoopState
+    from soothe.core.strange_loop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.core.strange_loop.state.schemas import LoopState
 
     state = LoopState(
         goal="Test goal",
@@ -86,7 +86,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     )
 
     ctx = LoopRuntimeContext(
-        agent_loop=mock_agent_loop,
+        strange_loop=mock_strange_loop,
         state_manager=mock_state_manager,
         anchor_manager=mock_anchor_manager,
         goal_context_manager=mock_goal_context_manager,
@@ -129,7 +129,7 @@ def save_mermaid_file(mermaid: str, output_path: Path) -> None:
 
     # Add title
     clean_mermaid = f"""---
-title: AgentLoop LangGraph (RFC-220)
+title: StrangeLoop LangGraph (RFC-220)
 config:
   flowchart:
     curve: linear
@@ -188,14 +188,14 @@ def main() -> None:
     output_dir = Path(__file__).parent.parent / "docs" / "diagrams"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    mermaid_path = output_dir / "agent_loop_graph.mmd"
-    svg_path = output_dir / "agent_loop_graph.svg"
+    mermaid_path = output_dir / "strange_loop_graph.mmd"
+    svg_path = output_dir / "strange_loop_graph.svg"
 
-    print("Building AgentLoop graph...")
+    print("Building StrangeLoop graph...")
 
     # Create mock context and build graph
     ctx = create_mock_runtime_context()
-    compiled_graph = build_agent_loop_graph(ctx)
+    compiled_graph = build_strange_loop_graph(ctx)
 
     # Get the graph representation
     graph = compiled_graph.get_graph()
@@ -236,8 +236,8 @@ def main() -> None:
     print("-" * 60)
 
     # Save node and edge summary
-    summary_path = output_dir / "agent_loop_graph_nodes.md"
-    summary = "# AgentLoop LangGraph Node Summary\n\n"
+    summary_path = output_dir / "strange_loop_graph_nodes.md"
+    summary = "# StrangeLoop LangGraph Node Summary\n\n"
     summary += "## Nodes\n\n"
     for node in graph.nodes:
         # Nodes can be Node objects or strings

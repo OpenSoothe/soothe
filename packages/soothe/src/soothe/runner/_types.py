@@ -61,19 +61,19 @@ class AgenticIterationRecord(BaseModel):
 
 
 class GoalResult(BaseModel):
-    """Result from AgentLoop execution for autonomous goal reflection (RFC-200, IG-154).
+    """Result from StrangeLoop execution for autonomous goal reflection (RFC-200, IG-154).
 
-    Wraps PlanResult from AgentLoop for autonomous goal reflection.
+    Wraps PlanResult from StrangeLoop for autonomous goal reflection.
 
     IG-399: Descriptive goal_progress levels instead of numeric.
 
     Args:
         goal_id: Goal identifier
         status: Execution status (completed, failed, in_progress)
-        evidence_summary: Accumulated evidence from AgentLoop execution
+        evidence_summary: Accumulated evidence from StrangeLoop execution
         goal_progress: Progress level (none | low | medium | high | complete)
         full_output: Final answer when status is completed
-        iteration_count: Number of AgentLoop iterations used
+        iteration_count: Number of StrangeLoop iterations used
         duration_ms: Total execution duration in milliseconds
     """
 
@@ -92,7 +92,7 @@ class RunnerState:
 
     Attributes:
         thread_id: Thread context for execution (Layer 1 CoreAgent)
-        loop_id: Loop context for goal execution (Layer 2 AgentLoop, RFC-216)
+        loop_id: Loop context for goal execution (Layer 2 StrangeLoop, RFC-216)
         workspace: Thread-specific workspace path (RFC-103)
         recalled_memories: Memory items recalled for this query
         recalled_memory_count: Number of memories recalled
@@ -112,7 +112,7 @@ class RunnerState:
     """Mutable state accumulated during a single query execution."""
 
     thread_id: str = ""
-    loop_id: str | None = None  # AgentLoop identifier for Layer 2 operations (RFC-216)
+    loop_id: str | None = None  # StrangeLoop identifier for Layer 2 operations (RFC-216)
     langgraph_thread_id: str | None = None  # LangGraph id when parallel goals/steps need isolation
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     full_response: list[str] = field(default_factory=list)
