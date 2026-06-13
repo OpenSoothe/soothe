@@ -259,7 +259,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 5. `packages/soothe-cli/src/soothe_cli/config/cli_config.py` - Add override fields
 6. `packages/soothe-cli/src/soothe_cli/cli/main.py` - Add CLI flags
 
-**Config Pattern**: Follow `AgenticLoopConfig` structure (RFC-001 lines 563-646).
+**Config Pattern**: Follow `StrangeLoopConfig` structure (RFC-001 lines 563-646).
 
 **CRITICAL**: Both `config.yml` and `config.dev.yml` must be updated synchronously per CLAUDE.md rule.
 

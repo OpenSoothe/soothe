@@ -416,7 +416,7 @@ async def handle_loop_reattach(
     """Handle loop reattachment: reconstruct history and send to client."""
     
     # 1. Load StrangeLoop checkpoint
-    loop_checkpoint = await persistence_manager.load_agentloop_checkpoint(loop_id)
+    loop_checkpoint = await persistence_manager.load_sloop_checkpoint(loop_id)
     
     # 2. Get thread checkpoint cross-reference map
     thread_checkpoints = await persistence_manager.get_thread_checkpoints_for_loop(loop_id)

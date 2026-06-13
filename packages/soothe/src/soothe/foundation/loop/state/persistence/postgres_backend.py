@@ -1,7 +1,7 @@
 """PostgreSQL backend for StrangeLoop persistence (RFC-612, IG-055).
 
 Backend-agnostic implementation supporting full StrangeLoop persistence operations.
-Uses shared soothe_checkpoints database with 4 tables: agentloop_checkpoints,
+Uses shared soothe_checkpoints database with 4 tables: sloop_checkpoints,
 checkpoint_anchors, failed_branches, goal_records.
 
 IG-406: Supports shared pool for high-concurrency (200+ threads) support.
@@ -21,7 +21,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from soothe.foundation.loop.state.persistence.base_backend import StrangeLoopPersistenceBackend
 from soothe.foundation.loop.state.persistence.postgres_schema import (
-    initialize_agentloop_postgres_schema,
+    initialize_sloop_postgres_schema,
 )
 
 if TYPE_CHECKING:
@@ -104,7 +104,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
             self._pool = pool
             logger.info(
-                "StrangeLoop PostgreSQL backend initialized (soothe_checkpoints database, table=agentloop_checkpoints, pool=%d)",
+                "StrangeLoop PostgreSQL backend initialized (soothe_checkpoints database, table=sloop_checkpoints, pool=%d)",
                 self.pool_size,
             )
 
@@ -112,7 +112,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
     async def _initialize_schema(self, pool: AsyncConnectionPool) -> None:
         """Recreate StrangeLoop tables using the canonical PostgreSQL schema."""
-        await initialize_agentloop_postgres_schema(pool)
+        await initialize_sloop_postgres_schema(pool)
 
     async def save_checkpoint(self, checkpoint: StrangeLoopCheckpoint) -> None:
         """Save StrangeLoop checkpoint to PostgreSQL.
@@ -131,7 +131,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    INSERT INTO agentloop_checkpoints (loop_id, thread_id, status, checkpoint_data, updated_at)
+                    INSERT INTO sloop_checkpoints (loop_id, thread_id, status, checkpoint_data, updated_at)
                     VALUES (%s, %s, %s, %s, NOW())
                     ON CONFLICT (loop_id)
                     DO UPDATE SET
@@ -160,7 +160,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    SELECT checkpoint_data FROM agentloop_checkpoints WHERE loop_id = %s
+                    SELECT checkpoint_data FROM sloop_checkpoints WHERE loop_id = %s
                 """,
                     (loop_id,),
                 )
@@ -192,7 +192,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    DELETE FROM agentloop_checkpoints WHERE loop_id = %s
+                    DELETE FROM sloop_checkpoints WHERE loop_id = %s
                 """,
                     (loop_id,),
                 )
@@ -219,7 +219,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     await cur.execute(
                         """
                         SELECT loop_id, thread_id, status, created_at, updated_at
-                        FROM agentloop_checkpoints
+                        FROM sloop_checkpoints
                         WHERE thread_id = %s AND status = %s
                         ORDER BY updated_at DESC
                     """,
@@ -229,7 +229,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     await cur.execute(
                         """
                         SELECT loop_id, thread_id, status, created_at, updated_at
-                        FROM agentloop_checkpoints
+                        FROM sloop_checkpoints
                         WHERE thread_id = %s
                         ORDER BY updated_at DESC
                     """,
@@ -239,7 +239,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     await cur.execute(
                         """
                         SELECT loop_id, thread_id, status, created_at, updated_at
-                        FROM agentloop_checkpoints
+                        FROM sloop_checkpoints
                         WHERE status = %s
                         ORDER BY updated_at DESC
                     """,
@@ -248,7 +248,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                 else:
                     await cur.execute("""
                         SELECT loop_id, thread_id, status, created_at, updated_at
-                        FROM agentloop_checkpoints
+                        FROM sloop_checkpoints
                         ORDER BY updated_at DESC
                     """)
 
@@ -300,7 +300,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    INSERT INTO agentloop_checkpoints (loop_id, thread_id, status, checkpoint_data, created_at, updated_at)
+                    INSERT INTO sloop_checkpoints (loop_id, thread_id, status, checkpoint_data, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, NOW(), NOW())
                     ON CONFLICT (loop_id)
                     DO UPDATE SET
@@ -331,7 +331,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     """
                     SELECT checkpoint_data, client_workspace, detached_at,
                            created_at, updated_at
-                    FROM agentloop_checkpoints WHERE loop_id = %s
+                    FROM sloop_checkpoints WHERE loop_id = %s
                 """,
                     (loop_id,),
                 )
@@ -408,7 +408,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                         SELECT jsonb_array_length(
                                    COALESCE(checkpoint_data->'goal_history', '[]'::jsonb)
                                ) AS history_len
-                        FROM agentloop_checkpoints
+                        FROM sloop_checkpoints
                         WHERE loop_id = %s
                         """,
                         (loop_id,),
@@ -436,7 +436,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    UPDATE agentloop_checkpoints
+                    UPDATE sloop_checkpoints
                     SET checkpoint_data = checkpoint_data || %s::jsonb,
                         thread_id = COALESCE(%s, thread_id),
                         status = COALESCE(%s, status),
@@ -504,7 +504,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                        AS ai_message_count,
                    checkpoint_data->>'last_message_at' AS last_message_at,
                    created_at, updated_at, client_workspace, detached_at
-            FROM agentloop_checkpoints
+            FROM sloop_checkpoints
             {where_sql}
             ORDER BY created_at DESC
             LIMIT %s
@@ -557,7 +557,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE agentloop_checkpoints SET updated_at = NOW() WHERE loop_id = %s",
+                    "UPDATE sloop_checkpoints SET updated_at = NOW() WHERE loop_id = %s",
                     (loop_id,),
                 )
 
@@ -581,7 +581,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    UPDATE agentloop_checkpoints
+                    UPDATE sloop_checkpoints
                     SET checkpoint_data = checkpoint_data
                         || jsonb_build_object(
                             'human_message_count',
@@ -611,7 +611,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     """
                     SELECT loop_id, status, thread_id AS current_thread_id,
                            checkpoint_data, client_workspace, created_at, updated_at
-                    FROM agentloop_checkpoints
+                    FROM sloop_checkpoints
                     WHERE COALESCE((checkpoint_data->>'is_ephemeral')::boolean, false) = true
                       AND status != 'running'
                       AND COALESCE(
@@ -671,7 +671,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     """
                     SELECT loop_id, status, thread_id AS current_thread_id,
                            checkpoint_data, client_workspace, created_at, updated_at
-                    FROM agentloop_checkpoints
+                    FROM sloop_checkpoints
                     WHERE COALESCE((checkpoint_data->>'human_message_count')::int, 0) = 0
                       AND COALESCE((checkpoint_data->>'ai_message_count')::int, 0) = 0
                       AND status != 'running'
@@ -726,9 +726,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                 await cur.execute("DELETE FROM checkpoint_anchors WHERE loop_id = %s", (loop_id,))
                 await cur.execute("DELETE FROM failed_branches WHERE loop_id = %s", (loop_id,))
                 await cur.execute("DELETE FROM goal_records WHERE loop_id = %s", (loop_id,))
-                await cur.execute(
-                    "DELETE FROM agentloop_checkpoints WHERE loop_id = %s", (loop_id,)
-                )
+                await cur.execute("DELETE FROM sloop_checkpoints WHERE loop_id = %s", (loop_id,))
         logger.info("Purged loop execution data from PostgreSQL: loop=%s", loop_id)
 
     async def save_checkpoint_anchor(

@@ -134,7 +134,7 @@ class TestLoopHumanMessageLangChainCompatibility:
         assert isinstance(msg, LoopHumanMessage)
 
     def test_messages_to_dict_serialization(self) -> None:
-        """Test messages_to_dict() preserves agentloop metadata."""
+        """Test messages_to_dict() preserves sloop metadata."""
         msg = LoopHumanMessage(
             content="Execute step",
             thread_id="thread_123",

@@ -223,7 +223,7 @@ class MyPlugin:
 
 | Feature | Status | Documentation |
 |---------|--------|---------------|
-| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-201](../specs/RFC-201-agentloop-plan-execute-loop.md) |
+| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-201](../specs/RFC-201-strangeloop-plan-execute-loop.md) |
 | **Research Subagent** | ✅ Production Ready | [Subagents Guide](subagents.md#research-subagent) |
 | **Plugin System** | ✅ Production Ready | [RFC-600](../specs/RFC-600-plugin-extension-system.md) |
 | **Multi-Transport Daemon** | ✅ Production Ready | [Multi-Transport Setup](multi-transport.md) |

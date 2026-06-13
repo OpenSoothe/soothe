@@ -9,7 +9,7 @@ import pytest
 # Integration test placeholder (requires full setup)
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_full_goalengine_to_agentloop_flow():
+async def test_full_goalengine_to_sloop_flow():
     """Full integration test: GoalEngine creates goal → delegates to StrangeLoop → reflection."""
     # This test would require:
     # 1. Full SootheRunner with real config

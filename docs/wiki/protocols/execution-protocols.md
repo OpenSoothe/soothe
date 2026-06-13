@@ -510,7 +510,7 @@ Tests verify:
 
 ## Related Documentation
 
-- [StrangeLoop Architecture](../agentloop.md)
+- [StrangeLoop Architecture](../sloop.md)
 - [Planner Protocol](planner.md)
 - [Plugin System](../plugins.md)
 - [Tool Registry](../tool-registry.md)

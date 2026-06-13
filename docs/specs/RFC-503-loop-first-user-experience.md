@@ -433,15 +433,15 @@ class SootheRunner:
         core_agent = await self._create_core_agent(current_thread_id)
         
         # Run with StrangeLoop orchestration
-        agentloop = StrangeLoop(self.loop_id, loop_checkpoint)
-        result = await agentloop.run_with_progress(
+        sloop = StrangeLoop(self.loop_id, loop_checkpoint)
+        result = await sloop.run_with_progress(
             core_agent=core_agent,
             query=query,
             thread_id=current_thread_id,  # Internal parameter
         )
         
         # Update loop checkpoint
-        loop_checkpoint = await agentloop.finalize()
+        loop_checkpoint = await sloop.finalize()
         await self.loop_manager.save(loop_checkpoint)
         
         return result

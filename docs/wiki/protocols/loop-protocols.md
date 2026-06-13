@@ -534,5 +534,5 @@ Different abstraction levels:
 
 - [Planner Protocol](planner.md)
 - [Policy Protocol](policy.md)
-- [StrangeLoop Architecture](../agentloop.md)
+- [StrangeLoop Architecture](../sloop.md)
 - [Security Enforcement](../security.md)

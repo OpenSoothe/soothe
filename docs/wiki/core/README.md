@@ -48,7 +48,7 @@ Soothe's execution architecture is organized into three hierarchical levels:
 **Module**: `goal_engine/`
 
 ### Level 2: StrangeLoop - Agentic Goal Execution
-**RFC**: [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)
+**RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
 **Scope**: Single-goal execution through iterative refinement
 **Loop**: Plan → Execute (max ~8 iterations)
 **Module**: `loop/`
@@ -213,7 +213,7 @@ Key components:
 |-----|-------|--------|
 | [RFC-100](../../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime | `agent/` |
 | [RFC-200](../../specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management | `goal_engine/` |
-| [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop | `loop/` |
+| [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop | `loop/` |
 | [RFC-001](../../specs/RFC-001-core-modules-architecture.md) | Core Protocol Modules | Multiple |
 
 ---

@@ -475,7 +475,7 @@ persistence:
   default_backend: sqlite
   postgres_pool_min_size: 4
   checkpointer_pool_size: 24
-  agentloop_pool_size: 24
+  sloop_pool_size: 24
   postgres_pool_max_idle_seconds: 120
   postgres_pool_max_lifetime_seconds: 1800
   postgres_pool_acquire_timeout_seconds: 30

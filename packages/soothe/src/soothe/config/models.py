@@ -410,7 +410,7 @@ class PersistenceConfig(BaseModel):
             "Default 24 with postgres_pool_min_size=4 suits thread_pool; lower for worker_pool."
         ),
     )
-    agentloop_pool_size: int = Field(
+    sloop_pool_size: int = Field(
         default=24,
         ge=1,
         le=128,

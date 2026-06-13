@@ -303,7 +303,7 @@ class TestModelRouter:
         p = PersistenceConfig(default_backend="postgresql")
         assert p.postgres_pool_min_size == 4
         assert p.checkpointer_pool_size == 24
-        assert p.agentloop_pool_size == 24
+        assert p.sloop_pool_size == 24
 
 
 class TestModelProvider:
