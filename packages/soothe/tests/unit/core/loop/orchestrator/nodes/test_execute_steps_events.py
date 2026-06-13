@@ -60,11 +60,11 @@ async def test_execute_emits_step_completed_per_result() -> None:
     scratch.decision = decision
     scratch.plan_result = MagicMock()
 
-    agent_loop = MagicMock()
-    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
+    strange_loop = MagicMock()
+    strange_loop.config.agent.loop.limits.max_parallel_steps = 4
 
     ctx = LoopRuntimeContext(
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),
@@ -147,11 +147,11 @@ async def test_execute_emits_step_started_when_dependency_unlocks() -> None:
     scratch.decision = decision
     scratch.plan_result = MagicMock()
 
-    agent_loop = MagicMock()
-    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
+    strange_loop = MagicMock()
+    strange_loop.config.agent.loop.limits.max_parallel_steps = 4
 
     ctx = LoopRuntimeContext(
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),

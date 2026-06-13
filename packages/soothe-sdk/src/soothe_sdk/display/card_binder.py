@@ -346,7 +346,7 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
 
         if isinstance(event_data, dict):
             event_type = str(event_data.get("type") or "").strip()
-            if event_type == "soothe.cognition.agent_loop.completed":
+            if event_type == "soothe.cognition.strange_loop.completed":
                 # Live UX consumes this event as a status transition (loop →
                 # "completed") not as a chat card; the final answer's own
                 # closing line (e.g. "Total time: 1m 8s") is the natural
@@ -355,7 +355,7 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
                 # banner under the resumed transcript that has no live
                 # counterpart — drop it.
                 return None
-            if event_type == "soothe.cognition.agent_loop.reasoned":
+            if event_type == "soothe.cognition.strange_loop.reasoned":
                 assessment = str(event_data.get("assessment_reasoning") or "").strip()
                 plan_reasoning = str(event_data.get("plan_reasoning") or "").strip()
                 if not assessment and not plan_reasoning:
@@ -373,13 +373,13 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
                     cognition_plan_assessment=assessment,
                     cognition_plan_strategy=plan_reasoning,
                 )
-            if event_type == "soothe.cognition.agent_loop.started":
+            if event_type == "soothe.cognition.strange_loop.started":
                 # The goal-tree pin (📍 goal · iter<=N) is suppressed on
                 # history replay: it only adds value while the loop is
                 # actively planning. Replayed transcripts already show the
                 # user prompt, step cards, and the completion summary.
                 return None
-            if event_type == "soothe.cognition.agent_loop.step.started":
+            if event_type == "soothe.cognition.strange_loop.step.started":
                 step_id = str(event_data.get("step_id") or "").strip()
                 if not step_id:
                     return None
@@ -391,7 +391,7 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
                     step_progress_description=str(event_data.get("description") or "(step)"),
                     step_progress_phase="running",
                 )
-            if event_type == "soothe.cognition.agent_loop.step.completed":
+            if event_type == "soothe.cognition.strange_loop.step.completed":
                 step_id = str(event_data.get("step_id") or "").strip()
                 if not step_id:
                     return None
@@ -686,8 +686,8 @@ def _has_cognition_step_events(events: list[dict[str, Any]]) -> bool:
             continue
         event_type = str(data.get("type") or "").strip()
         if event_type in (
-            "soothe.cognition.agent_loop.step.started",
-            "soothe.cognition.agent_loop.step.completed",
+            "soothe.cognition.strange_loop.step.started",
+            "soothe.cognition.strange_loop.step.completed",
         ):
             return True
     return False

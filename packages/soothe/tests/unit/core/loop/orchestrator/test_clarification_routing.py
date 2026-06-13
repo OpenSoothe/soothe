@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from langgraph.graph import END
 
-from soothe.foundation.loop.orchestrator.builder import build_agent_loop_graph
+from soothe.foundation.loop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.loop.orchestrator.routing import (
     route_after_assess,
     route_after_clarification,
@@ -17,7 +17,7 @@ from soothe.foundation.loop.orchestrator.routing import (
 
 def test_await_clarification_node_present_in_graph() -> None:
     ctx = MagicMock()
-    compiled = build_agent_loop_graph(ctx)
+    compiled = build_strange_loop_graph(ctx)
     names = set(compiled.get_graph().nodes)
     assert "await_clarification" in names
 

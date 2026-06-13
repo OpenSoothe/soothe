@@ -52,13 +52,13 @@ def test_internal_custom_stream_payload_not_visible() -> None:
 
 
 def test_client_types_broadcast() -> None:
-    assert is_client_broadcast_event_type("soothe.cognition.agent_loop.started") is True
+    assert is_client_broadcast_event_type("soothe.cognition.strange_loop.started") is True
     assert is_client_broadcast_event_type(None) is True
 
 
 def test_verbose_catalog_events_not_client_wire_visible() -> None:
     assert is_catalog_event_client_wire_visible("soothe.lifecycle.loop.checkpoint_saved") is False
-    assert is_catalog_event_client_wire_visible("soothe.cognition.agent_loop.started") is True
+    assert is_catalog_event_client_wire_visible("soothe.cognition.strange_loop.started") is True
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 
 ## Goal
 
-Refactor `soothe.core` into `soothe.foundation` with clear three-layer separation (CoreAgent, AgentLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
+Refactor `soothe.core` into `soothe.foundation` with clear three-layer separation (CoreAgent, StrangeLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
 
 ## Scope
 
@@ -14,7 +14,7 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 
 - Create `soothe.foundation/core/`, `loop/`, `autopilot/` package structure
 - Create `soothe.runner/` package
-- Define CoreAgentProtocol, AgentLoopProtocol, AutopilotProtocol in `soothe.protocols/`
+- Define CoreAgentProtocol, StrangeLoopProtocol, AutopilotProtocol in `soothe.protocols/`
 - Move layer-specific modules to their respective layer packages
 - Move shared utilities to `soothe.foundation/`
 - Update all imports across packages
@@ -22,7 +22,7 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 
 ### Out of Scope
 
-- Behavior changes to CoreAgent, AgentLoop, or GoalEngine
+- Behavior changes to CoreAgent, StrangeLoop, or GoalEngine
 - New features or API additions beyond protocols
 - RFC creation (skipped per user request)
 
@@ -32,7 +32,7 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 
 **Files to create:**
 - `soothe/protocols/core_agent.py` - CoreAgentProtocol
-- `soothe/protocols/agent_loop.py` - AgentLoopProtocol
+- `soothe/protocols/strange_loop.py` - StrangeLoopProtocol
 - `soothe/protocols/autopilot.py` - AutopilotProtocol
 
 **Verification:**
@@ -113,7 +113,7 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 1: Protocol Interfaces | ✅ Done | CoreAgentProtocol, AgentLoopProtocol, AutopilotProtocol added |
+| Phase 1: Protocol Interfaces | ✅ Done | CoreAgentProtocol, StrangeLoopProtocol, AutopilotProtocol added |
 | Phase 2: Create Package Structure | ✅ Done | foundation/core, loop, autopilot, runner created |
 | Phase 3: Move Shared Utilities | ✅ Done | events, workspace, persistence moved |
 | Phase 4: Move Core | ✅ Done | agent, context, security, filesystem moved |
@@ -138,14 +138,14 @@ The sys.modules registration in `soothe.core/__init__.py` causes issues with ser
 
 **Foundation refactor complete** with clear three-layer separation:
 - `soothe.foundation.core/` - Layer 1 CoreAgent (unaware of loop/autopilot)
-- `soothe.foundation.loop/` - Layer 2 AgentLoop
+- `soothe.foundation.loop/` - Layer 2 StrangeLoop
 - `soothe.foundation.autopilot/` - Layer 3 (merged goal_engine)
 - `soothe.runner/` - Top-level orchestrator
 
 **New import paths:**
 ```python
 from soothe.foundation.core import CoreAgent, create_soothe_agent
-from soothe.foundation.loop import AgentLoop, LoopState
+from soothe.foundation.loop import StrangeLoop, LoopState
 from soothe.foundation.autopilot import GoalEngine, AutopilotService
 from soothe.runner import SootheRunner
 ```
@@ -155,7 +155,7 @@ from soothe.runner import SootheRunner
 ## Files Modified
 
 Hundreds of files modified - see git status for full list. Key structural changes:
-- New: `soothe/protocols/core_agent.py`, `agent_loop.py`, `autopilot.py`
+- New: `soothe/protocols/core_agent.py`, `strange_loop.py`, `autopilot.py`
 - New: `soothe/foundation/core/`, `loop/`, `autopilot/` packages
 - New: `soothe.runner/` package
 - Modified: All packages' imports updated from `soothe.core.*` to new paths

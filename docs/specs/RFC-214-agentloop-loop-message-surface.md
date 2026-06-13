@@ -6,14 +6,14 @@
 **Kind**: Architecture Design
 **Created**: 2026-05-03
 **Updated**: 2026-05-13
-**Dependencies**: RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-104 (Dynamic System Context), RFC-207 (Thread & Goal Context), RFC-203 (AgentLoop State & Memory), RFC-215 (AgentLoop Persistence), RFC-218 (Checkpoint Tree), RFC-216 (Multi-Thread Lifecycle), RFC-217 (Goal Context Management)
-**Related**: RFC-211 (Tool Result Shaping), RFC-213 (AgentLoop Reasoning Quality), RFC-220 (LangGraph Agent Loop Orchestrator), RFC-614 (Streaming Messaging)
+**Dependencies**: RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-104 (Dynamic System Context), RFC-207 (Thread & Goal Context), RFC-203 (StrangeLoop State & Memory), RFC-215 (StrangeLoop Persistence), RFC-218 (Checkpoint Tree), RFC-216 (Multi-Thread Lifecycle), RFC-217 (Goal Context Management)
+**Related**: RFC-211 (Tool Result Shaping), RFC-213 (StrangeLoop Reasoning Quality), RFC-220 (LangGraph Agent Loop Orchestrator), RFC-614 (Streaming Messaging)
 
 ---
 
 ## Abstract
 
-AgentLoop orchestration currently maintains context through multiple parallel encoding paths, mixes volatile and static content in system prompts (breaking prompt caching), and duplicates messages between the ledger and CoreAgent checkpoints. This RFC addresses three problems with a unified design:
+StrangeLoop orchestration currently maintains context through multiple parallel encoding paths, mixes volatile and static content in system prompts (breaking prompt caching), and duplicates messages between the ledger and CoreAgent checkpoints. This RFC addresses three problems with a unified design:
 
 1. **Cache-unfriendly prompt structure**: Dynamic content (date, execution hints, per-turn memories) is interleaved with static content (identity, policies, tool schemas) in the system prompt, preventing prompt-cache hits on stable prefixes.
 
@@ -24,7 +24,7 @@ AgentLoop orchestration currently maintains context through multiple parallel en
 **Solution**:
 
 - **Volatility-tiered prompt architecture**: System prompts are split into a static tier (session-stable, maximum cache hits) and a semi-static tier (goal-stable). All per-turn volatile content moves to a structured user message envelope.
-- **Complete AgentLoop ledger**: All orchestration turns — plan-assess, plan-generate, and execute-step — are recorded in a single `loop_messages` ledger. Plan-phase messages are excluded from CoreAgent's thread.
+- **Complete StrangeLoop ledger**: All orchestration turns — plan-assess, plan-generate, and execute-step — are recorded in a single `loop_messages` ledger. Plan-phase messages are excluded from CoreAgent's thread.
 - **User message envelope**: A standard XML envelope carries per-turn dynamic content (goal context, execution hints, retrieved knowledge, user query) in semantically distinct sections.
 - **Reference-based dedup**: Ledger messages carry `core_agent_message_id` to reference CoreAgent message history without duplicating content.
 
@@ -93,7 +93,7 @@ No separate "synthetic transcript" for Plan phase:
 
 ### P4: CoreAgent Transcript as Implementation Detail
 
-LangGraph checkpoints remain for tool execution, resume capability, and debugging. AgentLoop orchestration does NOT require:
+LangGraph checkpoints remain for tool execution, resume capability, and debugging. StrangeLoop orchestration does NOT require:
 - Replaying full tool subgraphs for Plan reasoning
 - Reading LangGraph `messages` channel for context
 
@@ -122,7 +122,7 @@ These blocks rarely or never change during a session. They form the cache-friend
 | 2 | Tool orchestration guide | (plain text) | Shell, file ops, surgical edit, data, goals, research, subagent guides + key rules | `_TOOL_ORCHESTRATION_GUIDE` |
 | 3 | Execution policies | `<EXECUTION_POLICIES>` | Step granularity, filesystem discovery, first-wave constraints | `execution_policies.xml` fragment |
 | 4 | Subagent routing directive | `<SUBAGENT_ROUTING_DIRECTIVE>` | When user explicitly requests a subagent — force `task` tool usage | Conditionally injected |
-| 5 | Agent loop output contract | `<AGENT_LOOP_OUTPUT_CONTRACT>` | Wrap-up limits for tool/subagent results | Conditionally injected when `current_decision` exists |
+| 5 | Agent loop output contract | `<STRANGE_LOOP_OUTPUT_CONTRACT>` | Wrap-up limits for tool/subagent results | Conditionally injected when `current_decision` exists |
 
 #### Semi-Static Tier (goal-stable)
 
@@ -167,7 +167,7 @@ Every `LoopHumanMessage` sent to CoreAgent follows a standard XML envelope. **Go
 
 <DYNAMIC_CONTEXT>
   <EXECUTION_HINTS>
-    Step-specific guidance from AgentLoop (previously appended by ExecutionHintsMiddleware); omitted when empty
+    Step-specific guidance from StrangeLoop (previously appended by ExecutionHintsMiddleware); omitted when empty
   </EXECUTION_HINTS>
   <CONTEXT_INFO>
     <timestamp>2026-05-08T14:30:00+00:00</timestamp>
@@ -197,9 +197,9 @@ Every `LoopHumanMessage` sent to CoreAgent follows a standard XML envelope. **Go
 - **System prompt `<MEMORY_SUMMARY>`**: Long-term user persona, persistent preferences, semi-static facts. These change rarely and cache well. The LLM treats these as authoritative background.
 - **User message `<MEMORY>`**: Per-turn situational recall — things remembered from recent conversations relevant to the current query. These change every turn and must not pollute the system prompt's cache boundary.
 
-### 3. Complete AgentLoop Ledger
+### 3. Complete StrangeLoop Ledger
 
-The `loop_messages` ledger is a complete record of the entire AgentLoop conversation across all phases — not just execute steps.
+The `loop_messages` ledger is a complete record of the entire StrangeLoop conversation across all phases — not just execute steps.
 
 **Ledger records all phases:**
 
@@ -212,7 +212,7 @@ The `loop_messages` ledger is a complete record of the entire AgentLoop conversa
 **Why record plan-phase messages in the ledger:**
 
 1. **Cache maximization**: Prior plan-assess and plan-generate turns from previous iterations appear in the ledger portion of subsequent plan prompts. This increases the unchanged prefix between plan calls — the model sees its own prior reasoning as native message turns, and they cache.
-2. **Complete audit trail**: The ledger is the single source of truth for the full AgentLoop conversation. Checkpoint recovery, debugging, and observability all benefit from a complete history.
+2. **Complete audit trail**: The ledger is the single source of truth for the full StrangeLoop conversation. Checkpoint recovery, debugging, and observability all benefit from a complete history.
 3. **Iteration continuity**: When the planner re-assesses after an execute wave, it sees its own prior assessment and plan as preceding turns, not as a flattened summary.
 
 **CoreAgent isolation**: When building messages for CoreAgent execution, ledger projection filters to `phase="execute_step"` only. Plan-phase messages are excluded — CoreAgent never sees planning reasoning in its thread. **Parallel branch checkpoints** (§3.1) prepend a bounded transitive-predecessor slice from the same ledger before the current envelope; that slice is still execute-phase rows only. This keeps CoreAgent's message history focused on tool execution and prevents planning internals from leaking into tool-call context.
@@ -239,7 +239,7 @@ Replay is a **projection** of the single authoritative ledger, not a second tran
 
 `StepResult` and ledger appends continue to use the **logical** `thread_id`; only the LangGraph stream/checkpoint namespace may use the derived id.
 
-### 4. AgentLoop Plan Prompt Structure
+### 4. StrangeLoop Plan Prompt Structure
 
 The Plan phase prompt follows the same volatility-tiered philosophy, with the complete ledger as the message history.
 
@@ -308,11 +308,11 @@ Prior conversation is injected as native message turns in the message list (not 
 
 **Batch Execution Model:**
 
-AgentLoop may execute multiple steps in one CoreAgent invocation ("wave") for latency efficiency. The ledger records each step's turn individually.
+StrangeLoop may execute multiple steps in one CoreAgent invocation ("wave") for latency efficiency. The ledger records each step's turn individually.
 
 **Input to CoreAgent (Batch):**
 
-AgentLoop sends N `LoopHumanMessage` instances, one per step, each using the user message envelope format:
+StrangeLoop sends N `LoopHumanMessage` instances, one per step, each using the user message envelope format:
 
 ```python
 LoopHumanMessage(
@@ -331,7 +331,7 @@ LoopHumanMessage(
 
 **Output Processing and Ledger Recording:**
 
-When batch execution completes, AgentLoop:
+When batch execution completes, StrangeLoop:
 
 1. Collects all `AIMessage` instances from the stream
 2. Identifies the final `AIMessage` for each step as the user-visible outcome
@@ -349,7 +349,7 @@ If batch execution fails mid-stream:
 
 ### 6. Reference-Based Message Dedup
 
-**Current problem**: AgentLoop's `loop_messages` and CoreAgent's checkpoint messages contain overlapping content. When the Executor wraps a CoreAgent `AIMessage` into a `LoopAIMessage`, the content is duplicated. Plan-phase projections and checkpoint recovery both pay for this.
+**Current problem**: StrangeLoop's `loop_messages` and CoreAgent's checkpoint messages contain overlapping content. When the Executor wraps a CoreAgent `AIMessage` into a `LoopAIMessage`, the content is duplicated. Plan-phase projections and checkpoint recovery both pay for this.
 
 **Solution — reference-based dedup:**
 
@@ -363,7 +363,7 @@ This preserves both stores (no data loss, no architectural upheaval) while elimi
 
 ### 7. Checkpoint Persistence
 
-**AgentLoop checkpoints** (SQLite / PostgreSQL per RFC-215) persist:
+**StrangeLoop checkpoints** (SQLite / PostgreSQL per RFC-215) persist:
 
 **Metadata Fields:**
 - Loop status, thread health metrics
@@ -400,7 +400,7 @@ User input
   +-- Context projection -----------> context_projection
   |
   v
-AgentLoop (Plan-assess phase)
+StrangeLoop (Plan-assess phase)
   |
   +-- System prompt: static instructions + semi-static workspace/memory
   +-- Complete ledger as native human/AI turns (all phases from prior iterations)
@@ -412,7 +412,7 @@ AgentLoop (Plan-assess phase)
   +-- Plan-assess messages NOT injected into CoreAgent thread
   |
   v
-AgentLoop (Plan-generate phase)
+StrangeLoop (Plan-generate phase)
   |
   +-- System prompt: same static instructions + EXECUTION_POLICIES + PLAN_GENERATE
   +-- Complete ledger (now including plan-assess pair from this iteration)
@@ -424,7 +424,7 @@ AgentLoop (Plan-generate phase)
   +-- Plan-generate messages NOT injected into CoreAgent thread
   |
   v
-AgentLoop (Execute phase)
+StrangeLoop (Execute phase)
   |
   +-- Build LoopHumanMessage envelope (phase="execute_step"):
   |     <CURRENT_GOAL> + <USER_QUERY>  (task first)
@@ -473,7 +473,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 
 **Target**: Plan reads directly from `loop_messages` ledger (all phases). System prompt contains only static + semi-static content. `<PRIOR_CONVERSATION>` eliminated — prior thread messages are native ledger turns.
 
-### G4: AgentLoop Checkpoint Schema Missing Message Ledger
+### G4: StrangeLoop Checkpoint Schema Missing Message Ledger
 
 **Current**: `GoalExecutionRecord` stores `reason_history` and `act_history`. No `loop_messages` field.
 
@@ -483,7 +483,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 
 **Current**: Plan indirectly depends on overlapping content from LangGraph state.
 
-**Target**: Plan reads only from AgentLoop ledger. LangGraph checkpoints remain for CoreAgent resume/debug only.
+**Target**: Plan reads only from StrangeLoop ledger. LangGraph checkpoints remain for CoreAgent resume/debug only.
 
 ### G6: Serde Allowlist Path Mismatch
 
@@ -598,7 +598,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 
 ### Functional Requirements
 
-1. **Plan reconstruction without LangGraph dependency**: Given a resumed AgentLoop checkpoint, Plan can reconstruct full context from ledger + metadata alone.
+1. **Plan reconstruction without LangGraph dependency**: Given a resumed StrangeLoop checkpoint, Plan can reconstruct full context from ledger + metadata alone.
 2. **Deterministic step-outcome pairing**: Each completed step has exactly one `(LoopHumanMessage, LoopAIMessage)` pair in the ledger.
 3. **Serde round-trip fidelity**: Checkpoint serialization preserves `LoopHumanMessage`/`LoopAIMessage` types, never deserializes as `dict`.
 4. **CoreAgent isolation**: CoreAgent input contains only `phase="execute_step"` messages (and the current-step envelope). Plan-phase reasoning never leaks into CoreAgent context. Parallel branch namespaces (§3.1) additionally receive a bounded predecessor slice from the same ledger—never plan-phase rows.

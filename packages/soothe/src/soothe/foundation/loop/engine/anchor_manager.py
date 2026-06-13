@@ -3,7 +3,7 @@
 Captures checkpoint anchors at iteration boundaries (start/end) to enable
 precise rewinding and checkpoint tree management.
 
-RFC-218: AgentLoop Checkpoint Tree Architecture
+RFC-218: StrangeLoop Checkpoint Tree Architecture
 IG-055: Backend-agnostic persistence with config-driven backend selection
 """
 
@@ -13,7 +13,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
+    StrangeLoopCheckpointPersistenceManager,
 )
 
 if TYPE_CHECKING:
@@ -31,11 +31,11 @@ class CheckpointAnchorManager:
         """Initialize anchor manager.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             config: SootheConfig for backend selection. If None, defaults to SQLite.
         """
         self.loop_id = loop_id
-        self.persistence_manager = AgentLoopCheckpointPersistenceManager(config=config)
+        self.persistence_manager = StrangeLoopCheckpointPersistenceManager(config=config)
 
     async def capture_iteration_start_anchor(
         self,

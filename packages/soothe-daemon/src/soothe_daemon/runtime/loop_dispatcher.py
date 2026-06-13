@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     """Bind the loop's checkpoint thread and return its id.
 
-    Per RFC-223, the main AgentLoop checkpoint thread id is the ``loop_id``
-    itself — the runtime in ``soothe.core.loop.engine.agent_loop`` normalizes
+    Per RFC-223, the main StrangeLoop checkpoint thread id is the ``loop_id``
+    itself — the runtime in ``soothe.core.loop.engine.strange_loop`` normalizes
     any caller-supplied id back to ``loop_id`` before saving. Returning a
     distinct UUID here causes read RPCs (``loop_state_get``, ``loop_messages``)
     to query the wrong LangGraph checkpoint and surface an empty conversation
@@ -35,7 +35,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
     Args:
         daemon: ``SootheDaemon`` instance.
-        loop_id: AgentLoop identifier.
+        loop_id: StrangeLoop identifier.
 
     Returns:
         Checkpoint thread id for this loop (always equals ``loop_id``).

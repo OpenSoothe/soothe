@@ -196,7 +196,7 @@ class ExploreSubagentConfig(BaseModel):
 
     # Tool call limit overrides for explore subagent
     tool_call_limit_thread: int | None = None
-    """Override global thread tool call limit for explore. None uses agent_loop.limits default."""
+    """Override global thread tool call limit for explore. None uses strange_loop.limits default."""
 
     tool_call_limit_run: int | None = None
-    """Override global run tool call limit for explore. None uses agent_loop.limits default."""
+    """Override global run tool call limit for explore. None uses strange_loop.limits default."""

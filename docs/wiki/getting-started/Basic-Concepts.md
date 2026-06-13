@@ -28,12 +28,12 @@ Soothe uses a hierarchical execution model:
 ┌─────────────────────────────────────────────────────────────┐
 │ GoalEngine: Autonomous Goal Management                     │
 │ • Manages goal DAGs (directed acyclic graphs)             │
-│ • Delegates single goals to AgentLoop                     │
+│ • Delegates single goals to StrangeLoop                     │
 │ • Loop: Goal → PLAN → PERFORM → REFLECT → Update          │
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ AgentLoop: Agentic Goal Execution                          │
+│ StrangeLoop: Agentic Goal Execution                          │
 │ • Executes single goals through Plan → Execute iterations │
 │ • Maximum ~8 iterations per goal                           │
 │ • Adapts plans based on results                           │
@@ -54,7 +54,7 @@ Soothe uses a hierarchical execution model:
 | Component | Purpose | Key Features |
 |-----------|---------|--------------|
 | **GoalEngine** | Autonomous goal management | Goal DAGs, inter-goal coordination, reflection |
-| **AgentLoop** | Single goal execution | Plan-adapt-execute cycles, step management |
+| **StrangeLoop** | Single goal execution | Plan-adapt-execute cycles, step management |
 | **CoreAgent** | Foundation runtime | LangGraph agent, tool execution, memory |
 
 ---
@@ -454,7 +454,7 @@ Soothe uses **plan-driven execution** for complex tasks:
 
 ### Execution Loops
 
-**AgentLoop** manages execution with bounded iterations:
+**StrangeLoop** manages execution with bounded iterations:
 
 ```python
 # Maximum ~8 iterations
@@ -535,7 +535,7 @@ User: "Refactor the authentication module to support OAuth2"
     ↓
 1. CoreAgent receives query
 2. GoalEngine creates goal with subtasks
-3. AgentLoop plans execution steps
+3. StrangeLoop plans execution steps
     ↓
 Step 1: Explore codebase for auth module
     ↓
@@ -579,5 +579,5 @@ Now that you understand the basics:
 
 - **[RFC-000: System Conceptual Design](../../specs/RFC-000-system-conceptual-design.md)** - Complete architecture
 - **[RFC-200: Autonomous Goal Management](../../specs/RFC-200-autonomous-goal-management.md)** - GoalEngine details
-- **[RFC-201: AgentLoop](../../specs/RFC-201-agentloop-plan-execute-loop.md)** - Execution loop details
+- **[RFC-201: StrangeLoop](../../specs/RFC-201-agentloop-plan-execute-loop.md)** - Execution loop details
 - **[Architecture Overview](../architecture/README.md)** - Visual guides and explanations

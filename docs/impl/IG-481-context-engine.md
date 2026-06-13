@@ -8,7 +8,7 @@
 
 ## Overview
 
-Implement `soothe.context` as a standalone module per RFC-624. No changes to existing GoalEngine, AgentLoop, or CoreAgent code.
+Implement `soothe.context` as a standalone module per RFC-624. No changes to existing GoalEngine, StrangeLoop, or CoreAgent code.
 
 ## Build Sequence
 

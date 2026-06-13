@@ -55,7 +55,7 @@ class WelcomeBanner(Static):
         """Initialize the welcome banner.
 
         Args:
-            loop_id: Optional AgentLoop id to display in the banner.
+            loop_id: Optional StrangeLoop id to display in the banner.
             mcp_tool_count: Number of MCP tools loaded at startup.
             workspace_path: Session workspace path shown in the source row.
             connecting: When `True`, show a connecting footer instead of

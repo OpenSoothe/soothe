@@ -1,6 +1,6 @@
 """End-to-end planner-emitted ask_user → policy.answer → resume (IG-462).
 
-Drives ``AgentLoop.run_with_progress`` with a stub planner that emits a
+Drives ``StrangeLoop.run_with_progress`` with a stub planner that emits a
 ``kind="ask_user"`` step on the first iteration and a stub
 ``ClarificationPolicy`` that returns canned answers. Confirms the loop
 records a synthesized ``StepResult`` for the ask_user step and the next
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.clarification import (
     ClarificationAnswer,
     ClarificationRequest,
@@ -168,7 +168,7 @@ async def test_planner_ask_user_round_trip_records_answer_as_step_result() -> No
     planner = _AskUserPlanner()
     policy = _StubPolicy(answers=("json",))
     core_agent = _MockCoreAgent()
-    loop_agent = AgentLoop(core_agent=core_agent, loop_planner=planner, config=_make_config())
+    loop_agent = StrangeLoop(core_agent=core_agent, loop_planner=planner, config=_make_config())
 
     events: list[tuple[str, Any]] = []
     async for evt in loop_agent.run_with_progress(

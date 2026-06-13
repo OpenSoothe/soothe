@@ -8,7 +8,7 @@
 **Last Updated**: 2026-05-29
 **Authors**: Platonic brainstorming session
 **Design Draft**: [2026-05-29-progressive-skill-loading-design.md](../drafts/2026-05-29-progressive-skill-loading-design.md)
-**Depends On**: RFC-100 (CoreAgent Runtime), RFC-104 (Dynamic System Context), RFC-214 (AgentLoop Loop Message Surface), RFC-600 (Plugin Extension System)
+**Depends On**: RFC-100 (CoreAgent Runtime), RFC-104 (Dynamic System Context), RFC-214 (StrangeLoop Loop Message Surface), RFC-600 (Plugin Extension System)
 
 ## Abstract
 
@@ -35,7 +35,7 @@ Claude Code solved the analogous problem (`src/skills/loadSkillsDir.ts`, `src/ut
 
 ### Design goals
 
-1. **Bounded turn-0 cost** — total skill listing must stay within a configurable fraction of `AgentLoopConfig.context_window_limit` (default 1%, ~2K tokens on a 200K window).
+1. **Bounded turn-0 cost** — total skill listing must stay within a configurable fraction of `StrangeLoopConfig.context_window_limit` (default 1%, ~2K tokens on a 200K window).
 2. **Path-aware filtering** — skills with `paths:` frontmatter stay hidden until a file-op tool touches a matching path.
 3. **Delta-only re-emission** — a skill that has been announced to a thread is never re-announced unless evicted by compaction; state survives daemon restart, reconnect, and compaction.
 4. **No double-listing** — exactly one source of truth for the `<AVAILABLE_SKILLS>` block; deepagents' stock listing is suppressed at agent construction.
@@ -44,7 +44,7 @@ Claude Code solved the analogous problem (`src/skills/loadSkillsDir.ts`, `src/ut
 ## Scope
 
 - New: `ProgressiveSkillRegistry` (partitioning + delta + path matching), `format_skills_within_budget` (formatter), `SkillActivationMiddleware` (Stage 2 trigger), `ProgressiveSkillsConfig` (tunables), `<AVAILABLE_SKILLS>` and `<SKILL_CONTEXT>` system-prompt blocks, `SkillActivatedEvent` / `SkillBodyLoadedEvent` events.
-- Modified: `_parse_frontmatter`, `SkillIndexEntry`, `SystemPromptOptimizationMiddleware._get_prompt_for_complexity`, `build_soothe_middleware_stack`, `create_soothe_agent` (passes `skills=None`), `LoopState` (four snapshot fields), `AgentLoop` iteration boundary (snapshot/rehydrate).
+- Modified: `_parse_frontmatter`, `SkillIndexEntry`, `SystemPromptOptimizationMiddleware._get_prompt_for_complexity`, `build_soothe_middleware_stack`, `create_soothe_agent` (passes `skills=None`), `LoopState` (four snapshot fields), `StrangeLoop` iteration boundary (snapshot/rehydrate).
 - Reused unchanged: `SkillIndex` metadata cache, `catalog.wire_entries_for_agent_config` aggregation, `build_skill_context_text`, `try_expand_slash_skill_user_line`, `sync_specific_skill_to_workspace`, `BUILTIN_TOOL_TRIGGERS`, `InternalEventBus`, `register_event` / `custom_event`, `_thread_id_from_request` / `_workspace_from_request`.
 
 ## Non-Goals
@@ -140,10 +140,10 @@ Claude Code solved the analogous problem (`src/skills/loadSkillsDir.ts`, `src/ut
 
 #### Flow 4: Iteration boundary snapshot
 
-1. `AgentLoop` reaches iteration boundary in `core/loop/engine/agent_loop.py`.
+1. `StrangeLoop` reaches iteration boundary in `core/loop/engine/strange_loop.py`.
 2. Copies `state["skill_activation"]["sent" | "activated" | "invoked"]` into `LoopState.sent_skill_names`, `.activated_skill_names`, `.invoked_skill_names`.
 3. Copies `state["skill_activation"]["invoked_bodies"]` dict into `LoopState.invoked_skill_bodies`.
-4. On thread resume (cold daemon start, reconnect), `AgentLoop` rehydrates `state["skill_activation"]` from `LoopState` before the first `modify_request`.
+4. On thread resume (cold daemon start, reconnect), `StrangeLoop` rehydrates `state["skill_activation"]` from `LoopState` before the first `modify_request`.
 
 ## Type Definitions
 
@@ -323,7 +323,7 @@ class SkillActivationMiddleware(AgentMiddleware):
 
     async def abefore_agent(self, state, runtime) -> dict | None:
         """Lazy-init state['skill_activation'] if missing; rehydrate from
-        LoopState snapshot if AgentLoop placed it there."""
+        LoopState snapshot if StrangeLoop placed it there."""
 
     async def awrap_tool_call(self, request, handler, runtime):
         """If request.tool_name in FILE_OP_TOOLS, extract paths and run
@@ -378,9 +378,9 @@ agent = create_deep_agent(..., skills=None, ...)
 
 No post-construction surgery on the deepagents middleware list.
 
-### AgentLoop snapshot bridge
+### StrangeLoop snapshot bridge
 
-In `packages/soothe/src/soothe/core/loop/engine/agent_loop.py`, at each iteration boundary (the same point that snapshots `goal_user_submission` and other transient fields onto `LoopState`):
+In `packages/soothe/src/soothe/core/loop/engine/strange_loop.py`, at each iteration boundary (the same point that snapshots `goal_user_submission` and other transient fields onto `LoopState`):
 
 ```python
 activation = state.get("skill_activation") or ProgressiveSkillRegistry.init_activation_state()
@@ -439,7 +439,7 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | `skills/catalog.py:28` (`_parse_frontmatter`) | Accept `paths: str \| list[str]` and `when_to_use: str` (existing `tags: str` unchanged) |
 | `skills/index.py:23` (`SkillIndexEntry`) | Add `paths: tuple[str, ...] \| None`, `when_to_use: str \| None`; keep existing `tags: str`; bump `SkillIndex.wire_entries()` (line 87) AND `catalog.wire_entries_for_agent_config()` (line 127) to surface the new fields in the wire-safe view |
 | `core/loop/state/schemas.py` (`LoopState`) | Add four snapshot fields (`sent_skill_names`, `activated_skill_names`, `invoked_skill_names`, `invoked_skill_bodies`) |
-| `core/loop/engine/agent_loop.py` | Iteration-boundary snapshot/rehydrate of `state["skill_activation"]` ↔ `LoopState` |
+| `core/loop/engine/strange_loop.py` | Iteration-boundary snapshot/rehydrate of `state["skill_activation"]` ↔ `LoopState` |
 | `middleware/system_prompt_optimization.py` | Add private `_compose_skills_block`; wire into `_get_prompt_for_complexity` |
 | `middleware/_builder.py:59` | Insert `SkillActivationMiddleware` after `SoothePolicyMiddleware`, before `ToolConcurrencyMiddleware` |
 | `core/agent/_builder.py:199-211` | Pass `skills=None` to `create_deep_agent` |
@@ -462,7 +462,7 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | Compose full body | `build_skill_context_text` | `skills/catalog.py:304` |
 | Materialize skill files for model | `sync_specific_skill_to_workspace` | `skills/workspace_sync.py:170` |
 | Token counting | `count_tokens` | `utils/token_counting.py` |
-| Context-window limit | `AgentLoopConfig.context_window_limit` | `config/models.py:1001` |
+| Context-window limit | `StrangeLoopConfig.context_window_limit` | `config/models.py:1001` |
 | Canonical file-op tool set | `BUILTIN_TOOL_TRIGGERS` | `core/context/trigger_registry.py:12` |
 | Path-key extraction (reference; middleware unwired today) | `FileLockMiddleware._PATH_KEYS` | `middleware/file_lock.py:41` |
 | Public event registration | `register_event`, `custom_event` | `core/events/catalog.py:567,116` |
@@ -529,7 +529,7 @@ soothe daemon start --workspace /tmp/soothe-skill-test
 
 ## Open Questions
 
-1. **Resume seeding** — `LoopState` is the right home, but should activation also seed from the workspace's `.soothe/state/` if a thread is resumed in a new daemon process? Current proposal: yes, via existing `AgentLoopStateManager.load()` (no additional code path needed).
+1. **Resume seeding** — `LoopState` is the right home, but should activation also seed from the workspace's `.soothe/state/` if a thread is resumed in a new daemon process? Current proposal: yes, via existing `StrangeLoopStateManager.load()` (no additional code path needed).
 2. **Activation on current vs next turn** — should the newly-activated skill be (a) auto-injected into the *current* turn's response context, or (b) deferred to the next turn's `<AVAILABLE_SKILLS>` block? Claude Code does (b). Recommendation: (b) — keeps activation off the hot path and matches Claude Code semantics.
 3. **MCP skill integration** — deferred; `soothe.mcp.loader` not yet present. Broken imports at `core/thread/manager.py:24,553` referencing the missing module are a separate cleanup.
 4. **RFC-600 plugin extension** — promoting skills into the RFC-600 plugin extension point set is a follow-on RFC, not this one.
@@ -553,7 +553,7 @@ soothe daemon start --workspace /tmp/soothe-skill-test
 
 - [RFC-100: CoreAgent Runtime](RFC-100-coreagent-runtime.md)
 - [RFC-104: Dynamic System Context Injection](RFC-104-dynamic-system-context.md)
-- [RFC-214: AgentLoop Loop Message Surface](RFC-214-agentloop-loop-message-surface.md)
+- [RFC-214: StrangeLoop Loop Message Surface](RFC-214-agentloop-loop-message-surface.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
 - [Design Draft: Progressive Skill Loading](../drafts/2026-05-29-progressive-skill-loading-design.md)
 - [RFC Standard](./rfc-standard.md)

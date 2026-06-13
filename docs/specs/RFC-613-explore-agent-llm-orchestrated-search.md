@@ -369,7 +369,7 @@ def _get_subagent_factories() -> dict[str, Callable]:
     return factories
 ```
 
-### 9.2 AgentLoop LLMPlanner Prompt
+### 9.2 StrangeLoop LLMPlanner Prompt
 
 ```xml
 <AVAILABLE_SUBAGENTS>
@@ -402,7 +402,7 @@ def _get_subagent_factories() -> dict[str, Callable]:
 | RFC-601 | Peer subagent — follows same plugin/factory/event patterns as research |
 | RFC-600 | Plugin extension system — `@plugin` and `@subagent` decorators |
 | RFC-100 | CoreAgent runtime — `CompiledSubAgent` interface |
-| RFC-200 | AgentLoop — `StepAction.subagent` integration |
+| RFC-200 | StrangeLoop — `StepAction.subagent` integration |
 | RFC-211 | Tool result optimization — read snippet efficiency |
 | RFC-101 | Tool interface — reuse of existing filesystem tools |
 

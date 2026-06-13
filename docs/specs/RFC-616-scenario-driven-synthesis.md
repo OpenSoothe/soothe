@@ -145,7 +145,7 @@ Final Synthesis Response
 **Modified**:
 - `SynthesisGenerator.generate_synthesis()` - remove `length_category` parameter
 - `SynthesisGenerator._build_synthesis_prompt()` - use classification instead of goal_type/length_category
-- `agent_loop.py` - remove length categorization call
+- `strange_loop.py` - remove length categorization call
 
 ## Implementation Details
 
@@ -156,7 +156,7 @@ Final Synthesis Response
 
 **Modified**:
 - `analysis/synthesis.py` - Remove keyword classification, integrate classifier
-- `core/agent_loop.py` - Remove length categorization step
+- `core/strange_loop.py` - Remove length categorization step
 - `state/schemas.py` - Remove response_length_category from PlanResult
 
 **Deleted**:
@@ -240,7 +240,7 @@ Delete all tests for:
    - Modify `SynthesisGenerator` to use classifier
    - Remove length categorization logic
    - Update synthesis prompt template
-   - Update `agent_loop.py` to remove length_category
+   - Update `strange_loop.py` to remove length_category
 
 3. **Phase 3: Cleanup**
    - Delete `policies/response_length_policy.py`

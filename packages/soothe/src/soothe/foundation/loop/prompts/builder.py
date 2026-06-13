@@ -356,7 +356,7 @@ class PromptBuilder:
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
-        AgentLoop ledger messages are appended separately in ``build_plan_messages`` so the
+        StrangeLoop ledger messages are appended separately in ``build_plan_messages`` so the
         plan model sees native human/AI turns instead of a single flattened block.
         Execute-step evidence lives in those ledger messages (IG-368).
 

@@ -1,4 +1,4 @@
-"""Main AgentLoop orchestration (RFC-201)."""
+"""Main StrangeLoop orchestration (RFC-201)."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.loop.planning.phase import PlanPhase
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
 )
+from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 from soothe.foundation.loop.state.working_memory import LoopWorkingMemory
 from soothe.foundation.loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AgentLoop:
+class StrangeLoop:
     """Agentic goal execution using Plan-and-Execute pattern (RFC-220 Loop Graph).
 
     Orchestration is a compiled LangGraph whose configurable checkpoint key is ``loop_id``.
@@ -54,7 +54,7 @@ class AgentLoop:
         loop_planner: LoopPlannerProtocol,
         config: SootheConfig,
     ) -> None:
-        """Initialize AgentLoop.
+        """Initialize StrangeLoop.
 
         Args:
             core_agent: Layer 1 CoreAgent runtime
@@ -80,7 +80,7 @@ class AgentLoop:
         self,
         goal: str,
         thread_id: str,
-        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
     ) -> PlanResult:
         """Run Plan → Execute loop for goal execution.
 
@@ -113,7 +113,7 @@ class AgentLoop:
         thread_id: str,
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
-        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         intent: Any | None = None,  # Intent classification
         routing_classification: Any | None = None,  # IG-349, IG-383: RoutingClassification
@@ -193,26 +193,26 @@ class AgentLoop:
             slash_invoked_skill_body = skill_env.skill_context
         elif parsed_skill is not None:
             logger.warning(
-                "[AgentLoop] /skill: user line did not expand (missing skill on this host "
+                "[StrangeLoop] /skill: user line did not expand (missing skill on this host "
                 "or unreadable SKILL.md); planner will see the raw line: %s",
                 log_preview(goal, 120),
             )
 
-        # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
+        # Initialize StrangeLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
         # IG-406: Pass shared_pool for high-concurrency support
-        state_manager = AgentLoopStateManager(
+        state_manager = StrangeLoopStateManager(
             loop_id,
             Path(workspace) if workspace else None,
             config=self.config,
             shared_pool=shared_pool,
         )
-        # RFC-223: Main AgentLoop thread id must align to loop_id.
+        # RFC-223: Main StrangeLoop thread id must align to loop_id.
         # Keep caller-provided thread_id for upstream intent/routing context, but normalize
-        # all AgentLoop checkpoint + execution thread bookkeeping to loop_id.
+        # all StrangeLoop checkpoint + execution thread bookkeeping to loop_id.
         main_thread_id = state_manager.loop_id
         if thread_id and thread_id != main_thread_id:
             logger.info(
-                "[AgentLoop] normalizing main thread_id to loop_id: input=%s loop_id=%s",
+                "[StrangeLoop] normalizing main thread_id to loop_id: input=%s loop_id=%s",
                 thread_id,
                 main_thread_id,
             )
@@ -227,7 +227,7 @@ class AgentLoop:
 
         # Try to recover from checkpoint (RFC-216: loop-scoped).
         # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
-        # same TUI/daemon thread reuses one AgentLoop checkpoint across user turns.
+        # same TUI/daemon thread reuses one StrangeLoop checkpoint across user turns.
         checkpoint = await state_manager.load()
 
         if checkpoint is not None:
@@ -331,7 +331,7 @@ class AgentLoop:
         else:
             if checkpoint is not None:
                 logger.info(
-                    "Starting fresh AgentLoop checkpoint (prior status=%s loop_id=%s)",
+                    "Starting fresh StrangeLoop checkpoint (prior status=%s loop_id=%s)",
                     checkpoint.status,
                     state_manager.loop_id,
                 )
@@ -436,7 +436,7 @@ class AgentLoop:
         )
         ce_goal = await ce_instance.create_goal(
             execution_goal,
-            generating_reasoning="AgentLoop goal",
+            generating_reasoning="StrangeLoop goal",
             source="user",
         )
         await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
@@ -470,7 +470,7 @@ class AgentLoop:
         )
 
         ctx = LoopRuntimeContext(
-            agent_loop=self,
+            strange_loop=self,
             state_manager=state_manager,
             anchor_manager=anchor_manager,
             goal_context_manager=goal_context_manager,
@@ -497,9 +497,9 @@ class AgentLoop:
 
         async def pump_graph() -> None:
             try:
-                from soothe.foundation.loop.orchestrator.runner import invoke_agent_loop_graph
+                from soothe.foundation.loop.orchestrator.runner import invoke_strange_loop_graph
 
-                await invoke_agent_loop_graph(ctx)
+                await invoke_strange_loop_graph(ctx)
             except Exception as e:
                 logger.error(
                     "[pump_graph] Graph execution error: %s: %s",

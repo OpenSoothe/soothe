@@ -4,7 +4,7 @@ This package provides middleware implementations:
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
 - SystemPromptMiddleware: Dynamic prompt adjustment based on classification
 - LLMRateLimitMiddleware: Rate limiting at LLM level, not thread level
-- ExecutionHintsMiddleware: AgentLoop → CoreAgent execution hints injection
+- ExecutionHintsMiddleware: StrangeLoop → CoreAgent execution hints injection
 - WorkspaceContextMiddleware: Thread-aware workspace ContextVar management
 - PerTurnModelMiddleware: Per-stream model override for daemon/TUI
 - SootheFilesystemMiddleware: Extended filesystem tools middleware

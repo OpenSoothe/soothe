@@ -97,7 +97,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/resume",
-        description="Browse and resume AgentLoop instances",
+        description="Browse and resume StrangeLoop instances",
         bypass_tier=BypassTier.IMMEDIATE_UI,
         hidden_keywords="continue history sessions loops",
     ),

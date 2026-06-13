@@ -1,6 +1,6 @@
 # CE-as-LoopState Backend: Full Replacement Design
 
-RFC-624 Phase 4: Replace the AgentLoop's Plan-Exec implementation with ContextEngine as the sole data source. Remove all legacy components (PlanManager, PlanDAG, GoalContextManager, adapters). CE becomes the primary data store, backed by PostgreSQL/SQLite instead of files.
+RFC-624 Phase 4: Replace the StrangeLoop's Plan-Exec implementation with ContextEngine as the sole data source. Remove all legacy components (PlanManager, PlanDAG, GoalContextManager, adapters). CE becomes the primary data store, backed by PostgreSQL/SQLite instead of files.
 
 ## Context
 
@@ -12,7 +12,7 @@ This design makes CE the sole data source. Graph nodes still interact with `Loop
 
 - **Full replacement**: CE is the only path. No `if ce_config.enabled` branching.
 - **One shot**: Single IG, not phased.
-- **DB persistence**: CE switches from file backend to PostgreSQL/SQLite (same pool as current `AgentLoopStateManager`).
+- **DB persistence**: CE switches from file backend to PostgreSQL/SQLite (same pool as current `StrangeLoopStateManager`).
 - **Behavioral equivalence**: Same observable outputs (final response, step execution order, error handling). Internal data structures change completely.
 
 ## Architecture
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS ce_ledger (
 );
 ```
 
-Uses the same connection pool as `AgentLoopStateManager` (via `persistence.soothe_postgres_dsn`). Falls back to SQLite when PostgreSQL is unavailable (mirrors existing daemon behavior).
+Uses the same connection pool as `StrangeLoopStateManager` (via `persistence.soothe_postgres_dsn`). Falls back to SQLite when PostgreSQL is unavailable (mirrors existing daemon behavior).
 
 ## Removed Components
 
@@ -188,7 +188,7 @@ Uses the same connection pool as `AgentLoopStateManager` (via `persistence.sooth
 | `ContextEngineGoalContextAdapter` | ~190 | `foundation/loop/engine/context_adapters.py` | CE queries (already in `ContextEngineGoalContextAdapter.get_plan_context()`) |
 | `StepPlanManagerAdapter` | ~60 | `context/planning/step_planner.py` | Direct `StepPlanningSubengine` calls |
 | `ContextEngineLifecycle` | ~144 | `foundation/loop/engine/context_lifecycle.py` | CE operations inline in nodes (simpler with single path) |
-| `if ce_config.enabled` branches | ~50 | `agent_loop.py` | Removed — CE is always active |
+| `if ce_config.enabled` branches | ~50 | `strange_loop.py` | Removed — CE is always active |
 | `PlanManager` heuristic methods | ~80 | `foundation/loop/planning/manager.py` | Already in `completion.py` |
 | `ContextEngineConfig.enabled` | ~5 | `config/models.py` | Removed — always enabled |
 
@@ -277,7 +277,7 @@ state._ce.ledger.record_message(message, phase=phase)
 # a new state.append_loop_message(msg, phase) method instead.
 ```
 
-### agent_loop.py
+### strange_loop.py
 
 ```python
 # Before:
@@ -351,9 +351,9 @@ def record_message(self, message: BaseMessage, phase: str | None = None) -> None
 
 When `LedgerManager.get_messages()` returns messages, it returns the original message objects (which are already `LoopHumanMessage`/`LoopAIMessage` instances). This means `state.loop_messages` returns the same types as before, and `project_loop_messages_for_plan()` works unchanged.
 
-## Persistence: Replacing AgentLoopStateManager
+## Persistence: Replacing StrangeLoopStateManager
 
-The `AgentLoopStateManager` currently persists:
+The `StrangeLoopStateManager` currently persists:
 - `loop_messages` (full ledger)
 - `step_results`, `completed_step_ids`, `evidence_ledger`, `evidence_summary`
 - `current_plan` (from `current_decision` + `evidence_summary`)
@@ -381,7 +381,7 @@ def _sync_fallbacks(self) -> None:
 
 The `_ce` reference is excluded from serialization (it's a `PrivateAttr`).
 
-**Migration**: Existing checkpoint data in PostgreSQL is read-compatible. When a loop resumes, `AgentLoopStateManager.load()` deserializes the old `loop_messages` list → the `loop_messages` setter copies them into `LedgerManager`. Old `step_results` and `completed_step_ids` → `add_step_result()` copies them into `StepDAG`. This provides seamless migration from old checkpoints.
+**Migration**: Existing checkpoint data in PostgreSQL is read-compatible. When a loop resumes, `StrangeLoopStateManager.load()` deserializes the old `loop_messages` list → the `loop_messages` setter copies them into `LedgerManager`. Old `step_results` and `completed_step_ids` → `add_step_result()` copies them into `StepDAG`. This provides seamless migration from old checkpoints.
 
 ## Error Handling
 
@@ -431,7 +431,7 @@ The `enabled` field is removed. CE is always active. The `persistence_backend` d
 
 1. Add `DatabasePersistenceBackend` (no dependencies)
 2. Add `LoopState` properties and `append_loop_message()` method (depends on CE API)
-3. Wire `LoopState._ce` in `agent_loop.py` (depends on #2)
+3. Wire `LoopState._ce` in `strange_loop.py` (depends on #2)
 4. Update graph nodes to call `ce.planning.step` directly (depends on #3)
 5. Update `LoopRuntimeContext` — remove adapters, add `ce` field (depends on #4)
 6. Remove `_record_ledger_message()` — replace with `state.append_loop_message()` (depends on #2)
@@ -439,7 +439,7 @@ The `enabled` field is removed. CE is always active. The `persistence_backend` d
 8. Remove adapters and lifecycle (depends on #5, #6)
 9. Remove `ContextEngineConfig.enabled` (depends on #3)
 10. Update `config/config.template.yml` and `config/config.dev.yml`
-11. Add migration logic in `AgentLoopStateManager.load()` (depends on #2)
+11. Add migration logic in `StrangeLoopStateManager.load()` (depends on #2)
 12. Tests (depends on all)
 
 ## Acceptance Criteria
@@ -447,7 +447,7 @@ The `enabled` field is removed. CE is always active. The `persistence_backend` d
 - `PlanManager`, `PlanDAG`, `GoalContextManager` removed
 - All adapters (`ContextEngineLedgerAdapter`, `ContextEngineGoalContextAdapter`, `StepPlanManagerAdapter`) removed
 - `ContextEngineLifecycle` removed (CE ops inline in nodes)
-- `if ce_config.enabled` branching removed from `agent_loop.py`
+- `if ce_config.enabled` branching removed from `strange_loop.py`
 - `LoopState.loop_messages`, `step_results`, `completed_step_ids`, `evidence_summary`, `evidence_ledger` are properties backed by CE
 - `current_decision`, `working_memory` remain as fields
 - CE persistence backend is PostgreSQL/SQLite (not file)

@@ -163,7 +163,7 @@ async def test_sender_loop_sends_events():
 
     event = {
         "type": "event",
-        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+        "data": {"type": "soothe.cognition.strange_loop.started", "goal": "hello"},
     }
     await bus.publish(loop_event_topic("loop-abc123"), event)
 
@@ -195,7 +195,7 @@ async def test_sender_loop_stops_on_error():
 
     event = {
         "type": "event",
-        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+        "data": {"type": "soothe.cognition.strange_loop.started", "goal": "hello"},
     }
     await bus.publish(loop_event_topic("loop-abc123"), event)
 
@@ -227,7 +227,7 @@ async def test_sender_loop_treats_connection_error_as_disconnect(caplog: pytest.
 
     event = {
         "type": "event",
-        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+        "data": {"type": "soothe.cognition.strange_loop.started", "goal": "hello"},
     }
     await bus.publish(loop_event_topic("loop-abc123"), event)
 
@@ -394,7 +394,7 @@ async def test_wake_senders_for_loop_restarts_dead_sender() -> None:
 
     event = {
         "type": "event",
-        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "hello"},
+        "data": {"type": "soothe.cognition.strange_loop.started", "goal": "hello"},
     }
     await bus.publish(loop_event_topic("loop-abc123"), event)
     await asyncio.sleep(0.25)
@@ -427,7 +427,7 @@ async def test_session_count():
     assert manager.session_count == 0
 
 
-def test_get_batch_timeout_reads_agent_loop_output_streaming() -> None:
+def test_get_batch_timeout_reads_strange_loop_output_streaming() -> None:
     """Sender loop must resolve streaming interval from ``agent.loop`` config (IG-407)."""
     from soothe.config import SootheConfig
 
@@ -452,10 +452,10 @@ def test_queue_has_high_priority_detects_high_event() -> None:
 
     # NORMAL priority event returns False
     normal_meta = EventMeta(
-        type_string="soothe.cognition.agent_loop.step.started",
+        type_string="soothe.cognition.strange_loop.step.started",
         model=None,
         domain="cognition",
-        component="agent_loop",
+        component="strange_loop",
         action="step.started",
         verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.NORMAL,
@@ -468,10 +468,10 @@ def test_queue_has_high_priority_detects_high_event() -> None:
     # Clear and add HIGH priority event
     queue.get_nowait()
     high_meta = EventMeta(
-        type_string="soothe.cognition.agent_loop.completed",
+        type_string="soothe.cognition.strange_loop.completed",
         model=None,
         domain="cognition",
-        component="agent_loop",
+        component="strange_loop",
         action="completed",
         verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.HIGH,
@@ -523,17 +523,17 @@ async def test_sender_loop_flushes_high_priority_immediately() -> None:
 
     # Publish HIGH priority event
     high_meta = EventMeta(
-        type_string="soothe.cognition.agent_loop.completed",
+        type_string="soothe.cognition.strange_loop.completed",
         model=None,
         domain="cognition",
-        component="agent_loop",
+        component="strange_loop",
         action="completed",
         verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.HIGH,
     )
     event = {
         "type": "event",
-        "data": {"type": "soothe.cognition.agent_loop.completed", "status": "done"},
+        "data": {"type": "soothe.cognition.strange_loop.completed", "status": "done"},
     }
     await bus.publish(loop_event_topic("loop-abc123"), event, event_meta=high_meta)
 
@@ -543,7 +543,7 @@ async def test_sender_loop_flushes_high_priority_immediately() -> None:
     transport.send.assert_called_once()
     call_args = transport.send.call_args
     sent_event = call_args[0][1]
-    assert sent_event["data"]["type"] == "soothe.cognition.agent_loop.completed"
+    assert sent_event["data"]["type"] == "soothe.cognition.strange_loop.completed"
 
     await manager.remove_session(client_id)
 
@@ -570,8 +570,8 @@ async def test_sender_loop_batches_normal_priority() -> None:
     await asyncio.sleep(0.05)
 
     # Publish NORMAL priority events - should batch
-    event1 = {"type": "event", "data": {"type": "soothe.cognition.agent_loop.step.started"}}
-    event2 = {"type": "event", "data": {"type": "soothe.cognition.agent_loop.step.completed"}}
+    event1 = {"type": "event", "data": {"type": "soothe.cognition.strange_loop.step.started"}}
+    event2 = {"type": "event", "data": {"type": "soothe.cognition.strange_loop.step.completed"}}
     await bus.publish(loop_event_topic("loop-abc123"), event1)
     await bus.publish(loop_event_topic("loop-abc123"), event2)
 
@@ -609,10 +609,10 @@ async def test_await_loop_delivery_drained_with_high_priority() -> None:
 
     # Put HIGH priority event directly in queue
     high_meta = EventMeta(
-        type_string="soothe.cognition.agent_loop.completed",
+        type_string="soothe.cognition.strange_loop.completed",
         model=None,
         domain="cognition",
-        component="agent_loop",
+        component="strange_loop",
         action="completed",
         verbosity=VerbosityTier.NORMAL,
         priority=EventPriority.HIGH,

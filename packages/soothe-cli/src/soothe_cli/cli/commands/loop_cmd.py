@@ -1,4 +1,4 @@
-"""Loop management CLI commands for AgentLoop instances.
+"""Loop management CLI commands for StrangeLoop instances.
 
 RFC-503: Loop-First User Experience
 RFC-504: Loop Management CLI Commands
@@ -24,7 +24,7 @@ from soothe_cli.runtime import load_config
 console = Console()
 
 # Create loop command group
-loop_app = typer.Typer(help="Manage AgentLoop instances")
+loop_app = typer.Typer(help="Manage StrangeLoop instances")
 
 
 def _require_daemon(ws_url: str) -> None:
@@ -139,7 +139,7 @@ def list_loops(
         typer.Option("--limit", "-l", help="Limit number of results."),
     ] = 20,
 ) -> None:
-    """List all AgentLoop instances.
+    """List all StrangeLoop instances.
 
     Examples:
         soothe loop list
@@ -169,7 +169,7 @@ def list_loops(
         return
 
     # Render table
-    table = Table(title="AgentLoops")
+    table = Table(title="StrangeLoops")
     table.add_column("Loop ID", style="cyan")
     table.add_column("Status", style="green")
     table.add_column("Contexts", justify="right")

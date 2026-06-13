@@ -237,7 +237,7 @@ Check PRIOR_CONVERSATION in USER_TASK?
 
 ### LLMPlanner Refactor
 
-**Before** (historical `simple.py`; superseded by `packages/soothe/src/soothe/core/agent_loop/core/planner.py`):
+**Before** (historical `simple.py`; superseded by `packages/soothe/src/soothe/core/strange_loop/core/planner.py`):
 ```python
 async def reason(self, goal, state, context):
     prompt = self._build_reason_prompt(goal, state, context)
@@ -312,7 +312,7 @@ class LLMPlanner:
 
 ### Affected Code
 
-- `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (LLMPlanner / RFC-604)
+- `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (LLMPlanner / RFC-604)
 - `packages/soothe/src/soothe/core/prompts/builder.py` (PromptBuilder)
 - Any tests that construct prompts directly
 

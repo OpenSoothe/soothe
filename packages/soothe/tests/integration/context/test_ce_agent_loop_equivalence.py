@@ -1,4 +1,4 @@
-"""Integration test: ContextEngine AgentLoop path produces equivalent outputs to the non-CE path.
+"""Integration test: ContextEngine StrangeLoop path produces equivalent outputs to the non-CE path.
 
 RFC-624 Phase 3: verifies that enabling the ContextEngine path yields
 identical observable behavior (loop_messages, plan outcomes, DAG reports)

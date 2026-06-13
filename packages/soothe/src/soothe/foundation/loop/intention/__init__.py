@@ -1,7 +1,7 @@
 """Intent classification module (RFC-225).
 
 The LLM decides ``quiz`` vs ``agentic``. Loop continuation is derived
-structurally inside ``AgentLoop`` from the loaded checkpoint and is
+structurally inside ``StrangeLoop`` from the loaded checkpoint and is
 not a classifier concern.
 
 This module provides:

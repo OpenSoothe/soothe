@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines the architectural shift from **thread-based user experience** to **loop-based user experience**. AgentLoop becomes the primary user-facing concept, while CoreAgent threads become internal implementation details invisible to users. This aligns with RFC-216's vision: loops span multiple threads, users interact with loops, threads are execution contexts managed internally.
+This RFC defines the architectural shift from **thread-based user experience** to **loop-based user experience**. StrangeLoop becomes the primary user-facing concept, while CoreAgent threads become internal implementation details invisible to users. This aligns with RFC-216's vision: loops span multiple threads, users interact with loops, threads are execution contexts managed internally.
 
 ---
 
@@ -41,7 +41,7 @@ This RFC defines the architectural shift from **thread-based user experience** t
 - User mental model: "I work with loops"
 - Threads: Internal implementation detail (invisible to users)
 
-**Key principle**: Users interact with loops. Threads are execution contexts managed by AgentLoop internally.
+**Key principle**: Users interact with loops. Threads are execution contexts managed by StrangeLoop internally.
 
 ---
 
@@ -59,7 +59,7 @@ This RFC defines the architectural shift from **thread-based user experience** t
 - **Thread IDs**: Internal execution contexts
 - **Thread switches**: Automatic (internal) when thread health degrades
 - **Thread checkpoints**: Internal CoreAgent checkpoints
-- **Thread lifecycle**: Managed internally by AgentLoop
+- **Thread lifecycle**: Managed internally by StrangeLoop
 
 **Example user interaction**:
 ```
@@ -323,9 +323,9 @@ GOAL_FAILED = "soothe.cognition.goal.failed"
 BRANCH_CREATED = "soothe.cognition.branch.created"
 BRANCH_RETRY_STARTED = "soothe.cognition.branch.retry.started"
 
-# AgentLoop events (existing)
-AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
-AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
+# StrangeLoop events (existing)
+STRANGE_LOOP_STARTED = "soothe.cognition.strange_loop.started"
+STRANGE_LOOP_COMPLETED = "soothe.cognition.strange_loop.completed"
 ```
 
 **Internal events** (not client-visible):
@@ -411,7 +411,7 @@ class SootheRunner:
 class SootheRunner:
     def __init__(self, loop_id: str | None = None):  # ✅ Add loop_id
         self.loop_id = loop_id or self._generate_loop_id()
-        self.loop_manager = AgentLoopManager(self.loop_id)
+        self.loop_manager = StrangeLoopManager(self.loop_id)
         self.thread_manager = ThreadManager()  # Internal
     
     async def run(self, query: str):
@@ -432,8 +432,8 @@ class SootheRunner:
         current_thread_id = loop_checkpoint.current_thread_id
         core_agent = await self._create_core_agent(current_thread_id)
         
-        # Run with AgentLoop orchestration
-        agentloop = AgentLoop(self.loop_id, loop_checkpoint)
+        # Run with StrangeLoop orchestration
+        agentloop = StrangeLoop(self.loop_id, loop_checkpoint)
         result = await agentloop.run_with_progress(
             core_agent=core_agent,
             query=query,
@@ -535,7 +535,7 @@ async def handle_loop_subscribe(client_id: str, loop_id: str):
 await handle_loop_subscribe(client_id, loop_abc123)
 
 # Daemon reconstructs history:
-# 1. Load AgentLoop checkpoint (loop_abc123)
+# 1. Load StrangeLoop checkpoint (loop_abc123)
 # 2. Load checkpoint tree (main_line + failed_branches)
 # 3. Load CoreAgent checkpoints (internal)
 # 4. Reconstruct event stream (goal history + checkpoint anchors)
@@ -602,11 +602,11 @@ await handle_loop_subscribe(client_id, loop_abc123)
 
 ## Related Specifications
 
-- RFC-216: AgentLoop Multi-Thread Lifecycle
+- RFC-216: StrangeLoop Multi-Thread Lifecycle
 - RFC-450: Daemon Communication Protocol
 - RFC-500: CLI/TUI Architecture
 - RFC-454: Slash Command Architecture
-- RFC-215: AgentLoop Persistence Backend
+- RFC-215: StrangeLoop Persistence Backend
 - RFC-411: Event Stream Replay
 
 ---

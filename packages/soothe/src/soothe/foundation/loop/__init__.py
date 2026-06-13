@@ -1,12 +1,12 @@
-"""Loop package - Layer 2 AgentLoop orchestration.
+"""Loop package - Layer 2 StrangeLoop orchestration.
 
-AgentLoop executes single goals through iterative Plan-Execute refinement:
+StrangeLoop (alias: Sloop) executes single goals through iterative Plan-Execute refinement:
 - Plan: LLM reasoning with goal-directed evaluation
 - Execute: Step execution via CoreAgent
 - Judge: Progress assessment toward goal
 
 Import paths:
-    from soothe.foundation.loop import AgentLoop, LoopState, PlanResult
+    from soothe.foundation.loop import StrangeLoop, Sloop, LoopState, PlanResult
     from soothe.foundation.loop.engine.executor import Executor
     from soothe.foundation.loop.state.schemas import StepAction
 """
@@ -16,7 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 __all__ = [
-    "AgentLoop",
+    "Sloop",
+    "StrangeLoop",
     "LoopState",
     "LoopWorkingMemory",
     "PlanResult",
@@ -27,10 +28,10 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Lazy import loop modules."""
-    if name == "AgentLoop":
-        from soothe.foundation.loop.engine.agent_loop import AgentLoop
+    if name in ("StrangeLoop", "Sloop"):
+        from soothe.foundation.loop.engine.strange_loop import StrangeLoop
 
-        return AgentLoop
+        return StrangeLoop
     if name == "LoopState":
         from soothe.foundation.loop.state.schemas import LoopState
 

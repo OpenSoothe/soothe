@@ -75,7 +75,7 @@ LANGFUSE_HOST=http://localhost:3300  # Or https://cloud.langfuse.com
 ### Langfuse Features in Soothe
 
 **Tracked automatically**:
-- All LLM calls (CoreAgent, AgentLoop, subagents)
+- All LLM calls (CoreAgent, StrangeLoop, subagents)
 - Token usage (prompt + completion)
 - Latency per call
 - Model selection (default/fast/think roles)
@@ -238,7 +238,7 @@ observability:
 {
   "timestamp": "2026-06-06T02:40:15Z",
   "level": "DEBUG",
-  "logger": "soothe.core.agent_loop",
+  "logger": "soothe.core.strange_loop",
   "message": "Tool invocation completed",
   "tool_name": "read_file",
   "execution_time_ms": 150,

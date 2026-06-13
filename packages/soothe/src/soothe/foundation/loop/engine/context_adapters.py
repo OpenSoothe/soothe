@@ -28,7 +28,7 @@ class ContextEngineGoalContextAdapter:
     """Wraps ContextEngine to provide the same interfaces as GoalContextManager.
 
     Reads goal history from the GoalStepDAG (via ContextEngine public API)
-    instead of AgentLoopStateManager, producing identical XML blocks for plan
+    instead of StrangeLoopStateManager, producing identical XML blocks for plan
     context and execute briefings.
 
     Thread switch detection still uses state_manager (that concern is outside

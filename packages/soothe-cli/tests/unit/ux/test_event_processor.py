@@ -266,7 +266,7 @@ class TestEventProcessorPlanHandling:
 class TestEventProcessorOutputEventRouting:
     """Tests for output-event routing behavior."""
 
-    def test_agent_loop_completed_routes_to_progress_event(self) -> None:
+    def test_strange_loop_completed_routes_to_progress_event(self) -> None:
         """Agent-loop completion must flow through progress-event routing."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
@@ -276,7 +276,7 @@ class TestEventProcessorOutputEventRouting:
             "mode": "custom",
             "namespace": [],
             "data": {
-                "type": "soothe.cognition.agent_loop.completed",
+                "type": "soothe.cognition.strange_loop.completed",
                 "thread_id": "t",
                 "status": "done",
                 "goal_progress": 1.0,
@@ -288,7 +288,7 @@ class TestEventProcessorOutputEventRouting:
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(progress_calls) == 1
-        assert progress_calls[0][1][0] == "soothe.cognition.agent_loop.completed"
+        assert progress_calls[0][1][0] == "soothe.cognition.strange_loop.completed"
         assert assistant_calls == []
 
     def test_quiz_phase_messages_routes_to_assistant_text(self) -> None:
@@ -383,7 +383,7 @@ class TestEventProcessorOutputEventRouting:
             "mode": "custom",
             "namespace": [],
             "data": {
-                "type": "soothe.cognition.agent_loop.completed",
+                "type": "soothe.cognition.strange_loop.completed",
                 "status": "done",
                 "goal_progress": 1.0,
             },

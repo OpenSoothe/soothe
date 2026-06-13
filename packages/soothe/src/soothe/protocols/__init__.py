@@ -1,6 +1,5 @@
 """Soothe protocol definitions -- runtime-agnostic interfaces."""
 
-from soothe.protocols.agent_loop import AgentLoopProtocol
 from soothe.protocols.autopilot import AutopilotProtocol
 from soothe.protocols.concurrency import ConcurrencyPolicy
 from soothe.protocols.core_agent import CoreAgentProtocol
@@ -43,12 +42,12 @@ from soothe.protocols.policy import (
 )
 from soothe.protocols.remote import RemoteAgentProtocol
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
+from soothe.protocols.strange_loop import StrangeLoopProtocol
 from soothe.protocols.toolkit import ToolkitProtocol
 from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
     "ActionRequest",
-    "AgentLoopProtocol",
     "AsyncPersistStore",
     "AutopilotProtocol",
     "CheckpointEnvelope",
@@ -81,6 +80,7 @@ __all__ = [
     "RemoteAgentProtocol",
     "StepReport",
     "StepResult",
+    "StrangeLoopProtocol",
     "ThreadFilter",
     "ThreadInfo",
     "ThreadMetadata",

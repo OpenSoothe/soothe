@@ -1,4 +1,4 @@
-"""``AgentLoop.run_with_progress`` forwards ``clarification_policy`` (IG-462)."""
+"""``StrangeLoop.run_with_progress`` forwards ``clarification_policy`` (IG-462)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.state.schemas import PlanResult
 
 
@@ -125,7 +125,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
 
     with (
         patch(
-            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -133,15 +133,15 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.LoopRuntimeContext",
+            "soothe.foundation.loop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):
-        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
@@ -183,7 +183,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
 
     with (
         patch(
-            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -191,15 +191,15 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.LoopRuntimeContext",
+            "soothe.foundation.loop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):
-        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 

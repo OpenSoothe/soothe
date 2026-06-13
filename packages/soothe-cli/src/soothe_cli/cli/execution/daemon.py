@@ -39,7 +39,7 @@ _CANCEL_SEND_TIMEOUT_S = 3.0
 
 
 def _is_loop_scoped_event(event: dict[str, Any], *, active_loop_id: str) -> bool:
-    """Return whether a daemon frame belongs to the active AgentLoop session."""
+    """Return whether a daemon frame belongs to the active StrangeLoop session."""
     event_type = event.get("type", "")
     if event_type not in {"status", "event"}:
         return True

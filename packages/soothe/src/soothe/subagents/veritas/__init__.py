@@ -1,6 +1,6 @@
 """Veritas subagent: intent-grounded clarification auto-answerer (RFC-622).
 
-Veritas is invoked by ``AutoClarificationPolicy`` when the AgentLoop pauses on
+Veritas is invoked by ``AutoClarificationPolicy`` when the StrangeLoop pauses on
 an ``ask_user`` interrupt in autonomous mode. It is a single structured-output
 LLM call (not a CoreAgent) that produces a best-effort answer from the goal's
 first-principles context.

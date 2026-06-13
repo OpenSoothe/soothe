@@ -48,7 +48,7 @@ After RFC-606 migration, the CLI progressive display output showed:
 |------------|-------------------|---------|
 | Goal started | `format_goal_header()` | Visual separation for new goal scope |
 | Step started | `format_step_header()` | Clear step boundaries |
-| AgentLoop reasoning | `format_reasoning()` | Separate reasoning from actions |
+| StrangeLoop reasoning | `format_reasoning()` | Separate reasoning from actions |
 | Goal completed | `format_goal_done()` | Final report prominence |
 
 **Example Output**:

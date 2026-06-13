@@ -1,13 +1,13 @@
-"""Shared PostgreSQL connection pool for AgentLoop persistence (IG-406).
+"""Shared PostgreSQL connection pool for StrangeLoop persistence (IG-406).
 
 Provides a singleton pool at daemon level for high-concurrency scenarios
-(200+ threads). Each AgentLoopStateManager reuses this shared pool instead
+(200+ threads). Each StrangeLoopStateManager reuses this shared pool instead
 of creating its own, preventing connection exhaustion.
 
 Architecture:
     Daemon → SootheRunner → SharedPostgreSQLPool
                       ↓
-    AgentLoopStateManager (receives pool reference)
+    StrangeLoopStateManager (receives pool reference)
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ _pool_lock = asyncio.Lock()
 
 
 class SharedPostgreSQLPool:
-    """Shared PostgreSQL connection pool for AgentLoop state persistence.
+    """Shared PostgreSQL connection pool for StrangeLoop state persistence.
 
     IG-406: High-concurrency architecture with 200+ thread support.
     Pool size is config-driven (``persistence.agentloop_pool_size``); default suits
@@ -50,8 +50,8 @@ class SharedPostgreSQLPool:
         pool = SharedPostgreSQLPool(dsn, pool_size=24)
         await pool.open()
 
-        # Pass to AgentLoopStateManager
-        state_manager = AgentLoopStateManager(config=config, shared_pool=pool)
+        # Pass to StrangeLoopStateManager
+        state_manager = StrangeLoopStateManager(config=config, shared_pool=pool)
 
         # Close at daemon shutdown
         await pool.close()
@@ -109,24 +109,24 @@ class SharedPostgreSQLPool:
 
             self._initialized = True
             logger.info(
-                "Shared PostgreSQL pool opened for AgentLoop persistence (size=%d, DSN masked)",
+                "Shared PostgreSQL pool opened for StrangeLoop persistence (size=%d, DSN masked)",
                 self.pool_size,
             )
 
             return self._pool
 
     async def _initialize_schema(self, pool: AsyncConnectionPool) -> None:
-        """Recreate AgentLoop tables using the canonical PostgreSQL schema."""
+        """Recreate StrangeLoop tables using the canonical PostgreSQL schema."""
         await initialize_agentloop_postgres_schema(pool)
 
     async def release_idle_connections(self) -> None:
         """Return idle connections to PgBouncer (``Pool.check``)."""
-        await release_idle_pool_connections(self._pool, label="AgentLoop")
+        await release_idle_pool_connections(self._pool, label="StrangeLoop")
 
     async def close(self) -> None:
         """Close the shared connection pool."""
         if self._pool is not None:
-            await close_async_pool(self._pool, label="AgentLoop")
+            await close_async_pool(self._pool, label="StrangeLoop")
             self._pool = None
             self._initialized = False
 

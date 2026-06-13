@@ -16,15 +16,15 @@ from soothe.foundation.loop.engine.goal_context_manager import (
     format_execute_briefing_from_goals,
 )
 from soothe.foundation.loop.state.checkpoint import (
-    AgentLoopCheckpoint,
     GoalExecutionRecord,
+    StrangeLoopCheckpoint,
     ThreadHealthMetrics,
 )
 
 
 @pytest.fixture
 def mock_state_manager():
-    """Create mock AgentLoopStateManager."""
+    """Create mock StrangeLoopStateManager."""
     return Mock()
 
 
@@ -53,7 +53,7 @@ async def test_get_plan_context_empty_history(goal_context_manager, mock_state_m
 @pytest.mark.asyncio
 async def test_get_plan_context_no_goals(goal_context_manager, mock_state_manager):
     """Plan context returns [] when goal_history is empty."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
@@ -76,7 +76,7 @@ async def test_get_plan_context_no_goals(goal_context_manager, mock_state_manage
 @pytest.mark.asyncio
 async def test_get_plan_context_filters_same_thread(goal_context_manager, mock_state_manager):
     """Plan context only includes goals from current thread."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A", "thread_B"],
         current_thread_id="thread_A",
@@ -126,7 +126,7 @@ async def test_get_plan_context_filters_same_thread(goal_context_manager, mock_s
 @pytest.mark.asyncio
 async def test_get_plan_context_filters_completed_only(goal_context_manager, mock_state_manager):
     """Plan context only includes completed goals."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
@@ -175,7 +175,7 @@ async def test_get_plan_context_filters_completed_only(goal_context_manager, moc
 @pytest.mark.asyncio
 async def test_get_plan_context_respects_limit(goal_context_manager, mock_state_manager):
     """Plan context respects limit parameter."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
@@ -215,7 +215,7 @@ async def test_get_plan_context_config_disabled(mock_state_manager):
     config = GoalContextConfig(enabled=False)
     manager = GoalContextManager(mock_state_manager, config)
 
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
@@ -253,7 +253,7 @@ async def test_get_execute_briefing_returns_none_without_flag(
     goal_context_manager, mock_state_manager
 ):
     """Execute briefing returns None when thread_switch_pending=False."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
@@ -277,7 +277,7 @@ async def test_get_execute_briefing_returns_none_without_flag(
 @pytest.mark.asyncio
 async def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state_manager):
     """Execute briefing clears thread_switch_pending flag."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A", "thread_B"],
         current_thread_id="thread_B",
@@ -318,7 +318,7 @@ async def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state
 @pytest.mark.asyncio
 async def test_get_execute_briefing_cross_thread(goal_context_manager, mock_state_manager):
     """Execute briefing includes goals from all threads."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A", "thread_B"],
         current_thread_id="thread_B",
@@ -372,7 +372,7 @@ async def test_get_execute_briefing_cross_thread(goal_context_manager, mock_stat
 @pytest.mark.asyncio
 async def test_get_execute_briefing_no_completed_goals(goal_context_manager, mock_state_manager):
     """Execute briefing returns None when no completed goals."""
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",
@@ -413,7 +413,7 @@ async def test_get_execute_briefing_config_disabled(mock_state_manager):
     config = GoalContextConfig(enabled=False)
     manager = GoalContextManager(mock_state_manager, config)
 
-    checkpoint = AgentLoopCheckpoint(
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
         thread_ids=["thread_A"],
         current_thread_id="thread_A",

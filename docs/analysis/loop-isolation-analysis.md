@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-The Soothe daemon implements loop-based isolation where each **AgentLoop** (`loop_id`) serves as the primary unit of client work. The isolation architecture is layered across seven domains: events, workspace, input dispatch, running resources, persistence, client sessions, and subprocess execution.
+The Soothe daemon implements loop-based isolation where each **StrangeLoop** (`loop_id`) serves as the primary unit of client work. The isolation architecture is layered across seven domains: events, workspace, input dispatch, running resources, persistence, client sessions, and subprocess execution.
 
 The design is **architecturally sound** at the transport layer — the EventBus topic-based routing, single-subscription enforcement, and `_loop_scoped_client_message` boundary structurally prevent event leakage between loops. All previously identified bugs (4.1–4.5) have been fixed.
 
@@ -71,7 +71,7 @@ WebSocketClient
 
 | Concept | Identifier | Scope | Exposed to Client |
 |---------|-----------|-------|-------------------|
-| AgentLoop | `loop_id` | Client-visible conversation/session | Yes |
+| StrangeLoop | `loop_id` | Client-visible conversation/session | Yes |
 | LangGraph Checkpoint | `thread_id` | Internal durability key | No |
 
 Mapping: `ThreadStateRegistry._thread_loop: dict[str, str]` (checkpoint → loop).
@@ -235,7 +235,7 @@ loop_new {workspace: "/project-A"}
 | Resource | Isolation Scope | Key |
 |----------|----------------|-----|
 | LangGraph checkpoints | Per `thread_id` | `configurable.thread_id` |
-| AgentLoop checkpoints | Per `loop_id` | `agentloop_loops` table |
+| StrangeLoop checkpoints | Per `loop_id` | `agentloop_loops` table |
 | Thread metadata | Per `thread_id` | DurabilityProtocol key |
 | Working memory spill | Per `thread_id` | `data/threads/{thread_id}/working_memory/` |
 | Loop reports | Per `loop_id` | `data/loops/{loop_id}/` |
@@ -327,9 +327,9 @@ loop_new {workspace: "/project-A"}
 
 ### Bug 5.3 — Checkpoint Load-Modify-Save TOCTOU Race (MEDIUM)
 
-**Location**: `agent_loop.py:174–245`
+**Location**: `strange_loop.py:174–245`
 
-**Root cause**: `AgentLoop.run_with_progress()` loads the checkpoint, inspects `status`, and then modifies+saves it — all as separate operations without any concurrency control:
+**Root cause**: `StrangeLoop.run_with_progress()` loads the checkpoint, inspects `status`, and then modifies+saves it — all as separate operations without any concurrency control:
 
 ```python
 checkpoint = await state_manager.load()  # line 174
@@ -340,7 +340,7 @@ if checkpoint.status == "ready_for_next_goal":
 
 Between `load()` and `save()`, a concurrent operation (e.g., a `continue_thread` input arriving, or a thread switch) could have modified the same checkpoint in SQLite. The load-modify-save cycle is not atomic — there is no optimistic concurrency control, row-level locking, or CAS (compare-and-swap) mechanism.
 
-**RFC-221 impact**: Reduced severity. With per-loop subprocess isolation, concurrent access to the same loop's checkpoint from within the daemon is less likely — the streaming path no longer touches the daemon's `_runner`. However, the SQLite database is shared across subprocesses, and the `AgentLoopStateManager` in each subprocess writes to the same DB. The TOCTOU window is narrower but not eliminated.
+**RFC-221 impact**: Reduced severity. With per-loop subprocess isolation, concurrent access to the same loop's checkpoint from within the daemon is less likely — the streaming path no longer touches the daemon's `_runner`. However, the SQLite database is shared across subprocesses, and the `StrangeLoopStateManager` in each subprocess writes to the same DB. The TOCTOU window is narrower but not eliminated.
 
 **Impact**: A checkpoint could be overwritten with stale state, leading to:
 - A loop transitioning to `running` when it should be `paused`
@@ -409,7 +409,7 @@ if pending and not pending.done():
 **Root cause**: `_handle_loop_new` creates a new loop with no rate limiting, capacity check, or maximum count enforcement. Each loop, when activated:
 - Creates a filesystem directory
 - Creates 4+ SQLite table rows
-- Creates an `AgentLoopStateManager` with its own SQLite connection pool (5 reader + 1 writer = 6 connections per loop)
+- Creates an `StrangeLoopStateManager` with its own SQLite connection pool (5 reader + 1 writer = 6 connections per loop)
 - Eventually creates `LoopInputDispatcher` queue + worker task
 - With RFC-221: spawns an OS subprocess via `LocalLoopRunner` (~50MB+ memory per subprocess)
 
@@ -619,7 +619,7 @@ For each isolation domain, the enforcement mechanism and known gaps:
 - **Gaps**: `daemon._runner` still used for lifecycle operations (thread switching, activity timestamps)
 
 ### Persistence
-- **Enforcement**: Per-thread_id checkpoint key, per-loop_id AgentLoop state
+- **Enforcement**: Per-thread_id checkpoint key, per-loop_id StrangeLoop state
 - **Gaps**: Checkpoint load-modify-save not atomic (Bug 5.3)
 
 ### Client Sessions

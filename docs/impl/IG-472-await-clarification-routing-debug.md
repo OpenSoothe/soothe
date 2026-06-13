@@ -38,7 +38,7 @@ LangGraph routing may be affected by:
    - Added debug logging before and after `compiled.ainvoke()`
    - Added exception handling with full traceback logging
 
-4. `packages/soothe/src/soothe/core/loop/engine/agent_loop.py`
+4. `packages/soothe/src/soothe/core/loop/engine/strange_loop.py`
    - Added exception handling in `pump_graph()` with `exc_info=True` logging
    - Added debug logging when graph sentinel is received
 

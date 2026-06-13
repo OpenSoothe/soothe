@@ -1,4 +1,4 @@
-# AgentLoop LangGraph Node Summary
+# StrangeLoop LangGraph Node Summary
 
 > Reflects RFC-220 base topology, RFC-225 (status `idle`, structural `continue_loop_mode`),
 > and RFC-226 (continuation-aware `plan_assess` + terminal fast-exit edge).

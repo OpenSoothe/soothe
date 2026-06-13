@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def _normalize_layer1_input(input_arg: str | dict) -> dict:
     """Coerce a bare user string to LangGraph state with one HumanMessage.
 
-    AgentLoop and the runner pass ``{\"messages\": [...]}``; string input is
+    StrangeLoop and the runner pass ``{\"messages\": [...]}``; string input is
     supported for convenience and tests.
     """
     if isinstance(input_arg, str):
@@ -78,7 +78,7 @@ class CoreAgent:
             - soothe_step_expected_output: expected result description (advisory text)
 
     Layer 2 Contract:
-        Layer 2 (SootheRunner/AgentLoop) provides:
+        Layer 2 (SootheRunner/StrangeLoop) provides:
         - Execution hints via config.configurable (subagent delegation enforcement + advisory text)
         - Classification state (for SystemPromptMiddleware)
         - Thread/workspace management
@@ -143,7 +143,7 @@ class CoreAgent:
 
     @property
     def execution_graph(self) -> CompiledStateGraph:
-        """Graph used for AgentLoop execute streaming (IG-477).
+        """Graph used for StrangeLoop execute streaming (IG-477).
 
         Returns the checkpointer-free twin when ephemeral execute is enabled;
         otherwise the primary ``graph``.

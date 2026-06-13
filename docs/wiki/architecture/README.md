@@ -52,11 +52,11 @@ Soothe operates through a hierarchical execution model with three distinct level
 │ GoalEngine: Autonomous Goal Management (RFC-200)           │
 │ • Scope: Long-running complex workflows, multi-goal DAGs   │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update     │
-│ • Delegation: PERFORM invokes AgentLoop's full loop       │
+│ • Delegation: PERFORM invokes StrangeLoop's full loop       │
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ AgentLoop: Agentic Goal Execution (RFC-201)                 │
+│ StrangeLoop: Agentic Goal Execution (RFC-201)                 │
 │ • Scope: Single-goal execution through iterative refinement │
 │ • Loop: Plan → Execute (max iterations: ~8)               │
 │ • Delegation: EXECUTE invokes CoreAgent for execution       │
@@ -73,8 +73,8 @@ Soothe operates through a hierarchical execution model with three distinct level
 
 | Level | Responsibility | Delegates To |
 |-------|---------------|--------------|
-| **GoalEngine** | Goal DAG management, multi-goal coordination | AgentLoop |
-| **AgentLoop** | Single-goal execution, plan-execute iteration | CoreAgent |
+| **GoalEngine** | Goal DAG management, multi-goal coordination | StrangeLoop |
+| **StrangeLoop** | Single-goal execution, plan-execute iteration | CoreAgent |
 | **CoreAgent** | Tool/subagent execution, LLM interaction | langgraph |
 
 ### Level Interactions
@@ -84,9 +84,9 @@ GoalEngine (Layer 3)
     │
     ├─ Receives: User goals, scheduled tasks, autonomous proposals
     ├─ Manages: Goal DAG, priorities, dependencies
-    └─ Delegates: Single goals to AgentLoop
+    └─ Delegates: Single goals to StrangeLoop
     
-AgentLoop (Layer 2)
+StrangeLoop (Layer 2)
     │
     ├─ Receives: Single goal from GoalEngine
     ├─ Manages: Plan → Execute iterations (max ~8)
@@ -94,7 +94,7 @@ AgentLoop (Layer 2)
     
 CoreAgent (Layer 1)
     │
-    ├─ Receives: Step execution from AgentLoop
+    ├─ Receives: Step execution from StrangeLoop
     ├─ Manages: Model → Tools → Model loop
     └─ Returns: Tool results, model responses
 ```
@@ -107,7 +107,7 @@ CoreAgent (Layer 1)
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
 |  - GoalEngine: Autonomous Goal Management            |
-|  - AgentLoop: Agentic Goal Execution                 │
+|  - StrangeLoop: Agentic Goal Execution                 │
 |  - CoreAgent: Runtime                                │
 |  - ContextProtocol, MemoryProtocol,                  │
 |    PlannerProtocol, PolicyProtocol,                  │
@@ -127,7 +127,7 @@ CoreAgent (Layer 1)
 
 | Layer | Components | Responsibility |
 |-------|------------|----------------|
-| **Soothe** | GoalEngine, AgentLoop, Protocols | Orchestration, planning, durability, policy |
+| **Soothe** | GoalEngine, StrangeLoop, Protocols | Orchestration, planning, durability, policy |
 | **deepagents** | SubAgent, Middleware, Backend | Agent construction, summarization, backends |
 | **langchain/langgraph** | Models, Tools, StateGraph | Runtime execution, state management |
 
@@ -166,7 +166,7 @@ packages/
 ```
 core/
 ├── agent/           # CoreAgent wraps deepagents
-├── runner/          # AgentLoop orchestration, mixins
+├── runner/          # StrangeLoop orchestration, mixins
 ├── loop/            # Plan-execute loop (RFC-201)
 ├── goal_engine/     # Autonomous goal lifecycle (RFC-200)
 ├── events/          # Event system, registry
@@ -195,8 +195,8 @@ Soothe follows a **protocol-first, runtime-second** design. Every module is defi
 | **PolicyProtocol** | Security policy enforcement | RFC-406 |
 | **DurabilityProtocol** | State persistence and recovery | RFC-408 |
 | **VectorStoreProtocol** | Vector database abstraction | RFC-611 |
-| **LoopWorkingMemory** | Working memory for AgentLoop | RFC-224 |
-| **LoopPlanner** | Planning within AgentLoop | RFC-226 |
+| **LoopWorkingMemory** | Working memory for StrangeLoop | RFC-224 |
+| **LoopPlanner** | Planning within StrangeLoop | RFC-226 |
 | **RemoteProtocol** | Remote agent communication | RFC-450 |
 
 ### Protocol Hierarchy
@@ -238,7 +238,7 @@ CLI/Daemon
     ↓
 Thread Manager (create/resume thread)
     ↓
-AgentLoop.runner
+StrangeLoop.runner
     ↓
 ┌─────────────────────────────────────┐
 │ Plan-Execute Loop                    │
@@ -357,11 +357,11 @@ Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graph
 - **[RFC-104](../../specs/RFC-104-dynamic-system-context.md)** - Dynamic System Context Injection
 - **[RFC-105](../../specs/RFC-105-progressive-skill-loading.md)** - Progressive Skill Loading
 
-### AgentLoop & Cognition (2xx)
+### StrangeLoop & Cognition (2xx)
 
 - **[RFC-200](../../specs/RFC-200-autonomous-goal-management.md)** - Autonomous Goal Management Loop
-- **[RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)** - AgentLoop Plan-Execute Loop
-- **[RFC-203](../../specs/RFC-203-agentloop-state-memory.md)** - AgentLoop State Memory
+- **[RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)** - StrangeLoop Plan-Execute Loop
+- **[RFC-203](../../specs/RFC-203-agentloop-state-memory.md)** - StrangeLoop State Memory
 - **[RFC-204](../../specs/RFC-204-autopilot-mode.md)** - Autopilot Mode
 - **[RFC-206](../../specs/RFC-206-prompt-architecture.md)** - Prompt Architecture
 - **[RFC-217](../../specs/RFC-217-goal-context-management.md)** - Goal Context Management

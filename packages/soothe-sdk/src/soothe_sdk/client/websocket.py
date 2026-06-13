@@ -388,7 +388,7 @@ class WebSocketClient:
         limit: int = 20,
         request_id: str | None = None,
     ) -> None:
-        """Request AgentLoop instances via daemon RPC (RFC-504 ``loop_list``).
+        """Request StrangeLoop instances via daemon RPC (RFC-504 ``loop_list``).
 
         Args:
             filter_dict: Optional filter (e.g., {"status": "running"}).

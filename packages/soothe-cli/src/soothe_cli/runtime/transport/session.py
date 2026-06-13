@@ -54,7 +54,7 @@ class TuiDaemonSession:
 
     @property
     def loop_id(self) -> str | None:
-        """Active AgentLoop id for this WebSocket session."""
+        """Active StrangeLoop id for this WebSocket session."""
         return self._loop_id
 
     async def connect(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
@@ -100,7 +100,7 @@ class TuiDaemonSession:
         return "adaptive"
 
     async def new_loop(self) -> dict[str, Any]:
-        """Start a new AgentLoop conversation."""
+        """Start a new StrangeLoop conversation."""
         return await self._bootstrap_loop(resume_loop_id=None)
 
     async def switch_loop(self, loop_id: str) -> dict[str, Any]:
@@ -398,7 +398,7 @@ class TuiDaemonSession:
         binder that produced the original cards.
 
         Args:
-            loop_id: AgentLoop id.
+            loop_id: StrangeLoop id.
 
         Returns:
             ``SimpleNamespace`` with ``cards: list[dict]``, ``seq: int``,
@@ -449,7 +449,7 @@ class TuiDaemonSession:
         graph config objects over the wire.
 
         Args:
-            loop_id: AgentLoop id.
+            loop_id: StrangeLoop id.
 
         Returns:
             ``types.SimpleNamespace`` with ``values: dict[str, Any]``.
@@ -489,7 +489,7 @@ class TuiDaemonSession:
         """Merge partial state into the loop on the daemon host (``loop_state_update`` RPC).
 
         Args:
-            loop_id: AgentLoop id.
+            loop_id: StrangeLoop id.
             values: Channel updates (e.g. ``messages``) in JSON-serializable form.
             timeout: RPC wait budget in seconds.
             as_node: Optional LangGraph node to attribute the write to. When

@@ -44,7 +44,7 @@ It also defines graph-entry **intent classification** so conversational fast pat
 When RFC-220 is **Implemented**:
 
 - RFC-201 remains valid for **conceptual** Layer 2 responsibilities (single goal, PlanResult, delegation to CoreAgent) but its **imperative loop construction** is **obsolete**.
-- Code paths that expose “AgentLoop as a hand-written async generator loop” are **deleted**, not deprecated.
+- Code paths that expose “StrangeLoop as a hand-written async generator loop” are **deleted**, not deprecated.
 - Documentation that describes Layer 2 as a Python `while` loop **must** be updated to the Loop Graph model.
 
 Downstream specs (RFC-203, RFC-214, RFC-216, RFC-217) **must** be reconciled in the same implementation batch so they do not assume the removed driver.
@@ -83,7 +83,7 @@ Files on disk remain aligned with existing layout: loop runtime under **`$SOOTHE
 
 ### Nodes (normative names)
 
-1. **`init_or_resume`** — Load or initialize loop checkpoint via `AgentLoopStateManager`; construct `LoopState`; run single-shot intent classification for this loop entry; handle thread-continuation bootstrap where applicable.
+1. **`init_or_resume`** — Load or initialize loop checkpoint via `StrangeLoopStateManager`; construct `LoopState`; run single-shot intent classification for this loop entry; handle thread-continuation bootstrap where applicable.
 2. **`iteration_start`** — Iteration begin hooks; checkpoint anchors “start” (RFC-218).
 3. **`intent_fast_path`** — Terminal branch for intent `quiz`; emits graph event payload for runner to execute direct response flow without entering planning nodes.
 4. **`bounded_evidence_gather`** — Pre-plan placeholder node in current implementation (retained for topology compatibility).
@@ -128,7 +128,7 @@ Validation **rejects** plans where any step violates binding rules.
 
 **Cut-over simplification:** Implementation **may** consolidate loop orchestration persistence into **one** authoritative mechanism:
 
-- Preferred: LangGraph checkpointer for the Loop Graph keyed by `loop_id`, with `AgentLoopStateManager` adapted as the serializer/deserializer for loop checkpoint rows **or** migration of stored rows into the LangGraph store — **single writer**, no duplicate iteration records.
+- Preferred: LangGraph checkpointer for the Loop Graph keyed by `loop_id`, with `StrangeLoopStateManager` adapted as the serializer/deserializer for loop checkpoint rows **or** migration of stored rows into the LangGraph store — **single writer**, no duplicate iteration records.
 
 Exact consolidation is specified in the Implementation Guide; this RFC requires **no** duplicate conflicting sources of truth after implementation completes.
 
@@ -138,7 +138,7 @@ Exact consolidation is specified in the Implementation Guide; this RFC requires 
 
 The runner **consumes** `compiled.astream` (and compatible modes) from the Loop Graph and maps stream chunks to existing progress contracts (`RFC-614`, event catalog). Execute-phase suppression rules (e.g. IG-304) **remain**; breaking changes to client payloads are allowed **only** if RFC-614 / event catalog updates ship in the same change batch.
 
-Intent classification executed in the graph entry node **must** attach Langfuse metadata consistent with loop tracing (`component=agent_loop.intent_classification`, `phase=agent_loop_graph`, `loop_id`, `thread_id`) so classifier spans are correlated with the same session trace as plan/execute nodes.
+Intent classification executed in the graph entry node **must** attach Langfuse metadata consistent with loop tracing (`component=strange_loop.intent_classification`, `phase=strange_loop_graph`, `loop_id`, `thread_id`) so classifier spans are correlated with the same session trace as plan/execute nodes.
 
 ---
 

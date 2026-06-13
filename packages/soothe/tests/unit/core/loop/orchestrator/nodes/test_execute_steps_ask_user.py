@@ -51,12 +51,12 @@ def _make_ctx(
     scratch.decision = decision
     scratch.plan_result = MagicMock()
 
-    agent_loop = MagicMock()
-    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
-    agent_loop.core_agent.graph.checkpointer = None
+    strange_loop = MagicMock()
+    strange_loop.config.agent.loop.limits.max_parallel_steps = 4
+    strange_loop.core_agent.graph.checkpointer = None
 
     return LoopRuntimeContext(
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),
@@ -423,14 +423,14 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     scratch.decision = None
     scratch.plan_result = None
 
-    agent_loop = MagicMock()
-    agent_loop.config.agent.loop.limits.max_parallel_steps = 4
-    agent_loop.core_agent.graph.checkpointer = None
+    strange_loop = MagicMock()
+    strange_loop.config.agent.loop.limits.max_parallel_steps = 4
+    strange_loop.core_agent.graph.checkpointer = None
 
     checkpoint_obj = MagicMock()
 
     ctx = LoopRuntimeContext(
-        agent_loop=agent_loop,
+        strange_loop=strange_loop,
         state_manager=_StateManager(),
         anchor_manager=MagicMock(),
         goal_context_manager=MagicMock(),

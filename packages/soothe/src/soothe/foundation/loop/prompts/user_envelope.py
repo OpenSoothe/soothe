@@ -19,7 +19,7 @@ from soothe.foundation.loop.prompts.user_message import (
 if TYPE_CHECKING:
     from soothe.foundation.loop.state.schemas import PriorProgressDigest
 
-# Strip legacy AgentLoop suffix accidentally baked into goal text or stored checkpoints.
+# Strip legacy StrangeLoop suffix accidentally baked into goal text or stored checkpoints.
 _GOAL_ITERATION_SUFFIX_RE = re.compile(
     r"\s*\(iteration\s+\d+/\d+\)\s*$",
     re.IGNORECASE,

@@ -42,8 +42,8 @@ class ContextProtocol(Protocol):
 **Retrieval Authority Clarification** (brainstorming-derived architectural separation):
 
 - **ContextProtocol ownership**: Retrieval module implementation (RFC-400 `ContextRetrievalModule`), algorithm versions, stable API boundary
-- **AgentLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output (RFC-201 §61-78)
-- **Architectural principle**: Retrieval algorithms evolve behind stable API in ContextProtocol, preserving integration contracts with AgentLoop
+- **StrangeLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output (RFC-201 §61-78)
+- **Architectural principle**: Retrieval algorithms evolve behind stable API in ContextProtocol, preserving integration contracts with StrangeLoop
 
 **Implementation Status**:
 - ✅ ContextProtocol interface defined (RFC-400)
@@ -165,9 +165,9 @@ class PlannerProtocol(Protocol):
 - IG-028: DirectPlanner → SimplePlanner
 - IG-036: Removed SubagentPlanner indirection
 - IG-149: Implemented RFC-604 two-phase Plan architecture
-- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner; planning merged into `soothe.core.agent_loop` (historically `cognition.*` paths)
+- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner; planning merged into `soothe.core.strange_loop` (historically `cognition.*` paths)
 
-**Module location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (after IG-150 consolidation; package `soothe.core`)
+**Module location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (after IG-150 consolidation; package `soothe.core`)
 
 ## Module 4: PolicyProtocol
 

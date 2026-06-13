@@ -1,4 +1,4 @@
-"""Goal-level context management for AgentLoop (RFC-217)."""
+"""Goal-level context management for StrangeLoop (RFC-217)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config.models import GoalContextConfig
-    from soothe.foundation.loop.state.manager import AgentLoopStateManager
+    from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ def _extract_result_summary(report: str) -> str:
 
 
 class GoalContextManager:
-    """Unified goal-level context provider for AgentLoop.
+    """Unified goal-level context provider for StrangeLoop.
 
     Mirrors CoreAgent's separation: conversation history (thread state) vs
     goal-level summaries (loop checkpoint). Provides previous goal context
@@ -162,13 +162,13 @@ class GoalContextManager:
     Cross-thread scope: Execute briefing includes goals from all threads.
 
     Attributes:
-        state_manager: AgentLoopStateManager for checkpoint access
+        state_manager: StrangeLoopStateManager for checkpoint access
         config: GoalContextConfig with plan_limit and execute_limit
     """
 
     def __init__(
         self,
-        state_manager: AgentLoopStateManager,
+        state_manager: StrangeLoopStateManager,
         config: GoalContextConfig | None = None,
     ) -> None:
         """Initialize with state manager and configuration.

@@ -63,7 +63,7 @@ Built-in renderers for MVP:
 | Renderer | Event families |
 | --- | --- |
 | Assistant markdown bubble | final `AIMessage` chunks |
-| Reasoning / plan card (collapsed) | `soothe.cognition.agent_loop.*`, `soothe.cognition.plan.*` |
+| Reasoning / plan card (collapsed) | `soothe.cognition.strange_loop.*`, `soothe.cognition.plan.*` |
 | Tool card (collapsible activity preview) | `soothe.tool.execution.{started,completed,error}` |
 | File-change diff card | file-edit wire frames (mirrors `tui/widgets/file_change_preview.py`) |
 | Subagent progress chip | `soothe.subagent.<agent>.<signal>` |

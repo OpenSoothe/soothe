@@ -57,7 +57,7 @@ def _configurable_goal_synthesis() -> bool:
 
 
 def _configurable_step_subagent() -> str | None:
-    """Return AgentLoop per-step subagent hint from LangGraph RunnableConfig when set.
+    """Return StrangeLoop per-step subagent hint from LangGraph RunnableConfig when set.
 
     Executor passes ``soothe_step_subagent`` in ``config.configurable`` (from wire
     ``preferred_subagent`` when ``routing_hint=subagent``). This must drive the same task-only enforcement as
@@ -117,7 +117,7 @@ class _SystemPromptState(TypedDict):
     them survive across nodes.
 
     Declares:
-      - ``routing_classification`` so AgentLoop's complexity hint reaches the
+      - ``routing_classification`` so StrangeLoop's complexity hint reaches the
         prompt builder (IG-383).
       - ``workspace`` and ``git_status`` so the executor's ``_execute_graph_input``
         and ``WorkspaceContextMiddleware.abefore_agent`` writes propagate to
@@ -153,7 +153,7 @@ class SystemPromptMiddleware(AgentMiddleware):
     - complex: Full prompt with all context
 
     This middleware expects ``routing_classification`` in agent state before the
-    first model call (runner / AgentLoop inject).
+    first model call (runner / StrangeLoop inject).
 
     Args:
         config: Soothe configuration for resolving prompt templates.
@@ -504,7 +504,7 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         # Agent loop output contract (execute-step only)
         if state and state.get("current_decision"):
-            contract_section = self._build_agent_loop_output_contract_section(self._config)
+            contract_section = self._build_strange_loop_output_contract_section(self._config)
             if contract_section:
                 static_sections.append(contract_section)
 
@@ -861,10 +861,10 @@ class SystemPromptMiddleware(AgentMiddleware):
         state["tool_activation"] = activation
         return f"<AVAILABLE_TOOLS>\n{text}\n</AVAILABLE_TOOLS>"
 
-    def _build_agent_loop_output_contract_section(
+    def _build_strange_loop_output_contract_section(
         self, config: SootheConfig | None = None
     ) -> str | None:
-        """Build <AGENT_LOOP_OUTPUT_CONTRACT> section for Layer 2 agent loop.
+        """Build <STRANGE_LOOP_OUTPUT_CONTRACT> section for Layer 2 agent loop.
 
         Args:
             config: Optional SootheConfig to check if contract is enabled.
@@ -872,16 +872,16 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             XML section string, or None if contract is disabled.
         """
-        if config is None or not config.agent.loop.agent_loop_output_contract_enabled:
+        if config is None or not config.agent.loop.strange_loop_output_contract_enabled:
             return None
 
         return (
-            "<AGENT_LOOP_OUTPUT_CONTRACT>\n"
+            "<STRANGE_LOOP_OUTPUT_CONTRACT>\n"
             "- After tool or subagent results arrive, add at most two short wrap-up sentences in your own words.\n"
             "- Do NOT paste the full tool/subagent output again unless the user explicitly asked for a "
             "verbatim repeat.\n"
             "- If the tool output already satisfies the user-visible deliverable, stop there.\n"
-            "</AGENT_LOOP_OUTPUT_CONTRACT>"
+            "</STRANGE_LOOP_OUTPUT_CONTRACT>"
         )
 
     @staticmethod
@@ -964,7 +964,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         elif step_enforce:
             directive = step_subagent
             logger.info(
-                "AgentLoop step subagent hint (enforce): soothe_step_subagent=%s",
+                "StrangeLoop step subagent hint (enforce): soothe_step_subagent=%s",
                 step_subagent,
             )
             request.state["_subagent_routing_directive"] = directive

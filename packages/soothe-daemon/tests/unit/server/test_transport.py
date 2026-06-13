@@ -60,7 +60,7 @@ async def test_broadcast_allows_client_catalog_events() -> None:
     msg = {
         "type": "event",
         "loop_id": "loop-1",
-        "data": {"type": "soothe.cognition.agent_loop.started", "goal": "x"},
+        "data": {"type": "soothe.cognition.strange_loop.started", "goal": "x"},
     }
     await SootheDaemon._broadcast(daemon, msg)
 

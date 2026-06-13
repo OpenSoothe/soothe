@@ -264,13 +264,13 @@ projection = await context.project("goal", token_budget=2000)
 
 ## Integration Points
 
-### AgentLoop Integration
+### StrangeLoop Integration
 
-CoreAgent serves as Layer 1 foundation for AgentLoop:
+CoreAgent serves as Layer 1 foundation for StrangeLoop:
 
 ```python
-# AgentLoop uses CoreAgent for Execute phase
-class AgentLoop:
+# StrangeLoop uses CoreAgent for Execute phase
+class StrangeLoop:
     async def execute_step(self, step: PlanStep):
         # Delegate to CoreAgent
         async for chunk in self.agent.astream(step.prompt):
@@ -384,7 +384,7 @@ subagents:
 ## Related Documentation
 
 - **[SootheRunner](runner.md)** - Protocol orchestration
-- **[AgentLoop](agent-loop.md)** - Plan-Execute loop
+- **[StrangeLoop](agent-loop.md)** - Plan-Execute loop
 - **[Protocol Resolver](resolver.md)** - Protocol wiring
 - **[Middleware](../architecture/middleware.md)** - Middleware details
 - **[RFC-100](../../specs/RFC-100-coreagent-runtime.md)** - Full specification

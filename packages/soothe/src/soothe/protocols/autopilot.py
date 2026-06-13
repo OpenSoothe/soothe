@@ -1,7 +1,7 @@
 """AutopilotProtocol - Layer 3 goal lifecycle and dispatch interface.
 
 Autopilot manages goal DAG orchestration, lifecycle, and dispatch to
-AgentLoop workers. It is the highest abstraction layer, coordinating
+StrangeLoop workers. It is the highest abstraction layer, coordinating
 multi-goal execution with backoff reasoning.
 """
 
@@ -29,10 +29,10 @@ class AutopilotProtocol(Protocol):
     - Goal DAG orchestration (create, schedule, dependencies)
     - Goal lifecycle (pending, active, completed, failed)
     - Backoff reasoning on failure
-    - Dispatch to AgentLoop workers
+    - Dispatch to StrangeLoop workers
 
     This protocol enables alternative Autopilot implementations while
-    maintaining AgentLoop isolation (Autopilot dispatches to Loop,
+    maintaining StrangeLoop isolation (Autopilot dispatches to Loop,
     Loop doesn't know Autopilot internals).
 
     Key responsibilities:

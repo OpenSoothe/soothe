@@ -5,13 +5,13 @@ runs ``SootheRunner.astream(autopilot_job=...)``. ``astream`` routes that
 case to ``_run_single_autopilot_goal`` defined here.
 
 This mixin owns the **worker side** of the RFC-222 contract: take one
-``GoalDispatchEnvelope``, hydrate AgentLoop, run it, emit exactly one
+``GoalDispatchEnvelope``, hydrate StrangeLoop, run it, emit exactly one
 ``GoalCompletionChunk`` with a ``GoalDispatchContextContribution``, then a
 terminal ``done`` chunk. The runner never reaches into ``GoalEngine`` from
 this path — autopilot owns DAG state on the daemon side.
 
 Phase B (this file) ships a minimal working implementation:
-- Plumbs the goal through ``AgentLoop.run_with_progress``.
+- Plumbs the goal through ``StrangeLoop.run_with_progress``.
 - Streams the progress events as custom chunks.
 - Synthesizes a small ``GoalDispatchContextContribution`` from the final
   ``PlanResult`` (no full context extraction yet — that's later phase work).
@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.autopilot.engine.models import (
     Finding,
     GoalDispatchContextContribution,
@@ -35,7 +35,7 @@ from soothe.foundation.autopilot.engine.models import (
     ToolCallStats,
 )
 from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
-from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.state.schemas import PlanResult
 from soothe.protocols.planner import GoalDirective
 
@@ -75,8 +75,8 @@ class AutopilotWorkerMixin:
                 pre-merged GoalDispatchContextBundle, deadline, attempt.
             thread_id: Thread id for this attempt (autopilot supplies
                 ``autopilot__goal_<id>__attempt_<N>``).
-            workspace: Resolved workspace path for AgentLoop's CoreAgent.
-            max_iterations: Upper bound for AgentLoop iterations.
+            workspace: Resolved workspace path for StrangeLoop's CoreAgent.
+            max_iterations: Upper bound for StrangeLoop iterations.
 
         Yields:
             Stream chunks. The penultimate chunk is always a
@@ -95,13 +95,13 @@ class AutopilotWorkerMixin:
         # RFC-204 Group C: Create per-goal proposal queue for Layer 2 tools
         proposal_queue = ProposalQueue()
 
-        # Lazy async checkpointer (PostgreSQL pool) must be wired before AgentLoop
+        # Lazy async checkpointer (PostgreSQL pool) must be wired before StrangeLoop
         # touches CoreAgent checkpoints for anchor capture / thread forks.
         await self._ensure_checkpointer_initialized()  # type: ignore[attr-defined]
 
-        # Build a fresh AgentLoop for this dispatch. The CoreAgent / planner
+        # Build a fresh StrangeLoop for this dispatch. The CoreAgent / planner
         # are shared (workers serve many jobs over their lifetime).
-        agent_loop = AgentLoop(
+        strange_loop = StrangeLoop(
             core_agent=self._agent,  # type: ignore[attr-defined]
             loop_planner=self._planner,  # type: ignore[attr-defined]
             config=self._config,  # type: ignore[attr-defined]
@@ -138,13 +138,13 @@ class AutopilotWorkerMixin:
 
         plan_result: PlanResult | None = None
         try:
-            async for event_type, event_data in agent_loop.run_with_progress(
+            async for event_type, event_data in strange_loop.run_with_progress(
                 goal=job.goal_description,
                 thread_id=tid,
                 workspace=workspace,
                 max_iterations=max_iterations
                 if max_iterations
-                else DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+                else DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
                 loop_id=tid,
                 clarification_policy=clarification_policy,
                 proposal_queue=proposal_queue,  # RFC-204 Group C
@@ -317,7 +317,7 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
     to the Reflection model which flows through PlanResult.
 
     Args:
-        plan_result: The final PlanResult from AgentLoop execution.
+        plan_result: The final PlanResult from StrangeLoop execution.
 
     Returns:
         List of GoalDirective objects (may be empty).

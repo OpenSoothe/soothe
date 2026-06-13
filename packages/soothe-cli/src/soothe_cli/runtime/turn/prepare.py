@@ -11,12 +11,12 @@ from typing import Any
 
 from langchain_core.messages import ToolMessage
 from soothe_sdk.core.events import (
-    AGENT_LOOP_COMPLETED,
-    AGENT_LOOP_PLAN_DECISION,
-    AGENT_LOOP_STARTED,
-    AGENT_LOOP_STEP_COMPLETED,
-    AGENT_LOOP_STEP_QUEUED,
-    AGENT_LOOP_STEP_STARTED,
+    STRANGE_LOOP_COMPLETED,
+    STRANGE_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_STARTED,
+    STRANGE_LOOP_STEP_COMPLETED,
+    STRANGE_LOOP_STEP_QUEUED,
+    STRANGE_LOOP_STEP_STARTED,
 )
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.loop_stream import assistant_output_phase
@@ -38,12 +38,12 @@ _MAIN_LOOP_CUSTOM_TYPES = frozenset(
     {
         STREAM_TOOL_CALL_UPDATE,
         TOOL_CALL_UPDATES_BATCH,
-        AGENT_LOOP_STARTED,
-        AGENT_LOOP_COMPLETED,
-        AGENT_LOOP_PLAN_DECISION,
-        AGENT_LOOP_STEP_STARTED,
-        AGENT_LOOP_STEP_QUEUED,
-        AGENT_LOOP_STEP_COMPLETED,
+        STRANGE_LOOP_STARTED,
+        STRANGE_LOOP_COMPLETED,
+        STRANGE_LOOP_PLAN_DECISION,
+        STRANGE_LOOP_STEP_STARTED,
+        STRANGE_LOOP_STEP_QUEUED,
+        STRANGE_LOOP_STEP_COMPLETED,
     }
 )
 

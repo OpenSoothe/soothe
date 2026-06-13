@@ -1142,7 +1142,7 @@ sequenceDiagram
 
 - [RFC-000: System Conceptual Design](../specs/RFC-000-system-conceptual-design.md)
 - [RFC-300: Context and Memory Architecture Design](../specs/RFC-300-context-memory-protocols.md)
-- [RFC-201: AgentLoop Plan–Execute Loop](../specs/RFC-201-agentloop-plan-execute-loop.md)
+- [RFC-201: StrangeLoop Plan–Execute Loop](../specs/RFC-201-agentloop-plan-execute-loop.md)
 - [RFC-200: Autonomous Goal Management](../specs/RFC-200-autonomous-goal-management.md)
 - [RFC-450: Daemon Communication Protocol](../specs/RFC-450-daemon-communication-protocol.md)
 - [RFC-452: Unified Thread Management](../specs/RFC-452-unified-thread-management.md)

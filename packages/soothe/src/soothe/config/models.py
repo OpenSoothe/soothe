@@ -365,7 +365,7 @@ class PersistenceConfig(BaseModel):
         default_backend: Default backend for new protocols (can be overridden).
         metadata_sqlite_path: Path for ThreadInfo metadata storage (SQLitePersistStore).
             None defaults to $SOOTHE_DATA_DIR/metadata.db.
-        checkpoint_sqlite_path: Path for shared checkpoints database (LangGraph + AgentLoop).
+        checkpoint_sqlite_path: Path for shared checkpoints database (LangGraph + StrangeLoop).
             None defaults to $SOOTHE_DATA_DIR/soothe_checkpoints.db (IG-055 unified SQLite).
     """
 
@@ -381,7 +381,7 @@ class PersistenceConfig(BaseModel):
     }
     """Named database mapping for each component (RFC-612).
 
-    Note: AgentLoop checkpoints use the same 'checkpoints' database as LangGraph
+    Note: StrangeLoop checkpoints use the same 'checkpoints' database as LangGraph
     with separate table names for schema isolation.
     """
 
@@ -395,7 +395,7 @@ class PersistenceConfig(BaseModel):
         ge=1,
         le=32,
         description=(
-            "psycopg ``AsyncConnectionPool`` min_size for shared LangGraph and AgentLoop pools. "
+            "psycopg ``AsyncConnectionPool`` min_size for shared LangGraph and StrangeLoop pools. "
             "Keeps warm connections ready under thread_pool load."
         ),
     )
@@ -415,7 +415,7 @@ class PersistenceConfig(BaseModel):
         ge=1,
         le=128,
         description=(
-            "Shared AgentLoop persistence pool max_size per process (checkpoints DB). "
+            "Shared StrangeLoop persistence pool max_size per process (checkpoints DB). "
             "Thread pool mode: single daemon-level singleton shared by all threads (IG-406). "
             "Worker pool mode: each worker process creates its own singleton (not cross-process shared). "
             "Default 24 with postgres_pool_min_size=4; tune with thread_pool concurrency if needed."
@@ -608,14 +608,14 @@ class AutonomousConfig(BaseModel):
 
     # === Loop pool (RFC-222) ===
     # Distinct from `max_parallel_goals`: `max_loops` caps worker capacity in
-    # the AgentLoop pool (loops can be reused for parent→child lineage), while
+    # the StrangeLoop pool (loops can be reused for parent→child lineage), while
     # `max_parallel_goals` caps the number of goals actively scheduled at once.
     # They can differ — e.g. max_loops=8 for lineage reuse, max_parallel_goals=4.
     max_loops: int = Field(
         default=4,
         ge=1,
         le=32,
-        description="Maximum concurrent AgentLoop workers in the autopilot pool (RFC-222)",
+        description="Maximum concurrent StrangeLoop workers in the autopilot pool (RFC-222)",
     )
     loop_idle_timeout: int = Field(
         default=300,
@@ -839,7 +839,7 @@ class ToolRetryConfig(BaseModel):
 
 
 class InfrastructureLimitsConfig(BaseModel):
-    """Infrastructure limits configuration (IG-407: unified agent_loop.limits).
+    """Infrastructure limits configuration (IG-407: unified strange_loop.limits).
 
     Consolidates execution limits and concurrency controls into flat structure.
     ConcurrencyPolicy fields are flattened directly into this config (no nested concurrency).
@@ -981,7 +981,7 @@ class OutputStreamingConfig(BaseModel):
         default="adaptive",
         description=(
             "Delivery mode. batch: buffer entire goal_completion and emit one frame "
-            "at agent_loop.completed. adaptive: stream until adaptive_threshold_chars, "
+            "at strange_loop.completed. adaptive: stream until adaptive_threshold_chars, "
             "then emit block-sized AIMessageChunk frames. streaming: raw passthrough "
             "at the LLM's native generation rate (no buffering)."
         ),
@@ -1069,7 +1069,7 @@ class OutputStreamingConfig(BaseModel):
 
 
 class ContextEngineConfig(BaseModel):
-    """Context Engine integration for AgentLoop (RFC-624 Phase 4).
+    """Context Engine integration for StrangeLoop (RFC-624 Phase 4).
 
     ContextEngine is always active and replaces PlanManager, LoopWorkingMemory,
     and GoalContextManager as the internal state backend. The existing prompt
@@ -1085,18 +1085,18 @@ class ContextEngineConfig(BaseModel):
     )
 
 
-class AgentLoopConfig(BaseModel):
+class StrangeLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
 
     Unified configuration consolidating agentic behavior fields and infrastructure limits.
-    Behavior fields are placed directly under agent_loop.* for easy access (max 2 levels nesting).
-    Infrastructure limits are grouped in dedicated agent_loop.limits.* subsection.
+    Behavior fields are placed directly under strange_loop.* for easy access (max 2 levels nesting).
+    Infrastructure limits are grouped in dedicated strange_loop.limits.* subsection.
 
     Args:
         enabled: Enable agent loop mode.
         max_iterations: Maximum agent loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
-        agent_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
+        strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
             assistant text when appropriate, or use adaptive heuristics (IG-199).
         working_memory: Working memory / spill configuration (RFC-203).
@@ -1131,9 +1131,9 @@ class AgentLoopConfig(BaseModel):
         le=20,
     )
 
-    agent_loop_output_contract_enabled: bool = Field(
+    strange_loop_output_contract_enabled: bool = Field(
         default=True,
-        description="Instruct CoreAgent not to paste full tool outputs again during AgentLoop Execute phase",
+        description="Instruct CoreAgent not to paste full tool outputs again during StrangeLoop Execute phase",
     )
 
     final_response: AgenticFinalResponseMode = Field(
@@ -1596,7 +1596,7 @@ class ProgressiveSkillsConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Fraction of AgentLoopConfig.context_window_limit (chars, not tokens) "
+            "Fraction of StrangeLoopConfig.context_window_limit (chars, not tokens) "
             "available for the <AVAILABLE_SKILLS> listing per turn."
         ),
     )
@@ -1653,7 +1653,7 @@ class ProgressiveMCPConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Fraction of AgentLoopConfig.context_window_limit (chars, not tokens) "
+            "Fraction of StrangeLoopConfig.context_window_limit (chars, not tokens) "
             "available for the <AVAILABLE_MCP_TOOLS> listing per turn."
         ),
     )
@@ -1676,7 +1676,7 @@ class AgentConfig(BaseModel):
     - Basic: name, system_prompt (user identity)
     - Behavior: goal_completion_mode, final_response (response mode)
     - Autonomous: self-driving configuration (merged autonomous+autopilot)
-    - Loop: AgentLoop internal tuning
+    - Loop: StrangeLoop internal tuning
     - Protocols: Planner, Policy, Durability backend selection
 
     Args:
@@ -1685,7 +1685,7 @@ class AgentConfig(BaseModel):
         goal_completion_mode: How planner completion combines with execution heuristics.
         final_response: Whether to always synthesize final report or use adaptive heuristics.
         autonomous: Unified self-driving configuration (IG-434: merged autonomous+autopilot).
-        loop: AgentLoop configuration (IG-407: unified agentic+execution).
+        loop: StrangeLoop configuration (IG-407: unified agentic+execution).
         protocols: Protocol backends configuration (planner, policy, durability).
     """
 
@@ -1729,10 +1729,10 @@ class AgentConfig(BaseModel):
     )
     """Controls 24/7 self-running behavior for both goal-level and daemon-level."""
 
-    # === LOOP (AgentLoop Internal Tuning) ===
-    loop: AgentLoopConfig = Field(
-        default_factory=AgentLoopConfig,
-        description="AgentLoop configuration (IG-407: unified agentic+execution)",
+    # === LOOP (StrangeLoop Internal Tuning) ===
+    loop: StrangeLoopConfig = Field(
+        default_factory=StrangeLoopConfig,
+        description="StrangeLoop configuration (IG-407: unified agentic+execution)",
     )
     """Internal tuning for the agent loop execution mode."""
 

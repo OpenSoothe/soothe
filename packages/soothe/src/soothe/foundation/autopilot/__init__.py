@@ -4,7 +4,7 @@ Autopilot manages:
 - Goal DAG orchestration (create, schedule, dependencies)
 - Goal lifecycle (pending, active, completed, failed)
 - Backoff reasoning on failure
-- Dispatch to AgentLoop workers
+- Dispatch to StrangeLoop workers
 
 This package merges GoalEngine and AutopilotService as unified Layer 3.
 

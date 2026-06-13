@@ -226,7 +226,7 @@ async def subscribe_loop(
 ) -> str
 ```
 
-Subscribe to events for a specific AgentLoop.
+Subscribe to events for a specific StrangeLoop.
 
 **Parameters**:
 - `thread_id`: Thread ID to subscribe to
@@ -583,7 +583,7 @@ class SootheEvent(BaseModel):
     """Unix timestamp when event was created."""
     
     loop_id: str | None = None
-    """AgentLoop ID if event is loop-scoped."""
+    """StrangeLoop ID if event is loop-scoped."""
     
     thread_id: str | None = None
     """Thread ID for persistence scope."""

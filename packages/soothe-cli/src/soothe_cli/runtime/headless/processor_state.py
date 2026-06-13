@@ -38,7 +38,7 @@ class ProcessorState:
     # Current plan state (updated on plan events)
     current_plan: Plan | None = None
 
-    # Active AgentLoop id from daemon status frames (``loop_id``)
+    # Active StrangeLoop id from daemon status frames (``loop_id``)
     loop_id: str = ""
 
     # Internal context tracking (suppress internal LLM responses)

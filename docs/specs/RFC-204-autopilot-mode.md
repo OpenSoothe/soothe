@@ -640,10 +640,10 @@ def add_finding(
 async def _run_single_autopilot_goal(...):
     proposal_queue = ProposalQueue()
 
-    async for event in agent_loop.run_with_progress(..., proposal_queue=proposal_queue):
+    async for event in strange_loop.run_with_progress(..., proposal_queue=proposal_queue):
         # ... handle events ...
 
-    # Drain and convert proposals after AgentLoop completes
+    # Drain and convert proposals after StrangeLoop completes
     proposals = proposal_queue.drain()
     proposal_directives = _proposals_to_directives(proposals, source_goal_id=job.goal_id)
 
@@ -869,7 +869,7 @@ async def apply_directives(
 
 - [RFC-200](./RFC-200-autonomous-goal-management.md) — Layer 3 Foundation
 - [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) — Layer 2 Execution
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) — Unified AgentLoop execution
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) — Unified StrangeLoop execution
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) — Daemon Protocol
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 
@@ -880,7 +880,7 @@ async def apply_directives(
 - Added **Gap 5a** (GoalCompletionChunk.goal_directives) and **Gap 5b** (GoalEngine.apply_directives) to gap inventory.
 - Defined **dual-path architecture:** proactive (Layer 2 tools → ProposalQueue) and reactive (Reflection → goal_directives), unified at GoalCompletionChunk.
 - Specified `suggest_goal` and `add_finding` tool implementations with full signatures.
-- Added Runner wiring for ProposalQueue lifecycle, AgentLoop injection, and daemon-side `_route_chunk` consumer.
+- Added Runner wiring for ProposalQueue lifecycle, StrangeLoop injection, and daemon-side `_route_chunk` consumer.
 - Defined implementation phases C.1, C.2, C.3 for Group C.
 - Related design draft: `docs/drafts/2026-06-07-goal-directive-proposal-integration-design.md`
 

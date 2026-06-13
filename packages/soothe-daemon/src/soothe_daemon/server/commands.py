@@ -4,7 +4,7 @@ Structured command request/response handlers for slash commands.
 Each handler executes a specific command and returns structured data.
 
 IG-408 naming:
-    - Wire / clients: ``loop_id`` (AgentLoop subscription scope).
+    - Wire / clients: ``loop_id`` (StrangeLoop subscription scope).
     - First positional argument to each ``_cmd_*`` handler: ``checkpoint_thread_id`` —
       the LangGraph / durability checkpoint key (``configurable.thread_id``) after
       ``bind_execution_thread_for_loop``; not a client routing id.

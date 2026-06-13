@@ -4,7 +4,7 @@
 
 ## Context
 
-Phase 3 adapters (`ContextEnginePlanAdapter`, `ContextEngineLedgerAdapter`, `ContextEngineGoalContextAdapter`) and the `AgentLoop.run_with_progress()` wiring are already implemented. The `ce_ledger_adapter` is stored on `LoopRuntimeContext` but never invoked — the dual-write strategy is non-functional.
+Phase 3 adapters (`ContextEnginePlanAdapter`, `ContextEngineLedgerAdapter`, `ContextEngineGoalContextAdapter`) and the `StrangeLoop.run_with_progress()` wiring are already implemented. The `ce_ledger_adapter` is stored on `LoopRuntimeContext` but never invoked — the dual-write strategy is non-functional.
 
 Additionally, the adapters have behavioral gaps vs. PlanManager: hardcoded constants, missing logging, and a fragile `GoalContextManager.__new__()` hack.
 
@@ -54,7 +54,7 @@ In `goal_completion.py`, replace `_append_goal_completion_ledger_pair()` direct 
 
 ### Step 7: Integration test
 
-Add `tests/integration/loop/test_ce_agent_loop_equivalence.py` with a parameterized test that runs the same AgentLoop scenario with CE enabled and disabled, asserting identical observable outputs.
+Add `tests/integration/loop/test_ce_strange_loop_equivalence.py` with a parameterized test that runs the same StrangeLoop scenario with CE enabled and disabled, asserting identical observable outputs.
 
 ### Step 8: Verification
 
@@ -73,7 +73,7 @@ Run `./scripts/verify_finally.sh` — zero lint errors, all tests pass.
 | `orchestrator/nodes/goal_completion.py` | Wire adapter into completion appends |
 | `orchestrator/nodes/plan_assess.py` | Pass `ctx.ce_ledger_adapter` to planner |
 | `orchestrator/nodes/plan_generate.py` | Pass `ctx.ce_ledger_adapter` to planner |
-| `tests/integration/loop/test_ce_agent_loop_equivalence.py` | New integration test |
+| `tests/integration/loop/test_ce_strange_loop_equivalence.py` | New integration test |
 
 ## Constraints
 

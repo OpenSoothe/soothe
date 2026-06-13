@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-from soothe.foundation.events import AgenticLoopCompletedEvent
+from soothe.foundation.events import StrangeLoopCompletedEvent
 
 
 def test_agentic_loop_completed_event_has_no_goal_completion_message_field() -> None:
-    ev = AgenticLoopCompletedEvent(
+    ev = StrangeLoopCompletedEvent(
         thread_id="t-1",
         status="done",
         goal_progress="complete",
         evidence_summary="ev",
     )
     d = ev.to_dict()
-    assert d["type"] == "soothe.cognition.agent_loop.completed"
+    assert d["type"] == "soothe.cognition.strange_loop.completed"
     assert "goal_completion_message" not in d
 
 
 def test_agentic_loop_completed_event_none_when_unset() -> None:
-    ev = AgenticLoopCompletedEvent(
+    ev = StrangeLoopCompletedEvent(
         thread_id="t-3",
         status="done",
         goal_progress="complete",

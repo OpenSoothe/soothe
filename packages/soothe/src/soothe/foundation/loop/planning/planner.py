@@ -130,7 +130,7 @@ def _detect_stuck_loop(state: LoopState) -> str | None:
 
 
 class LLMPlanner:
-    """PlannerProtocol for AgentLoop Plan phase using RFC-604 structured LLM calls.
+    """PlannerProtocol for StrangeLoop Plan phase using RFC-604 structured LLM calls.
 
     For simple/medium tasks. Produces flat plans (typically 1-3 steps).
 
@@ -233,35 +233,35 @@ class LLMPlanner:
         plan: Plan,
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
-        agentloop_result: Any | None = None,  # IG-154: AgentLoop GoalResult
+        agentloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult
     ) -> Reflection:
-        """Reflection with AgentLoop integration support (IG-154).
+        """Reflection with StrangeLoop integration support (IG-154).
 
-        When agentloop_result is provided (from AgentLoop delegation), uses
-        AgentLoop's evidence and judgment for reflection instead of step_results.
+        When agentloop_result is provided (from StrangeLoop delegation), uses
+        StrangeLoop's evidence and judgment for reflection instead of step_results.
 
         Args:
-            plan: The plan (None when AgentLoop handles execution).
-            step_results: Step execution results (empty when AgentLoop handles execution).
+            plan: The plan (None when StrangeLoop handles execution).
+            step_results: Step execution results (empty when StrangeLoop handles execution).
             goal_context: Goal DAG context for autonomous goal management.
-            agentloop_result: GoalResult from AgentLoop delegation (when delegating).
+            agentloop_result: GoalResult from StrangeLoop delegation (when delegating).
 
         Returns:
             Reflection with assessment and goal directives for DAG restructuring.
         """
-        # IG-154: AgentLoop integration - use GoalResult when available
+        # IG-154: StrangeLoop integration - use GoalResult when available
         if agentloop_result:
             logger.info(
-                "Using AgentLoop result for reflection (status=%s, progress=%s)",
+                "Using StrangeLoop result for reflection (status=%s, progress=%s)",
                 agentloop_result.status,
                 agentloop_result.goal_progress,
             )
 
-            # Build assessment from AgentLoop evidence
+            # Build assessment from StrangeLoop evidence
             evidence_preview = (
                 agentloop_result.evidence_summary[:300] if agentloop_result.evidence_summary else ""
             )
-            assessment = f"AgentLoop achieved {agentloop_result.goal_progress} progress. "
+            assessment = f"StrangeLoop achieved {agentloop_result.goal_progress} progress. "
 
             if agentloop_result.status == "completed":
                 assessment += f"Goal successfully completed. {evidence_preview}"
@@ -278,20 +278,20 @@ class LLMPlanner:
 
             # Generate feedback
             if agentloop_result.status == "completed":
-                feedback = "Goal achieved successfully via AgentLoop execution."
+                feedback = "Goal achieved successfully via StrangeLoop execution."
             elif agentloop_result.status == "failed":
                 feedback = "Goal not achieved. Consider alternative approach or create dependency prerequisites."
             else:
                 feedback = "Goal partially achieved. May need continuation or alternative strategy."
 
-            # Generate goal directives based on AgentLoop outcome
+            # Generate goal directives based on StrangeLoop outcome
             from soothe.protocols.planner import GoalDirective
 
             directives = []
 
             if agentloop_result.status == "failed" and goal_context:
                 # Failed goal: try alternative approach or decompose
-                logger.info("AgentLoop goal failed, generating recovery directives")
+                logger.info("StrangeLoop goal failed, generating recovery directives")
 
                 # Create alternative goal with lower priority
                 directives.append(
@@ -304,7 +304,7 @@ class LLMPlanner:
                             else 40,
                             10,
                         ),
-                        reason="Primary approach failed via AgentLoop",
+                        reason="Primary approach failed via StrangeLoop",
                     )
                 )
 
@@ -329,7 +329,7 @@ class LLMPlanner:
                         action="complete",
                         goal_id=goal_context.current_goal_id if goal_context else None,
                         description="Goal completed successfully",
-                        reason="AgentLoop achieved high/complete progress",
+                        reason="StrangeLoop achieved high/complete progress",
                     )
                 )
 

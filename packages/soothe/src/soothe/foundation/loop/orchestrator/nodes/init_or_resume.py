@@ -1,7 +1,7 @@
 """Loop Graph ``init_or_resume`` node (RFC-220).
 
 Hydrates intent/routing from the pre-classified intent passed by the runner.
-The runner handles quiz detection; loop continuation is derived in ``AgentLoop``
+The runner handles quiz detection; loop continuation is derived in ``StrangeLoop``
 from the checkpoint. This node just emits the classified intent for event streaming.
 """
 

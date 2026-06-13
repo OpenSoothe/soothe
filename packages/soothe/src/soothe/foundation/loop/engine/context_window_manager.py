@@ -1,4 +1,4 @@
-"""Automatic context window compaction for AgentLoop threads (RFC-224).
+"""Automatic context window compaction for StrangeLoop threads (RFC-224).
 
 This module provides ContextWindowManager which handles:
 - Estimating token count from checkpoint messages
@@ -92,7 +92,7 @@ class ContextCompactionResult:
 
 
 class ContextWindowManager:
-    """Manages automatic context window compaction for AgentLoop threads.
+    """Manages automatic context window compaction for StrangeLoop threads.
 
     RFC-224: After execute waves, check estimated context size and trigger
     in-place summarization when threshold exceeded.

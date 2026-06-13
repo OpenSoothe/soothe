@@ -1,9 +1,9 @@
-"""Generate structured metadata from tool results for AgentLoop reasoning.
+"""Generate structured metadata from tool results for StrangeLoop reasoning.
 
 This module extracts concise, structured metadata from tool execution results
-to enable AgentLoop reasoning without full content bloat.
+to enable StrangeLoop reasoning without full content bloat.
 
-RFC-211: AgentLoop Tool Result Optimization
+RFC-211: StrangeLoop Tool Result Optimization
 """
 
 from __future__ import annotations

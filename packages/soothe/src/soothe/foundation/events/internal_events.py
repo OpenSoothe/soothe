@@ -2,7 +2,7 @@
 
 This module defines event classes for the `soothe.internal.*` namespace.
 These events are used for internal coordination between:
-- AgentLoop (Layer 2) - emits goal completion/failure events
+- StrangeLoop (Layer 2) - emits goal completion/failure events
 - GoalEngine (Layer 3) - owns goal state, dispatches state changes
 - AutopilotService (Layer 3) - manages loop pool, scheduling
 
@@ -29,7 +29,7 @@ from soothe_sdk.core.events import SootheEvent
 
 
 class InternalGoalCompletedEvent(SootheEvent):
-    """Goal completed by AgentLoop.
+    """Goal completed by StrangeLoop.
 
     Emitted by AL when goal execution succeeds. Received by GoalEngine
     to update goal status and release file locks.
@@ -43,7 +43,7 @@ class InternalGoalCompletedEvent(SootheEvent):
 
 
 class InternalGoalFailedEvent(SootheEvent):
-    """Goal failed by AgentLoop.
+    """Goal failed by StrangeLoop.
 
     Emitted by AL when goal execution fails. Received by GoalEngine
     for backoff reasoning and DAG restructuring.
@@ -58,7 +58,7 @@ class InternalGoalFailedEvent(SootheEvent):
 
 
 class InternalGoalProgressEvent(SootheEvent):
-    """Goal progress update from AgentLoop.
+    """Goal progress update from StrangeLoop.
 
     Emitted periodically by AL during execution. Used by AP
     for loop health monitoring and progress tracking.
@@ -165,7 +165,7 @@ class InternalLoopSpawnedEvent(SootheEvent):
 
 
 class InternalFileLockedEvent(SootheEvent):
-    """File locked by AgentLoop.
+    """File locked by StrangeLoop.
 
     Emitted by FileLockMiddleware when file operation is intercepted.
     Received by GE to update file lock registry.

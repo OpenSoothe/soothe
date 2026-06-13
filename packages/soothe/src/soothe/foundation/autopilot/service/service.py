@@ -1,7 +1,7 @@
 """AutopilotService for Layer 3 orchestration (RFC-222).
 
 This module provides the AutopilotService class that manages:
-- Loop pool (AgentLoop worker creation, assignment, release)
+- Loop pool (StrangeLoop worker creation, assignment, release)
 - Scheduling loop (goal → loop assignment with lineage reuse)
 - Internal EventBus integration (AL ↔ GE ↔ AP coordination)
 - Dreaming mode transitions
@@ -53,19 +53,19 @@ logger = logging.getLogger(__name__)
 class AutopilotService:
     """Layer 3 Autopilot orchestration service.
 
-    Manages AgentLoop worker pool and goal scheduling with
+    Manages StrangeLoop worker pool and goal scheduling with
     lineage-aware loop reuse. Subscribes to GoalEngine events
     for reactive scheduling.
 
     Responsibilities:
-    - Spawn and manage AgentLoop workers (loop pool)
+    - Spawn and manage StrangeLoop workers (loop pool)
     - Schedule ready goals to available loops
     - Lineage-aware loop assignment (reuse parent's loop)
     - Send webhook notifications
     - Enter dreaming mode when no goals active
 
     NOT responsible for:
-    - Single-goal execution logic (AgentLoop owns this)
+    - Single-goal execution logic (StrangeLoop owns this)
     - Goal DAG management (GoalEngine owns this)
     - Tool/subagent execution (CoreAgent owns this)
 
@@ -997,7 +997,7 @@ class AutopilotService:
         return None
 
     async def _spawn_loop(self) -> LoopHandle:
-        """Spawn a new AgentLoop worker.
+        """Spawn a new StrangeLoop worker.
 
         Returns:
             New LoopHandle.

@@ -53,7 +53,7 @@ def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
     thread's full conversation into the synthesis model call.
 
     Args:
-        parent_thread_id: AgentLoop / user thread identifier.
+        parent_thread_id: StrangeLoop / user thread identifier.
 
     Returns:
         Unique checkpoint thread key (stable prefix for log grep).
@@ -128,7 +128,7 @@ class SynthesisGenerator:
         """Generate synthesis via CoreAgent streaming.
 
         Two-phase: classify scenario, then project evidence and stream via CoreAgent.
-        Uses isolated checkpoint thread to prevent replay of parent AgentLoop history.
+        Uses isolated checkpoint thread to prevent replay of parent StrangeLoop history.
 
         Args:
             goal: Goal description.

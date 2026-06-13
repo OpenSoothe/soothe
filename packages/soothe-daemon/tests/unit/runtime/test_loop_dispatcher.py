@@ -1,7 +1,7 @@
 """Tests for resume-time thread binding in ``bind_execution_thread_for_loop`` (IG-455).
 
-Per RFC-223 the main AgentLoop checkpoint thread id equals the ``loop_id``:
-the runtime in ``soothe.core.loop.engine.agent_loop`` normalizes any
+Per RFC-223 the main StrangeLoop checkpoint thread id equals the ``loop_id``:
+the runtime in ``soothe.core.loop.engine.strange_loop`` normalizes any
 caller-supplied id back to ``loop_id`` before saving the checkpoint, so the
 daemon must read from that same id on resume. Earlier code minted a separate
 UUID, causing ``loop_state_get`` and ``loop_messages`` to read an empty
@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 import soothe.config as soothe_config
 from soothe.foundation.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
+    StrangeLoopCheckpointPersistenceManager,
 )
 
 from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
@@ -27,7 +27,7 @@ class _CapturingDaemon:
     def __init__(self, config: Any) -> None:
         self.sent: list[dict[str, Any]] = []
         self._config = config
-        self._persistence_manager = AgentLoopCheckpointPersistenceManager(config=config)
+        self._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=config)
 
     async def _send_client_message(self, _client_id: Any, msg: dict[str, Any]) -> None:
         self.sent.append(msg)

@@ -21,7 +21,7 @@ def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
     mock_ls.thread_id = "thread-xyz"
 
     ctx = MagicMock()
-    ctx.agent_loop = mock_al
+    ctx.strange_loop = mock_al
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
 
@@ -30,7 +30,7 @@ def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
     assert out["configurable"]["thread_id"] == "loop-abc"
     meta = out["metadata"]
     assert meta["loop_id"] == "loop-abc"
-    assert meta["soothe_component"] == "agent_loop_graph"
+    assert meta["soothe_component"] == "strange_loop_graph"
     assert "goal_execution_loop" in meta["langfuse_tags"]
 
 
@@ -49,7 +49,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     mock_ls.thread_id = "conv-thread-9"
 
     ctx = MagicMock()
-    ctx.agent_loop = mock_al
+    ctx.strange_loop = mock_al
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
 
@@ -67,6 +67,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     assert kwargs["session_id"] == "conv-thread-9"
     assert kwargs["loop_id"] == "loop-1"
     assert (
-        kwargs["run_name"].endswith(":agent-loop-graph") or kwargs["run_name"] == "agent-loop-graph"
+        kwargs["run_name"].endswith(":strange-loop-graph")
+        or kwargs["run_name"] == "strange-loop-graph"
     )
     assert out["metadata"]["loop_id"] == "loop-1"

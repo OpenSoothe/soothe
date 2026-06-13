@@ -16,7 +16,6 @@ from unittest.mock import patch
 import pytest
 
 from soothe.foundation.loop.state.checkpoint import GoalExecutionRecord
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     EvidenceEntry,
@@ -24,19 +23,20 @@ from soothe.foundation.loop.state.schemas import (
     StepAction,
     StepResult,
 )
+from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.fixture
 def temp_state_manager():
-    """Create a temp-scoped AgentLoopStateManager (mirrors test_checkpoint_index_fix)."""
+    """Create a temp-scoped StrangeLoopStateManager (mirrors test_checkpoint_index_fix)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
         db_path = workspace / "test_loop_checkpoints.db"
         with patch(
-            "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            yield AgentLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
+            yield StrangeLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
 
 
 def _make_plan() -> PlanResult:
@@ -100,10 +100,10 @@ async def test_goal_record_round_trip_through_sqlite(temp_state_manager) -> None
 
     # Cold load via fresh manager pointing at the same DB.
     with patch(
-        "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
-        sm2 = AgentLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
         loaded = await sm2.load()
 
     assert loaded is not None

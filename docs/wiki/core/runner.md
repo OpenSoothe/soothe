@@ -26,7 +26,7 @@ SootheRunner.run(query)
     │  ├─ Memory restoration
     │  ├─ Context projection
     │  └─ Plan bootstrap
-    ├─ Agentic Loop (AgentLoop)
+    ├─ Agentic Loop (StrangeLoop)
     │  ├─ Plan phase
     │  ├─ Execute phase (CoreAgent)
     │  ├─ Reflect phase
@@ -74,7 +74,7 @@ Execute protocol operations around agent execution:
 
 ### 3. Agentic Loop Orchestration
 
-Orchestrate AgentLoop's Plan → Execute loop:
+Orchestrate StrangeLoop's Plan → Execute loop:
 
 ```python
 # Run agentic loop
@@ -126,7 +126,7 @@ Pre-stream helpers:
 
 #### AgenticMixin
 Agentic loop orchestration:
-- AgentLoop integration
+- StrangeLoop integration
 - Plan phase handling
 - Execute phase delegation
 
@@ -177,8 +177,8 @@ async def pre_stream_phase(self, query: str, thread_id: str):
 
 ```python
 async def agentic_loop_phase(self, query: str, state: dict):
-    # Run AgentLoop Plan → Execute
-    loop = AgentLoop(self.config)
+    # Run StrangeLoop Plan → Execute
+    loop = StrangeLoop(self.config)
     
     async for event in loop.run_with_progress(query):
         # Yield events
@@ -393,7 +393,7 @@ async def checkpoint_final(self, thread_id: str, result: dict):
 
 ```yaml
 runner:
-  max_iterations: 8      # Maximum AgentLoop iterations
+  max_iterations: 8      # Maximum StrangeLoop iterations
   checkpoint_interval: 5 # Checkpoint every N steps
   artifact_storage: true # Enable artifact storage
 ```
@@ -473,7 +473,7 @@ thread:
 ## Related Documentation
 
 - **[Agent Factory](agent-factory.md)** - CoreAgent creation
-- **[AgentLoop](agent-loop.md)** - Plan-Execute loop
+- **[StrangeLoop](agent-loop.md)** - Plan-Execute loop
 - **[Protocol Resolver](resolver.md)** - Protocol wiring
 - **[Thread Management](../user-guide/thread-management.md)** - User guide
 - **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** - Architecture spec
@@ -503,7 +503,7 @@ class SootheRunner:
         query: str,
         thread_id: str
     ) -> AsyncIterator[Event]:
-        """Run AgentLoop with protocol handling."""
+        """Run StrangeLoop with protocol handling."""
     
     async def run_autopilot_worker(
         self,

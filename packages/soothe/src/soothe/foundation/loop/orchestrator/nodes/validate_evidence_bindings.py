@@ -16,7 +16,8 @@ async def node_validate_evidence_bindings(
     ctx: LoopRuntimeContext, _state: dict[str, Any]
 ) -> dict[str, Any]:
     """Reject plans whose steps lack valid evidence refs when the ledger is non-empty."""
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     decision = ctx.scratch.decision
 
@@ -28,7 +29,7 @@ async def node_validate_evidence_bindings(
         )
         return {"last_outcome": "fatal"}
 
-    if not validate_plan_evidence(agent_loop.config, state, decision):
+    if not validate_plan_evidence(strange_loop.config, state, decision):
         logger.error("[Plan] Evidence validation failed for planned steps")
         await ctx.emit(
             "fatal_error",

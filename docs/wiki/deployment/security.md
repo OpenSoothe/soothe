@@ -687,7 +687,7 @@ mount /dev/mapper/postgres_encrypted /var/lib/postgresql
 
 **Separate databases for isolation** (RFC-612):
 ```sql
--- Checkpoints database (LangGraph + AgentLoop)
+-- Checkpoints database (LangGraph + StrangeLoop)
 CREATE DATABASE soothe_checkpoints OWNER soothe_user;
 
 -- Metadata database (Thread lifecycle)

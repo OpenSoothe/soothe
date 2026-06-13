@@ -15,7 +15,7 @@ from soothe.protocols.planner import PlanContext
 
 @runtime_checkable
 class LoopPlannerProtocol(Protocol):
-    """Protocol for the AgentLoop Plan step (assessment + optional plan generation).
+    """Protocol for the StrangeLoop Plan step (assessment + optional plan generation).
 
     Implementations typically perform structured LLM calls (see RFC-604 ``LLMPlanner``:
     ``StatusAssessment`` then, when needed, ``PlanGeneration``) and return a unified

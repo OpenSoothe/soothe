@@ -72,7 +72,7 @@ def build_soothe_middleware_stack(
        this middleware bounds parallelism to prevent resource exhaustion.
 
     3. **SystemPromptMiddleware** - Modifies prompts BEFORE the
-       LLM call. Requires ``routing_classification`` state injected by AgentLoop / runner
+       LLM call. Requires ``routing_classification`` state injected by StrangeLoop / runner
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
@@ -180,7 +180,7 @@ def build_soothe_middleware_stack(
         stack.append(progressive_tool_middleware)
         logger.info("[Middleware] Progressive tool loading enabled")
 
-    # 3. System prompt assembly (requires routing_classification from AgentLoop / runner)
+    # 3. System prompt assembly (requires routing_classification from StrangeLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(

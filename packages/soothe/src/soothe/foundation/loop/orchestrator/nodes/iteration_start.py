@@ -12,7 +12,8 @@ from ..runtime_context import LoopRuntimeContext
 
 async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Emit iteration start, capture start anchor, reset per-iteration planner scratch."""
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
 
     ctx.scratch = LoopPhaseScratch(iteration_perf_start=time.perf_counter())
@@ -28,7 +29,7 @@ async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     await ctx.anchor_manager.capture_iteration_start_anchor(
         iteration=state.iteration,
         thread_id=state.thread_id,
-        checkpointer=core_agent_checkpointer(agent_loop),
+        checkpointer=core_agent_checkpointer(strange_loop),
     )
 
     return {"plan_route": None, "assess_route": None, "last_outcome": None}

@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines CLI commands for users to manage AgentLoop instances: list active loops, inspect loop details, visualize checkpoint trees (main line + failed branches), prune old branches, and delete loops. Commands provide loop-centric user interface aligned with RFC-612's loop-first user experience, replacing thread-based commands with loop-based commands.
+This RFC defines CLI commands for users to manage StrangeLoop instances: list active loops, inspect loop details, visualize checkpoint trees (main line + failed branches), prune old branches, and delete loops. Commands provide loop-centric user interface aligned with RFC-612's loop-first user experience, replacing thread-based commands with loop-based commands.
 
 ---
 
@@ -62,7 +62,7 @@ soothe loop <subcommand>
 
 | Command | Description | Status |
 |---------|-------------|--------|
-| `list` | List all AgentLoop instances | REPLACES `thread list` |
+| `list` | List all StrangeLoop instances | REPLACES `thread list` |
 | `describe <loop_id>` | Show detailed loop information | REPLACES `thread describe` |
 | `tree <loop_id>` | Visualize checkpoint tree structure | NEW |
 | `prune <loop_id>` | Prune old failed branches | NEW |
@@ -104,7 +104,7 @@ loop_jkl012      cancelled           1          2        0           2026-04-20 
 ```
 
 **Columns**:
-- `Loop ID`: AgentLoop identifier (UUID)
+- `Loop ID`: StrangeLoop identifier (UUID)
 - `Status`: Loop lifecycle status
 - `Threads`: Number of threads (internal, shown for context)
 - `Goals`: Goals completed
@@ -117,7 +117,7 @@ loop_jkl012      cancelled           1          2        0           2026-04-20 
 
 ```python
 async def list_loops(status: str | None = None, limit: int = 20):
-    """List all AgentLoop instances."""
+    """List all StrangeLoop instances."""
     
     loops_dir = SOOTHE_HOME / "data" / "loops"
     loops = []
@@ -149,7 +149,7 @@ async def list_loops(status: str | None = None, limit: int = 20):
     
     # Render table
     console.print(Printer.table(
-        title="AgentLoops",
+        title="StrangeLoops",
         columns=["Loop ID", "Status", "Threads", "Goals", "Switches", "Created"],
         rows=[[l["loop_id"], l["status"], l["threads"], l["goals"], l["switches"], l["created"]] for l in loops],
     ))
@@ -257,7 +257,7 @@ async def describe_loop(loop_id: str, verbose: bool = False):
     metadata = json.loads((loop_dir / "metadata.json").read_text())
     
     # Load checkpoint database
-    persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite", SOOTHE_HOME)
+    persistence_manager = StrangeLoopCheckpointPersistenceManager("sqlite", SOOTHE_HOME)
     checkpoint_tree = await persistence_manager.load_checkpoint_tree_ref(loop_id)
     
     # Render panels
@@ -436,7 +436,7 @@ digraph checkpoint_tree {
 async def visualize_loop_tree(loop_id: str, format: str = "ascii"):
     """Visualize checkpoint tree structure."""
     
-    persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite", SOOTHE_HOME)
+    persistence_manager = StrangeLoopCheckpointPersistenceManager("sqlite", SOOTHE_HOME)
     checkpoint_tree = await persistence_manager.load_checkpoint_tree_ref(loop_id)
     
     if format == "ascii":
@@ -542,7 +542,7 @@ Dry-run: would prune 2 branches (no changes made)
 async def prune_loop_branches(loop_id: str, retention_days: int = 30, dry_run: bool = False):
     """Prune old failed branches."""
     
-    persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite", SOOTHE_HOME)
+    persistence_manager = StrangeLoopCheckpointPersistenceManager("sqlite", SOOTHE_HOME)
     threshold = datetime.now(UTC) - timedelta(days=retention_days)
     
     console.print(f"Pruning failed branches for {loop_id}:")
@@ -650,7 +650,7 @@ async def delete_loop(loop_id: str, force: bool = False):
 app = typer.Typer()
 
 # Loop management commands
-loop_app = typer.Typer(help="Manage AgentLoop instances")
+loop_app = typer.Typer(help="Manage StrangeLoop instances")
 app.add_typer(loop_app, name="loop")
 
 loop_app.command("list")(list_loops)
@@ -705,8 +705,8 @@ loop_app.command("status")(show_loop_status)
 ## Related Specifications
 
 - RFC-612: Loop-First User Experience
-- RFC-218: AgentLoop Checkpoint Tree Architecture
-- RFC-215: AgentLoop Persistence Backend
+- RFC-218: StrangeLoop Checkpoint Tree Architecture
+- RFC-215: StrangeLoop Persistence Backend
 - RFC-454: Slash Command Architecture
 
 ---

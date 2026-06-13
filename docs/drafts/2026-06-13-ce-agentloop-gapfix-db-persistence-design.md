@@ -1,4 +1,4 @@
-# CE-AgentLoop Integration: Gap Fixes + DB Persistence
+# CE-StrangeLoop Integration: Gap Fixes + DB Persistence
 
 Date: 2026-06-13
 Status: Draft
@@ -6,7 +6,7 @@ RFC: RFC-624 (Context Engine)
 
 ## Summary
 
-Close 5 integration gaps between ContextEngine and AgentLoop, then add SQLite and PostgreSQL persistence backends for CE state. The CE path is always active (100% behavioral compatibility with the old PlanManager/GoalContextManager path is guaranteed by the CE implementation itself). SQLite is the new default persistence backend.
+Close 5 integration gaps between ContextEngine and StrangeLoop, then add SQLite and PostgreSQL persistence backends for CE state. The CE path is always active (100% behavioral compatibility with the old PlanManager/GoalContextManager path is guaranteed by the CE implementation itself). SQLite is the new default persistence backend.
 
 ## Gap Fixes
 
@@ -30,7 +30,7 @@ Close 5 integration gaps between ContextEngine and AgentLoop, then add SQLite an
 
 ### G4: Public semantic loading API
 
-`agent_loop.py` accesses `ce_instance._semantic` directly to call `load_project_instructions()`, `load_agent_instructions()`, `load_memory()`. This is a private API.
+`strange_loop.py` accesses `ce_instance._semantic` directly to call `load_project_instructions()`, `load_agent_instructions()`, `load_memory()`. This is a private API.
 
 **Fix**: Add `ContextEngine.load_semantic_context()` as a public sync method:
 
@@ -43,7 +43,7 @@ def load_semantic_context(self, workspace: Path | None = None) -> None:
     self._semantic.load_memory()
 ```
 
-Replace the `_semantic` access in `agent_loop.py` with this call. Error handling (try/except) moves to the caller as it is now.
+Replace the `_semantic` access in `strange_loop.py` with this call. Error handling (try/except) moves to the caller as it is now.
 
 ### G5: Config model update
 
@@ -65,7 +65,7 @@ class ContextEngineConfig(BaseModel):
     )
 ```
 
-No `db_path` or `dsn` fields. When `persistence_backend` is `"sqlite"` or `"postgresql"`, the CE persistence backend derives the database path/DSN from `SootheConfig.persistence` (same as `AgentLoopStateManager` does).
+No `db_path` or `dsn` fields. When `persistence_backend` is `"sqlite"` or `"postgresql"`, the CE persistence backend derives the database path/DSN from `SootheConfig.persistence` (same as `StrangeLoopStateManager` does).
 
 ## Database Persistence
 
@@ -120,12 +120,12 @@ Constructor:
 class SqliteContextPersistence:
     def __init__(self, loop_id: str, db_path: str | None = None) -> None:
         self._loop_id = loop_id
-        self._db_path = db_path  # Derived from SootheConfig in agent_loop.py
+        self._db_path = db_path  # Derived from SootheConfig in strange_loop.py
         self._conn: sqlite3.Connection | None = None
         self._lock = asyncio.Lock()
 ```
 
-The `db_path` is resolved in `agent_loop.py` from the Soothe default persistence config, using the same path as `PersistenceDirectoryManager.get_loop_checkpoint_path()` or `SootheConfig.persistence.metadata_sqlite_path`.
+The `db_path` is resolved in `strange_loop.py` from the Soothe default persistence config, using the same path as `PersistenceDirectoryManager.get_loop_checkpoint_path()` or `SootheConfig.persistence.metadata_sqlite_path`.
 
 ### PostgresContextPersistence
 
@@ -152,7 +152,7 @@ class PostgresContextPersistence:
         self._init_lock = asyncio.Lock()
 ```
 
-The `dsn` is resolved in `agent_loop.py` from `config.resolve_postgres_dsn_for_database("checkpoints")`, using the same database as AgentLoop checkpoints. CE tables live alongside checkpoint tables in the same database, scoped by table name prefix (`ce_dag`, `ce_ledger`).
+The `dsn` is resolved in `strange_loop.py` from `config.resolve_postgres_dsn_for_database("checkpoints")`, using the same database as StrangeLoop checkpoints. CE tables live alongside checkpoint tables in the same database, scoped by table name prefix (`ce_dag`, `ce_ledger`).
 
 ### Serialization Strategy
 
@@ -160,9 +160,9 @@ The `dsn` is resolved in `agent_loop.py` from `config.resolve_postgres_dsn_for_d
 
 **Ledger serialization**: Same format as `FileContextPersistence` -- each entry is a dict with `_msg_type`, `_phase`, plus the full `BaseMessage.model_dump()` fields. The `seq` column preserves insertion order.
 
-## Persistence Wiring in AgentLoop
+## Persistence Wiring in StrangeLoop
 
-In `agent_loop.py:run_with_progress()`, replace the current persistence selection block with a 4-way switch. DB path/DSN is derived from the Soothe default persistence config (not from CE-specific config):
+In `strange_loop.py:run_with_progress()`, replace the current persistence selection block with a 4-way switch. DB path/DSN is derived from the Soothe default persistence config (not from CE-specific config):
 
 ```python
 persistence: ContextPersistenceProtocol
@@ -176,7 +176,7 @@ if ce_config.persistence_backend == "sqlite":
     )
 elif ce_config.persistence_backend == "postgresql":
     from soothe.context.persistence.postgres_backend import PostgresContextPersistence
-    # Use the same DSN resolution as AgentLoopStateManager
+    # Use the same DSN resolution as StrangeLoopStateManager
     dsn = self.config.resolve_postgres_dsn_for_database("checkpoints")
     persistence = PostgresContextPersistence(
         loop_id=state_manager.loop_id,
@@ -211,7 +211,7 @@ No `db_path` or `dsn` fields. SQLite and PostgreSQL backends derive their connec
 - **Unit tests**: `SqliteContextPersistence` and `PostgresContextPersistence` CRUD round-trips (save_dag/load_dag, save_ledger/load_ledger, clear, empty-load returns None/[])
 - **Fidelity test**: Create a CE with DAG + ledger state, save, create fresh CE with same persistence, load, verify DAG and ledger match
 - **Existing tests**: All 2812 unit + 88 integration tests must continue passing
-- **No new equivalence tests**: The existing `test_ce_agent_loop_equivalence.py` covers behavioral parity. The gap fixes are correctness fixes, not behavioral changes.
+- **No new equivalence tests**: The existing `test_ce_strange_loop_equivalence.py` covers behavioral parity. The gap fixes are correctness fixes, not behavioral changes.
 
 ## File Change Summary
 
@@ -222,7 +222,7 @@ No `db_path` or `dsn` fields. SQLite and PostgreSQL backends derive their connec
 | `soothe/context/persistence/postgres_backend.py` | **New**: PostgresContextPersistence |
 | `soothe/context/persistence/__init__.py` | Update exports |
 | `soothe/config/models.py` | Update ContextEngineConfig (G5) |
-| `soothe/foundation/loop/engine/agent_loop.py` | 4-way persistence switch; use `load_semantic_context()` (G4) |
+| `soothe/foundation/loop/engine/strange_loop.py` | 4-way persistence switch; use `load_semantic_context()` (G4) |
 | `soothe/foundation/loop/orchestrator/nodes/goal_completion.py` | Add `fail_goal` call (G1) |
 | `soothe/foundation/loop/orchestrator/nodes/execute_steps.py` | Add `ce.save()` after step execution (G3) |
 | `soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Drop `await` from step method calls (G2) |

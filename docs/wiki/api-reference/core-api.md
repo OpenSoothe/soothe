@@ -237,7 +237,7 @@ class AgentConfig(BaseModel):
     system_prompt: str | None = None
     """Custom system prompt."""
     
-    max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
     """Maximum iterations per loop (RFC-201)."""
     
     execute_timeout: float = DEFAULT_EXECUTE_TIMEOUT

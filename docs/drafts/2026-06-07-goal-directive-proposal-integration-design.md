@@ -245,8 +245,8 @@ async def _run_single_autopilot_goal(...) -> AsyncGenerator[StreamChunk, None]:
     # Create per-goal proposal queue
     proposal_queue = ProposalQueue()
 
-    # Inject into AgentLoop via runtime context
-    async for event_type, event_data in agent_loop.run_with_progress(
+    # Inject into StrangeLoop via runtime context
+    async for event_type, event_data in strange_loop.run_with_progress(
         goal=job.goal_description,
         thread_id=tid,
         workspace=workspace,
@@ -257,7 +257,7 @@ async def _run_single_autopilot_goal(...) -> AsyncGenerator[StreamChunk, None]:
     ):
         # ... existing event handling ...
 
-    # After AgentLoop completes, drain proposals
+    # After StrangeLoop completes, drain proposals
     proposals = proposal_queue.drain()
 
     # Convert proposals to directives
@@ -325,9 +325,9 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
 
 ---
 
-### 5. AgentLoop Injection: proposal_queue Parameter
+### 5. StrangeLoop Injection: proposal_queue Parameter
 
-**Location:** `core/loop/__init__.py` (AgentLoop.run_with_progress)
+**Location:** `core/loop/__init__.py` (StrangeLoop.run_with_progress)
 
 **Parameter addition:**
 
@@ -473,7 +473,7 @@ if chunk_type == "soothe.internal.autopilot.goal_completion":
 ## Success Criteria
 
 1. Job with prerequisite failure creates subgoal via Reflection → GoalCompletionChunk → apply_directives
-2. AgentLoop can call `suggest_goal` mid-execution and see subgoal in next scheduling tick
+2. StrangeLoop can call `suggest_goal` mid-execution and see subgoal in next scheduling tick
 3. `GoalEngine._format_goal_dag()` shows parent→child relationships for dynamically created goals
 4. Integration test covers full flow: tool → queue → chunk → apply → DAG
 

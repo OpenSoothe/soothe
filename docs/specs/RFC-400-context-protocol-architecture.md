@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines ContextProtocol, Soothe's unbounded knowledge accumulator for cognitive context engineering. ContextProtocol provides append-only knowledge ingestion, relevance-based projection for bounded token windows, and goal-centric retrieval through self-contained retrieval module with stable API boundary. ContextProtocol serves as AgentLoop's "consciousness" layer, maintaining complete execution knowledge across threads.
+This RFC defines ContextProtocol, Soothe's unbounded knowledge accumulator for cognitive context engineering. ContextProtocol provides append-only knowledge ingestion, relevance-based projection for bounded token windows, and goal-centric retrieval through self-contained retrieval module with stable API boundary. ContextProtocol serves as StrangeLoop's "consciousness" layer, maintaining complete execution knowledge across threads.
 
 ---
 
@@ -179,12 +179,12 @@ class ContextRetrievalModule:
 
 **Version Selection**: Configurable via `context.retrieval.algorithm_version`. Algorithm evolution behind stable API preserves integration contracts.
 
-### AgentLoop Integration Pattern
+### StrangeLoop Integration Pattern
 
-**Integration with RFC-201 AgentLoop.Executor**:
+**Integration with RFC-201 StrangeLoop.Executor**:
 
 ```python
-# AgentLoop.Executor calls ContextRetrievalModule
+# StrangeLoop.Executor calls ContextRetrievalModule
 retrieval = context.get_retrieval_module()
 relevant_history = retrieval.retrieve_by_goal_relevance(
     goal_id=state.current_goal_id,
@@ -196,7 +196,7 @@ relevant_history = retrieval.retrieve_by_goal_relevance(
 
 **Ownership Boundary** (RFC-201 §61-78):
 - **ContextProtocol ownership**: Retrieval module implementation, algorithm versions, stable API
-- **AgentLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output
+- **StrangeLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output
 
 ### Evidence Storage Pattern
 
@@ -239,11 +239,11 @@ await context.ingest(evidence_entry)
 **Critical Foundation**: ContextProtocol is specified but not yet implemented. This is a foundational protocol required by:
 - GoalBackoffReasoner (RFC-200) - needs ContextProtocol for evidence storage
 - ThreadRelationshipModule (RFC-217) - needs ContextProtocol for embedding model access
-- AgentLoop.Executor (RFC-201) - needs ContextProtocol for goal-centric retrieval
+- StrangeLoop.Executor (RFC-201) - needs ContextProtocol for goal-centric retrieval
 
 **Recommended Implementation Sequence**:
 1. Phase 1: KeywordContext backend (v1_keyword algorithm, JSON persistence)
-2. Phase 2: Integration with SootheRunner, AgentLoop.Executor, GoalEngine
+2. Phase 2: Integration with SootheRunner, StrangeLoop.Executor, GoalEngine
 3. Phase 3: VectorContext backend (v2_embedding algorithm, requires vector store)
 
 ---
@@ -346,7 +346,7 @@ protocols:
 ### Goal-Centric Retrieval
 
 ```python
-# AgentLoop uses retrieval module for goal-centric context
+# StrangeLoop uses retrieval module for goal-centric context
 context = agent.soothe_context
 retrieval = context.get_retrieval_module()
 relevant_history = retrieval.retrieve_by_goal_relevance(
@@ -412,7 +412,7 @@ protocols:
 - ⚠️ Goal-centric retrieval v1_keyword (not yet implemented)
 - ⚠️ v2_embedding algorithm (future work)
 - ⚠️ Persistence integration (not yet implemented)
-- ⚠️ AgentLoop integration (not yet implemented)
+- ⚠️ StrangeLoop integration (not yet implemented)
 - ⚠️ Evidence storage pattern (not yet implemented)
 
 ---

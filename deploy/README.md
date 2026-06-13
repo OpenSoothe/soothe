@@ -44,7 +44,7 @@ Select via `SOOTHE_CONFIG_PATH` in `.env` (default: `./deploy/config.dev.yml`).
 ### 4. init-db.sql
 PostgreSQL initialization script (RFC-612 multi-database architecture):
 - Creates 4 separate databases:
-  - `soothe_checkpoints` - LangGraph + AgentLoop checkpoints
+  - `soothe_checkpoints` - LangGraph + StrangeLoop checkpoints
   - `soothe_metadata` - Durability metadata
   - `soothe_vectors` - pgvector embeddings (with vector extension)
   - `soothe_memory` - MemU long-term memory
