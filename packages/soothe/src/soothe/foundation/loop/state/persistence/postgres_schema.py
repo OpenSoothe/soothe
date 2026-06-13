@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SLOOP_POSTGRES_DATABASE = "soothe_checkpoints"
+AGENTLOOP_POSTGRES_DATABASE = "soothe_checkpoints"
 
 
-async def initialize_sloop_postgres_schema(pool: AsyncConnectionPool) -> None:
+async def initialize_agentloop_postgres_schema(pool: AsyncConnectionPool) -> None:
     """Apply pending SQL migrations for StrangeLoop persistence tables.
 
     Called when the shared pool or dedicated backend pool opens (daemon start,
@@ -29,7 +29,7 @@ async def initialize_sloop_postgres_schema(pool: AsyncConnectionPool) -> None:
     Args:
         pool: Open ``AsyncConnectionPool`` for the soothe_checkpoints database.
     """
-    applied = await run_database_migrations(pool, SLOOP_POSTGRES_DATABASE)
+    applied = await run_database_migrations(pool, AGENTLOOP_POSTGRES_DATABASE)
     if applied:
         logger.info(
             "StrangeLoop PostgreSQL schema upgraded (applied migrations: %s)",
@@ -39,4 +39,4 @@ async def initialize_sloop_postgres_schema(pool: AsyncConnectionPool) -> None:
         logger.debug("StrangeLoop PostgreSQL schema already up to date")
 
 
-__all__ = ["SLOOP_POSTGRES_DATABASE", "initialize_sloop_postgres_schema"]
+__all__ = ["AGENTLOOP_POSTGRES_DATABASE", "initialize_agentloop_postgres_schema"]

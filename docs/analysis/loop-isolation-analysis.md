@@ -235,7 +235,7 @@ loop_new {workspace: "/project-A"}
 | Resource | Isolation Scope | Key |
 |----------|----------------|-----|
 | LangGraph checkpoints | Per `thread_id` | `configurable.thread_id` |
-| StrangeLoop checkpoints | Per `loop_id` | `sloop_loops` table |
+| StrangeLoop checkpoints | Per `loop_id` | `agentloop_loops` table |
 | Thread metadata | Per `thread_id` | DurabilityProtocol key |
 | Working memory spill | Per `thread_id` | `data/threads/{thread_id}/working_memory/` |
 | Loop reports | Per `loop_id` | `data/loops/{loop_id}/` |

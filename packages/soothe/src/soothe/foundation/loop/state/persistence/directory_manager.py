@@ -139,7 +139,7 @@ class PersistenceDirectoryManager:
 
         Returns:
             Path to shared soothe_checkpoints.db (managed by StrangeLoop + LangGraph).
-            Table: sloop_checkpoints (separate from LangGraph checkpoint tables).
+            Table: agentloop_checkpoints (separate from LangGraph checkpoint tables).
         """
         from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
