@@ -91,29 +91,128 @@ async def check_daemon_status(
 def _daemon_status_indicates_live(status: dict) -> bool:
     """Infer liveness from a ``daemon_status_response`` payload.
 
-    Prefer an explicit ``running`` field when present. Older or alternate
-    implementations may omit it; a successful RPC response should not be
-    treated as dead solely due to a missing key.
+    Checks readiness_state first (IG-489): transitional states (starting, warming)
+    indicate the daemon is not yet ready to handle loops. Falls back to legacy
+    ``running``/``port_live`` check for older daemons without this field.
+
+    Args:
+        status: Daemon status response dict.
+
+    Returns:
+        True if daemon is live and ready for loop operations, False otherwise.
     """
+    # Check readiness_state first (new field, IG-489)
+    readiness_state = status.get("readiness_state")
+    if readiness_state:
+        # Transitional states mean daemon is not ready for loops
+        if readiness_state in {"starting", "warming"}:
+            return False
+        # Terminal error/degraded/stopped states
+        if readiness_state in {"error", "degraded", "stopped"}:
+            return False
+        # Only "ready" is truly live for loop operations
+        if readiness_state == "ready":
+            return True
+        # Unknown state - fall through to legacy check
+
+    # Legacy check (for older daemons without readiness_state)
     if "running" in status:
         return bool(status["running"])
     return bool(status.get("port_live", True))
 
 
-async def is_daemon_live(ws_url: str, timeout: float = 5.0) -> bool:
+async def is_daemon_live(
+    ws_url: str,
+    timeout: float = 5.0,
+    wait_for_ready: bool = False,
+    ready_timeout: float = 30.0,
+) -> bool:
     """Composite health check: connection + status RPC.
+
+    Optionally waits for daemon to reach "ready" state (IG-489), polling during
+    transitional states like "starting" and "warming".
 
     Args:
         ws_url: WebSocket URL to check
-        timeout: Total timeout for connection + RPC
+        timeout: Per-request timeout for connection + RPC
+        wait_for_ready: If True, poll until daemon is "ready" (not transitional)
+        ready_timeout: Max seconds to wait for ready state when wait_for_ready=True
 
     Returns:
-        True if daemon is live and responsive, False otherwise
+        True if daemon is live (and ready if wait_for_ready=True), False otherwise
     """
     attempts = 3
     delay_s = 0.35
     last_error: Exception | None = None
 
+    # When waiting for ready, we need to poll during transitional states
+    if wait_for_ready:
+        # Use monotonic time via asyncio for consistent timing
+        try:
+            loop = asyncio.get_running_loop()
+            start_time = loop.time()
+        except RuntimeError:
+            start_time = 0.0
+
+        while True:
+            for attempt in range(attempts):
+                client: WebSocketClient | None = None
+                try:
+                    client = WebSocketClient(url=ws_url)
+                    await client.connect()
+                    status = await check_daemon_status(client, timeout=timeout)
+
+                    # Check if daemon is ready
+                    readiness_state = status.get("readiness_state")
+                    if readiness_state == "ready":
+                        return True
+
+                    # Check if transitional - continue polling
+                    if readiness_state in {"starting", "warming"}:
+                        # Calculate remaining time
+                        try:
+                            loop = asyncio.get_running_loop()
+                            elapsed = loop.time() - start_time
+                        except RuntimeError:
+                            elapsed = 0.0
+
+                        if elapsed >= ready_timeout:
+                            logger.debug(
+                                "Daemon not ready after %s seconds (state: %s)",
+                                ready_timeout,
+                                readiness_state,
+                            )
+                            return False
+                        # Wait and retry
+                        await asyncio.sleep(delay_s)
+                        break  # Exit attempt loop, continue polling
+
+                    # Terminal state (error, degraded, stopped) or unknown
+                    return _daemon_status_indicates_live(status)
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < attempts - 1:
+                        await asyncio.sleep(delay_s)
+                finally:
+                    if client is not None:
+                        with contextlib.suppress(Exception):
+                            await client.close()
+
+            # Check timeout after exhausting attempts
+            try:
+                loop = asyncio.get_running_loop()
+                elapsed = loop.time() - start_time
+            except RuntimeError:
+                elapsed = 0.0
+
+            if elapsed >= ready_timeout:
+                break
+
+        if last_error is not None:
+            logger.debug("Daemon health check failed for %s: %s", ws_url, last_error)
+        return False
+
+    # Standard liveness check without waiting
     for attempt in range(attempts):
         client: WebSocketClient | None = None
         try:

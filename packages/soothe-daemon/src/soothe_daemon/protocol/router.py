@@ -638,6 +638,8 @@ class MessageRouter:
             "port_live": port_live,
             "active_threads": active_threads,
             "daemon_pid": os.getpid() if running else None,
+            "readiness_state": d._readiness_state,
+            "readiness_message": d._readiness_message,
         }
 
         await d._send_client_message(client_id, response)

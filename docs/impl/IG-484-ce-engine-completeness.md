@@ -1,4 +1,4 @@
-# IG-624-1: CE Engine Completeness
+# IG-484: CE Engine Completeness
 
 **RFC**: 624 (Phase 3a)
 **Status**: Draft

@@ -442,7 +442,10 @@ class _StartupMixin:
             ws_url = websocket_url_from_config(self._daemon_config)
 
             # Check daemon status via WebSocket RPC (IG-174 Phase 1)
-            daemon_live = await is_daemon_live(ws_url, timeout=5.0)
+            # Wait for daemon to be fully ready, not just port-live (IG-489)
+            daemon_live = await is_daemon_live(
+                ws_url, timeout=5.0, wait_for_ready=True, ready_timeout=30.0
+            )
 
             if not daemon_live:
                 # CLI does NOT control daemon start/stop per architectural separation (IG-174/IG-175)
