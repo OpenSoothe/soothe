@@ -1,15 +1,15 @@
-# IG-624-2: Adapter Hardening + Projection Wiring
+# IG-483: Adapter Hardening + Projection Wiring
 
 **RFC**: 624 (Phase 3b)
 **Status**: Done
 **Created**: 2026-06-13
-**Depends on**: IG-624-1 (CE Engine Completeness)
+**Depends on**: IG-484 (CE Engine Completeness)
 
 ---
 
 ## Objective
 
-Fix the GoalContextAdapter gap (reads from old state_manager instead of CE DAG), refactor all adapters to use the public API from IG-624-1, and wire ContextBundle into the prompt pipeline as supplementary context when CE is enabled.
+Fix the GoalContextAdapter gap (reads from old state_manager instead of CE DAG), refactor all adapters to use the public API from IG-484, and wire ContextBundle into the prompt pipeline as supplementary context when CE is enabled.
 
 ## Implementation Steps
 

@@ -2,7 +2,6 @@
 
 import asyncio
 import sys
-import time
 
 import typer
 from soothe_sdk.client import (
@@ -42,7 +41,10 @@ def run_headless(
     # Auto-start daemon if not running (RFC-0013) - WebSocket RPC checks (IG-174 Phase 1)
     async def _run_headless_pipeline() -> int:
         """Ensure daemon is reachable, then run the headless daemon session."""
-        daemon_live = await is_daemon_live(ws_url, timeout=5.0)
+        # Check if daemon is live and ready (IG-489: wait for readiness, not just port-live)
+        daemon_live = await is_daemon_live(
+            ws_url, timeout=5.0, wait_for_ready=True, ready_timeout=30.0
+        )
 
         if not daemon_live:
             # Attempt cleanup if stale daemon (connection exists but daemon not responsive)
@@ -64,13 +66,10 @@ def run_headless(
                 stderr=subprocess.DEVNULL,
             )
 
-            # Wait for daemon to become fully ready with timeout
-            start_time = time.time()
-            while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
-                daemon_live = await is_daemon_live(ws_url, timeout=2.0)
-                if daemon_live:
-                    break
-                await asyncio.sleep(0.5)
+            # Wait for daemon to become fully ready with timeout (IG-489)
+            daemon_live = await is_daemon_live(
+                ws_url, timeout=2.0, wait_for_ready=True, ready_timeout=_DAEMON_START_WAIT_TIMEOUT
+            )
             # Note: We don't fail here - let the connection attempt handle errors
             # This allows tests and edge cases to proceed with mocked daemons
 

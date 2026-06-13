@@ -6,9 +6,8 @@ StrangeLoop (alias: Sloop) executes single goals through iterative Plan-Execute 
 - Judge: Progress assessment toward goal
 
 Import paths:
-    from soothe.foundation.loop import StrangeLoop, Sloop, LoopState, PlanResult
-    from soothe.foundation.loop.engine.executor import Executor
-    from soothe.foundation.loop.state.schemas import StepAction
+    from soothe.foundation.loop import StrangeLoop, Sloop
+    from soothe.foundation.loop.state.schemas import LoopState, PlanResult, StepAction
 """
 
 from __future__ import annotations

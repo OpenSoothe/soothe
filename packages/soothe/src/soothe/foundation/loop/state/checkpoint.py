@@ -267,6 +267,3 @@ def normalize_checkpoint_data(
         out["status"] = "idle"
 
     return out
-
-
-_STRANGE_LOOP_CHECKPOINT_STATUSES = _SLOOP_CHECKPOINT_STATUSES
