@@ -96,10 +96,10 @@ async def test_sqlite_backend_initialize_database(tmp_path):
     import aiosqlite
 
     async with aiosqlite.connect(db_path) as db:
-        # Check sloop_loops table
+        # Check agentloop_loops table
         async with db.execute("""
             SELECT name FROM sqlite_master
-            WHERE type='table' AND name='sloop_loops'
+            WHERE type='table' AND name='agentloop_loops'
         """) as cursor:
             table = await cursor.fetchone()
             assert table is not None

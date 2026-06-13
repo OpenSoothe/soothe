@@ -160,7 +160,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         now = datetime.now(UTC).isoformat()
         conn.execute(
             """
-            INSERT INTO sloop_loops
+            INSERT INTO agentloop_loops
             (loop_id, thread_ids, current_thread_id, status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (loop_id) DO UPDATE SET
@@ -195,7 +195,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                    client_workspace, detached_at, user_id, client_workspace_id,
                    is_ephemeral, last_message_at, current_workspace,
                    human_message_count, ai_message_count
-            FROM sloop_loops WHERE loop_id = ?
+            FROM agentloop_loops WHERE loop_id = ?
         """,
             (loop_id,),
         )
@@ -262,7 +262,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         params = list(updates.values()) + [loop_id]
         conn.execute(
-            f"UPDATE sloop_loops SET {set_clause} WHERE loop_id = ?",  # noqa: S608
+            f"UPDATE agentloop_loops SET {set_clause} WHERE loop_id = ?",  # noqa: S608
             params,
         )
         conn.commit()
@@ -313,7 +313,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                    total_goals_completed, total_thread_switches,
                    created_at, updated_at, client_workspace, detached_at,
                    human_message_count, ai_message_count, last_message_at
-            FROM sloop_loops
+            FROM agentloop_loops
             {where_sql}
             ORDER BY created_at DESC
             LIMIT ?
@@ -359,7 +359,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> None:
         """Sync heartbeat — single-statement UPDATE; no-op when row is gone."""
         conn.execute(
-            "UPDATE sloop_loops SET updated_at = ? WHERE loop_id = ?",
+            "UPDATE agentloop_loops SET updated_at = ? WHERE loop_id = ?",
             (now_iso, loop_id),
         )
         conn.commit()
@@ -389,7 +389,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """Sync increment counters in a single UPDATE."""
         conn.execute(
             """
-            UPDATE sloop_loops
+            UPDATE agentloop_loops
             SET human_message_count = human_message_count + ?,
                 ai_message_count    = ai_message_count + ?,
                 last_message_at     = ?,
@@ -425,7 +425,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             SELECT loop_id, thread_ids, current_thread_id, status,
                    client_workspace, current_workspace, user_id, client_workspace_id,
                    last_message_at, created_at, is_ephemeral
-            FROM sloop_loops
+            FROM agentloop_loops
             WHERE human_message_count = 0
               AND ai_message_count = 0
               AND status != 'running'
@@ -480,7 +480,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             SELECT loop_id, thread_ids, current_thread_id, status,
                    client_workspace, current_workspace, user_id, client_workspace_id,
                    last_message_at, created_at
-            FROM sloop_loops
+            FROM agentloop_loops
             WHERE is_ephemeral = 1
               AND status != 'running'
               AND COALESCE(last_message_at, created_at) < ?
@@ -518,7 +518,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         conn.execute("DELETE FROM checkpoint_anchors WHERE loop_id = ?", (loop_id,))
         conn.execute("DELETE FROM failed_branches WHERE loop_id = ?", (loop_id,))
         conn.execute("DELETE FROM goal_records WHERE loop_id = ?", (loop_id,))
-        conn.execute("DELETE FROM sloop_loops WHERE loop_id = ?", (loop_id,))
+        conn.execute("DELETE FROM agentloop_loops WHERE loop_id = ?", (loop_id,))
         conn.commit()
         logger.info("Purged loop execution data from SQLite: loop=%s", loop_id)
 
@@ -998,12 +998,12 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     @staticmethod
     def _ensure_loop_columns(db: sqlite3.Connection) -> None:
-        """Add ephemeral-loop columns to existing ``sloop_loops`` tables."""
-        cursor = db.execute("PRAGMA table_info(sloop_loops)")
+        """Add ephemeral-loop columns to existing ``agentloop_loops`` tables."""
+        cursor = db.execute("PRAGMA table_info(agentloop_loops)")
         existing = {row[1] for row in cursor.fetchall()}
         for col, typedef in _LOOP_COLUMN_MIGRATIONS.items():
             if col not in existing:
-                db.execute(f"ALTER TABLE sloop_loops ADD COLUMN {col} {typedef}")  # noqa: S608
+                db.execute(f"ALTER TABLE agentloop_loops ADD COLUMN {col} {typedef}")  # noqa: S608
 
     @staticmethod
     def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
@@ -1016,7 +1016,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     @staticmethod
     def _ensure_loop_columns_on_path(db_path: Path) -> None:
-        """Migrate ``sloop_loops`` and ``goal_records`` columns on an existing database file."""
+        """Migrate ``agentloop_loops`` and ``goal_records`` columns on an existing database file."""
         with sqlite3.connect(db_path) as db:
             SQLitePersistenceBackend._ensure_loop_columns(db)
             SQLitePersistenceBackend._ensure_goal_record_columns(db)
@@ -1027,7 +1027,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """Initialize SQLite database schema (synchronous version).
 
         Creates tables for:
-        - sloop_loops (metadata)
+        - agentloop_loops (metadata)
         - checkpoint_anchors (synchronization)
         - failed_branches (learning history)
         - goal_records (execution history)
@@ -1043,9 +1043,9 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA journal_mode=WAL")
 
-            # Create sloop_loops table
+            # Create agentloop_loops table
             db.execute("""
-                CREATE TABLE IF NOT EXISTS sloop_loops (
+                CREATE TABLE IF NOT EXISTS agentloop_loops (
                     loop_id TEXT PRIMARY KEY,
                     thread_ids TEXT NOT NULL,
                     current_thread_id TEXT NOT NULL,
@@ -1090,7 +1090,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     next_action_summary TEXT,
                     tools_executed TEXT,
                     reasoning_decision TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id),
+                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id),
                     UNIQUE(loop_id, iteration, anchor_type)
                 )
             """)
@@ -1126,7 +1126,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     created_at TEXT NOT NULL,
                     analyzed_at TEXT,
                     pruned_at TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id)
+                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)
 
@@ -1161,7 +1161,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
                     extras_jsonb TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id)
+                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)
 
@@ -1187,7 +1187,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """Initialize SQLite database schema (async version).
 
         Creates tables for:
-        - sloop_loops (metadata)
+        - agentloop_loops (metadata)
         - checkpoint_anchors (synchronization)
         - failed_branches (learning history)
         - goal_records (execution history)
@@ -1203,9 +1203,9 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             await db.execute("PRAGMA foreign_keys=ON")
             await db.execute("PRAGMA journal_mode=WAL")
 
-            # Create sloop_loops table (MISSING in async version - add it)
+            # Create agentloop_loops table (MISSING in async version - add it)
             await db.execute("""
-                CREATE TABLE IF NOT EXISTS sloop_loops (
+                CREATE TABLE IF NOT EXISTS agentloop_loops (
                     loop_id TEXT PRIMARY KEY,
                     thread_ids TEXT NOT NULL,
                     current_thread_id TEXT NOT NULL,
@@ -1248,7 +1248,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     next_action_summary TEXT,
                     tools_executed TEXT,
                     reasoning_decision TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id),
+                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id),
                     UNIQUE(loop_id, iteration, anchor_type)
                 )
             """)
@@ -1284,7 +1284,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     created_at TEXT NOT NULL,
                     analyzed_at TEXT,
                     pruned_at TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id)
+                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)
 
@@ -1320,7 +1320,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
                     extras_jsonb TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id)
+                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)
 
