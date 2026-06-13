@@ -9,8 +9,8 @@ import pytest
 pytest.importorskip("psycopg_pool")
 
 from soothe.foundation.loop.state.persistence.postgres_schema import (
-    SLOOP_POSTGRES_DATABASE,
-    initialize_sloop_postgres_schema,
+    AGENTLOOP_POSTGRES_DATABASE,
+    initialize_agentloop_postgres_schema,
 )
 
 
@@ -23,6 +23,6 @@ async def test_initialize_schema_runs_checkpoints_migrations() -> None:
         new_callable=AsyncMock,
         return_value=["001"],
     ) as run_migrations:
-        await initialize_sloop_postgres_schema(pool)  # type: ignore[arg-type]
+        await initialize_agentloop_postgres_schema(pool)  # type: ignore[arg-type]
 
-    run_migrations.assert_awaited_once_with(pool, SLOOP_POSTGRES_DATABASE)
+    run_migrations.assert_awaited_once_with(pool, AGENTLOOP_POSTGRES_DATABASE)

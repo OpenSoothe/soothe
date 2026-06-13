@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from psycopg_pool import AsyncConnectionPool
 
 from soothe.foundation.loop.state.persistence.postgres_schema import (
-    initialize_sloop_postgres_schema,
+    initialize_agentloop_postgres_schema,
 )
 from soothe.foundation.persistence.postgres_pool_lifecycle import (
     apply_row_factory,
@@ -104,7 +104,7 @@ class SharedPostgreSQLPool:
             # Open pool
             await self._pool.open()
 
-            # Initialize schema (sloop_checkpoints, checkpoint_anchors, etc.)
+            # Initialize schema (agentloop_checkpoints, checkpoint_anchors, etc.)
             await self._initialize_schema(self._pool)
 
             self._initialized = True
@@ -117,7 +117,7 @@ class SharedPostgreSQLPool:
 
     async def _initialize_schema(self, pool: AsyncConnectionPool) -> None:
         """Recreate StrangeLoop tables using the canonical PostgreSQL schema."""
-        await initialize_sloop_postgres_schema(pool)
+        await initialize_agentloop_postgres_schema(pool)
 
     async def release_idle_connections(self) -> None:
         """Return idle connections to PgBouncer (``Pool.check``)."""

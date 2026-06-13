@@ -476,7 +476,7 @@ class StrangeLoopStateManager:
                    total_goals_completed, total_thread_switches,
                    total_duration_ms, total_tokens_used,
                    thread_switch_pending, created_at, updated_at, schema_version
-            FROM sloop_loops WHERE loop_id = ?
+            FROM agentloop_loops WHERE loop_id = ?
             """,
             (loop_id,),
         )
@@ -534,7 +534,7 @@ class StrangeLoopStateManager:
     ) -> None:
         """Sync save of checkpoint executed in thread pool.
 
-        Bug 5.3 fix: Uses UPDATE (not INSERT OR REPLACE) for sloop_loops.
+        Bug 5.3 fix: Uses UPDATE (not INSERT OR REPLACE) for agentloop_loops.
         Preserves daemon-managed lifecycle statuses (detached, paused, archived)
         via CASE WHEN — if the daemon changed status between subprocess load
         and save, the subprocess preserves it instead of clobbering.
@@ -546,10 +546,10 @@ class StrangeLoopStateManager:
         working_memory_json = checkpoint.working_memory_state.model_dump_json()
         thread_health_json = checkpoint.thread_health_metrics.model_dump_json()
 
-        # UPDATE sloop_loops — preserves daemon-managed fields and statuses
+        # UPDATE agentloop_loops — preserves daemon-managed fields and statuses
         conn.execute(
             """
-            UPDATE sloop_loops
+            UPDATE agentloop_loops
             SET thread_ids = ?,
                 current_thread_id = ?,
                 status = CASE
@@ -590,7 +590,7 @@ class StrangeLoopStateManager:
         if rows_affected == 0:
             conn.execute(
                 """
-                INSERT OR IGNORE INTO sloop_loops
+                INSERT OR IGNORE INTO agentloop_loops
                 (loop_id, thread_ids, current_thread_id, status, current_goal_index,
                  working_memory_state, thread_health_metrics,
                  total_goals_completed, total_thread_switches,
