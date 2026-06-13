@@ -58,7 +58,7 @@ def _postgres_integration_config() -> SootheConfig:
             "default_backend": "postgresql",
             "postgres_base_dsn": base,
             "checkpointer_pool_size": 3,
-            "agentloop_pool_size": 6,
+            "sloop_pool_size": 6,
             "postgres_pool_max_idle_seconds": 30,
             "postgres_pool_max_lifetime_seconds": 300,
             "postgres_pool_acquire_timeout_seconds": 5,
@@ -145,7 +145,7 @@ async def test_sequential_runner_cleanup_preserves_shared_checkpointer_pool(
 
 
 @pytest.mark.asyncio
-async def test_shared_agentloop_pool_parallel_load(pg_config: SootheConfig) -> None:
+async def test_shared_sloop_pool_parallel_load(pg_config: SootheConfig) -> None:
     """Concurrent checkpoint reads must not exhaust the shared StrangeLoop pool."""
     shared = await SharedPostgreSQLPool.get_shared_instance(pg_config)
     assert shared is not None

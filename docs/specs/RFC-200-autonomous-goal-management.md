@@ -964,8 +964,8 @@ class GoalFileWatcher:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: StrangeLoop Plan-Execute Loop
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Unified StrangeLoop Plan-Execute Loop
+- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) - Layer 2: StrangeLoop Plan-Execute Loop
+- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) - Unified StrangeLoop Plan-Execute Loop
 
 ## Changelog
 

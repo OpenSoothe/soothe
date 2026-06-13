@@ -779,7 +779,7 @@ soothe daemon start --config /tmp/mcp-test.yml
 
 - [RFC-100: CoreAgent Runtime](RFC-100-coreagent-runtime.md)
 - [RFC-105: Progressive Skill Loading](RFC-105-progressive-skill-loading.md)
-- [RFC-214: StrangeLoop Loop Message Surface](RFC-214-agentloop-loop-message-surface.md)
+- [RFC-214: StrangeLoop Loop Message Surface](RFC-214-strangeloop-loop-message-surface.md)
 - [RFC-406: Policy Protocol Architecture](RFC-406-policy-protocol-architecture.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
 - [Design Draft: MCP Management](../drafts/2026-05-29-mcp-management-design.md)

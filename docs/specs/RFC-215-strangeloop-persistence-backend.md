@@ -98,9 +98,9 @@ SOOTHE_HOME/
 
 **Tables**:
 
-#### agentloop_loops (metadata)
+#### sloop_loops (metadata)
 ```sql
-CREATE TABLE agentloop_loops (
+CREATE TABLE sloop_loops (
     loop_id TEXT PRIMARY KEY,
     thread_ids TEXT NOT NULL,  -- JSON array: ["thread_001", "thread_002"]
     current_thread_id TEXT NOT NULL,
@@ -123,8 +123,8 @@ CREATE TABLE agentloop_loops (
 PostgreSQL deployments SHOULD add a partial index to keep the empty-loop reclamation query cheap:
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_agentloop_loops_empty
-  ON agentloop_loops (last_message_at)
+CREATE INDEX IF NOT EXISTS idx_sloop_loops_empty
+  ON sloop_loops (last_message_at)
   WHERE human_message_count = 0 AND ai_message_count = 0;
 ```
 
@@ -146,7 +146,7 @@ CREATE TABLE checkpoint_anchors (
     tools_executed TEXT,  -- JSON array: ["tool_A", "tool_B"]
     reasoning_decision TEXT,
     
-    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id),
+    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id),
     UNIQUE(loop_id, iteration, anchor_type)
 );
 
@@ -178,7 +178,7 @@ CREATE TABLE failed_branches (
     analyzed_at TEXT,  -- ISO timestamp
     pruned_at TEXT,  -- ISO timestamp (soft delete)
     
-    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
+    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id)
 );
 
 CREATE INDEX idx_branches_loop ON failed_branches(loop_id);
@@ -212,7 +212,7 @@ CREATE TABLE goal_records (
     started_at TEXT NOT NULL,
     completed_at TEXT,
     
-    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
+    FOREIGN KEY (loop_id) REFERENCES sloop_loops(loop_id)
 );
 
 CREATE INDEX idx_goals_loop ON goal_records(loop_id);
@@ -441,7 +441,7 @@ async def load_checkpoint_tree_ref(
     """
     pass
 
-async def load_agentloop_checkpoint(
+async def load_sloop_checkpoint(
     self,
     loop_id: str,
 ) -> StrangeLoopCheckpoint:
@@ -457,7 +457,7 @@ async def load_agentloop_checkpoint(
     """
     pass
 
-async def save_agentloop_checkpoint(
+async def save_sloop_checkpoint(
     self,
     checkpoint: StrangeLoopCheckpoint,
 ) -> None:
@@ -479,7 +479,7 @@ async def save_agentloop_checkpoint(
 
 ```python
 # config/config.yml
-agentloop_checkpoint:
+sloop_checkpoint:
   persistence_backend: "sqlite"  # "sqlite" or "postgresql"
   
   sqlite:

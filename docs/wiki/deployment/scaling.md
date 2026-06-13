@@ -100,7 +100,7 @@ services:
 persistence:
   postgres_pool_min_size: 16
   checkpointer_pool_size: 48
-  agentloop_pool_size: 48
+  sloop_pool_size: 48
 ```
 
 ### Daemon Node Configuration
@@ -342,7 +342,7 @@ WITH (lists = 100);
 persistence:
   postgres_pool_min_size: 16  # Base pool
   checkpointer_pool_size: 48  # LangGraph checkpoints
-  agentloop_pool_size: 48     # StrangeLoop state
+  sloop_pool_size: 48     # StrangeLoop state
   
 agent:
   autonomous:

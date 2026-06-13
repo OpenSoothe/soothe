@@ -868,8 +868,8 @@ async def apply_directives(
 ## Related Documents
 
 - [RFC-200](./RFC-200-autonomous-goal-management.md) — Layer 3 Foundation
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) — Layer 2 Execution
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) — Unified StrangeLoop execution
+- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) — Layer 2 Execution
+- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) — Unified StrangeLoop execution
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) — Daemon Protocol
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 

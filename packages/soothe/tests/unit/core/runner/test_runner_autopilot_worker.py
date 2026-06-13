@@ -281,7 +281,7 @@ async def test_stream_needs_replan_when_status_is_replan(
 
 
 @pytest.mark.asyncio
-async def test_stream_handles_agentloop_exception(
+async def test_stream_handles_sloop_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If StrangeLoop raises mid-stream, emit a failed GoalCompletionChunk."""

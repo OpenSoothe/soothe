@@ -608,7 +608,7 @@ for attempt in range(3):
 ### 13.1 Dependencies
 
 * **RFC-603-reasoning-quality-progressive-actions**: Provides Plan phase architecture and quality improvements that this RFC builds upon
-* **RFC-201-agentloop-plan-execute-loop**: Defines Layer 2 StrangeLoop architecture where Plan phase operates
+* **RFC-201-strangeloop-plan-execute-loop**: Defines Layer 2 StrangeLoop architecture where Plan phase operates
 
 ### 13.2 Integration Points
 

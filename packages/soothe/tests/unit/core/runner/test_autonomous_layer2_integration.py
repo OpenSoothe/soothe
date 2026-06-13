@@ -50,7 +50,7 @@ def test_plan_result_to_goal_result_conversion():
 
 
 @pytest.mark.asyncio
-async def test_agentloop_delegation_basic():
+async def test_sloop_delegation_basic():
     """Test basic StrangeLoop delegation from GoalEngine."""
     from soothe.config import SootheConfig
     from soothe.runner import SootheRunner
@@ -82,8 +82,8 @@ async def test_agentloop_delegation_basic():
 
 
 @pytest.mark.asyncio
-async def test_planner_reflect_with_agentloop_result():
-    """Test planner.reflect() handles agentloop_result parameter."""
+async def test_planner_reflect_with_sloop_result():
+    """Test planner.reflect() handles sloop_result parameter."""
     from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
@@ -111,12 +111,12 @@ async def test_planner_reflect_with_agentloop_result():
         max_parallel_goals=1,
     )
 
-    # Call reflect with agentloop_result
+    # Call reflect with sloop_result
     reflection = await planner.reflect(
         plan=None,
         step_results=[],
         goal_context=goal_context,
-        agentloop_result=goal_result,
+        sloop_result=goal_result,
     )
 
     # Verify reflection uses StrangeLoop result
@@ -129,7 +129,7 @@ async def test_planner_reflect_with_agentloop_result():
 
 
 @pytest.mark.asyncio
-async def test_planner_reflect_with_failed_agentloop_result():
+async def test_planner_reflect_with_failed_sloop_result():
     """Test planner generates recovery directives for failed StrangeLoop result."""
     from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
@@ -158,7 +158,7 @@ async def test_planner_reflect_with_failed_agentloop_result():
         plan=None,
         step_results=[],
         goal_context=goal_context,
-        agentloop_result=goal_result,
+        sloop_result=goal_result,
     )
 
     # Verify recovery directives
@@ -174,8 +174,8 @@ async def test_planner_reflect_with_failed_agentloop_result():
 
 
 @pytest.mark.asyncio
-async def test_planner_reflect_without_agentloop_result():
-    """Test planner falls back to heuristic reflection without agentloop_result."""
+async def test_planner_reflect_without_sloop_result():
+    """Test planner falls back to heuristic reflection without sloop_result."""
     from soothe.foundation.loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import Plan, PlanStep
 
@@ -206,12 +206,12 @@ async def test_planner_reflect_without_agentloop_result():
         ),
     ]
 
-    # Call reflect WITHOUT agentloop_result
+    # Call reflect WITHOUT sloop_result
     reflection = await planner.reflect(
         plan=plan,
         step_results=step_results,
         goal_context=None,
-        agentloop_result=None,  # Explicitly None
+        sloop_result=None,  # Explicitly None
     )
 
     # Should use heuristic reflection
@@ -244,7 +244,7 @@ def test_goal_result_serialization():
 
 
 @pytest.mark.asyncio
-async def test_agentloop_run_with_progress_interface():
+async def test_sloop_run_with_progress_interface():
     """Verify StrangeLoop.run_with_progress() interface matches expectations."""
     from soothe.foundation.core.agent import CoreAgent
     from soothe.foundation.loop import StrangeLoop
@@ -288,13 +288,13 @@ if __name__ == "__main__":
     print("✅ GoalResult serialization test passed")
 
     print("\nRunning async tests...")
-    asyncio.run(test_planner_reflect_with_agentloop_result())
+    asyncio.run(test_planner_reflect_with_sloop_result())
     print("✅ Planner reflect with StrangeLoop result test passed")
 
-    asyncio.run(test_planner_reflect_with_failed_agentloop_result())
+    asyncio.run(test_planner_reflect_with_failed_sloop_result())
     print("✅ Planner reflect with failed StrangeLoop result test passed")
 
-    asyncio.run(test_planner_reflect_without_agentloop_result())
+    asyncio.run(test_planner_reflect_without_sloop_result())
     print("✅ Planner reflect without StrangeLoop result test passed")
 
     print("\n✅ All IG-154 StrangeLoop integration tests passed!")

@@ -191,7 +191,7 @@ async def perform_goal(self, goal: Goal):
     
     # Delegate to StrangeLoop (via daemon dispatch in RFC-222)
     # StrangeLoop executes Plan → Execute loop
-    plan_result = await self.dispatch_to_agentloop(goal)
+    plan_result = await self.dispatch_to_sloop(goal)
     
     return plan_result
 ```

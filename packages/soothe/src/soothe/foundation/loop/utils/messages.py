@@ -107,7 +107,7 @@ class LoopHumanMessage(HumanMessage):
         ...     goal_summary="Find configuration files",
         ...     phase="execute_step",
         ... )
-        >>> msg.thread_id  # Access agentloop metadata
+        >>> msg.thread_id  # Access sloop metadata
         'thread_123'
     """
 
@@ -258,7 +258,7 @@ def loop_message_to_thread_metadata(msg: LoopHumanMessage) -> dict[str, str | in
     ThreadMessage.metadata field.
 
     Args:
-        msg: LoopHumanMessage with agentloop context (may have None fields)
+        msg: LoopHumanMessage with sloop context (may have None fields)
 
     Returns:
         Dict with thread_id, iteration, goal_summary, phase, wave_id, workspace,

@@ -360,8 +360,8 @@ Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graph
 ### StrangeLoop & Cognition (2xx)
 
 - **[RFC-200](../../specs/RFC-200-autonomous-goal-management.md)** - Autonomous Goal Management Loop
-- **[RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)** - StrangeLoop Plan-Execute Loop
-- **[RFC-203](../../specs/RFC-203-agentloop-state-memory.md)** - StrangeLoop State Memory
+- **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - StrangeLoop Plan-Execute Loop
+- **[RFC-203](../../specs/RFC-203-strangeloop-state-memory.md)** - StrangeLoop State Memory
 - **[RFC-204](../../specs/RFC-204-autopilot-mode.md)** - Autopilot Mode
 - **[RFC-206](../../specs/RFC-206-prompt-architecture.md)** - Prompt Architecture
 - **[RFC-217](../../specs/RFC-217-goal-context-management.md)** - Goal Context Management

@@ -427,7 +427,7 @@ User Query
 
 ### RFC References
 
-- [RFC-201](../specs/RFC-201-agentloop-plan-execute-loop.md) — StrangeLoop plan–execute (observe / act / verify)
+- [RFC-201](../specs/RFC-201-strangeloop-plan-execute-loop.md) — StrangeLoop plan–execute (observe / act / verify)
 - [RFC-200](../specs/RFC-200-autonomous-goal-management.md) — Autonomous goal management
 - [RFC-604](../specs/RFC-604-reason-phase-robustness.md) — Two-phase plan assess and generation (`LLMPlanner`)
 - [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) — Daemon communication

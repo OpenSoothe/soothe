@@ -199,7 +199,7 @@ class SootheRunner(
 
         # IG-406: Shared PostgreSQL pool for StrangeLoop state persistence
         # Initialized lazily in async context for high-concurrency support
-        self._agentloop_shared_pool: Any = None  # SharedPostgreSQLPool | None
+        self._sloop_shared_pool: Any = None  # SharedPostgreSQLPool | None
 
         total_ms = (time.perf_counter() - init_start) * 1000
         logger.info("SootheRunner initialized in %.1fms", total_ms)
@@ -267,7 +267,7 @@ class SootheRunner(
             metadata=metadata,
         )
 
-    async def get_agentloop_shared_pool(self) -> Any:
+    async def get_sloop_shared_pool(self) -> Any:
         """Get or initialize the shared PostgreSQL pool for StrangeLoop state.
 
         IG-406: Singleton pool for high-concurrency (200+ threads) support.
@@ -276,16 +276,16 @@ class SootheRunner(
         Returns:
             SharedPostgreSQLPool instance if PostgreSQL configured, None for SQLite.
         """
-        if self._agentloop_shared_pool is not None:
-            return self._agentloop_shared_pool
+        if self._sloop_shared_pool is not None:
+            return self._sloop_shared_pool
 
         if self._config.persistence.default_backend != "postgresql":
             return None
 
         from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
 
-        self._agentloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
-        return self._agentloop_shared_pool
+        self._sloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
+        return self._sloop_shared_pool
 
     async def list_persisted_threads(
         self,
@@ -407,7 +407,7 @@ class SootheRunner(
         # IG-406: Clear reference to shared StrangeLoop PostgreSQL pool
         # NOTE: Do NOT close the global singleton here - it's shared across all threads
         # in thread_pool mode. Pool is closed at daemon shutdown via LoopRunnerFactory.
-        self._agentloop_shared_pool = None
+        self._sloop_shared_pool = None
 
         await self._close_attached_store(self._memory)
 

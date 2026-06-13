@@ -2,8 +2,8 @@
 
 from soothe_daemon.persistence.health_check import check_persistence
 from soothe_daemon.persistence.pool_sizing import (
-    recommended_agentloop_pool_size,
     recommended_checkpointer_pool_size,
+    recommended_sloop_pool_size,
 )
 from soothe_daemon.persistence.pools import (
     POSTGRES_POOL_MAINTENANCE_INTERVAL_S,
@@ -26,7 +26,7 @@ __all__ = [
     "periodic_postgres_pool_maintenance",
     "periodic_stale_worker_reap",
     "preopen_shared_postgres_pools",
-    "recommended_agentloop_pool_size",
+    "recommended_sloop_pool_size",
     "recommended_checkpointer_pool_size",
     "reap_from_cli",
     "reap_stale_soothe_worker_processes",

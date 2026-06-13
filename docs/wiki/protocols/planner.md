@@ -650,6 +650,6 @@ Controlled concurrency (RFC-000 Principle 8):
 
 ## Related Documentation
 
-- [StrangeLoop Architecture](../agentloop.md)
+- [StrangeLoop Architecture](../sloop.md)
 - [LoopRunner Protocol](loop-runner.md)
 - [LoopWorkingMemory Protocol](working-memory.md)

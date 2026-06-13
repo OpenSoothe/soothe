@@ -8,7 +8,7 @@ Plan-Execute loop for single-goal agentic execution.
 
 StrangeLoop (`soothe.core.loop`) implements Layer 2 of Soothe's three-layer execution architecture, providing agentic goal execution through iterative refinement. It uses a Plan → Execute loop where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via Layer 1 CoreAgent.
 
-**RFC**: [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)
+**RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
 
 ---
 
@@ -568,7 +568,7 @@ planning:
 - **[Agent Factory](agent-factory.md)** - CoreAgent integration
 - **[SootheRunner](runner.md)** - Runner orchestration
 - **[Evidence System](../architecture/evidence-system.md)** - Evidence handling
-- **[RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)** - Full specification
+- **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - Full specification
 
 ---
 

@@ -351,7 +351,7 @@ class PlannerProtocol(Protocol):
         plan: Plan,
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
-        agentloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult integration
+        sloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult integration
     ) -> Reflection:
         """Evaluate plan progress and recommend goal changes.
 
@@ -359,7 +359,7 @@ class PlannerProtocol(Protocol):
             plan: The current plan (None when StrangeLoop handles execution).
             step_results: Results from completed steps (empty when StrangeLoop handles execution).
             goal_context: Goal DAG context for autonomous goal management.
-            agentloop_result: GoalResult wrapper from StrangeLoop delegation (IG-154).
+            sloop_result: GoalResult wrapper from StrangeLoop delegation (IG-154).
 
         Returns:
             Reflection with assessment and goal directives for DAG restructuring.

@@ -41,7 +41,7 @@ async def _probe_config() -> SootheConfig:
             "default_backend": "postgresql",
             "postgres_base_dsn": base,
             "checkpointer_pool_size": 3,
-            "agentloop_pool_size": 6,
+            "sloop_pool_size": 6,
             "postgres_pool_acquire_timeout_seconds": 5,
         },
         router=router_config,

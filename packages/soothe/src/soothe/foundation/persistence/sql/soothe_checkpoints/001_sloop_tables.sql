@@ -1,6 +1,6 @@
--- AgentLoop persistence tables (RFC-612, IG-055). Idempotent bootstrap / upgrade base.
+-- StrangeLoop persistence tables (RFC-612, IG-055). Idempotent bootstrap / upgrade base.
 
-CREATE TABLE IF NOT EXISTS agentloop_checkpoints (
+CREATE TABLE IF NOT EXISTS sloop_checkpoints (
     loop_id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -12,12 +12,12 @@ CREATE TABLE IF NOT EXISTS agentloop_checkpoints (
     user_id TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoints_thread_id
-    ON agentloop_checkpoints(thread_id);
-CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoints_status
-    ON agentloop_checkpoints(status);
-CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoints_updated_at
-    ON agentloop_checkpoints(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sloop_checkpoints_thread_id
+    ON sloop_checkpoints(thread_id);
+CREATE INDEX IF NOT EXISTS idx_sloop_checkpoints_status
+    ON sloop_checkpoints(status);
+CREATE INDEX IF NOT EXISTS idx_sloop_checkpoints_updated_at
+    ON sloop_checkpoints(updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS checkpoint_anchors (
     anchor_id SERIAL PRIMARY KEY,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_anchors (
     next_action_summary TEXT,
     tools_executed JSONB,
     reasoning_decision TEXT,
-    FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id),
+    FOREIGN KEY (loop_id) REFERENCES sloop_checkpoints(loop_id),
     UNIQUE(loop_id, iteration, anchor_type)
 );
 
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS failed_branches (
     created_at TIMESTAMPTZ NOT NULL,
     analyzed_at TIMESTAMPTZ,
     pruned_at TIMESTAMPTZ,
-    FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id)
+    FOREIGN KEY (loop_id) REFERENCES sloop_checkpoints(loop_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_branches_loop ON failed_branches(loop_id);
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS goal_records (
     tokens_used INTEGER DEFAULT 0,
     started_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,
-    FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id)
+    FOREIGN KEY (loop_id) REFERENCES sloop_checkpoints(loop_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_goals_loop ON goal_records(loop_id);
