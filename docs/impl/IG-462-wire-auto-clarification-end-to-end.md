@@ -38,8 +38,8 @@ the answer instead of generating "Propose 2-3 approaches…" cold.
 |------|--------|
 | `core/loop/clarification/runtime_factory.py` (new) | `resolve_clarification_mode` (request → config fallback) + `build_clarification_policy_for_runner` (mode → `AutoClarificationPolicy` or `InteractiveClarificationPolicy`, defers chat-model construction to auto mode only). |
 | `core/loop/clarification/__init__.py` | Re-export the new helpers. |
-| `core/loop/engine/agent_loop.py` | `run_with_progress(... clarification_policy=...)` plumbs through into `LoopRuntimeContext`. |
-| `core/runner/_runner_agentic.py` | Builds the policy per goal from per-request mode (Slice B) + config default, forwards to `AgentLoop.run_with_progress`. Errors degrade to `None` (legacy defer). |
+| `core/loop/engine/strange_loop.py` | `run_with_progress(... clarification_policy=...)` plumbs through into `LoopRuntimeContext`. |
+| `core/runner/_runner_agentic.py` | Builds the policy per goal from per-request mode (Slice B) + config default, forwards to `StrangeLoop.run_with_progress`. Errors degrade to `None` (legacy defer). |
 | `core/runner/_runner_autopilot_worker.py` | Always builds the policy with `mode="auto"` — autopilot is headless. |
 | `core/runner/__init__.py` (`astream`) | `clarification_mode` kwarg passes through to `_run_agentic_loop`. |
 | `config/models.py` (`ClarificationConfig`) | New `default_mode: Literal["auto","manual"] = "auto"` field. |
@@ -75,12 +75,12 @@ the answer instead of generating "Propose 2-3 approaches…" cold.
 ## 3. Tests
 
 - `tests/unit/core/loop/clarification/test_runtime_factory.py` — mode resolution and policy construction.
-- `tests/unit/core/loop/engine/test_agent_loop_clarification_policy.py` — `AgentLoop.run_with_progress(clarification_policy=…)` forwards into `LoopRuntimeContext`.
+- `tests/unit/core/loop/engine/test_strange_loop_clarification_policy.py` — `StrangeLoop.run_with_progress(clarification_policy=…)` forwards into `LoopRuntimeContext`.
 - `tests/unit/core/runner/test_runner_autopilot_worker.py` (extended) — autopilot forces `mode="auto"`; gracefully degrades when the builder raises.
 - `tests/unit/core/loop/state/test_step_action_kind.py` — schema defaults, validator, converter round-trips.
 - `tests/unit/core/loop/orchestrator/nodes/test_execute_steps_ask_user.py` — Branch 1 / Branch 2 behavior and the unchanged CoreAgent-interrupt resume path.
 - `tests/unit/core/loop/orchestrator/nodes/test_await_clarification.py` (updated) — confirms the new "keep request, write answer" contract.
-- `tests/integration/core/test_loop_agent_clarification_round_trip.py` — drives `AgentLoop.run_with_progress` with a stub planner that emits `kind="ask_user"` and a stub policy that returns canned answers; asserts the policy was consulted, a `step_completed` event surfaced for the ask_user step, and the loop reached `completed` without re-invoking CoreAgent for the ask.
+- `tests/integration/core/test_loop_agent_clarification_round_trip.py` — drives `StrangeLoop.run_with_progress` with a stub planner that emits `kind="ask_user"` and a stub policy that returns canned answers; asserts the policy was consulted, a `step_completed` event surfaced for the ask_user step, and the loop reached `completed` without re-invoking CoreAgent for the ask.
 - `tests/unit/daemon/test_message_router_loop_input.py` (extended) — `clarification_mode` normalization (case-insensitive, whitelist, blank → `None`).
 - `soothe-sdk/tests/unit/client/test_websocket_send_input.py` — wire payload omits the key by default; includes it when set; coexists with other fields.
 

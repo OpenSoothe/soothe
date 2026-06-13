@@ -210,7 +210,7 @@ async def test_iter_turn_chunks_peels_stale_daemon_ready_before_stream() -> None
                 "loop_id": "loop-main",
                 "namespace": [],
                 "mode": "custom",
-                "data": {"type": "soothe.cognition.agent_loop.started"},
+                "data": {"type": "soothe.cognition.strange_loop.started"},
             },
             {"type": "status", "state": "idle", "loop_id": "loop-main"},
         ]

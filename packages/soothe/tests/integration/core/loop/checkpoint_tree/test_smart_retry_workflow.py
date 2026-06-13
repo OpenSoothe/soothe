@@ -6,7 +6,7 @@ Tests end-to-end smart retry cycle across all components:
 - Failure analysis
 - Smart retry execution
 
-RFC-218: AgentLoop Checkpoint Tree Architecture
+RFC-218: StrangeLoop Checkpoint Tree Architecture
 IG-243: Checkpoint Tree Integration Testing
 """
 
@@ -31,7 +31,7 @@ from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 from soothe.foundation.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
+    StrangeLoopCheckpointPersistenceManager,
 )
 
 
@@ -76,7 +76,7 @@ async def test_complete_smart_retry_workflow(tmp_path):
     with mock_soothe_home(tmp_path):
         # Setup persistence
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
+        persistence_manager = StrangeLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_retry_loop"
 
         # Register the loop first (required for FK constraint)
@@ -215,7 +215,7 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
     """
     with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
+        persistence_manager = StrangeLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_multi_failure_loop"
 
         # Register the loop first (required for FK constraint)
@@ -293,7 +293,7 @@ async def test_branch_pruning_retention_policy(tmp_path):
 
     with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
+        persistence_manager = StrangeLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_prune_loop"
 
         # Register the loop first (required for FK constraint)

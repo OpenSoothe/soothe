@@ -5,11 +5,11 @@ continues to work after the module was split into a package.
 """
 
 from soothe.config.constants import (
-    DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
     DEFAULT_AUTONOMOUS_MAX_ITERATIONS,
     DEFAULT_EXECUTE_TIMEOUT,
     DEFAULT_PRIOR_CONVERSATION_LIMIT,
     DEFAULT_RECENT_MESSAGES_FOR_CLASSIFY_LIMIT,
+    DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
     MAX_CONSECUTIVE_EMPTY_TOOL_CALLS,
     MAX_EVIDENCE_STRING_LENGTH,
 )
@@ -21,7 +21,6 @@ from soothe.config.env import (
 )
 from soothe.config.models import (
     AgentConfig,
-    AgentLoopConfig,
     AutonomousConfig,
     ComplexityThresholds,
     ConsoleLoggingConfig,
@@ -41,6 +40,7 @@ from soothe.config.models import (
     ProtocolsConfig,
     RecoveryConfig,
     SecurityConfig,
+    StrangeLoopConfig,
     SubagentConfig,
     ThreadLoggingConfig,
     ToolConfig,
@@ -58,7 +58,7 @@ from soothe.foundation.loop.prompts import (
 )
 
 __all__ = [
-    "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
+    "DEFAULT_STRANGE_LOOP_MAX_ITERATIONS",
     "DEFAULT_AUTONOMOUS_MAX_ITERATIONS",
     "DEFAULT_EXECUTE_TIMEOUT",
     "DEFAULT_PRIOR_CONVERSATION_LIMIT",
@@ -72,7 +72,7 @@ __all__ = [
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
-    "AgentLoopConfig",
+    "StrangeLoopConfig",
     "AutonomousConfig",
     "ComplexityThresholds",
     "ConsoleLoggingConfig",

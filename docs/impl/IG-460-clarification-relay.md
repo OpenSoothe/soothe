@@ -306,7 +306,7 @@ class LoopRuntimeContext:
     clarification_policy: ClarificationPolicy | None = None
 
     async def mark_goal_status(self, status: str, reason: str = "") -> None:
-        # Solo: writes via AgentLoopStateManager
+        # Solo: writes via StrangeLoopStateManager
         # Autopilot: GoalEngine subclass overrides to also notify scheduler
         ...
 ```

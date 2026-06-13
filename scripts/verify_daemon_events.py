@@ -402,7 +402,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                             step_id,
                         )
 
-                elif inner_type == "soothe.cognition.agent_loop.plan.decision":
+                elif inner_type == "soothe.cognition.strange_loop.plan.decision":
                     stats.plan_decision_events.append(data)
                     steps = data.get("steps", [])
                     for step in steps:
@@ -415,7 +415,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                                 description[:80],
                             )
 
-                elif inner_type == "soothe.cognition.agent_loop.step.started":
+                elif inner_type == "soothe.cognition.strange_loop.step.started":
                     stats.step_started_events.append(data)
                     step_id = data.get("step_id", "")
                     description = data.get("description", "")
@@ -428,7 +428,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                             description[:80],
                         )
 
-                elif inner_type == "soothe.cognition.agent_loop.step.completed":
+                elif inner_type == "soothe.cognition.strange_loop.step.completed":
                     step_id = data.get("step_id", "")
                     if step_id:
                         logger.info(
@@ -813,7 +813,7 @@ async def run_verification(
                 data = event.get("data")
                 if isinstance(data, dict):
                     inner_type = data.get("type", "")
-                    if inner_type == "soothe.cognition.agent_loop.completed":
+                    if inner_type == "soothe.cognition.strange_loop.completed":
                         logger.info("Agent loop completed: %s", data.get("status"))
                         break
 

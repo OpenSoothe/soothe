@@ -16,9 +16,9 @@ The goal completion response generation workflow in Soothe is a multi-layer adap
 
 | Component | Python package / path | Role |
 |-----------|------------------------|------|
-| **AgentLoop** | `packages/soothe/src/soothe/core/agent_loop/` | Plan–Execute loop; completion detection; adaptive final response |
+| **StrangeLoop** | `packages/soothe/src/soothe/core/strange_loop/` | Plan–Execute loop; completion detection; adaptive final response |
 | **GoalEngine** | `packages/soothe/src/soothe/core/goal_engine/` | Goal lifecycle, consensus, DAG scheduling |
-| **Runner** | `packages/soothe/src/soothe/core/runner/` | Wires AgentLoop to transports and streams |
+| **Runner** | `packages/soothe/src/soothe/core/runner/` | Wires StrangeLoop to transports and streams |
 
 ---
 
@@ -26,7 +26,7 @@ The goal completion response generation workflow in Soothe is a multi-layer adap
 
 ### Stage 1: Completion Detection (Plan Phase)
 
-**Location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py`
+**Location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py`
 
 #### Primary Detection: LLM-Based Assessment
 
@@ -44,7 +44,7 @@ The Plan phase produces a `PlanResult` with:
 
 ### Stage 2: Response Length Determination (IG-268)
 
-**Location**: Length / scenario logic lives under `packages/soothe/src/soothe/core/agent_loop/analysis/` (e.g. scenario classification). Older standalone `response_length_policy.py` references in this doc are **historical**. Completion strategy is now determined by `PlanManager.determine_completion_strategy()` in `core/plan_manager.py` (IG-400).
+**Location**: Length / scenario logic lives under `packages/soothe/src/soothe/core/strange_loop/analysis/` (e.g. scenario classification). Older standalone `response_length_policy.py` references in this doc are **historical**. Completion strategy is now determined by `PlanManager.determine_completion_strategy()` in `core/plan_manager.py` (IG-400).
 
 Before generating any response, the system uses configuration (`SootheConfig.agentic.final_response`) and policies to choose synthesis vs direct execute vs summary.
 
@@ -107,7 +107,7 @@ def calculate_evidence_metrics(step_results: list) -> tuple[int, int]:
 
 ### Stage 3: Adaptive Response Generation (IG-199, IG-400)
 
-**Location**: `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` (goal completion branch after `plan_result.is_done()`)
+**Location**: `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` (goal completion branch after `plan_result.is_done()`)
 
 Once `plan_result.is_done()` returns true, the system uses `PlanManager.determine_completion_strategy()` to choose one of three branches: `LEDGER_DIRECT`, `SYNTHESIZE`, or `SUMMARY`.
 
@@ -173,7 +173,7 @@ All must be true:
 3. ≥500 chars total evidence
 4. ≥2 unique step types
 
-**Implementation** (`agent_loop.py:412-494`):
+**Implementation** (`strange_loop.py:412-494`):
 
 ```python
 # 1. Build synthesis request with length guidance
@@ -235,7 +235,7 @@ def resolve_goal_completion_text(state: GoalCompletionAccumState) -> str:
 
 **Condition**: Synthesis fails or no Execute text available
 
-**Implementation** (`agent_loop.py:333-342`):
+**Implementation** (`strange_loop.py:333-342`):
 
 ```python
 # Generate user-friendly summary (NEVER leak verbose evidence_summary)
@@ -257,14 +257,14 @@ else:
 
 **Location**: `packages/soothe/src/soothe/core/goal_engine/consensus.py`
 
-After AgentLoop produces `status="done"` response, GoalEngine consensus validates completion before accepting.
+After StrangeLoop produces `status="done"` response, GoalEngine consensus validates completion before accepting.
 
 #### Validation Process
 
 ```python
 async def evaluate_goal_completion(
     goal_description: str,
-    response_text: str,         # AgentLoop's completion response
+    response_text: str,         # StrangeLoop's completion response
     evidence_summary: str = "",
     success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
@@ -276,7 +276,7 @@ async def evaluate_goal_completion(
 | Decision | Action | Condition |
 |----------|--------|-----------|
 | **accept** | Mark goal completed | Goal truly satisfied |
-| **send_back** | Return to AgentLoop with refined instructions | Goal not fully satisfied |
+| **send_back** | Return to StrangeLoop with refined instructions | Goal not fully satisfied |
 | **suspend** | Pause goal (budget exhaustion) | Cannot proceed further |
 
 #### LLM-Based Evaluation
@@ -407,7 +407,7 @@ async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) ->
 ### 4. GoalEngine validation (RFC-204)
 
 **Holistic evaluation before accepting completion**:
-- AgentLoop's `done` judgment can be validated independently
+- StrangeLoop's `done` judgment can be validated independently
 - Consensus can send back for refinement or suspend when exhausted
 - Prevents premature completion declaration
 
@@ -455,7 +455,7 @@ agentic:
 | `GoalCompletedEvent` | `soothe.cognition.goal.completed` | Goal marked completed |
 | `GoalFailedEvent` | `soothe.cognition.goal.failed` | Goal marked failed (includes retry_count) |
 | `GoalReportEvent` | `soothe.cognition.goal.report` | Step counts and summary |
-| `LoopAgentReasonEvent` | `soothe.cognition.agent_loop.reasoned` | User-visible progress after Plan phase (wire name unchanged) |
+| `LoopAgentReasonEvent` | `soothe.cognition.strange_loop.reasoned` | User-visible progress after Plan phase (wire name unchanged) |
 
 ### Streaming Events
 
@@ -472,26 +472,26 @@ agentic:
 
 | Class | Location | Purpose |
 |-------|----------|---------|
-| `AgentLoop` | `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` | Plan–Execute orchestration |
-| `PlanManager` | `packages/soothe/src/soothe/core/agent_loop/core/plan_manager.py` | Plan orchestration + completion strategy (IG-400) |
-| `PlanDAG` | `packages/soothe/src/soothe/core/agent_loop/core/plan_dag.py` | Unified DAG of all planned steps (IG-400) |
-| `LLMPlanner` | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | Two-call Plan architecture (RFC-604) |
-| `PlanResult` | `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` | Plan phase output |
-| `StatusAssessment` | `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` | Lightweight status check |
-| `GoalCompletionAccumState` | `packages/soothe/src/soothe/core/agent_loop/utils/stream_normalize.py` | Streaming accumulator for goal completion |
+| `StrangeLoop` | `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` | Plan–Execute orchestration |
+| `PlanManager` | `packages/soothe/src/soothe/core/strange_loop/core/plan_manager.py` | Plan orchestration + completion strategy (IG-400) |
+| `PlanDAG` | `packages/soothe/src/soothe/core/strange_loop/core/plan_dag.py` | Unified DAG of all planned steps (IG-400) |
+| `LLMPlanner` | `packages/soothe/src/soothe/core/strange_loop/core/planner.py` | Two-call Plan architecture (RFC-604) |
+| `PlanResult` | `packages/soothe/src/soothe/core/strange_loop/state/schemas.py` | Plan phase output |
+| `StatusAssessment` | `packages/soothe/src/soothe/core/strange_loop/state/schemas.py` | Lightweight status check |
+| `GoalCompletionAccumState` | `packages/soothe/src/soothe/core/strange_loop/utils/stream_normalize.py` | Streaming accumulator for goal completion |
 | `GoalEngine` | `packages/soothe/src/soothe/core/goal_engine/engine.py` | Goal lifecycle manager |
-| `EvidenceBundle` | `packages/soothe/src/soothe/core/goal_engine/models.py` | AgentLoop → GoalEngine evidence exchange |
+| `EvidenceBundle` | `packages/soothe/src/soothe/core/goal_engine/models.py` | StrangeLoop → GoalEngine evidence exchange |
 
 ### Key Functions
 
 | Function | Location | Purpose |
 |----------|----------|---------|
-| `PlanManager.determine_completion_strategy()` | `packages/soothe/src/soothe/core/agent_loop/core/plan_manager.py` | Choose LEDGER_DIRECT / SYNTHESIZE / SUMMARY |
+| `PlanManager.determine_completion_strategy()` | `packages/soothe/src/soothe/core/strange_loop/core/plan_manager.py` | Choose LEDGER_DIRECT / SYNTHESIZE / SUMMARY |
 | `PlanManager.determine_goal_completion_needs()` | `plan_manager.py` | `require_goal_completion` vs config mode |
 | `determine_goal_completion_needs()` (standalone) | `plan_manager.py` | Used by planner.py without PlanManager |
-| `PlanDAG.ingest_plan()` | `packages/soothe/src/soothe/core/agent_loop/core/plan_dag.py` | Merge plan steps into unified DAG |
-| `generate_user_fallback_summary()` | `packages/soothe/src/soothe/core/agent_loop/core/fallback_summary.py` | User-safe summary when synthesis unavailable |
-| `SynthesisGenerator` (class) | `packages/soothe/src/soothe/core/agent_loop/analysis/synthesis.py` | Optional synthesis stream for goal completion |
+| `PlanDAG.ingest_plan()` | `packages/soothe/src/soothe/core/strange_loop/core/plan_dag.py` | Merge plan steps into unified DAG |
+| `generate_user_fallback_summary()` | `packages/soothe/src/soothe/core/strange_loop/core/fallback_summary.py` | User-safe summary when synthesis unavailable |
+| `SynthesisGenerator` (class) | `packages/soothe/src/soothe/core/strange_loop/analysis/synthesis.py` | Optional synthesis stream for goal completion |
 | `evaluate_goal_completion()` | `packages/soothe/src/soothe/core/goal_engine/consensus.py` | Consensus validation |
 
 ---
@@ -502,11 +502,11 @@ agentic:
 
 | Test Type | Location |
 |-----------|----------|
-| **PlanDAG / PlanManager** | `packages/soothe/tests/unit/core/agent_loop/policies/test_goal_completion_policy.py` |
-| **Plan phase / planner** | `packages/soothe/tests/unit/core/agent_loop/core/` (`test_plan_phase_*.py`, etc.) |
-| **Adaptive final response** | `packages/soothe/tests/unit/core/agent_loop/core/test_agent_loop_adaptive_final.py` |
+| **PlanDAG / PlanManager** | `packages/soothe/tests/unit/core/strange_loop/policies/test_goal_completion_policy.py` |
+| **Plan phase / planner** | `packages/soothe/tests/unit/core/strange_loop/core/` (`test_plan_phase_*.py`, etc.) |
+| **Adaptive final response** | `packages/soothe/tests/unit/core/strange_loop/core/test_strange_loop_adaptive_final.py` |
 | **GoalEngine** | `packages/soothe/tests/unit/core/goal_engine/` |
-| **AgentLoop integration** | `packages/soothe/tests/integration/core/agent_loop/` |
+| **StrangeLoop integration** | `packages/soothe/tests/integration/core/strange_loop/` |
 
 ### Verification Command
 
@@ -561,8 +561,8 @@ The goal completion response generation workflow in Soothe is a sophisticated ad
 
 1. **Completion detection** from RFC-604 `StatusAssessment` only
 2. **Adaptive final response** (`agentic.final_response`) choosing direct execute vs synthesis vs summary
-3. **Policies and analysis modules** under `core/agent_loop/policies` and `core/agent_loop/analysis`
+3. **Policies and analysis modules** under `core/strange_loop/policies` and `core/strange_loop/analysis`
 4. **GoalEngine consensus** where applicable before accepting completion
 5. **Lifecycle management** in `core/goal_engine` for completion, failure, retry, and reactivation
 
-Implementation paths use `packages/soothe/src/soothe/core/` (AgentLoop and GoalEngine migrated from legacy `cognition/` packages).
+Implementation paths use `packages/soothe/src/soothe/core/` (StrangeLoop and GoalEngine migrated from legacy `cognition/` packages).

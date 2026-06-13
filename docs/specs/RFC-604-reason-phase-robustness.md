@@ -7,7 +7,7 @@
 **Created**: 2026-04-11
 **Updated**: 2026-05-05
 **Authors**: Claude Sonnet 4.6
-**Depends on**: RFC-201 (AgentLoop Plan-Execute Loop)
+**Depends on**: RFC-201 (StrangeLoop Plan-Execute Loop)
 
 ---
 
@@ -406,7 +406,7 @@ Total Phase 2:     ~500-800 tokens ✅ (safe margin)
 
 ### 8.1 Existing Fallback Logic
 
-**Location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (structured Plan / retry; historical refs to `llm.py` pre-merge)
+**Location**: `packages/soothe/src/soothe/core/strange_loop/core/planner.py` (structured Plan / retry; historical refs to `llm.py` pre-merge)
 
 **Current Pipeline**:
 ```python
@@ -608,7 +608,7 @@ for attempt in range(3):
 ### 13.1 Dependencies
 
 * **RFC-603-reasoning-quality-progressive-actions**: Provides Plan phase architecture and quality improvements that this RFC builds upon
-* **RFC-201-agentloop-plan-execute-loop**: Defines Layer 2 AgentLoop architecture where Plan phase operates
+* **RFC-201-agentloop-plan-execute-loop**: Defines Layer 2 StrangeLoop architecture where Plan phase operates
 
 ### 13.2 Integration Points
 

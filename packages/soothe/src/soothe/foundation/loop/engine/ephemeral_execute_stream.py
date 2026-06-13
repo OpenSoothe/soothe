@@ -1,4 +1,4 @@
-"""Ephemeral execute graph for AgentLoop ACT streaming (IG-477).
+"""Ephemeral execute graph for StrangeLoop ACT streaming (IG-477).
 
 LangGraph graphs compiled with a checkpointer load checkpoint channel history on
 each ``astream`` tick, causing unbounded RSS during execute. CoreAgent therefore

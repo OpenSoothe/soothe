@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe_daemon.query.stream_delivery import (
-    AGENT_LOOP_COMPLETED,
+    STRANGE_LOOP_COMPLETED,
     StreamDeliveryCoalescer,
 )
 
@@ -42,14 +42,14 @@ def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 2
     assert done[0][1] == "messages"
     coalesced_msg = done[0][2][0]
     assert coalesced_msg["content"] == "ab"
     assert coalesced_msg.get("chunk_position") == "last"
-    assert done[1][2]["type"] == AGENT_LOOP_COMPLETED
+    assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
     assert coalescer.turn_complete_pending
 
 
@@ -149,23 +149,23 @@ def test_strip_tool_metadata_for_batch() -> None:
 
 
 def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
-    """IG-436: Verify goal_completion flushed when AGENT_LOOP_COMPLETED arrives."""
+    """IG-436: Verify goal_completion flushed when STRANGE_LOOP_COMPLETED arrives."""
     coalescer = StreamDeliveryCoalescer("batch")
     # Accumulate goal_completion chunks
     assert coalescer.ingest(*_gc_chunk("part1")) == []
     assert coalescer.ingest(*_gc_chunk("part2")) == []
-    # AGENT_LOOP_COMPLETED triggers flush
+    # STRANGE_LOOP_COMPLETED triggers flush
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     # Should have flushed goal_completion + completed event
     assert len(done) == 2
     assert done[0][1] == "messages"
     assert done[0][2][0]["phase"] == "goal_completion"
     assert done[0][2][0]["content"] == "part1part2"
-    assert done[1][2]["type"] == AGENT_LOOP_COMPLETED
+    assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
     assert coalescer.turn_complete_pending
 
 
@@ -173,7 +173,7 @@ def test_adaptive_mode_switches_to_chunked_streaming_on_threshold() -> None:
     """IG-441: After threshold, adaptive enters chunked-streaming (not pure batch).
 
     Pre-IG-441 the second phase was pure batch — every post-threshold chunk
-    was held until ``agent_loop.completed``. With block_chars=1024 (default)
+    was held until ``strange_loop.completed``. With block_chars=1024 (default)
     and a short stream, the new behavior with default block thresholds still
     holds chunks until the final flush, preserving the no-duplicate guarantee:
     streamed bytes are NEVER re-emitted as part of a block.
@@ -194,7 +194,7 @@ def test_adaptive_mode_switches_to_chunked_streaming_on_threshold() -> None:
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 2
     # Final block carries only post-threshold content; streamed "abc" is never
@@ -213,7 +213,7 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
     - third chunk "kl" (2 chars) does not push buffer to 10 yet.
     - fourth chunk "mnopqr" (6 chars) → buffer=15 ≥ 10 → emit a block
       ("defghijklmnopqr") and reset.
-    - agent_loop.completed flushes any remainder (none here) and emits the
+    - strange_loop.completed flushes any remainder (none here) and emits the
       completed event.
     """
     coalescer = StreamDeliveryCoalescer(
@@ -243,7 +243,7 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     # Buffer was empty after the block flush, but we still emit a terminal
     # marker so clients can finalize goal_completion streaming state.
@@ -252,7 +252,7 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
     assert marker["phase"] == "goal_completion"
     assert marker["content"] == ""
     assert marker["chunk_position"] == "last"
-    assert done[1][2]["type"] == AGENT_LOOP_COMPLETED
+    assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
 
 
 def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
@@ -305,7 +305,7 @@ def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
         done = coalescer.ingest(
             (),
             "custom",
-            {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+            {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
         )
         assert len(done) == 2
         assert done[0][2][0]["content"] == "z"
@@ -339,14 +339,14 @@ def test_streaming_mode_passthrough_every_goal_completion_chunk() -> None:
     assert coalescer.goal_completion_phase == "streaming"
     assert coalescer.goal_completion_block_flush_count == 0
 
-    # ``agent_loop.completed`` only emits the custom event — nothing was buffered.
+    # ``strange_loop.completed`` only emits the custom event — nothing was buffered.
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 1
-    assert done[0][2]["type"] == AGENT_LOOP_COMPLETED
+    assert done[0][2]["type"] == STRANGE_LOOP_COMPLETED
 
 
 def test_streaming_mode_file_output_still_buffers() -> None:
@@ -365,7 +365,7 @@ def test_streaming_mode_file_output_still_buffers() -> None:
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 2
     assert done[0][2][0]["content"] == "alphabravo"
@@ -391,7 +391,7 @@ def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
     done = coalescer.ingest(
         (),
         "custom",
-        {"type": AGENT_LOOP_COMPLETED, "status": "done"},
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     assert len(done) == 2
     assert done[0][2][0]["content"] == "abcdefgh"

@@ -27,7 +27,7 @@ Tests go in package directories: `packages/<pkg>/tests/unit/` or `tests/integrat
 Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests pass.
 
 ### 6. Terminology
-- NEVER use "layer N" — use concrete names (CoreAgent, AgentLoop, GoalEngine)
+- NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
 - NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors)—internal only
 
 ### 7. DO NOT Cheat Tests

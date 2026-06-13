@@ -14,7 +14,7 @@ This RFC defines a unified streaming messaging framework for daemon-to-client ou
 
 ### IG-304 / IG-317 Amendment (current)
 
-Daemon output emission owns suppression boundaries for AgentLoop execution:
+Daemon output emission owns suppression boundaries for StrangeLoop execution:
 
 1. Execute-phase assistant prose is suppressed at daemon emission and is not streamed as user-visible output.
 2. Message-mode forwarding carries **tool UI** (`ToolMessage` + AI tool-call metadata) **and** loop-tagged assistant completion chunks (`phase` in `goal_completion`, `quiz`, `autonomous_goal`, `direct_model`).
@@ -64,7 +64,7 @@ Users see tool telemetry during execute and receive final / phased assistant tex
 - Transport layer changes (WebSocket already bidirectional, RFC-450)
 - Event naming taxonomy (RFC-403 covers naming conventions)
 - UI display logic (CLI/TUI implementation details, RFC-500)
-- Client-side suppression as primary correctness boundary for AgentLoop execute-phase prose
+- Client-side suppression as primary correctness boundary for StrangeLoop execute-phase prose
 
 ## Architectural Design
 
@@ -160,7 +160,7 @@ Early RFC-614 drafts described a `_wrap_streaming_output()` helper that re-publi
 4. Namespace: carry LangGraph namespace through to the client so concurrent subgraphs do not interleave text.
 
 **Delegate finals & completion replay**  
-Intermediate subgraph assistant prose stays **off** the root orchestration summary path (`iter_messages_for_act_aggregation` yields root-graph `messages` only). Answers that exist only inside a delegated run are promoted from ordered **`task`** `ToolMessage` return bodies at the delegation boundary (not by replaying raw subgraph AIMessage streams). The AgentLoop `goal_completion` node sets **`skip_goal_completion_wire_duplicate`** after a **streamed `synthesize`** so the runner does not emit a second identical **`phase=goal_completion`** chunk. The flag stays **false** for **`ledger_direct`** (and **`summary`**) so headless clients still receive one **`goal_completion`** line on stdout while execute-phase narration remains suppressed (IG-343).
+Intermediate subgraph assistant prose stays **off** the root orchestration summary path (`iter_messages_for_act_aggregation` yields root-graph `messages` only). Answers that exist only inside a delegated run are promoted from ordered **`task`** `ToolMessage` return bodies at the delegation boundary (not by replaying raw subgraph AIMessage streams). The StrangeLoop `goal_completion` node sets **`skip_goal_completion_wire_duplicate`** after a **streamed `synthesize`** so the runner does not emit a second identical **`phase=goal_completion`** chunk. The flag stays **false** for **`ledger_direct`** (and **`summary`**) so headless clients still receive one **`goal_completion`** line on stdout while execute-phase narration remains suppressed (IG-343).
 
 #### StreamingTextAccumulator (State Machine)
 
@@ -267,7 +267,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 
 **Primary modules**:
 1. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
-2. `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` — emit `stream_event` tuples consumed by the runner.
+2. `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` — emit `stream_event` tuples consumed by the runner.
 
 **Forwarding contract** (summary): forward **tool UI** `messages` chunks; forward **loop assistant** `messages` chunks when `assistant_output_phase(...)` is non-null; suppress plain execute-phase assistant prose.
 
@@ -397,7 +397,7 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 
 ### Event Semantics
 
-- **`soothe.cognition.agent_loop.completed`**: lifecycle / progress only (no parallel requirement to ship final answer text on this event).
+- **`soothe.cognition.strange_loop.completed`**: lifecycle / progress only (no parallel requirement to ship final answer text on this event).
 - **Removed for assistant bodies**: `soothe.output.goal_completion.*`, `soothe.output.quiz.responded`, and related autonomous output-domain duplicates — **replaced by `messages` + `phase`.**
 
 **Integrator guidance**:
@@ -574,7 +574,7 @@ from soothe_sdk.ux.loop_stream import assistant_output_phase
 phase = assistant_output_phase(msg)  # e.g. "goal_completion"
 ```
 
-**Emitting loop assistant output (runner / AgentLoop)**:
+**Emitting loop assistant output (runner / StrangeLoop)**:
 - Forward `stream_event` tuples that already include loop-tagged AI `messages` payloads with `phase` set; avoid reintroducing duplicate `soothe.output.goal_completion.*` custom events for the same text.
 
 ### For Users

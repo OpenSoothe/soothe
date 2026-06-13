@@ -16,7 +16,7 @@
 
 This RFC defines the interface contracts for Soothe's event processing system, including the typed event protocol, unified event processor architecture, and daemon-side filtering. It consolidates the progress event protocol (RFC-0015), unified event processing (RFC-0019), and daemon-side filtering (RFC-0022) into a single implementation interface specification.
 
-**IG-304 amendment**: For AgentLoop execution, daemon-side emission is the primary suppression boundary for execute-phase assistant prose. Client processors render normalized output events and tool telemetry; they are not the authoritative suppression boundary for execute-phase prose correctness.
+**IG-304 amendment**: For StrangeLoop execution, daemon-side emission is the primary suppression boundary for execute-phase assistant prose. Client processors render normalized output events and tool telemetry; they are not the authoritative suppression boundary for execute-phase prose correctness.
 **IG-306 amendment**: Streaming accumulation preserves chunk boundaries and applies minimal boundary-safe stitching for markdown/token integrity (for example heading and alpha/number boundary glue).
 
 ---
@@ -316,14 +316,14 @@ class EventBus:
 }
 ```
 
-### 6.6 Daemon Output Contract for AgentLoop
+### 6.6 Daemon Output Contract for StrangeLoop
 
-Daemon emission must enforce these rules for AgentLoop runs:
+Daemon emission must enforce these rules for StrangeLoop runs:
 
 1. Forward message-mode stream chunks required for tool UI (`ToolMessage` and AI tool-call metadata).
 2. Do not forward execute-phase assistant prose as user-facing output events.
 3. Emit user-facing final answer text on the **`messages`** stream using loop-tagged AI payloads with a **`phase`** field (for example `goal_completion`, `quiz`, `autonomous_goal`, `direct_model`; IG-317 / RFC-614). Do not rely on parallel `soothe.output.goal_completion.*` custom events for that text.
-4. Keep lifecycle/progress events (`soothe.cognition.agent_loop.*`) separate from final answer payloads.
+4. Keep lifecycle/progress events (`soothe.cognition.strange_loop.*`) separate from final answer payloads.
 5. Preserve chunk boundary integrity through client streaming accumulation (boundary-safe stitching) without re-introducing client-side execute-phase suppression authority.
 
 ---

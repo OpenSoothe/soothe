@@ -1,7 +1,7 @@
 """Intent classifier implementation (RFC-225).
 
 Two-value LLM classification (``quiz`` vs. ``agentic``). Loop continuation
-is derived structurally inside ``AgentLoop`` from the loaded checkpoint
+is derived structurally inside ``StrangeLoop`` from the loaded checkpoint
 and is not a classifier concern.
 """
 
@@ -39,7 +39,7 @@ class IntentClassifier:
     """LLM-driven intent classification (RFC-225).
 
     - Quiz vs. agentic decision via a single structured LLM call.
-    - No structural / continuation logic — that is owned by ``AgentLoop``.
+    - No structural / continuation logic — that is owned by ``StrangeLoop``.
     - Robust fallbacks to safe defaults on failure.
 
     Args:

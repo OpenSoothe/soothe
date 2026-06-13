@@ -14,13 +14,13 @@
 
 ## Abstract
 
-This RFC introduces two major capabilities to Soothe's AgentLoop architecture:
+This RFC introduces two major capabilities to Soothe's StrangeLoop architecture:
 
 1. **Explore Subagent**: A specialized subagent for targeted filesystem searches using intelligent wave-based strategies (directory listing → glob patterns → content search), LLM-driven search planning, and match validation with relevance ranking.
 
-2. **Parallel Subagent Spawning**: Extension of AgentLoop's StepAction schema to support multiple concurrent subagent executions via the `subagents` list field, enabling parallel exploration of different filesystem branches or mixed subagent workflows (explore + research running concurrently).
+2. **Parallel Subagent Spawning**: Extension of StrangeLoop's StepAction schema to support multiple concurrent subagent executions via the `subagents` list field, enabling parallel exploration of different filesystem branches or mixed subagent workflows (explore + research running concurrently).
 
-Both features integrate with existing AgentLoop Plan → Execute architecture, leverage deepagents' task tool infrastructure, and maintain thread isolation guarantees.
+Both features integrate with existing StrangeLoop Plan → Execute architecture, leverage deepagents' task tool infrastructure, and maintain thread isolation guarantees.
 
 ## Problem Statement
 
@@ -108,7 +108,7 @@ Executor aggregates ToolMessages → single StepResult
 Outcome: {type: "parallel_subagents", subagents: [...], outputs: [...]}
 ```
 
-### Integration with AgentLoop Plan Phase
+### Integration with StrangeLoop Plan Phase
 
 **LLMPlanner Prompt Enhancement**:
 
@@ -317,9 +317,9 @@ class StepAction(BaseModel):
 - `subagent="research"` → `subagents=["research"]`
 
 **Files requiring updates**:
-- `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`
-- `packages/soothe/src/soothe/core/agent_loop/core/executor.py`
-- `packages/soothe/src/soothe/core/agent_loop/core/planner.py`
+- `packages/soothe/src/soothe/core/strange_loop/state/schemas.py`
+- `packages/soothe/src/soothe/core/strange_loop/core/executor.py`
+- `packages/soothe/src/soothe/core/strange_loop/core/planner.py`
 - All test files with StepAction usage
 
 ### 3. Parallel Spawning Implementation
@@ -526,7 +526,7 @@ sections.append("""
    - Mixed (explore + research)
    - Thread isolation verification
 
-3. **AgentLoop integration**:
+3. **StrangeLoop integration**:
    - LLM auto-selects explore
    - Parallel execution modes
    - Metrics aggregation
@@ -559,7 +559,7 @@ sections.append("""
 
 ## Related Documents
 
-- RFC-200: AgentLoop architecture
+- RFC-200: StrangeLoop architecture
 - RFC-211: Layer 2 tool result optimization
 - RFC-600: Plugin extension system
 - Design draft: `docs/drafts/2026-04-13-explore-subagent-parallel-spawning-design.md`
@@ -570,7 +570,7 @@ sections.append("""
 - Initial RFC draft from approved design
 - Two major capabilities: explore subagent + parallel spawning
 - Breaking schema change (no backward compatibility)
-- Integration with AgentLoop Plan → Execute architecture
+- Integration with StrangeLoop Plan → Execute architecture
 
 ---
 

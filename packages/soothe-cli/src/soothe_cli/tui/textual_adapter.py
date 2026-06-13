@@ -31,15 +31,15 @@ if TYPE_CHECKING:
 
 from langchain_core.messages import AIMessage, HumanMessage
 from soothe_sdk.core.events import (
-    AGENT_LOOP_COMPLETED,
-    AGENT_LOOP_PLAN_DECISION,
-    AGENT_LOOP_STARTED,
-    AGENT_LOOP_STEP_COMPLETED,
-    AGENT_LOOP_STEP_QUEUED,
-    AGENT_LOOP_STEP_STARTED,
     LOOP_CLARIFICATION_ANSWERED,
     LOOP_CLARIFICATION_DEFERRED,
     LOOP_CLARIFICATION_REQUESTED,
+    STRANGE_LOOP_COMPLETED,
+    STRANGE_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_STARTED,
+    STRANGE_LOOP_STEP_COMPLETED,
+    STRANGE_LOOP_STEP_QUEUED,
+    STRANGE_LOOP_STEP_STARTED,
 )
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.langchain_wire import (
@@ -2475,7 +2475,7 @@ async def execute_task_textual(
                                     await adapter._set_spinner(None)
                                 continue
 
-                            if event_type == AGENT_LOOP_STARTED:
+                            if event_type == STRANGE_LOOP_STARTED:
                                 if not ns_key:
                                     goal_loop_start_monotonic = time.monotonic()
                                     ui_coalesce.execute_wave_active = True
@@ -2494,7 +2494,7 @@ async def execute_task_textual(
                                     assistant_message_by_namespace.pop(ns_key, None)
                                 continue
 
-                            if event_type == AGENT_LOOP_COMPLETED:
+                            if event_type == STRANGE_LOOP_COMPLETED:
                                 continue
 
                             if event_type in (
@@ -2553,7 +2553,7 @@ async def execute_task_textual(
                                 adapter._clarification_pending = False
                                 continue
 
-                            if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
+                            if event_type == STRANGE_LOOP_PLAN_DECISION and not ns_key:
                                 raw_steps = data.get("steps")
                                 if isinstance(raw_steps, list):
                                     execution_mode = str(data.get("execution_mode", "")).strip()
@@ -2566,7 +2566,7 @@ async def execute_task_textual(
                                         ui_coalesce.execute_wave_active = True
                                 continue
 
-                            if event_type == AGENT_LOOP_STEP_QUEUED:
+                            if event_type == STRANGE_LOOP_STEP_QUEUED:
                                 step_id = str(data.get("step_id", "")).strip()
                                 description = str(data.get("description", "")).strip()
                                 if step_id:
@@ -2584,7 +2584,7 @@ async def execute_task_textual(
                                     step_widget.set_queued()
                                 continue
 
-                            if event_type == AGENT_LOOP_STEP_STARTED:
+                            if event_type == STRANGE_LOOP_STEP_STARTED:
                                 ui_coalesce.execute_wave_active = True
                                 step_id = str(data.get("step_id", "")).strip()
                                 description = str(data.get("description", "")).strip()
@@ -2637,7 +2637,7 @@ async def execute_task_textual(
 
                                     continue
 
-                            if event_type == AGENT_LOOP_STEP_COMPLETED:
+                            if event_type == STRANGE_LOOP_STEP_COMPLETED:
                                 step_id = str(data.get("step_id", "")).strip()
                                 if step_id:
                                     # Drain buffered tools that still reference this
@@ -2924,11 +2924,11 @@ __all__ = [
     "SessionStats",
     "SpinnerStatus",
     "format_token_count",
-    "AGENT_LOOP_COMPLETED",
-    "AGENT_LOOP_STARTED",
-    "AGENT_LOOP_STEP_COMPLETED",
-    "AGENT_LOOP_STEP_QUEUED",
-    "AGENT_LOOP_STEP_STARTED",
+    "STRANGE_LOOP_COMPLETED",
+    "STRANGE_LOOP_STARTED",
+    "STRANGE_LOOP_STEP_COMPLETED",
+    "STRANGE_LOOP_STEP_QUEUED",
+    "STRANGE_LOOP_STEP_STARTED",
     "TurnToolUiCoalescer",
 ]
 

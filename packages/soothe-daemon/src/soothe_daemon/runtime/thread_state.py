@@ -73,14 +73,14 @@ class ThreadStateRegistry:
                 self._client_active_thread.pop(cid, None)
 
     def set_thread_loop(self, thread_id: str, loop_id: str | None) -> None:
-        """Associate a durability thread with an AgentLoop id (IG-300)."""
+        """Associate a durability thread with an StrangeLoop id (IG-300)."""
         if loop_id and str(loop_id).strip():
             self._thread_loop[thread_id] = str(loop_id).strip()
         else:
             self._thread_loop.pop(thread_id, None)
 
     def get_thread_loop(self, thread_id: str) -> str | None:
-        """Return AgentLoop id bound to *thread_id*, if any."""
+        """Return StrangeLoop id bound to *thread_id*, if any."""
         return self._thread_loop.get(thread_id)
 
     def set_client_thread(self, client_id: str, thread_id: str) -> None:

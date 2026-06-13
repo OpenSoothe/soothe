@@ -3,7 +3,7 @@
 > **Purpose**: Document how user queries flow through the Soothe system across different scenarios.
 > **Version**: 1.2.0
 > **Date**: 2026-05-11
-> **Scope**: CLI → Daemon → Runner → AgentLoop → CoreAgent
+> **Scope**: CLI → Daemon → Runner → StrangeLoop → CoreAgent
 
 ---
 
@@ -64,7 +64,7 @@
 Soothe routes queries through a multi-layer architecture with decision points at each layer. The routing determines:
 
 - **Execution mode**: Autonomous vs. agentic
-- **Intent handling**: Fast path (`quiz`) vs. full AgentLoop
+- **Intent handling**: Fast path (`quiz`) vs. full StrangeLoop
 - **Thread continuation**: New goal vs. resume from checkpoint
 - **Goal lifecycle**: Creation, execution, completion
 - **Early completion optimization**: Direct execute vs. goal completion synthesis
@@ -238,7 +238,7 @@ intent_classification = await self._intent_classifier.classify_intent(
     ...
 )
 
-# Fast path: skip AgentLoop entirely for quiz (greetings, thanks, piggybacked trivia)
+# Fast path: skip StrangeLoop entirely for quiz (greetings, thanks, piggybacked trivia)
 if intent_classification.intent_type == "quiz":
     async for chunk in self._run_quiz(user_input, ...):
         yield chunk
@@ -250,8 +250,8 @@ if intent_classification.intent_type == "quiz":
 | Intent Type | Fast Path | Latency |
 |-------------|-----------|---------|
 | `quiz` | `_run_quiz()` → CoreAgent | ~1-2s |
-| `new_goal` | Full AgentLoop | ~5-30s |
-| `continue_thread` | Full AgentLoop | ~3-15s |
+| `new_goal` | Full StrangeLoop | ~5-30s |
+| `continue_thread` | Full StrangeLoop | ~3-15s |
 
 ### 6.3 Initialization (lines 84-199)
 
@@ -283,14 +283,14 @@ IntentClassifier.classify_intent()
     ↓ (not quiz)
 ┌─────────────────────────────────────────┐
 │ intent_type == "new_goal"               │
-│   → AgentLoop.run_with_progress()       │
+│   → StrangeLoop.run_with_progress()       │
 │   → Full Plan→Execute loop              │
 │   → AGENTIC PATH (~5-30s)               │
 └─────────────────────────────────────────┘
     ↓
-Emit AgenticLoopStartedEvent
+Emit StrangeLoopStartedEvent
     ↓
-AgentLoop execution with progress events
+StrangeLoop execution with progress events
 ```
 
 **Direct Execute Optimization**:
@@ -345,13 +345,13 @@ class StatusAssessment(BaseModel):
 
 | Intent Type | Route | Description |
 |-------------|-------|-------------|
-| `quiz` | `_run_quiz()` | Fast path, skip AgentLoop |
-| `new_goal` | AgentLoop | Full loop execution, fresh goal |
-| `continue_thread` | AgentLoop | Reuse working memory from prior goal |
+| `quiz` | `_run_quiz()` | Fast path, skip StrangeLoop |
+| `new_goal` | StrangeLoop | Full loop execution, fresh goal |
+| `continue_thread` | StrangeLoop | Reuse working memory from prior goal |
 
 ### 7.2 Fast Path Execution
 
-Fast path (`quiz`) skips the AgentLoop orchestrator:
+Fast path (`quiz`) skips the StrangeLoop orchestrator:
 
 ```
 IntentClassifier → "quiz" → _run_quiz()
@@ -361,9 +361,9 @@ IntentClassifier → "quiz" → _run_quiz()
 
 ---
 
-## 8. AgentLoop Orchestrator
+## 8. StrangeLoop Orchestrator
 
-**File**: `packages/soothe/src/soothe/core/loop/engine/agent_loop.py`
+**File**: `packages/soothe/src/soothe/core/loop/engine/strange_loop.py`
 
 ### 8.1 run_with_progress() (lines 102-342)
 
@@ -372,7 +372,7 @@ IntentClassifier → "quiz" → _run_quiz()
 │  run_with_progress(goal, thread_id, workspace)                  │
 │    ↓                                                            │
 │  1. Checkpoint recovery (lines 173-244)                         │
-│     - Load from AgentLoopStateManager                           │
+│     - Load from StrangeLoopStateManager                           │
 │     - Determine recovery scenario                               │
 │    ↓                                                            │
 │  2. Continue-thread mode (lines 153-162)                        │
@@ -381,7 +381,7 @@ IntentClassifier → "quiz" → _run_quiz()
 │    ↓                                                            │
 │  3. Loop Graph execution (lines 294-342)                        │
 │     - Create LoopRuntimeContext                                 │
-│     - invoke_agent_loop_graph(ctx)                              │
+│     - invoke_strange_loop_graph(ctx)                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -446,7 +446,7 @@ class LoopState:
     
     # Routing fields (minimal)
     last_outcome: Literal["continue", "fatal", "max_iterations"]
-    intent_route: Literal["fast_path", "agent_loop"]
+    intent_route: Literal["fast_path", "strange_loop"]
     plan_route: Literal["PLAN_ROUTE_GOAL_DONE", "continue"]
 ```
 
@@ -506,7 +506,7 @@ Update minimal routing fields only
 │    ↓                                                            │
 │  next_goal() → Highest-priority ready goal                      │
 │    ↓                                                            │
-│  execute_goal() → AgentLoop.run_with_progress()                 │
+│  execute_goal() → StrangeLoop.run_with_progress()                 │
 │    ↓                                                            │
 │  complete_goal() / fail_goal() → Mark status                    │
 │    ↓                                                            │
@@ -600,7 +600,7 @@ class StatusAssessment(BaseModel):
 StatusAssessment feeds into Goal Engine routing:
 
 ```
-AgentLoop Plan Phase
+StrangeLoop Plan Phase
     ↓
 StatusAssessment LLM call (lightweight)
     ↓
@@ -748,9 +748,9 @@ IntentClassifier → "new_goal"
     ↓
 _run_agentic_loop()
     ↓
-AgentLoop.run_with_progress()
+StrangeLoop.run_with_progress()
     ↓
-LoopGraph.invoke_agent_loop_graph()
+LoopGraph.invoke_strange_loop_graph()
     ↓
 Nodes: init_or_resume → plan_assess → plan_generate → execute
     ↓
@@ -764,7 +764,7 @@ User Query (with thread context)
     ↓
 IntentClassifier → "continue_thread"
     ↓
-AgentLoop.run_with_progress(continue_thread_mode=True)
+StrangeLoop.run_with_progress(continue_thread_mode=True)
     ↓
 Seeds working_memory from prior goal
     ↓
@@ -784,7 +784,7 @@ _run_quiz()
     ↓
 CoreAgent.astream() directly
     ↓
-Return response (skip AgentLoop)
+Return response (skip StrangeLoop)
 ```
 
 ### Scenario 4: Autonomous Mode
@@ -800,7 +800,7 @@ GoalEngine.create_goal() → goal DAG
     ↓
 GoalEngine.next_goal() → highest priority ready goal
     ↓
-AgentLoop.run_with_progress() for that goal
+StrangeLoop.run_with_progress() for that goal
     ↓
 GoalEngine.complete_goal() / fail_goal()
     ↓
@@ -812,7 +812,7 @@ Repeat until all goals terminal
 ```
 User Query (loop_id with existing checkpoint)
     ↓
-AgentLoop loads checkpoint from AgentLoopStateManager
+StrangeLoop loads checkpoint from StrangeLoopStateManager
     ↓
 status=="running" → Resume at iteration
 status=="ready_for_next_goal" → Start new goal in same loop
@@ -870,7 +870,7 @@ Emit cancellation event to subscribed clients
 ### Scenario 9: Status Assessment Routing (RFC-604)
 
 ```
-AgentLoop enters Plan Phase
+StrangeLoop enters Plan Phase
     ↓
 StatusAssessment LLM call (lightweight, ~50-80 tokens)
     ↓
@@ -956,7 +956,7 @@ User Query (autonomous=True, complex multi-step task)
     ↓
 GoalEngine.create_goal() → Goal with dependencies
     ↓
-AgentLoop.run_with_progress() executes goal
+StrangeLoop.run_with_progress() executes goal
     ↓
 ┌─────────────────────────────────────────┐
 │ Step execution FAILS                    │
@@ -1034,13 +1034,13 @@ class BackoffDecision:
 | 3 | Runner selection | `runner/factory.py` | - | Local, Pool, Ray |
 | 4 | Execution mode | `runner/__init__.py` | 505-580 | Autonomous or Agentic |
 | 5 | Intent classification | `_runner_agentic.py` | 280-310 | quiz, new_goal, continue_thread |
-| 6 | Checkpoint status | `agent_loop.py` | 173-244 | Resume, new goal, fresh start |
+| 6 | Checkpoint status | `strange_loop.py` | 173-244 | Resume, new goal, fresh start |
 | 7 | Plan routing | `routing.py` | 12-67 | goal_completion, execute, END |
 | 8 | Goal completion | `plan_assess.py` | - | PLAN_ROUTE_GOAL_DONE signal |
 | 9 | Status assessment | `state/schemas.py` | 453-475 | continue, replan, done |
 | 10 | Progress level | `state/schemas.py` | 470 | none, low, medium, high, complete |
 | 11 | Fatal error routing | `routing.py` | 42-67 | END on fatal |
-| 12 | Checkpoint recovery | `agent_loop.py` | 170-244 | Resume, new goal, fresh |
+| 12 | Checkpoint recovery | `strange_loop.py` | 170-244 | Resume, new goal, fresh |
 
 ---
 
@@ -1048,7 +1048,7 @@ class BackoffDecision:
 
 ### 14.1 Fast Path Optimization
 
-Quiz intents bypass AgentLoop for:
+Quiz intents bypass StrangeLoop for:
 
 - Reduced latency (single CoreAgent call)
 - Lower resource usage (no plan generation)
@@ -1142,8 +1142,8 @@ Per-loop queues ensure:
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │ Intent → Route                                                      │  │
 │  │ quiz → _run_quiz() → CoreAgent (FAST PATH)                         │  │
-│  │ new_goal → AgentLoop (FRESH)                                       │  │
-│  │ continue_thread → AgentLoop (RESUME)                               │  │
+│  │ new_goal → StrangeLoop (FRESH)                                       │  │
+│  │ continue_thread → StrangeLoop (RESUME)                               │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -1202,12 +1202,12 @@ Per-loop queues ensure:
 **Files**:
 - `packages/soothe/src/soothe/core/loop/orchestrator/routing.py`
 - `packages/soothe/src/soothe/core/loop/orchestrator/nodes/execute_steps.py`
-- `packages/soothe/src/soothe/core/loop/engine/agent_loop.py`
+- `packages/soothe/src/soothe/core/loop/engine/strange_loop.py`
 - `packages/soothe/src/soothe/core/loop/state/manager.py`
 
 ### 17.1 Error Classification
 
-The AgentLoop categorizes errors into distinct types for appropriate handling:
+The StrangeLoop categorizes errors into distinct types for appropriate handling:
 
 | Error Type | Description | Handling Strategy |
 |------------|-------------|-------------------|
@@ -1248,9 +1248,9 @@ Routing functions detect "fatal" → route to END
 
 ### 17.3 Checkpoint Recovery Scenarios
 
-**File**: `agent_loop.py` (lines 170-244)
+**File**: `strange_loop.py` (lines 170-244)
 
-The AgentLoop implements three checkpoint recovery scenarios:
+The StrangeLoop implements three checkpoint recovery scenarios:
 
 ```
 Checkpoint Load

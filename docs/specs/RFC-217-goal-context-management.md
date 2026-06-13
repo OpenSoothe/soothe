@@ -1,7 +1,7 @@
-# RFC-217: Goal Context Management for AgentLoop
+# RFC-217: Goal Context Management for StrangeLoop
 
 **RFC**: 217
-**Title**: Goal Context Management for AgentLoop
+**Title**: Goal Context Management for StrangeLoop
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
@@ -9,13 +9,13 @@
 
 ## Abstract
 
-Design a unified goal-level context management system for AgentLoop that mirrors CoreAgent's context separation pattern. Goal-level summaries (loop checkpoint) are injected separately from conversation history (thread state), enabling seamless same-thread continuation and thread-switch knowledge transfer while maintaining architectural isolation between loop history (goals) and thread history (messages).
+Design a unified goal-level context management system for StrangeLoop that mirrors CoreAgent's context separation pattern. Goal-level summaries (loop checkpoint) are injected separately from conversation history (thread state), enabling seamless same-thread continuation and thread-switch knowledge transfer while maintaining architectural isolation between loop history (goals) and thread history (messages).
 
 ## Problem Statement
 
 ### Current Issue
 
-AgentLoop's `inject_previous_goal_context()` method exists but is never called. Previous goal final_reports are not injected into Plan or Execute phases, causing:
+StrangeLoop's `inject_previous_goal_context()` method exists but is never called. Previous goal final_reports are not injected into Plan or Execute phases, causing:
 
 1. **Same-thread continuation failure**: When user sends "translate to chinese" after "analyze performance", agent asks "please provide text" instead of translating previous report
 2. **Thread switch knowledge loss**: When RFC-216 thread switching occurs, CoreAgent on new thread has no conversation history and no goal-level context
@@ -26,7 +26,7 @@ AgentLoop's `inject_previous_goal_context()` method exists but is never called. 
 - Conversation history: LangGraph thread state (raw messages)
 - Execution context: config.configurable briefings
 
-**AgentLoop should mirror this**:
+**StrangeLoop should mirror this**:
 - Goal-level history: loop checkpoint goal_history (summaries, not messages)
 - Iteration context: LoopState.plan_conversation_excerpts
 
@@ -38,7 +38,7 @@ Create `GoalContextManager` module that provides goal-level context for both Pla
 
 ```python
 class GoalContextManager:
-    """Unified goal-level context provider for AgentLoop.
+    """Unified goal-level context provider for StrangeLoop.
     
     Mirrors CoreAgent's separation: conversation history (thread state) vs
     goal-level summaries (loop checkpoint). Provides previous goal context
@@ -84,11 +84,11 @@ class GoalContextManager:
 
 ```
 packages/soothe/src/soothe/core/
-├─ agent_loop/context/goal_context_manager.py
-├─ agent_loop/state/state_manager.py
-├─ agent_loop/core/agent_loop.py
-├─ agent_loop/core/executor.py
-├─ agent_loop/state/checkpoint.py
+├─ strange_loop/context/goal_context_manager.py
+├─ strange_loop/state/state_manager.py
+├─ strange_loop/core/strange_loop.py
+├─ strange_loop/core/executor.py
+├─ strange_loop/state/checkpoint.py
 └─ goal_engine/thread_relationship.py   # related-thread analysis
 ```
 
@@ -349,7 +349,7 @@ class GoalContext(BaseModel):
 class GoalContextManager:
     def __init__(
         self,
-        state_manager: AgentLoopStateManager,
+        state_manager: StrangeLoopStateManager,
         config: GoalContextConfig,
         embedding_model: Embeddings,  # NEW parameter
     ) -> None:
@@ -381,10 +381,10 @@ class GoalContextManager:
         return self._format_execute_briefing(goal_context.execution_memory, checkpoint.current_thread_id)
 ```
 
-**Wiring in AgentLoop**:
+**Wiring in StrangeLoop**:
 
 ```python
-# agent_loop.py run_with_progress()
+# strange_loop.py run_with_progress()
 embedding_model = config.create_embedding_model(config.agentic.goal_context.embedding_role)
 goal_context_manager = GoalContextManager(
     state_manager, 
@@ -408,13 +408,13 @@ agentic:
 
 #### Plan Phase Integration
 
-Inject previous goal context at AgentLoop initialization:
+Inject previous goal context at StrangeLoop initialization:
 
 ```python
-# agent_loop.py
+# strange_loop.py
 
 async def run_with_progress(...):
-    state_manager = AgentLoopStateManager(thread_id, workspace)
+    state_manager = StrangeLoopStateManager(thread_id, workspace)
     goal_context_manager = GoalContextManager(state_manager, config.goal_context)
     
     # NEW: Inject previous goal context
@@ -471,7 +471,7 @@ Flag-based mechanism ensures Execute briefing only injected on thread switch:
 ```python
 # checkpoint.py
 
-class AgentLoopCheckpoint(BaseModel):
+class StrangeLoopCheckpoint(BaseModel):
     # ... existing fields ...
     
     thread_switch_pending: bool = False
@@ -595,9 +595,9 @@ Thread switch: thread_A → thread_B
 
 ```python
 class GoalContextManager:
-    """Unified goal-level context provider for AgentLoop."""
+    """Unified goal-level context provider for StrangeLoop."""
     
-    def __init__(self, state_manager: AgentLoopStateManager, config: GoalContextConfig) -> None:
+    def __init__(self, state_manager: StrangeLoopStateManager, config: GoalContextConfig) -> None:
         self._state_manager = state_manager
         self._config = config
     
@@ -723,8 +723,8 @@ class GoalContextManager:
 ### Checkpoint Modification
 
 ```python
-class AgentLoopCheckpoint(BaseModel):
-    """Complete AgentLoop state (RFC-216: multi-thread spanning)."""
+class StrangeLoopCheckpoint(BaseModel):
+    """Complete StrangeLoop state (RFC-216: multi-thread spanning)."""
     
     # ... existing fields ...
     
@@ -794,7 +794,7 @@ class GoalContextConfig(BaseModel):
 class AgenticConfig(BaseModel):
     """Agentic loop configuration."""
     
-    max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
     prior_conversation_limit: int = 10
     working_memory: WorkingMemoryConfig
     goal_context: GoalContextConfig = Field(default_factory=GoalContextConfig)
@@ -847,7 +847,7 @@ def get_execute_briefing(self, limit: int | None = None) -> str | None:
 
 ### Integration Tests
 
-- `test_plan_phase_receives_previous_goal_context`: AgentLoop injects goal context into Plan
+- `test_plan_phase_receives_previous_goal_context`: StrangeLoop injects goal context into Plan
 - `test_execute_phase_injects_briefing_on_thread_switch`: Thread switch triggers briefing
 - `test_execute_phase_no_briefing_same_thread`: Same thread skips briefing
 - `test_goal_context_manager_thread_switch_flag_flow`: Flag lifecycle from set to clear
@@ -879,7 +879,7 @@ def get_execute_briefing(self, limit: int | None = None) -> str | None:
 
 ### Backward Compatibility
 
-- **Existing AgentLoop executions**: Continue without goal context (no impact, empty history)
+- **Existing StrangeLoop executions**: Continue without goal context (no impact, empty history)
 - **Existing checkpoints**: thread_switch_pending defaults to False (no change in behavior)
 - **Existing configuration**: goal_context defaults to enabled with limit=10
 
@@ -906,7 +906,7 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 ## References
 
 - RFC-200: Agentic Goal Execution Loop
-- RFC-216: AgentLoop Multi-Thread Infinite Lifecycle
+- RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle
 - RFC-203: Layer 2 Unified State Model
 - CoreAgent context briefing mechanism (existing)
 - Design draft: docs/drafts/2026-04-17-goal-context-management-design.md
@@ -917,7 +917,7 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 
 **Date**: 2026-05-08
 
-RFC-214 introduces a complete AgentLoop ledger that records all orchestration turns (plan-assess, plan-generate, execute-step) in `loop_messages`. This supersedes the `get_plan_context()` method defined in this RFC.
+RFC-214 introduces a complete StrangeLoop ledger that records all orchestration turns (plan-assess, plan-generate, execute-step) in `loop_messages`. This supersedes the `get_plan_context()` method defined in this RFC.
 
 ### What Changes
 

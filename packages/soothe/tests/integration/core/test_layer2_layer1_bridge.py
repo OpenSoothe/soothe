@@ -1,4 +1,4 @@
-"""Integration tests for AgentLoop execution hints (RFC-214).
+"""Integration tests for StrangeLoop execution hints (RFC-214).
 
 Execution hints are delivered in the per-turn user message envelope
 (``EXECUTION HINTS:`` section via ``build_execute_step_envelope``), not by mutating

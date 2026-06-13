@@ -60,7 +60,7 @@ class _BareMixin(AutopilotWorkerMixin):
         self._ensure_checkpointer_initialized = AsyncMock()
 
 
-# ---- Helper-method tests (no AgentLoop involvement) -------------------
+# ---- Helper-method tests (no StrangeLoop involvement) -------------------
 
 
 class TestDeriveOutcome:
@@ -156,11 +156,11 @@ class TestGoalCompletionChunk:
         assert isinstance(payload["context_contribution"], dict)
 
 
-# ---- Streaming-path tests (AgentLoop stubbed) -------------------------
+# ---- Streaming-path tests (StrangeLoop stubbed) -------------------------
 
 
-class _FakeAgentLoop:
-    """Stub AgentLoop yielding canned (event_type, event_data) tuples."""
+class _FakeStrangeLoop:
+    """Stub StrangeLoop yielding canned (event_type, event_data) tuples."""
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         pass
@@ -174,23 +174,23 @@ class _FakeAgentLoop:
             yield evt
 
 
-def _patch_agent_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeAgentLoop) -> None:
-    """Replace AgentLoop where the mixin imports it."""
+def _patch_strange_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeStrangeLoop) -> None:
+    """Replace StrangeLoop where the mixin imports it."""
     from soothe.runner import _runner_autopilot_worker
 
-    def _factory(*_args: Any, **_kwargs: Any) -> _FakeAgentLoop:
+    def _factory(*_args: Any, **_kwargs: Any) -> _FakeStrangeLoop:
         return fake
 
-    monkeypatch.setattr(_runner_autopilot_worker, "AgentLoop", _factory)
+    monkeypatch.setattr(_runner_autopilot_worker, "StrangeLoop", _factory)
 
 
 @pytest.mark.asyncio
-async def test_stream_initializes_checkpointer_before_agent_loop(
+async def test_stream_initializes_checkpointer_before_strange_loop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pr = _plan_result(is_done=True)
-    fake = _FakeAgentLoop().make_progress([("completed", {"result": pr})])
-    _patch_agent_loop(monkeypatch, fake)
+    fake = _FakeStrangeLoop().make_progress([("completed", {"result": pr})])
+    _patch_strange_loop(monkeypatch, fake)
 
     mixin = _BareMixin()
     _ = [
@@ -209,14 +209,14 @@ async def test_stream_emits_completion_chunk_at_end(
 ) -> None:
     """Happy path: PlanResult.is_done() True → outcome 'completed'."""
     pr = _plan_result(is_done=True)
-    fake = _FakeAgentLoop().make_progress(
+    fake = _FakeStrangeLoop().make_progress(
         [
             ("plan", {"action": "first plan"}),
             ("iteration_started", {"iter": 1}),
             ("completed", {"result": pr}),
         ]
     )
-    _patch_agent_loop(monkeypatch, fake)
+    _patch_strange_loop(monkeypatch, fake)
 
     mixin = _BareMixin()
     chunks = [
@@ -247,8 +247,8 @@ async def test_stream_failed_plan_result_yields_failed_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pr = _plan_result(is_done=False, status="abandoned")
-    fake = _FakeAgentLoop().make_progress([("completed", {"result": pr})])
-    _patch_agent_loop(monkeypatch, fake)
+    fake = _FakeStrangeLoop().make_progress([("completed", {"result": pr})])
+    _patch_strange_loop(monkeypatch, fake)
 
     mixin = _BareMixin()
     chunks = [
@@ -267,8 +267,8 @@ async def test_stream_needs_replan_when_status_is_replan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pr = _plan_result(is_done=False, status="replan")
-    fake = _FakeAgentLoop().make_progress([("completed", {"result": pr})])
-    _patch_agent_loop(monkeypatch, fake)
+    fake = _FakeStrangeLoop().make_progress([("completed", {"result": pr})])
+    _patch_strange_loop(monkeypatch, fake)
 
     mixin = _BareMixin()
     chunks = [
@@ -284,18 +284,18 @@ async def test_stream_needs_replan_when_status_is_replan(
 async def test_stream_handles_agentloop_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If AgentLoop raises mid-stream, emit a failed GoalCompletionChunk."""
+    """If StrangeLoop raises mid-stream, emit a failed GoalCompletionChunk."""
 
     class _BoomError(RuntimeError):
         pass
 
-    class _RaisingFakeAgentLoop(_FakeAgentLoop):
+    class _RaisingFakeStrangeLoop(_FakeStrangeLoop):
         async def run_with_progress(self, **kwargs: Any):
             yield ("plan", {"action": "first"})
             raise _BoomError("kaboom")
 
-    fake = _RaisingFakeAgentLoop()
-    _patch_agent_loop(monkeypatch, fake)
+    fake = _RaisingFakeStrangeLoop()
+    _patch_strange_loop(monkeypatch, fake)
 
     mixin = _BareMixin()
     chunks = [
@@ -319,12 +319,12 @@ async def test_stream_uses_provided_thread_id(
 ) -> None:
     captured: dict[str, Any] = {}
 
-    class _CapturingFake(_FakeAgentLoop):
+    class _CapturingFake(_FakeStrangeLoop):
         async def run_with_progress(self, **kwargs: Any):
             captured.update(kwargs)
             yield ("completed", {"result": _plan_result(is_done=True)})
 
-    _patch_agent_loop(monkeypatch, _CapturingFake())
+    _patch_strange_loop(monkeypatch, _CapturingFake())
     mixin = _BareMixin()
     _ = [
         c
@@ -343,12 +343,12 @@ async def test_stream_synthesizes_thread_id_when_none(
 ) -> None:
     captured: dict[str, Any] = {}
 
-    class _CapturingFake(_FakeAgentLoop):
+    class _CapturingFake(_FakeStrangeLoop):
         async def run_with_progress(self, **kwargs: Any):
             captured.update(kwargs)
             yield ("completed", {"result": _plan_result(is_done=True)})
 
-    _patch_agent_loop(monkeypatch, _CapturingFake())
+    _patch_strange_loop(monkeypatch, _CapturingFake())
     mixin = _BareMixin()
     _ = [
         c
@@ -371,15 +371,15 @@ async def test_stream_forces_auto_clarification_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Autopilot is headless — the policy must be built with ``mode='auto'``
-    and forwarded to ``AgentLoop.run_with_progress``."""
+    and forwarded to ``StrangeLoop.run_with_progress``."""
     captured: dict[str, Any] = {}
 
-    class _CapturingFake(_FakeAgentLoop):
+    class _CapturingFake(_FakeStrangeLoop):
         async def run_with_progress(self, **kwargs: Any):
             captured.update(kwargs)
             yield ("completed", {"result": _plan_result(is_done=True)})
 
-    _patch_agent_loop(monkeypatch, _CapturingFake())
+    _patch_strange_loop(monkeypatch, _CapturingFake())
 
     builder_calls: list[dict[str, Any]] = []
     sentinel_policy = object()
@@ -432,12 +432,12 @@ async def test_stream_continues_when_clarification_builder_fails(
     rather than failing the whole goal."""
     captured: dict[str, Any] = {}
 
-    class _CapturingFake(_FakeAgentLoop):
+    class _CapturingFake(_FakeStrangeLoop):
         async def run_with_progress(self, **kwargs: Any):
             captured.update(kwargs)
             yield ("completed", {"result": _plan_result(is_done=True)})
 
-    _patch_agent_loop(monkeypatch, _CapturingFake())
+    _patch_strange_loop(monkeypatch, _CapturingFake())
 
     def _raising_builder(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("no model")

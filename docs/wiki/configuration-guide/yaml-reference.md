@@ -218,7 +218,7 @@ agent:
 | `max_total_goals` | int | `50` | Maximum goals allowed |
 | `max_goal_depth` | int | `5` | Maximum hierarchy depth |
 | `max_parallel_goals` | int | `3` | Maximum goals running simultaneously |
-| `max_loops` | int | `4` | Maximum concurrent AgentLoop workers |
+| `max_loops` | int | `4` | Maximum concurrent StrangeLoop workers |
 | `loop_idle_timeout` | int | `300` | Seconds to keep idle loop |
 | `poll_interval` | int | `5` | Autopilot scheduling tick interval |
 
@@ -230,7 +230,7 @@ agent:
     enabled: true
     max_iterations: 10
     max_subagent_tasks_per_wave: 4
-    agent_loop_output_contract_enabled: true
+    strange_loop_output_contract_enabled: true
     prior_conversation_limit: 10
     context_window_limit: 200000
     

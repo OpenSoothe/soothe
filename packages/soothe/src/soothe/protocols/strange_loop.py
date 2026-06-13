@@ -1,7 +1,7 @@
-"""AgentLoopProtocol - Layer 2 Plan-Execute orchestration interface.
+"""StrangeLoopProtocol - Layer 2 Plan-Execute orchestration interface.
 
-AgentLoop executes single goals through iterative refinement, delegating
-step execution to CoreAgentProtocol. Loop knows CoreAgent, CoreAgent
+StrangeLoop (alias: Sloop) executes single goals through iterative refinement,
+delegating step execution to CoreAgentProtocol. Loop knows CoreAgent, CoreAgent
 doesn't know Loop.
 """
 
@@ -11,22 +11,20 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-
-    # Import from current location (will update after move)
     from soothe.foundation.loop.state.schemas import LoopState, PlanResult
     from soothe.protocols.core_agent import CoreAgentProtocol
 
 
 @runtime_checkable
-class AgentLoopProtocol(Protocol):
-    """Layer 2 AgentLoop interface - Plan-Execute orchestration.
+class StrangeLoopProtocol(Protocol):
+    """Layer 2 StrangeLoop interface - Plan-Execute orchestration.
 
-    AgentLoop executes single goals through iterative refinement:
+    StrangeLoop executes single goals through iterative refinement:
     - Plan: LLM reasoning with goal-directed evaluation
     - Execute: Step execution via CoreAgentProtocol
     - Judge: Progress assessment toward goal
 
-    This protocol enables alternative AgentLoop implementations while
+    This protocol enables alternative StrangeLoop implementations while
     maintaining CoreAgent isolation (Loop knows Core, Core doesn't know Loop).
 
     Key responsibilities:
@@ -58,7 +56,7 @@ class AgentLoopProtocol(Protocol):
         thread_id: str,
         **kwargs: Any,
     ) -> PlanResult | None:
-        """Run full AgentLoop for a goal with progress tracking.
+        """Run full StrangeLoop for a goal with progress tracking.
 
         Args:
             goal_text: Goal description to execute
@@ -75,7 +73,7 @@ class AgentLoopProtocol(Protocol):
         cls,
         config: SootheConfig,
         core_agent: CoreAgentProtocol,
-    ) -> AgentLoopProtocol:
+    ) -> StrangeLoopProtocol:
         """Factory method requiring CoreAgentProtocol dependency.
 
         Args:
@@ -83,6 +81,6 @@ class AgentLoopProtocol(Protocol):
             core_agent: CoreAgentProtocol instance for execution
 
         Returns:
-            AgentLoopProtocol instance ready for iteration.
+            StrangeLoopProtocol instance ready for iteration.
         """
         ...

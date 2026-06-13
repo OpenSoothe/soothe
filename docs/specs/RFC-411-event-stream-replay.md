@@ -17,7 +17,7 @@
 
 ## Abstract
 
-This RFC defines event stream replay architecture for reconstructing complete execution history from AgentLoop checkpoint trees when clients reattach to detached loops. The design converts checkpoint tree (main_line + failed_branches) into chronological event stream, enriches events with CoreAgent checkpoint details, and maps events to existing TUI display cards. Failed branches appear as BranchCard widgets showing failure analysis and learning insights.
+This RFC defines event stream replay architecture for reconstructing complete execution history from StrangeLoop checkpoint trees when clients reattach to detached loops. The design converts checkpoint tree (main_line + failed_branches) into chronological event stream, enriches events with CoreAgent checkpoint details, and maps events to existing TUI display cards. Failed branches appear as BranchCard widgets showing failure analysis and learning insights.
 
 ---
 
@@ -33,14 +33,14 @@ This RFC defines event stream replay architecture for reconstructing complete ex
 
 **History reconstruction gap**:
 - CoreAgent checkpoint contains message history (raw messages)
-- AgentLoop checkpoint contains goal history (semantic execution records)
+- StrangeLoop checkpoint contains goal history (semantic execution records)
 - No mechanism to combine both for full history replay
 - Failed attempts not captured (no retry history)
 
 ### Proposed Solution
 
 **Checkpoint tree → event stream** reconstruction:
-- Load AgentLoop checkpoint tree (main_line + failed_branches)
+- Load StrangeLoop checkpoint tree (main_line + failed_branches)
 - Reconstruct chronological event stream (goal → iteration → step → tool events)
 - Enrich events with CoreAgent checkpoint details (message/tool content)
 - Emit existing event types (reuse TUI event processor)
@@ -68,10 +68,10 @@ ITERATION_STARTED = "soothe.lifecycle.iteration.started"  # Reuse
 ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"  # Reuse
 ```
 
-**AgentLoop step events** (existing, reused):
+**StrangeLoop step events** (existing, reused):
 ```python
-AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"  # Reuse
-AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"  # Reuse
+STRANGE_LOOP_STEP_STARTED = "soothe.cognition.strange_loop.step.started"  # Reuse
+STRANGE_LOOP_STEP_COMPLETED = "soothe.cognition.strange_loop.step.completed"  # Reuse
 ```
 
 **Tool events** (existing, implicitly via CoreAgent messages):
@@ -112,8 +112,8 @@ CHECKPOINT_ANCHOR_CREATED = "soothe.lifecycle.checkpoint.anchor.created"  # NEW 
 **Step 1: Load checkpoint tree**:
 ```python
 async def reconstruct_event_stream_from_checkpoint_tree(
-    checkpoint: AgentLoopCheckpoint,
-    persistence_manager: AgentLoopCheckpointPersistenceManager,
+    checkpoint: StrangeLoopCheckpoint,
+    persistence_manager: StrangeLoopCheckpointPersistenceManager,
 ) -> list[dict[str, Any]]:
     """Reconstruct event stream from checkpoint tree using existing event types."""
     
@@ -145,11 +145,11 @@ async def reconstruct_event_stream_from_checkpoint_tree(
                 "timestamp": iteration_anchor["timestamp"],
             })
             
-            # Emit step events (reuse existing AgentLoop step events)
+            # Emit step events (reuse existing StrangeLoop step events)
             for reason_step in goal_record.reason_history:
                 if reason_step.iteration == iteration:
                     events.append({
-                        "type": AGENT_LOOP_STEP_STARTED,
+                        "type": STRANGE_LOOP_STEP_STARTED,
                         "step_id": reason_step.step_id,
                         "description": reason_step.decision,
                         "timestamp": reason_step.timestamp.isoformat(),
@@ -276,8 +276,8 @@ async def enrich_events_with_coreagent_details(
 |------------|----------|--------|
 | `GOAL_CREATED` | `CognitionGoalTreeMessage` | ✅ Reuse |
 | `ITERATION_STARTED` | `CognitionGoalTreeMessage` subtree | ✅ Reuse |
-| `AGENT_LOOP_STEP_STARTED` | `CognitionStepMessage` | ✅ Reuse |
-| `AGENT_LOOP_STEP_COMPLETED` | `CognitionStepMessage` | ✅ Reuse |
+| `STRANGE_LOOP_STEP_STARTED` | `CognitionStepMessage` | ✅ Reuse |
+| `STRANGE_LOOP_STEP_COMPLETED` | `CognitionStepMessage` | ✅ Reuse |
 | `PLAN_STEP_STARTED` | `CognitionReasonMessage` | ✅ Reuse |
 | Tool messages (from CoreAgent) | `ToolCallMessage` | ✅ Reuse |
 
@@ -390,7 +390,7 @@ def map_events_to_tui_cards(events: list[dict[str, Any]]) -> list[Widget]:
             # Reuse existing CognitionGoalTreeMessage
             cards.append(CognitionGoalTreeMessage(...))
         
-        elif event["type"] == AGENT_LOOP_STEP_STARTED:
+        elif event["type"] == STRANGE_LOOP_STEP_STARTED:
             # Reuse existing CognitionStepMessage
             cards.append(CognitionStepMessage(...))
         
@@ -411,11 +411,11 @@ def map_events_to_tui_cards(events: list[dict[str, Any]]) -> list[Widget]:
 async def handle_loop_reattach(
     loop_id: str,
     client_session: ClientSession,
-    persistence_manager: AgentLoopCheckpointPersistenceManager,
+    persistence_manager: StrangeLoopCheckpointPersistenceManager,
 ):
     """Handle loop reattachment: reconstruct history and send to client."""
     
-    # 1. Load AgentLoop checkpoint
+    # 1. Load StrangeLoop checkpoint
     loop_checkpoint = await persistence_manager.load_agentloop_checkpoint(loop_id)
     
     # 2. Get thread checkpoint cross-reference map
@@ -485,7 +485,7 @@ class EventProcessor:
         elif event_type == ITERATION_STARTED:
             await self._handle_iteration_started(event)
         
-        elif event_type == AGENT_LOOP_STEP_STARTED:
+        elif event_type == STRANGE_LOOP_STEP_STARTED:
             await self._handle_step_started(event)
         
         # ... other existing event handlers
@@ -583,9 +583,9 @@ class EventProcessor:
 
 ## Related Specifications
 
-- RFC-218: AgentLoop Checkpoint Tree Architecture
+- RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-612: Loop-First User Experience
-- RFC-613: AgentLoop Persistence Backend
+- RFC-613: StrangeLoop Persistence Backend
 - RFC-401: Event Processing (existing)
 - RFC-500: CLI/TUI Architecture (existing)
 

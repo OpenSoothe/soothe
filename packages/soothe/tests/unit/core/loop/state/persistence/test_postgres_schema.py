@@ -1,4 +1,4 @@
-"""Unit tests for AgentLoop PostgreSQL schema initialization."""
+"""Unit tests for StrangeLoop PostgreSQL schema initialization."""
 
 from __future__ import annotations
 

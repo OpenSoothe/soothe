@@ -1,7 +1,7 @@
 """Unit tests for intent classification (RFC-225).
 
 The LLM classifier produces only ``quiz`` or ``agentic``. Loop
-continuation is derived structurally inside ``AgentLoop`` from the
+continuation is derived structurally inside ``StrangeLoop`` from the
 loaded checkpoint and is not a classifier concern.
 """
 

@@ -1,6 +1,6 @@
 # Subagents inventory: Soothe vs deepagents
 
-This document describes **how subagents are exposed**, **what ships with deepagents**, and **which first-party subagents Soothe wires in** at agent construction time. For how subagents appear inside AgentLoop plan steps, see [subagent-in-plan-steps-analysis.md](./subagent-in-plan-steps-analysis.md).
+This document describes **how subagents are exposed**, **what ships with deepagents**, and **which first-party subagents Soothe wires in** at agent construction time. For how subagents appear inside StrangeLoop plan steps, see [subagent-in-plan-steps-analysis.md](./subagent-in-plan-steps-analysis.md).
 
 ---
 

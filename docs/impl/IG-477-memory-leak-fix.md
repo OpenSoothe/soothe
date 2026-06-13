@@ -41,7 +41,7 @@ Compared Postgres vs `InMemorySaver`. **Both OOM'd** (~3.4–4 GiB). Backend cho
 
 ### Phase 5 — Bare LLM probe (HP-014)
 
-Direct LLM HTTP without AgentLoop: **stable ~321 MiB**. DashScope HTTP is not the main leak.
+Direct LLM HTTP without StrangeLoop: **stable ~321 MiB**. DashScope HTTP is not the main leak.
 
 ### Phase 6 — Measurement correction (HP-016)
 
@@ -132,7 +132,7 @@ All `SOOTHE_HP*` / `SOOTHE_DAEMON_HP*` env toggles, memray wiring, malloc_trim h
 flowchart TB
     subgraph persistent["Persistent graph (with checkpointer)"]
         Planner[Planner / Intent / Clarification]
-        LoopCP[AgentLoop orchestrator CP]
+        LoopCP[StrangeLoop orchestrator CP]
     end
     subgraph ephemeral["Ephemeral execute twin (no checkpointer)"]
         ExecuteAST[execution_astream]
@@ -141,7 +141,7 @@ flowchart TB
     User[User query] --> Planner
     Planner --> ExecuteAST
     ExecuteAST --> Tools
-    LoopState[AgentLoopStateManager / loop_messages] --> Planner
+    LoopState[StrangeLoopStateManager / loop_messages] --> Planner
     ExecuteAST --> LoopState
 ```
 

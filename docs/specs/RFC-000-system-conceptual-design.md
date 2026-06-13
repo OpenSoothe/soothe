@@ -10,7 +10,7 @@
 
 ## Abstract
 
-This document defines the conceptual design for Soothe, a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. Soothe extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining runtime-agnostic and langchain-ecosystem-friendly. The architecture is organized into three distinct execution levels: GoalEngine for autonomous goal management, AgentLoop for agentic goal execution, and CoreAgent for the foundational runtime.
+This document defines the conceptual design for Soothe, a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. Soothe extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining runtime-agnostic and langchain-ecosystem-friendly. The architecture is organized into three distinct execution levels: GoalEngine for autonomous goal management, StrangeLoop for agentic goal execution, and CoreAgent for the foundational runtime.
 
 ## Overview
 
@@ -33,11 +33,11 @@ Soothe operates through a hierarchical execution model with three distinct level
 │ GoalEngine: Autonomous Goal Management (RFC-200)            │
 │ • Scope: Long-running complex workflows, multi-goal DAGs      │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update       │
-│ • Delegation: PERFORM invokes AgentLoop's full loop          │
+│ • Delegation: PERFORM invokes StrangeLoop's full loop          │
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ AgentLoop: Agentic Goal Execution (RFC-201)                 │
+│ StrangeLoop: Agentic Goal Execution (RFC-201)                 │
 │ • Scope: Single-goal execution through iterative refinement   │
 │ • Loop: Plan → Execute (max iterations: ~8)                  │
 │ • Delegation: EXECUTE invokes CoreAgent for execution         │
@@ -51,8 +51,8 @@ Soothe operates through a hierarchical execution model with three distinct level
 ```
 
 **Level Relationships**:
-- **GoalEngine** manages goal DAGs, delegates single-goal execution to AgentLoop
-- **AgentLoop** executes single goals through iterative Plan → Execute, delegates steps to CoreAgent
+- **GoalEngine** manages goal DAGs, delegates single-goal execution to StrangeLoop
+- **StrangeLoop** executes single goals through iterative Plan → Execute, delegates steps to CoreAgent
 - **CoreAgent** provides the foundational runtime for tool/subagent execution
 
 ### Framework Stack
@@ -61,7 +61,7 @@ Soothe operates through a hierarchical execution model with three distinct level
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
 |  - GoalEngine: Autonomous Goal Management            |
-|  - AgentLoop: Agentic Goal Execution                 |
+|  - StrangeLoop: Agentic Goal Execution                 |
 |  - CoreAgent: Runtime                                |
 |  - ContextProtocol, MemoryProtocol,                  |
 |    PlannerProtocol, PolicyProtocol,                  |
@@ -90,7 +90,7 @@ Soothe operates through a hierarchical execution model with three distinct level
 
 5. **Durable by default** -- Agent state is persistable and resumable. Crashes recover from the last persisted state. The durability protocol abstracts over the persistence backend (could be LangGraph Checkpointer, a database, or a file).
 
-6. **Plan-driven execution** -- Complex goals are decomposed into plans with steps. The planner (`LLMPlanner`) uses two-phase architecture (`StatusAssessment` then conditional `PlanGeneration`, merged into `PlanResult`; RFC-604, IG-372 prompt split, IG-329 trimmed plan-generate schema) for token efficiency across all complexity levels. Architectural evolution: IG-150 removed multiple planner tiers (`AutoPlanner`, `ClaudePlanner`, `SubagentPlanner`) and consolidated to `LLMPlanner`, merging the planning module into `soothe.core.agent_loop` (Python package; wire events may still use the `soothe.cognition.*` prefix per RFC-403). Simple queries bypass planning entirely.
+6. **Plan-driven execution** -- Complex goals are decomposed into plans with steps. The planner (`LLMPlanner`) uses two-phase architecture (`StatusAssessment` then conditional `PlanGeneration`, merged into `PlanResult`; RFC-604, IG-372 prompt split, IG-329 trimmed plan-generate schema) for token efficiency across all complexity levels. Architectural evolution: IG-150 removed multiple planner tiers (`AutoPlanner`, `ClaudePlanner`, `SubagentPlanner`) and consolidated to `LLMPlanner`, merging the planning module into `soothe.core.strange_loop` (Python package; wire events may still use the `soothe.cognition.*` prefix per RFC-403). Simple queries bypass planning entirely.
 
 7. **Least-privilege delegation** -- Every tool invocation and subagent spawn passes through a policy protocol. Permissions are structured (category + action + scope), enabling fine-grained control down to individual shell commands or file paths. Subagents inherit a narrower permission set than their parent.
 
@@ -100,9 +100,9 @@ Soothe operates through a hierarchical execution model with three distinct level
 
 10. **Graceful degradation** -- Step-level failure handling (mark failed, try next, revise plan), LLM content-policy fallbacks, and configurable retry. Partial results over hard failure.
 
-11. **Three-level execution architecture** -- Soothe operates through three distinct levels: GoalEngine (autonomous goal management), AgentLoop (agentic goal execution), and CoreAgent (foundational runtime). Each level has distinct responsibilities, clear delegation boundaries, and explicit integration contracts. Higher levels delegate to lower levels through well-defined interfaces.
+11. **Three-level execution architecture** -- Soothe operates through three distinct levels: GoalEngine (autonomous goal management), StrangeLoop (agentic goal execution), and CoreAgent (foundational runtime). Each level has distinct responsibilities, clear delegation boundaries, and explicit integration contracts. Higher levels delegate to lower levels through well-defined interfaces.
 
-12. **Architectural component isolation** -- Each level maintains clear architectural component boundaries: AgentLoop is the Plan → Execute loop runner (not consciousness), ContextProtocol is the consciousness (unbounded knowledge ledger with bounded projections), GoalEngine manages goal lifecycle. These are separate architectural components with distinct ownership boundaries. Consciousness lives in ContextProtocol, not in AgentLoop or GoalEngine. This separation prevents confusion from design brainstorming sessions that assign consciousness to AgentLoop. **See also**: RFC-201 §50-60 (AgentLoop role clarification), RFC-201 §61-66 (retrieval authority clarification), RFC-001 §14-47 (ContextProtocol consciousness concept).
+12. **Architectural component isolation** -- Each level maintains clear architectural component boundaries: StrangeLoop is the Plan → Execute loop runner (not consciousness), ContextProtocol is the consciousness (unbounded knowledge ledger with bounded projections), GoalEngine manages goal lifecycle. These are separate architectural components with distinct ownership boundaries. Consciousness lives in ContextProtocol, not in StrangeLoop or GoalEngine. This separation prevents confusion from design brainstorming sessions that assign consciousness to StrangeLoop. **See also**: RFC-201 §50-60 (StrangeLoop role clarification), RFC-201 §61-66 (retrieval authority clarification), RFC-001 §14-47 (ContextProtocol consciousness concept).
 
 ## Core Abstractions
 
@@ -177,13 +177,13 @@ Controls parallel execution of plan steps, subagents, and tools. Steps declare d
 11. MCP session lifecycle is managed alongside thread lifecycle (created on thread start, cleaned up on suspend/archive).
 12. Plan state and context ledger survive thread suspend/resume via `DurabilityProtocol`.
 13. All protocol implementations are swappable via `SootheConfig`.
-14. AgentLoop and CoreAgent have independent persistence systems: AgentLoop uses DurabilityProtocol + ContextProtocol persistence, CoreAgent uses LangGraph checkpointer. This dual persistence architecture ensures architectural isolation and enables AgentLoop recovery without CoreAgent dependency.
+14. StrangeLoop and CoreAgent have independent persistence systems: StrangeLoop uses DurabilityProtocol + ContextProtocol persistence, CoreAgent uses LangGraph checkpointer. This dual persistence architecture ensures architectural isolation and enables StrangeLoop recovery without CoreAgent dependency.
 
 ## Appendix A: Cross-domain analogies (non-normative)
 
 This appendix records **illustrative** comparisons from other fields. It is not normative: implementations MUST follow protocol RFCs, not these metaphors.
 
-- **Distributed schedulers (for example Kubernetes)**: A control plane reconciles desired state with reported status; workers run workloads. This parallels **AgentLoop + GoalEngine** coordinating threads while **CoreAgent** runs steps, and parallels **event-driven monitoring versus explicit report-back** as two ways status reaches the coordinator.
+- **Distributed schedulers (for example Kubernetes)**: A control plane reconciles desired state with reported status; workers run workloads. This parallels **StrangeLoop + GoalEngine** coordinating threads while **CoreAgent** runs steps, and parallels **event-driven monitoring versus explicit report-back** as two ways status reaches the coordinator.
 - **Operating systems**: A small kernel mediates resources; user processes hold most execution context. This parallels **thin mediation at the runner** versus **heavy per-thread state** in LangGraph.
 - **Biological homeostasis**: Feedback loops maintain stability under changing load. This parallels **goal backoff and replanning** when execution evidence contradicts prior assumptions.
 - **Game AI**: A director layer selects high-level objectives while NPC controllers handle local tactics. This parallels **GoalEngine / Plan phase** versus **Execute phase** delegation to CoreAgent.
@@ -215,7 +215,7 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 - [RFC Standard](./rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
 - [RFC-200](./RFC-200-autonomous-goal-management.md) - GoalEngine: Autonomous Goal Management
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - AgentLoop: Agentic Goal ExecutionExecute Loop
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - StrangeLoop: Agentic Goal ExecutionExecute Loop
 - [RFC-400](./RFC-400-context-protocol-architecture.md) through [RFC-408](./RFC-408-durability-protocol-architecture.md) - Core protocol architecture set
 
 **Note**: RFC consolidation completed 2026-04-17. Canonical merged RFCs are maintained in `docs/specs/`; legacy files are retained for historical context with explicit redirects.

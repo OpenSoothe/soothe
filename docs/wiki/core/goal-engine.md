@@ -31,7 +31,7 @@ GoalEngine Architecture
 │  └─ Failure handling
 │
 ├─ Goal Execution
-│  ├─ PERFORM delegation (AgentLoop)
+│  ├─ PERFORM delegation (StrangeLoop)
 │  ├─ REFLECT evaluation
 │  └─ DAG update
 │
@@ -175,11 +175,11 @@ def get_ready_goals(self) -> list[Goal]:
 
 ### 3. Goal Execution
 
-Delegate execution to AgentLoop:
+Delegate execution to StrangeLoop:
 
 ```python
 async def perform_goal(self, goal: Goal):
-    """Delegate goal execution to AgentLoop."""
+    """Delegate goal execution to StrangeLoop."""
     
     # Update status
     goal.status = GoalStatus.RUNNING
@@ -189,8 +189,8 @@ async def perform_goal(self, goal: Goal):
     thread_id = f"{base_tid}__goal_{goal.id}"
     goal.assigned_thread = thread_id
     
-    # Delegate to AgentLoop (via daemon dispatch in RFC-222)
-    # AgentLoop executes Plan → Execute loop
+    # Delegate to StrangeLoop (via daemon dispatch in RFC-222)
+    # StrangeLoop executes Plan → Execute loop
     plan_result = await self.dispatch_to_agentloop(goal)
     
     return plan_result
@@ -552,7 +552,7 @@ ready = goal_engine.get_ready_goals()  # Only goal-1 initially
 
 ```python
 # GoalEngine works with daemon AutopilotService
-# Autopilot dispatches goals to AgentLoop workers
+# Autopilot dispatches goals to StrangeLoop workers
 # GoalEngine provides goal state service
 ```
 
@@ -599,7 +599,7 @@ backoff:
 
 ## Related Documentation
 
-- **[AgentLoop](agent-loop.md)** - Goal execution integration
+- **[StrangeLoop](agent-loop.md)** - Goal execution integration
 - **[SootheRunner](runner.md)** - Runner orchestration
 - **[Backoff Reasoning](../architecture/backoff-reasoning.md)** - Backoff details
 - **[Autopilot Service](../daemon/autopilot.md)** - Daemon integration

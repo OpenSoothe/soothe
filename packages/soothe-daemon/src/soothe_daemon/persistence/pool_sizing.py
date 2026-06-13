@@ -2,7 +2,7 @@
 
 
 def recommended_agentloop_pool_size(*, max_thread_workers: int) -> int:
-    """Size the AgentLoop singleton for concurrent thread-pool workers.
+    """Size the StrangeLoop singleton for concurrent thread-pool workers.
 
     Rule: ``max_workers + 2`` headroom for the utility runner and bursts, capped at 32.
     """

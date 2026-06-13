@@ -1,1 +1,1 @@
-"""Test configuration for agent_loop tests."""
+"""Test configuration for strange_loop tests."""

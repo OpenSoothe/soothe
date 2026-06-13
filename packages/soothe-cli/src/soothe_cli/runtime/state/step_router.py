@@ -1,4 +1,4 @@
-"""Per-turn routing for AgentLoop steps, root tools, and subagent task namespaces.
+"""Per-turn routing for StrangeLoop steps, root tools, and subagent task namespaces.
 
 Owns associations between execute ``step_id``, root ``tool_call_id``, LangGraph
 subgraph ``namespace``, and ``task`` delegations. Designed for parallel execute waves

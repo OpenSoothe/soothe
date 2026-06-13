@@ -1,4 +1,4 @@
-"""Mutable runtime bundle for LangGraph Agent Loop nodes (RFC-220)."""
+"""Mutable runtime bundle for LangGraph Strange Loop nodes (RFC-220)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.loop.engine.anchor_manager import CheckpointAnchorManager
-from soothe.foundation.loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
+from soothe.foundation.loop.state.checkpoint import (
+    GoalExecutionRecord,
+    StrangeLoopCheckpoint,
+)
 from soothe.foundation.loop.state.schemas import LoopState
+from soothe.foundation.loop.state.sloop_manager import (
+    StrangeLoopStateManager,
+)
 
 from .phase_scratch import LoopPhaseScratch
 
@@ -18,7 +23,7 @@ if TYPE_CHECKING:
     from soothe.foundation.autopilot.engine.proposal_queue import ProposalQueue
     from soothe.foundation.core.agent import CoreAgent
     from soothe.foundation.loop.clarification.protocol import ClarificationPolicy
-    from soothe.foundation.loop.engine.agent_loop import AgentLoop
+    from soothe.foundation.loop.engine.strange_loop import StrangeLoop
 
 EmitFn = Callable[[str, Any], Awaitable[None]]
 
@@ -29,12 +34,12 @@ logger = logging.getLogger(__name__)
 class LoopRuntimeContext:
     """Shared handles for one goal run; not serialized by LangGraph."""
 
-    agent_loop: AgentLoop
-    state_manager: AgentLoopStateManager
+    strange_loop: StrangeLoop  # Primary field - must be first and required
+    state_manager: StrangeLoopStateManager
     anchor_manager: CheckpointAnchorManager
     goal_context_manager: Any  # GoalContextManager or ContextEngineGoalContextAdapter (duck-typed)
     plan_manager: Any  # StepPlanManagerAdapter (duck-typed, 5-method contract)
-    checkpoint: AgentLoopCheckpoint
+    checkpoint: StrangeLoopCheckpoint
     goal_record: GoalExecutionRecord | None
     continue_loop_mode: bool
     recovery_valid_resume: bool
@@ -64,7 +69,7 @@ class LoopRuntimeContext:
     @property
     def core_agent(self) -> CoreAgent:
         """Layer 1 graph (checkpoint key = ``thread_id``, not loop_id)."""
-        return self.agent_loop.core_agent
+        return self.strange_loop.core_agent
 
     async def mark_goal_status(self, status: str, reason: str = "") -> None:
         """Update the running goal's status (best-effort).

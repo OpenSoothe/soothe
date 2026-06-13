@@ -1,4 +1,4 @@
-"""AgentLoop State Manager (RFC-205, RFC-216, IG-055).
+"""StrangeLoop State Manager (RFC-205, RFC-216, IG-055).
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 RFC-216: Multi-thread spanning with loop_id as primary key.
@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.foundation.loop.state.checkpoint import (
-    AgentLoopCheckpoint,
     GoalExecutionRecord,
+    StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
@@ -46,8 +46,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AgentLoopStateManager:
-    """Manages AgentLoop checkpoint lifecycle (RFC-216: loop-scoped, multi-thread).
+class StrangeLoopStateManager:
+    """Manages StrangeLoop checkpoint lifecycle (RFC-216: loop-scoped, multi-thread).
 
     IG-055: Configuration-driven backend selection (PostgreSQL or SQLite).
     Uses PostgreSQL soothe_checkpoints database when configured, SQLite fallback.
@@ -79,7 +79,7 @@ class AgentLoopStateManager:
         self.run_dir = PersistenceDirectoryManager.get_loop_directory(
             self.loop_id
         )  # For reports/working_memory
-        self._checkpoint: AgentLoopCheckpoint | None = None
+        self._checkpoint: StrangeLoopCheckpoint | None = None
 
         # IG-055: Backend selection based on persistence.default_backend
         self._backend_type = "sqlite"  # Default
@@ -92,18 +92,18 @@ class AgentLoopStateManager:
             self._postgres_dsn = config.resolve_postgres_dsn_for_database("checkpoints")
             if shared_pool:
                 logger.info(
-                    "AgentLoop using shared PostgreSQL pool: loop_id=%s",
+                    "StrangeLoop using shared PostgreSQL pool: loop_id=%s",
                     self.loop_id,
                 )
             else:
                 logger.info(
-                    "AgentLoop using PostgreSQL backend (soothe_checkpoints database): loop_id=%s",
+                    "StrangeLoop using PostgreSQL backend (soothe_checkpoints database): loop_id=%s",
                     self.loop_id,
                 )
         else:
             self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
             logger.info(
-                "AgentLoop using SQLite backend (loop_checkpoints.db): loop_id=%s",
+                "StrangeLoop using SQLite backend (loop_checkpoints.db): loop_id=%s",
                 self.loop_id,
             )
 
@@ -139,7 +139,7 @@ class AgentLoopStateManager:
                                 )
                                 self._postgres_backend._pool = pool  # Use shared pool directly
                                 logger.info(
-                                    "AgentLoop PostgreSQL backend ready (shared pool): loop_id=%s",
+                                    "StrangeLoop PostgreSQL backend ready (shared pool): loop_id=%s",
                                     self.loop_id,
                                 )
                 else:
@@ -155,7 +155,7 @@ class AgentLoopStateManager:
                             )
                             # Schema initialization happens in backend
                             logger.info(
-                                "AgentLoop PostgreSQL backend ready: loop_id=%s", self.loop_id
+                                "StrangeLoop PostgreSQL backend ready: loop_id=%s", self.loop_id
                             )
         else:
             # SQLite backend initialization
@@ -196,7 +196,7 @@ class AgentLoopStateManager:
         # Initialize database schema
         SQLitePersistenceBackend.initialize_database_sync(db_path)
 
-        logger.info("AgentLoop SQLite writer connection initialized at %s", db_path)
+        logger.info("StrangeLoop SQLite writer connection initialized at %s", db_path)
 
     async def _get_reader_connection(self) -> sqlite3.Connection:
         """Get reader connection from pool (Phase 2).
@@ -230,7 +230,7 @@ class AgentLoopStateManager:
             conn.row_factory = sqlite3.Row
             self._reader_pool.append(conn)
 
-        logger.info("AgentLoop SQLite reader pool initialized: size=%d", self._reader_pool_size)
+        logger.info("StrangeLoop SQLite reader pool initialized: size=%d", self._reader_pool_size)
 
     async def _create_reader_conn(self) -> sqlite3.Connection:
         """Create new reader connection if pool empty."""
@@ -245,7 +245,7 @@ class AgentLoopStateManager:
         conn.row_factory = sqlite3.Row
         return conn
 
-    async def initialize(self, thread_id: str, max_iterations: int = 10) -> AgentLoopCheckpoint:
+    async def initialize(self, thread_id: str, max_iterations: int = 10) -> StrangeLoopCheckpoint:
         """Create new loop for thread (RFC-216: loop-scoped).
 
         IG-258 Phase 2: Database schema initialized lazily by writer connection.
@@ -255,11 +255,11 @@ class AgentLoopStateManager:
             max_iterations: Maximum loop iterations per goal
 
         Returns:
-            New AgentLoopCheckpoint instance (status=idle)
+            New StrangeLoopCheckpoint instance (status=idle)
         """
         now = datetime.now(UTC)
 
-        checkpoint = AgentLoopCheckpoint(
+        checkpoint = StrangeLoopCheckpoint(
             loop_id=self.loop_id,
             thread_ids=[thread_id],  # First thread
             current_thread_id=thread_id,
@@ -288,14 +288,14 @@ class AgentLoopStateManager:
 
         return checkpoint
 
-    async def load(self) -> AgentLoopCheckpoint | None:
+    async def load(self) -> StrangeLoopCheckpoint | None:
         """Load existing loop checkpoint (RFC-216: by loop_id).
 
         IG-055: Backend-aware load (PostgreSQL or SQLite).
         IG-258 Phase 2: Use reader connection pool for concurrent reads (SQLite).
 
         Returns:
-            AgentLoopCheckpoint if exists and valid (v2.0 schema), None otherwise
+            StrangeLoopCheckpoint if exists and valid (v2.0 schema), None otherwise
         """
         # IG-055: PostgreSQL backend
         if self._backend_type == "postgresql":
@@ -411,7 +411,7 @@ class AgentLoopStateManager:
                     )
                     goal_history.append(goal_record)
 
-                checkpoint = AgentLoopCheckpoint(
+                checkpoint = StrangeLoopCheckpoint(
                     loop_id=self.loop_id,
                     thread_ids=thread_ids,
                     current_thread_id=current_thread_id,
@@ -497,7 +497,7 @@ class AgentLoopStateManager:
         )
         return cursor.fetchall()
 
-    async def save(self, checkpoint: AgentLoopCheckpoint) -> None:
+    async def save(self, checkpoint: StrangeLoopCheckpoint) -> None:
         """Persist loop checkpoint to SQLite (RFC-216: indexed by loop_id).
 
         Args:
@@ -505,7 +505,7 @@ class AgentLoopStateManager:
         """
         await self._save_checkpoint_to_db(checkpoint)
 
-    async def _save_checkpoint_to_db(self, checkpoint: AgentLoopCheckpoint) -> None:
+    async def _save_checkpoint_to_db(self, checkpoint: StrangeLoopCheckpoint) -> None:
         """Save checkpoint to database (IG-055: PostgreSQL or SQLite).
 
         IG-258 Phase 2: Use single writer connection for SQLite consistency.
@@ -530,7 +530,7 @@ class AgentLoopStateManager:
         logger.debug("Saved loop checkpoint: loop=%s status=%s", self.loop_id, checkpoint.status)
 
     def _save_checkpoint_sync(
-        self, conn: sqlite3.Connection, checkpoint: AgentLoopCheckpoint
+        self, conn: sqlite3.Connection, checkpoint: StrangeLoopCheckpoint
     ) -> None:
         """Sync save of checkpoint executed in thread pool.
 
@@ -740,7 +740,7 @@ class AgentLoopStateManager:
 
         RFC-225: when ``loop_state`` is provided, mirror the latest plan DAG,
         step results, completed step ids, and evidence ledger into the goal
-        record so the AgentLoop checkpoint becomes the durable orchestration log.
+        record so the StrangeLoop checkpoint becomes the durable orchestration log.
 
         Args:
             goal_record: Goal execution record to finalize.
@@ -917,9 +917,9 @@ class AgentLoopStateManager:
         """Close backend connection pools (IG-404, IG-406).
 
         IG-404: Prevent pool exhaustion in concurrent execution.
-        IG-406: Shared pools are closed at daemon level, not per-AgentLoop.
+        IG-406: Shared pools are closed at daemon level, not per-StrangeLoop.
 
-        Must be called after AgentLoop completes to release database connections.
+        Must be called after StrangeLoop completes to release database connections.
         For shared pool mode, only clears references (pool closed at daemon shutdown).
         """
         # Close PostgreSQL backend pool (only if owned, not shared)

@@ -14,17 +14,17 @@ from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
     seed_loop_ledger_from_prior_goal,
 )
 from soothe.foundation.loop.state.checkpoint import (
-    AgentLoopCheckpoint,
     GoalExecutionRecord,
+    StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
-def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> AgentLoopCheckpoint:
+def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> StrangeLoopCheckpoint:
     now = datetime.now(UTC)
-    return AgentLoopCheckpoint(
+    return StrangeLoopCheckpoint(
         loop_id="loop-x",
         thread_ids=["tid"],
         current_thread_id="tid",

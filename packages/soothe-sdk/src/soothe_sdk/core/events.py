@@ -75,13 +75,13 @@ TOOL_COMPLETED = "soothe.tool.execution.completed"
 TOOL_ERROR = "soothe.tool.execution.error"
 
 # Agent loop events (DEBUG level; wire ``mode=custom`` types)
-AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
-AGENT_LOOP_ITERATION = "soothe.cognition.agent_loop.iterated"
-AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
-AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
-AGENT_LOOP_STEP_QUEUED = "soothe.cognition.agent_loop.step.queued"
-AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
-AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
+STRANGE_LOOP_STARTED = "soothe.cognition.strange_loop.started"
+STRANGE_LOOP_ITERATION = "soothe.cognition.strange_loop.iterated"
+STRANGE_LOOP_COMPLETED = "soothe.cognition.strange_loop.completed"
+STRANGE_LOOP_STEP_STARTED = "soothe.cognition.strange_loop.step.started"
+STRANGE_LOOP_STEP_QUEUED = "soothe.cognition.strange_loop.step.queued"
+STRANGE_LOOP_STEP_COMPLETED = "soothe.cognition.strange_loop.step.completed"
+STRANGE_LOOP_PLAN_DECISION = "soothe.cognition.strange_loop.plan.decision"
 
 # Clarification relay events (RFC-622 / RFC-623)
 # Emitted while the loop graph is paused on the ``await_clarification`` node.
@@ -97,7 +97,7 @@ MESSAGE_RECEIVED = "soothe.protocol.message.received"
 MESSAGE_SENT = "soothe.protocol.message.sent"
 
 # Agent loop configuration constants
-DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 10
+DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = 10
 
 
 __all__ = [
@@ -114,13 +114,13 @@ __all__ = [
     "TOOL_COMPLETED",
     "TOOL_ERROR",
     # Agent loop (DEBUG)
-    "AGENT_LOOP_STARTED",
-    "AGENT_LOOP_ITERATION",
-    "AGENT_LOOP_COMPLETED",
-    "AGENT_LOOP_STEP_STARTED",
-    "AGENT_LOOP_STEP_QUEUED",
-    "AGENT_LOOP_STEP_COMPLETED",
-    "AGENT_LOOP_PLAN_DECISION",
+    "STRANGE_LOOP_STARTED",
+    "STRANGE_LOOP_ITERATION",
+    "STRANGE_LOOP_COMPLETED",
+    "STRANGE_LOOP_STEP_STARTED",
+    "STRANGE_LOOP_STEP_QUEUED",
+    "STRANGE_LOOP_STEP_COMPLETED",
+    "STRANGE_LOOP_PLAN_DECISION",
     # Clarification relay (RFC-622 / RFC-623)
     "LOOP_CLARIFICATION_REQUESTED",
     "LOOP_CLARIFICATION_ANSWERED",
@@ -129,5 +129,5 @@ __all__ = [
     "MESSAGE_RECEIVED",
     "MESSAGE_SENT",
     # Constants
-    "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
+    "DEFAULT_STRANGE_LOOP_MAX_ITERATIONS",
 ]

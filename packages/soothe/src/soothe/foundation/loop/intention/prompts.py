@@ -4,7 +4,7 @@ Two-value classification with piggybacked quiz answer: the LLM decides whether
 a query is a simple quiz (greeting, thanks, static trivia answerable without
 tools) or requires the agentic loop. When quiz, the LLM also provides the
 direct answer (``quiz_response``) to avoid a second LLM call. Loop continuation
-is derived structurally inside ``AgentLoop`` from the checkpoint, not classified.
+is derived structurally inside ``StrangeLoop`` from the checkpoint, not classified.
 
 Prompt bodies live as ``.xml`` fragments under
 ``soothe.core.prompts.fragments.classifiers``; this module loads them directly

@@ -1,4 +1,4 @@
-"""Plan phase orchestration for AgentLoop Plan-and-Execute execution (RFC-201)."""
+"""Plan phase orchestration for StrangeLoop Plan-and-Execute execution (RFC-201)."""
 
 from __future__ import annotations
 

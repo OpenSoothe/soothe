@@ -1,7 +1,7 @@
-# RFC-201: AgentLoop Plan-Execute Loop Architecture
+# RFC-201: StrangeLoop Plan-Execute Loop Architecture
 
 **RFC**: 201
-**Title**: AgentLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
+**Title**: StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-17
@@ -37,23 +37,23 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 ### Integration with Layer 3
 
-**AgentLoop Goal Pull Architecture** (Inverted Control Flow):
+**StrangeLoop Goal Pull Architecture** (Inverted Control Flow):
 
-Layer 2 AgentLoop actively queries Layer 3 GoalEngine for goal assignment and reports execution results. GoalEngine provides goal state service, never invokes AgentLoop.
+Layer 2 StrangeLoop actively queries Layer 3 GoalEngine for goal assignment and reports execution results. GoalEngine provides goal state service, never invokes StrangeLoop.
 
 **Integration Pattern**:
 
 ```python
-# AgentLoop initialization (run_with_progress)
+# StrangeLoop initialization (run_with_progress)
 async def run_with_progress(...):
-    # PULL: AgentLoop queries GoalEngine for current goal
+    # PULL: StrangeLoop queries GoalEngine for current goal
     goal_engine = config.resolve_goal_engine()
     current_goal = goal_engine.get_next_ready_goal()
     
     if not current_goal:
         return None
     
-    # Execute Layer 2 loop (AgentLoop drives)
+    # Execute Layer 2 loop (StrangeLoop drives)
     state = LoopState(
         current_goal_id=current_goal.id,
         goal_text=current_goal.description,
@@ -62,7 +62,7 @@ async def run_with_progress(...):
     
     plan_result = await self.run_iteration(state)
     
-    # REPORT: AgentLoop reports result to GoalEngine
+    # REPORT: StrangeLoop reports result to GoalEngine
     if plan_result.status == "done":
         goal_engine.complete_goal(current_goal.id, plan_result)
     elif plan_result.status == "failed":
@@ -74,13 +74,13 @@ async def run_with_progress(...):
 
 **Integration Contract**:
 
-| Trigger | AgentLoop Action | GoalEngine Response |
+| Trigger | StrangeLoop Action | GoalEngine Response |
 |---------|------------------|---------------------|
 | Goal assignment | `get_next_ready_goal()` | Return DAG-satisfied goal |
 | Goal completion | `complete_goal(goal_id, plan_result)` | Update goal status |
 | Goal failure | `fail_goal(goal_id, EvidenceBundle)` | Apply BackoffReasoner |
 
-**Architectural Principle**: AgentLoop owns execution timing, GoalEngine provides goal state service (inverted control flow, no active PERFORM delegation).
+**Architectural Principle**: StrangeLoop owns execution timing, GoalEngine provides goal state service (inverted control flow, no active PERFORM delegation).
 
 ### Integration with Layer 1
 
@@ -90,28 +90,28 @@ async def run_with_progress(...):
 
 ### Adaptive final user response (IG-199)
 
-When the Plan phase returns `status: done`, AgentLoop must produce the user-visible completion text. Two strategies exist:
+When the Plan phase returns `status: done`, StrangeLoop must produce the user-visible completion text. Two strategies exist:
 
-1. **Reuse last Execute assistant text**: After each Execute wave on the goal thread, AgentLoop records assistant-visible text. Root-graph AIMessage chunks are aggregated from the Act stream for orchestration (`iter_messages_for_act_aggregation` is root-only). When delegation ran via the **`task`** tool, the bounded **return payload** text is also captured (ordered, capped; IG-355)—that is the delegate **final**, not subgraph AIMessage chatter—and preferred for adaptive completion when present so user-visible answers are not lost when subgraph streams stay isolated.
+1. **Reuse last Execute assistant text**: After each Execute wave on the goal thread, StrangeLoop records assistant-visible text. Root-graph AIMessage chunks are aggregated from the Act stream for orchestration (`iter_messages_for_act_aggregation` is root-only). When delegation ran via the **`task`** tool, the bounded **return payload** text is also captured (ordered, capped; IG-355)—that is the delegate **final**, not subgraph AIMessage chatter—and preferred for adaptive completion when present so user-visible answers are not lost when subgraph streams stay isolated.
 2. **Final thread synthesis**: An additional CoreAgent turn asks for a consolidated report over full thread history. Used when evidence heuristics indicate a multi-step or heavy run, when the last wave used parallel multi-step execution, when the subagent task cap was hit, or when no assistant text was captured.
 
 Configuration (`agentic.final_response`): `adaptive` (default) applies the policy above; `always_synthesize` always runs the report turn; `always_last_execute` skips the report when last Execute text exists (falling back to plan evidence otherwise).
 
 ### Architectural Role Clarification
 
-**Important**: AgentLoop is the **Layer 2 Plan → Execute loop runner**, not a consciousness module or knowledge accumulator. Its responsibilities are execution orchestration and iterative refinement, not knowledge persistence.
+**Important**: StrangeLoop is the **Layer 2 Plan → Execute loop runner**, not a consciousness module or knowledge accumulator. Its responsibilities are execution orchestration and iterative refinement, not knowledge persistence.
 
 **Architectural Separation**:
-- **AgentLoop**: Layer 2 loop runner (Plan → Execute iterations)
+- **StrangeLoop**: Layer 2 loop runner (Plan → Execute iterations)
 - **ContextProtocol**: Consciousness/knowledge ledger (unbounded context accumulation)
 - **GoalEngine**: Layer 3 goal lifecycle manager (DAG management, goal status)
-- **Executor**: AgentLoop component for thread coordination
+- **Executor**: StrangeLoop component for thread coordination
 
-**Why This Matters**: Brainstorming sessions sometimes confuse AgentLoop with "consciousness" because it maintains execution history. However, consciousness (unbounded knowledge with bounded projections) lives in ContextProtocol, not AgentLoop. AgentLoop's history is iteration-scoped execution state, not global knowledge accumulation.
+**Why This Matters**: Brainstorming sessions sometimes confuse StrangeLoop with "consciousness" because it maintains execution history. However, consciousness (unbounded knowledge with bounded projections) lives in ContextProtocol, not StrangeLoop. StrangeLoop's history is iteration-scoped execution state, not global knowledge accumulation.
 
-### Retrieval authority (AgentLoop versus ContextProtocol)
+### Retrieval authority (StrangeLoop versus ContextProtocol)
 
-**Architectural clarification**: Brainstorming sessions sometimes assign "unbounded retrieval authority" to AgentLoop. RFCs clarify the ownership boundary:
+**Architectural clarification**: Brainstorming sessions sometimes assign "unbounded retrieval authority" to StrangeLoop. RFCs clarify the ownership boundary:
 
 **ContextProtocol ownership** (RFC-001, RFC-400):
 - Append-only ledger semantics (unbounded knowledge accumulator)
@@ -119,17 +119,17 @@ Configuration (`agentic.final_response`): `adaptive` (default) applies the polic
 - **Retrieval module implementation** (RFC-400 `ContextRetrievalModule`)
 - Retrieval algorithm evolution behind stable API
 
-**AgentLoop operational authority** (this RFC):
+**StrangeLoop operational authority** (this RFC):
 - **When** to retrieve (iteration start, thread switch, goal dependency)
 - **For which goal** (goal-centric retrieval via `retrieve_by_goal_relevance()`)
 - **How** retrieved entries combine with GoalContextManager output and Plan/Execute prompts
 
-**Integration**: AgentLoop calls `ContextProtocol.get_retrieval_module().retrieve_by_goal_relevance(goal_id, execution_context, limit)` when building Plan/Execute context. Retrieval algorithm implementation details stay encapsulated in ContextProtocol, preserving architectural separation.
+**Integration**: StrangeLoop calls `ContextProtocol.get_retrieval_module().retrieve_by_goal_relevance(goal_id, execution_context, limit)` when building Plan/Execute context. Retrieval algorithm implementation details stay encapsulated in ContextProtocol, preserving architectural separation.
 
 **Integration Pattern Example**:
 
 ```python
-# AgentLoop.Executor calls ContextProtocol retrieval module
+# StrangeLoop.Executor calls ContextProtocol retrieval module
 retrieval = context.get_retrieval_module()
 relevant_history = retrieval.retrieve_by_goal_relevance(
     goal_id=state.current_goal_id,
@@ -143,25 +143,25 @@ relevant_history = retrieval.retrieve_by_goal_relevance(
 
 ### Dual Trigger Synchronization Ordering
 
-Layer 2 (AgentLoop) and Layer 3 (GoalEngine, RFC-200) stay synchronized through **ordered complementary triggers** with precise timing guarantees.
+Layer 2 (StrangeLoop) and Layer 3 (GoalEngine, RFC-200) stay synchronized through **ordered complementary triggers** with precise timing guarantees.
 
 **Trigger Types**:
 
 **REACTIVE Trigger** (Event-Bound):
 - Timing: Fired after execution boundaries (completion, failure, step completion)
 - Purpose: Push evidence to GoalEngine immediately
-- Direction: AgentLoop → GoalEngine (push)
+- Direction: StrangeLoop → GoalEngine (push)
 - Examples: complete_goal(), fail_goal(), event emission
 
 **PULL Trigger** (Need-Based):
 - Timing: Fired before decisions requiring goal context (Plan, after backoff, iteration boundaries)
 - Purpose: Query GoalEngine for authoritative state
-- Direction: AgentLoop → GoalEngine (query)
+- Direction: StrangeLoop → GoalEngine (query)
 - Examples: get_goal(), get_next_ready_goal(), ready_goals()
 
 **Ordered Sync Sequence (Per Iteration)**:
 
-| Step | Trigger | When | AgentLoop Call | Purpose |
+| Step | Trigger | When | StrangeLoop Call | Purpose |
 |------|---------|------|----------------|---------|
 | 1 | **PULL #1** | Before Plan | `get_goal(goal_id)` | Get goal state (priority, dependencies) |
 | 2 | PLAN | - | - | LLM reasoning with goal context |
@@ -176,7 +176,7 @@ Layer 2 (AgentLoop) and Layer 3 (GoalEngine, RFC-200) stay synchronized through 
 
 1. **PULL before Plan (mandatory)**: Planning requires authoritative goal state. Violation: stale goal context, wrong priority order.
 2. **REACTIVE after execution (immediate)**: GoalEngine needs evidence for DAG decisions. Violation: state stale during reflection.
-3. **PULL after backoff (before continuing)**: Backoff may reset goal status. Violation: AgentLoop continues on inactive goal.
+3. **PULL after backoff (before continuing)**: Backoff may reset goal status. Violation: StrangeLoop continues on inactive goal.
 4. **PULL before iteration boundary**: Reflection may add dependencies. Violation: executing goal with unsatisfied dependencies.
 
 **Race Condition Handling**:
@@ -322,7 +322,7 @@ class PlanResult(BaseModel):
    - Current goal: goal-centric retrieval (10 entries)
 3. **GoalContextManager summaries**: Previous goal summaries (5 entries)
 
-**PlanContext Integration**: AgentLoop calls `GoalContextConstructor.construct_plan_context(goal_id)` during PULL #1 before Plan phase.
+**PlanContext Integration**: StrangeLoop calls `GoalContextConstructor.construct_plan_context(goal_id)` during PULL #1 before Plan phase.
 
 **Architectural Principle**: Goal dependencies define relevant context scope. Prerequisite goal execution history provides constraints and learned patterns for planning.
 
@@ -408,7 +408,7 @@ async def execute(decision: AgentDecision, state: LoopState):
 
 ### Execute-Phase Output Suppression Contract (IG-304)
 
-Execute-phase assistant prose is internal orchestration output and should not be emitted as user-facing output events. AgentLoop must:
+Execute-phase assistant prose is internal orchestration output and should not be emitted as user-facing output events. StrangeLoop must:
 
 1. keep tool activity observable via message-mode tool chunks/events,
 2. emit final user-facing answer text through goal-completion output events only,
@@ -432,7 +432,7 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 - **Layer 2 (`RFC-201`)**: Produce execution evidence via EvidenceBundleBuilder, call GoalEngine.fail_goal()
 - **Layer 3 (`RFC-200`)**: Define and execute GoalBackoffReasoner policy internally, apply BackoffDecision
 - **Shared contract**: EvidenceBundle (RFC-200 §14-22) with structured + narrative fields
-- **Encapsulation**: AgentLoop never calls BackoffReasoner directly
+- **Encapsulation**: StrangeLoop never calls BackoffReasoner directly
 
 ### EvidenceBundle Contract
 
@@ -458,10 +458,10 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 
 ### Handoff Integration Architecture
 
-**AgentLoop → GoalEngine Flow**:
+**StrangeLoop → GoalEngine Flow**:
 
-1. **Build Evidence**: AgentLoop Executor constructs EvidenceBundle from execution context (PlanResult + LoopState wave metrics)
-2. **Handoff**: REACTIVE trigger #2 - AgentLoop calls GoalEngine.fail_goal(goal_id, evidence)
+1. **Build Evidence**: StrangeLoop Executor constructs EvidenceBundle from execution context (PlanResult + LoopState wave metrics)
+2. **Handoff**: REACTIVE trigger #2 - StrangeLoop calls GoalEngine.fail_goal(goal_id, evidence)
 3. **GoalEngine Processing** (encapsulated):
    - Build GoalContext snapshot from goal DAG
    - Call BackoffReasoner.reason_backoff() with goal context + evidence
@@ -469,7 +469,7 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
    - Persist DAG mutation
 4. **Next Iteration**: PULL #2 checks updated goal status → abort if "pending"
 
-**Architectural Guarantee**: AgentLoop hands off evidence, GoalEngine owns backoff reasoning (clear ownership boundary, no circular dependency).
+**Architectural Guarantee**: StrangeLoop hands off evidence, GoalEngine owns backoff reasoning (clear ownership boundary, no circular dependency).
 
 ---
 
@@ -477,12 +477,12 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 
 | Event | Description |
 |-------|-------------|
-| `soothe.cognition.agent_loop.started` | AgentLoop execution began |
-| `soothe.cognition.agent_loop.reasoned` | Plan/assessment progress summary event |
-| `soothe.cognition.agent_loop.step.started` | EXECUTE step began |
-| `soothe.cognition.agent_loop.step.completed` | EXECUTE step completed |
+| `soothe.cognition.strange_loop.started` | StrangeLoop execution began |
+| `soothe.cognition.strange_loop.reasoned` | Plan/assessment progress summary event |
+| `soothe.cognition.strange_loop.step.started` | EXECUTE step began |
+| `soothe.cognition.strange_loop.step.completed` | EXECUTE step completed |
 | `mode="messages"` + loop-tagged AI + `phase="goal_completion"` (and related phases) | Streaming / final user-visible answer text (IG-317; not `soothe.output.*`) |
-| `soothe.cognition.agent_loop.completed` | Loop completed lifecycle event |
+| `soothe.cognition.strange_loop.completed` | Loop completed lifecycle event |
 
 **Contract note**: Message-mode tool telemetry chunks remain visible during execute; plain execute-phase assistant prose is daemon-suppressed for stdout. User-visible completion prose is forwarded on the **messages** wire with **`phase`**, not as separate `soothe.output.goal_completion.*` custom event types. **RFC-500** defines how the Textual TUI maps loop-tagged AI (`execute_step` → step card, subagent scope → task card, `goal_completion` → `AssistantMessage`).
 
@@ -538,16 +538,16 @@ agentic:
 - RFC-001: Core modules architecture
 - RFC-100: CoreAgent runtime
 - RFC-200: Layer 3 Goal management and backoff authority
-- RFC-203: AgentLoop State & Memory Architecture
-- RFC-207: AgentLoop Thread Management & Goal Context
-- RFC-213: AgentLoop Reasoning Quality & Robustness
+- RFC-203: StrangeLoop State & Memory Architecture
+- RFC-207: StrangeLoop Thread Management & Goal Context
+- RFC-213: StrangeLoop Reasoning Quality & Robustness
 
 ---
 
 ## Changelog
 
 ### 2026-04-29
-- Aligned stream event table with current event contract (`soothe.cognition.agent_loop.reasoned`).
+- Aligned stream event table with current event contract (`soothe.cognition.strange_loop.reasoned`).
 - Clarified execute-phase suppression and tool-telemetry visibility semantics.
 
 ### 2026-04-17

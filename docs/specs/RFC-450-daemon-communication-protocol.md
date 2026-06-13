@@ -13,7 +13,7 @@
 This RFC defines a WebSocket-based daemon communication protocol serving all clients (local CLI/TUI and remote/web) through a unified transport. HTTP REST retained for health checks and stateless CRUD. The protocol specifies JSON message format, security requirements, and implementation interface, eliminating Unix domain socket complexity while enabling local and remote connectivity.
 
 **Updates**:
-- **2026-04-29**: Clarified stream-event payload semantics for AgentLoop: daemon forwards tool telemetry and explicit goal-completion output events; execute-phase assistant prose suppression is enforced at emission boundary (see RFC-401 §6.6, RFC-614).
+- **2026-04-29**: Clarified stream-event payload semantics for StrangeLoop: daemon forwards tool telemetry and explicit goal-completion output events; execute-phase assistant prose suppression is enforced at emission boundary (see RFC-401 §6.6, RFC-614).
 - **2026-04-14**: Added `models_list` / `models_list_response` so clients list models from the daemon host `SootheConfig`; `input` may carry optional `model` and `model_params` for a per-turn override resolved on the daemon.
 - **2026-04-14**: Added `skills_list` / `skills_list_response` and `invoke_skill` / `invoke_skill_response` RPCs for remote-safe skill metadata and invocation; ordering rule for `invoke_skill` (response before stream events for that turn).
 - **2026-03-29**: Simplified to WebSocket-only bidirectional streaming, removed Unix socket (stability issues)

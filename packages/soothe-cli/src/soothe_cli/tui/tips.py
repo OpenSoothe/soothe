@@ -6,7 +6,7 @@ import random
 
 SESSION_TIPS: list[str] = [
     "Use @ to reference files and / for commands",
-    "Try /resume to pick up a previous AgentLoop instance",
+    "Try /resume to pick up a previous StrangeLoop instance",
     "After Ctrl+C exit, use 'soothe loop continue' to resume",
     "Use /tokens to check context usage",
     "Use /mcp to see your loaded tools and servers",

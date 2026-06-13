@@ -5,18 +5,18 @@
 **Status**: Draft (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-05-27
-**Revised**: 2026-05-28 — daemon-ownership pivot; AgentLoop reframed as pure execution unit; bounded summarization via `GoalDispatchContextBundle` replaces in-memory lineage; `WorkspaceReservation` replaces per-path file-lock coordination. `GoalDispatchContext*` naming chosen to avoid collision with `GoalContext` already defined in RFC-217 (thread ecosystem) and RFC-200 (DAG snapshot for backoff).
+**Revised**: 2026-05-28 — daemon-ownership pivot; StrangeLoop reframed as pure execution unit; bounded summarization via `GoalDispatchContextBundle` replaces in-memory lineage; `WorkspaceReservation` replaces per-path file-lock coordination. `GoalDispatchContext*` naming chosen to avoid collision with `GoalContext` already defined in RFC-217 (thread ecosystem) and RFC-200 (DAG snapshot for backoff).
 **Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol)
 **Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events)
 **Supersedes (in part)**:
 - Earlier RFC-222 §"Loop Pool Management", §"Lineage-Aware Loop Assignment", §"File Lock Conflict Resolution" — replaced by the design herein.
-- RFC-200 §"Pull-Based Architecture" / §"AgentLoop ↔ GoalEngine Integration": the inverted control flow ("AgentLoop pulls from GoalEngine, GoalEngine never invokes AgentLoop") is replaced by **autopilot push**: daemon's `AutopilotService` dispatches goals to AgentLoop workers via the job contract. AgentLoop never sees `GoalEngine`. RFC-200's backoff reasoning, evidence schema, and goal-directives sections remain authoritative.
+- RFC-200 §"Pull-Based Architecture" / §"StrangeLoop ↔ GoalEngine Integration": the inverted control flow ("StrangeLoop pulls from GoalEngine, GoalEngine never invokes StrangeLoop") is replaced by **autopilot push**: daemon's `AutopilotService` dispatches goals to StrangeLoop workers via the job contract. StrangeLoop never sees `GoalEngine`. RFC-200's backoff reasoning, evidence schema, and goal-directives sections remain authoritative.
 
 ---
 
 ## Abstract
 
-This RFC defines the architecture for **daemon-owned autopilot**: one `AutopilotService` instance per daemon that composes `GoalEngine`, `WorkerPool`, `ContextProjector`, `WorkspaceReservation`, and `InternalEventBus`, and dispatches goals to fungible subprocess workers via the existing `LoopRunnerProtocol` (RFC-221). Workers run `AgentLoop` as a pure execution unit — they hydrate from an immutable `GoalDispatchContextBundle`, execute one goal, and emit a `GoalCompletionChunk` that the daemon's autopilot consumes to advance the DAG.
+This RFC defines the architecture for **daemon-owned autopilot**: one `AutopilotService` instance per daemon that composes `GoalEngine`, `WorkerPool`, `ContextProjector`, `WorkspaceReservation`, and `InternalEventBus`, and dispatches goals to fungible subprocess workers via the existing `LoopRunnerProtocol` (RFC-221). Workers run `StrangeLoop` as a pure execution unit — they hydrate from an immutable `GoalDispatchContextBundle`, execute one goal, and emit a `GoalCompletionChunk` that the daemon's autopilot consumes to advance the DAG.
 
 This replaces the prior per-`SootheRunner` autopilot model in which goal state, file-lock state, and the loop pool lived inside subprocess `SootheRunner` instances and died at the end of each request. The daemon-owned model enables true 24/7 operation, cross-session coordination, crash recovery via persisted `GoalDispatchContextContribution`, and workspace-level conflict gating at scheduling time.
 
@@ -49,7 +49,7 @@ In-memory continuity only handles linear-chain-on-one-worker. Every other shape 
 ### Goals
 
 1. **Single autopilot, daemon-lifetime.** `AutopilotService` is constructed once during `SootheDaemon.start()` and runs until shutdown.
-2. **AgentLoop as pure execution unit.** AgentLoop knows nothing about the DAG, sibling goals, the autopilot pool, scheduling, or cross-loop file conflicts. The job → worker → completion-chunk contract is the entire surface autopilot shares with AgentLoop.
+2. **StrangeLoop as pure execution unit.** StrangeLoop knows nothing about the DAG, sibling goals, the autopilot pool, scheduling, or cross-loop file conflicts. The job → worker → completion-chunk contract is the entire surface autopilot shares with StrangeLoop.
 3. **Bounded summarization for DAG composability.** Cross-goal context flows as a serializable `GoalDispatchContextBundle` (kilobytes, not megabytes). Diamonds and fan-out compose naturally. Crash recovery is automatic.
 4. **Workspace-level conflict gate at scheduling time.** Daemon refuses to dispatch two goals on overlapping workspace prefixes concurrently. Removes the need for cross-process file-lock RPC.
 5. **Subprocess isolation preserved (RFC-221).** Workers still crash independently; the daemon still consumes their streams; cancellation still uses the existing `cancel_event`.
@@ -59,11 +59,11 @@ In-memory continuity only handles linear-chain-on-one-worker. Every other shape 
 
 ## Architectural Invariant
 
-> **AgentLoop is the pure execution unit. Autopilot is the orchestrator.**
+> **StrangeLoop is the pure execution unit. Autopilot is the orchestrator.**
 >
-> AgentLoop knows nothing about the DAG, sibling goals, the autopilot pool, scheduling, or cross-loop file conflicts. Autopilot knows everything about those — and feeds AgentLoop one goal at a time through a value-typed contract.
+> StrangeLoop knows nothing about the DAG, sibling goals, the autopilot pool, scheduling, or cross-loop file conflicts. Autopilot knows everything about those — and feeds StrangeLoop one goal at a time through a value-typed contract.
 
-This invariant gates every design choice. If a proposed change would require AgentLoop to know about its siblings or about the DAG shape, it doesn't belong.
+This invariant gates every design choice. If a proposed change would require StrangeLoop to know about its siblings or about the DAG shape, it doesn't belong.
 
 ---
 
@@ -92,18 +92,18 @@ Layer 3: Autopilot (daemon process, singleton)
                   (LoopRunRequest + AutopilotJob ↓)
                   (StreamChunk[…] + GoalCompletion ↑)
                                 │
-Layer 2: AgentLoop (subprocess worker, fungible, RFC-221)
+Layer 2: StrangeLoop (subprocess worker, fungible, RFC-221)
   ┌──────────────────────────────────────────────────────────────┐
   │ One subprocess per worker slot (LoopRunnerFactory).          │
   │ Per request: SootheRunner.astream(autopilot_job=…) →         │
   │              _run_single_autopilot_goal(job) →               │
-  │              AgentLoop hydrates from bundle, executes,       │
+  │              StrangeLoop hydrates from bundle, executes,       │
   │              emits GoalCompletionChunk + done.               │
   │                                                              │
   │ Knows: nothing about the DAG, autopilot, or siblings.        │
   └──────────────────────────────────────────────────────────────┘
 
-Layer 1: CoreAgent (per AgentLoop)
+Layer 1: CoreAgent (per StrangeLoop)
   Unchanged from prior RFC. Tools, subagents, MCP, middleware.
 ```
 
@@ -122,12 +122,12 @@ Layer 1: CoreAgent (per AgentLoop)
 - Handle crash recovery on daemon startup
 
 **Not responsible for:**
-- Single-goal execution logic (`AgentLoop` owns this)
+- Single-goal execution logic (`StrangeLoop` owns this)
 - Plan/execute/reflect mechanics (RFC-201, RFC-220 own these)
 - Tool/subagent execution (CoreAgent owns this)
 - Subprocess lifecycle (`LoopRunnerFactory` owns this — autopilot is a consumer)
 
-**AgentLoop responsibilities (subprocess worker):**
+**StrangeLoop responsibilities (subprocess worker):**
 - Hydrate `loop_messages` and plan ledger from `GoalDispatchContextBundle` on entry
 - Drive plan/execute/reflect loop for the one goal at hand
 - Emit `GoalCompletionChunk` exactly once, just before the terminal `done` chunk
@@ -154,7 +154,7 @@ class LoopRunRequest:
     #   config, autonomous, max_iterations, intent_hint, …) — unchanged
 
     # RFC-222: when set, this is an autopilot-dispatched job. When None,
-    # this is a solo-mode request and AgentLoop runs today's path.
+    # this is a solo-mode request and StrangeLoop runs today's path.
     autopilot_job: AutopilotJob | None = None
 
 
@@ -168,7 +168,7 @@ class AutopilotJob:
 ```
 
 Properties:
-- `autopilot_job` is **optional**. Solo callers pass `None`. AgentLoop branches on presence — no global config gates behavior.
+- `autopilot_job` is **optional**. Solo callers pass `None`. StrangeLoop branches on presence — no global config gates behavior.
 - `merged_context` is **pre-computed in the daemon**. Worker never reads `GoalEngine`, never queries parents, never sees the DAG.
 - `deadline_seconds` bounds runaway goals (closes gap H5).
 - `attempt` lets the worker adapt strategy on retries without daemon-side prompt mutation.
@@ -194,13 +194,13 @@ class GoalCompletionChunk(BaseModel):
 
 ### Cancellation Contract
 
-Reuse the RFC-221 `cancel_event` mechanism (`pool_runner.py:448`). Autopilot's `cancel_goal(goal_id)` resolves the assigned worker via `goal_engine.get_goal()`, calls `worker.runner.cancel()`, then transitions the goal to `failed` in the engine. AgentLoop's cooperative check between chunks (`pool_runner.py:485`) is unchanged. Closes gap H8.
+Reuse the RFC-221 `cancel_event` mechanism (`pool_runner.py:448`). Autopilot's `cancel_goal(goal_id)` resolves the assigned worker via `goal_engine.get_goal()`, calls `worker.runner.cancel()`, then transitions the goal to `failed` in the engine. StrangeLoop's cooperative check between chunks (`pool_runner.py:485`) is unchanged. Closes gap H8.
 
 ---
 
 ## GoalDispatchContext and ContextProjector
 
-> **Naming note**: `GoalDispatchContext*` is distinct from `GoalContext` in RFC-217 (thread ecosystem + execution memory) and RFC-200 (DAG snapshot for backoff reasoning). Those concepts continue to exist; this RFC introduces a third, narrower concept: the bounded summary autopilot ships to a worker so AgentLoop can hydrate without seeing the DAG.
+> **Naming note**: `GoalDispatchContext*` is distinct from `GoalContext` in RFC-217 (thread ecosystem + execution memory) and RFC-200 (DAG snapshot for backoff reasoning). Those concepts continue to exist; this RFC introduces a third, narrower concept: the bounded summary autopilot ships to a worker so StrangeLoop can hydrate without seeing the DAG.
 
 ### Why bounded summarization (not full-memory continuity)
 
@@ -220,7 +220,7 @@ Defined in `core/goal_engine/models.py`:
 
 ```python
 class GoalDispatchContextBundle(BaseModel):
-    """Immutable hydration input for AgentLoop.
+    """Immutable hydration input for StrangeLoop.
 
     Merged across all parents (depends_on ∪ informs) by ContextProjector.
     Bounded size — summaries, not raw transcripts.
@@ -521,12 +521,12 @@ The existing internal-event types declared in `core/events/internal_events.py` a
 │   `soothe` → TUI → user input                              │
 │                                                            │
 │ Flow:                                                      │
-│   CLI/TUI → SootheRunner → AgentLoop ↔ CoreAgent           │
+│   CLI/TUI → SootheRunner → StrangeLoop ↔ CoreAgent           │
 │                                                            │
 │ Status:                                                    │
 │   No GoalEngine, no AutopilotService, no dispatch bundle   │
 │   LoopRunRequest.autopilot_job = None                      │
-│   AgentLoop runs today's _run_agentic / _run_quiz paths    │
+│   StrangeLoop runs today's _run_agentic / _run_quiz paths    │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -642,7 +642,7 @@ These were debated in the brainstorming session and locked as defaults:
 | Gap | Resolution |
 |---|---|
 | B1 — Scheduling loop never runs | Daemon owns `AutopilotService.start()` → continuous scheduling. |
-| B2 — Two incompatible loop concepts | Resolved by collapsing to one: AutopilotService in daemon, AgentLoop in worker. |
+| B2 — Two incompatible loop concepts | Resolved by collapsing to one: AutopilotService in daemon, StrangeLoop in worker. |
 | B3 — GoalEngine state in-process only | Daemon-owned + `restore_from_durability()`. |
 | B4 — File-lock registry per-process | Replaced by daemon-owned `WorkspaceReservation` (Q1). |
 | B5 — FileLockMiddleware not installed | Replaced by workspace-level scheduling check (Q1). |
@@ -660,7 +660,7 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 
 - RFC-000: System Conceptual Design
 - RFC-200: Layer 3 Goal Management and Backoff Authority
-- RFC-201: AgentLoop Plan-Execute Loop Architecture
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture
 - RFC-204: Goal File Discovery & Status Tracking
 - RFC-220: LangGraph Loop Orchestrator
 - RFC-221: Loop Runner Protocol and Subprocess Isolation
@@ -681,7 +681,7 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 
 ### 2026-05-28 (Revised — daemon-ownership pivot)
 - **AutopilotService moved to daemon ownership.** One instance per daemon, constructed at `SootheDaemon.start()`, lifetime = daemon lifetime.
-- **AgentLoop reframed as pure execution unit.** No GoalEngine, no AutopilotService, no DAG view inside subprocess workers.
+- **StrangeLoop reframed as pure execution unit.** No GoalEngine, no AutopilotService, no DAG view inside subprocess workers.
 - **Bounded summarization via `GoalDispatchContextBundle`** replaces lineage-based in-memory continuity. Composes for diamond joins, fan-out, backoff, worker crash. Linear chains still get warm caches via sticky scheduling.
 - **`WorkspaceReservation`** replaces `FileLockRegistry` / `FileLockMiddleware` as the conflict gate. Enforced at scheduling time in the daemon. Fine-grained per-path locking preserved unwired (revivable when needed).
 - **Job contract** added: `LoopRunRequest.autopilot_job: AutopilotJob | None`. Worker branches on presence; solo callers pass `None`.
@@ -695,4 +695,4 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 
 ---
 
-*Daemon-owned AutopilotService composing AgentLoop workers as fungible executors, enabling 24/7 autonomous goal execution with bounded-summarization context flow, workspace-level conflict gating, and crash recovery — while preserving subprocess isolation (RFC-221) and solo-mode behavior.*
+*Daemon-owned AutopilotService composing StrangeLoop workers as fungible executors, enabling 24/7 autonomous goal execution with bounded-summarization context flow, workspace-level conflict gating, and crash recovery — while preserving subprocess isolation (RFC-221) and solo-mode behavior.*

@@ -2,7 +2,7 @@
 
 ``QueryEngine`` sets a `ContextVar` for the duration of ``SootheRunner.astream`` so
 ``PerTurnModelMiddleware`` can swap the chat model without threading kwargs through
-``AgentLoop`` and every ``astream`` callsite.
+``StrangeLoop`` and every ``astream`` callsite.
 """
 
 from __future__ import annotations

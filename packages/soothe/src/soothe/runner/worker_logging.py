@@ -34,7 +34,7 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
 
     Args:
         config: Worker configuration (rotation/size mirrors ``observability``).
-        loop_id: Active AgentLoop identifier.
+        loop_id: Active StrangeLoop identifier.
 
     Returns:
         Path to ``runner.log``, or ``None`` when ``loop_id`` is empty.

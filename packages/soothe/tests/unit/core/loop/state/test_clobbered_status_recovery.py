@@ -5,11 +5,11 @@ Reproduces the failure mode where the daemon's pre-query
 ``finalize_goal``) back to ``status="running"`` while
 ``current_goal_index`` stays at ``-1``. The fix lives in two places:
 
-1. ``agent_loop.py``: when status=running + invalid index but goal_history
+1. ``strange_loop.py``: when status=running + invalid index but goal_history
    has completed goals, take the idle-continuation path (preserve history,
    append new goal, seed prior ledger) instead of wiping.
 2. ``postgres_backend.update_loop_metadata``: drop ``status`` from external
-   writes when goal_history is non-empty (AgentLoop owns status then).
+   writes when goal_history is non-empty (StrangeLoop owns status then).
 
 This test covers (1) — exercising the branching state transitions via the
 SQLite-backed manager and confirming the seeding path triggers.
@@ -26,20 +26,20 @@ import pytest
 from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
     seed_loop_ledger_from_prior_goal,
 )
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
+from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.fixture
 def temp_state_manager():
-    """Temp-scoped AgentLoopStateManager (mirrors test_checkpoint_index_fix)."""
+    """Temp-scoped StrangeLoopStateManager (mirrors test_checkpoint_index_fix)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
         db_path = workspace / "test_clobber_recovery.db"
         with patch(
-            "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            yield AgentLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
+            yield StrangeLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
 
 
 @pytest.mark.asyncio
@@ -69,12 +69,12 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     clobbered.status = "running"
     await sm.save(clobbered)
 
-    # Cold reload — mimics agent_loop.load() at the start of a new query.
+    # Cold reload — mimics strange_loop.load() at the start of a new query.
     with patch(
-        "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
-        sm2 = AgentLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
         loaded = await sm2.load()
 
     assert loaded is not None
@@ -84,7 +84,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     assert loaded.goal_history[0].status == "completed"
     # ── Fix A precondition holds: status==running, invalid index, prior completed goal. ──
 
-    # ── Exercise: the recovery branch that agent_loop now takes for this state ───
+    # ── Exercise: the recovery branch that strange_loop now takes for this state ───
     has_prior_completed = any(
         g.status in ("completed", "failed", "cancelled") for g in loaded.goal_history
     )
@@ -113,10 +113,10 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
 
     # Final cold reload confirms persistence of preserved history.
     with patch(
-        "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
-        sm3 = AgentLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm3 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
         final = await sm3.load()
     assert final is not None
     assert len(final.goal_history) == 2
@@ -128,7 +128,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
 def test_wipe_branch_still_fires_for_truly_corrupt_state() -> None:
     """When goal_history is empty AND status==running, the wipe re-init path
     must still fire (no prior goals to preserve)."""
-    # The discriminator in agent_loop is:
+    # The discriminator in strange_loop is:
     #   checkpoint.goal_history AND any(g.status in (completed/failed/cancelled))
     # An empty goal_history short-circuits to the wipe branch.
     empty_history: list = []

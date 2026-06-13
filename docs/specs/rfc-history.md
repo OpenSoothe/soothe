@@ -36,7 +36,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### 2026-06
 
-- **2026-06-04**: RFC-215 - AgentLoop Persistence Backend Architecture
+- **2026-06-04**: RFC-215 - StrangeLoop Persistence Backend Architecture
   - Status: Draft
   - Kind: Architecture Design
 
@@ -153,7 +153,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-05-05**: RFC-213 - AgentLoop Reasoning Quality & Robustness
+- **2026-05-05**: RFC-213 - StrangeLoop Reasoning Quality & Robustness
   - Status: Draft
   - Kind: Architecture Design
   - Authors: Claude Code
@@ -201,7 +201,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-29**: RFC-201 - AgentLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
+- **2026-04-29**: RFC-201 - StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
   - Status: Implemented
   - Kind: Architecture Design
 
@@ -233,7 +233,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Kind: Architecture Design
   - Authors: Soothe Team
 
-- **2026-04-22**: RFC-218 - AgentLoop Checkpoint Tree Architecture
+- **2026-04-22**: RFC-218 - StrangeLoop Checkpoint Tree Architecture
   - Status: Draft
   - Kind: Architecture Design
 
@@ -258,15 +258,15 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **2026-04-17**: RFC-001 - Architecture Design for Core Protocol Modules
   - Status: Implemented
 
-- **2026-04-17**: RFC-203 - AgentLoop State & Memory Architecture
+- **2026-04-17**: RFC-203 - StrangeLoop State & Memory Architecture
   - Status: Draft
   - Kind: Architecture Design / Impl Interface
 
-- **2026-04-17**: RFC-207 - AgentLoop Thread Management & Goal Context
+- **2026-04-17**: RFC-207 - StrangeLoop Thread Management & Goal Context
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-17**: RFC-217 - Goal Context Management for AgentLoop
+- **2026-04-17**: RFC-217 - Goal Context Management for StrangeLoop
   - Status: Draft
   - Kind: Architecture Design
 
@@ -294,7 +294,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-16**: RFC-216 - AgentLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
+- **2026-04-16**: RFC-216 - StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
   - Status: Draft
   - Kind: Architecture Design
 
@@ -447,21 +447,21 @@ RFCs are organized into numbered series by category:
 - RFC-104: Dynamic System Context Injection
 - RFC-105: Progressive Skill Loading
 
-### 2xx - AgentLoop & Cognition
+### 2xx - StrangeLoop & Cognition
 
 - RFC-200: Autonomous Goal Management Loop
-- RFC-201: AgentLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
-- RFC-203: AgentLoop State & Memory Architecture
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
+- RFC-203: StrangeLoop State & Memory Architecture
 - RFC-204: Autopilot Mode (Layer 3 Extension)
 - RFC-206: Hierarchical Prompt Architecture with System/User Separation
-- RFC-207: AgentLoop Thread Management & Goal Context
+- RFC-207: StrangeLoop Thread Management & Goal Context
 - RFC-211: Layer 2 Tool Result Optimization
-- RFC-213: AgentLoop Reasoning Quality & Robustness
+- RFC-213: StrangeLoop Reasoning Quality & Robustness
 - RFC-214: Volatility-Tiered Prompt Architecture & Unified Message Ledger
-- RFC-215: AgentLoop Persistence Backend Architecture
-- RFC-216: AgentLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
-- RFC-217: Goal Context Management for AgentLoop
-- RFC-218: AgentLoop Checkpoint Tree Architecture
+- RFC-215: StrangeLoop Persistence Backend Architecture
+- RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
+- RFC-217: Goal Context Management for StrangeLoop
+- RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-219: Goal Completion Module Architecture
 - RFC-220: LangGraph Agent Loop Orchestrator
 - RFC-221: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution

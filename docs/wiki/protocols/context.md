@@ -7,7 +7,7 @@
 
 ## Overview
 
-ContextProtocol is **planned** as Soothe's unbounded knowledge accumulator for cognitive context engineering. It serves as AgentLoop's "consciousness" layer, maintaining complete execution knowledge across threads.
+ContextProtocol is **planned** as Soothe's unbounded knowledge accumulator for cognitive context engineering. It serves as StrangeLoop's "consciousness" layer, maintaining complete execution knowledge across threads.
 
 ⚠️ **Implementation Status**: ContextProtocol is defined in RFC-400 (draft status) but **not yet implemented**. The current architecture uses alternative mechanisms for context management. This documentation describes the **planned design**.
 

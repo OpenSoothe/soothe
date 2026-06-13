@@ -107,7 +107,7 @@ observability:
 # ============================================================
 persistence:
   default_backend: postgresql
-  # Thread pool (daemon_config.dev.yml): one checkpointer + one AgentLoop pool per daemon process.
+  # Thread pool (daemon_config.dev.yml): one checkpointer + one StrangeLoop pool per daemon process.
   postgres_pool_min_size: 4
   checkpointer_pool_size: 24
   agentloop_pool_size: 24

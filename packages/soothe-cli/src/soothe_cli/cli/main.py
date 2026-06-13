@@ -152,7 +152,7 @@ def main(
         soothe -p "Research AI advances" # One-shot headless (non-TUI) query
         soothe -p "Hello" --tui         # TUI with an auto-submitted prompt
         soothe --daemon-port 9000 loop list  # Subcommands inherit global flags
-        soothe loop list                 # List AgentLoop instances
+        soothe loop list                 # List StrangeLoop instances
     """
     # Handle -h/--help flag
     if show_help:

@@ -342,7 +342,7 @@ WITH (lists = 100);
 persistence:
   postgres_pool_min_size: 16  # Base pool
   checkpointer_pool_size: 48  # LangGraph checkpoints
-  agentloop_pool_size: 48     # AgentLoop state
+  agentloop_pool_size: 48     # StrangeLoop state
   
 agent:
   autonomous:
@@ -400,7 +400,7 @@ agent:
 
 ### Memory Estimation
 
-**Per-thread memory**: ~50 MB (AgentLoop state + LLM context)
+**Per-thread memory**: ~50 MB (StrangeLoop state + LLM context)
 
 **Total memory**: Threads × 50 MB + Base daemon memory
 

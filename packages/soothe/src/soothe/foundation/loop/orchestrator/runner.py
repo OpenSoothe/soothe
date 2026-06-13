@@ -1,9 +1,9 @@
-"""Invoke the compiled Loop graph (RFC-220).
+"""Invoke the compiled Strange Loop graph (RFC-220).
 
 Langfuse (IG-367, IG-396): outer ``ainvoke`` receives the LangChain callback handler so the
 Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the
 conversation ``thread_id``; Runnable ``configurable.thread_id`` stays ``loop_id`` for checkpoint
-routing. Metadata adds ``soothe_component`` and dashboard tags for AgentLoop.
+routing. Metadata adds ``soothe_component`` and dashboard tags for StrangeLoop.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import logging
 import traceback
 from typing import Any
 
-from soothe.foundation.loop.orchestrator.builder import build_agent_loop_graph
+from soothe.foundation.loop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.utils.observability.langfuse import (
     loop_graph_langfuse_run_display_name,
@@ -61,7 +61,7 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     # RFC-204 Group C: propagate proposal_queue for Layer 2 tools
     if ctx.proposal_queue is not None:
         base["configurable"]["proposal_queue"] = ctx.proposal_queue
-    cfg = ctx.agent_loop.config
+    cfg = ctx.strange_loop.config
     run_name = loop_graph_langfuse_run_display_name(cfg.observability.langfuse.trace_name)
     merged = merge_langfuse_runnable_config(
         base,
@@ -73,10 +73,10 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     out = dict(merged)
     meta = dict(out.get("metadata") or {})
     meta.setdefault("loop_id", loop_id)
-    meta.setdefault("soothe_component", "agent_loop_graph")
-    meta.setdefault("soothe_component_version", "agent-loop-v2")
+    meta.setdefault("soothe_component", "strange_loop_graph")
+    meta.setdefault("soothe_component_version", "strange-loop-v2")
     tags = list(meta.get("langfuse_tags") or [])
-    for label in ("goal_execution_loop", "agent-loop-graph"):
+    for label in ("goal_execution_loop", "strange-loop-graph"):
         if label not in tags:
             tags.append(label)
     meta["langfuse_tags"] = tags
@@ -84,10 +84,10 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     return out
 
 
-async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
+async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
     """Run the compiled graph once until END.
 
-    Progress is emitted through ``ctx.emit``, which ``AgentLoop.run_with_progress`` wires
+    Progress is emitted through ``ctx.emit``, which ``StrangeLoop.run_with_progress`` wires
     to an asyncio queue consumer.
 
     Args:
@@ -96,11 +96,11 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
     from langgraph.types import Command
 
     loop_id = ctx.state_manager.loop_id
-    planner = ctx.agent_loop.plan_phase._loop_planner
+    planner = ctx.strange_loop.plan_phase._loop_planner
     if hasattr(planner, "_loop_id"):
         planner._loop_id = loop_id
 
-    compiled = build_agent_loop_graph(ctx)
+    compiled = build_strange_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)
 
     # RFC-622: if the caller flagged this turn as a clarification answer AND
@@ -155,7 +155,7 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
         )
         raise
 
-    cfg = ctx.agent_loop.config
+    cfg = ctx.strange_loop.config
     if cfg.observability.langfuse.enabled:
         pub = resolve_langfuse_config_str(cfg.observability.langfuse.public_key)
         trace_goal = ctx.loop_state.goal_user_submission or ctx.loop_state.goal

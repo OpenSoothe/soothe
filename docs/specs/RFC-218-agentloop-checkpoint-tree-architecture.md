@@ -1,7 +1,7 @@
-# RFC-218: AgentLoop Checkpoint Tree Architecture
+# RFC-218: StrangeLoop Checkpoint Tree Architecture
 
 **RFC**: 218
-**Title**: AgentLoop Checkpoint Tree Architecture
+**Title**: StrangeLoop Checkpoint Tree Architecture
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines AgentLoop checkpoint tree architecture that synchronizes AgentLoop checkpoints with CoreAgent checkpoints through **branch-based checkpoint trees**. The design enables smart retry with learning: failed execution branches are preserved, analyzed for failure patterns, and learning insights are injected into retry attempts. Checkpoint anchors provide synchronization points between AgentLoop iterations and CoreAgent checkpoint history, enabling precise rewinding without garbage checkpoints.
+This RFC defines StrangeLoop checkpoint tree architecture that synchronizes StrangeLoop checkpoints with CoreAgent checkpoints through **branch-based checkpoint trees**. The design enables smart retry with learning: failed execution branches are preserved, analyzed for failure patterns, and learning insights are injected into retry attempts. Checkpoint anchors provide synchronization points between StrangeLoop iterations and CoreAgent checkpoint history, enabling precise rewinding without garbage checkpoints.
 
 ---
 
@@ -23,25 +23,25 @@ This RFC defines AgentLoop checkpoint tree architecture that synchronizes AgentL
 **IG-238** introduced `CoreAgentCheckpointRef` metadata linkage, but left a critical synchronization gap:
 
 ```
-AgentLoop checkpoint at iteration 2 boundary
+StrangeLoop checkpoint at iteration 2 boundary
   ↓
 CoreAgent executes: reason → tool → subagent (multiple checkpoints)
   ↓
 FAILURE (iteration 3)
   ↓
-Want to recover: Rewind to AgentLoop checkpoint (iteration 2)
+Want to recover: Rewind to StrangeLoop checkpoint (iteration 2)
   ↓
 Problem: Which CoreAgent checkpoint_id to restore?
   - checkpoint_id_latest? Contains failed iteration 3 garbage
   - checkpoint_id_boundary? Correct state, but how do we know this ID?
 ```
 
-**Root cause**: AgentLoop checkpoint lacks precise checkpoint anchor to CoreAgent checkpoint at iteration boundaries. Failed iteration creates garbage checkpoints in CoreAgent history, making rewinding ambiguous.
+**Root cause**: StrangeLoop checkpoint lacks precise checkpoint anchor to CoreAgent checkpoint at iteration boundaries. Failed iteration creates garbage checkpoints in CoreAgent history, making rewinding ambiguous.
 
 ### Proposed Solution
 
 **Branch-based checkpoint trees**:
-- AgentLoop checkpoint references a **tree structure** (main_line + failed_branches)
+- StrangeLoop checkpoint references a **tree structure** (main_line + failed_branches)
 - **Iteration checkpoint anchors**: Precise CoreAgent checkpoint_id captured at each iteration boundary
 - **Failed branches**: Preserve execution path (checkpoint_ids from root → failure) for learning analysis
 - **Smart retry**: Rewind to root checkpoint, inject learning insights, retry with adjustments
@@ -81,7 +81,7 @@ Checkpoint Tree = {
 
 ```python
 class CheckpointAnchor(BaseModel):
-    """Synchronization point between AgentLoop iteration and CoreAgent checkpoint."""
+    """Synchronization point between StrangeLoop iteration and CoreAgent checkpoint."""
     
     iteration: int
     thread_id: str  # Which thread this checkpoint belongs to
@@ -167,10 +167,10 @@ class CoreAgentCheckpointTreeRef(BaseModel):
     """Latest checkpoint_id on current branch (main_line or retry branch)."""
 ```
 
-**AgentLoopCheckpoint v3.1 schema** (extends IG-238 v3.0):
+**StrangeLoopCheckpoint v3.1 schema** (extends IG-238 v3.0):
 ```python
-class AgentLoopCheckpoint(BaseModel):
-    """Complete AgentLoop state with checkpoint tree reference (v3.1)."""
+class StrangeLoopCheckpoint(BaseModel):
+    """Complete StrangeLoop state with checkpoint tree reference (v3.1)."""
     
     # Identity (RFC-216)
     loop_id: str  # UUID
@@ -256,7 +256,7 @@ async def start_iteration(iteration: int, thread_id: str):
 
 **Step 2: Iteration execution**:
 - CoreAgent executes Plan → Execute (automatic per-node checkpointing)
-- AgentLoop tracks execution progress (reason steps, act waves)
+- StrangeLoop tracks execution progress (reason steps, act waves)
 - CoreAgent checkpoint history grows: checkpoint_start → checkpoint_node_1 → checkpoint_node_2 → ...
 
 **Step 3: Iteration end anchor (success)**:
@@ -505,12 +505,12 @@ async def prune_old_branches(loop_id: str, policy: BranchPruningPolicy):
 - Add `CheckpointAnchor` model
 - Add `FailedBranchRecord` model
 - Add `CoreAgentCheckpointTreeRef` model
-- Update `AgentLoopCheckpoint` schema to v3.1
+- Update `StrangeLoopCheckpoint` schema to v3.1
 
 ### Phase 2: Checkpoint Anchor Management
 - Implement `save_checkpoint_anchor()` in persistence manager
 - Implement `get_checkpoint_anchors_for_range()` for failure analysis
-- Integrate with AgentLoop iteration boundaries
+- Integrate with StrangeLoop iteration boundaries
 
 ### Phase 3: Failed Branch Management
 - Implement `detect_iteration_failure()` and branch creation
@@ -520,7 +520,7 @@ async def prune_old_branches(loop_id: str, policy: BranchPruningPolicy):
 ### Phase 4: Smart Retry Integration
 - Implement `restore_coreagent_checkpoint()` rewinding
 - Implement learning injection into Plan phase
-- Integrate with AgentLoop retry logic
+- Integrate with StrangeLoop retry logic
 
 ### Phase 5: Pruning & Cleanup
 - Implement branch pruning policy
@@ -544,10 +544,10 @@ async def prune_old_branches(loop_id: str, policy: BranchPruningPolicy):
 
 ## Related Specifications
 
-- RFC-216: AgentLoop Multi-Thread Lifecycle
-- RFC-215: AgentLoop Persistence Backend
+- RFC-216: StrangeLoop Multi-Thread Lifecycle
+- RFC-215: StrangeLoop Persistence Backend
 - RFC-411: Event Stream Replay & History Reconstruction
-- IG-238: AgentLoop Checkpoint Unified Integration
+- IG-238: StrangeLoop Checkpoint Unified Integration
 
 ---
 

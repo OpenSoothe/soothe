@@ -3,7 +3,7 @@
 Two-value intent classification: ``quiz`` (greetings, thanks, trivia
 answered without tools) vs. ``agentic`` (everything else). Whether an
 agentic query continues an in-flight loop is derived structurally
-inside ``AgentLoop`` from the loaded checkpoint, not classified here.
+inside ``StrangeLoop`` from the loaded checkpoint, not classified here.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class RoutingClassification(BaseModel):
 
     Args:
         task_complexity: Routing complexity level.
-        preferred_subagent: Wire or classifier hint for which subagent to prefer in AgentLoop.
+        preferred_subagent: Wire or classifier hint for which subagent to prefer in StrangeLoop.
         routing_hint: Routing strategy hint.
     """
 
@@ -66,7 +66,7 @@ class IntentClassification(BaseModel):
 
     Two-value LLM classification:
     - ``quiz``: minimal direct reply (greeting/thanks/trivia) without tools.
-    - ``agentic``: everything else; the runner / AgentLoop derive loop
+    - ``agentic``: everything else; the runner / StrangeLoop derive loop
       continuation structurally from the checkpoint.
 
     Args:
@@ -144,7 +144,7 @@ def build_loop_routing_classification(
     intent: IntentClassification | None,
     preferred_subagent: str | None,
 ) -> RoutingClassification | None:
-    """Build routing classification consumed by AgentLoop Plan/Execute."""
+    """Build routing classification consumed by StrangeLoop Plan/Execute."""
     if intent is None:
         if preferred_subagent:
             return RoutingClassification(

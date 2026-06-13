@@ -166,13 +166,13 @@ Several use cases are uneven or impossible in the TUI:
   | Renderer | Source event family |
   | --- | --- |
   | `AssistantBubble` | streamed `AIMessage` text chunks coalesced per turn |
-  | `ReasoningCard` (collapsed) | `soothe.cognition.agent_loop.*`, `soothe.cognition.plan.*` |
+  | `ReasoningCard` (collapsed) | `soothe.cognition.strange_loop.*`, `soothe.cognition.plan.*` |
   | `ToolCard` (collapsible activity) | `soothe.tool.execution.{started,completed,error}` |
   | `DiffCard` | file-edit wire frames (see §8.3) |
   | `SubagentChip` | `soothe.subagent.<agent>.<signal>` |
   | `ClarificationCard` | `soothe.loop.clarification.{requested,answered,deferred}` |
   | `ErrorBanner` | `soothe.error.*` + envelope `{type:"error"}` |
-  | `FinalReportCard` | terminal `AgenticStepCompletedEvent` |
+  | `FinalReportCard` | terminal `StrangeLoopStepCompletedEvent` |
   | `DebugCard` (fallback) | anything else |
 
 ### 5.4 IPC Bridge

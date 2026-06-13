@@ -358,7 +358,7 @@ def record_message(self, message: BaseMessage, phase: str) -> None:
         self.compact()
 ```
 
-**Default `max_entries=200`**: sufficient for typical multi-hour AgentLoop sessions
+**Default `max_entries=200`**: sufficient for typical multi-hour StrangeLoop sessions
 (~50 iterations x 4 ledger pairs). The compaction function is not set by default —
 without it, old entries are dropped. This matches the current behavior where
 `loop_messages` grows unbounded but is bounded by the projection layer.
@@ -404,13 +404,13 @@ class LedgerManager:
 ### Callback Flow
 
 ```
-AgentLoop → ContextEngine.complete_goal(goal_id)
+StrangeLoop → ContextEngine.complete_goal(goal_id)
                 ↓
             GoalStepDAG.complete_goal() [state change]
                 ↓
             _fire("goal_completed", goal_id) [callback dispatch]
                 ↓
-            AgentLoop handler (if registered)
+            StrangeLoop handler (if registered)
                 → e.g., activate next ready goal
 ```
 

@@ -11,8 +11,8 @@ screen.
 ## Root causes
 
 ### 1. `bind_execution_thread_for_loop` disagrees with RFC-223
-RFC-223 normalizes the main AgentLoop checkpoint thread id to the
-``loop_id`` itself: ``soothe.core.loop.engine.agent_loop`` rewrites any
+RFC-223 normalizes the main StrangeLoop checkpoint thread id to the
+``loop_id`` itself: ``soothe.core.loop.engine.strange_loop`` rewrites any
 caller-supplied id back to ``loop_id`` before saving the checkpoint, and
 the LangGraph checkpointer stores the conversation under that id. The
 daemon's ``bind_execution_thread_for_loop``

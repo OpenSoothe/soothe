@@ -1,7 +1,7 @@
-# RFC-215: AgentLoop Persistence Backend Architecture
+# RFC-215: StrangeLoop Persistence Backend Architecture
 
 **RFC**: 215
-**Title**: AgentLoop Persistence Backend Architecture
+**Title**: StrangeLoop Persistence Backend Architecture
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
@@ -13,7 +13,7 @@
 
 ## Abstract
 
-This RFC defines the persistence backend architecture for AgentLoop checkpoints with SQLite (primary) and PostgreSQL (secondary) support. The design enforces strict **thread/loop isolation**: thread data (CoreAgent Layer 1) and loop data (AgentLoop Layer 2) are stored in separate directory structures with cross-reference linkage. SQLite provides simple local development, PostgreSQL offers production scalability with connection pooling and JSONB queries.
+This RFC defines the persistence backend architecture for StrangeLoop checkpoints with SQLite (primary) and PostgreSQL (secondary) support. The design enforces strict **thread/loop isolation**: thread data (CoreAgent Layer 1) and loop data (StrangeLoop Layer 2) are stored in separate directory structures with cross-reference linkage. SQLite provides simple local development, PostgreSQL offers production scalability with connection pooling and JSONB queries.
 
 ---
 
@@ -22,7 +22,7 @@ This RFC defines the persistence backend architecture for AgentLoop checkpoints 
 ### Current Problem
 
 **Mixed persistence** (current):
-- AgentLoop checkpoint: JSON file in `$SOOTHE_HOME/runs/{loop_id}/`
+- StrangeLoop checkpoint: JSON file in `$SOOTHE_HOME/runs/{loop_id}/`
 - CoreAgent checkpoint: LangGraph SQLite in thread-scoped location
 - No standardized directory structure
 - Thread/loop data mixed in same location
@@ -32,7 +32,7 @@ This RFC defines the persistence backend architecture for AgentLoop checkpoints 
 
 **Isolated persistence** with backend flexibility:
 - Thread data: `$SOOTHE_HOME/data/threads/{thread_id}/` (CoreAgent Layer 1)
-- Loop data: `$SOOTHE_HOME/data/loops/{loop_id}/` (AgentLoop Layer 2)
+- Loop data: `$SOOTHE_HOME/data/loops/{loop_id}/` (StrangeLoop Layer 2)
 - SQLite backend (primary): Per-loop database files
 - PostgreSQL backend (secondary): Shared database with connection pool
 - Clear separation: Thread vs loop data
@@ -44,7 +44,7 @@ This RFC defines the persistence backend architecture for AgentLoop checkpoints 
 
 ### Isolation Principle
 
-**Key principle**: Thread folders contain **only CoreAgent data**, loop folders contain **only AgentLoop data**. No data mixing.
+**Key principle**: Thread folders contain **only CoreAgent data**, loop folders contain **only StrangeLoop data**. No data mixing.
 
 ```
 SOOTHE_HOME/
@@ -64,9 +64,9 @@ SOOTHE_HOME/
             system_prompt_cache.json
         history.jsonl  # Message history (optional, for quick replay)
         
-    loops/  # AgentLoop checkpoint data (Layer 2)
+    loops/  # StrangeLoop checkpoint data (Layer 2)
       {loop_id}/
-        checkpoint.db  # AgentLoop checkpoint database (SQLite)
+        checkpoint.db  # StrangeLoop checkpoint database (SQLite)
         metadata.json  # Loop metadata (quick access, human-readable)
         working_memory/  # Working memory spills
           step-{goal_id}-{step_id}-{seq}.md
@@ -264,8 +264,8 @@ CREATE INDEX idx_branches_insights ON failed_branches USING Gin (failure_insight
 ### Core Interface
 
 ```python
-class AgentLoopCheckpointPersistenceManager:
-    """Manager for AgentLoop checkpoint persistence.
+class StrangeLoopCheckpointPersistenceManager:
+    """Manager for StrangeLoop checkpoint persistence.
     
     Supports SQLite (primary) and PostgreSQL (secondary) backends.
     Enforces thread/loop isolation with cross-reference linkage.
@@ -309,15 +309,15 @@ class AgentLoopCheckpointPersistenceManager:
         return self.threads_dir / thread_id / "artifacts"
 
     def get_loop_checkpoint_path(self, loop_id: str) -> Path:
-        """Get AgentLoop checkpoint database path.
+        """Get StrangeLoop checkpoint database path.
         
         Returns:
-            Path to loop's checkpoint.db (managed by AgentLoop).
+            Path to loop's checkpoint.db (managed by StrangeLoop).
         """
         return self.loops_dir / loop_id / "checkpoint.db"
 
     def get_loop_working_memory_dir(self, loop_id: str) -> Path:
-        """Get AgentLoop working memory spill directory.
+        """Get StrangeLoop working memory spill directory.
         
         Returns:
             Path to loop's working_memory/ directory.
@@ -340,7 +340,7 @@ async def save_checkpoint_anchor(
     """Save iteration checkpoint anchor with thread cross-reference.
     
     Args:
-        loop_id: AgentLoop identifier.
+        loop_id: StrangeLoop identifier.
         iteration: Iteration number.
         thread_id: Thread where checkpoint belongs (cross-reference).
         checkpoint_id: CoreAgent checkpoint_id.
@@ -434,7 +434,7 @@ async def load_checkpoint_tree_ref(
     self,
     loop_id: str,
 ) -> CoreAgentCheckpointTreeRef:
-    """Load complete checkpoint tree for AgentLoop.
+    """Load complete checkpoint tree for StrangeLoop.
     
     Returns:
         CoreAgentCheckpointTreeRef with main_line + failed_branches.
@@ -444,8 +444,8 @@ async def load_checkpoint_tree_ref(
 async def load_agentloop_checkpoint(
     self,
     loop_id: str,
-) -> AgentLoopCheckpoint:
-    """Load AgentLoop checkpoint from persistence backend.
+) -> StrangeLoopCheckpoint:
+    """Load StrangeLoop checkpoint from persistence backend.
     
     Process:
     1. Load metadata.json (quick access)
@@ -453,15 +453,15 @@ async def load_agentloop_checkpoint(
     3. Load CoreAgent checkpoint refs (metadata linkage)
     
     Returns:
-        Complete AgentLoopCheckpoint v3.1.
+        Complete StrangeLoopCheckpoint v3.1.
     """
     pass
 
 async def save_agentloop_checkpoint(
     self,
-    checkpoint: AgentLoopCheckpoint,
+    checkpoint: StrangeLoopCheckpoint,
 ) -> None:
-    """Save AgentLoop checkpoint to persistence backend.
+    """Save StrangeLoop checkpoint to persistence backend.
     
     Process:
     1. Save metadata.json (human-readable quick access)
@@ -507,7 +507,7 @@ agentloop_checkpoint:
 ### Phase 2: SQLite Backend
 - Create per-loop database schema
 - Implement persistence manager (SQLite operations)
-- Integrate with AgentLoop checkpoint save/load
+- Integrate with StrangeLoop checkpoint save/load
 
 ### Phase 3: PostgreSQL Backend
 - Create PostgreSQL schema with optimizations
@@ -563,8 +563,8 @@ Per-row purge failures are isolated (try/except) so a single failure does not ab
 
 ## Related Specifications
 
-- RFC-218: AgentLoop Checkpoint Tree Architecture
-- RFC-216: AgentLoop Multi-Thread Lifecycle
+- RFC-218: StrangeLoop Checkpoint Tree Architecture
+- RFC-216: StrangeLoop Multi-Thread Lifecycle
 - RFC-503: Loop-First User Experience
 - RFC-411: Event Stream Replay
 - RFC-602: SQLite Backend (existing)

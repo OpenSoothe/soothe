@@ -16,8 +16,8 @@ import pytest
 import pytest_asyncio
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
 from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 from soothe.runner import SootheRunner
 from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
@@ -146,13 +146,13 @@ async def test_sequential_runner_cleanup_preserves_shared_checkpointer_pool(
 
 @pytest.mark.asyncio
 async def test_shared_agentloop_pool_parallel_load(pg_config: SootheConfig) -> None:
-    """Concurrent checkpoint reads must not exhaust the shared AgentLoop pool."""
+    """Concurrent checkpoint reads must not exhaust the shared StrangeLoop pool."""
     shared = await SharedPostgreSQLPool.get_shared_instance(pg_config)
     assert shared is not None
     loop_id = f"test-pool-{uuid.uuid4().hex}"
     thread_id = str(uuid.uuid4())
 
-    manager = AgentLoopStateManager(
+    manager = StrangeLoopStateManager(
         loop_id,
         config=pg_config,
         shared_pool=shared,
@@ -160,7 +160,7 @@ async def test_shared_agentloop_pool_parallel_load(pg_config: SootheConfig) -> N
     await manager.initialize(thread_id, max_iterations=3)
 
     async def _load_once() -> bool:
-        mgr = AgentLoopStateManager(
+        mgr = StrangeLoopStateManager(
             loop_id,
             config=pg_config,
             shared_pool=shared,

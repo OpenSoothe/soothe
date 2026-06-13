@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 import soothe.config as soothe_config
 from soothe.foundation.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
+    StrangeLoopCheckpointPersistenceManager,
 )
 
 from soothe_daemon.protocol import MessageRouter
@@ -24,7 +24,7 @@ from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 
 async def _read_metadata(loop_id: str, config: Any) -> dict[str, Any]:
     """Read loop metadata from the database (replaces old metadata.json read)."""
-    pm = AgentLoopCheckpointPersistenceManager(config=config)
+    pm = StrangeLoopCheckpointPersistenceManager(config=config)
     try:
         return await pm.get_loop_metadata(loop_id) or {}
     finally:
@@ -37,15 +37,15 @@ class _CapturingDaemon:
     def __init__(self, config: Any = None) -> None:
         self.sent: list[dict[str, Any]] = []
         self._config = config
-        self._persistence_manager: AgentLoopCheckpointPersistenceManager | None = None
+        self._persistence_manager: StrangeLoopCheckpointPersistenceManager | None = None
 
-    def _get_pm(self) -> AgentLoopCheckpointPersistenceManager:
+    def _get_pm(self) -> StrangeLoopCheckpointPersistenceManager:
         if self._persistence_manager is None:
-            self._persistence_manager = AgentLoopCheckpointPersistenceManager(config=self._config)
+            self._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=self._config)
         return self._persistence_manager
 
     @property
-    def _pm(self) -> AgentLoopCheckpointPersistenceManager:
+    def _pm(self) -> StrangeLoopCheckpointPersistenceManager:
         return self._get_pm()
 
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -59,7 +59,7 @@ class _CapturingDaemon:
 def _make_daemon_with_pm(config: Any) -> _CapturingDaemon:
     daemon = _CapturingDaemon(config=config)
     # Pre-init the persistence manager so _handle_loop_new can use daemon._persistence_manager
-    daemon._persistence_manager = AgentLoopCheckpointPersistenceManager(config=config)
+    daemon._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=config)
     return daemon
 
 
@@ -247,7 +247,7 @@ async def test_bind_execution_thread_prefers_client_workspace(
 async def test_bind_execution_thread_uses_loop_id_as_checkpoint_thread(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RFC-223: the main AgentLoop checkpoint thread id equals the loop id."""
+    """RFC-223: the main StrangeLoop checkpoint thread id equals the loop id."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig

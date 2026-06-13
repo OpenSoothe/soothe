@@ -1,6 +1,6 @@
 # Loop-Level Protocols
 
-**RFCs**: RFC-203 (LoopWorkingMemory), RFC-220 (AgentLoop), RFC-604 (LoopPlanner)  
+**RFCs**: RFC-203 (LoopWorkingMemory), RFC-220 (StrangeLoop), RFC-604 (LoopPlanner)  
 **Locations**:
 - `packages/soothe/src/soothe/protocols/loop_working_memory.py`
 - `packages/soothe/src/soothe/protocols/loop_planner.py`
@@ -10,13 +10,13 @@
 
 ## Overview
 
-Loop-level protocols define interfaces specific to AgentLoop execution:
+Loop-level protocols define interfaces specific to StrangeLoop execution:
 
 1. **LoopWorkingMemoryProtocol**: Bounded scratchpad for Plan prompts
 2. **LoopPlannerProtocol**: Unified Plan phase (covered in [Planner Protocol](planner.md))
 3. **OperationSecurityProtocol**: Operation-level security context
 
-These protocols support AgentLoop's Plan → Execute cycle, providing bounded memory, planning decisions, and operation-level security.
+These protocols support StrangeLoop's Plan → Execute cycle, providing bounded memory, planning decisions, and operation-level security.
 
 ## LoopWorkingMemoryProtocol
 
@@ -31,7 +31,7 @@ These protocols support AgentLoop's Plan → Execute cycle, providing bounded me
 
 ```python
 class LoopWorkingMemoryProtocol(Protocol):
-    """Bounded working memory for AgentLoop Plan prompts.
+    """Bounded working memory for StrangeLoop Plan prompts.
     
     Optional workspace spill when bounded memory exceeds limits.
     """
@@ -172,7 +172,7 @@ class DefaultWorkingMemory(LoopWorkingMemoryProtocol):
 
 ### Usage Patterns
 
-#### AgentLoop Integration
+#### StrangeLoop Integration
 
 ```python
 from soothe.protocols import LoopWorkingMemoryProtocol
@@ -525,7 +525,7 @@ Different abstraction levels:
 
 ## Specification Reference
 
-- **RFC-203**: AgentLoop State Memory
+- **RFC-203**: StrangeLoop State Memory
 - **RFC-604**: Reason Phase Robustness
 - **RFC-220**: LangGraph Agent Loop Orchestrator
 - **RFC-617**: Operation Security Protocol
@@ -534,5 +534,5 @@ Different abstraction levels:
 
 - [Planner Protocol](planner.md)
 - [Policy Protocol](policy.md)
-- [AgentLoop Architecture](../agentloop.md)
+- [StrangeLoop Architecture](../agentloop.md)
 - [Security Enforcement](../security.md)

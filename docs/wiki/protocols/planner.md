@@ -13,7 +13,7 @@
 Soothe defines two planner protocols for goal decomposition and execution planning:
 
 1. **PlannerProtocol**: Goal decomposition into structured plans with steps
-2. **LoopPlannerProtocol**: Unified AgentLoop Plan phase (assessment + plan generation)
+2. **LoopPlannerProtocol**: Unified StrangeLoop Plan phase (assessment + plan generation)
 
 Both protocols implement the plan-driven execution principle (RFC-000 Principle 6), enabling complex goals to be decomposed into executable steps with dependency tracking and concurrency management.
 
@@ -205,7 +205,7 @@ class ConcurrencyPolicy:
 
 ### Purpose
 
-- **AgentLoop Plan phase**: Unified assessment + plan generation
+- **StrangeLoop Plan phase**: Unified assessment + plan generation
 - **Status assessment**: Evaluate progress and decide next action
 - **Plan generation**: Create or keep execution plan
 - **Continuation routing**: Discriminate continuation vs new goal
@@ -215,7 +215,7 @@ class ConcurrencyPolicy:
 ```python
 @runtime_checkable
 class LoopPlannerProtocol(Protocol):
-    """Protocol for the AgentLoop Plan step (assessment + optional plan generation).
+    """Protocol for the StrangeLoop Plan step (assessment + optional plan generation).
     
     Implementations perform structured LLM calls (StatusAssessment then, 
     when needed, PlanGeneration) and return a unified PlanResult.
@@ -537,10 +537,10 @@ plan.concurrency = concurrency
 
 ## Integration with Other Protocols
 
-### Planner ↔ AgentLoop Integration
+### Planner ↔ StrangeLoop Integration
 
 ```
-AgentLoop Plan → Execute cycle:
+StrangeLoop Plan → Execute cycle:
 
 Plan Phase (LoopPlanner):
   1. assess_status() → StatusAssessment
@@ -582,7 +582,7 @@ agent:
     planner:
       enabled: true
       llm_role: planner  # Model role for planning
-      max_iterations: 8  # Maximum AgentLoop iterations
+      max_iterations: 8  # Maximum StrangeLoop iterations
       concurrency:
         max_parallel_steps: 2
         max_parallel_subagents: 1
@@ -650,6 +650,6 @@ Controlled concurrency (RFC-000 Principle 8):
 
 ## Related Documentation
 
-- [AgentLoop Architecture](../agentloop.md)
+- [StrangeLoop Architecture](../agentloop.md)
 - [LoopRunner Protocol](loop-runner.md)
 - [LoopWorkingMemory Protocol](working-memory.md)

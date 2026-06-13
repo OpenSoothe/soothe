@@ -32,7 +32,7 @@ async def handle_loop_reattach(
     2. Stream ``card.replay_begin`` → ``card.created`` × N → ``card.replay_end``.
 
     Args:
-        loop_id: AgentLoop identifier.
+        loop_id: StrangeLoop identifier.
         daemon: Daemon instance (for sending messages + card manager access).
         client_id: Client connection identifier.
     """

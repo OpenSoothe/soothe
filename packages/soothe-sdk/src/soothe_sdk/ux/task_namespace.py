@@ -185,7 +185,7 @@ def normalize_step_task_tool_call_id(step_id: str, tool_call_id: str) -> str:
     """Return step-scoped unified id for a main-graph ``task`` delegation.
 
     Args:
-        step_id: AgentLoop execute step id.
+        step_id: StrangeLoop execute step id.
         tool_call_id: Unified or provider tool call id from the stream.
 
     Returns:
@@ -222,7 +222,7 @@ def resolve_step_id_from_subgraph_tool(tool_call_id: str) -> str:
 
 
 def task_scope_step_id(scope: TaskScope | None) -> str:
-    """Return the AgentLoop step id from a task scope tuple, if present."""
+    """Return the StrangeLoop step id from a task scope tuple, if present."""
     if not scope:
         return ""
     return str(scope[2] or "").strip()

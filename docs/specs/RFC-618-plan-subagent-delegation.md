@@ -8,7 +8,7 @@
 **Updated**: 2026-05-11
 **Authors**: Soothe Team
 **Depends on**: RFC-000, RFC-001, RFC-100, RFC-600, RFC-601, RFC-613
-**Related**: RFC-201 (AgentLoop plan-execute loop), RFC-214 (plan context)
+**Related**: RFC-201 (StrangeLoop plan-execute loop), RFC-214 (plan context)
 
 ## Abstract
 
@@ -18,7 +18,7 @@ In the collection phase, an LLM may request **multiple readonly explore invocati
 
 In the plan-design phase, a separate structured loop refines a **full markdown plan** over one or more iterations before the delegate emits one final `AIMessage`.
 
-This subagent is **not** the AgentLoop planner (RFC-201); it is an optional **delegation capability** the main agent may call with `task(subagent_type="plan", ...)`.
+This subagent is **not** the StrangeLoop planner (RFC-201); it is an optional **delegation capability** the main agent may call with `task(subagent_type="plan", ...)`.
 
 ## 1. Problem Statement
 
@@ -38,7 +38,7 @@ This subagent is **not** the AgentLoop planner (RFC-201); it is an optional **de
 
 ## 3. Non-Goals
 
-- Replacing or merging with AgentLoop `LLMPlanner` / PlanManager.
+- Replacing or merging with StrangeLoop `LLMPlanner` / PlanManager.
 - Nested `task` tools or general-purpose subagent inside plan.
 - Parallel `Send` fan-out for explore in v1 (explore invocations within a round are **sequential**; multiple directives per round are still supported).
 

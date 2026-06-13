@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
+from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.fixture
@@ -26,10 +26,10 @@ def temp_state_manager():
         db_path = workspace / "test_loop_checkpoints.db"
 
         with patch(
-            "soothe.foundation.loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            state_manager = AgentLoopStateManager(loop_id="test_loop_001", workspace=workspace)
+            state_manager = StrangeLoopStateManager(loop_id="test_loop_001", workspace=workspace)
             yield state_manager
 
 
@@ -44,7 +44,7 @@ class TestIndexCalculationFix:
         # Initialize loop
         checkpoint = await sm.initialize("thread_001", max_iterations=10)
 
-        # Add first goal (simulating agent_loop.py logic)
+        # Add first goal (simulating strange_loop.py logic)
         goal_record = sm.start_new_goal("test goal", max_iterations=10)
         checkpoint.goal_history.append(goal_record)  # Append FIRST
         checkpoint.current_goal_index = len(checkpoint.goal_history) - 1  # Compute AFTER

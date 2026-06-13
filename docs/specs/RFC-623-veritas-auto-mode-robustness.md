@@ -7,14 +7,14 @@
 **Created**: 2026-06-03
 **Last Updated**: 2026-06-03
 **Authors**: Soothe Team
-**Depends on**: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / AgentLoop), RFC-403 (Unified Event Naming)
+**Depends on**: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-403 (Unified Event Naming)
 **Supersedes**: ---
 
 ---
 
 ## 1. Abstract
 
-The veritas auto-answerer introduced by RFC-622 calls `model.with_structured_output(...).ainvoke(...)` directly. Thinking-class models (e.g. `coding-plan:glm-5`) and providers requiring the literal `json` keyword in prompts return structurally-valid but empty `VeritasAnswerSchema` payloads, which a post-hoc count-mismatch guard then coerces to `defer=True`. Every false defer terminates the AgentLoop and parks its goal in `awaiting_clarification` for up to seven days. RFC-623 makes auto-mode robust by migrating veritas onto the shared `invoke_structured_chat` helper, enforcing the *exactly N answers or defer* contract directly in JSON Schema, classifying defer kinds for operators, and falling back to the interactive (TUI) relay when veritas itself fails.
+The veritas auto-answerer introduced by RFC-622 calls `model.with_structured_output(...).ainvoke(...)` directly. Thinking-class models (e.g. `coding-plan:glm-5`) and providers requiring the literal `json` keyword in prompts return structurally-valid but empty `VeritasAnswerSchema` payloads, which a post-hoc count-mismatch guard then coerces to `defer=True`. Every false defer terminates the StrangeLoop and parks its goal in `awaiting_clarification` for up to seven days. RFC-623 makes auto-mode robust by migrating veritas onto the shared `invoke_structured_chat` helper, enforcing the *exactly N answers or defer* contract directly in JSON Schema, classifying defer kinds for operators, and falling back to the interactive (TUI) relay when veritas itself fails.
 
 ---
 
@@ -53,7 +53,7 @@ Loop `019e8c08-3ce2-7b11-a17d-679c0fa0090c` (referred to in operator logs as loo
 {"answers": [], "confidence": 0.0, "defer": false, "rationale": ""}
 ```
 
-The schema's defaults (`answers: list[str] = Field(default_factory=list)`, `confidence: float = 0.0`) accept this. Pydantic validation passed. The post-hoc `len(result.answers) != len(request.questions)` guard at `subagents/veritas/implementation.py:60-66` coerced the result to `defer=True, confidence=0.0`. `AutoClarificationPolicy.answer` raised `ClarificationDeferredError("veritas explicit defer (confidence=0.00)")`. The `await_clarification` node caught the error, marked the goal `awaiting_clarification`, and returned `last_outcome="deferred"`. The AgentLoop terminated.
+The schema's defaults (`answers: list[str] = Field(default_factory=list)`, `confidence: float = 0.0`) accept this. Pydantic validation passed. The post-hoc `len(result.answers) != len(request.questions)` guard at `subagents/veritas/implementation.py:60-66` coerced the result to `defer=True, confidence=0.0`. `AutoClarificationPolicy.answer` raised `ClarificationDeferredError("veritas explicit defer (confidence=0.00)")`. The `await_clarification` node caught the error, marked the goal `awaiting_clarification`, and returned `last_outcome="deferred"`. The StrangeLoop terminated.
 
 ### 3.2 Why this is a regression worth fixing
 
@@ -364,7 +364,7 @@ Same scenario but a TUI is attached: `_runner_agentic` wired `emit`, so `interac
 ## 7. Relationship to Other RFCs
 
 - **RFC-622 (CoreAgent Clarification Relay)**: RFC-623 strengthens the auto-mode policy introduced by RFC-622 without changing its protocol or surface area. `ClarificationPolicy`, `await_clarification`, `awaiting_clarification`, and the `veritas` subagent are all defined by RFC-622 and consumed verbatim here.
-- **RFC-220 (Agentic Goal Execution / AgentLoop)**: The defer terminal path (`last_outcome="deferred"` → `END` via `route_after_clarification`) is RFC-220's. Unchanged.
+- **RFC-220 (Agentic Goal Execution / StrangeLoop)**: The defer terminal path (`last_outcome="deferred"` → `END` via `route_after_clarification`) is RFC-220's. Unchanged.
 - **RFC-403 (Unified Event Naming)**: The `LOOP_CLARIFICATION_DEFERRED` event keeps its `soothe.loop.clarification_deferred` type; the `defer_kind` field is an additive payload extension.
 - **RFC-222 (Autopilot Mode)**: The autopilot worker's contract — headless, always auto, no human at the other end — is preserved. RFC-623's interactive fallback is statically disabled when `emit is None`.
 

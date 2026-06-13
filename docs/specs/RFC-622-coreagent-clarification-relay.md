@@ -6,18 +6,18 @@
 **Kind**: Architecture Design  
 **Created**: 2026-06-02  
 **Authors**: Soothe Team  
-**Depends on**: RFC-220 (Agentic Goal Execution / AgentLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)  
+**Depends on**: RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-222 (Autopilot Mode), RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)  
 **Supersedes**: Empty-answer auto-resume behavior currently encoded in `core/loop/engine/graph_interrupt.py::build_auto_resume_payload` for `type=="ask_user"` interrupts.
 
 ---
 
 ## 1. Abstract
 
-When the **CoreAgent** (deepagents-based LangGraph) emits a clarification — e.g. *"What specific area or aspect of Soothe would you like to refine?"* — the surrounding **AgentLoop** silently auto-resumes the interrupt with empty-string answers. The model receives no useful input, replans into a spin, and burns iterations.
+When the **CoreAgent** (deepagents-based LangGraph) emits a clarification — e.g. *"What specific area or aspect of Soothe would you like to refine?"* — the surrounding **StrangeLoop** silently auto-resumes the interrupt with empty-string answers. The model receives no useful input, replans into a spin, and burns iterations.
 
-This RFC introduces a **clarification relay**: a `ClarificationPolicy` protocol, a dedicated `await_clarification` graph node in the AgentLoop, two built-in policies (interactive TUI relay and auto-answer), a new `veritas` subagent that answers clarifications as the originating user would, and a TUI Manual/Auto mode toggle. The pause-on-human path is durable via the existing LangGraph checkpointer.
+This RFC introduces a **clarification relay**: a `ClarificationPolicy` protocol, a dedicated `await_clarification` graph node in the StrangeLoop, two built-in policies (interactive TUI relay and auto-answer), a new `veritas` subagent that answers clarifications as the originating user would, and a TUI Manual/Auto mode toggle. The pause-on-human path is durable via the existing LangGraph checkpointer.
 
-The relay works identically in solo AgentLoop and autopilot runs **without** forcing `GoalEngine` into solo mode: policy is injected through `LoopRuntimeContext`.
+The relay works identically in solo StrangeLoop and autopilot runs **without** forcing `GoalEngine` into solo mode: policy is injected through `LoopRuntimeContext`.
 
 ---
 
@@ -26,7 +26,7 @@ The relay works identically in solo AgentLoop and autopilot runs **without** for
 ### 2.1 In scope
 
 - `ClarificationPolicy` protocol and two built-in implementations.
-- `await_clarification` AgentLoop graph node and routing changes.
+- `await_clarification` StrangeLoop graph node and routing changes.
 - `LoopGraphState` additions for pending clarification + answer + origin.
 - `veritas` subagent (intent-grounded auto-answerer) under `subagents/veritas/`.
 - TUI Manual ↔ Auto toggle, status badge, and `--mode` CLI flag.
@@ -49,8 +49,8 @@ The relay works identically in solo AgentLoop and autopilot runs **without** for
 | Issue (current behavior) | Relay response |
 |--------------------------|----------------|
 | `ask_user` interrupts auto-resumed with `""` answers (`graph_interrupt.py:47`) | Policy-driven payload from real human or auto-answerer |
-| AgentLoop has no graph state for "paused on human" | First-class `pending_clarification` state + dedicated node |
-| Solo AgentLoop has no GoalEngine; autopilot does | `ClarificationPolicy` protocol injected via `LoopRuntimeContext`; runtimes pick their implementation |
+| StrangeLoop has no graph state for "paused on human" | First-class `pending_clarification` state + dedicated node |
+| Solo StrangeLoop has no GoalEngine; autopilot does | `ClarificationPolicy` protocol injected via `LoopRuntimeContext`; runtimes pick their implementation |
 | No way for an operator to see/answer questions out-of-band | `awaiting_clarification` goal status + `soothe goal answer` CLI |
 | Plain-text clarifications (no tool call, no `interrupt`) silently end turns | Heuristic detector synthesizes an equivalent request |
 
@@ -78,7 +78,7 @@ The bug is reproducible in trace `trace-2626ed6b65d86c80845248e42f383bff.json`: 
                                         │
                                         ▼
                           ┌─────────────────────────────┐
-                          │ AgentLoop graph router       │
+                          │ StrangeLoop graph router       │
                           │ short-circuits to:           │
                           │   await_clarification        │
                           └─────────────┬───────────────┘
@@ -249,7 +249,7 @@ GoalStatus = Enum(
 
 ### 8.1 Delta (RFC-220)
 
-New node and edges added to `build_agent_loop_graph` (current topology defined in RFC-220 §4).
+New node and edges added to `build_strange_loop_graph` (current topology defined in RFC-220 §4).
 
 ```
 execute             → route_after_execute       → {record_iteration, await_clarification, END}
@@ -348,7 +348,7 @@ Per project rule, both `config.template.yml` and `config.dev.yml` are updated in
 
 ## 13. Persistence and Out-of-Band Answers
 
-- `awaiting_clarification` goal status is persisted by the goal-engine backend (autopilot) and by `AgentLoopStateManager` (solo).
+- `awaiting_clarification` goal status is persisted by the goal-engine backend (autopilot) and by `StrangeLoopStateManager` (solo).
 - New CLI: `soothe goal answer <goal_id> [--question-index N] "answer text"` writes the answer into the goal's pending-clarification record and clears `awaiting_clarification`.
 - Autopilot scheduler treats `awaiting_clarification` as blocked: it does not count toward active-goal concurrency and is not selected for execution until cleared.
 - TTL: goals stuck in `awaiting_clarification` longer than `max_defer_age_hours` are surfaced for operator review (autopilot only).
@@ -390,7 +390,7 @@ Integration:
 - **Behavior change**: solo CLI no longer silently empty-answers `ask_user`. Manual mode now blocks for input; Auto mode now calls veritas. This is the intended fix but a visible behavior delta.
 - **Test impact**: `build_auto_resume_payload` tests rewritten. Action-approval auto-approve is preserved.
 - **Veritas wrongness**: every answer emits an audit event with question + answer + source + confidence + rationale; below-threshold confidence forces defer.
-- **Durability**: relies on AgentLoop checkpointer (default-on); doctor check confirms presence.
+- **Durability**: relies on StrangeLoop checkpointer (default-on); doctor check confirms presence.
 - **Autopilot scheduler**: must recognize `awaiting_clarification` as blocked, not active — one-line change in concurrency accounting.
 
 ---
@@ -408,7 +408,7 @@ Integration:
 
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)
-- [RFC-220](./RFC-220-agentic-goal-execution.md) — AgentLoop topology that this RFC extends
+- [RFC-220](./RFC-220-agentic-goal-execution.md) — StrangeLoop topology that this RFC extends
 - [RFC-222](./RFC-222-autopilot-mode.md) — Autopilot scheduler whose status enum gains `awaiting_clarification`
 - [RFC-600](./RFC-600-plugin-extension-system.md) — `register_event` used for new event types
 - [RFC-601](./RFC-601-built-in-agents.md) — Built-in subagent registry that gains `veritas`

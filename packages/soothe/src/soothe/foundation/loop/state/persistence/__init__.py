@@ -1,13 +1,13 @@
-"""AgentLoop checkpoint persistence backend.
+"""StrangeLoop checkpoint persistence backend.
 
-This module provides persistence infrastructure for AgentLoop checkpoints
+This module provides persistence infrastructure for StrangeLoop checkpoints
 with thread/loop isolation and dual backend support (SQLite/PostgreSQL).
 
-RFC-215: AgentLoop Persistence Backend Architecture
+RFC-215: StrangeLoop Persistence Backend Architecture
 """
 
 from soothe.foundation.loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
+    StrangeLoopCheckpointPersistenceManager,
 )
 
-__all__ = ["AgentLoopCheckpointPersistenceManager"]
+__all__ = ["StrangeLoopCheckpointPersistenceManager"]

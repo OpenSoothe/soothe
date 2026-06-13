@@ -41,7 +41,7 @@ This RFC does **not** change:
 - The executor's `loop_messages` injection mechanism for the bootstrap step (RFC-225 / IG-445 §Fix D).
 - The seeded-ledger seeding by `seed_loop_ledger_from_prior_goal()`.
 - The off-graph intent classifier (RFC-225).
-- The persistence schema for `AgentLoopCheckpoint` or `GoalExecutionRecord` (beyond an additive default-False field on `PlanResult`).
+- The persistence schema for `StrangeLoopCheckpoint` or `GoalExecutionRecord` (beyond an additive default-False field on `PlanResult`).
 
 ---
 
@@ -248,7 +248,7 @@ The model role mirrors today's `plan_assess`: the `think` role from the configur
 ### 5.6 _prior_goal_summaries helper
 
 ```python
-def _prior_goal_summaries(checkpoint: AgentLoopCheckpoint) -> list[dict]:
+def _prior_goal_summaries(checkpoint: StrangeLoopCheckpoint) -> list[dict]:
     """Compact summary of completed prior goals for the continuation assess prompt."""
     out: list[dict] = []
     for g in checkpoint.goal_history[:-1]:  # exclude the active new goal
@@ -277,7 +277,7 @@ User query (continuation)
 intent_classifier  ─── (off-graph; quiz vs agentic, RFC-225)
        │
        ▼ agentic
-AgentLoop.run_with_progress()
+StrangeLoop.run_with_progress()
        │  derives continue_loop_mode (RFC-225 §5.2)
        ▼
 init_or_resume → iteration_gate → iteration_start → bounded_evidence_gather
@@ -408,7 +408,7 @@ plan_assess(iter=0):
 
 - **RFC-220 (LangGraph Agent Loop Orchestrator)** — Defines the Loop Graph topology this RFC extends with one new conditional edge. The plan / execute / assess node identities are unchanged.
 - **RFC-225 (Loop Continuity and Goal Record Enrichment)** — Provides the persisted per-goal data (`current_plan`, `step_results`, `goal_completion`) that the continuation discriminator consumes. Also provides the seeded `loop_messages` ledger consumed by the executor for the bootstrap step.
-- **RFC-214 (AgentLoop Loop-Message Surface)** — The `loop_messages` ledger schema is unchanged; this RFC only consumes the seeded entries for prior-goal context.
+- **RFC-214 (StrangeLoop Loop-Message Surface)** — The `loop_messages` ledger schema is unchanged; this RFC only consumes the seeded entries for prior-goal context.
 - **RFC-217 (Goal Context Management)** — Unaffected. `thread_switch_pending` and `GoalContextManager` continue to operate as specified.
 - **RFC-604 (Reason-Phase Robustness)** — The `assess` / `generate` split persists; this RFC adds a third structured-output schema (`ContinuationAssessment`) sitting alongside the existing `StatusAssessment` and `PlanGeneration` schemas.
 

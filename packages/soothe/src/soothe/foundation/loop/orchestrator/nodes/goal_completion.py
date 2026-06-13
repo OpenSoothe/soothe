@@ -83,7 +83,8 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     When goal completion happens, any pending decision, step_results, or working memory
     from this query must be cleared so the next query starts fresh.
     """
-    agent_loop = ctx.agent_loop
+    strange_loop = ctx.strange_loop
+    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     state_manager = ctx.state_manager
     goal_record = ctx.goal_record
@@ -130,17 +131,17 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     )
 
     synthesis_gen = SynthesisGenerator(
-        agent_loop.loop_planner._model,
-        agent_loop.core_agent,
-        agent_loop.config,
+        strange_loop.loop_planner._model,
+        strange_loop.core_agent,
+        strange_loop.config,
         loop_id=ctx.state_manager.loop_id,
-        fast_llm_client=agent_loop._fast_llm,
+        fast_llm_client=strange_loop._fast_llm,
     )
 
     action = plan_manager.determine_completion_strategy(
         state,
         plan_result,
-        agent_loop.config.agent.loop.final_response,
+        strange_loop.config.agent.loop.final_response,
     )
     dag_report = plan_manager.format_completion_dag_report().strip()
     if dag_report:

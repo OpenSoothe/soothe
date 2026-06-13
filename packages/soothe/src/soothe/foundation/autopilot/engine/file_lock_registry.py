@@ -1,7 +1,7 @@
 """File lock registry for multi-AL conflict tracking (RFC-222).
 
 This module provides file lock tracking for Autopilot mode when
-multiple AgentLoop workers may attempt concurrent file operations.
+multiple StrangeLoop workers may attempt concurrent file operations.
 Prevents conflicts by tracking locks per (goal_id, loop_id).
 
 Architecture:
@@ -25,7 +25,7 @@ class FileLockEntry(BaseModel):
     Args:
         file_path: Path to the locked file.
         goal_id: Goal that owns the lock.
-        loop_id: AgentLoop that acquired the lock.
+        loop_id: StrangeLoop that acquired the lock.
         locked_at: Lock acquisition timestamp.
         operation: Type of file operation.
     """

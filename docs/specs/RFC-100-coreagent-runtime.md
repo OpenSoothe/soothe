@@ -10,25 +10,25 @@
 
 ## Abstract
 
-This RFC defines CoreAgent, the foundational runtime of Soothe's execution architecture. Built on the `create_soothe_agent()` factory, CoreAgent provides a CompiledStateGraph with built-in tools, subagents, and middlewares, executing through LangGraph's Model → Tools → Model loop. It serves as the execution foundation for AgentLoop's ACT phase and direct CLI/daemon usage.
+This RFC defines CoreAgent, the foundational runtime of Soothe's execution architecture. Built on the `create_soothe_agent()` factory, CoreAgent provides a CompiledStateGraph with built-in tools, subagents, and middlewares, executing through LangGraph's Model → Tools → Model loop. It serves as the execution foundation for StrangeLoop's ACT phase and direct CLI/daemon usage.
 
 ## Architecture Position
 
 ### Three-Level Execution Model
 
 ```
-GoalEngine: Autonomous Goal Management (RFC-200) → AgentLoop (PERFORM stage)
-AgentLoop: Agentic Goal Execution (RFC-200) → CoreAgent (ACT phase)
+GoalEngine: Autonomous Goal Management (RFC-200) → StrangeLoop (PERFORM stage)
+StrangeLoop: Agentic Goal Execution (RFC-200) → CoreAgent (ACT phase)
 CoreAgent: Runtime (this RFC) → Tools/Subagents
 ```
 
-**CoreAgent Responsibilities**: CoreAgent factory (`create_soothe_agent()` → CompiledStateGraph), built-in capabilities (tools, subagents, MCP, middlewares), execution engine (LangGraph loop), thread management, middleware integration, protocol attachments, AgentLoop integration.
+**CoreAgent Responsibilities**: CoreAgent factory (`create_soothe_agent()` → CompiledStateGraph), built-in capabilities (tools, subagents, MCP, middlewares), execution engine (LangGraph loop), thread management, middleware integration, protocol attachments, StrangeLoop integration.
 
 ### Level Integration
 
-**AgentLoop → CoreAgent**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-207 simplifies to single thread_id for all executions).
+**StrangeLoop → CoreAgent**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-207 simplifies to single thread_id for all executions).
 
-**CoreAgent Usage**: Foundation for AgentLoop ACT phase, CLI direct usage, daemon queries, subagent tool calls.
+**CoreAgent Usage**: Foundation for StrangeLoop ACT phase, CLI direct usage, daemon queries, subagent tool calls.
 
 ## CoreAgent Factory
 
@@ -128,11 +128,11 @@ Protocol instances attached to CompiledStateGraph: `agent.soothe_context`, `agen
 
 **Usage**: Tools/middlewares access protocols via `state["agent"].soothe_*`.
 
-## AgentLoop Integration Contract
+## StrangeLoop Integration Contract
 
 ### Execution Hints
 
-AgentLoop passes advisory hints via `config.configurable`:
+StrangeLoop passes advisory hints via `config.configurable`:
 
 | Hint | Purpose | Example |
 |------|---------|---------|
@@ -143,7 +143,7 @@ AgentLoop passes advisory hints via `config.configurable`:
 
 **Example**:
 ```python
-# AgentLoop decision
+# StrangeLoop decision
 decision = AgentDecision(
     steps=[StepAction(description="Find config files", subagent="explore", expected_output="Matching paths")]
 )
@@ -163,7 +163,7 @@ await core_agent.astream(
 
 ### Responsibility Split
 
-**AgentLoop Controls**: What to execute (step content), when to execute (timing), how to sequence (parallel/sequential/dependency), thread isolation.
+**StrangeLoop Controls**: What to execute (step content), when to execute (timing), how to sequence (parallel/sequential/dependency), thread isolation.
 
 **CoreAgent Handles**: How to execute (tool sequencing within turn), middleware application, thread state, tool/subagent orchestration.
 
@@ -200,14 +200,14 @@ mcp_servers:
 ### 2026-03-29
 - Initial RFC establishing CoreAgent foundation
 - Documented CoreAgent architecture, execution interface, thread model, capabilities
-- Specified protocol attachments and AgentLoop integration with execution hints
+- Specified protocol attachments and StrangeLoop integration with execution hints
 
 ## References
 
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
 - RFC-200: GoalEngine autonomous goal management
-- RFC-200: AgentLoop agentic goal execution
+- RFC-200: StrangeLoop agentic goal execution
 - RFC-601: Skillify subagent
 - RFC-601: Weaver subagent
 - RFC-101: Tool interface

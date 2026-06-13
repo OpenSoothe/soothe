@@ -6,13 +6,13 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Dependencies**: RFC-000, RFC-400
-**Related**: RFC-201 (AgentLoop)
+**Related**: RFC-201 (StrangeLoop)
 
 ---
 
 ## Abstract
 
-This RFC defines PlannerProtocol, Soothe's plan creation and revision interface for complex goal decomposition. PlannerProtocol provides plan creation, revision, and reflection methods with LLMPlanner default implementation using two-phase architecture (`StatusAssessment` then conditional `PlanGeneration`, merged into `PlanResult`; RFC-604, IG-372/IG-329) for token efficiency. This protocol serves AgentLoop and autonomous goal management planning needs.
+This RFC defines PlannerProtocol, Soothe's plan creation and revision interface for complex goal decomposition. PlannerProtocol provides plan creation, revision, and reflection methods with LLMPlanner default implementation using two-phase architecture (`StatusAssessment` then conditional `PlanGeneration`, merged into `PlanResult`; RFC-604, IG-372/IG-329) for token efficiency. This protocol serves StrangeLoop and autonomous goal management planning needs.
 
 ---
 
@@ -131,9 +131,9 @@ class Reflection(BaseModel):
 **Phase 2: PlanGeneration** (Conditional, higher token cost; skipped when `status="done"`):
 - Emit structured `PlanGeneration` (`plan_action`, `decision`, `next_action` only; IG-329)
 - Uses execution policies plus `plan_generate_instructions`
-- Merged with phase 1 in AgentLoop’s `LLMPlanner` into `PlanResult` for execution
+- Merged with phase 1 in StrangeLoop’s `LLMPlanner` into `PlanResult` for execution
 
-**Implementation** (in Layer 2 AgentLoop, RFC-201):
+**Implementation** (in Layer 2 StrangeLoop, RFC-201):
 ```python
 # Two-phase Plan execution is Layer 2 implementation
 # PlannerProtocol interface remains protocol-level (no phases)
@@ -146,7 +146,7 @@ class LLMPlanner(PlannerProtocol):
         response = await self._model.ainvoke(prompt)
         return Plan.model_validate_json(response.content)
 
-    # Two-phase execution happens in AgentLoop (RFC-201)
+    # Two-phase execution happens in StrangeLoop (RFC-201)
     # Not in PlannerProtocol implementation
 ```
 
@@ -175,7 +175,7 @@ Simple queries bypass planning:
 
 Plans support hierarchical decomposition:
 - Goal → Steps
-- Step → Subgoals (via AgentLoop)
+- Step → Subgoals (via StrangeLoop)
 - Dependency DAG structure
 - Concurrency policies
 
@@ -186,7 +186,7 @@ Plans support hierarchical decomposition:
 ```yaml
 # Planning is configured on SootheConfig.agentic (see config/config.template.yml).
 # LLMPlanner / two-phase StatusAssessment + PlanGeneration (RFC-604, IG-372, IG-329):
-# packages/soothe/src/soothe/core/agent_loop/core/planner.py
+# packages/soothe/src/soothe/core/strange_loop/core/planner.py
 agentic:
   max_iterations: 10
   reject_done_at_iteration_zero: false
@@ -213,7 +213,7 @@ agentic:
 ## References
 
 - RFC-000: System Conceptual Design
-- RFC-201: AgentLoop Plan-Execute Loop Architecture (two-phase execution)
+- RFC-201: StrangeLoop Plan-Execute Loop Architecture (two-phase execution)
 - RFC-200: GoalEngine Goal DAG Management
 - RFC-001: Core Modules Architecture (original Module 3)
 

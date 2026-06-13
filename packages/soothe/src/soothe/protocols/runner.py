@@ -26,7 +26,7 @@ class GoalDispatchEnvelope:
     - ``GoalDispatchEnvelope`` here = transient dispatch **message** (not stored)
 
     Attached to ``LoopRunRequest.autopilot_job`` when present. The worker
-    hydrates AgentLoop from ``merged_context`` and executes ``goal_description``,
+    hydrates StrangeLoop from ``merged_context`` and executes ``goal_description``,
     ignoring ``LoopRunRequest.user_input``. When ``None``, the worker runs
     solo-mode behavior — today's path, unchanged.
 

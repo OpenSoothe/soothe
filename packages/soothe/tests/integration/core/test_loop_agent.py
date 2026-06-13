@@ -1,4 +1,4 @@
-"""Integration tests for Layer 2 AgentLoop (RFC-0008)."""
+"""Integration tests for Layer 2 StrangeLoop (RFC-0008)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     PlanResult,
@@ -50,7 +50,7 @@ class MockLoopPlanner:
         self.plan_count = 0
         self._assess_count = 0
         self._generate_count = 0
-        # AgentLoop goal completion constructs ``SynthesisGenerator(loop_planner._model, ...)``.
+        # StrangeLoop goal completion constructs ``SynthesisGenerator(loop_planner._model, ...)``.
         self._model = MagicMock()
 
     async def assess_status(
@@ -281,7 +281,7 @@ class MockCoreAgent:
 
         async def mock_stream():
             self.call_count += 1
-            # Use message format expected by agent_loop
+            # Use message format expected by strange_loop
             yield {"messages": [{"content": f"Mock output for: {user_input}"}]}
 
         return mock_stream()
@@ -320,10 +320,10 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_loop_agent_success() -> None:
-    """Test AgentLoop with successful execution."""
+    """Test StrangeLoop with successful execution."""
     planner = MockLoopPlanner(scenario="success")
     core_agent = MockCoreAgent()
-    loop_agent = AgentLoop(
+    loop_agent = StrangeLoop(
         core_agent=core_agent,
         loop_planner=planner,
         config=_make_config(),
@@ -344,10 +344,10 @@ async def test_loop_agent_success() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_with_replan() -> None:
-    """Test AgentLoop with replan scenario."""
+    """Test StrangeLoop with replan scenario."""
     planner = MockLoopPlanner(scenario="replan")
     core_agent = MockCoreAgent()
-    loop_agent = AgentLoop(
+    loop_agent = StrangeLoop(
         core_agent=core_agent,
         loop_planner=planner,
         config=_make_config(),
@@ -367,10 +367,10 @@ async def test_loop_agent_with_replan() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_with_continue() -> None:
-    """Test AgentLoop with continue-then-done scenario."""
+    """Test StrangeLoop with continue-then-done scenario."""
     planner = MockLoopPlanner(scenario="continue")
     core_agent = MockCoreAgent()
-    loop_agent = AgentLoop(
+    loop_agent = StrangeLoop(
         core_agent=core_agent,
         loop_planner=planner,
         config=_make_config(),
@@ -390,7 +390,7 @@ async def test_loop_agent_with_continue() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_max_iterations() -> None:
-    """Test AgentLoop respects max iterations."""
+    """Test StrangeLoop respects max iterations."""
 
     class NeverDonePlanner:
         def __init__(self) -> None:
@@ -462,7 +462,7 @@ async def test_loop_agent_max_iterations() -> None:
 
     planner = NeverDonePlanner()
     core_agent = MockCoreAgent()
-    loop_agent = AgentLoop(
+    loop_agent = StrangeLoop(
         core_agent=core_agent,
         loop_planner=planner,
         config=_make_config(max_iterations=3),
@@ -482,7 +482,7 @@ async def test_loop_agent_max_iterations() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_parallel_execution() -> None:
-    """Test AgentLoop with parallel execution mode."""
+    """Test StrangeLoop with parallel execution mode."""
 
     class ParallelPlanner:
         def __init__(self) -> None:
@@ -576,7 +576,7 @@ async def test_loop_agent_parallel_execution() -> None:
 
     planner = ParallelPlanner()
     core_agent = MockCoreAgent()
-    loop_agent = AgentLoop(
+    loop_agent = StrangeLoop(
         core_agent=core_agent,
         loop_planner=planner,
         config=_make_config(),

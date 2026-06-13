@@ -654,7 +654,7 @@ See [Channel Plugin Guide](channel-plugin-guide.md).
 └─────────────────────────────────────┘
               ↓ PERFORM
 ┌─────────────────────────────────────┐
-│ AgentLoop: Agentic Goal Execution   │  Plan → Execute iterations
+│ StrangeLoop: Agentic Goal Execution   │  Plan → Execute iterations
 │ Loop: Plan → Execute (max ~8 iter) │
 └─────────────────────────────────────┘
               ↓ EXECUTE
@@ -685,10 +685,10 @@ See [Architecture Overview - Protocols](architecture/README.md#protocols).
 
 ### How does the Plan → Execute loop work?
 
-**AgentLoop** iterates Plan → Execute:
+**StrangeLoop** iterates Plan → Execute:
 
 ```
-User Query → AgentLoop
+User Query → StrangeLoop
   ↓
 PLAN phase
   - Decompose goal into plan steps
@@ -705,7 +705,7 @@ If complete → Return final response
 
 **Max iterations**: 10 (configurable)
 
-See [Architecture Overview - AgentLoop](core/agent-loop.md).
+See [Architecture Overview - StrangeLoop](core/agent-loop.md).
 
 ---
 

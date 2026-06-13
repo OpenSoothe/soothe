@@ -324,8 +324,8 @@ Related modules should be linked:
 ```markdown
 ## Related Modules
 
-- [AgentLoop](./agent-loop.md) - Uses this protocol for execution
-- [GoalEngine](./goal-engine.md) - Delegates to AgentLoop
+- [StrangeLoop](./agent-loop.md) - Uses this protocol for execution
+- [GoalEngine](./goal-engine.md) - Delegates to StrangeLoop
 ```
 
 ---
@@ -562,7 +562,7 @@ from soothe.core.agent import create_soothe_agent
 Use Mermaid for diagrams:
 ```mermaid
 graph TD
-    A[CoreAgent] --> B[AgentLoop]
+    A[CoreAgent] --> B[StrangeLoop]
     B --> C[GoalEngine]
     C --> D[Protocols]
 ```
@@ -650,7 +650,7 @@ All 73 RFCs should have corresponding wiki pages summarizing their content for u
 
 1. **RFC-000**: System Conceptual Design → `architecture/conceptual-design.md`
 2. **RFC-200**: Autonomous Goal Management → `modules/core/goal-engine.md`
-3. **RFC-201**: AgentLoop Architecture → `modules/core/agent-loop.md`
+3. **RFC-201**: StrangeLoop Architecture → `modules/core/agent-loop.md`
 4. **RFC-220**: LangGraph Agent Loop → `modules/core/runner.md`
 5. **RFC-600**: Plugin System → `modules/sdk/plugin-development.md`
 

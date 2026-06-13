@@ -105,7 +105,7 @@ This RFC does **not** define:
 |--------|------------------|----------|
 | `lifecycle` | Thread/process lifecycle boundaries | `thread.started`, `checkpoint.saving`, `iteration.completed` |
 | `protocol` | Protocol operations (memory, policy, context, durability) | `memory.recalling`, `policy.checking`, `durability.storing` |
-| `cognition` | Cognitive reasoning and decision-making | `plan.creating`, `goal.creating`, `agent_loop.completed`, `reason.running` |
+| `cognition` | Cognitive reasoning and decision-making | `plan.creating`, `goal.creating`, `strange_loop.completed`, `reason.running` |
 | `capability` | External capability naming (draft taxonomy; not used for built-in subagent wire) | Hypothetical `soothe.capability.*` names—**obsolete for built-ins** (IG-339 uses `soothe.subagent.*`) |
 | `output` | User-facing content delivery | `final_report.reporting`, `autonomous.displaying` (duplicate `soothe.output.*` assistant bodies removed; use `messages` + `phase` per RFC-614) |
 | `system` | System-level operations (daemon, autopilot) | `daemon.heartbeat`, `autopilot.status_changed` |
@@ -153,10 +153,10 @@ soothe.<domain>.<component>.<action_or_state>
 #### 4.3.2 Component Naming Rules
 
 1. Use **singular form**: `thread` (not `threads`), `plan` (not `plans`)
-2. Use **snake_case**: `agent_loop`, `final_report`
+2. Use **snake_case**: `strange_loop`, `final_report`
 3. **Hierarchical components** allowed for nested operations:
    ```
-   soothe.cognition.agent_loop.step.started
+   soothe.cognition.strange_loop.step.started
    soothe.cognition.plan.step.completed
    ```
 
@@ -310,7 +310,7 @@ Add validation script to CI pipeline:
 3. Update `_reg()` calls with new type strings
 4. Update `register_event()` calls in module event files:
    - `packages/soothe/src/soothe/core/events/catalog.py` (core registry)
-   - `packages/soothe/src/soothe/core/agent_loop/utils/events.py` (AgentLoop typed events)
+   - `packages/soothe/src/soothe/core/strange_loop/utils/events.py` (StrangeLoop typed events)
 Optional community plugin event modules (see `community/src/soothe_plugins/`)
    - `packages/soothe/src/soothe/subagents/research/events.py`
    - `packages/soothe/src/soothe/plugin/events.py`
@@ -319,7 +319,7 @@ Optional community plugin event modules (see `community/src/soothe_plugins/`)
 **Files**:
 - `packages/soothe/src/soothe/core/events/catalog.py`
 - `packages/soothe/src/soothe/core/events/constants.py`
-- `packages/soothe/src/soothe/core/agent_loop/utils/events.py`
+- `packages/soothe/src/soothe/core/strange_loop/utils/events.py`
 - `packages/soothe/src/soothe/subagents/*/events.py`
 - `packages/soothe/src/soothe/plugin/events.py`
 
@@ -398,7 +398,7 @@ Create `scripts/validate_event_names.py`:
 | `soothe.cognition.goal.created` | `soothe.cognition.goal.creating` | Present progressive |
 | `soothe.cognition.goal.directives_applied` | `soothe.cognition.goal.directives_applying` | Present progressive |
 | `soothe.cognition.goal.deferred` | `soothe.cognition.goal.deferring` | Present progressive |
-| `soothe.cognition.agent_loop.reason` | `soothe.cognition.agent_loop.reasoning` | Present progressive |
+| `soothe.cognition.strange_loop.reason` | `soothe.cognition.strange_loop.reasoning` | Present progressive |
 
 ### 8.4 Subagent delegated UX (`soothe.subagent.*`, IG-339)
 
@@ -457,7 +457,7 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 ### 9.2 Phase 1: Event Catalog
 
 - [ ] Migrate `core/events/catalog.py` core events
-- [ ] Migrate `core/events/catalog.py` and per-module `register_event()` sites (e.g. `core/agent_loop/utils/events.py`)
+- [ ] Migrate `core/events/catalog.py` and per-module `register_event()` sites (e.g. `core/strange_loop/utils/events.py`)
 - [x] Migrate community plugin event modules under `soothe_plugins/` (IG-415)
 - [ ] Migrate `subagents/research/events.py`
 - [ ] Migrate `plugin/events.py`

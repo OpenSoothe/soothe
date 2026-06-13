@@ -73,7 +73,7 @@ class LoopInfo(TypedDict, total=False):
     """Loop metadata returned by `list_loops_via_daemon_rpc`."""
 
     loop_id: str
-    """Unique identifier for the AgentLoop."""
+    """Unique identifier for the StrangeLoop."""
 
     status: str
     """Loop status (running, paused, completed, etc.)."""
@@ -230,7 +230,7 @@ async def list_loops_via_daemon_rpc(
     limit: int = 20,
     sort_by: str = "updated",
 ) -> list[LoopInfo]:
-    """List AgentLoop instances via daemon WebSocket RPC (RFC-504).
+    """List StrangeLoop instances via daemon WebSocket RPC (RFC-504).
 
     Queries daemon's loop persistence (per-loop metadata.json files)
     instead of only local SQLite checkpoint walks.

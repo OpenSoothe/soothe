@@ -9,8 +9,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from soothe.foundation.loop.state.checkpoint import (
-    AgentLoopCheckpoint,
     CustomSwitchTrigger,
+    StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     ThreadSwitchPolicy,
 )
@@ -34,7 +34,7 @@ class ThreadSwitchPolicyManager:
 
     def evaluate(
         self,
-        checkpoint: AgentLoopCheckpoint,
+        checkpoint: StrangeLoopCheckpoint,
         next_goal: str | None = None,
         model: BaseChatModel | None = None,
     ) -> tuple[bool, str]:

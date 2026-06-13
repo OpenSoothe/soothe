@@ -1,4 +1,4 @@
-"""Abstract backend interface for AgentLoop persistence.
+"""Abstract backend interface for StrangeLoop persistence.
 
 IG-055: Backend-agnostic persistence layer supporting PostgreSQL and SQLite.
 """
@@ -12,11 +12,11 @@ if TYPE_CHECKING:
     pass
 
 
-class AgentLoopPersistenceBackend(ABC):
-    """Abstract backend for AgentLoop persistence operations.
+class StrangeLoopPersistenceBackend(ABC):
+    """Abstract backend for StrangeLoop persistence operations.
 
     Defines contract for backend-agnostic operations supporting both PostgreSQL and SQLite.
-    Mirrors ``AgentLoopCheckpointPersistenceManager`` persistence operations.
+    Mirrors ``StrangeLoopCheckpointPersistenceManager`` persistence operations.
     """
 
     # Core loop operations
@@ -29,10 +29,10 @@ class AgentLoopPersistenceBackend(ABC):
         current_thread_id: str,
         status: str = "running",
     ) -> None:
-        """Register new AgentLoop in database.
+        """Register new StrangeLoop in database.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             thread_ids: List of thread IDs associated with this loop.
             current_thread_id: Current active thread ID.
             status: Loop status (default: "running").
@@ -101,7 +101,7 @@ class AgentLoopPersistenceBackend(ABC):
         """Save iteration checkpoint anchor.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             iteration: Iteration number.
             thread_id: Thread where checkpoint belongs.
             checkpoint_id: CoreAgent checkpoint_id.
@@ -118,7 +118,7 @@ class AgentLoopPersistenceBackend(ABC):
         """Query checkpoint anchors for iteration range.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             start: Start iteration (inclusive).
             end: End iteration (inclusive).
 
@@ -134,7 +134,7 @@ class AgentLoopPersistenceBackend(ABC):
         """Query checkpoint anchors for specific thread in loop.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             thread_id: Thread identifier.
 
         Returns:
@@ -160,7 +160,7 @@ class AgentLoopPersistenceBackend(ABC):
 
         Args:
             branch_id: Branch identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             iteration: Iteration where failure occurred.
             thread_id: Thread identifier.
             root_checkpoint_id: Root checkpoint before failure.
@@ -183,7 +183,7 @@ class AgentLoopPersistenceBackend(ABC):
 
         Args:
             branch_id: Branch identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             failure_insights: Failure analysis insights.
             avoid_patterns: Patterns to avoid.
             suggested_adjustments: Suggested strategy adjustments.
@@ -197,7 +197,7 @@ class AgentLoopPersistenceBackend(ABC):
         """Query failed branches for loop.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             limit: Maximum branches to return.
 
         Returns:
@@ -210,7 +210,7 @@ class AgentLoopPersistenceBackend(ABC):
         """Prune old failed branches.
 
         Args:
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             max_age_days: Maximum age in days.
 
         Returns:
@@ -235,7 +235,7 @@ class AgentLoopPersistenceBackend(ABC):
 
         Args:
             goal_id: Goal identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             goal_text: Goal description.
             thread_id: Thread identifier.
             iteration: Iteration number.
@@ -260,7 +260,7 @@ class AgentLoopPersistenceBackend(ABC):
 
         Args:
             goal_id: Goal identifier.
-            loop_id: AgentLoop identifier.
+            loop_id: StrangeLoop identifier.
             status: Goal status.
             goal_completion: Goal completion summary.
             evidence_summary: Evidence summary.

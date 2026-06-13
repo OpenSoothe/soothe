@@ -1,4 +1,4 @@
-# AgentLoop
+# StrangeLoop
 
 Plan-Execute loop for single-goal agentic execution.
 
@@ -6,7 +6,7 @@ Plan-Execute loop for single-goal agentic execution.
 
 ## Overview
 
-AgentLoop (`soothe.core.loop`) implements Layer 2 of Soothe's three-layer execution architecture, providing agentic goal execution through iterative refinement. It uses a Plan → Execute loop where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via Layer 1 CoreAgent.
+StrangeLoop (`soothe.core.loop`) implements Layer 2 of Soothe's three-layer execution architecture, providing agentic goal execution through iterative refinement. It uses a Plan → Execute loop where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via Layer 1 CoreAgent.
 
 **RFC**: [RFC-201](../../specs/RFC-201-agentloop-plan-execute-loop.md)
 
@@ -16,10 +16,10 @@ AgentLoop (`soothe.core.loop`) implements Layer 2 of Soothe's three-layer execut
 
 ### Plan-Execute Loop
 
-AgentLoop operates through iterative Plan → Execute cycles:
+StrangeLoop operates through iterative Plan → Execute cycles:
 
 ```
-AgentLoop.run_with_progress(goal)
+StrangeLoop.run_with_progress(goal)
     ↓
 ┌─ Loop Iteration (max ~8) ────────────────────────────┐
 │                                                       │
@@ -213,7 +213,7 @@ State management for loop execution:
 
 ```python
 class LoopState:
-    """State for AgentLoop execution."""
+    """State for StrangeLoop execution."""
     
     # Goal information
     current_goal_id: str
@@ -440,11 +440,11 @@ def detect_convergence(self, state: LoopState) -> bool:
 ### Basic Execution
 
 ```python
-from soothe.core.loop import AgentLoop
+from soothe.core.loop import StrangeLoop
 from soothe.config import SootheConfig
 
 config = SootheConfig.from_file("config.yml")
-loop = AgentLoop(config)
+loop = StrangeLoop(config)
 
 # Run loop
 result = await loop.run_with_progress(
@@ -574,10 +574,10 @@ planning:
 
 ## API Reference
 
-### AgentLoop Class
+### StrangeLoop Class
 
 ```python
-class AgentLoop:
+class StrangeLoop:
     """Plan-Execute loop for single-goal execution."""
     
     def __init__(self, config: SootheConfig):

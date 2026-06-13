@@ -105,7 +105,7 @@ class EvidenceBundle(BaseModel):
     """Canonical evidence payload exchanged across Layer 2 and Layer 3.
 
     RFC-200 §14-22: This is the authoritative schema for evidence exchange.
-    Layer 2 AgentLoop MUST construct this structure from execution context.
+    Layer 2 StrangeLoop MUST construct this structure from execution context.
     Layer 3 GoalEngine MUST receive this in fail_goal() signature.
 
     Args:
@@ -207,7 +207,7 @@ class ContextConstructionOptions(BaseModel):
 
 # ---------------------------------------------------------------------------
 # RFC-222 (revised): GoalDispatchContext* — bounded summary types that flow
-# between the daemon's AutopilotService and subprocess AgentLoop workers.
+# between the daemon's AutopilotService and subprocess StrangeLoop workers.
 # Distinct from RFC-217 GoalContext (thread ecosystem) and RFC-200 GoalContext
 # (DAG snapshot for backoff) — see RFC-222 §"GoalDispatchContext".
 # ---------------------------------------------------------------------------
@@ -276,11 +276,11 @@ class ToolCallStats(BaseModel):
 
 
 class GoalDispatchContextBundle(BaseModel):
-    """Immutable hydration input for AgentLoop (RFC-222 revised).
+    """Immutable hydration input for StrangeLoop (RFC-222 revised).
 
     Built by the daemon's ContextProjector from a goal's parents'
     GoalDispatchContextContribution entries. Bounded — summaries only,
-    not raw transcripts. AgentLoop never sees the DAG; it sees this
+    not raw transcripts. StrangeLoop never sees the DAG; it sees this
     pre-merged bundle.
     """
 

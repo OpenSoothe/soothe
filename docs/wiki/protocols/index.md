@@ -31,14 +31,14 @@ Soothe's 9+ core protocols organize into three categories:
 | Protocol | Purpose | Backend | Documentation |
 |----------|---------|---------|---------------|
 | **PlannerProtocol** | Goal decomposition into plans | LLMPlanner | [planner.md](planner.md) |
-| **LoopPlannerProtocol** | AgentLoop Plan phase | LLMPlanner (two-phase) | [planner.md](planner.md) |
+| **LoopPlannerProtocol** | StrangeLoop Plan phase | LLMPlanner (two-phase) | [planner.md](planner.md) |
 | **PolicyProtocol** | Permission-based access control | ConfigDrivenPolicy | [policy.md](policy.md) |
 
 ### Execution Protocols
 
 | Protocol | Purpose | Backend | Documentation |
 |----------|---------|---------|---------------|
-| **LoopRunnerProtocol** | AgentLoop orchestration | SootheRunner | [execution-protocols.md](execution-protocols.md) |
+| **LoopRunnerProtocol** | StrangeLoop orchestration | SootheRunner | [execution-protocols.md](execution-protocols.md) |
 | **RemoteAgentProtocol** | Remote agent invocation | ACP, A2A, LangGraph Remote | [execution-protocols.md](execution-protocols.md) |
 | **ToolkitProtocol** | Tool collection interface | Built-in + Plugin toolkits | [execution-protocols.md](execution-protocols.md) |
 
@@ -60,11 +60,11 @@ Soothe's 9+ core protocols organize into three categories:
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  GoalEngine (autonomous goal management)                 │
-│  - Delegates to AgentLoop for single-goal execution     │
+│  - Delegates to StrangeLoop for single-goal execution     │
 └─────────────────────────────────────────────────────────┘
                           ↓ PERFORM delegation
 ┌─────────────────────────────────────────────────────────┐
-│  AgentLoop (agentic goal execution)                      │
+│  StrangeLoop (agentic goal execution)                      │
 │  - LoopPlannerProtocol: Plan phase                      │
 │  - LoopWorkingMemoryProtocol: Bounded memory            │
 │  - LoopRunnerProtocol: Orchestration                    │
@@ -422,7 +422,7 @@ All backends must satisfy:
 | RFC-406 | Policy Protocol Architecture | PolicyProtocol |
 | RFC-404 | Planner Protocol Architecture | PlannerProtocol |
 | RFC-604 | Reason Phase Robustness | LoopPlannerProtocol |
-| RFC-203 | AgentLoop State Memory | LoopWorkingMemoryProtocol |
+| RFC-203 | StrangeLoop State Memory | LoopWorkingMemoryProtocol |
 | RFC-221 | Loop Runner Protocol | LoopRunnerProtocol |
 
 ### Related RFCs
@@ -462,7 +462,7 @@ All backends must satisfy:
 ### Cognition Protocols
 
 - **[Policy Protocol](policy.md)**: Permission-based access control with structured permissions
-- **[Planner Protocol](planner.md)**: Goal decomposition and AgentLoop Plan phase
+- **[Planner Protocol](planner.md)**: Goal decomposition and StrangeLoop Plan phase
 
 ### Execution Protocols
 

@@ -144,7 +144,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 2. Large Result Cache
 
-**File**: `packages/soothe/src/soothe/core/agent_loop/context/result_cache.py` (new)
+**File**: `packages/soothe/src/soothe/core/strange_loop/context/result_cache.py` (new)
 
 **Purpose**: Cache large tool results (>50KB) to file system.
 
@@ -160,7 +160,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 3. Executor Enhancement
 
-**File**: `packages/soothe/src/soothe/core/agent_loop/core/executor.py` (modify existing)
+**File**: `packages/soothe/src/soothe/core/strange_loop/core/executor.py` (modify existing)
 
 **Changes**:
 - Extract `tool_call_id` from ToolMessage
@@ -171,7 +171,7 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
 
 ### 4. StepResult Schema Update
 
-**File**: `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` (modify existing)
+**File**: `packages/soothe/src/soothe/core/strange_loop/state/schemas.py` (modify existing)
 
 **Changes**:
 - Replace `output: str | None` with `outcome: dict`

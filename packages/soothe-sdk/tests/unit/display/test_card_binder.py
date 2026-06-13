@@ -78,7 +78,7 @@ def test_convert_event_to_message_data_step_started_then_completed_merges() -> N
         "kind": "event",
         "timestamp": "2026-06-04T10:00:00+00:00",
         "data": {
-            "type": "soothe.cognition.agent_loop.step.started",
+            "type": "soothe.cognition.strange_loop.step.started",
             "step_id": "step_001",
             "description": "Read the file",
         },
@@ -87,7 +87,7 @@ def test_convert_event_to_message_data_step_started_then_completed_merges() -> N
         "kind": "event",
         "timestamp": "2026-06-04T10:00:05+00:00",
         "data": {
-            "type": "soothe.cognition.agent_loop.step.completed",
+            "type": "soothe.cognition.strange_loop.step.completed",
             "step_id": "step_001",
             "success": True,
             "duration_ms": 4210,
@@ -160,7 +160,7 @@ def test_parse_loop_event_timestamp_returns_none_on_bad_input() -> None:
 def test_conversation_rows_to_langchain_messages_filters_non_conversation() -> None:
     rows = [
         {"kind": "conversation", "role": "user", "content": "first"},
-        {"kind": "event", "data": {"type": "soothe.cognition.agent_loop.started"}},
+        {"kind": "event", "data": {"type": "soothe.cognition.strange_loop.started"}},
         {"kind": "conversation", "role": "assistant", "content": "answer"},
         {"kind": "tool_call", "tool_name": "read_file"},  # ignored
     ]
@@ -214,7 +214,7 @@ def test_collect_cognition_card_replay_surfaces_assistant_conversation_rows() ->
             "kind": "event",
             "timestamp": "2026-06-04T10:00:10+00:00",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.completed",
+                "type": "soothe.cognition.strange_loop.step.completed",
                 "step_id": "NPT-01",
                 "success": True,
                 "duration_ms": 18806,
@@ -313,8 +313,8 @@ def test_convert_messages_to_data_suppresses_standalone_tool_when_cognition_repl
     assert any(c.type == MessageType.USER for c in cards)
 
 
-def test_convert_event_to_message_data_drops_agent_loop_completed_app_banner() -> None:
-    """Live TUI handles ``soothe.cognition.agent_loop.completed`` as a status
+def test_convert_event_to_message_data_drops_strange_loop_completed_app_banner() -> None:
+    """Live TUI handles ``soothe.cognition.strange_loop.completed`` as a status
     transition (loop → "completed") not as a chat card. Resume must not
     synthesize a "Goal done · progress=complete" APP banner — the
     goal_completion text's own closing line is the natural endpoint marker.
@@ -323,7 +323,7 @@ def test_convert_event_to_message_data_drops_agent_loop_completed_app_banner() -
         "kind": "event",
         "timestamp": "2026-06-04T10:00:00+00:00",
         "data": {
-            "type": "soothe.cognition.agent_loop.completed",
+            "type": "soothe.cognition.strange_loop.completed",
             "status": "done",
             "goal_progress": "complete",
             "completion_summary": "Goal achieved successfully",
@@ -426,7 +426,7 @@ def test_collect_cognition_card_replay_attaches_step_tool_calls_json() -> None:
             "kind": "event",
             "timestamp": "2026-06-04T10:00:00+00:00",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.started",
+                "type": "soothe.cognition.strange_loop.step.started",
                 "step_id": "DPB-01",
                 "description": "do stuff",
             },
@@ -456,7 +456,7 @@ def test_collect_cognition_card_replay_attaches_step_tool_calls_json() -> None:
             "kind": "event",
             "timestamp": "2026-06-04T10:00:02+00:00",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.completed",
+                "type": "soothe.cognition.strange_loop.step.completed",
                 "step_id": "DPB-01",
                 "success": True,
                 "duration_ms": 2000,
@@ -489,7 +489,7 @@ def test_convert_loop_events_to_data_attaches_step_tool_calls_json_fallback_path
             "kind": "event",
             "timestamp": "2026-06-04T10:00:01+00:00",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.started",
+                "type": "soothe.cognition.strange_loop.step.started",
                 "step_id": "NPT-01",
                 "description": "do",
             },
@@ -519,7 +519,7 @@ def test_convert_loop_events_to_data_attaches_step_tool_calls_json_fallback_path
             "kind": "event",
             "timestamp": "2026-06-04T10:00:03+00:00",
             "data": {
-                "type": "soothe.cognition.agent_loop.step.completed",
+                "type": "soothe.cognition.strange_loop.step.completed",
                 "step_id": "NPT-01",
                 "success": True,
                 "duration_ms": 2000,

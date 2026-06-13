@@ -1,4 +1,4 @@
-"""AgentLoop-specific message types with thread/iteration context."""
+"""StrangeLoop-specific message types with thread/iteration context."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def loop_message_assistant_output_phase(msg: Any) -> str | None:
 
 
 class LoopHumanMessage(HumanMessage):
-    """AgentLoop HumanMessage with thread/iteration context.
+    """StrangeLoop HumanMessage with thread/iteration context.
 
     Extends HumanMessage to capture LoopState context for:
     - Thread tracking (thread_id)
@@ -111,7 +111,7 @@ class LoopHumanMessage(HumanMessage):
         'thread_123'
     """
 
-    # AgentLoop context fields (all optional)
+    # StrangeLoop context fields (all optional)
     thread_id: str | None = None
     iteration: int | None = None
     goal_summary: str | None = Field(default=None, max_length=200)
@@ -136,13 +136,13 @@ class LoopHumanMessage(HumanMessage):
 
 
 class LoopAIMessage(AIMessage):
-    """AgentLoop AIMessage with iteration metadata.
+    """StrangeLoop AIMessage with iteration metadata.
 
     Extends AIMessage to preserve:
     - response_metadata for token extraction (executor._extract_token_usage)
     - usage_metadata for standardized token counts
     - tool_calls for tool tracking
-    - AgentLoop-specific metadata (iteration, phase)
+    - StrangeLoop-specific metadata (iteration, phase)
     - CoreAgent dedup (core_agent_message_id for RFC-214 reference-based dedup)
 
     NOTE: LoopAIMessage is rarely directly instantiated - CoreAgent returns
@@ -167,7 +167,7 @@ class LoopAIMessage(AIMessage):
         150
     """
 
-    # AgentLoop context fields (optional)
+    # StrangeLoop context fields (optional)
     thread_id: str | None = None
     iteration: int | None = None
     phase: str | None = None
@@ -180,7 +180,7 @@ class LoopAIMessage(AIMessage):
 
 
 class LoopAIMessageChunk(AIMessageChunk):
-    """Streaming AI chunk with AgentLoop ``phase`` metadata (IG-317 / RFC-614)."""
+    """Streaming AI chunk with StrangeLoop ``phase`` metadata (IG-317 / RFC-614)."""
 
     thread_id: str | None = None
     iteration: int | None = None

@@ -1,4 +1,4 @@
-"""AgentLoop adaptive final response wiring (IG-199, IG-299)."""
+"""StrangeLoop adaptive final response wiring (IG-199, IG-299)."""
 
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -6,7 +6,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.context.planning.models import CompletionStrategy
-from soothe.foundation.loop import AgentLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.state.schemas import PlanResult
 
 
@@ -111,7 +111,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
     with (
         patch(
-            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -119,11 +119,11 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
-        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
@@ -161,7 +161,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 
     with (
         patch(
-            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -169,11 +169,11 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
-        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
@@ -205,7 +205,7 @@ async def test_completed_payload_for_summary_path() -> None:
 
     with (
         patch(
-            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -213,11 +213,11 @@ async def test_completed_payload_for_summary_path() -> None:
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
-        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
@@ -235,7 +235,7 @@ async def test_completed_payload_for_summary_path() -> None:
 
 @pytest.mark.asyncio
 async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
-    """RFC-223: AgentLoop main thread id must align to loop_id."""
+    """RFC-223: StrangeLoop main thread id must align to loop_id."""
     mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = AsyncMock()
 
@@ -251,7 +251,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
 
     with (
         patch(
-            "soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager",
+            "soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
@@ -259,11 +259,11 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager",
+            "soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
     ):
-        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 

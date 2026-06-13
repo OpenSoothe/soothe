@@ -26,7 +26,7 @@ def test_pool_size_positive_owns_pool() -> None:
 
 @pytest.mark.asyncio
 async def test_close_does_not_close_injected_shared_pool() -> None:
-    """Regression: shared pool was closed when first AgentLoopStateManager closed."""
+    """Regression: shared pool was closed when first StrangeLoopStateManager closed."""
     pool = MagicMock()
     pool.closed = False
     pool.close = AsyncMock()
