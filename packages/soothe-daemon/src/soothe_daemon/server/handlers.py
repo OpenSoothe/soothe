@@ -177,6 +177,15 @@ class DaemonHandlersMixin:
                 )
             return
 
+        # Emit running status early so client doesn't timeout waiting for query start.
+        # run_query emits another status later but this unblocks headless CLI immediately.
+        await self._broadcast(
+            self._query_engine._loop_scoped_client_message(
+                loop_id,
+                {"type": "status", "state": "running"},
+            )
+        )
+
         try:
             if msg_type == "command":
                 cmd = msg.get("cmd", "")

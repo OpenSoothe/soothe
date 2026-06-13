@@ -86,7 +86,7 @@ def test_system_prompt_has_no_orchestration_vocabulary() -> None:
     )
     text = render_synthesis_system_prompt(classification)
     lowered = text.lower()
-    assert "agentloop" not in lowered
+    assert "sloop" not in lowered
     assert "ledger" not in lowered
     assert "iteration" not in lowered
     assert "goal completion" not in lowered

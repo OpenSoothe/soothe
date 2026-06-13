@@ -91,7 +91,7 @@ subagents:
 
 persistence:
   default_backend: postgresql
-  agentloop_pool_size: 10
+  sloop_pool_size: 10
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
 
 vector_stores:

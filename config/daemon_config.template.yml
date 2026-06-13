@@ -114,7 +114,7 @@ memory_profiling:
 #   Due to multiprocessing spawn isolation, pools cannot be cross-process shared.
 #
 # Pool Size Recommendations (config persistence: postgres_pool_min_size, *pool_size max):
-# - thread_pool mode: Defaults min 4 / max 24 per shared checkpointer and agentloop pool
+# - thread_pool mode: Defaults min 4 / max 24 per shared checkpointer and sloop pool
 # - worker_pool mode: Lower *pool_size per process to avoid N×connection bloat
 #   Total connections = (min_pool_size + scale) × pool_size per worker
 # ============================================================================
@@ -124,7 +124,7 @@ memory_profiling:
 # Best for: Dev/testing, I/O-bound async workloads
 #
 # PostgreSQL connection sharing: Daemon-level singleton pools (IG-406) are shared by
-# ALL threads. Defaults: postgres_pool_min_size 4, checkpointer/agentloop max 24 each
+# ALL threads. Defaults: postgres_pool_min_size 4, checkpointer/sloop max 24 each
 # since threads benefit from shared pool capacity without multiplying connections.
 thread_pool:
   enabled: true
@@ -141,7 +141,7 @@ thread_pool:
 # Best for: Production, user data isolation, CPU-bound workloads
 #
 # PostgreSQL connection sizing: Each worker process has its OWN connection pool.
-# Total PG connections = (active workers) × (checkpointer_pool_size + agentloop_pool_size)
+# Total PG connections = (active workers) × (checkpointer_pool_size + sloop_pool_size)
 # Use small persistence pool sizes (2-4) to avoid connection exhaustion.
 # For high-concurrency worker_pool: consider PGBouncer as external connection proxy.
 worker_pool:

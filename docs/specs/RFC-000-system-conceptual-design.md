@@ -215,7 +215,7 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 - [RFC Standard](./rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
 - [RFC-200](./RFC-200-autonomous-goal-management.md) - GoalEngine: Autonomous Goal Management
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - StrangeLoop: Agentic Goal ExecutionExecute Loop
+- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) - StrangeLoop: Agentic Goal ExecutionExecute Loop
 - [RFC-400](./RFC-400-context-protocol-architecture.md) through [RFC-408](./RFC-408-durability-protocol-architecture.md) - Core protocol architecture set
 
 **Note**: RFC consolidation completed 2026-04-17. Canonical merged RFCs are maintained in `docs/specs/`; legacy files are retained for historical context with explicit redirects.

@@ -293,7 +293,7 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
             fake_stream(),
             budget=None,
             step_id="JPV-01",
-            step_description="Map goal engine to agentloop boundaries",
+            step_description="Map goal engine to sloop boundaries",
             step_subagent="explore",
         )
     ]
@@ -301,7 +301,7 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
     msg = data[0]
     tc = msg.tool_calls[0]
     assert tc["id"] == "JPV_01:s:task:0"
-    assert "agentloop" in str(tc["args"].get("description", ""))
+    assert "sloop" in str(tc["args"].get("description", ""))
     assert tc["args"].get("subagent_type") == "explore"
 
 

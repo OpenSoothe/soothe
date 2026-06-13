@@ -305,7 +305,7 @@ class TestDatabaseConsistency:
 
             async with aiosqlite.connect(sm.db_path) as db:
                 cursor = await db.execute(
-                    "SELECT current_goal_index FROM agentloop_loops WHERE loop_id = ?",
+                    "SELECT current_goal_index FROM sloop_loops WHERE loop_id = ?",
                     (sm.loop_id,),
                 )
                 row = await cursor.fetchone()

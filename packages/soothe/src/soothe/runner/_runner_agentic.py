@@ -460,7 +460,7 @@ class AgenticMixin:
         strange_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
 
         # IG-406: Get shared PostgreSQL pool for high-concurrency support
-        shared_pool = await self.get_agentloop_shared_pool()
+        shared_pool = await self.get_sloop_shared_pool()
 
         # RFC-622: build the clarification policy from per-request mode + config defaults.
         # Constructed once per goal so the closed-over veritas chat model is reused

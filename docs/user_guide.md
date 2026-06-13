@@ -97,7 +97,7 @@ Technical documentation for developers and system architects.
 | [RFC-101](specs/RFC-101-tool-interface.md) | Tool Interface |
 | [RFC-102](specs/RFC-102-security-filesystem-policy.md) | Security Filesystem Policy |
 | [RFC-200](specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management |
-| [RFC-201](specs/RFC-201-agentloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop |
+| [RFC-201](specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop |
 | [RFC-300](specs/RFC-300-context-memory-protocols.md) | Context and Memory Protocols |
 | [RFC-400](specs/RFC-400-context-protocol-architecture.md) | Context Protocol Architecture |
 | [RFC-401](specs/RFC-401-event-processing.md) | Event Processing |
@@ -127,8 +127,8 @@ Technical documentation for developers and system architects.
 | [IG-366](impl/IG-366-policy-virtual-path-glob-root.md) | Policy Virtual Path Glob Root |
 | [IG-367](impl/IG-367-langfuse-observability.md) | Langfuse Observability |
 | [IG-368](impl/IG-368-remove-detailed-evidence-string.md) | Remove Detailed Evidence String |
-| [IG-369](impl/IG-369-langfuse-agentloop-langchain-fix.md) | Langfuse StrangeLoop LangChain Fix |
-| [IG-370](impl/IG-370-agentloop-evidence-dedup.md) | StrangeLoop Evidence Deduplication |
+| [IG-369](impl/IG-369-langfuse-strangeloop-langchain-fix.md) | Langfuse StrangeLoop LangChain Fix |
+| [IG-370](impl/IG-370-strangeloop-evidence-dedup.md) | StrangeLoop Evidence Deduplication |
 | [IG-371](impl/IG-371-plan-human-omit-working-memory.md) | Plan Human Omit Working Memory |
 | [IG-372](impl/IG-372-plan-phase-split-prompts.md) | Plan Phase Split Prompts |
 | [IG-374](impl/IG-374-parallel-execute-ledger-for-plan-assess.md) | Parallel Execute Ledger for Plan Assess |
@@ -137,13 +137,13 @@ Technical documentation for developers and system architects.
 | [IG-377](impl/IG-377-plan-human-trim-and-langfuse-execute-step.md) | Plan Human Trim and Langfuse Execute Step |
 | [IG-378](impl/IG-378-plan-generate-goal-progress-system.md) | Plan Generate Goal Progress System |
 | [IG-379](impl/IG-379-langfuse-cost-dashboard-bridge.md) | Langfuse Cost Dashboard Bridge |
-| [IG-380](impl/IG-380-agentloop-plan-ledger-explore-messages.md) | StrangeLoop Plan Ledger Explore Messages |
+| [IG-380](impl/IG-380-strangeloop-plan-ledger-explore-messages.md) | StrangeLoop Plan Ledger Explore Messages |
 | [IG-381](impl/IG-381-plan-generate-progressive-evidence-explore-bundle.md) | Plan Generate Progressive Evidence Explore Bundle |
 | [IG-382](impl/IG-382-remove-stepaction-tools-hint.md) | Remove StepAction Tools Hint |
 | [IG-383](impl/IG-383-routing-classification-rename-git-status-trim.md) | Routing Classification Rename Git Status Trim |
 | [IG-384](impl/IG-384-system-prompt-merge-and-fallback.md) | System Prompt Merge and Fallback |
-| [IG-386](impl/IG-386-agentloop-step-subagent-coreagent-enforcement.md) | StrangeLoop Step Subagent CoreAgent Enforcement |
-| [IG-387](impl/IG-387-drop-agentloop-tool-result-cache.md) | Drop StrangeLoop Tool Result Cache |
+| [IG-386](impl/IG-386-strangeloop-step-subagent-coreagent-enforcement.md) | StrangeLoop Step Subagent CoreAgent Enforcement |
+| [IG-387](impl/IG-387-drop-strangeloop-tool-result-cache.md) | Drop StrangeLoop Tool Result Cache |
 | [IG-388](impl/IG-388-plan-generate-sequential-step-ids.md) | Plan Generate Sequential Step IDs |
 | [IG-390](impl/IG-390-explore-migrate-create-agent.md) | Explore Migrate Create Agent |
 | [IG-391](impl/IG-391-explore-execute-readonly-prompt.md) | Explore Execute Readonly Prompt |
@@ -152,8 +152,8 @@ Technical documentation for developers and system architects.
 | [IG-394](impl/IG-394-langgraph-agent-loop-orchestrator.md) | LangGraph Agent Loop Orchestrator |
 | [IG-395](impl/IG-395-langfuse-trace-goal-io.md) | Langfuse Trace Goal IO |
 | [IG-396](impl/IG-396-rfc-220-loop-graph-topology-langfuse.md) | RFC-220 Loop Graph Topology Langfuse |
-| [IG-397](impl/IG-397-agentloop-graph-intent-and-assess-bypass.md) | StrangeLoop Graph Intent and Assess Bypass |
-| [IG-398](impl/IG-398-cancellation-propagation-agentloop.md) | Cancellation Propagation StrangeLoop |
+| [IG-397](impl/IG-397-strangeloop-graph-intent-and-assess-bypass.md) | StrangeLoop Graph Intent and Assess Bypass |
+| [IG-398](impl/IG-398-cancellation-propagation-strangeloop.md) | Cancellation Propagation StrangeLoop |
 | [IG-399](impl/IG-399-plan-pre-generate-evidence-and-flat-generation.md) | Plan Pre-generate Evidence and Flat Generation |
 | [IG-400](impl/IG-400-planmanager-plandag-architecture.md) | PlanManager PlanDAG Architecture |
 | [IG-401](impl/IG-401-plan-generation-optimization.md) | Plan Generation Optimization |
@@ -174,7 +174,7 @@ Technical documentation for developers and system architects.
 | [IG-416](impl/IG-416-tool-call-realtime-display.md) | Tool Call Realtime Display |
 | [IG-418](impl/IG-418-remove-legacy-tool-call-id.md) | Remove Legacy Tool Call ID |
 | [IG-419](impl/IG-419-direct-llm-structured-output.md) | Direct LLM Structured Output |
-| [IG-420](impl/IG-420-goal-engine-agentloop-autopilot-integration.md) | Goal Engine StrangeLoop Autopilot Integration |
+| [IG-420](impl/IG-420-goal-engine-strangeloop-autopilot-integration.md) | Goal Engine StrangeLoop Autopilot Integration |
 | [IG-421](impl/IG-421-step-card-tool-stats-display.md) | Step Card Tool Stats Display |
 | [IG-422](impl/IG-422-cli-runtime-module.md) | CLI Runtime Module |
 | [IG-425](impl/IG-425-tacitus-subagent.md) | Tacitus Subagent |

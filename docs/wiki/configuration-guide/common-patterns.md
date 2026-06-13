@@ -104,7 +104,7 @@ persistence:
   postgres_base_dsn: ${POSTGRES_DSN}
   postgres_pool_min_size: 8
   checkpointer_pool_size: 32
-  agentloop_pool_size: 32
+  sloop_pool_size: 32
 
 vector_stores:
   - name: pgvector_prod

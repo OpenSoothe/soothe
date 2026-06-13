@@ -233,53 +233,53 @@ class LLMPlanner:
         plan: Plan,
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
-        agentloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult
+        sloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult
     ) -> Reflection:
         """Reflection with StrangeLoop integration support (IG-154).
 
-        When agentloop_result is provided (from StrangeLoop delegation), uses
+        When sloop_result is provided (from StrangeLoop delegation), uses
         StrangeLoop's evidence and judgment for reflection instead of step_results.
 
         Args:
             plan: The plan (None when StrangeLoop handles execution).
             step_results: Step execution results (empty when StrangeLoop handles execution).
             goal_context: Goal DAG context for autonomous goal management.
-            agentloop_result: GoalResult from StrangeLoop delegation (when delegating).
+            sloop_result: GoalResult from StrangeLoop delegation (when delegating).
 
         Returns:
             Reflection with assessment and goal directives for DAG restructuring.
         """
         # IG-154: StrangeLoop integration - use GoalResult when available
-        if agentloop_result:
+        if sloop_result:
             logger.info(
                 "Using StrangeLoop result for reflection (status=%s, progress=%s)",
-                agentloop_result.status,
-                agentloop_result.goal_progress,
+                sloop_result.status,
+                sloop_result.goal_progress,
             )
 
             # Build assessment from StrangeLoop evidence
             evidence_preview = (
-                agentloop_result.evidence_summary[:300] if agentloop_result.evidence_summary else ""
+                sloop_result.evidence_summary[:300] if sloop_result.evidence_summary else ""
             )
-            assessment = f"StrangeLoop achieved {agentloop_result.goal_progress} progress. "
+            assessment = f"StrangeLoop achieved {sloop_result.goal_progress} progress. "
 
-            if agentloop_result.status == "completed":
+            if sloop_result.status == "completed":
                 assessment += f"Goal successfully completed. {evidence_preview}"
-            elif agentloop_result.status == "failed":
+            elif sloop_result.status == "failed":
                 assessment += f"Goal execution failed. {evidence_preview}"
             else:
                 assessment += f"Goal execution in progress. {evidence_preview}"
 
             # Determine if revision needed
-            should_revise = agentloop_result.status == "failed" or (
-                isinstance(agentloop_result.goal_progress, str)
-                and agentloop_result.goal_progress in ["none", "low"]
+            should_revise = sloop_result.status == "failed" or (
+                isinstance(sloop_result.goal_progress, str)
+                and sloop_result.goal_progress in ["none", "low"]
             )
 
             # Generate feedback
-            if agentloop_result.status == "completed":
+            if sloop_result.status == "completed":
                 feedback = "Goal achieved successfully via StrangeLoop execution."
-            elif agentloop_result.status == "failed":
+            elif sloop_result.status == "failed":
                 feedback = "Goal not achieved. Consider alternative approach or create dependency prerequisites."
             else:
                 feedback = "Goal partially achieved. May need continuation or alternative strategy."
@@ -289,7 +289,7 @@ class LLMPlanner:
 
             directives = []
 
-            if agentloop_result.status == "failed" and goal_context:
+            if sloop_result.status == "failed" and goal_context:
                 # Failed goal: try alternative approach or decompose
                 logger.info("StrangeLoop goal failed, generating recovery directives")
 
@@ -309,7 +309,7 @@ class LLMPlanner:
                 )
 
                 # Or decompose into smaller sub-goals
-                if agentloop_result.goal_progress in ("none", "low"):
+                if sloop_result.goal_progress in ("none", "low"):
                     directives.append(
                         GoalDirective(
                             action="decompose",
@@ -319,7 +319,7 @@ class LLMPlanner:
                         )
                     )
 
-            elif agentloop_result.status == "completed" and agentloop_result.goal_progress in (
+            elif sloop_result.status == "completed" and sloop_result.goal_progress in (
                 "high",
                 "complete",
             ):

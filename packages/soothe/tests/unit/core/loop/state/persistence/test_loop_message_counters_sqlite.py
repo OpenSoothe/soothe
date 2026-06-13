@@ -196,7 +196,7 @@ async def test_list_empty_loops_uses_created_at_when_last_message_null(
     old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
 
     def _backdate_created_at(conn, lid: str, ts: str) -> None:
-        conn.execute("UPDATE agentloop_loops SET created_at = ? WHERE loop_id = ?", (ts, lid))
+        conn.execute("UPDATE sloop_loops SET created_at = ? WHERE loop_id = ?", (ts, lid))
         conn.commit()
 
     await sqlite_backend._writer_to_thread(_backdate_created_at, loop_id, old)

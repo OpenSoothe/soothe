@@ -16,7 +16,7 @@ def test_calculate_relevance_score_uses_semantic_only(monkeypatch: pytest.Monkey
     monkeypatch.setattr(sim, "semantic_similarity", lambda _a, _b: 0.85)
 
     finding = {"path": "/unrelated/path.txt", "snippet": "goal engine integration"}
-    assert sim.calculate_relevance_score(finding, "agentloop", enable_semantic=True) == "high"
+    assert sim.calculate_relevance_score(finding, "sloop", enable_semantic=True) == "high"
 
 
 def test_calculate_relevance_score_without_model_returns_medium(

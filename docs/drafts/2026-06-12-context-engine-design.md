@@ -529,7 +529,7 @@ ContextEngine.complete_goal(goal_id)
 
 ### 10.2 Ledger recovery from GoalStepDAG
 
-The draft notes: "the current agentloop's loop message ledger could be recovered from the DAG."
+The draft notes: "the current sloop's loop message ledger could be recovered from the DAG."
 
 This works because each `StepExecution` stores the full CoreAgent input/output messages. Given a `GoalStepDAG`, the ledger can be reconstructed by:
 

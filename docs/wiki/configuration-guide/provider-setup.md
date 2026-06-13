@@ -469,7 +469,7 @@ persistence:
   
   postgres_pool_min_size: 8
   checkpointer_pool_size: 32
-  agentloop_pool_size: 32
+  sloop_pool_size: 32
   postgres_pool_max_idle_seconds: 120
   postgres_pool_max_lifetime_seconds: 1800
 ```
@@ -500,7 +500,7 @@ CREATE EXTENSION vector;
 |-------|---------|-------------|
 | `postgres_pool_min_size` | 4 | Min connections per pool |
 | `checkpointer_pool_size` | 24 | LangGraph checkpoint pool |
-| `agentloop_pool_size` | 24 | StrangeLoop pool |
+| `sloop_pool_size` | 24 | StrangeLoop pool |
 | `postgres_pool_max_idle_seconds` | 120 | Idle connection timeout |
 | `postgres_pool_max_lifetime_seconds` | 1800 | Connection lifetime |
 

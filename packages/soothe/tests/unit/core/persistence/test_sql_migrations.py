@@ -26,13 +26,13 @@ def test_split_sql_statements_splits_multiline_ddl() -> None:
     assert statements[1].startswith("CREATE INDEX idx_foo")
 
 
-def test_split_sql_statements_agentloop_migration_file() -> None:
+def test_split_sql_statements_sloop_migration_file() -> None:
     scripts = discover_migration_scripts("soothe_checkpoints", sql_root=migration_sql_root())
-    agentloop = next(s for s in scripts if s.name == "agentloop_tables")
-    statements = split_sql_statements(agentloop.sql)
+    sloop_script = next(s for s in scripts if s.name == "sloop_tables")
+    statements = split_sql_statements(sloop_script.sql)
     assert len(statements) >= 10
     assert any(
-        stmt.startswith("CREATE TABLE IF NOT EXISTS agentloop_checkpoints") for stmt in statements
+        stmt.startswith("CREATE TABLE IF NOT EXISTS sloop_checkpoints") for stmt in statements
     )
 
 
@@ -42,9 +42,9 @@ def test_migration_sql_root_contains_checkpoints_scripts() -> None:
     versions = [s.version for s in scripts]
     assert versions == ["000", "001"]
     assert scripts[0].name == "migration_tracking"
-    assert scripts[1].name == "agentloop_tables"
+    assert scripts[1].name == "sloop_tables"
     assert "soothe_schema_migrations" in scripts[0].sql
-    assert "agentloop_checkpoints" in scripts[1].sql
+    assert "sloop_checkpoints" in scripts[1].sql
     assert "client_workspace TEXT" in scripts[1].sql
 
 

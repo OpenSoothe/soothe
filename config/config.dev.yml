@@ -110,7 +110,7 @@ persistence:
   # Thread pool (daemon_config.dev.yml): one checkpointer + one StrangeLoop pool per daemon process.
   postgres_pool_min_size: 4
   checkpointer_pool_size: 24
-  agentloop_pool_size: 24
+  sloop_pool_size: 24
   postgres_pool_max_idle_seconds: 90
   postgres_pool_max_lifetime_seconds: 900
   postgres_pool_acquire_timeout_seconds: 30

@@ -349,7 +349,7 @@ def build_traced_config(
     """Build a RunnableConfig with Langfuse callbacks and standardized call metadata.
 
     Combines ``merge_langfuse_runnable_config`` with ``create_llm_call_metadata`` so
-    non-agentloop LLM call sites get both observability metadata and Langfuse tracing
+    non-sloop LLM call sites get both observability metadata and Langfuse tracing
     in a single call.
 
     Args:

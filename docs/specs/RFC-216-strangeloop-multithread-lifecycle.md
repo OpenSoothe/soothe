@@ -49,7 +49,7 @@ StrangeLoop becomes an abstract orchestration entity spanning multiple threads:
 
 ### Layer Integration
 
-This RFC extends RFC-203 (Layer 2 Unified State Model) and `RFC-201-agentloop-plan-execute-loop.md` (Agentic Goal Execution):
+This RFC extends RFC-203 (Layer 2 Unified State Model) and `RFC-201-strangeloop-plan-execute-loop.md` (Agentic Goal Execution):
 
 - **Layer 2 StrangeLoop**: Manages Plan → Execute loop across multiple threads
 - **Layer 1 CoreAgent**: Executes on specific thread (LangGraph thread_id)

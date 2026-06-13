@@ -553,7 +553,7 @@ soothe daemon start --workspace /tmp/soothe-skill-test
 
 - [RFC-100: CoreAgent Runtime](RFC-100-coreagent-runtime.md)
 - [RFC-104: Dynamic System Context Injection](RFC-104-dynamic-system-context.md)
-- [RFC-214: StrangeLoop Loop Message Surface](RFC-214-agentloop-loop-message-surface.md)
+- [RFC-214: StrangeLoop Loop Message Surface](RFC-214-strangeloop-loop-message-surface.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
 - [Design Draft: Progressive Skill Loading](../drafts/2026-05-29-progressive-skill-loading-design.md)
 - [RFC Standard](./rfc-standard.md)

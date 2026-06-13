@@ -93,12 +93,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Implemented
   - Created: 2026-03-15
 
-- **RFC-201**: [StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)](RFC-201-agentloop-plan-execute-loop.md)
+- **RFC-201**: [StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)](RFC-201-strangeloop-plan-execute-loop.md)
   - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-04-17
 
-- **RFC-203**: [StrangeLoop State & Memory Architecture](RFC-203-agentloop-state-memory.md)
+- **RFC-203**: [StrangeLoop State & Memory Architecture](RFC-203-strangeloop-state-memory.md)
   - Kind: Architecture Design / Impl Interface
   - Status: Draft
   - Created: 2026-04-17
@@ -113,7 +113,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-08
 
-- **RFC-207**: [StrangeLoop Thread Management & Goal Context](RFC-207-agentloop-thread-context-lifecycle.md)
+- **RFC-207**: [StrangeLoop Thread Management & Goal Context](RFC-207-strangeloop-thread-context-lifecycle.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
@@ -123,23 +123,23 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-10
 
-- **RFC-213**: [StrangeLoop Reasoning Quality & Robustness](RFC-213-agentloop-reasoning-quality.md)
+- **RFC-213**: [StrangeLoop Reasoning Quality & Robustness](RFC-213-strangeloop-reasoning-quality.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
   - Authors: Claude Code
 
-- **RFC-214**: [Volatility-Tiered Prompt Architecture & Unified Message Ledger](RFC-214-agentloop-loop-message-surface.md)
+- **RFC-214**: [Volatility-Tiered Prompt Architecture & Unified Message Ledger](RFC-214-strangeloop-loop-message-surface.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-05-03
 
-- **RFC-215**: [StrangeLoop Persistence Backend Architecture](RFC-215-agentloop-persistence-backend.md)
+- **RFC-215**: [StrangeLoop Persistence Backend Architecture](RFC-215-strangeloop-persistence-backend.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
 
-- **RFC-216**: [StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching](RFC-216-agentloop-multithread-lifecycle.md)
+- **RFC-216**: [StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching](RFC-216-strangeloop-multithread-lifecycle.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-16
@@ -149,7 +149,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-218**: [StrangeLoop Checkpoint Tree Architecture](RFC-218-agentloop-checkpoint-tree-architecture.md)
+- **RFC-218**: [StrangeLoop Checkpoint Tree Architecture](RFC-218-strangeloop-checkpoint-tree-architecture.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
