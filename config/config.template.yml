@@ -273,6 +273,21 @@ agent:
       persist_dir: null
       thread_inactivity_timeout_hours: 72
 
+  # === CODE INTERPRETER (IG-423) ===
+  # Embedded QuickJS interpreter for programmatic tool calling (PTC).
+  # Opt-in feature — disabled by default. When enabled, agents can write
+  # JavaScript code that calls tools directly via tools.* namespace.
+  # Install dependency: uv add 'soothe[quickjs]'
+  code_interpreter:
+    enabled: false # opt-in; set to true and install soothe[quickjs] to enable
+    ptc_allowlist: [] # tools exposed via tools.* namespace (empty = no PTC)
+    memory_limit_mb: 128
+    timeout_seconds: 30
+    max_ptc_calls: 50
+    max_result_size: 100000
+    console_capture: true
+    snapshot_between_turns: false
+
   # === CLARIFICATION RELAY (RFC-622) ===
   # When CoreAgent emits a structured ``ask_user`` interrupt, the loop bubbles
   # it up through a ClarificationPolicy. Manual mode relays to the human via
