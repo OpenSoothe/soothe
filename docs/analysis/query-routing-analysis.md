@@ -181,7 +181,7 @@ If valid, message is enqueued to `LoopInputDispatcher` for that `loop_id`.
 │    ↓                                                            │
 │  4. Execution mode decision                                     │
 │     - autonomous=True → _run_autonomous()                       │
-│     - Default → _run_agentic_loop()                             │
+│     - Default → _run_strange_loop()                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -214,7 +214,7 @@ async def astream(self, user_input, *, autonomous=False, ...):
             yield chunk
     else:
         # RFC-0008/RFC-201: Agentic loop with Reason→Act
-        async for chunk in self._run_agentic_loop(...):
+        async for chunk in self._run_strange_loop(...):
             yield chunk
 ```
 
@@ -265,7 +265,7 @@ Runner initializes:
 
 ### 6.4 Current Selection Logic
 
-**File**: `_runner_agentic.py` (lines 280-350)
+**File**: `_runner_strange_loop.py` (lines 280-350)
 
 Complete routing decision flow:
 
@@ -337,7 +337,7 @@ class StatusAssessment(BaseModel):
 
 ## 7. Intent Classification
 
-**File**: `packages/soothe/src/soothe/core/runner/_runner_agentic.py`
+**File**: `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py`
 
 ### 7.1 Classification (lines 280-310)
 
@@ -746,7 +746,7 @@ SootheRunner.astream()
     ↓
 IntentClassifier → "new_goal"
     ↓
-_run_agentic_loop()
+_run_strange_loop()
     ↓
 StrangeLoop.run_with_progress()
     ↓
@@ -1033,7 +1033,7 @@ class BackoffDecision:
 | 2 | Capacity check | `query_engine.py` | 159-198 | Reject or proceed |
 | 3 | Runner selection | `runner/factory.py` | - | Local, Pool, Ray |
 | 4 | Execution mode | `runner/__init__.py` | 505-580 | Autonomous or Agentic |
-| 5 | Intent classification | `_runner_agentic.py` | 280-310 | quiz, new_goal, continue_thread |
+| 5 | Intent classification | `_runner_strange_loop.py` | 280-310 | quiz, new_goal, continue_thread |
 | 6 | Checkpoint status | `strange_loop.py` | 173-244 | Resume, new goal, fresh start |
 | 7 | Plan routing | `routing.py` | 12-67 | goal_completion, execute, END |
 | 8 | Goal completion | `plan_assess.py` | - | PLAN_ROUTE_GOAL_DONE signal |
@@ -1132,7 +1132,7 @@ Per-loop queues ensure:
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │ Execution Mode Routing                                             │  │
 │  │ autonomous=True → _run_autonomous() → GoalEngine                   │  │
-│  │ Default → _run_agentic_loop() → IntentClassifier                   │  │
+│  │ Default → _run_strange_loop() → IntentClassifier                   │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────────┘
                                     │

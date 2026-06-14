@@ -507,7 +507,7 @@ event = GoalCompletedEvent(
 ## Related Documentation
 
 - **[SootheRunner](runner.md)** - Runner event handling
-- **[StrangeLoop](agent-loop.md)** - Loop events
+- **[StrangeLoop](strangeloop.md)** - Loop events
 - **[GoalEngine](goal-engine.md)** - Goal events
 - **[Event Catalog](../../specs/event-catalog.md)** - Event catalog spec
 - **[RFC-401](../../specs/RFC-401-event-processing.md)** - Event processing

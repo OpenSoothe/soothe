@@ -9,7 +9,7 @@ from soothe.foundation.events import (
 )
 
 
-def test_agentic_step_started_includes_step_id_in_dict() -> None:
+def test_strange_loop_step_started_includes_step_id_in_dict() -> None:
     ev = StrangeLoopStepStartedEvent(step_id="s-1", description="Do work")
     d = ev.to_dict()
     assert d["type"] == "soothe.cognition.strange_loop.step.started"
@@ -17,7 +17,7 @@ def test_agentic_step_started_includes_step_id_in_dict() -> None:
     assert d["description"] == "Do work"
 
 
-def test_agentic_step_queued_includes_step_id_in_dict() -> None:
+def test_strange_loop_step_queued_includes_step_id_in_dict() -> None:
     ev = StrangeLoopStepQueuedEvent(step_id="s-2", description="Wait for slot")
     d = ev.to_dict()
     assert d["type"] == "soothe.cognition.strange_loop.step.queued"
@@ -25,7 +25,7 @@ def test_agentic_step_queued_includes_step_id_in_dict() -> None:
     assert d["description"] == "Wait for slot"
 
 
-def test_agentic_step_completed_includes_step_id_in_dict() -> None:
+def test_strange_loop_step_completed_includes_step_id_in_dict() -> None:
     ev = StrangeLoopStepCompletedEvent(
         step_id="s-1",
         success=True,
@@ -42,7 +42,7 @@ def test_agentic_step_completed_includes_step_id_in_dict() -> None:
     assert "clarification" not in d
 
 
-def test_agentic_step_completed_carries_clarification_when_set() -> None:
+def test_strange_loop_step_completed_carries_clarification_when_set() -> None:
     ev = StrangeLoopStepCompletedEvent(
         step_id="ASK-01",
         success=True,

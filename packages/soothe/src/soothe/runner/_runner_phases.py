@@ -171,7 +171,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 phase="pre-stream",
                 session_id=thread_id,
                 run_name="soothe:quiz",
-                independent_trace=True,  # Standalone trace, not nested under agent-loop-graph
+                independent_trace=True,  # Standalone trace, not nested under strange-loop-graph
             )
             response = await quiz_model.ainvoke(quiz_messages, config=quiz_config)
             answer = response.content if hasattr(response, "content") else str(response)

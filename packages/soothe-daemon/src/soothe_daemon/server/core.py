@@ -858,7 +858,7 @@ class SootheDaemon(DaemonHandlersMixin):
           * ``updated_at`` older than ``stale_running_seconds``
           * ``loop_id`` is NOT in this daemon's ``_active_stream_loop_ids``
 
-        The runner heartbeat (see ``_runner_agentic._start_loop_heartbeat``)
+        The runner heartbeat (see ``_runner_strange_loop._start_loop_heartbeat``)
         ticks ``updated_at`` every ~30s while a goal is in flight, so loops
         that miss multiple heartbeat windows are presumed orphaned (daemon
         crash + restart, runner subprocess crash, etc.) and are demoted to

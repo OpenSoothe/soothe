@@ -1,11 +1,11 @@
-"""Wire-contract tests for agentic loop control events."""
+"""Wire-contract tests for StrangeLoop control events."""
 
 from __future__ import annotations
 
 from soothe.foundation.events import StrangeLoopCompletedEvent
 
 
-def test_agentic_loop_completed_event_has_no_goal_completion_message_field() -> None:
+def test_strange_loop_completed_event_has_no_goal_completion_message_field() -> None:
     ev = StrangeLoopCompletedEvent(
         thread_id="t-1",
         status="done",
@@ -17,7 +17,7 @@ def test_agentic_loop_completed_event_has_no_goal_completion_message_field() -> 
     assert "goal_completion_message" not in d
 
 
-def test_agentic_loop_completed_event_none_when_unset() -> None:
+def test_strange_loop_completed_event_none_when_unset() -> None:
     ev = StrangeLoopCompletedEvent(
         thread_id="t-3",
         status="done",

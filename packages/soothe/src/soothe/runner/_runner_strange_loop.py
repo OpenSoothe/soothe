@@ -336,7 +336,7 @@ def _forward_messages_chunk(
     )
 
 
-def _clip_agentic_step_description(
+def _clip_sloop_step_description(
     description: str, *, max_len: int = _AGENTIC_STEP_DESC_UI_MAX
 ) -> str:
     """Shorten Layer-2 step descriptions for progress events (TUI one-line template)."""
@@ -358,14 +358,14 @@ def _should_emit_loop_reason_event(
     return bool(assessment_reasoning.strip() or plan_reasoning.strip())
 
 
-class AgenticMixin:
-    """Layer 2 agentic loop integration.
+class StrangeLoopMixin:
+    """Layer 2 StrangeLoop integration.
 
     Mixed into SootheRunner -- all self.* attributes are defined
     on the concrete class.
     """
 
-    async def _run_agentic_loop(
+    async def _run_strange_loop(
         self,
         user_input: str,
         *,
@@ -378,7 +378,7 @@ class AgenticMixin:
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
+        """Run Layer 2: StrangeLoop goal execution (RFC-0008).
 
         Implements Reason → Act via StrangeLoop with RFC-0020 progress events.
 
@@ -421,7 +421,7 @@ class AgenticMixin:
             )
 
             logger.info(
-                "[Agentic] intent_type=%s - %s",
+                "[StrangeLoop] intent_type=%s - %s",
                 intent_classification.intent_type,
                 user_input[:50],
             )
@@ -434,7 +434,7 @@ class AgenticMixin:
                     yield chunk
                 return
         elif clarification_answer:
-            logger.info("[Agentic] clarification_answer=True - bypassing intent classification")
+            logger.info("[StrangeLoop] clarification_answer=True - bypassing intent classification")
 
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
@@ -448,7 +448,7 @@ class AgenticMixin:
 
         if self._planner is None:
             logger.error(
-                "[Runner] Agentic loop requires a planner that implements LoopPlannerProtocol.plan"
+                "[Runner] StrangeLoop requires a planner that implements LoopPlannerProtocol.plan"
             )
             return
 
@@ -492,7 +492,7 @@ class AgenticMixin:
                     Path(workspace).expanduser().resolve(),  # noqa: ASYNC240
                 )
             except Exception:
-                logger.debug("Git status collection failed for agentic loop", exc_info=True)
+                logger.debug("Git status collection failed for StrangeLoop", exc_info=True)
 
         # Build routing classification from pre-computed intent (avoids redundant classification in graph)
         routing_classification = build_loop_routing_classification(
@@ -565,7 +565,7 @@ class AgenticMixin:
                     yield _custom(
                         StrangeLoopStepStartedEvent(
                             step_id=str(event_data.get("step_id", "")),
-                            description=_clip_agentic_step_description(event_data["description"]),
+                            description=_clip_sloop_step_description(event_data["description"]),
                         ).to_dict()
                     )
 
@@ -573,7 +573,7 @@ class AgenticMixin:
                     yield _custom(
                         StrangeLoopStepQueuedEvent(
                             step_id=str(event_data.get("step_id", "")),
-                            description=_clip_agentic_step_description(event_data["description"]),
+                            description=_clip_sloop_step_description(event_data["description"]),
                         ).to_dict()
                     )
 
@@ -745,7 +745,7 @@ class AgenticMixin:
                     )
 
                     logger.info(
-                        "[Runner] Agentic loop completed (status=%s, progress=%s)",
+                        "[Runner] StrangeLoop completed (status=%s, progress=%s)",
                         final_result.status,
                         final_result.goal_progress,
                     )

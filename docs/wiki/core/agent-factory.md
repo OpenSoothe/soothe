@@ -384,7 +384,7 @@ subagents:
 ## Related Documentation
 
 - **[SootheRunner](runner.md)** - Protocol orchestration
-- **[StrangeLoop](agent-loop.md)** - Plan-Execute loop
+- **[StrangeLoop](strangeloop.md)** - Plan-Execute loop
 - **[Protocol Resolver](resolver.md)** - Protocol wiring
 - **[Middleware](../architecture/middleware.md)** - Middleware details
 - **[RFC-100](../../specs/RFC-100-coreagent-runtime.md)** - Full specification

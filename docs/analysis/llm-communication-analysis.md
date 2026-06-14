@@ -1031,7 +1031,7 @@ Translation scenario (contamination risk):
 
 **Layer 1 Checkpointer**:
 - `packages/soothe/src/soothe/core/runner/_runner_phases.py`: Message persistence (lines 307-324)
-- `packages/soothe/src/soothe/core/runner/_runner_agentic.py`: Thread loading (lines 191-195)
+- `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py`: Thread loading (lines 191-195)
 
 **Layer 2 State Management**:
 - `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py`: Checkpoint recovery (lines 124-137)
@@ -1118,7 +1118,7 @@ Translation scenario (contamination risk):
 
 **Runner and Orchestration**:
 - `packages/soothe/src/soothe/core/runner/__init__.py`: Main runner
-- `packages/soothe/src/soothe/core/runner/_runner_agentic.py`: Agentic loop driver
+- `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py`: Agentic loop driver
 - `packages/soothe/src/soothe/core/runner/_runner_phases.py`: Stream phases
 
 **Loop Agent**:

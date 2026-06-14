@@ -27,7 +27,7 @@ from ..runtime_context import LoopRuntimeContext
 logger = logging.getLogger(__name__)
 
 # Short event_type names emitted via ``ctx.emit``; the runner dispatch
-# (`_runner_agentic.py`) wraps them in the corresponding wire events
+# (``_runner_strange_loop.py``) wraps them in the corresponding wire events
 # (``soothe.loop.clarification.*``) before yielding to the stream.
 _EVT_CLARIFICATION_REQUESTED = "clarification_requested"
 _EVT_CLARIFICATION_ANSWERED = "clarification_answered"

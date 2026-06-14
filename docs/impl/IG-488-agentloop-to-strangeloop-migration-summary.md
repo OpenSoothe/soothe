@@ -183,8 +183,8 @@ After all fixes, `./scripts/verify_finally.sh` passes:
 - Wiki documentation needs updates
 
 ### Phase 6: Scripts/Diagrams (TODO)
-- `scripts/visualize_agent_loop_graph.py` still uses old naming
-- `docs/diagrams/agent_loop_graph_nodes.md` still uses old naming
+- `scripts/visualize_strange_loop_graph.py` still uses old naming
+- `docs/diagrams/strange_loop_graph_nodes.md` still uses old naming
 
 ## Migration Commands Used
 

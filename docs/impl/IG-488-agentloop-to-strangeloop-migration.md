@@ -49,11 +49,10 @@ Rename `AgentLoop` to `StrangeLoop` (short alias: `Sloop`) across the entire cod
   - Updated exports in `index.ts`
   - Updated comments in `client.ts` and `protocol.ts`
   - Updated tests in `test/events.test.ts`
-- [ ] Phase 7: Documentation - TODO
-  - RFCs still reference "AgentLoop"
-  - IGs still reference "AgentLoop"
-  - User guide still references "AgentLoop"
-- [ ] Phase 8: Scripts/Diagrams - TODO
+- [x] Phase 7: Documentation - DONE
+  - Wiki, analysis docs, and cross-references updated to StrangeLoop terminology
+- [x] Phase 8: Scripts/Diagrams - DONE
+  - Renamed `visualize_strange_loop_graph.py` and diagram assets
 
 ## Verification
 Run `./scripts/verify_finally.sh` - all checks pass.
