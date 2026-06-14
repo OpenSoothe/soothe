@@ -26,26 +26,29 @@ def test_split_sql_statements_splits_multiline_ddl() -> None:
     assert statements[1].startswith("CREATE INDEX idx_foo")
 
 
-def test_split_sql_statements_agentloop_migration_file() -> None:
+def test_split_sql_statements_init_migration_file() -> None:
     scripts = discover_migration_scripts("soothe_checkpoints", sql_root=migration_sql_root())
-    agentloop_script = next(s for s in scripts if s.name == "agentloop_tables")
-    statements = split_sql_statements(agentloop_script.sql)
-    assert len(statements) >= 10
+    init_script = scripts[0]
+    statements = split_sql_statements(init_script.sql)
+    assert len(statements) >= 15
+    assert any(
+        stmt.startswith("CREATE TABLE IF NOT EXISTS soothe_schema_migrations")
+        for stmt in statements
+    )
     assert any(
         stmt.startswith("CREATE TABLE IF NOT EXISTS agentloop_checkpoints") for stmt in statements
     )
 
 
-def test_migration_sql_root_contains_checkpoints_scripts() -> None:
+def test_migration_sql_root_contains_init_script() -> None:
     root = migration_sql_root()
     scripts = discover_migration_scripts("soothe_checkpoints", sql_root=root)
-    versions = [s.version for s in scripts]
-    assert versions == ["000", "001"]
-    assert scripts[0].name == "migration_tracking"
-    assert scripts[1].name == "agentloop_tables"
+    assert len(scripts) == 1
+    assert scripts[0].version == "000"
+    assert scripts[0].name == "init"
     assert "soothe_schema_migrations" in scripts[0].sql
-    assert "agentloop_checkpoints" in scripts[1].sql
-    assert "client_workspace TEXT" in scripts[1].sql
+    assert "agentloop_checkpoints" in scripts[0].sql
+    assert "client_workspace TEXT" in scripts[0].sql
 
 
 def test_discover_rejects_invalid_filename(tmp_path: Path) -> None:
@@ -72,11 +75,13 @@ async def test_run_database_migrations_applies_pending_scripts(tmp_path: Path) -
 
     db_dir = tmp_path / "soothe_checkpoints"
     db_dir.mkdir()
-    (db_dir / "000_track.sql").write_text(
-        "CREATE TABLE soothe_schema_migrations (version TEXT PRIMARY KEY)",
+    (db_dir / "000_init.sql").write_text(
+        """
+        CREATE TABLE soothe_schema_migrations (version TEXT PRIMARY KEY);
+        CREATE TABLE demo (id INT);
+        """,
         encoding="utf-8",
     )
-    (db_dir / "001_data.sql").write_text("CREATE TABLE demo (id INT)", encoding="utf-8")
 
     cur = AsyncMock()
     conn = MagicMock()
@@ -96,9 +101,9 @@ async def test_run_database_migrations_applies_pending_scripts(tmp_path: Path) -
 
     applied = await run_database_migrations(pool, "soothe_checkpoints", sql_root=tmp_path)
 
-    assert applied == ["000", "001"]
+    assert applied == ["000"]
     execute_sql = [call.args[0] for call in cur.execute.call_args_list]
     assert any("CREATE TABLE soothe_schema_migrations" in stmt for stmt in execute_sql)
     assert any("CREATE TABLE demo" in stmt for stmt in execute_sql)
     insert_stmts = [s for s in execute_sql if "INSERT INTO soothe_schema_migrations" in s]
-    assert len(insert_stmts) == 2
+    assert len(insert_stmts) == 1

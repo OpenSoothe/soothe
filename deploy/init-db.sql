@@ -2,7 +2,7 @@
 -- Separate databases by logical purpose for lifecycle isolation, backup granularity,
 -- and pgvector extension requirements.
 
--- Database: soothe_checkpoints (LangGraph + AgentLoop checkpoints - IG-055 shared database)
+-- Database: soothe_checkpoints (LangGraph + StrangeLoop checkpoints - IG-055 shared database)
 SELECT 'CREATE DATABASE soothe_checkpoints'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'soothe_checkpoints')\gexec
 
@@ -27,5 +27,5 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'langfuse')\gexec
 \c soothe_vectors
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Note: soothe_checkpoints AgentLoop tables are created/upgraded automatically on
+-- Note: soothe_checkpoints StrangeLoop tables are created/upgraded automatically on
 -- pool open from packages/soothe/.../persistence/sql/soothe_checkpoints/*.sql
