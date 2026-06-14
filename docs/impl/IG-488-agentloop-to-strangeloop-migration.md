@@ -1,11 +1,16 @@
 # IG-488: AgentLoop → StrangeLoop Name Migration
 
 ## Scope
-Rename `AgentLoop` to `StrangeLoop` (short alias: `Sloop`) across the entire codebase.
+Renamed `AgentLoop` to `StrangeLoop` (short alias: `Sloop`) across the entire codebase.
 
-## Naming Decisions
-| Old | New |
-|-----|-----|
+> **Historical Context**: This migration was completed on 2025-06-14. The `AgentLoop` naming originated from early design iterations and was replaced with `StrangeLoop` to better reflect the self-referential, recursive nature of the orchestration pattern. All references below document the completed transformation.
+
+## Naming Mapping (Completed Migration)
+
+The following table documents the naming changes that were applied:
+
+| Original Name | Migrated Name |
+|---------------|---------------|
 | `AgentLoop` class | `StrangeLoop` (alias: `Sloop`) |
 | `AgentLoopProtocol` | `StrangeLoopProtocol` |
 | `agent_loop.py` file | `strange_loop.py` |
@@ -21,38 +26,48 @@ Rename `AgentLoop` to `StrangeLoop` (short alias: `Sloop`) across the entire cod
 | `ContextCompactionEvent` | `StrangeLoopContextCompactionEvent` |
 | Event namespace `soothe.cognition.agent_loop.*` | `soothe.cognition.strange_loop.*` |
 
-## Status
-- [x] Phase 1: Core Python (classes, protocols, files) - DONE
-  - Classes renamed: `agent_loop.py` → `strange_loop.py`, `manager.py` → `sloop_manager.py`
-  - RuntimeContext updated: `agent_loop` field → `strange_loop` field
-  - Orchestrator builder/runner updated
-- [x] Phase 2: Events - DONE
-  - Event classes renamed: `Agentic*` → `StrangeLoop*`
-  - Event registrations updated in catalog.py
-  - Exports updated in `__init__.py`
-- [x] Phase 3: Tests - DONE
-  - Mock patch paths updated to new module paths
-  - Test imports updated to use `StrangeLoop*` names
-- [x] Phase 4: Backward Compatibility Removal - DONE
-  - Removed all `Agentic* = StrangeLoop*` aliases from catalog.py
-  - Removed `Agentic*` exports from `__init__.py`
-  - Removed `_STRANGE_LOOP_CHECKPOINT_STATUSES` alias
-  - Updated SDK comment to use `StrangeLoopStepCompletedEvent`
-  - Updated runner imports to use `StrangeLoop*` event names
-- [x] Phase 5: Go Client - DONE
-  - Updated `client/go/events.go`: `EventAgentLoop*` → `EventStrangeLoop*`
-  - Updated event namespace: `soothe.cognition.agent_loop.*` → `soothe.cognition.strange_loop.*`
-  - Updated comments referencing AgentLoop
-- [x] Phase 6: TypeScript Client - DONE
-  - Updated `client/typescript/src/events.ts`: `EventAgentLoop*` → `EventStrangeLoop*`
-  - Updated `ESSENTIAL_EVENT_TYPES` set
-  - Updated exports in `index.ts`
-  - Updated comments in `client.ts` and `protocol.ts`
-  - Updated tests in `test/events.test.ts`
-- [x] Phase 7: Documentation - DONE
-  - Wiki, analysis docs, and cross-references updated to StrangeLoop terminology
-- [x] Phase 8: Scripts/Diagrams - DONE
-  - Renamed `visualize_strange_loop_graph.py` and diagram assets
+## Completed Migration Phases
+
+All phases of this migration were completed and verified:
+
+### Phase 1: Core Python (classes, protocols, files)
+- Renamed `agent_loop.py` → `strange_loop.py`, `manager.py` → `sloop_manager.py`
+- Updated RuntimeContext: `agent_loop` field → `strange_loop` field
+- Updated Orchestrator builder/runner
+
+### Phase 2: Events
+- Renamed event classes: `Agentic*` → `StrangeLoop*`
+- Updated event registrations in catalog.py
+- Updated exports in `__init__.py`
+
+### Phase 3: Tests
+- Updated mock patch paths to new module paths
+- Updated test imports to use `StrangeLoop*` names
+
+### Phase 4: Backward Compatibility Removal
+- Removed all `Agentic* = StrangeLoop*` aliases from catalog.py
+- Removed `Agentic*` exports from `__init__.py`
+- Removed `_STRANGE_LOOP_CHECKPOINT_STATUSES` alias
+- Updated SDK comment to use `StrangeLoopStepCompletedEvent`
+- Updated runner imports to use `StrangeLoop*` event names
+
+### Phase 5: Go Client
+- Updated `client/go/events.go`: `EventAgentLoop*` → `EventStrangeLoop*`
+- Updated event namespace: `soothe.cognition.agent_loop.*` → `soothe.cognition.strange_loop.*`
+- Updated comments referencing AgentLoop
+
+### Phase 6: TypeScript Client
+- Updated `client/typescript/src/events.ts`: `EventAgentLoop*` → `EventStrangeLoop*`
+- Updated `ESSENTIAL_EVENT_TYPES` set
+- Updated exports in `index.ts`
+- Updated comments in `client.ts` and `protocol.ts`
+- Updated tests in `test/events.test.ts`
+
+### Phase 7: Documentation
+- Updated Wiki, analysis docs, and cross-references to StrangeLoop terminology
+
+### Phase 8: Scripts/Diagrams
+- Renamed `visualize_strange_loop_graph.py` and diagram assets
 
 ## Verification
-Run `./scripts/verify_finally.sh` - all checks pass.
+All changes were verified with `./scripts/verify_finally.sh` - all checks passed.

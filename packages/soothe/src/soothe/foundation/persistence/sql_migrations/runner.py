@@ -1,8 +1,10 @@
 """Apply ordered SQL migration scripts on PostgreSQL pool open / database init.
 
-Scripts live under ``soothe/core/persistence/sql/<database>/`` as
+Scripts live under ``soothe/foundation/persistence/sql/<database>/`` as
 ``NNN_snake_name.sql`` (three-digit version prefix). Applied versions are
 recorded in ``soothe_schema_migrations`` so restarts only run pending scripts.
+
+Simplified for dev-only use: no checksum validation, fresh database init only.
 """
 
 from __future__ import annotations
@@ -31,17 +33,12 @@ class MigrationScript:
     version: str
     name: str
     path: Path
-    checksum: str
     sql: str
 
 
 def migration_sql_root() -> Path:
     """Directory containing per-database SQL script folders."""
     return Path(__file__).resolve().parent.parent / "sql"
-
-
-def _script_checksum(sql: str) -> str:
-    return hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
 
 def split_sql_statements(sql: str) -> list[str]:
@@ -104,7 +101,6 @@ def discover_migration_scripts(
                 version=version,
                 name=name,
                 path=path,
-                checksum=_script_checksum(sql),
                 sql=sql,
             )
         )
@@ -117,23 +113,23 @@ def _advisory_lock_key(database: str) -> int:
     return int.from_bytes(digest[:8], "big") & 0x7FFF_FFFF_FFFF_FFFF
 
 
-async def _fetch_applied_versions(pool: AsyncConnectionPool) -> dict[str, str]:
+async def _fetch_applied_versions(pool: AsyncConnectionPool) -> set[str]:
+    """Fetch already-applied migration versions from tracking table."""
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT version, checksum
+                SELECT version
                 FROM soothe_schema_migrations
                 ORDER BY version
                 """
             )
             rows = await cur.fetchall()
-    if not rows:
-        return {}
-    return {row["version"]: row["checksum"] for row in rows}
+    return {row["version"] for row in rows}
 
 
 async def _apply_script(pool: AsyncConnectionPool, script: MigrationScript) -> None:
+    """Apply a single migration script and record it."""
     async with pool.connection() as conn:
         await conn.set_autocommit(False)
         try:
@@ -143,10 +139,10 @@ async def _apply_script(pool: AsyncConnectionPool, script: MigrationScript) -> N
                         await cur.execute(statement)
                     await cur.execute(
                         """
-                        INSERT INTO soothe_schema_migrations (version, name, checksum)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO soothe_schema_migrations (version, name)
+                        VALUES (%s, %s)
                         """,
-                        (script.version, script.name, script.checksum),
+                        (script.version, script.name),
                     )
         finally:
             await conn.set_autocommit(True)
@@ -161,8 +157,7 @@ async def run_database_migrations(
     """Run pending SQL migrations for ``database`` (pool open / init hook).
 
     Uses a PostgreSQL advisory lock so concurrent pool opens do not apply
-    the same migration twice. Already-applied versions are skipped; if a
-    script file changes after apply, raises ``RuntimeError``.
+    the same migration twice. Already-applied versions are skipped.
 
     Args:
         pool: Open connection pool connected to the target database.
@@ -174,7 +169,6 @@ async def run_database_migrations(
 
     Raises:
         FileNotFoundError: No script directory for ``database``.
-        RuntimeError: Checksum mismatch for an applied migration.
     """
     scripts = discover_migration_scripts(database, sql_root=sql_root)
     if not scripts:
@@ -188,7 +182,7 @@ async def run_database_migrations(
         async with conn.cursor() as cur:
             await cur.execute("SELECT pg_advisory_lock(%s)", (lock_key,))
         try:
-            applied: dict[str, str] = {}
+            applied: set[str] = set()
             try:
                 applied = await _fetch_applied_versions(pool)
             except Exception as exc:
@@ -202,14 +196,7 @@ async def run_database_migrations(
                 )
 
             for script in scripts:
-                known_checksum = applied.get(script.version)
-                if known_checksum is not None:
-                    if known_checksum != script.checksum:
-                        msg = (
-                            f"Migration {script.version} ({script.name}) was already applied "
-                            f"with a different checksum; refusing to continue"
-                        )
-                        raise RuntimeError(msg)
+                if script.version in applied:
                     continue
 
                 logger.info(
@@ -219,7 +206,7 @@ async def run_database_migrations(
                     database,
                 )
                 await _apply_script(pool, script)
-                applied[script.version] = script.checksum
+                applied.add(script.version)
                 applied_versions.append(script.version)
         finally:
             async with conn.cursor() as cur:

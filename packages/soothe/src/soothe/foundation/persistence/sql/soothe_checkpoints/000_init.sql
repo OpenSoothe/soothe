@@ -1,5 +1,13 @@
--- AgentLoop persistence tables (RFC-612, IG-055). Idempotent bootstrap / upgrade base.
+-- StrangeLoop persistence schema (RFC-612, IG-055). Single init script for fresh database.
 
+-- Migration tracking table
+CREATE TABLE IF NOT EXISTS soothe_schema_migrations (
+    version TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- StrangeLoop checkpoint tables
 CREATE TABLE IF NOT EXISTS agentloop_checkpoints (
     loop_id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL,
