@@ -75,6 +75,7 @@ class WizsearchSearchTool(BaseTool):
     def _run(
         self,
         query: str,
+        limit: int | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -82,17 +83,19 @@ class WizsearchSearchTool(BaseTool):
 
         Args:
             query: Search query.
+            limit: Alias for max_results_per_engine (for backward compatibility).
             max_results_per_engine: Max results per engine.
             timeout_seconds: Request timeout.
 
         Returns:
             Formatted search results.
         """
+        # Use limit if provided, otherwise fall back to max_results_per_engine or default
+        effective_max = limit or max_results_per_engine or self.default_max_results_per_engine
         return _run_coro(
             perform_wizsearch_search(
                 query=query,
-                max_results_per_engine=max_results_per_engine
-                or self.default_max_results_per_engine,
+                max_results_per_engine=effective_max,
                 timeout_seconds=timeout_seconds or self.default_timeout,
                 engines=self.default_engines,
                 debug_mode=self.debug_mode,
@@ -103,6 +106,7 @@ class WizsearchSearchTool(BaseTool):
     async def _arun(
         self,
         query: str,
+        limit: int | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -110,15 +114,18 @@ class WizsearchSearchTool(BaseTool):
 
         Args:
             query: Search query.
+            limit: Alias for max_results_per_engine (for backward compatibility).
             max_results_per_engine: Max results per engine.
             timeout_seconds: Request timeout.
 
         Returns:
             Formatted search results.
         """
+        # Use limit if provided, otherwise fall back to max_results_per_engine or default
+        effective_max = limit or max_results_per_engine or self.default_max_results_per_engine
         return await perform_wizsearch_search(
             query=query,
-            max_results_per_engine=max_results_per_engine or self.default_max_results_per_engine,
+            max_results_per_engine=effective_max,
             timeout_seconds=timeout_seconds or self.default_timeout,
             engines=self.default_engines,
             debug_mode=self.debug_mode,
