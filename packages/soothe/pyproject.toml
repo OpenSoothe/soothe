@@ -85,6 +85,9 @@ semantic = [
 langfuse = [
     "langfuse>=3.0.0,<4.0.0",
 ]
+quickjs = [
+    "langchain-quickjs>=0.1.0",
+]
 dashscope = [
     "dashscope>=1.20.0",
 ]

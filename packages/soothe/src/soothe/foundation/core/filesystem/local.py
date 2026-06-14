@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import hashlib
 import shutil
@@ -18,6 +19,7 @@ from .exceptions import (
     PathTraversalError,
     PermissionDeniedError,
 )
+from .grep_search import grep_with_ag, is_ag_available
 from .protocol import (
     DeleteResult,
     EditResult,
@@ -853,9 +855,39 @@ class LocalFilesystem(UnifiedFilesystem):
         output_mode: str = "files_with_matches",
     ) -> GrepResult | list[str] | str:
         """Search for pattern in files."""
-        import re
-
         resolved = self._resolve_path(path)
+
+        if not resolved.is_dir() and not resolved.is_file():
+            return GrepResult(matches=[])
+
+        if is_ag_available():
+            ag_result = grep_with_ag(
+                workspace=self.workspace,
+                search_path=resolved,
+                pattern=pattern,
+                glob=glob,
+                output_mode=output_mode,
+            )
+            if ag_result is not None:
+                return ag_result
+
+        return self._grep_python_walk(
+            pattern,
+            resolved=resolved,
+            glob=glob,
+            output_mode=output_mode,
+        )
+
+    def _grep_python_walk(
+        self,
+        pattern: str,
+        *,
+        resolved: Path,
+        glob: str | None,
+        output_mode: str,
+    ) -> GrepResult | list[str] | str:
+        """Fallback grep: walk the tree and scan file contents in Python."""
+        import re
 
         if not resolved.is_dir():
             return GrepResult(matches=[])
@@ -863,7 +895,7 @@ class LocalFilesystem(UnifiedFilesystem):
         matches: list[GrepMatch] = []
         files_searched = 0
 
-        for root, dirs, files in __import__("os").walk(resolved):
+        for root, _dirs, files in __import__("os").walk(resolved):
             for name in files:
                 if glob and not fnmatch.fnmatch(name, glob):
                     continue
@@ -899,10 +931,9 @@ class LocalFilesystem(UnifiedFilesystem):
 
         if output_mode == "files_with_matches":
             return list({m.path for m in matches})
-        elif output_mode == "count":
+        if output_mode == "count":
             return str(len(matches))
-        else:
-            return result
+        return result
 
     async def agrep(
         self,
@@ -913,4 +944,10 @@ class LocalFilesystem(UnifiedFilesystem):
         output_mode: str = "files_with_matches",
     ) -> GrepResult | list[str] | str:
         """Async search for pattern in files."""
-        return self.grep(pattern, path=path, glob=glob, output_mode=output_mode)
+        return await asyncio.to_thread(
+            self.grep,
+            pattern,
+            path=path,
+            glob=glob,
+            output_mode=output_mode,
+        )
