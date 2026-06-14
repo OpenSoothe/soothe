@@ -84,7 +84,13 @@ def _render_prior_progress(digest: PriorProgressDigest) -> str:
 
 
 def _render_dag_status(dag_ctx: Any) -> str:
-    """Render DagPlanningContext as plain-text DAG STATUS section."""
+    """Render DagPlanningContext as plain-text DAG STATUS section.
+
+    Accepts either a DagPlanningContext object or a pre-rendered string.
+    """
+    # Handle pre-rendered string (already formatted by _format_dag_context)
+    if isinstance(dag_ctx, str):
+        return dag_ctx
     if not dag_ctx or not dag_ctx.has_prior_state:
         return ""
     lines = [f"- Total steps planned: {dag_ctx.total_steps}"]
