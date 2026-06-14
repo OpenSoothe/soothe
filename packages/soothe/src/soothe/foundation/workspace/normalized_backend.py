@@ -20,6 +20,33 @@ logger = logging.getLogger(__name__)
 _DEFAULT_READ_LINE_LIMIT = 2000
 
 
+def _coerce_fs_grep_to_da_matches(result: Any) -> list[dict[str, Any]]:
+    """Convert filesystem grep results to deepagents ``GrepMatch`` dicts."""
+    from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
+
+    matches: list[dict[str, Any]] = []
+    if isinstance(result, FsGrepResult):
+        for match in result.matches:
+            matches.append(
+                {
+                    "path": match.path,
+                    "line": match.line_number,
+                    "text": match.line_content,
+                }
+            )
+    elif isinstance(result, list):
+        for item in result:
+            if isinstance(item, dict):
+                matches.append(item)
+            elif isinstance(item, str):
+                matches.append({"path": item, "line": 0, "text": ""})
+    elif isinstance(result, str) and result:
+        for line in result.split("\n"):
+            if line:
+                matches.append({"path": line, "line": 0, "text": ""})
+    return matches
+
+
 def _read_result_for_path(
     fs: Any,
     normalized: str,
@@ -449,19 +476,7 @@ class NormalizedPathBackend:
         try:
             result = self._fs.grep(pattern, path=normalized, glob=glob, output_mode=output_mode)
 
-            # Convert to GrepResult format with GrepMatch dicts
-            matches = []
-            if isinstance(result, str) and result:
-                # For files_with_matches, result is newline-separated paths
-                for line in result.split("\n"):
-                    if line:
-                        matches.append({"path": line, "line": 0, "text": ""})
-            elif isinstance(result, list):
-                for item in result:
-                    if isinstance(item, dict):
-                        matches.append(item)
-                    elif isinstance(item, str):
-                        matches.append({"path": item, "line": 0, "text": ""})
+            matches = _coerce_fs_grep_to_da_matches(result)
 
             return GrepResult(error=None, matches=matches)
         except Exception as e:
@@ -493,18 +508,7 @@ class NormalizedPathBackend:
                 pattern, path=normalized, glob=glob, output_mode=output_mode
             )
 
-            # Convert to GrepResult format with GrepMatch dicts
-            matches = []
-            if isinstance(result, str) and result:
-                for line in result.split("\n"):
-                    if line:
-                        matches.append({"path": line, "line": 0, "text": ""})
-            elif isinstance(result, list):
-                for item in result:
-                    if isinstance(item, dict):
-                        matches.append(item)
-                    elif isinstance(item, str):
-                        matches.append({"path": item, "line": 0, "text": ""})
+            matches = _coerce_fs_grep_to_da_matches(result)
 
             return GrepResult(error=None, matches=matches)
         except Exception as e:

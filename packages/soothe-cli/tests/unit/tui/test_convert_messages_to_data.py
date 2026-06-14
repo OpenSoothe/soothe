@@ -289,7 +289,7 @@ def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
     replay leave the started card stuck at "Running..." while a duplicate
     "(step) Completed" card appears next to it. The merge must also keep
     the description from ``step.started`` — the
-    ``AgenticStepCompletedEvent`` schema does not include ``description``.
+    ``StrangeLoopStepCompletedEvent`` schema does not include ``description``.
     """
     events = [
         {
