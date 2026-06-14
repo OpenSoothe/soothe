@@ -260,7 +260,7 @@ def merge_langfuse_runnable_config(
     """
     if not soothe_config.observability.langfuse.enabled:
         return base
-    # Use fresh handler for independent traces (e.g., intent classification before agent-loop-graph)
+    # Use fresh handler for independent traces (e.g., intent classification before strange-loop-graph)
     handler = (
         _create_fresh_langfuse_handler(soothe_config)
         if fresh_handler
@@ -363,7 +363,7 @@ def build_traced_config(
         loop_id: Optional loop identifier for trace correlation across sub-traces.
         independent_trace: When True, creates a fresh handler with new trace_id to avoid
             nesting under a prior trace's OpenTelemetry context. Use for LLM calls that
-            should be standalone root traces (e.g., intent classification before agent-loop-graph).
+            should be standalone root traces (e.g., intent classification before strange-loop-graph).
 
     Returns:
         RunnableConfig dict with callbacks and metadata ready for ``model.ainvoke(..., config=)``.
@@ -466,7 +466,7 @@ def patch_langfuse_trace_goal_io(
         config: RunnableConfig passed to ``CompiledGraph.ainvoke`` (must include Langfuse handler).
         goal_text: User goal string for trace input.
         output_text: Final user-visible answer for trace output (may be empty).
-        trace_display_name: Root trace title (must match graph ``run_name``, e.g. ``…:agent-loop-graph``).
+        trace_display_name: Root trace title (must match graph ``run_name``, e.g. ``…:strange-loop-graph``).
         public_key: Resolved Langfuse public key for ``get_client`` (multi-project safe).
         session_id: Conversation thread id for Langfuse session correlation (optional).
     """

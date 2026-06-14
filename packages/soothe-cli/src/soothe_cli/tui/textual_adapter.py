@@ -158,7 +158,7 @@ class TextualUIAdapter:
         """Stable tool_call_id → step card for subagent activity and pending-tool routing."""
 
         self._current_step_messages: dict[str, CognitionStepMessage] = {}
-        """Map of agent-loop act step IDs to step card widgets."""
+        """Map of StrangeLoop act step IDs to step card widgets."""
 
         self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
         """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""

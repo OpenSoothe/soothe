@@ -705,7 +705,7 @@ If complete → Return final response
 
 **Max iterations**: 10 (configurable)
 
-See [Architecture Overview - StrangeLoop](core/agent-loop.md).
+See [Architecture Overview - StrangeLoop](core/strangeloop.md).
 
 ---
 

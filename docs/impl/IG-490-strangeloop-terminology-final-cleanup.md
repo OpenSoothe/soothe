@@ -52,6 +52,14 @@ Database table names `agentloop_checkpoints` and `agentloop_loops` remain unchan
 to maintain migration checksum compatibility with existing databases. The SQL
 migration filename `001_agentloop_tables.sql` also remains unchanged.
 
+### 9. Runner and Client Terminology (IG-488 Phase 7/8 completion)
+- Renamed `_runner_agentic.py` → `_runner_strange_loop.py`
+- Renamed `AgenticMixin` → `StrangeLoopMixin`, `_run_agentic_loop` → `_run_strange_loop`
+- Updated desktop app event namespaces: `soothe.cognition.agent_loop.*` → `soothe.cognition.strange_loop.*`
+- Renamed test files: `test_agent_loop_*` → `test_strange_loop_*`, `test_agentic_*` → `test_strange_loop_*`
+- Renamed wiki `agent-loop.md` → `strangeloop.md` and updated cross-references
+- Renamed diagram/script assets to `strange_loop_graph.*` and `visualize_strange_loop_graph.py`
+
 ## Verification
 - All lint checks pass
 - All tests pass

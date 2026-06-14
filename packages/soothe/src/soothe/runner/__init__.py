@@ -18,7 +18,7 @@ single-goal worker path.
 Implementation is decomposed into mixins:
 
 - `PhasesMixin`     -- pre-stream helpers (threads, policy, memory, plan bootstrap)
-- `AgenticMixin`    -- agentic loop (RFC-0008)
+- `StrangeLoopMixin` -- StrangeLoop execution (RFC-0008)
 - `AutopilotWorkerMixin` -- single-goal worker entry (RFC-222 revised)
 - `CheckpointMixin` -- progressive checkpoint, artifacts, reports (RFC-0010)
 """
@@ -35,11 +35,11 @@ from soothe.foundation.workspace import resolve_workspace_for_stream
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
 
-from ._runner_agentic import AgenticMixin
 from ._runner_autopilot_worker import AutopilotWorkerMixin
 from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
+from ._runner_strange_loop import StrangeLoopMixin
 from ._types import generate_thread_id
 
 # Re-export types
@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 class SootheRunner(
     CheckpointMixin,
     AutopilotWorkerMixin,
-    AgenticMixin,
+    StrangeLoopMixin,
     PhasesMixin,
 ):
     """Protocol-orchestrated agent runner.
@@ -606,8 +606,8 @@ class SootheRunner(
                     yield chunk
                 return
 
-            # Default: agentic loop (RFC-0008)
-            async for chunk in self._run_agentic_loop(
+            # Default: StrangeLoop execution (RFC-0008)
+            async for chunk in self._run_strange_loop(
                 user_input,
                 thread_id=thread_id,
                 workspace=effective_workspace,

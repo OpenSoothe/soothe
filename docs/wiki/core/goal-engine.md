@@ -599,7 +599,7 @@ backoff:
 
 ## Related Documentation
 
-- **[StrangeLoop](agent-loop.md)** - Goal execution integration
+- **[StrangeLoop](strangeloop.md)** - Goal execution integration
 - **[SootheRunner](runner.md)** - Runner orchestration
 - **[Backoff Reasoning](../architecture/backoff-reasoning.md)** - Backoff details
 - **[Autopilot Service](../daemon/autopilot.md)** - Daemon integration

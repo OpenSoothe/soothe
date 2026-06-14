@@ -39,9 +39,9 @@ the answer instead of generating "Propose 2-3 approaches…" cold.
 | `core/loop/clarification/runtime_factory.py` (new) | `resolve_clarification_mode` (request → config fallback) + `build_clarification_policy_for_runner` (mode → `AutoClarificationPolicy` or `InteractiveClarificationPolicy`, defers chat-model construction to auto mode only). |
 | `core/loop/clarification/__init__.py` | Re-export the new helpers. |
 | `core/loop/engine/strange_loop.py` | `run_with_progress(... clarification_policy=...)` plumbs through into `LoopRuntimeContext`. |
-| `core/runner/_runner_agentic.py` | Builds the policy per goal from per-request mode (Slice B) + config default, forwards to `StrangeLoop.run_with_progress`. Errors degrade to `None` (legacy defer). |
+| `core/runner/_runner_strange_loop.py` | Builds the policy per goal from per-request mode (Slice B) + config default, forwards to `StrangeLoop.run_with_progress`. Errors degrade to `None` (legacy defer). |
 | `core/runner/_runner_autopilot_worker.py` | Always builds the policy with `mode="auto"` — autopilot is headless. |
-| `core/runner/__init__.py` (`astream`) | `clarification_mode` kwarg passes through to `_run_agentic_loop`. |
+| `core/runner/__init__.py` (`astream`) | `clarification_mode` kwarg passes through to `_run_strange_loop`. |
 | `config/models.py` (`ClarificationConfig`) | New `default_mode: Literal["auto","manual"] = "auto"` field. |
 | `config/config.template.yml` | Added `default_mode` to the documented template. (`config.dev.yml` follows the convention of omitting keys that match defaults.) |
 

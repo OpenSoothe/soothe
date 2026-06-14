@@ -297,7 +297,7 @@ def build_clarification_policy_for_runner(config, *, mode=None, emit=None):
     )
 ```
 
-`build_default_clarification_policy` is extended with an optional `interactive_fallback` keyword that it forwards to `AutoClarificationPolicy`. Autopilot worker (which constructs the policy with `emit=None`) gets `interactive_fallback=None` — the fallback is silently disabled and behavior on veritas failure is identical to today (hard defer). Interactive callers (`_runner_agentic`) wire `emit`, getting the fallback automatically.
+`build_default_clarification_policy` is extended with an optional `interactive_fallback` keyword that it forwards to `AutoClarificationPolicy`. Autopilot worker (which constructs the policy with `emit=None`) gets `interactive_fallback=None` — the fallback is silently disabled and behavior on veritas failure is identical to today (hard defer). Interactive callers (`_runner_strange_loop`) wire `emit`, getting the fallback automatically.
 
 ### 5.6 `await_clarification` event payload
 
@@ -357,7 +357,7 @@ Same call, but the model returns malformed JSON. `invoke_structured_chat` exhaus
 
 ### 6.3 Forced defer in interactive run
 
-Same scenario but a TUI is attached: `_runner_agentic` wired `emit`, so `interactive_fallback=InteractiveClarificationPolicy(emit=emit)`. Policy detects `kind="structured_output_failed"`, calls `interactive_fallback.answer(request)`. The interactive policy emits `clarification_requested` with `mode="manual"`, then calls `interrupt(...)`. The LangGraph checkpointer captures the pending question; the TUI renders the prompt; the operator types an answer; `Command(resume=...)` returns the payload. Veritas's failure is invisible to the policy's caller — the loop continues with the human's answer.
+Same scenario but a TUI is attached: `_runner_strange_loop` wired `emit`, so `interactive_fallback=InteractiveClarificationPolicy(emit=emit)`. Policy detects `kind="structured_output_failed"`, calls `interactive_fallback.answer(request)`. The interactive policy emits `clarification_requested` with `mode="manual"`, then calls `interrupt(...)`. The LangGraph checkpointer captures the pending question; the TUI renders the prompt; the operator types an answer; `Command(resume=...)` returns the payload. Veritas's failure is invisible to the policy's caller — the loop continues with the human's answer.
 
 ---
 
