@@ -76,7 +76,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 - **[Core Modules Overview](core/README.md)** ⭐ - Core framework architecture
   - **[Agent Factory](core/agent-factory.md)** - CoreAgent construction and runtime
   - **[SootheRunner](core/runner.md)** - Protocol-orchestrated execution
-  - **[StrangeLoop](core/agent-loop.md)** - Plan-Execute loop for single goals
+  - **[StrangeLoop](core/strangeloop.md)** - Plan-Execute loop for single goals
   - **[GoalEngine](core/goal-engine.md)** - Autonomous goal management
   - **[Event System](core/events.md)** - Event infrastructure and registration
   - **[Protocol Resolver](core/resolver.md)** - Protocol wiring from config

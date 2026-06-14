@@ -100,7 +100,7 @@ Key responsibilities:
 - Goal-directed evaluation
 - Adaptive execution
 
-**Documentation**: [StrangeLoop](agent-loop.md)
+**Documentation**: [StrangeLoop](strangeloop.md)
 
 ---
 

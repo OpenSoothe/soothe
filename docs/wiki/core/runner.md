@@ -110,7 +110,7 @@ SootheRunner is decomposed into focused mixins:
 ```python
 class SootheRunner(
     PhasesMixin,           # Pre-stream helpers
-    AgenticMixin,          # Agentic loop
+    StrangeLoopMixin,          # Agentic loop
     AutopilotWorkerMixin,  # Single-goal worker
     CheckpointMixin        # Progressive checkpoint
 ):
@@ -124,7 +124,7 @@ Pre-stream helpers:
 - Memory restoration
 - Context projection
 
-#### AgenticMixin
+#### StrangeLoopMixin
 Agentic loop orchestration:
 - StrangeLoop integration
 - Plan phase handling
@@ -473,7 +473,7 @@ thread:
 ## Related Documentation
 
 - **[Agent Factory](agent-factory.md)** - CoreAgent creation
-- **[StrangeLoop](agent-loop.md)** - Plan-Execute loop
+- **[StrangeLoop](strangeloop.md)** - Plan-Execute loop
 - **[Protocol Resolver](resolver.md)** - Protocol wiring
 - **[Thread Management](../user-guide/thread-management.md)** - User guide
 - **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** - Architecture spec

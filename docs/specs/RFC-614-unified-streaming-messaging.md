@@ -33,7 +33,7 @@ Daemon output emission owns suppression boundaries for StrangeLoop execution:
 ### Current Limitations
 
 **IG-119 Filtering Barrier**:
-The runner's IG-119 filtering logic (`_runner_agentic.py` lines 541-545) blocks plain AIMessage chunks to prevent duplicate stdout in multi-step execution. Only tool-related chunks (ToolMessage + AI tool_invocation metadata) pass through.
+The runner's IG-119 filtering logic (`_runner_strange_loop.py` lines 541-545) blocks plain AIMessage chunks to prevent duplicate stdout in multi-step execution. Only tool-related chunks (ToolMessage + AI tool_invocation metadata) pass through.
 
 **Special-Case Workaround**:
 `final_report_stream` is hard-coded special case (lines 547-570) that:
@@ -266,7 +266,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 ### Phase 2: Runner Layer (Stream Generation)
 
 **Primary modules**:
-1. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
+1. `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
 2. `packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py` — emit `stream_event` tuples consumed by the runner.
 
 **Forwarding contract** (summary): forward **tool UI** `messages` chunks; forward **loop assistant** `messages` chunks when `assistant_output_phase(...)` is non-null; suppress plain execute-phase assistant prose.

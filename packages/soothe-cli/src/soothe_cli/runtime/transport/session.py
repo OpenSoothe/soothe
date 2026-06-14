@@ -442,7 +442,7 @@ class TuiDaemonSession:
         )
 
     async def aget_loop_state(self, loop_id: str) -> Any:
-        """Load agent-loop state channels from the daemon (``loop_state_get`` RPC).
+        """Load StrangeLoop state channels from the daemon (``loop_state_get`` RPC).
 
         Returns a namespace with a ``values`` mapping so history code can share the
         same consumption pattern as the in-process agent snapshot, without passing

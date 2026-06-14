@@ -112,7 +112,7 @@ quiz        agentic      subagent?
 quiz        default      direct
 response    mode         execution
                 ↓
-        _run_agentic_loop()
+        _run_strange_loop()
 ```
 
 **Routing Logic:**
@@ -125,7 +125,7 @@ response    mode         execution
 
 **Key files:**
 - `packages/soothe/src/soothe/core/runner/__init__.py` — Runner package entry
-- `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — Agentic loop
+- `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` — Agentic loop
 - `packages/soothe/src/soothe/core/runner/_runner_autonomous.py` — Autonomous mode
 
 ## 4. Agentic Loop (RFC-200)
@@ -179,7 +179,7 @@ The default execution mode follows an iterative observe-act-verify cycle:
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — Agentic loop
+- `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` — Agentic loop
 - `packages/soothe/src/soothe/core/runner/_runner_phases.py` — Phase helpers
 
 ## 5. Planning (StrangeLoop + LLMPlanner)
@@ -420,7 +420,7 @@ User Query
 | Daemon | `packages/soothe/src/soothe/daemon/server.py` | Daemon server |
 | Daemon | `packages/soothe/src/soothe/daemon/_handlers.py` | Query handling |
 | Runner | `packages/soothe/src/soothe/core/runner/__init__.py` | Runner package |
-| Runner | `packages/soothe/src/soothe/core/runner/_runner_agentic.py` | Agentic loop |
+| Runner | `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` | Agentic loop |
 | Runner | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Pre-stream (thread, policy, memory, plan bootstrap) |
 | Planning | `packages/soothe/src/soothe/core/strange_loop/core/planner.py` | `LLMPlanner` (RFC-604) |
 | Agent | `packages/soothe/src/soothe/core/agent.py` | CoreAgent factory |

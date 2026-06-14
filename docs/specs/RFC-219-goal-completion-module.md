@@ -62,7 +62,7 @@ packages/soothe/src/soothe/core/
 │   ├── core/strange_loop.py                   # invokes goal-completion flow
 │   ├── core/plan_phase.py
 │   └── core/executor.py
-└── runner/                                  # wires StrangeLoop + streaming (e.g. _runner_agentic)
+└── runner/                                  # wires StrangeLoop + streaming (e.g. _runner_strange_loop)
 ```
 *(Historical draft showed `cognition/strange_loop/completion/`; implementation lives under `core/` per IG consolidation.)*
 
