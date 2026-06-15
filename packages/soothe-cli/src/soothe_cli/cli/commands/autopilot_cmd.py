@@ -10,6 +10,7 @@ import asyncio
 import os
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 import typer
@@ -124,12 +125,40 @@ def submit(
 
 @app.command("status")
 def status() -> None:
-    """Show overall autopilot state from the daemon."""
+    """Show overall autopilot state and goal DAG summary."""
     client = _require_daemon_http()
     data = client.status()
-    typer.echo(f"Autopilot state: {data.get('state', data.get('status', 'unknown'))}")
-    if "active_goals" in data:
-        typer.echo(f"Active goals: {len(data['active_goals'])}")
+    state = data.get("state", data.get("status", "unknown"))
+    running = data.get("running", False)
+    dreaming = data.get("dreaming", False)
+    typer.echo(f"Autopilot state: {state}")
+    typer.echo(f"Scheduling loop: {'running' if running else 'stopped'}")
+    if dreaming:
+        typer.echo("Dreaming: yes")
+    loop_pool = data.get("loop_pool")
+    if isinstance(loop_pool, dict) and loop_pool:
+        typer.echo(f"Worker pool: {loop_pool}")
+
+    jobs = client.list_jobs().get("jobs") or []
+    goals = client.list_goals().get("goals") or []
+    typer.echo(f"\nJobs (root goals): {len(jobs)}")
+    if goals:
+        counts = Counter(str(g.get("status", "pending")) for g in goals)
+        typer.echo(f"Goals in DAG: {len(goals)}")
+        for stat, count in sorted(counts.items()):
+            typer.echo(f"  {stat}: {count}")
+    elif not jobs:
+        typer.echo("Goals in DAG: 0")
+
+    if jobs:
+        typer.echo("\nJobs:")
+        for j in jobs:
+            jid = str(j.get("id", "?"))
+            sid = jid[:8]
+            sstat = j.get("status", "pending")
+            sdesc = preview_first(j.get("description", ""), 50)
+            typer.echo(f"  [{sid}] {sstat:10s}  {sdesc}")
+        typer.echo("\nFull DAG for a job: soothe autopilot job <job_id>")
 
 
 @app.command("list")
@@ -139,8 +168,20 @@ def list_jobs(
     """List jobs (root goals) from the daemon autopilot.
 
     Jobs are user-submitted tasks. Subgoals created during autonomous
-    execution are not shown here; use 'goal <id>' to inspect subgoals.
+    execution are not shown here; use ``goals`` or ``goal <id>`` for details.
     """
+    _list_jobs_impl(status_filter)
+
+
+@app.command("jobs")
+def list_jobs_alias(
+    status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
+) -> None:
+    """Alias for ``list`` — list root autopilot jobs."""
+    _list_jobs_impl(status_filter)
+
+
+def _list_jobs_impl(status_filter: str) -> None:
     client = _require_daemon_http()
     payload = client.list_jobs()
     jobs = payload.get("jobs") or []
@@ -156,6 +197,29 @@ def list_jobs(
         sstat = j.get("status", "pending")
         spri = j.get("priority", 50)
         typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  {sdesc}")
+
+
+@app.command("goals")
+def list_goals(
+    status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
+) -> None:
+    """List all goals in the daemon autopilot DAG (including subgoals)."""
+    client = _require_daemon_http()
+    payload = client.list_goals()
+    goals = payload.get("goals") or []
+    if not goals:
+        typer.echo("No goals found.")
+        return
+
+    for g in goals:
+        if status_filter and g.get("status", "") != status_filter:
+            continue
+        gid = str(g.get("id", "?"))[:8]
+        parent = g.get("parent_id")
+        parent_s = f" parent={str(parent)[:8]}" if parent else ""
+        desc = preview_first(g.get("description", ""), 50)
+        stat = g.get("status", "pending")
+        typer.echo(f"  [{gid}] {stat:10s}{parent_s}  {desc}")
 
 
 def _render_dag_tree(dag: dict, root_id: str) -> None:
@@ -199,9 +263,9 @@ def _render_dag_tree(dag: dict, root_id: str) -> None:
 
 @app.command("job")
 def show_job(
-    job_id: str = typer.Argument(..., help="Job ID to show details and DAG."),
+    job_id: str = typer.Argument(..., help="Job ID to show details and goal DAG."),
 ) -> None:
-    """Show job status and DAG tree visualization.
+    """Show job status and goal DAG tree visualization.
 
     A job is a root goal submitted by the user. This command shows
     the job's details and the complete goal DAG under it.
@@ -211,7 +275,7 @@ def show_job(
         payload = client.get_job(job_id)
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     job = payload.get("job")
     dag = payload.get("dag")
@@ -228,11 +292,9 @@ def show_job(
         typer.echo(f"Workspace:       {job['workspace']}")
     created = job.get("created_at", "")
     if created:
-        # Truncate timestamp for readability
         created_short = created[:19] if len(created) > 19 else created
         typer.echo(f"Created:         {created_short}")
 
-    # DAG stats from response
     active = payload.get("active_goals", 0)
     completed = payload.get("completed_goals", 0)
     total = payload.get("total_goals", 0)
@@ -240,10 +302,9 @@ def show_job(
     typer.echo(f"Completed goals: {completed}")
     typer.echo(f"Total goals:     {total}")
 
-    # DAG tree
-    typer.echo("\nDAG:")
+    typer.echo("\nGoal DAG:")
     if dag:
-        _render_dag_tree(dag, job_id)
+        _render_dag_tree(dag, str(job.get("id") or job_id))
     else:
         typer.echo("  (no subgoals)")
 

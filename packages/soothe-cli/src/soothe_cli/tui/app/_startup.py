@@ -478,6 +478,13 @@ class _StartupMixin:
             if self._session_state is not None:
                 self._session_state.loop_id = status_loop_id
 
+        autopilot_mode = event.status_event.get("autopilot_mode")
+        if autopilot_mode not in ("solo", "autopilot") and event.session is not None:
+            autopilot_mode = getattr(event.session, "autopilot_mode", None)
+        self._apply_loop_autopilot_mode(
+            str(autopilot_mode) if autopilot_mode in ("solo", "autopilot") else None
+        )
+
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
             banner.set_connected(self._mcp_tool_count)

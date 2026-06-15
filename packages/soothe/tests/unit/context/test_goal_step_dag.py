@@ -102,7 +102,7 @@ class TestGoalStepDAGScheduling:
         dag = GoalStepDAG()
         goal = GoalNode(description="Test", status="active")
         dag.add_goal(goal)
-        assert dag.ready_goals() == []
+        assert dag.peek_ready_goals() == []
 
     def test_ready_goals_sorted_by_priority(self) -> None:
         dag = GoalStepDAG()
@@ -110,7 +110,7 @@ class TestGoalStepDAGScheduling:
         high = GoalNode(description="High", priority=90)
         dag.add_goal(low)
         dag.add_goal(high)
-        ready = dag.ready_goals(limit=1)
+        ready = dag.peek_ready_goals(limit=1)
         assert ready[0].id == high.id
 
     def test_ready_goals_deps_met(self) -> None:
@@ -120,10 +120,10 @@ class TestGoalStepDAGScheduling:
         goal = GoalNode(description="Goal", priority=50, depends_on=[dep.id])
         dag.add_goal(goal)
         # Dep itself is ready (no deps), but goal is not
-        ready_before = dag.ready_goals()
+        ready_before = dag.peek_ready_goals()
         assert goal.id not in [g.id for g in ready_before]
         dag.complete_goal(dep.id)
-        ready_after = dag.ready_goals()
+        ready_after = dag.peek_ready_goals()
         assert goal.id in [g.id for g in ready_after]
 
     def test_ready_goals_conflict_blocks(self) -> None:
@@ -132,7 +132,7 @@ class TestGoalStepDAGScheduling:
         dag.add_goal(active)
         pending = GoalNode(description="Pending", conflicts_with=[active.id])
         dag.add_goal(pending)
-        assert dag.ready_goals() == []
+        assert dag.peek_ready_goals() == []
 
     def test_active_goals(self) -> None:
         dag = GoalStepDAG()

@@ -1151,6 +1151,10 @@ class MessageRouter:
 
         await handle_loop_reattach(loop_id, d, client_id)
 
+        from soothe_daemon.runtime.loop_autopilot_mode import ensure_loop_autopilot_mode
+
+        autopilot_mode = await ensure_loop_autopilot_mode(d, loop_id, broadcast=False)
+
         wire_tier = msg.get("wire_tier", "full")
         # IG-441: three first-class modes (batch / adaptive / streaming);
         # default to ``adaptive`` for new subscribers since it gives the best
@@ -1181,6 +1185,7 @@ class MessageRouter:
                 "type": "loop_subscribe_response",
                 "loop_id": loop_id,
                 "success": True,
+                "autopilot_mode": autopilot_mode,
                 "request_id": request_id,
             },
         )
@@ -1378,11 +1383,16 @@ class MessageRouter:
             }
         await d._persistence_manager.update_loop_metadata(loop_id, **meta_updates)
 
+        from soothe_daemon.runtime.loop_autopilot_mode import ensure_loop_autopilot_mode
+
+        autopilot_mode = await ensure_loop_autopilot_mode(d, loop_id, broadcast=True)
+
         logger.info(
-            "Created new loop %s (ephemeral=%s workspace=%s)",
+            "Created new loop %s (ephemeral=%s workspace=%s autopilot_mode=%s)",
             loop_id,
             is_ephemeral,
             effective_workspace,
+            autopilot_mode,
         )
 
         # Send response
@@ -1391,6 +1401,7 @@ class MessageRouter:
             "loop_id": loop_id,
             "success": True,
             "is_ephemeral": is_ephemeral,
+            "autopilot_mode": autopilot_mode,
             "request_id": request_id,
         }
         if host_root is not None:

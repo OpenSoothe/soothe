@@ -45,6 +45,7 @@ class TuiDaemonSession:
         self._client = WebSocketClient(url=ws_url)
         self._rpc_client = WebSocketClient(url=ws_url)
         self._loop_id: str | None = None
+        self._autopilot_mode: str | None = None
         self._read_lock = asyncio.Lock()
         self._rpc_lock = asyncio.Lock()
         self._rpc_connected = False
@@ -56,6 +57,11 @@ class TuiDaemonSession:
     def loop_id(self) -> str | None:
         """Active StrangeLoop id for this WebSocket session."""
         return self._loop_id
+
+    @property
+    def autopilot_mode(self) -> str | None:
+        """Active loop Solo/Autopilot mode when known."""
+        return self._autopilot_mode
 
     async def connect(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
         """Connect and bootstrap a daemon loop session."""
@@ -77,6 +83,8 @@ class TuiDaemonSession:
         if status_event.get("type") == "error":
             raise RuntimeError(str(status_event.get("message", "daemon bootstrap failed")))
         self._loop_id = status_event.get("loop_id")
+        mode = status_event.get("autopilot_mode")
+        self._autopilot_mode = str(mode) if mode in ("solo", "autopilot") else None
         return status_event
 
     def _resolve_stream_delivery_mode(self) -> str:

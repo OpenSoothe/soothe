@@ -51,7 +51,7 @@ agent:
   name: Soothe
   core_agent_backend: langgraph
   autonomous:
-    enabled: false
+    enabled: true
     max_iterations: 15
     # RFC-222: faster scheduling cadence for local iteration
     poll_interval: 2

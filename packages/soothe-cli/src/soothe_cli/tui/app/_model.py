@@ -265,12 +265,26 @@ class _ModelMixin:
             return None
         return resp.get("servers")
 
+    def _apply_loop_autopilot_mode(self, mode: str | None) -> None:
+        """Sync local Solo/Autopilot mode from daemon bootstrap or toggle events."""
+        if mode not in ("solo", "autopilot"):
+            return
+        self._loop_autopilot_mode = mode
+        if self._status_bar is not None:
+            label = "Autopilot" if mode == "autopilot" else "Solo"
+            self._status_bar.set_session_tip(f"Mode: {label}")
+
     async def _show_autopilot_dashboard(self) -> None:
         """Show autopilot dashboard as a screen overlay."""
         from soothe_cli.tui.widgets.autopilot_screen import AutopilotScreen
 
         is_narrow = self.size.width < 100
-        screen = AutopilotScreen(is_narrow=is_narrow)
+        mode = (
+            self._loop_autopilot_mode
+            if self._loop_autopilot_mode in ("solo", "autopilot")
+            else "solo"
+        )
+        screen = AutopilotScreen(is_narrow=is_narrow, mode=mode)
 
         def handle_result(result: None) -> None:  # noqa: ARG001
             if self._chat_input:
@@ -313,6 +327,8 @@ class _ModelMixin:
                 self._client,
                 loop_id=lid,
             )
+            new_mode = "solo" if self._loop_autopilot_mode == "autopilot" else "autopilot"
+            self._apply_loop_autopilot_mode(new_mode)
 
         except Exception as exc:
             logger.exception("Autopilot toggle failed")

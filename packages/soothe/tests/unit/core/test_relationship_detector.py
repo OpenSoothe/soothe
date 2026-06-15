@@ -1,6 +1,5 @@
-"""Tests for Autopilot relationship detector (soothe.foundation.autopilot.engine.relationship_detector)."""
+"""Tests for Autopilot relationship detector (RFC-625 updated)."""
 
-from soothe.foundation.autopilot.engine import Goal
 from soothe.foundation.autopilot.engine.relationship_detector import (
     _AUTO_APPLY_CONFIDENCE,
     _FLAG_FOR_REVIEW_CONFIDENCE,
@@ -10,6 +9,7 @@ from soothe.foundation.autopilot.engine.relationship_detector import (
     auto_apply_relationships,
     detect_relationships,
 )
+from soothe.foundation.context.models import GoalNode
 
 
 class TestSignificantWords:
@@ -67,8 +67,8 @@ class TestDetectRelationships:
     """Tests for relationship detection between goals."""
 
     def test_detects_informs_via_shared_keywords(self) -> None:
-        completed = Goal(id="g1", description="Analyze sales data and build quarterly report")
-        pending = Goal(id="g2", description="Build sales report for management")
+        completed = GoalNode(id="g1", description="Analyze sales data and build quarterly report")
+        pending = GoalNode(id="g2", description="Build sales report for management")
         all_goals = [completed, pending]
 
         relationships = detect_relationships(completed, all_goals)
@@ -81,8 +81,8 @@ class TestDetectRelationships:
         assert informs[0].confidence >= _FLAG_FOR_REVIEW_CONFIDENCE
 
     def test_detects_depends_on_via_artifact_ref(self) -> None:
-        completed = Goal(id="g1", description="Generate the report.csv file")
-        pending = Goal(id="g2", description="Email the report.csv to stakeholders")
+        completed = GoalNode(id="g1", description="Generate the report.csv file")
+        pending = GoalNode(id="g2", description="Email the report.csv to stakeholders")
         all_goals = [completed, pending]
 
         relationships = detect_relationships(completed, all_goals)
@@ -91,16 +91,16 @@ class TestDetectRelationships:
         assert depends[0].confidence >= _AUTO_APPLY_CONFIDENCE
 
     def test_no_relationship_for_unrelated_goals(self) -> None:
-        completed = Goal(id="g1", description="Configure the CI pipeline")
-        pending = Goal(id="g2", description="Write the marketing copy")
+        completed = GoalNode(id="g1", description="Configure the CI pipeline")
+        pending = GoalNode(id="g2", description="Write the marketing copy")
         all_goals = [completed, pending]
 
         relationships = detect_relationships(completed, all_goals)
         assert len(relationships) == 0
 
     def test_skips_completed_goals(self) -> None:
-        completed = Goal(id="g1", description="Analyze sales data and build report")
-        also_completed = Goal(
+        completed = GoalNode(id="g1", description="Analyze sales data and build report")
+        also_completed = GoalNode(
             id="g2", description="Sales report and data analysis", status="completed"
         )
         all_goals = [completed, also_completed]
@@ -109,15 +109,15 @@ class TestDetectRelationships:
         assert len(relationships) == 0
 
     def test_skips_self(self) -> None:
-        completed = Goal(id="g1", description="Test goal")
+        completed = GoalNode(id="g1", description="Test goal")
         all_goals = [completed]
 
         relationships = detect_relationships(completed, all_goals)
         assert len(relationships) == 0
 
     def test_detects_informs_skips_failed_goals(self) -> None:
-        completed = Goal(id="g1", description="Analyze sales data and build report")
-        failed = Goal(id="g2", description="Sales report and data analysis", status="failed")
+        completed = GoalNode(id="g1", description="Analyze sales data and build report")
+        failed = GoalNode(id="g2", description="Sales report and data analysis", status="failed")
         all_goals = [completed, failed]
 
         relationships = detect_relationships(completed, all_goals)
@@ -136,8 +136,8 @@ class TestAutoApplyRelationships:
             reason="Test",
         )
         goals = [
-            Goal(id="g1", description="Source"),
-            Goal(id="g2", description="Target"),
+            GoalNode(id="g1", description="Source"),
+            GoalNode(id="g2", description="Target"),
         ]
         applied, flagged = auto_apply_relationships([rel], goals)
         assert len(applied) == 1
@@ -153,8 +153,8 @@ class TestAutoApplyRelationships:
             reason="Test",
         )
         goals = [
-            Goal(id="g1", description="Source"),
-            Goal(id="g2", description="Target"),
+            GoalNode(id="g1", description="Source"),
+            GoalNode(id="g2", description="Target"),
         ]
         applied, flagged = auto_apply_relationships([rel], goals)
         assert len(applied) == 0
@@ -169,8 +169,8 @@ class TestAutoApplyRelationships:
             reason="Test",
         )
         goals = [
-            Goal(id="g1", description="Source"),
-            Goal(id="g2", description="Target"),
+            GoalNode(id="g1", description="Source"),
+            GoalNode(id="g2", description="Target"),
         ]
         applied, flagged = auto_apply_relationships([rel], goals)
         assert len(applied) == 0
@@ -184,15 +184,15 @@ class TestAutoApplyRelationships:
             confidence=0.9,
             reason="Test",
         )
-        goals = [Goal(id="g1", description="Source")]
+        goals = [GoalNode(id="g1", description="Source")]
         applied, flagged = auto_apply_relationships([rel], goals)
         assert len(applied) == 0
         assert len(flagged) == 0
 
     def test_does_not_duplicate_existing_relationship(self) -> None:
         goals = [
-            Goal(id="g1", description="Source"),
-            Goal(id="g2", description="Target", informs=["g1"]),
+            GoalNode(id="g1", description="Source"),
+            GoalNode(id="g2", description="Target", informs=["g1"]),
         ]
         rel = Relationship(
             from_goal="g1",

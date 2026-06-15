@@ -1,14 +1,18 @@
-"""Goal models for autonomous iteration (RFC-0007, RFC-204, RFC-200, RFC-217)."""
+"""Goal models for autonomous iteration (RFC-204, RFC-200, RFC-217, RFC-222, RFC-625).
+
+Goal class deleted per RFC-625. All goal state is managed via GoalNode in
+soothe.foundation.context.models. This module retains models used for:
+- Evidence/Backoff: LLM-driven backoff reasoning
+- GoalDispatchContext*: IPC between daemon and workers
+- Status constants: Shared lifecycle state definitions
+"""
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
-
-from soothe.protocols.planner import GoalReport
 
 # RFC-204: Extended lifecycle states; RFC-622: + awaiting_clarification
 GoalStatus = Literal[
@@ -30,83 +34,13 @@ TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "cancelled"}
 BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})
 
 
-class Goal(BaseModel):
-    """A single autonomous goal.
-
-    Args:
-        id: Unique 8-char hex identifier.
-        description: Human-readable goal text.
-        status: Current lifecycle status (7 states per RFC-204).
-        priority: Scheduling priority (0-100, higher = first).
-        parent_id: Optional parent goal for hierarchical decomposition.
-        depends_on: IDs of goals that must complete before this one (hard DAG edges).
-        informs: IDs of goals whose findings may enrich this goal (soft dependency).
-        conflicts_with: IDs of goals that must not execute concurrently (mutual exclusion).
-        plan_count: Number of plans created for this goal (for P_N ID generation).
-        retry_count: Number of retries attempted so far.
-        max_retries: Maximum retries before permanent failure.
-        send_back_count: Number of consensus send-backs used (RFC-204).
-        max_send_backs: Maximum send-back rounds before suspension (RFC-204).
-        error: Error message if goal failed (IG-155 for file tracking).
-        report: GoalReport from execution (set on completion).
-        source_file: Path to GOAL.md file that defined this goal (None if auto-created).
-        created_at: Creation timestamp.
-        updated_at: Last update timestamp.
-        assigned_loop_id: Loop assigned to this goal (RFC-222).
-        lock_status: File lock status for this goal (RFC-222).
-        locked_files: Files currently locked by this goal (RFC-222).
-        lock_acquired_at: Timestamp when lock acquired (RFC-222).
-        workspace: Absolute filesystem workspace for execution (RFC-222).
-            When unset, the worker falls back to a per-loop persisted sandbox.
-    """
-
-    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
-    description: str
-    status: GoalStatus = "pending"
-    priority: int = 50
-    parent_id: str | None = None
-    depends_on: list[str] = Field(default_factory=list)
-    # RFC-204: Soft relationships and mutual exclusion
-    informs: list[str] = Field(default_factory=list)
-    conflicts_with: list[str] = Field(default_factory=list)
-    plan_count: int = 0
-    retry_count: int = 0
-    max_retries: int = 2
-    # RFC-204: Consensus loop tracking
-    send_back_count: int = 0
-    max_send_backs: int = 3
-    error: str | None = None  # IG-155: Error message for file tracking
-    report: GoalReport | None = None
-    # RFC-204, IG-155: Source file for status tracking
-    source_file: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    # RFC-222: Autopilot-specific fields for loop assignment and file locking
-    assigned_loop_id: str | None = None
-    lock_status: Literal["none", "acquired", "released"] = "none"
-    locked_files: list[str] = Field(default_factory=list)
-    lock_acquired_at: datetime | None = None
-    # RFC-222 H4: incremented each time crash recovery resets this goal from
-    # ``active`` back to ``pending`` on daemon start.
-    attempts_after_crash: int = 0
-    # RFC-222: client workspace for autopilot dispatch (optional).
-    workspace: str | None = None
-    # RFC-622: pending clarification persisted while ``status="awaiting_clarification"``.
-    # Serialized form of ``ClarificationRequest`` (see
-    # ``soothe.core.loop.clarification.protocol.request_to_state``).
-    pending_clarification: dict[str, Any] | None = None
-    # RFC-228: accumulated guidance from desktop LOR (Loop Observation Room).
-    # Each entry: {"text": str, "timestamp": datetime, "scope": "goal"|"job"}
-    guidance_accumulated: list[dict[str, Any]] = Field(default_factory=list)
-
-
 # RFC-200 §14-22: Canonical evidence bundle for Layer 2 → Layer 3 integration
 class EvidenceBundle(BaseModel):
     """Canonical evidence payload exchanged across Layer 2 and Layer 3.
 
     RFC-200 §14-22: This is the authoritative schema for evidence exchange.
     Layer 2 StrangeLoop MUST construct this structure from execution context.
-    Layer 3 GoalEngine MUST receive this in fail_goal() signature.
+    ContextEngine (via AutopilotMonitor) MUST receive this in fail_goal() signature.
 
     Args:
         structured: Machine-readable execution metrics/state for deterministic processing.
@@ -158,7 +92,7 @@ class GoalSubDAGStatus(BaseModel):
     """Canonical DAG execution status for backoff and reflection.
 
     RFC-200 §14-22: Tracks goal execution states and backoff boundaries.
-    Used by GoalEngine for DAG state management.
+    Used by AutopilotMonitor for DAG state management.
 
     Args:
         execution_states: Per-goal execution state.

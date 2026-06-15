@@ -791,7 +791,7 @@ class TestGoalSchedulerReadyGoals:
     def test_no_goals(self) -> None:
         ce = ContextEngine()
         scheduler = ce.planning.scheduler
-        assert scheduler.ready_goals() == []
+        assert scheduler.peek_ready_goals() == []
 
     def test_pending_goal_is_ready(self) -> None:
         ce = ContextEngine()
@@ -799,7 +799,7 @@ class TestGoalSchedulerReadyGoals:
         ce._dag.add_goal(g)
 
         scheduler = ce.planning.scheduler
-        ready = scheduler.ready_goals()
+        ready = scheduler.peek_ready_goals()
         assert len(ready) == 1
         assert ready[0].id == g.id
 
@@ -809,7 +809,7 @@ class TestGoalSchedulerReadyGoals:
         ce._dag.add_goal(g)
 
         scheduler = ce.planning.scheduler
-        assert scheduler.ready_goals() == []
+        assert scheduler.peek_ready_goals() == []
 
     def test_limit_respected(self) -> None:
         ce = ContextEngine()
@@ -817,40 +817,36 @@ class TestGoalSchedulerReadyGoals:
             ce._dag.add_goal(GoalNode(description=f"Goal {i}", status="pending", priority=50))
 
         scheduler = ce.planning.scheduler
-        assert len(scheduler.ready_goals(limit=2)) == 2
+        assert len(scheduler.peek_ready_goals(limit=2)) == 2
 
 
 class TestGoalSchedulerClaimGoal:
-    @pytest.mark.asyncio
-    async def test_claim_pending_goal(self) -> None:
+    def test_claim_pending_goal(self) -> None:
         ce = ContextEngine()
         g = GoalNode(description="Ready goal", status="pending")
         ce._dag.add_goal(g)
 
         scheduler = ce.planning.scheduler
-        claimed = await scheduler.claim_goal(g.id, loop_id="loop-1")
+        claimed = scheduler.claim_goal(g.id, loop_id="loop-1")
 
         assert claimed is not None
         assert claimed.status == "active"
         assert claimed.assigned_loop_id == "loop-1"
 
-    @pytest.mark.asyncio
-    async def test_claim_nonexistent(self) -> None:
+    def test_claim_nonexistent(self) -> None:
         ce = ContextEngine()
         scheduler = ce.planning.scheduler
-        assert await scheduler.claim_goal("nonexistent") is None
+        assert scheduler.claim_goal("nonexistent") is None
 
-    @pytest.mark.asyncio
-    async def test_claim_non_pending(self) -> None:
+    def test_claim_non_pending(self) -> None:
         ce = ContextEngine()
         g = GoalNode(description="Active", status="active")
         ce._dag.add_goal(g)
 
         scheduler = ce.planning.scheduler
-        assert await scheduler.claim_goal(g.id) is None
+        assert scheduler.claim_goal(g.id) is None
 
-    @pytest.mark.asyncio
-    async def test_claim_with_active_conflict(self) -> None:
+    def test_claim_with_active_conflict(self) -> None:
         ce = ContextEngine()
         g1 = GoalNode(description="Active", status="active")
         g2 = GoalNode(description="Conflicting", status="pending", conflicts_with=[g1.id])
@@ -858,10 +854,9 @@ class TestGoalSchedulerClaimGoal:
         ce._dag.add_goal(g2)
 
         scheduler = ce.planning.scheduler
-        assert await scheduler.claim_goal(g2.id) is None
+        assert scheduler.claim_goal(g2.id) is None
 
-    @pytest.mark.asyncio
-    async def test_claim_with_unmet_dependency(self) -> None:
+    def test_claim_with_unmet_dependency(self) -> None:
         ce = ContextEngine()
         g1 = GoalNode(description="Pending dep", status="pending")
         g2 = GoalNode(description="Waiting goal", status="pending", depends_on=[g1.id])
@@ -869,7 +864,7 @@ class TestGoalSchedulerClaimGoal:
         ce._dag.add_goal(g2)
 
         scheduler = ce.planning.scheduler
-        assert await scheduler.claim_goal(g2.id) is None
+        assert scheduler.claim_goal(g2.id) is None
 
 
 class TestGoalSchedulerIsComplete:
