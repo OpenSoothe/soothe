@@ -69,49 +69,22 @@ def test_loop_ai_message_serde_roundtrip():
     assert deserialized.step_id == msg.step_id
 
 
-def test_goal_execution_record_with_ledger_serde_roundtrip():
-    """Test GoalExecutionRecord with loop_messages preserves message types."""
+def test_goal_execution_record_serde_roundtrip():
+    """GoalExecutionRecord serde preserves metadata fields."""
     from datetime import datetime
 
     serde = create_soothe_serde()
-
-    # Create ledger with adjacent Human-AI pairs
-    ledger = [
-        LoopHumanMessage(
-            content="Plan next steps",
-            thread_id="test_thread",
-            iteration=10,
-            phase="plan_assess",  # RFC-214: plan_assess or plan_generate
-        ),
-        LoopAIMessage(
-            content="Next actions: 1. Query database",
-            thread_id="test_thread",
-            iteration=10,
-            phase="plan_assess",  # RFC-214: plan_assess or plan_generate
-        ),
-        LoopHumanMessage(
-            content="Execute: Query database",
-            thread_id="test_thread",
-            iteration=10,
-            phase="execute_step",
-            step_id="step_a",
-        ),
-        LoopAIMessage(
-            content="Found 150 records",
-            thread_id="test_thread",
-            iteration=10,
-            phase="execute_step",
-            step_id="step_a",
-        ),
-    ]
 
     record = GoalExecutionRecord(
         goal_id="test_goal_1",
         goal_text="Test goal",
         thread_id="test_thread",
         iteration=10,
-        status="running",
-        loop_messages=ledger,
+        status="completed",
+        plan_revision_count=2,
+        goal_completion="Finished",
+        duration_ms=1200,
+        tokens_used=99,
         started_at=datetime.now(),
     )
 
@@ -124,28 +97,10 @@ def test_goal_execution_record_with_ledger_serde_roundtrip():
     # Verify record structure
     assert isinstance(deserialized, GoalExecutionRecord)
     assert deserialized.goal_id == record.goal_id
-
-    # Verify ledger preserved
-    assert len(deserialized.loop_messages) == len(ledger)
-
-    # Verify ALL message types preserved (no dict fallback)
-    for msg in deserialized.loop_messages:
-        assert isinstance(msg, (LoopHumanMessage, LoopAIMessage))
-        assert not isinstance(msg, dict)
-
-    # Verify adjacent Human-AI pairs preserved
-    assert isinstance(deserialized.loop_messages[0], LoopHumanMessage)
-    assert isinstance(deserialized.loop_messages[1], LoopAIMessage)
-    assert isinstance(deserialized.loop_messages[2], LoopHumanMessage)
-    assert isinstance(deserialized.loop_messages[3], LoopAIMessage)
-
-    # Verify Human-AI pairing by phase/step_id
-    assert deserialized.loop_messages[0].phase == "plan_assess"  # RFC-214
-    assert deserialized.loop_messages[1].phase == "plan_assess"  # RFC-214
-    assert deserialized.loop_messages[2].phase == "execute_step"
-    assert deserialized.loop_messages[3].phase == "execute_step"
-    assert deserialized.loop_messages[2].step_id == "step_a"
-    assert deserialized.loop_messages[3].step_id == "step_a"
+    assert deserialized.plan_revision_count == 2
+    assert deserialized.goal_completion == "Finished"
+    assert deserialized.duration_ms == 1200
+    assert deserialized.tokens_used == 99
 
 
 def test_mixed_message_types_in_ledger():
@@ -172,8 +127,8 @@ def test_mixed_message_types_in_ledger():
     assert isinstance(deserialized[3], AIMessage)
 
 
-def test_empty_ledger_serde():
-    """Test GoalExecutionRecord with empty ledger."""
+def test_minimal_goal_execution_record_serde():
+    """GoalExecutionRecord serde works with minimal required fields."""
     from datetime import datetime
 
     serde = create_soothe_serde()
@@ -184,7 +139,6 @@ def test_empty_ledger_serde():
         thread_id="test_thread",
         iteration=0,
         status="running",
-        loop_messages=[],  # Empty ledger
         started_at=datetime.now(),
     )
 
@@ -192,6 +146,5 @@ def test_empty_ledger_serde():
     serialized = serde.dumps_typed(record)
     deserialized = serde.loads_typed(serialized)
 
-    # Verify empty ledger preserved
-    assert isinstance(deserialized.loop_messages, list)
-    assert len(deserialized.loop_messages) == 0
+    assert deserialized.goal_id == "test_goal_empty"
+    assert deserialized.status == "running"

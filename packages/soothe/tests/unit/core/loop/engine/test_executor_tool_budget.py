@@ -3,18 +3,29 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import ToolMessage
 
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import (
     _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     Executor,
     _ActStreamBudget,
 )
 from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
+
+
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
 
 
 def _make_step() -> StepAction:
@@ -40,7 +51,7 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
         for c in chunks:
             yield c
 
-    ex = Executor(MagicMock(), max_parallel_steps=1)
+    ex = Executor(MagicMock(), max_parallel_steps=1, context_engine=_make_ce())
     rows = [
         r
         async for r in ex._stream_and_collect(fake_stream(), budget=budget, step_id="s0")
@@ -85,8 +96,12 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
     ]
     agent = _make_mock_agent(tool_msgs)
 
-    ex = Executor(agent, max_parallel_steps=1, config=None)
+    ce = _make_ce()
+    ex = Executor(agent, max_parallel_steps=1, config=None, context_engine=ce)
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
     step = _make_step()
 
     decision = AgentDecision(
@@ -108,5 +123,5 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
     if isinstance(preview, dict):
         preview = str(preview.get("first", ""))
     assert "out-0" in str(preview)
-    ledger_ai = [m for m in state.loop_messages if getattr(m, "step_id", None) == "s0"][-1]
+    ledger_ai = [m for m in ce.ledger.get_messages() if getattr(m, "step_id", None) == "s0"][-1]
     assert "Step execution failed" not in ledger_ai.content

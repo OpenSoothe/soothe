@@ -1084,14 +1084,6 @@ class LoopState(BaseModel):
         self._step_results_cache.clear()
         self._completed_step_ids_cache.clear()
 
-    def sync_loop_messages_from_ce(self) -> None:
-        """No-op. Retained for backward compatibility (RFC-624 Phase 4).
-
-        The ``loop_messages`` property now queries CE directly when bound.
-        Callers that previously called this before reading ``state.loop_messages``
-        no longer need to — the property always returns fresh data.
-        """
-
     @property
     def loop_messages(self) -> list[LoopHumanMessage | LoopAIMessage]:
         """Ordered adjacent Human-AI message pairs for all orchestration turns.
@@ -1316,8 +1308,11 @@ class LoopState(BaseModel):
         # Clear decision and step state
         self.current_decision = None
         self.plan_id = None
-        self.completed_step_ids.clear()
-        self.step_results.clear()
+        # RFC-624 Phase 4 Stage 2: Clear cache fields directly (not property returns).
+        # When CE is bound, property reads from DAG so cache is irrelevant.
+        # When CE is not bound (tests), cache needs to be cleared.
+        self._completed_step_ids_cache.clear()
+        self._step_results_cache.clear()
 
         # Clear evidence and working memory
         self.evidence_ledger.clear()

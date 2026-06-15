@@ -142,8 +142,8 @@ def _append_ask_user_loop_messages(
         phase="execute_step",
         step_id=step_id,
     )
-    _record_ledger_message(context_engine, human, "execute_step", state.loop_messages)
-    _record_ledger_message(context_engine, ai, "execute_step", state.loop_messages)
+    _record_ledger_message(context_engine, human, "execute_step")
+    _record_ledger_message(context_engine, ai, "execute_step")
 
 
 async def _record_and_emit_step_completed(
@@ -299,21 +299,16 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # would loop (or never terminate via max_iterations) because no
             # iteration was recorded as complete during this graph invocation.
             state.iteration += 1
-            # Mirror the appended Q&A pair (and updated iteration) onto
-            # goal_record.loop_messages and persist. The synth path skips
-            # record_iteration, where plan-phase / execute pairs are normally
-            # snapshotted onto the goal record. Without this save, the next
-            # clarification round trip reloads goal_record with a stale
-            # ledger and plan-assess / plan-generate re-ask the same
-            # question because the prior answers are gone.
+            # RFC-624 Phase 4 Stage 2: No loop_messages mirroring onto goal_record.
+            # CE LedgerManager spans all goals; ce.save() persists the ledger.
+            # Update goal_record.iteration and persist checkpoint.
             if goal_record is not None:
-                goal_record.loop_messages = [m.model_copy(deep=True) for m in state.loop_messages]
                 goal_record.iteration = state.iteration
                 try:
                     await state_manager.save(checkpoint)
                 except Exception:
                     logger.exception(
-                        "[execute] failed to persist synth-path Q&A ledger for step %s",
+                        "[execute] failed to persist synth-path iteration for step %s",
                         planner_ask_answered_step_id,
                     )
             return {

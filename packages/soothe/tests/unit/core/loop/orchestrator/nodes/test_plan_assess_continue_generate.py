@@ -94,6 +94,23 @@ def _make_ctx(
     strange_loop._build_plan_context = MagicMock(
         return_value=MagicMock(available_capabilities=["read_file", "run_python"]),
     )
+    # Non-continuation assess path is not under test in this file.
+    strange_loop.plan_phase.assess_status = AsyncMock(
+        return_value=StatusAssessment(status="continue", goal_progress="low")
+    )
+
+    completed_goal = MagicMock()
+    completed_goal.id = "goal-0"
+    completed_goal.description = "analyze trace data"
+    completed_goal.status = "completed"
+    completed_goal.action_history = ["Trace analysis complete."]
+    completed_goal.steps = MagicMock()
+    completed_goal.steps.nodes = {}
+
+    ce = MagicMock()
+    ce.get_all_goals.return_value = [completed_goal]
+    ce.ledger = MagicMock()
+    ce.ledger.get_messages.return_value = []
 
     emitted: list[tuple[str, Any]] = []
 
@@ -113,6 +130,7 @@ def _make_ctx(
         loop_state=loop_state,
         emit=emit,
         scratch=LoopPhaseScratch(),
+        ce=ce,
     )
 
 

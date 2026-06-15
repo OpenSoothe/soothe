@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk
 
+from soothe.context.engine import ContextEngine
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
@@ -32,11 +35,18 @@ def _make_mock_agent() -> MagicMock:
     return mock_agent
 
 
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
+
+
 @pytest.mark.asyncio
 async def test_parallel_single_wave_yields_one_result_per_step() -> None:
     mock_agent = _make_mock_agent()
 
-    executor = Executor(mock_agent, max_parallel_steps=4)
+    executor = Executor(mock_agent, max_parallel_steps=4, context_engine=_make_ce())
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -59,7 +69,7 @@ async def test_parallel_single_wave_yields_one_result_per_step() -> None:
 async def test_parallel_respects_max_parallel_steps_multiple_waves() -> None:
     mock_agent = _make_mock_agent()
 
-    executor = Executor(mock_agent, max_parallel_steps=1)
+    executor = Executor(mock_agent, max_parallel_steps=1, context_engine=_make_ce())
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -80,7 +90,7 @@ async def test_parallel_respects_max_parallel_steps_multiple_waves() -> None:
 async def test_plan_with_dependencies_drains_ready_chain() -> None:
     mock_agent = _make_mock_agent()
 
-    executor = Executor(mock_agent, max_parallel_steps=4)
+    executor = Executor(mock_agent, max_parallel_steps=4, context_engine=_make_ce())
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -112,7 +122,7 @@ async def test_plan_with_dependencies_drains_ready_chain() -> None:
 def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None:
     """Trailing empty AIMessage after chunks must not produce empty ledger body (IG-373)."""
     mock_agent = _make_mock_agent()
-    executor = Executor(mock_agent, max_parallel_steps=4)
+    executor = Executor(mock_agent, max_parallel_steps=4, context_engine=_make_ce())
     messages: list = [
         AIMessageChunk(content="Here are the first lines:\n"),
         AIMessageChunk(content="A\nB\n"),
@@ -131,7 +141,7 @@ def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None
 async def test_parallel_waves_emit_step_wave_queued_for_overflow() -> None:
     mock_agent = _make_mock_agent()
 
-    executor = Executor(mock_agent, max_parallel_steps=1)
+    executor = Executor(mock_agent, max_parallel_steps=1, context_engine=_make_ce())
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -155,7 +165,7 @@ async def test_parallel_waves_emit_step_wave_queued_for_overflow() -> None:
 async def test_parallel_waves_emit_step_wave_start_per_batch() -> None:
     mock_agent = _make_mock_agent()
 
-    executor = Executor(mock_agent, max_parallel_steps=1)
+    executor = Executor(mock_agent, max_parallel_steps=1, context_engine=_make_ce())
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -181,7 +191,7 @@ async def test_parallel_waves_emit_step_wave_start_per_batch() -> None:
 async def test_parallel_waves_respect_max_parallel_steps() -> None:
     mock_agent = _make_mock_agent()
 
-    executor = Executor(mock_agent, max_parallel_steps=1)
+    executor = Executor(mock_agent, max_parallel_steps=1, context_engine=_make_ce())
     decision = AgentDecision(
         type="execute_steps",
         steps=[

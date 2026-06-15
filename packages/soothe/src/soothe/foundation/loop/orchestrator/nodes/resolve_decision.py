@@ -68,7 +68,9 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         decision = assign_plan_step_ids(decision, plan_id=plan_id)
 
     if plan_result.plan_action == "new":
-        state.completed_step_ids.clear()
+        # RFC-624 Phase 4 Stage 2: No longer clear completed_step_ids on new plan.
+        # Old step IDs remain in the set but don't interfere with new plan's
+        # dependency resolution (dependency_completion_ids() unions with step_results).
         state.current_decision = decision
         # RFC-225: count plan revisions in the active goal record
         if ctx.goal_record is not None:

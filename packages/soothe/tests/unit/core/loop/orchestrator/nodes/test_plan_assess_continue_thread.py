@@ -2,40 +2,78 @@
 
 Covers:
 - ``build_continue_loop_bootstrap_plan`` shape + terminal_after_execute flag (RFC-226).
-- ``seed_loop_ledger_from_prior_goal`` (RFC-225 unchanged behavior).
-- ``_prior_goal_summaries`` filtering (RFC-226).
+- ``_prior_goal_summaries`` reads from CE GoalStepDAG (RFC-624 Phase 4 Stage 2).
+
+RFC-624 Phase 4 Stage 2: seed_loop_ledger_from_prior_goal deleted.
+CE ledger spans all goals via ce.load(), no explicit seeding needed.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
     _prior_goal_summaries,
     build_continue_loop_bootstrap_plan,
-    seed_loop_ledger_from_prior_goal,
 )
+from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.loop.state.checkpoint import (
-    GoalExecutionRecord,
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.loop.state.schemas import LoopState
 
 
-def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> StrangeLoopCheckpoint:
-    now = datetime.now(UTC)
-    return StrangeLoopCheckpoint(
+def _make_ce_with_completed_goal() -> ContextEngine:
+    """Create a CE instance with a completed goal for testing."""
+    ce = ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
+    goal = GoalNode(description="count files", status="completed")
+    goal.action_history.append("There are 3 README files.")
+    ce._dag.add_goal(goal)
+    return ce
+
+
+def _make_runtime_context_with_ce(ce: ContextEngine) -> LoopRuntimeContext:
+    """Create a LoopRuntimeContext bound to a CE instance."""
+    state = LoopState(goal="test", thread_id="tid")
+    state.bind_ce(ce, "goal-0")
+    checkpoint = StrangeLoopCheckpoint(
         loop_id="loop-x",
         thread_ids=["tid"],
         current_thread_id="tid",
         status="idle",
-        goal_history=list(goals),
+        goal_history=[],
         current_goal_index=-1,
         working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
-        thread_health_metrics=ThreadHealthMetrics(thread_id="tid", last_updated=now),
-        created_at=now,
-        updated_at=now,
+        thread_health_metrics=ThreadHealthMetrics(thread_id="tid", last_updated=datetime.now(UTC)),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
+    return LoopRuntimeContext(
+        strange_loop=None,
+        state_manager=None,  # not needed for this test
+        anchor_manager=None,
+        goal_context_manager=None,
+        plan_manager=None,
+        goal_record=None,
+        recovery_valid_resume=False,
+        emit=_noop_emit,
+        loop_state=state,
+        checkpoint=checkpoint,
+        scratch=LoopPhaseScratch(),
+        continue_loop_mode=True,
+        ce=ce,
+    )
+
+
+async def _noop_emit(_event_type: str, _event_data: object) -> None:
+    return None
 
 
 # ── build_continue_loop_bootstrap_plan ─────────────────────────────────────
@@ -67,117 +105,47 @@ def test_build_bootstrap_plan_terminal_flag_propagates() -> None:
     assert "translate the result to chinese" in pr.decision.steps[0].description
 
 
-# ── seed_loop_ledger_from_prior_goal (RFC-225) ─────────────────────────────
+# ── _prior_goal_summaries (RFC-226, RFC-624 Phase 4 Stage 2) ───────────────────
 
 
-def test_seed_continuation_copies_prior_ledger() -> None:
-    now = datetime.now(UTC)
-    prev = GoalExecutionRecord(
-        goal_id="g0",
-        goal_text="count files",
-        thread_id="tid",
-        status="completed",
-        loop_messages=[
-            LoopHumanMessage(content="h", thread_id="tid", phase="execute_step"),
-            LoopAIMessage(content="found 3", thread_id="tid", phase="execute_wave"),
-        ],
-        started_at=now,
-        completed_at=now,
-    )
-    new_g = GoalExecutionRecord(
-        goal_id="g1",
-        goal_text="translate",
-        thread_id="tid",
-        loop_messages=[],
-        started_at=now,
-    )
-    ckpt = _minimal_checkpoint(goals=[prev, new_g])
-    seed_loop_ledger_from_prior_goal(ckpt, new_g, "tid")
-    assert len(new_g.loop_messages) == 2
-    assert new_g.loop_messages[0].content == "h"
-    assert new_g.loop_messages[1].content == "found 3"
-    assert new_g.loop_messages[0] is not prev.loop_messages[0]
-
-
-def test_seed_continuation_falls_back_to_goal_completion() -> None:
-    now = datetime.now(UTC)
-    prev = GoalExecutionRecord(
-        goal_id="g0",
-        goal_text="count files",
-        thread_id="tid",
-        status="completed",
-        loop_messages=[],
-        goal_completion="There are 3 README files.",
-        started_at=now,
-        completed_at=now,
-    )
-    new_g = GoalExecutionRecord(
-        goal_id="g1",
-        goal_text="translate",
-        thread_id="tid",
-        loop_messages=[],
-        started_at=now,
-    )
-    ckpt = _minimal_checkpoint(goals=[prev, new_g])
-    seed_loop_ledger_from_prior_goal(ckpt, new_g, "tid")
-    assert len(new_g.loop_messages) == 2
-    assert "README" in new_g.loop_messages[1].content
-
-
-# ── _prior_goal_summaries (RFC-226) ────────────────────────────────────────
-
-
-def test_prior_goal_summaries_excludes_active_and_non_completed() -> None:
-    now = datetime.now(UTC)
-    g0_completed = GoalExecutionRecord(
-        goal_id="g0",
-        goal_text="count files",
-        thread_id="tid",
-        status="completed",
-        goal_completion="There are 12 file types.",
-        loop_messages=[],
-        started_at=now,
-        completed_at=now,
-    )
-    g1_failed = GoalExecutionRecord(
-        goal_id="g1",
-        goal_text="email bob",
-        thread_id="tid",
-        status="failed",
-        loop_messages=[],
-        started_at=now,
-    )
-    g2_active = GoalExecutionRecord(
-        goal_id="g2",
-        goal_text="translate the result",
-        thread_id="tid",
-        status="running",
-        loop_messages=[],
-        started_at=now,
-    )
-    ckpt = _minimal_checkpoint(goals=[g0_completed, g1_failed, g2_active])
-
-    summaries = _prior_goal_summaries(ckpt)
-
-    # Active goal (last) is always excluded; failed goal is filtered out.
+def test_prior_goal_summaries_reads_ce_dag() -> None:
+    """Stage 2: _prior_goal_summaries reads from CE GoalStepDAG, not checkpoint."""
+    ce = _make_ce_with_completed_goal()
+    ctx = _make_runtime_context_with_ce(ce)
+    summaries = _prior_goal_summaries(ctx)
     assert len(summaries) == 1
-    s = summaries[0]
-    assert s["goal_id"] == "g0"
-    assert s["goal_text"] == "count files"
-    assert s["completion"] == "There are 12 file types."
-    assert s["step_count"] == 0
-    assert s["current_plan_action"] == ""
+    assert summaries[0]["goal_text"] == "count files"
+    assert "README" in summaries[0]["completion"]
 
 
-def test_prior_goal_summaries_empty_when_only_active_goal() -> None:
-    now = datetime.now(UTC)
-    g0_active = GoalExecutionRecord(
-        goal_id="g0",
-        goal_text="count files",
-        thread_id="tid",
-        status="running",
-        loop_messages=[],
-        started_at=now,
+def test_prior_goal_summaries_empty_without_ce() -> None:
+    """When CE is None, returns empty list (tests without CE)."""
+    checkpoint = StrangeLoopCheckpoint(
+        loop_id="loop-x",
+        thread_ids=["tid"],
+        current_thread_id="tid",
+        status="idle",
+        goal_history=[],
+        current_goal_index=-1,
+        working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
+        thread_health_metrics=ThreadHealthMetrics(thread_id="tid", last_updated=datetime.now(UTC)),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
-    ckpt = _minimal_checkpoint(goals=[g0_active])
-    assert _prior_goal_summaries(ckpt) == []
+    state = LoopState(goal="test", thread_id="tid")
+    ctx = LoopRuntimeContext(
+        strange_loop=None,
+        state_manager=None,
+        anchor_manager=None,
+        goal_context_manager=None,
+        plan_manager=None,
+        goal_record=None,
+        recovery_valid_resume=False,
+        emit=_noop_emit,
+        loop_state=state,
+        checkpoint=checkpoint,
+        scratch=LoopPhaseScratch(),
+        continue_loop_mode=False,
+    )
+    summaries = _prior_goal_summaries(ctx)
+    assert summaries == []

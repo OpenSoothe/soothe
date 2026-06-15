@@ -12,13 +12,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
-
 if TYPE_CHECKING:
     # Forward references — actual imports happen during model_rebuild() at the
     # end of soothe.core.loop.state.__init__ to break the circular import via
     # protocols.loop_planner (RFC-225 / IG-445).
-    from soothe.foundation.loop.state.schemas import EvidenceEntry, PlanResult, StepResult
+    pass
 
 _SLOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
 
@@ -129,12 +127,17 @@ class GoalThreadRelevanceAnalysis(BaseModel):
 
 
 class GoalExecutionRecord(BaseModel):
-    """Single goal execution record (RFC-216: on specific thread, RFC-214: ledger-based).
+    """Single goal execution record (RFC-216: on specific thread).
 
-    RFC-225 enrichment: carries the latest plan DAG (``current_plan``), accumulated
-    ``step_results`` and ``evidence_ledger``, plus ``completed_step_ids`` and a
-    monotonic ``plan_revision_count`` so the goal's plan DAG and execution overlay
-    are recoverable from the checkpoint alone.
+    RFC-624 Phase 4 Stage 2: Slimmed to metadata-only. CE owns execution data:
+    - loop_messages → CE LedgerManager spans all goals
+    - step_results → CE StepDAG
+    - completed_step_ids → derived from CE StepDAG
+    - evidence_ledger → not populated after clear_goal_state()
+    - current_plan → clear_goal_state() sets None before finalize
+
+    The checkpoint goal_history is now a lightweight index. CE DAG is the
+    real data store for goal/step/ledger state.
     """
 
     # Identity (RFC-216: goal_id independent of thread)
@@ -147,24 +150,11 @@ class GoalExecutionRecord(BaseModel):
     max_iterations: int = 10
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
-    # RFC-225: Orchestration — latest plan DAG (revisions emitted via events)
-    current_plan: PlanResult | None = None
-    completed_step_ids: set[str] = Field(default_factory=set)
+    # Plan revision tracking (still useful for monitoring)
     plan_revision_count: int = 0
 
-    # RFC-225: Execution overlay — per-step outcomes and evidence accumulated for goal
-    step_results: list[StepResult] = Field(default_factory=list)
-    evidence_ledger: list[EvidenceEntry] = Field(default_factory=list)
-
-    # RFC-214: Unified message ledger (replaces reason_history/act_history)
-    loop_messages: list[LoopHumanMessage | LoopAIMessage] = Field(
-        default_factory=list,
-        description="Ordered adjacent Human-AI message pairs for all orchestration turns",
-    )
-
-    # Goal output
+    # Goal output (kept for checkpoint-level summary)
     goal_completion: str = ""
-    evidence_summary: str = ""
 
     # Metrics
     duration_ms: int = 0
@@ -215,7 +205,7 @@ class StrangeLoopCheckpoint(BaseModel):
     updated_at: datetime
 
     # Metadata (informational only, no migration logic)
-    schema_version: str = "3.3"  # Rate limit circuit breaker
+    schema_version: str = "3.4"  # RFC-624 Phase 4 Stage 2: slimmed GoalExecutionRecord
 
 
 def normalize_checkpoint_data(
@@ -257,7 +247,7 @@ def normalize_checkpoint_data(
     out.setdefault("total_duration_ms", 0)
     out.setdefault("total_tokens_used", 0)
     out.setdefault("thread_switch_pending", False)
-    out.setdefault("schema_version", "3.3")
+    out.setdefault("schema_version", "3.4")
 
     status = out.get("status")
     if status not in _SLOOP_CHECKPOINT_STATUSES:

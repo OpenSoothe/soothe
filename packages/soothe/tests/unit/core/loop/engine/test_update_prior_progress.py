@@ -9,10 +9,21 @@ intentionally excluded from the list. Tool names therefore come from
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
+from soothe.context.engine import ContextEngine
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import Executor
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
+
+
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
 
 
 def _ai_with_tool_calls(
@@ -69,7 +80,7 @@ def _failed_payload(step_id: str = "s1", error: str = "boom") -> tuple:
 
 
 def _executor() -> Executor:
-    return Executor(object(), max_parallel_steps=4)
+    return Executor(object(), max_parallel_steps=4, context_engine=_make_ce())
 
 
 def test_tool_calls_extracted_from_aimessage_tool_calls() -> None:

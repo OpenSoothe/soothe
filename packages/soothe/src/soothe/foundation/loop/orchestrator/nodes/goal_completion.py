@@ -72,8 +72,8 @@ def _append_goal_completion_ledger_pair(
         iteration=iteration_completed,
         phase="goal_completion",
     )
-    _record_ledger_message(context_engine, human_msg, "goal_completion", state.loop_messages)
-    _record_ledger_message(context_engine, ai_msg, "goal_completion", state.loop_messages)
+    _record_ledger_message(context_engine, human_msg, "goal_completion")
+    _record_ledger_message(context_engine, ai_msg, "goal_completion")
 
 
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -106,9 +106,11 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     state.iteration += 1
     state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)
 
-    # IG-475: Snapshot step_results before clearing so synthesis (scenario
-    # classifier + evidence projection) still sees them.  Clear after synthesis.
-    pre_clear_step_results = list(state.step_results)
+    # RFC-624 Phase 4 Stage 2: No longer snapshot/restore step_results.
+    # When CE is bound, state.step_results property reads from CE DAG,
+    # which retains step data after finalize_goal(). Clear caches only.
+    # When CE is not bound (tests), synthesis reads from cache directly.
+    pre_clear_step_results = list(state.step_results)  # for metrics logging only
 
     state.clear_goal_state()
     ctx.scratch.decision = None
@@ -173,9 +175,9 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         final_output = last_ledger_ai_content(state)
         logger.info("Goal completion: action=ledger_direct chars=%d", len(final_output or ""))
     elif action == CompletionStrategy.SYNTHESIZE:
-        # Restore step_results so scenario classifier + evidence projection
-        # can read execution metadata (they were cleared by IG-475 above).
-        state.step_results = pre_clear_step_results
+        # RFC-624 Phase 4 Stage 2: No restore needed.
+        # state.step_results property reads from CE DAG when bound.
+        # Synthesis projection reads state.step_results which queries CE.
         logger.info("Goal completion: action=synthesis starting stream")
         accum = GoalCompletionAccumState()
         chunk_count = 0
@@ -198,13 +200,10 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         if not final_output:
             used_synthesis_fallback = True
             final_output = generate_user_fallback_summary(state, plan_result)
-        # Re-clear step_results after synthesis consumed them (IG-475)
-        state.step_results = []
     elif action == CompletionStrategy.SUMMARY:
-        # Restore step_results so fallback summary can read execution metadata.
-        state.step_results = pre_clear_step_results
+        # RFC-624 Phase 4 Stage 2: No restore needed.
+        # state.step_results property reads from CE DAG when bound.
         final_output = generate_user_fallback_summary(state, plan_result)
-        state.step_results = []
         logger.info("Goal completion: action=summary chars=%d", len(final_output or ""))
 
     _append_goal_completion_ledger_pair(

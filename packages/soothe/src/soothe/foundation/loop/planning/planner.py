@@ -1162,13 +1162,11 @@ class LLMPlanner:
                 context_engine,
                 recorded_human,
                 "plan_assess",
-                state.loop_messages,
             )
             _record_ledger_message(
                 context_engine,
                 ai_msg,
                 "plan_assess",
-                state.loop_messages,
             )
             logger.debug(
                 "Recorded plan-assess ledger pair: human=%d chars, ai=%d chars",
@@ -1361,13 +1359,11 @@ class LLMPlanner:
                 context_engine,
                 recorded_human,
                 "plan_generate",
-                state.loop_messages,
             )
             _record_ledger_message(
                 context_engine,
                 ai_msg,
                 "plan_generate",
-                state.loop_messages,
             )
             logger.debug(
                 "Recorded plan-generate ledger pair: human=%d chars, ai=%d chars",
