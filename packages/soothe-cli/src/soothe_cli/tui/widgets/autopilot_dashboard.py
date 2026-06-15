@@ -1,10 +1,14 @@
-"""RFC-204: Autopilot TUI Dashboard — read-only monitoring view.
+"""RFC-204/RFC-625: Autopilot TUI Dashboard — read-only monitoring view.
 
 Four-panel layout (responsive):
   Wide terminal:  Goal DAG (left) | Status + Findings + Controls (right)
   Narrow terminal: Vertical stack (DAG → Status → Findings → Controls)
 
 All panels are read-only; control actions are done via CLI commands.
+
+Mode-aware DAG rendering:
+  - Solo mode: Linear chain (simple list with → arrows)
+  - Autopilot mode: Full DAG (with dependencies visualization)
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from soothe_sdk.client.config import SOOTHE_HOME
 from soothe_sdk.client.protocol import preview_first
@@ -32,11 +36,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+DagRenderMode = Literal["solo", "autopilot"]
+
 
 class GoalDagWidget(Static):
-    """Displays the goal DAG as a text tree."""
+    """Displays the goal DAG as a text tree.
+
+    Mode-aware rendering:
+    - Solo mode: Linear chain (goal → goal → goal)
+    - Autopilot mode: Full DAG with dependencies
+    """
 
     goals: list[dict] = reactive([])
+    mode: DagRenderMode = reactive("solo")
 
     DEFAULT_CSS = """
     GoalDagWidget {
@@ -51,6 +63,7 @@ class GoalDagWidget(Static):
         """Render the goal DAG as styled text."""
         if not self.goals:
             return "[dim]No goals loaded[/]"
+
         status_colors = {
             "pending": "dim",
             "active": "yellow",
@@ -70,7 +83,48 @@ class GoalDagWidget(Static):
             "suspended": "⏸",
             "blocked": "⏺",
         }
-        lines = ["[bold green]Goal DAG[/]", ""]
+
+        # Mode-aware header
+        mode_label = "Solo" if self.mode == "solo" else "Autopilot"
+        lines = [f"[bold green]Goal DAG[/] [dim]({mode_label} mode)[/]", ""]
+
+        if self.mode == "solo":
+            # Solo mode: Render as linear chain
+            self._render_linear_chain(lines, status_colors, icons)
+        else:
+            # Autopilot mode: Render full DAG
+            self._render_full_dag(lines, status_colors, icons)
+
+        return "\n".join(lines)
+
+    def _render_linear_chain(
+        self,
+        lines: list[str],
+        status_colors: dict[str, str],
+        icons: dict[str, str],
+    ) -> None:
+        """Render goals as a linear chain (solo mode)."""
+        # Sort goals by created_at for linear chain
+        sorted_goals = sorted(self.goals, key=lambda g: g.get("created_at", ""))
+
+        for i, g in enumerate(sorted_goals):
+            status = g.get("status", "pending")
+            color = status_colors.get(status, "dim")
+            icon = icons.get(status, "○")
+            gid = g.get("id", "?")
+            desc = preview_first(g.get("description", ""), AUTOPILOT_GOAL_DESCRIPTION_PREVIEW_CHARS)
+
+            # Arrow for chain (except last)
+            arrow = " → " if i < len(sorted_goals) - 1 else ""
+            lines.append(f"  [{color}]{icon}[/] [{color}]{gid}[/] {desc}{arrow}")
+
+    def _render_full_dag(
+        self,
+        lines: list[str],
+        status_colors: dict[str, str],
+        icons: dict[str, str],
+    ) -> None:
+        """Render goals as full DAG with dependencies (autopilot mode)."""
         for g in self.goals:
             status = g.get("status", "pending")
             color = status_colors.get(status, "dim")
@@ -86,13 +140,13 @@ class GoalDagWidget(Static):
             gid = g.get("id", "?")
             desc = preview_first(g.get("description", ""), AUTOPILOT_GOAL_DESCRIPTION_PREVIEW_CHARS)
             lines.append(f"  [{color}]{icon}[/] [{color}]{gid}[/] {desc}{deps}{informs}")
-        return "\n".join(lines)
 
 
 class StatusWidget(Static):
     """Displays overall autopilot status."""
 
     state: str = reactive("idle")
+    mode: DagRenderMode = reactive("solo")
     active_count: int = reactive(0)
     completed_count: int = reactive(0)
     iteration_count: int = reactive(0)
@@ -109,8 +163,9 @@ class StatusWidget(Static):
 
     def render(self) -> str:
         """Render the status panel as styled text."""
+        mode_label = "Solo" if self.mode == "solo" else "Autopilot"
         parts = [
-            f"[bold blue]Status[/]  [{self.state}]",
+            f"[bold blue]Status[/]  [{self.state}]  [dim]({mode_label})[/]",
             f"  Active: {self.active_count}  |  "
             f"Completed: {self.completed_count}  |  "
             f"Iterations: {self.iteration_count}",
@@ -145,6 +200,8 @@ class FindingsWidget(ScrollableContainer):
 class ControlsWidget(Static):
     """Displays available CLI commands (read-only)."""
 
+    mode: DagRenderMode = reactive("solo")
+
     _COMMANDS: ClassVar[list[tuple[str, str]]] = [
         ("soothe autopilot submit 'task'", "Submit task"),
         ("soothe autopilot status", "Check status"),
@@ -152,6 +209,7 @@ class ControlsWidget(Static):
         ("soothe autopilot goal <id>", "Goal details"),
         ("soothe autopilot cancel <id>", "Cancel goal"),
         ("soothe autopilot wake", "Exit dreaming"),
+        ("/autopilot-toggle", "Toggle solo/autopilot mode"),
     ]
 
     DEFAULT_CSS = """
@@ -165,9 +223,14 @@ class ControlsWidget(Static):
 
     def render(self) -> str:
         """Render the controls panel as styled text."""
+        mode_hint = "Switch to Autopilot" if self.mode == "solo" else "Switch to Solo"
         lines = ["[bold yellow]Available Commands[/] (use CLI)", ""]
         for cmd, desc in self._COMMANDS:
-            lines.append(f"  [bold]{cmd}[/]  [dim]— {desc}[/]")
+            # Highlight mode toggle based on current state
+            if cmd == "/autopilot-toggle":
+                lines.append(f"  [bold cyan]{cmd}[/]  [dim]— {mode_hint}[/]")
+            else:
+                lines.append(f"  [bold]{cmd}[/]  [dim]— {desc}[/]")
         return "\n".join(lines)
 
 
@@ -183,19 +246,27 @@ class AutopilotDashboard(Container):
     }
     """
 
-    def __init__(self, *, is_narrow: bool = False, **kwargs: Any) -> None:
+    def __init__(
+        self, *, is_narrow: bool = False, mode: DagRenderMode = "solo", **kwargs: Any
+    ) -> None:
         """Initialize dashboard.
 
         Args:
             is_narrow: Whether to use vertical layout.
+            mode: Initial DAG render mode (solo or autopilot).
             **kwargs: Passed to parent.
         """
         super().__init__(**kwargs)
         self._is_narrow = is_narrow
+        self._mode: DagRenderMode = mode
         self.goal_dag = GoalDagWidget()
         self.status = StatusWidget()
         self.findings = FindingsWidget()
         self.controls = ControlsWidget()
+        # Set initial mode on widgets
+        self.goal_dag.mode = mode
+        self.status.mode = mode
+        self.controls.mode = mode
 
     def compose(self) -> ComposeResult:
         """Build the dashboard layout."""
@@ -215,6 +286,35 @@ class AutopilotDashboard(Container):
                 self.controls,
                 classes="side-panel",
             )
+
+    def set_mode(self, mode: DagRenderMode) -> None:
+        """Set DAG render mode and propagate to widgets.
+
+        Args:
+            mode: DAG render mode (solo or autopilot).
+        """
+        self._mode = mode
+        self.goal_dag.mode = mode
+        self.status.mode = mode
+        self.controls.mode = mode
+
+    def get_mode(self) -> DagRenderMode:
+        """Get current DAG render mode.
+
+        Returns:
+            Current mode (solo or autopilot).
+        """
+        return self._mode
+
+    def toggle_mode(self) -> DagRenderMode:
+        """Toggle between solo and autopilot mode.
+
+        Returns:
+            New mode after toggle.
+        """
+        new_mode = "autopilot" if self._mode == "solo" else "solo"
+        self.set_mode(new_mode)
+        return new_mode
 
     def update_goals(self, goals: list[dict]) -> None:
         """Update goal display.

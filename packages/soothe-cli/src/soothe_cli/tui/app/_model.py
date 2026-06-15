@@ -278,6 +278,46 @@ class _ModelMixin:
 
         self.push_screen(screen, handle_result)
 
+    async def _toggle_autopilot_mode(self) -> None:
+        """Toggle autopilot mode (solo ↔ autopilot) via daemon RPC.
+
+        Sends command_request to daemon and updates local dashboard mode.
+        """
+        from soothe_cli.tui.widgets.messages import ErrorMessage, UserMessage
+
+        await self._mount_message(UserMessage("/autopilot-toggle"))
+
+        lid = self._loop_id
+        if not lid:
+            await self._mount_message(ErrorMessage("No active loop for autopilot toggle"))
+            return
+
+        if not self._client:
+            await self._mount_message(ErrorMessage("Not connected to daemon"))
+            return
+
+        try:
+            from soothe_cli.tui.commands.command_router import handle_rpc_command
+            from soothe_cli.tui.commands.slash_commands import COMMANDS
+
+            entry = COMMANDS.get("/autopilot-toggle")
+            if not entry:
+                await self._mount_message(ErrorMessage("Command /autopilot-toggle not found"))
+                return
+
+            await handle_rpc_command(
+                entry,
+                "autopilot-toggle",
+                None,
+                self._console,
+                self._client,
+                loop_id=lid,
+            )
+
+        except Exception as exc:
+            logger.exception("Autopilot toggle failed")
+            await self._mount_message(ErrorMessage(f"Failed to toggle autopilot: {exc}"))
+
     async def _submit_autopilot_job(self, task: str) -> None:
         """Submit an autopilot job via HTTP REST (like CLI `soothe autopilot run`).
 

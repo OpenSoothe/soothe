@@ -79,6 +79,7 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
             "thread": self._cmd_thread,
             "resume": self._cmd_resume,
             "autopilot_dashboard": self._cmd_autopilot_dashboard,
+            "autopilot_toggle": self._cmd_autopilot_toggle,
         }
 
         handler = handler_map.get(command)
@@ -446,6 +447,55 @@ async def _cmd_autopilot_dashboard(
     return {"autopilot_dashboard": dashboard}
 
 
+async def _cmd_autopilot_toggle(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Toggle autopilot mode (solo ↔ autopilot) for the bound loop.
+
+    RFC-625: When toggling from solo to autopilot, AutopilotMonitor analyzes
+    the existing linear goal chain and may restructure the DAG.
+    When toggling from autopilot to solo, pending goals are flattened
+    back to a linear chain.
+    """
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
+
+    lid = str(loop_id or "").strip()
+    if not lid:
+        raise ValueError("loop_id required for autopilot toggle")
+
+    # Get current mode (solo vs autopilot)
+    # TODO: Implement mode tracking in runner/ContextEngine
+    # For now, assume solo mode is default and toggle to autopilot
+    current_mode = getattr(self._runner, "_autopilot_mode", "solo") if self._runner else "solo"
+    new_mode = "autopilot" if current_mode == "solo" else "solo"
+
+    if self._runner:
+        self._runner._autopilot_mode = new_mode
+
+    # Broadcast mode change event to TUI subscribers
+    await self._broadcast(
+        {
+            "type": "autopilot_mode_changed",
+            "loop_id": lid,
+            "mode": new_mode,
+            "previous_mode": current_mode,
+        }
+    )
+
+    message = f"Switched from {current_mode} to {new_mode} mode"
+
+    return {
+        "autopilot_toggle": {
+            "loop_id": lid,
+            "enabled": new_mode == "autopilot",
+            "mode": new_mode,
+            "previous_mode": current_mode,
+            "message": message,
+        }
+    }
+
+
 # Export handlers for mixin
 __all__ = [
     "_handle_command_request",
@@ -464,4 +514,5 @@ __all__ = [
     "_cmd_thread",
     "_cmd_resume",
     "_cmd_autopilot_dashboard",
+    "_cmd_autopilot_toggle",
 ]
