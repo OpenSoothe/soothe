@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.context.models import StepDAG, StepExecution, StepNode
+from soothe.foundation.context.models import StepDAG, StepExecution, StepNode
 
 
 class TestStepDAGAddStep:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.context.models import GoalNode, GoalStepDAG, StepNode
+from soothe.foundation.context.models import GoalNode, GoalStepDAG, StepNode
 
 
 class TestSqliteMemoryPersistence:
@@ -12,7 +12,7 @@ class TestSqliteMemoryPersistence:
 
     @pytest.mark.asyncio
     async def test_save_and_load_dag(self) -> None:
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         dag = GoalStepDAG()
@@ -30,14 +30,14 @@ class TestSqliteMemoryPersistence:
 
     @pytest.mark.asyncio
     async def test_load_empty_returns_none(self) -> None:
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         assert await p.load_dag() is None
 
     @pytest.mark.asyncio
     async def test_save_and_load_ledger(self) -> None:
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         data = [{"type": "HumanMessage", "content": "hello", "phase": "plan"}]
@@ -48,14 +48,14 @@ class TestSqliteMemoryPersistence:
 
     @pytest.mark.asyncio
     async def test_load_ledger_empty(self) -> None:
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         assert await p.load_ledger() == []
 
     @pytest.mark.asyncio
     async def test_clear(self) -> None:
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         dag = GoalStepDAG()
@@ -70,7 +70,7 @@ class TestSqliteMemoryPersistence:
 class TestFilePersistence:
     @pytest.mark.asyncio
     async def test_save_and_load_dag(self, tmp_path) -> None:
-        from soothe.context.persistence.file_backend import FileContextPersistence
+        from soothe.foundation.context.persistence.file_backend import FileContextPersistence
 
         p = FileContextPersistence(loop_id="test-1", soothe_home=tmp_path)
         dag = GoalStepDAG()
@@ -85,7 +85,7 @@ class TestFilePersistence:
 
     @pytest.mark.asyncio
     async def test_save_and_load_ledger(self, tmp_path) -> None:
-        from soothe.context.persistence.file_backend import FileContextPersistence
+        from soothe.foundation.context.persistence.file_backend import FileContextPersistence
 
         p = FileContextPersistence(loop_id="test-1", soothe_home=tmp_path)
         data = [{"type": "AIMessage", "content": "result", "phase": "execute_step"}]
@@ -96,7 +96,7 @@ class TestFilePersistence:
 
     @pytest.mark.asyncio
     async def test_load_nonexistent_returns_none(self, tmp_path) -> None:
-        from soothe.context.persistence.file_backend import FileContextPersistence
+        from soothe.foundation.context.persistence.file_backend import FileContextPersistence
 
         p = FileContextPersistence(loop_id="missing", soothe_home=tmp_path)
         assert await p.load_dag() is None
@@ -104,7 +104,7 @@ class TestFilePersistence:
 
     @pytest.mark.asyncio
     async def test_clear_removes_files(self, tmp_path) -> None:
-        from soothe.context.persistence.file_backend import FileContextPersistence
+        from soothe.foundation.context.persistence.file_backend import FileContextPersistence
 
         p = FileContextPersistence(loop_id="test-1", soothe_home=tmp_path)
         dag = GoalStepDAG()
@@ -117,7 +117,7 @@ class TestFilePersistence:
 
     @pytest.mark.asyncio
     async def test_isolated_loops(self, tmp_path) -> None:
-        from soothe.context.persistence.file_backend import FileContextPersistence
+        from soothe.foundation.context.persistence.file_backend import FileContextPersistence
 
         p1 = FileContextPersistence(loop_id="l1", soothe_home=tmp_path)
         p2 = FileContextPersistence(loop_id="l2", soothe_home=tmp_path)

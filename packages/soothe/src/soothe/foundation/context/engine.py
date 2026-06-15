@@ -1,4 +1,4 @@
-"""Context Engine — unified context management for goals, steps, and projection (RFC-624)."""
+"""Context Engine — unified context management for goals, steps, and projection (RFC-624, RFC-625)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import (
     AIMessage,
@@ -17,17 +17,22 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from soothe.context.ledger import LedgerManager
-from soothe.context.models import (
+from soothe.foundation.context.ledger import LedgerManager
+from soothe.foundation.context.models import (
+    EpisodeSummary,
     GoalNode,
+    GoalStatus,
     GoalStepDAG,
     GoalStepDAGSnapshot,
     StepDAG,
     StepExecution,
     StepNode,
 )
-from soothe.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
-from soothe.context.semantic import SemanticLoader
+from soothe.foundation.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
+from soothe.foundation.context.semantic import SemanticLoader
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +98,9 @@ class ContextEngine:
         workspace: Path | None = None,
     ) -> None:
         if persistence is None:
-            from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+            from soothe.foundation.context.persistence.sqlite_backend import (
+                SqliteContextPersistence,
+            )
 
             persistence = SqliteContextPersistence(loop_id="default", db_path=Path(":memory:"))
 
@@ -105,7 +112,7 @@ class ContextEngine:
         self._callbacks: dict[str, list[Callable]] = {}
 
         # Planning submodule (RFC-624 Phase 3c)
-        from soothe.context.planning import (
+        from soothe.foundation.context.planning import (
             GoalPlanningSubengine,
             GoalScheduler,
             PlanningFacade,
@@ -322,6 +329,54 @@ class ContextEngine:
             goal.previous_plan = (
                 plan.model_dump(mode="json") if hasattr(plan, "model_dump") else plan
             )
+
+    # ── RFC-625: Monitor-required methods ────────────────────────────────
+
+    async def remove_goal(self, goal_id: str) -> bool:
+        """Remove a goal from the DAG. Validates no dependents.
+
+        Returns True if removed, False if goal not found or has dependents.
+        """
+        return self._dag.remove_goal(goal_id)
+
+    async def merge_goals(
+        self, goal_ids: list[str], merged_description: str, merged_id: str | None = None
+    ) -> GoalNode | None:
+        """Merge multiple goals into a single consolidated goal.
+
+        Preserves union of dependencies, informs, and findings.
+        Returns new merged goal, or None if any goal not found.
+        """
+        return self._dag.merge_goals(goal_ids, merged_description, merged_id)
+
+    def is_dag_complete(self) -> bool:
+        """Check if all goals in DAG are in terminal states."""
+        return self._dag.is_dag_complete()
+
+    def get_goals_by_status(self, status: GoalStatus | None = None) -> list[GoalNode]:
+        """Filter goals by status (None = all goals)."""
+        return self._dag.get_goals_by_status(status)
+
+    def get_goal_dependents(self, goal_id: str) -> list[str]:
+        """Get all goal IDs that depend on this goal."""
+        return self._dag.get_goal_dependents(goal_id)
+
+    async def update_dependencies(self, goal_id: str, depends_on: list[str]) -> None:
+        """Update goal dependencies (for mode switch flattening)."""
+        self._dag.update_dependencies(goal_id, depends_on)
+
+    # ── Episodic memory (RFC-625 dreaming) ────────────────────────────────
+
+    _episodic_memory: list[EpisodeSummary] = []
+
+    async def record_episodic_memory(self, episodes: list[EpisodeSummary]) -> None:
+        """Store distilled episodic memory from dreaming."""
+        self._episodic_memory.extend(episodes)
+        logger.info("Recorded %d episodic memory entries", len(episodes))
+
+    def get_episodic_memory(self, limit: int = 10) -> list[EpisodeSummary]:
+        """Retrieve recent episodic memories."""
+        return self._episodic_memory[-limit:]
 
     # ── Step management ──────────────────────────────────────────
 

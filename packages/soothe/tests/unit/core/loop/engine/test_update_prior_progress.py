@@ -13,8 +13,8 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from soothe.context.engine import ContextEngine
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import Executor
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 

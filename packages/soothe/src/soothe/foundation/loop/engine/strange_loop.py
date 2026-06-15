@@ -401,8 +401,8 @@ class StrangeLoop:
         plan_manager: Any
 
         # RFC-624 Phase 4: ContextEngine is always active
-        from soothe.context.engine import ContextEngine as _ContextEngine
-        from soothe.context.planning import StepPlanManagerAdapter
+        from soothe.foundation.context.engine import ContextEngine as _ContextEngine
+        from soothe.foundation.context.planning import StepPlanManagerAdapter
 
         from .context_adapters import (
             ContextEngineGoalContextAdapter,
@@ -423,7 +423,9 @@ class StrangeLoop:
                 )
                 persistence_backend = "sqlite"
             else:
-                from soothe.context.persistence.pgsql_backend import PgsqlContextPersistence
+                from soothe.foundation.context.persistence.pgsql_backend import (
+                    PgsqlContextPersistence,
+                )
 
                 # RFC-612: prefer postgres_base_dsn + database name; fall back to
                 # soothe_postgres_dsn (single-database legacy DSN).
@@ -445,7 +447,9 @@ class StrangeLoop:
                 )
 
         if persistence_backend == "sqlite":
-            from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+            from soothe.foundation.context.persistence.sqlite_backend import (
+                SqliteContextPersistence,
+            )
             from soothe.foundation.loop.state.persistence.directory_manager import (
                 PersistenceDirectoryManager,
             )

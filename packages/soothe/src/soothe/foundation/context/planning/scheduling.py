@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from soothe.context.models import TERMINAL_STATES, GoalNode, GoalStepDAG
+from soothe.foundation.context.models import TERMINAL_STATES, GoalNode, GoalStepDAG
 
 logger = logging.getLogger(__name__)
 

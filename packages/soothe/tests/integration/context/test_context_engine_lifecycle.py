@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import StepExecution, StepNode
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import StepExecution, StepNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 class TestContextEngineGoalLifecycle:

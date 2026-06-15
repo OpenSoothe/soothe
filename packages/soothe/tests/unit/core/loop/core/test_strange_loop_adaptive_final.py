@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.context.planning.models import CompletionStrategy
+from soothe.foundation.context.planning.models import CompletionStrategy
 from soothe.foundation.loop import StrangeLoop
 from soothe.foundation.loop.state.schemas import PlanResult
 

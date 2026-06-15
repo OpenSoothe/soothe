@@ -1205,7 +1205,7 @@ class LLMPlanner:
         Records the plan-generate user/AI pair in the ledger after the LLM call.
         These messages are NOT injected into CoreAgent thread.
         """
-        from soothe.context.planning.completion import (
+        from soothe.foundation.context.planning.completion import (
             determine_goal_completion_needs,
         )
         from soothe.foundation.loop.state.schemas import PlanResult
@@ -1450,7 +1450,7 @@ class LLMPlanner:
 
                 # Early completion: apply goal-completion policy (IG-298)
                 if assessment.status == "done":
-                    from soothe.context.planning.completion import (
+                    from soothe.foundation.context.planning.completion import (
                         determine_goal_completion_needs,
                     )
 

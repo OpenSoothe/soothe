@@ -15,7 +15,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe.context.projection import ContextBundle
+    from soothe.foundation.context.projection import ContextBundle
     from soothe.foundation.loop.engine.scenario_classifier import (
         ScenarioClassification,
     )

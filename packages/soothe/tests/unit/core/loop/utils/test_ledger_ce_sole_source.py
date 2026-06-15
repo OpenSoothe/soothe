@@ -6,7 +6,7 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.context.engine import ContextEngine
+from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.loop.state.schemas import LoopState
 from soothe.foundation.loop.utils.messages import (
     LoopAIMessage,
@@ -17,8 +17,8 @@ from soothe.foundation.loop.utils.messages import (
 
 def _make_state_with_ce() -> tuple[LoopState, ContextEngine]:
     """Create a LoopState bound to a real ContextEngine instance."""
-    from soothe.context.models import GoalNode
-    from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+    from soothe.foundation.context.models import GoalNode
+    from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
     ce = ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -32,7 +32,7 @@ def _make_state_with_ce() -> tuple[LoopState, ContextEngine]:
 
 def _make_ce() -> ContextEngine:
     """Create a ContextEngine with sqlite :memory: backend."""
-    from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+    from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
     return ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -175,7 +175,7 @@ class TestBindCE:
         assert state._ce is None
         assert state._ce_goal_id is None
 
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         ce = ContextEngine(
             persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -196,7 +196,7 @@ class TestBindCE:
         )
         state._completed_step_ids_cache.add("s1")
 
-        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         ce = ContextEngine(
             persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
