@@ -31,6 +31,7 @@ from soothe_cli.tui.input import (
     IMAGE_PLACEHOLDER_PATTERN,
     VIDEO_PLACEHOLDER_PATTERN,
     abbreviate_pasted_input_display,
+    compose_paste_into_input,
     should_abbreviate_pasted_input,
 )
 from soothe_cli.tui.widgets.autocomplete import (
@@ -1317,16 +1318,47 @@ class ChatInput(Vertical):
             return full
         return display_value
 
-    def _apply_abbreviated_paste_display(self, full_text: str) -> None:
-        """Show an abbreviated preview while retaining the full paste for submit."""
+    def _apply_abbreviated_paste_display(self, pasted_text: str) -> None:
+        """Show abbreviated preview while retaining full post-paste text for submit."""
         if not self._text_area:
             return
+        text_area = self._text_area
+        cursor = self._get_cursor_offset()
+        replace_start = cursor
+        replace_end = cursor
+
+        selection = text_area.selection
+        if not selection.is_empty and selection.end is not None:
+            try:
+                start = text_area.document.get_index_from_location(selection.start)  # type: ignore[attr-defined]  # Document has this method; DocumentBase stub is narrower
+                end = text_area.document.get_index_from_location(selection.end)  # type: ignore[attr-defined]
+                replace_start = start
+                replace_end = end
+            except (AttributeError, ValueError):
+                logger.debug(
+                    "Failed to map selection to document offsets for abbreviated paste; "
+                    "falling back to cursor insertion",
+                    exc_info=True,
+                )
+
+        full_text = compose_paste_into_input(
+            text_area.text,
+            pasted_text,
+            replace_start=replace_start,
+            replace_end=replace_end,
+        )
         self._pending_submit_text = full_text
         self._setting_abbreviated_display = True
-        preview = abbreviate_pasted_input_display(full_text)
-        self._text_area.text = preview
+        preview_token = abbreviate_pasted_input_display(pasted_text)
+        preview = compose_paste_into_input(
+            text_area.text,
+            preview_token,
+            replace_start=replace_start,
+            replace_end=replace_end,
+        )
+        text_area.text = preview
         lines = preview.split("\n")
-        self._text_area.move_cursor((len(lines) - 1, len(lines[-1])))
+        text_area.move_cursor((len(lines) - 1, len(lines[-1])))
 
     def _submit_value(self, value: str) -> None:
         """Prepend mode prefix, save to history, post message, and reset input.

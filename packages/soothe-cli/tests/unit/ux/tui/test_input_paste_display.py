@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from soothe_cli.tui.input import (
     abbreviate_pasted_input_display,
+    compose_paste_into_input,
     should_abbreviate_pasted_input,
 )
 
@@ -26,14 +27,10 @@ def test_should_not_abbreviate_short_paste() -> None:
     assert should_abbreviate_pasted_input("fix the websocket bug") is False
 
 
-def test_abbreviate_shows_header_and_omitted_line_count() -> None:
+def test_abbreviate_shows_header_only() -> None:
     display = abbreviate_pasted_input_display(_TRACE_SAMPLE)
-    assert display.startswith("[pasted ")
-    assert "lines," in display
-    assert "characters]" in display
-    assert "more lines" in display
-    assert "ConnectionError: Connection closed" in display
-    assert "request_daemon_ready" in display
+    expected = f"[pasted {len(_TRACE_SAMPLE.splitlines())} lines, {len(_TRACE_SAMPLE)} characters]"
+    assert display == expected
     assert len(display) < len(_TRACE_SAMPLE)
 
 
@@ -42,3 +39,40 @@ def test_abbreviate_preserves_full_text_separately() -> None:
     display = abbreviate_pasted_input_display(_TRACE_SAMPLE)
     assert display != _TRACE_SAMPLE
     assert _TRACE_SAMPLE.strip() not in {display.strip()}
+
+
+def test_compose_paste_into_input_appends_at_end_by_default() -> None:
+    assert compose_paste_into_input("/skill:refine ", "summarize this trace") == (
+        "/skill:refine summarize this trace"
+    )
+
+
+def test_compose_paste_into_input_inserts_at_cursor_offset() -> None:
+    assert (
+        compose_paste_into_input(
+            "/skill:refine ",
+            "please ",
+            replace_start=7,
+            replace_end=7,
+        )
+        == "/skill:please refine "
+    )
+
+
+def test_compose_paste_into_input_replaces_selected_span() -> None:
+    assert (
+        compose_paste_into_input(
+            "/skill:refine old prompt",
+            "new prompt",
+            replace_start=14,
+            replace_end=24,
+        )
+        == "/skill:refine new prompt"
+    )
+
+
+def test_abbreviated_preview_can_keep_selected_skill_visible() -> None:
+    summary = abbreviate_pasted_input_display(_TRACE_SAMPLE)
+    preview = compose_paste_into_input("/skill:platonic-brainstorming ", summary)
+    assert preview.startswith("/skill:platonic-brainstorming ")
+    assert summary in preview
