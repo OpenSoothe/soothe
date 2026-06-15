@@ -1,17 +1,19 @@
 """Integration tests for ledger recovery from DAG (soothe.context)."""
 
+from pathlib import Path
+
 import pytest
 from langchain_core.messages import HumanMessage
 
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepExecution, StepNode
-from soothe.context.persistence.in_memory import InMemoryContextPersistence
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 class TestLedgerRecoveryFromDAG:
     @pytest.mark.asyncio
     async def test_step_results_in_ledger_after_persistence(self) -> None:
-        persistence = InMemoryContextPersistence()
+        persistence = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         engine = ContextEngine(persistence=persistence)
         goal = await engine.create_goal("Test")
         await engine.add_step(goal.id, StepNode(id="S1", description="Do it"))
@@ -27,7 +29,7 @@ class TestLedgerRecoveryFromDAG:
 
     @pytest.mark.asyncio
     async def test_dag_restores_step_status(self) -> None:
-        persistence = InMemoryContextPersistence()
+        persistence = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         engine = ContextEngine(persistence=persistence)
         goal = await engine.create_goal("Test")
         await engine.add_step(goal.id, StepNode(id="S1", description="Step 1"))

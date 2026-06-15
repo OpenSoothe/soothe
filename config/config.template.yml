@@ -193,8 +193,16 @@ agent:
       plan_ledger_max_message_chars: 0
 
     # Context Engine integration (RFC-624 Phase 4). Always active.
+    # CE uses the same persistence backend as the rest of Soothe
+    # (persistence.default_backend). Projection limits control how much
+    # context the CE injects into prompt templates.
     context_engine:
-      persistence_backend: "file"  # "file" | "in_memory"
+      projection_max_goals: 5
+      projection_max_steps_per_goal: 10
+      projection_max_ledger_chars: 4000
+      projection_max_ledger_messages: 20
+      projection_max_lineage_chars: 2000
+      projection_max_project_instructions_chars: 8000
 
     # Infrastructure limits (rate limiting, concurrency, timeouts)
     limits:

@@ -24,6 +24,18 @@ class ProjectionConfig(BaseModel):
     max_project_instructions_chars: int = 8000
 
 
+class PriorGoalSummary(BaseModel):
+    """Condensed summary of a completed goal for cross-goal context (RFC-624 Phase 4)."""
+
+    goal_id: str
+    description: str
+    status: str
+    step_summary: str
+    completion_text: str = ""
+    total_duration_ms: int = 0
+    total_tokens_used: int = 0
+
+
 class ContextBundle(BaseModel):
     """Structured output of ContextEngine.project() for prompt templates.
 
@@ -50,6 +62,10 @@ class ContextBundle(BaseModel):
 
     total_tokens_used: int = 0
     goal_dag_summary: str = ""
+
+    # RFC-624 Phase 4: cross-goal context
+    prior_goals: list[PriorGoalSummary] = Field(default_factory=list)
+    cross_goal_ledger: list[dict] = Field(default_factory=list)
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -167,6 +183,10 @@ class ProjectionEngine:
         total_tokens = sum(g.total_tokens_used for g in dag.goals.values())
         goal_dag_summary = self._render_dag_summary(dag)
 
+        # RFC-624 Phase 4: cross-goal context
+        prior_goals = self._render_prior_goals(dag, cfg.max_goals)
+        cross_goal_ledger = self._render_cross_goal_ledger(ledger, cfg.max_ledger_messages)
+
         return ContextBundle(
             active_goal=goal,
             goal_progress=goal_progress,
@@ -182,6 +202,8 @@ class ProjectionEngine:
             step_lineage=step_lineage,
             total_tokens_used=total_tokens,
             goal_dag_summary=goal_dag_summary,
+            prior_goals=prior_goals,
+            cross_goal_ledger=cross_goal_ledger,
         )
 
     @staticmethod
@@ -212,3 +234,50 @@ class ProjectionEngine:
         if failed:
             parts.append(f"{failed} failed")
         return ", ".join(parts)
+
+    @staticmethod
+    def _render_prior_goals(dag: GoalStepDAG, max_goals: int) -> list[PriorGoalSummary]:
+        """Build PriorGoalSummary list from completed/failed goals."""
+        from soothe.context.models import TERMINAL_STATES
+
+        terminal = [g for g in dag.goals.values() if g.status in TERMINAL_STATES]
+        # Most recent first
+        terminal.sort(key=lambda g: g.updated_at, reverse=True)
+        terminal = terminal[:max_goals]
+
+        summaries: list[PriorGoalSummary] = []
+        for g in terminal:
+            step_parts: list[str] = []
+            for sid in sorted(g.steps.nodes.keys()):
+                node = g.steps.nodes[sid]
+                if node.status == "completed":
+                    desc = (node.description or "").strip().replace("\n", " ")[:80]
+                    step_parts.append(f"  - {sid}: {desc}")
+            summaries.append(
+                PriorGoalSummary(
+                    goal_id=g.id,
+                    description=g.description,
+                    status=g.status,
+                    step_summary="\n".join(step_parts) if step_parts else "",
+                    total_duration_ms=g.total_duration_ms,
+                    total_tokens_used=g.total_tokens_used,
+                )
+            )
+        return summaries
+
+    @staticmethod
+    def _render_cross_goal_ledger(ledger: LedgerManager, max_messages: int) -> list[dict]:
+        """Build cross-goal ledger entries from LedgerManager."""
+        messages: list[dict] = []
+        for msg, phase in ledger.entries():
+            content = getattr(msg, "content", "")
+            if not isinstance(content, str):
+                content = ""
+            messages.append(
+                {
+                    "type": type(msg).__name__,
+                    "phase": phase,
+                    "content": _truncate(content, 500),
+                }
+            )
+        return messages[-max_messages:]
