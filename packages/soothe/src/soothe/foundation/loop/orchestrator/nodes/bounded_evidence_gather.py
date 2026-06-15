@@ -38,15 +38,14 @@ def _is_fresh_loop(ctx: LoopRuntimeContext) -> bool:
         return False
     if ctx.continue_loop_mode:
         return False
-    # RFC-624 Phase 4 Stage 2: Check CE DAG for completed goals instead of goal_history
-    if ctx.ce is not None:
-        has_completed_goals = any(g.status == "completed" for g in ctx.ce.get_all_goals())
-        if has_completed_goals:
-            return False
-    else:
-        # Fallback: no CE, use checkpoint.goal_history
-        if len(ctx.checkpoint.goal_history) >= 2:
-            return False
+    # RFC-624 Phase 4: CE is guaranteed active when graph nodes execute.
+    # Check CE DAG for completed goals instead of checkpoint.goal_history.
+    if ctx.ce is None:
+        # No CE should not happen in production; tests must provide CE backend.
+        return False
+    has_completed_goals = any(g.status == "completed" for g in ctx.ce.get_all_goals())
+    if has_completed_goals:
+        return False
     # Recovery paths may need assessment
     if ctx.recovery_valid_resume:
         return False

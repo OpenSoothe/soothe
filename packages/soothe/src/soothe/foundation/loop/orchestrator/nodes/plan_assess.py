@@ -66,6 +66,23 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
 ]
 
 
+def _has_prior_completed_goal(ctx: LoopRuntimeContext) -> bool:
+    """Check CE DAG for at least one completed prior goal.
+
+    RFC-624 Phase 4: CE is authoritative for goal state; checkpoint GER is metadata-only.
+    CE is guaranteed active when graph nodes execute (created before graph invocation).
+
+    Args:
+        ctx: LoopRuntimeContext with CE reference.
+
+    Returns:
+        True if at least one goal in CE DAG has status="completed".
+    """
+    if ctx.ce is None:
+        return False
+    return any(g.status == "completed" for g in ctx.ce.get_all_goals())
+
+
 def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
     """Compact summary of completed prior goals for the continuation_assess prompt.
 
@@ -80,7 +97,6 @@ def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
         ``goal_id``, ``goal_text``, ``completion``, ``step_count``.
     """
     if ctx.ce is None:
-        # Fallback: no CE, return empty (tests without CE)
         return []
     out: list[dict] = []
     for goal in ctx.ce.get_all_goals():
@@ -108,10 +124,9 @@ def build_continue_loop_bootstrap_plan(
     """Build a synthetic first ``PlanResult`` for loop continuation (RFC-225, RFC-226).
 
     The new user request is embedded in the step description so the agent knows
-    exactly what to address. The executor additionally prepends the prior goal's
-    execute_step ledger entries (seeded into ``LoopState.loop_messages`` by
-    ``seed_loop_ledger_from_prior_goal``) as graph_input_messages, giving the
-    agent the conversational context it needs to answer.
+    exactly what to address. The executor prepends prior goal ledger entries from
+    CE LedgerManager as graph_input_messages, giving the agent the conversational
+    context it needs to answer.
 
     Args:
         goal: Loop goal text (the current user request).
@@ -169,19 +184,18 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     # Only fires when this loop already has at least one completed prior goal,
     # state is a true first plan (no step results, recovery is clean), and
     # the structural continue_loop_mode flag is set by StrangeLoop.
+    # RFC-624 Phase 4: Use CE DAG query instead of checkpoint.goal_history.
     if (
         state.iteration == 0
         and ctx.continue_loop_mode
         and not state.step_results
-        and len(ctx.checkpoint.goal_history) >= 2
+        and _has_prior_completed_goal(ctx)
         and (
             not ctx.recovery_valid_resume
             or (
                 ctx.goal_record is not None
                 and ctx.goal_record.iteration == 0
-                # RFC-624 Phase 4 Stage 2: loop_messages removed from GER
-                # Check CE ledger instead
-                and (ctx.ce is None or len(ctx.ce.ledger.get_messages()) == 0)
+                and len(ctx.ce.ledger.get_messages()) == 0
             )
         )
     ):
