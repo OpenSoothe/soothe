@@ -24,6 +24,7 @@ from soothe_daemon.protocol.router import (
 # Import RPC command handlers (RFC-404)
 from soothe_daemon.server.commands import (
     _cmd_autopilot_dashboard,
+    _cmd_autopilot_toggle,
     _cmd_cancel,
     _cmd_clear,
     _cmd_config,
@@ -68,6 +69,7 @@ class DaemonHandlersMixin:
     _cmd_thread = _cmd_thread
     _cmd_resume = _cmd_resume
     _cmd_autopilot_dashboard = _cmd_autopilot_dashboard
+    _cmd_autopilot_toggle = _cmd_autopilot_toggle
 
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Send a direct response to a specific client when possible.
