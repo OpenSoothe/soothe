@@ -81,12 +81,12 @@ def prior_loop_execute_messages(
 
     Used by the executor when a bootstrap step (no dependencies) runs as the first
     step of a continuation goal. Unlike ``predecessor_execute_messages_for_branch``,
-    this does not filter by step_id — it replays ALL prior execute_step rows that
-    ``seed_loop_ledger_from_prior_goal`` seeded into ``LoopState.loop_messages``,
+    this does not filter by step_id — it replays ALL prior execute_step rows
+    from ``LoopState.loop_messages`` (synced from CE ledger for multi-goal context),
     so the agent sees the prior goal's conversation as context.
 
     Args:
-        loop_messages: ``LoopState.loop_messages`` ledger (seeded from prior goal).
+        loop_messages: ``LoopState.loop_messages`` ledger (synced from CE or seeded from prior goal).
         max_messages: Hard cap on copied messages.
 
     Returns:

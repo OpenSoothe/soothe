@@ -522,6 +522,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
     state.previous_plan = plan_result
 
+    # RFC-624 Phase 4 Step 5: mirror previous_plan on CE goal
+    if ctx.ce is not None and ctx.ce_goal_id:
+        try:
+            ctx.ce.set_previous_plan(ctx.ce_goal_id, plan_result)
+            await ctx.ce.save()
+        except Exception:
+            logger.debug("[execute] CE set_previous_plan/save failed", exc_info=True)
+
     ctx.scratch.step_results = step_results
 
     # RFC-224: Check context window and compact if needed

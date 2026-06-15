@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -856,6 +856,34 @@ MAX_LOOP_MESSAGES_PER_GOAL = 200  # Cap message ledger
 MAX_ACTION_HISTORY_PER_GOAL = 20  # Cap action descriptions
 MAX_EVIDENCE_LEDGER_PER_GOAL = 100  # Cap evidence entries
 
+# RFC-624 Phase 4: StepResult mapping helpers
+_VALID_ERROR_TYPES = {"execution", "tool", "timeout", "policy", "unknown", "fatal"}
+
+
+def _clamp_error_type(raw: str | None) -> str | None:
+    """Clamp error_type to StepResult's Literal union; unknown values → 'unknown'."""
+    if raw is None:
+        return None
+    return raw if raw in _VALID_ERROR_TYPES else "unknown"
+
+
+def _step_node_to_result(node: Any) -> StepResult:
+    """Map CE StepNode + StepExecution to LoopState StepResult."""
+    ex = node.execution
+    return StepResult(
+        step_id=node.id,
+        success=node.status == "completed",
+        outcome=ex.outcome or {},
+        error=ex.error,
+        error_type=_clamp_error_type(ex.error_type),
+        duration_ms=ex.duration_ms,
+        thread_id=ex.thread_id or "",
+        tool_call_count=ex.tool_call_count,
+        subagent_task_completions=ex.subagent_task_completions,
+        hit_subagent_cap=ex.hit_subagent_cap,
+        hit_tool_budget=ex.hit_tool_budget,
+    )
+
 
 class LoopState(BaseModel):
     """State for agentic loop (RFC-201, RFC-214).
@@ -876,14 +904,14 @@ class LoopState(BaseModel):
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
         plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses (IG-303).
-        completed_step_ids: Set of completed step IDs
+        completed_step_ids: Set of completed step IDs (CE-backed property when bound)
         previous_plan: Previous Plan phase result
-        step_results: All step results from execution (bounded to MAX_STEP_RESULTS_PER_GOAL)
+        step_results: All step results from execution (CE-backed property when bound)
         evidence_summary: Accumulated evidence summary
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
-        loop_messages: RFC-214: Unified message ledger (bounded to MAX_LOOP_MESSAGES_PER_GOAL).
+        loop_messages: RFC-214: Unified message ledger (CE-backed property when bound).
         last_execute_assistant_text: Resolved visible answer for the latest Execute wave — see
             :mod:`soothe.core.loop.engine.executor` (IG-357).
         last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
@@ -910,22 +938,66 @@ class LoopState(BaseModel):
 
     current_decision: AgentDecision | None = None
     plan_id: str | None = None
-    completed_step_ids: set[str] = Field(default_factory=set)
     previous_plan: PlanResult | None = None
-    step_results: list[StepResult] = []
     evidence_summary: str = ""
     working_memory: Any | None = None
+
+    # CE-backed property caches (RFC-624 Phase 4). When CE is not bound,
+    # these caches serve as the authoritative store. When CE is bound,
+    # the @property accessors query CE and these caches are unused.
+    _loop_messages_cache: list[LoopHumanMessage | LoopAIMessage] = PrivateAttr(default_factory=list)
+    _step_results_cache: list[StepResult] = PrivateAttr(default_factory=list)
+    _completed_step_ids_cache: set[str] = PrivateAttr(default_factory=set)
 
     evidence_ledger: list[EvidenceEntry] = Field(
         default_factory=list,
         description="Append-only evidence ids for plan validation (RFC-220).",
     )
 
-    # RFC-214: Unified message ledger for orchestration turns
-    loop_messages: list[LoopHumanMessage | LoopAIMessage] = Field(
-        default_factory=list,
-        description="Ordered adjacent Human-AI message pairs for all orchestration turns",
-    )
+    # RFC-624 Phase 4: CE binding. When set, @property accessors query CE
+    # for loop_messages, step_results, and completed_step_ids.
+    _ce: Any | None = PrivateAttr(default=None)
+    _ce_goal_id: str | None = PrivateAttr(default=None)
+    # Temporary storage for property kwargs captured by the before-validator.
+    # Not thread-safe but LoopState is not shared across threads.
+    _pending_kwargs: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _capture_property_kwargs(cls, data: Any) -> Any:
+        """Route loop_messages/step_results/completed_step_ids kwargs to caches.
+
+        These fields are @property accessors (not Pydantic fields), but callers
+        may still pass them as constructor kwargs. This validator extracts them
+        so they can be assigned after Pydantic construction.
+        """
+        if isinstance(data, dict):
+            data = dict(data)  # avoid mutating the original
+            captured = {
+                k: data.pop(k)
+                for k in ("loop_messages", "step_results", "completed_step_ids")
+                if k in data
+            }
+            # Stash on the class for post-init assignment; safe because
+            # LoopState construction is single-threaded per instance.
+            cls._pending_kwargs_store = captured  # type: ignore[attr-defined]
+        return data
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        # Apply any captured property kwargs to the private caches
+        pending = getattr(self.__class__, "_pending_kwargs_store", {})
+        if pending:
+            if "loop_messages" in pending:
+                self._loop_messages_cache = pending["loop_messages"]
+            if "step_results" in pending:
+                self._step_results_cache = pending["step_results"]
+            if "completed_step_ids" in pending:
+                self._completed_step_ids_cache = pending["completed_step_ids"]
+            self.__class__._pending_kwargs_store = {}
 
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0
@@ -995,23 +1067,163 @@ class LoopState(BaseModel):
         description="Maps step_id → thread_id used for execution.",
     )
 
+    def bind_ce(self, ce: Any, goal_id: str) -> None:
+        """Bind this LoopState to a ContextEngine instance (RFC-624 Phase 4).
+
+        After binding, @property accessors for loop_messages, step_results,
+        and completed_step_ids query CE instead of the local cache.
+
+        Args:
+            ce: ContextEngine instance.
+            goal_id: Active goal ID in the CE DAG.
+        """
+        self._ce = ce
+        self._ce_goal_id = goal_id
+        # Clear caches — CE is now authoritative
+        self._loop_messages_cache.clear()
+        self._step_results_cache.clear()
+        self._completed_step_ids_cache.clear()
+
+    def sync_loop_messages_from_ce(self) -> None:
+        """No-op. Retained for backward compatibility (RFC-624 Phase 4).
+
+        The ``loop_messages`` property now queries CE directly when bound.
+        Callers that previously called this before reading ``state.loop_messages``
+        no longer need to — the property always returns fresh data.
+        """
+
+    @property
+    def loop_messages(self) -> list[LoopHumanMessage | LoopAIMessage]:
+        """Ordered adjacent Human-AI message pairs for all orchestration turns.
+
+        When CE is bound, queries the CE ledger (fresh data each call).
+        When CE is not bound, returns the local cache.
+        """
+        if self._ce is None:
+            return self._loop_messages_cache
+        return self._build_loop_messages_from_ce()
+
+    @loop_messages.setter
+    def loop_messages(self, value: list[LoopHumanMessage | LoopAIMessage]) -> None:
+        """Allow legacy assignment (e.g., constructor). Writes to cache only."""
+        self._loop_messages_cache = value
+
+    @property
+    def step_results(self) -> list[StepResult]:
+        """Step execution results. When CE is bound, derived from CE StepDAG."""
+        if self._ce is None:
+            return self._step_results_cache
+        return self._build_step_results_from_ce()
+
+    @step_results.setter
+    def step_results(self, value: list[StepResult]) -> None:
+        """Allow legacy assignment. Writes to cache only."""
+        self._step_results_cache = value
+
+    @property
+    def completed_step_ids(self) -> set[str]:
+        """Set of completed step IDs. When CE is bound, derived from CE StepDAG."""
+        if self._ce is None:
+            return self._completed_step_ids_cache
+        try:
+            goal = self._ce.get_goal_sync(self._ce_goal_id)
+            if goal is None:
+                return set()
+            return {sid for sid, n in goal.steps.nodes.items() if n.status == "completed"}
+        except Exception:
+            logger.warning("completed_step_ids property: CE query failed", exc_info=True)
+            return self._completed_step_ids_cache
+
+    @completed_step_ids.setter
+    def completed_step_ids(self, value: set[str]) -> None:
+        """Allow legacy assignment. Writes to cache only."""
+        self._completed_step_ids_cache = value
+
+    def _build_loop_messages_from_ce(self) -> list[LoopHumanMessage | LoopAIMessage]:
+        """Convert CE ledger entries to Loop message types."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        result: list[LoopHumanMessage | LoopAIMessage] = []
+        try:
+            for msg, phase in self._ce.ledger.entries():
+                if isinstance(msg, (LoopHumanMessage, LoopAIMessage)):
+                    result.append(msg)
+                elif isinstance(msg, HumanMessage):
+                    result.append(
+                        LoopHumanMessage(
+                            content=msg.content,
+                            phase=phase,
+                            **{
+                                k: v
+                                for k, v in msg.model_dump().items()
+                                if k
+                                in (
+                                    "thread_id",
+                                    "iteration",
+                                    "goal_summary",
+                                    "workspace",
+                                    "wave_id",
+                                    "core_agent_message_id",
+                                )
+                                and v is not None
+                            },
+                        )
+                    )
+                elif isinstance(msg, AIMessage):
+                    result.append(
+                        LoopAIMessage(
+                            content=msg.content,
+                            phase=phase,
+                            **{
+                                k: v
+                                for k, v in msg.model_dump().items()
+                                if k
+                                in ("thread_id", "iteration", "wave_id", "core_agent_message_id")
+                                and v is not None
+                            },
+                        )
+                    )
+        except Exception:
+            logger.warning("loop_messages property: CE query failed", exc_info=True)
+            return self._loop_messages_cache
+        if len(result) > MAX_LOOP_MESSAGES_PER_GOAL:
+            result = result[-MAX_LOOP_MESSAGES_PER_GOAL:]
+        return result
+
+    def _build_step_results_from_ce(self) -> list[StepResult]:
+        """Map CE StepNode + StepExecution to StepResult."""
+        try:
+            goal = self._ce.get_goal_sync(self._ce_goal_id)
+            if goal is None:
+                return []
+            results = []
+            for node in goal.steps.nodes.values():
+                if node.execution is not None:
+                    results.append(_step_node_to_result(node))
+            return results
+        except Exception:
+            logger.warning("step_results property: CE query failed", exc_info=True)
+            return self._step_results_cache
+
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set with bounded accumulation (IG-475).
 
-        Maintains dependency tracking even when old results are evicted by
-        preserving step_id in completed_step_ids set.
+        When CE is bound, this is a no-op — CE writes (``complete_step``,
+        ``fail_step``) are the sole mutation path. When CE is not bound,
+        writes to the local cache.
 
         Args:
             result: Step execution result
         """
-        self.step_results.append(result)
+        if self._ce is not None:
+            return
+        self._step_results_cache.append(result)
         if result.success:
-            self.completed_step_ids.add(result.step_id)
+            self._completed_step_ids_cache.add(result.step_id)
         # IG-475: Trim old results to prevent unbounded memory growth
-        if len(self.step_results) > MAX_STEP_RESULTS_PER_GOAL:
-            # Keep the most recent results, but preserve all completed_step_ids
-            excess = len(self.step_results) - MAX_STEP_RESULTS_PER_GOAL
-            self.step_results = self.step_results[excess:]
+        if len(self._step_results_cache) > MAX_STEP_RESULTS_PER_GOAL:
+            excess = len(self._step_results_cache) - MAX_STEP_RESULTS_PER_GOAL
+            self._step_results_cache = self._step_results_cache[excess:]
 
     def dependency_completion_ids(self) -> set[str]:
         """Step IDs that satisfy ``StepAction.dependencies`` edges.
@@ -1026,7 +1238,7 @@ class LoopState(BaseModel):
             Union of completed IDs for dependency checks.
         """
         historical = {r.step_id for r in self.step_results if r.success}
-        return self.completed_step_ids | historical
+        return set(self.completed_step_ids) | historical
 
     def add_action_to_history(self, action: str) -> None:
         """Add action description to history with bounded accumulation (IG-475).
@@ -1064,17 +1276,19 @@ class LoopState(BaseModel):
     def trim_loop_messages(self) -> None:
         """Trim loop_messages to bounded size (IG-475).
 
-        Keeps the most recent Human-AI pairs to preserve recent conversation context
-        while preventing unbounded memory growth.
+        When CE is bound, trimming is unnecessary — CE ledger is authoritative
+        and the _build_loop_messages_from_ce helper applies its own bound.
+        When CE is not bound, trims the local cache.
         """
-        if len(self.loop_messages) > MAX_LOOP_MESSAGES_PER_GOAL:
-            # Keep the most recent messages (Human-AI pairs should be preserved)
-            excess = len(self.loop_messages) - MAX_LOOP_MESSAGES_PER_GOAL
-            self.loop_messages = self.loop_messages[excess:]
+        if self._ce is not None:
+            return
+        if len(self._loop_messages_cache) > MAX_LOOP_MESSAGES_PER_GOAL:
+            excess = len(self._loop_messages_cache) - MAX_LOOP_MESSAGES_PER_GOAL
+            self._loop_messages_cache = self._loop_messages_cache[excess:]
             logger.debug(
                 "Trimmed loop_messages from %d to %d (thread=%s)",
-                len(self.loop_messages) + excess,
-                len(self.loop_messages),
+                len(self._loop_messages_cache) + excess,
+                len(self._loop_messages_cache),
                 self.thread_id[:16],
             )
 

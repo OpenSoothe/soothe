@@ -48,6 +48,12 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
                     duration_ms=r.duration_ms,
                     thread_id=r.thread_id,
                     error=r.error,
+                    error_type=r.error_type,
+                    outcome=r.outcome if r.outcome else None,
+                    tool_call_count=r.tool_call_count,
+                    subagent_task_completions=r.subagent_task_completions,
+                    hit_subagent_cap=r.hit_subagent_cap,
+                    hit_tool_budget=r.hit_tool_budget,
                 )
                 if r.success:
                     await ctx.ce.complete_step(ctx.ce_goal_id, r.step_id, execution)
@@ -104,6 +110,17 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
             len(ready_after),
         )
     state.current_decision = decision
+
+    # RFC-624 Phase 4 Step 5: record action + previous_plan on CE goal
+    if ctx.ce is not None and ctx.ce_goal_id:
+        try:
+            if plan_result.next_action:
+                ctx.ce.record_action(ctx.ce_goal_id, plan_result.next_action)
+            ctx.ce.set_previous_plan(ctx.ce_goal_id, plan_result)
+        except Exception:
+            logger.debug(
+                "[record_iteration] CE record_action/set_previous_plan failed", exc_info=True
+            )
 
     # RFC-226: terminal bootstrap fast-exit — when the plan asserts that its single
     # step IS the goal completion (continuation bootstrap path), route straight to

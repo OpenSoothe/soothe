@@ -245,11 +245,11 @@ class TestPlanAdapterPlanManagerEquivalence:
 
 
 class TestLedgerAdapterDualWrite:
-    """Verify _record_ledger_message dual-writes to loop_messages and CE LedgerManager."""
+    """Verify _record_ledger_message writes to CE LedgerManager when CE is present."""
 
     @pytest.mark.asyncio
     async def test_ce_ledger_receives_all_phases(self) -> None:
-        """All phase-tagged messages are mirrored to the CE LedgerManager."""
+        """All phase-tagged messages go to the CE LedgerManager (CE is sole source)."""
         from langchain_core.messages import AIMessage, HumanMessage
 
         from soothe.foundation.loop.utils.messages import _record_ledger_message
@@ -282,8 +282,9 @@ class TestLedgerAdapterDualWrite:
             ce, AIMessage(content="Final output"), "goal_completion", loop_messages
         )
 
-        # loop_messages should have all 8 messages
-        assert len(loop_messages) == 8
+        # With CE active, loop_messages is NOT populated — CE is the sole source.
+        # Consumers must call state.sync_loop_messages_from_ce() to read back.
+        assert len(loop_messages) == 0
 
         # LedgerManager should have all 8 messages with correct phase tags
         exec_msgs = ce._ledger.get_messages(["execute_step"])

@@ -1,14 +1,17 @@
-"""Context Engine adapter bridging CE to GoalContextManager interface (RFC-624 Phase 4).
+"""Context Engine goal context provider (RFC-624 Phase 4).
 
-`ContextEngineLedgerAdapter` has been removed — ledger writes now go through
-`_record_ledger_message()` in `soothe.foundation.loop.utils.messages` which
-calls `context_engine.ledger.record_message()` directly.
+Former adapters removed:
+- ``ContextEngineLedgerAdapter`` — ledger writes now go through
+  ``_record_ledger_message()`` which calls ``context_engine.ledger.record_message()``
+  directly.
+- ``ContextEnginePlanAdapter`` — replaced by ``StepPlanManagerAdapter``
+  in ``soothe.context.planning`` (RFC-624 Phase 3c).
+- ``ContextEngineLifecycle`` — lifecycle calls are now inline in graph nodes
+  (record_iteration, goal_completion, resolve_decision).
 
-`ContextEnginePlanAdapter` was replaced by `StepPlanManagerAdapter`
-in `soothe.context.planning` (RFC-624 Phase 3c).
-
-`ContextEngineLifecycle` was removed — lifecycle calls are now inline in
-graph nodes (record_iteration, goal_completion, resolve_decision).
+This module provides ``ContextEngineGoalContextAdapter``, the CE-native
+replacement for ``GoalContextManager``. It reads completed goals directly
+from the CE GoalStepDAG with no checkpoint fallback.
 """
 
 from __future__ import annotations
@@ -25,12 +28,9 @@ logger = logging.getLogger(__name__)
 
 
 class ContextEngineGoalContextAdapter:
-    """Wraps ContextEngine to provide the same interfaces as GoalContextManager.
+    """Wraps ContextEngine to provide the same interface as GoalContextManager.
 
-    Reads goal history from the GoalStepDAG (via ContextEngine public API)
-    instead of StrangeLoopStateManager, producing identical XML blocks for plan
-    context and execute briefings.
-
+    Reads goal history from the GoalStepDAG (via ContextEngine public API).
     Thread switch detection still uses state_manager (that concern is outside
     CE's scope), but completed goal data comes from the CE DAG.
     """
@@ -48,8 +48,7 @@ class ContextEngineGoalContextAdapter:
     async def get_plan_context(self, limit: int | None = None) -> list[str]:
         """Get previous goal summaries for Plan phase (XML blocks).
 
-        Reads completed goals from the CE GoalStepDAG. Falls back to
-        state_manager if CE has no completed goals.
+        Reads completed goals from the CE GoalStepDAG.
         """
         if self._config is not None and not getattr(self._config, "enabled", True):
             return []
@@ -62,34 +61,10 @@ class ContextEngineGoalContextAdapter:
             else:
                 actual_limit = 10
 
-            # Primary: read from CE DAG
             all_goals = self._ce.get_all_goals()
             completed = [g for g in all_goals if g.status == "completed"][-actual_limit:]
 
             if not completed:
-                # Fallback to state_manager if CE has no completed goals
-                if self._state_manager is not None:
-                    checkpoint = await self._state_manager.load()
-                    if checkpoint and checkpoint.goal_history:
-                        current_thread = checkpoint.current_thread_id
-                        completed_goals = [
-                            g
-                            for g in checkpoint.goal_history
-                            if g.thread_id == current_thread and g.status == "completed"
-                        ][-actual_limit:]
-                        if completed_goals:
-                            context_blocks = []
-                            for goal in completed_goals:
-                                context_block = (
-                                    f"<previous_goal>\n"
-                                    f"Goal: {goal.goal_text}\n"
-                                    f"Status: {goal.status}\n"
-                                    f"Thread: {goal.thread_id}\n"
-                                    f"Output:\n{goal.goal_completion}\n"
-                                    f"</previous_goal>"
-                                )
-                                context_blocks.append(context_block)
-                            return context_blocks
                 return []
 
             context_blocks = []
@@ -124,7 +99,7 @@ class ContextEngineGoalContextAdapter:
             return None
 
         try:
-            # Thread switch detection still needs state_manager
+            # Thread switch detection needs state_manager
             current_thread = ""
             if self._state_manager is not None:
                 checkpoint = await self._state_manager.load()
@@ -143,26 +118,10 @@ class ContextEngineGoalContextAdapter:
                 limit or getattr(self._config, "execute_limit", 10) if self._config else 10
             )
 
-            # Read completed goals from CE DAG
             all_goals = self._ce.get_all_goals()
             completed = [g for g in all_goals if g.status == "completed"][-actual_limit:]
 
             if not completed:
-                # Fallback to state_manager if CE has no completed goals
-                if self._state_manager is not None:
-                    checkpoint = await self._state_manager.load()
-                    if checkpoint and checkpoint.goal_history:
-                        previous_goals = [
-                            g for g in checkpoint.goal_history if g.status == "completed"
-                        ][-actual_limit:]
-                        if previous_goals:
-                            from soothe.foundation.loop.engine.goal_context_manager import (
-                                format_execute_briefing_from_goals,
-                            )
-
-                            return format_execute_briefing_from_goals(
-                                previous_goals, current_thread
-                            )
                 logger.warning(
                     "CE GoalContextAdapter: thread switch but no completed goals for briefing"
                 )
@@ -193,11 +152,7 @@ class ContextEngineGoalContextAdapter:
 
 
 def _format_execute_briefing_from_ce_goals(goals: list, current_thread: str) -> str:
-    """Format CE GoalNode objects as condensed Execute briefing.
-
-    Parallel to ``format_execute_briefing_from_goals()`` but works with
-    GoalNode objects instead of GoalExecutionRecord.
-    """
+    """Format CE GoalNode objects as condensed Execute briefing."""
     sections = ["## Previous Goal Context (Thread Switch Recovery)\n\n"]
 
     for i, goal in enumerate(goals, 1):

@@ -42,12 +42,14 @@ def _make_mock_ce() -> Mock:
     mock_ce = Mock()
     mock_goal = Mock()
     mock_goal.id = "test-goal-id"
+    mock_ce.load = AsyncMock(return_value=False)
     mock_ce.create_goal = AsyncMock(return_value=mock_goal)
     mock_ce.activate_goal = AsyncMock()
     mock_ce.save = AsyncMock()
     mock_ce.complete_goal = AsyncMock()
     mock_ce.get_all_goals = Mock(return_value=[])
     mock_ce.ledger = Mock()
+    mock_ce.ledger.entries = Mock(return_value=[])
 
     mock_step_planner = Mock()
     mock_step_planner.ingest_plan = Mock()
