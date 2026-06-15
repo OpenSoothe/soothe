@@ -506,6 +506,35 @@ class _SkillToggle(Static):
     """
 
 
+def _build_skill_description_preview(
+    description: str,
+    *,
+    max_lines: int,
+    max_chars: int,
+    ellipsis: str,
+) -> tuple[str, bool]:
+    """Return collapsed description preview and truncation flag."""
+    text = description.strip()
+    if not text:
+        return "", False
+
+    lines = text.splitlines()
+    by_lines = len(lines) > max_lines
+    by_chars = len(text) > max_chars
+    if not by_lines and not by_chars:
+        return text, False
+
+    preview_lines = lines[:max_lines]
+    preview = "\n".join(preview_lines).strip()
+    if len(preview) > max_chars:
+        preview = preview[:max_chars].rstrip()
+    if not preview:
+        return f"{ellipsis}", True
+    if not preview.endswith(ellipsis):
+        preview = f"{preview}{ellipsis}"
+    return preview, True
+
+
 class SkillMessage(Vertical):
     """Widget displaying a skill invocation with collapsible body.
 
@@ -601,6 +630,9 @@ class SkillMessage(Vertical):
         self._args = args
         self._md_widget: Static | None = None
         self._hint_widget: _SkillToggle | None = None
+        self._description_widget: _SkillToggle | None = None
+        self._description_preview = description.strip()
+        self._description_needs_truncation = False
         self._deferred_expanded: bool = False
         self._md_rendered: bool = False
 
@@ -623,6 +655,7 @@ class SkillMessage(Vertical):
             yield _SkillToggle(
                 Content.styled(self._description, "dim"),
                 classes="skill-description",
+                id="skill-description",
             )
         if self._args:
             yield Static(
@@ -648,6 +681,17 @@ class SkillMessage(Vertical):
 
         self._md_widget = self.query_one("#skill-md", Static)
         self._hint_widget = self.query_one("#skill-hint", _SkillToggle)
+        if self._description:
+            self._description_widget = self.query_one("#skill-description", _SkillToggle)
+            self._description_preview, self._description_needs_truncation = (
+                _build_skill_description_preview(
+                    self._description,
+                    max_lines=self._PREVIEW_LINES,
+                    max_chars=self._PREVIEW_CHARS,
+                    ellipsis=get_glyphs().ellipsis,
+                )
+            )
+            self._render_description(expanded=self._expanded)
 
         body = self._stripped_body.strip()
         if body:
@@ -680,7 +724,22 @@ class SkillMessage(Vertical):
         else:
             # Short body — show fully rendered, no preview needed.
             self._ensure_md_rendered(body)
-            self._expanded = True
+            if not self._description_needs_truncation:
+                self._expanded = True
+
+    def _render_description(self, *, expanded: bool) -> None:
+        """Render description as preview or full text based on expansion state."""
+        if not self._description_widget:
+            return
+        if expanded or not self._description_needs_truncation:
+            text = self._description.strip()
+        else:
+            text = self._description_preview
+        self._description_widget.update(Content.styled(text, "dim"))
+
+    def _has_expandable_content(self) -> bool:
+        """Return whether skill card has any truncatable/expandable content."""
+        return bool(self._stripped_body.strip()) or self._description_needs_truncation
 
     def _ensure_md_rendered(self, body: str) -> None:
         """Render markdown into the Static widget on first call, then no-op.
@@ -704,17 +763,16 @@ class SkillMessage(Vertical):
 
     def toggle_body(self) -> None:
         """Toggle between preview and full body display."""
-        if not self._stripped_body.strip():
+        if not self._has_expandable_content():
             return
         self._expanded = not self._expanded
 
     def watch__expanded(self, expanded: bool) -> None:
         """Lazy-render markdown on first expand; update hint text."""
+        self._render_description(expanded=expanded)
         body = self._stripped_body.strip()
-        if not body:
-            return
 
-        if expanded:
+        if expanded and body:
             self._ensure_md_rendered(body)
 
         if not self._hint_widget:
@@ -722,7 +780,10 @@ class SkillMessage(Vertical):
 
         lines = body.split("\n")
         total_lines = len(lines)
-        needs_truncation = total_lines > self._PREVIEW_LINES or len(body) > self._PREVIEW_CHARS
+        needs_body_truncation = bool(body) and (
+            total_lines > self._PREVIEW_LINES or len(body) > self._PREVIEW_CHARS
+        )
+        needs_truncation = needs_body_truncation or self._description_needs_truncation
 
         if not needs_truncation:
             # Short body — always fully visible, no hint needed.
@@ -733,12 +794,19 @@ class SkillMessage(Vertical):
             self._hint_widget.update(
                 Content.styled(_tui_hint_collapse_body(get_glyphs().ellipsis), "dim italic")
             )
-        else:
+        elif needs_body_truncation:
             remaining = total_lines - self._PREVIEW_LINES
             ellipsis = get_glyphs().ellipsis
             self._hint_widget.update(
                 Content.styled(
                     _tui_hint_expand_lines(ellipsis, remaining),
+                    "dim",
+                )
+            )
+        else:
+            self._hint_widget.update(
+                Content.styled(
+                    _tui_hint_expand_more_text(get_glyphs().ellipsis),
                     "dim",
                 )
             )
