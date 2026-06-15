@@ -86,6 +86,7 @@ async def bootstrap_loop_session(
     await client.wait_for_daemon_ready(ready_timeout_s=daemon_ready_timeout_s)
 
     mapping_data: dict[str, Any] | None = None
+    autopilot_mode: str | None = None
 
     if resume_loop_id:
         loop_id = resume_loop_id
@@ -109,6 +110,8 @@ async def bootstrap_loop_session(
         loop_id = str(new_resp.get("loop_id") or "")
         if not loop_id:
             raise ValueError("loop_new_response missing loop_id")
+        raw_mode = new_resp.get("autopilot_mode")
+        autopilot_mode = str(raw_mode) if raw_mode in ("solo", "autopilot") else None
 
         # RFC-621: parse workspace mapping for container path translation
         mapping_data = new_resp.get("workspace_mapping")
@@ -140,12 +143,19 @@ async def bootstrap_loop_session(
     if not sub_resp.get("success", True):
         raise RuntimeError(str(sub_resp.get("message", "loop_subscribe failed")))
 
+    sub_mode = sub_resp.get("autopilot_mode")
+    if sub_mode in ("solo", "autopilot"):
+        autopilot_mode = str(sub_mode)
+
     logger.info(
-        "Subscribed to loop %s with stream_delivery=%s",
+        "Subscribed to loop %s with stream_delivery=%s autopilot_mode=%s",
         loop_id,
         delivery,
+        autopilot_mode,
     )
     result: dict[str, Any] = {"type": "session_ready", "loop_id": loop_id, "success": True}
+    if autopilot_mode in ("solo", "autopilot"):
+        result["autopilot_mode"] = autopilot_mode
     if mapping_data and mapping_data.get("host_root"):
         result["workspace_mapping"] = mapping_data
     return result

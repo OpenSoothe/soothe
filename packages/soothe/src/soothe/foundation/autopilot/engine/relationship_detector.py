@@ -1,7 +1,7 @@
-"""RFC-204: Relationship Auto-Detection for goals.
+"""RFC-204: Relationship Auto-Detection for goals (RFC-625 updated).
 
 Detects implicit relationships between goals based on resource overlap,
-text similarity, and execution patterns.
+text similarity, and execution patterns. Uses GoalNode from ContextEngine.
 """
 
 from __future__ import annotations
@@ -10,10 +10,10 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from soothe.foundation.autopilot.engine.models import TERMINAL_STATES
+from soothe.foundation.context.models import TERMINAL_STATES
 
 if TYPE_CHECKING:
-    from soothe.foundation.autopilot.engine.models import Goal
+    from soothe.foundation.context.models import GoalNode
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +129,8 @@ class Relationship:
 
 
 def detect_relationships(
-    completed_goal: Goal,
-    all_goals: list[Goal],
+    completed_goal: GoalNode,
+    all_goals: list[GoalNode],
 ) -> list[Relationship]:
     """Detect relationships between a completed goal and other goals.
 
@@ -237,7 +237,7 @@ def _extract_artifact_refs(description: str) -> list[str]:
 
 def auto_apply_relationships(
     relationships: list[Relationship],
-    all_goals: list[Goal],
+    all_goals: list[GoalNode],
 ) -> tuple[list[Relationship], list[Relationship]]:
     """Apply high-confidence relationships automatically, flag others for review.
 

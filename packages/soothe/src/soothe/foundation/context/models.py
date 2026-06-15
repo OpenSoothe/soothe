@@ -264,6 +264,7 @@ class GoalNode(BaseModel):
     # Completion/completion state (from Goal)
     # report is serialized GoalReport (avoid circular import)
     report: dict[str, Any] | None = None  # Serialized GoalReport on completion
+    error: str | None = None  # Failure reason if status == "failed"
     pending_clarification: dict[str, Any] | None = None  # RFC-622
 
     # Guidance (from Goal, RFC-228)
@@ -298,8 +299,12 @@ class GoalStepDAG(BaseModel):
     # ── Goal lifecycle ──────────────────────────────────────────
 
     def add_goal(self, goal: GoalNode) -> None:
-        """Add a goal to the DAG. Validates depth limit."""
+        """Add a goal to the DAG. Validates parent exists and depth limit."""
         if goal.parent_id:
+            parent = self.goals.get(goal.parent_id)
+            if parent is None:
+                msg = f"Parent goal {goal.parent_id} not found."
+                raise ValueError(msg)
             depth = self._goal_depth(goal.parent_id)
             if depth >= MAX_GOAL_DEPTH:
                 msg = f"Goal depth limit ({MAX_GOAL_DEPTH}) exceeded. Parent {goal.parent_id} is at depth {depth}."
@@ -319,6 +324,7 @@ class GoalStepDAG(BaseModel):
         goal = self.goals.get(goal_id)
         if goal is not None:
             goal.status = "failed"
+            goal.error = error
             goal.updated_at = datetime.now(UTC)
 
     def suspend_goal(self, goal_id: str, reason: str) -> None:
@@ -351,8 +357,8 @@ class GoalStepDAG(BaseModel):
 
     # ── Scheduling ──────────────────────────────────────────────
 
-    def ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Goals whose deps are satisfied, sorted by priority desc / created_at asc.
+    def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
+        """Return ready candidates without mutation (read-only, RFC-625).
 
         Mirrors GoalEngine._filter_ready_candidates: filters by
         status == "pending", checks hard dependencies (all in
@@ -362,6 +368,9 @@ class GoalStepDAG(BaseModel):
         ready: list[GoalNode] = []
         for goal in self.goals.values():
             if goal.status != "pending":
+                continue
+            # RFC-622: also skip goals in BLOCKED_STATES
+            if goal.status in BLOCKED_STATES:
                 continue
             deps_met = all(
                 (dep := self.goals.get(dep_id)) is not None and dep.status in TERMINAL_STATES
@@ -375,6 +384,37 @@ class GoalStepDAG(BaseModel):
             ready.append(goal)
         ready.sort(key=lambda g: (-g.priority, g.created_at))
         return ready[:limit]
+
+    def claim_goal(self, goal_id: str, loop_id: str | None = None) -> GoalNode | None:
+        """Atomically transition goal to active (RFC-222, RFC-625).
+
+        Re-checks conflicts and dependencies at claim time to prevent race conditions.
+        Returns the goal if claimed, None if ineligible, conflict appeared, or deps unmet.
+        """
+        goal = self.goals.get(goal_id)
+        if goal is None or goal.status != "pending":
+            return None
+        # Re-check conflicts at claim time
+        active_ids = {
+            gid for gid, g in self.goals.items() if g.status == "active" and gid != goal_id
+        }
+        if any(dep_id in active_ids for dep_id in goal.conflicts_with):
+            logger.debug("Goal %s claim aborted: conflict appeared", goal_id)
+            return None
+        # Re-check dependencies at claim time
+        deps_met = all(
+            (dep := self.goals.get(dep_id)) is not None and dep.status in TERMINAL_STATES
+            for dep_id in goal.depends_on
+        )
+        if not deps_met:
+            logger.debug("Goal %s claim aborted: dependencies unmet", goal_id)
+            return None
+        goal.status = "active"
+        goal.updated_at = datetime.now(UTC)
+        if loop_id:
+            goal.assigned_loop_id = loop_id
+        logger.debug("Claimed goal %s (loop_id=%s)", goal_id, loop_id)
+        return goal
 
     def active_goals(self) -> list[GoalNode]:
         return [g for g in self.goals.values() if g.status == "active"]

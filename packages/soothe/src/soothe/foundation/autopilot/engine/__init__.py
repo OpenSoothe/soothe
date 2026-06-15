@@ -1,16 +1,23 @@
-"""Goal lifecycle management and related utilities (RFC-0007, RFC-204, RFC-200, RFC-217, RFC-222)."""
+"""Goal-related models and utilities (RFC-204, RFC-200, RFC-217, RFC-222, RFC-625).
 
-from soothe.foundation.autopilot.engine.backoff_reasoner import GoalBackoffReasoner
-from soothe.foundation.autopilot.engine.engine import GoalEngine
-from soothe.foundation.autopilot.engine.file_lock_registry import (
-    FileConflictError,
-    FileLockEntry,
-    FileLockRegistry,
-)
+GoalEngine deleted per RFC-625. ContextEngine (soothe.foundation.context) is now
+the sole source of truth for goal/step state. This module retains shared models
+used by AutopilotService, StrangeLoop workers, and ContextProjector.
+
+Key exports:
+- GoalStatus, TERMINAL_STATES, BLOCKED_STATES: Goal lifecycle states
+- EvidenceBundle, BackoffDecision: Backoff reasoning models (RFC-200)
+- GoalDispatchContextBundle, GoalDispatchContextContribution: IPC models (RFC-222)
+- ScheduledTask, SchedulerService: Scheduled goal discovery (RFC-204)
+"""
+
 from soothe.foundation.autopilot.engine.models import (
+    BLOCKED_STATES,
+    TERMINAL_STATES,
+    BackoffDecision,
+    EvidenceBundle,
     FileTouchSummary,
     Finding,
-    Goal,
     GoalDispatchContextBundle,
     GoalDispatchContextContribution,
     GoalStatus,
@@ -27,16 +34,13 @@ from soothe.foundation.autopilot.engine.scheduled_tasks import (
 )
 
 __all__ = [
-    "FileConflictError",
-    "FileLockEntry",
-    "FileLockRegistry",
+    "BLOCKED_STATES",
+    "BackoffDecision",
+    "EvidenceBundle",
     "FileTouchSummary",
     "Finding",
-    "Goal",
-    "GoalBackoffReasoner",
     "GoalDispatchContextBundle",
     "GoalDispatchContextContribution",
-    "GoalEngine",
     "GoalStatus",
     "ParentFinding",
     "PriorStepSummary",
@@ -46,5 +50,6 @@ __all__ = [
     "ScheduledTask",
     "SchedulerService",
     "StepSummary",
+    "TERMINAL_STATES",
     "ToolCallStats",
 ]

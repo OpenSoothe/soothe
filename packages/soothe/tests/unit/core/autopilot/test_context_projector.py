@@ -1,4 +1,4 @@
-"""Tests for ContextProjector (RFC-222 revised).
+"""Tests for ContextProjector (RFC-222 revised, RFC-625).
 
 Covers linear chain, diamond join, fan-out, soft (informs) parents,
 recency-ordering, bound enforcement, and graceful handling of missing
@@ -15,13 +15,13 @@ from soothe.config.models import ContextProjectionConfig
 from soothe.foundation.autopilot.engine.models import (
     FileTouchSummary,
     Finding,
-    Goal,
     GoalDispatchContextContribution,
     StepSummary,
     ToolCallStats,
 )
 from soothe.foundation.autopilot.service.context_projector import ContextProjector
 from soothe.foundation.autopilot.service.context_store import InMemoryGoalDispatchContextStore
+from soothe.foundation.context.models import GoalNode
 
 # ---- Fixtures -----------------------------------------------------------
 
@@ -32,8 +32,8 @@ def _goal(
     depends_on: list[str] | None = None,
     informs: list[str] | None = None,
     updated_offset_sec: float = 0.0,
-) -> Goal:
-    g = Goal(
+) -> GoalNode:
+    g = GoalNode(
         id=gid,
         description=f"goal {gid}",
         depends_on=depends_on or [],

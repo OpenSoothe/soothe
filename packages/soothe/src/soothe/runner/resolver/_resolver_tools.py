@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
 
-    from soothe.foundation.autopilot.engine import GoalEngine
-
 logger = logging.getLogger(__name__)
 
 
@@ -502,32 +500,6 @@ def _resolve_single_tool_group_uncached(
 
     logger.warning("Unknown tool group '%s', skipping.", name)
     return []
-
-
-# ---------------------------------------------------------------------------
-# Goal engine resolution
-# ---------------------------------------------------------------------------
-
-
-def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
-    """Create a GoalEngine instance from config.
-
-    Args:
-        config: Soothe configuration.
-
-    Returns:
-        A configured GoalEngine with backoff reasoner support. RFC-222 Q8:
-        no module-global ``InternalEventBus`` is wired here. Consumers that
-        need autopilot event coordination (the daemon's ``AutopilotService``)
-        construct and inject their own bus explicitly.
-    """
-    from soothe.foundation.autopilot.engine import GoalEngine
-
-    return GoalEngine(
-        max_retries=config.agent.autonomous.max_retries,
-        config=config,  # Enable LLM-driven backoff reasoning
-        internal_bus=None,
-    )
 
 
 # ---------------------------------------------------------------------------

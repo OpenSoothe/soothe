@@ -16,7 +16,6 @@ from soothe.config import SootheConfig
 from ._resolver_infra import resolve_checkpointer, resolve_durability
 from ._resolver_tools import (
     SUBAGENT_FACTORIES,
-    resolve_goal_engine,
     resolve_subagents,
     resolve_tools,
 )
@@ -34,7 +33,6 @@ __all__ = [
     "SUBAGENT_FACTORIES",
     "resolve_checkpointer",
     "resolve_durability",
-    "resolve_goal_engine",
     "resolve_memory",
     "resolve_planner",
     "resolve_policy",

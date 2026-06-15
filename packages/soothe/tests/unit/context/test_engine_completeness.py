@@ -177,12 +177,12 @@ class TestCallbacks:
     @pytest.mark.asyncio
     async def test_goal_cancelled_callback(self) -> None:
         ce = _ce()
-        events: list[tuple[str, str]] = []
-        ce.on("goal_cancelled", lambda gid: events.append(("cancelled", gid)))
+        events: list[tuple[str, str, str]] = []
+        ce.on("goal_cancelled", lambda gid, reason: events.append(("cancelled", gid, reason)))
         goal = await ce.create_goal("Test goal")
         await ce.cancel_goal(goal.id)
         assert len(events) == 1
-        assert events[0] == ("cancelled", goal.id)
+        assert events[0] == ("cancelled", goal.id, "user_cancelled")
 
     @pytest.mark.asyncio
     async def test_step_completed_callback(self) -> None:

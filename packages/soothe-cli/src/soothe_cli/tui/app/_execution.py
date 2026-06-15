@@ -570,6 +570,7 @@ class _ExecutionMixin:
                     )
                     self._session_state.loop_id = new_loop_id
                     self._lc_loop_id = new_loop_id
+                    self._apply_loop_autopilot_mode(status_event.get("autopilot_mode"))
                     try:
                         banner = self.query_one("#welcome-banner", WelcomeBanner)
                         banner.update_loop_id(new_loop_id)

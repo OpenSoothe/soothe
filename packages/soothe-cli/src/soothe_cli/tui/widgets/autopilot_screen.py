@@ -13,7 +13,7 @@ from soothe_sdk.client.config import SOOTHE_HOME
 from textual.binding import Binding
 from textual.screen import Screen
 
-from soothe_cli.tui.widgets.autopilot_dashboard import AutopilotDashboard
+from soothe_cli.tui.widgets.autopilot_dashboard import AutopilotDashboard, DagRenderMode
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -30,15 +30,16 @@ class AutopilotScreen(Screen):
         Binding("q", "quit", "Close", show=True),
     ]
 
-    def __init__(self, *, is_narrow: bool = False) -> None:
+    def __init__(self, *, is_narrow: bool = False, mode: DagRenderMode = "solo") -> None:
         """Initialize screen.
 
         Args:
             is_narrow: Whether to use vertical layout.
+            mode: Solo or autopilot DAG render mode.
         """
         super().__init__()
         self._is_narrow = is_narrow
-        self._dashboard = AutopilotDashboard(is_narrow=is_narrow)
+        self._dashboard = AutopilotDashboard(is_narrow=is_narrow, mode=mode)
 
     def compose(self) -> ComposeResult:
         """Build the screen with the dashboard."""

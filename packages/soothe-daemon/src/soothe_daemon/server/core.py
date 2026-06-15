@@ -138,6 +138,8 @@ class SootheDaemon(DaemonHandlersMixin):
         self._stop_event: asyncio.Event | None = None
         max_queue_size = self._daemon_config.max_input_queue_size
         self._loop_input_dispatcher = LoopInputDispatcher(self, max_queue_size=max_queue_size)
+        # Per-loop Solo/Autopilot mode (RFC-625); see loop_autopilot_mode.py
+        self._loop_autopilot_modes: dict[str, str] = {}
         self._cleanup_task: asyncio.Task[None] | None = None
         self._postgres_pool_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
@@ -263,7 +265,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 raise
 
             # RFC-222 revised (Phase C): daemon-owned AutopilotService with
-            # full real-dispatch wiring. Constructs its OWN GoalEngine and
+            # full real-dispatch wiring. Constructs its OWN ContextEngine and
             # InternalEventBus (not the singleton/runner's) so its DAG state
             # and event subscriptions are isolated from the per-runner
             # AutopilotService that handles autonomous mode in subprocess.
@@ -271,25 +273,30 @@ class SootheDaemon(DaemonHandlersMixin):
             # The daemon-owned instance is the one HTTP /autopilot/submit
             # talks to (Phase C5 cutover). Its scheduling loop dispatches
             # to subprocess workers via the runner_factory above.
+            #
+            # RFC-625: Uses ContextEngine + AutopilotMonitor instead of GoalEngine.
             try:
                 from soothe.backends.persistence import create_persist_store
-                from soothe.foundation.autopilot.engine import GoalEngine
+                from soothe.foundation.autopilot.monitor import AutopilotMonitor
                 from soothe.foundation.autopilot.service import (
                     AutopilotService,
                     ContextProjector,
                     DurabilityGoalDispatchContextStore,
                     WorkspaceReservation,
                 )
+                from soothe.foundation.context import ContextEngine
                 from soothe.foundation.events.internal_bus import InternalEventBus
                 from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
                 # Isolated bus for the daemon's autopilot domain.
                 daemon_autopilot_bus = InternalEventBus()
-                # Isolated GoalEngine — separate DAG from the runner's autonomous mode.
-                daemon_goal_engine = GoalEngine(
-                    max_retries=self._config.agent.autonomous.max_retries,
+                # RFC-625: ContextEngine is the sole source of truth for goal/step state.
+                daemon_ce = ContextEngine()
+                # RFC-625: AutopilotMonitor handles proactive DAG monitoring.
+                daemon_monitor = AutopilotMonitor(
+                    ce=daemon_ce,
+                    bus=daemon_autopilot_bus,
                     config=self._config,
-                    internal_bus=daemon_autopilot_bus,
                 )
                 ws_cfg = self._config.agent.autonomous.workspace_reservation
                 workspace_reservation = WorkspaceReservation(
@@ -334,9 +341,10 @@ class SootheDaemon(DaemonHandlersMixin):
                     )
 
                 self._autopilot_service = AutopilotService(
-                    goal_engine=daemon_goal_engine,
+                    ce=daemon_ce,
                     config=self._config.agent.autonomous,
                     internal_bus=daemon_autopilot_bus,
+                    monitor=daemon_monitor,
                     subscribe_to_bus=True,
                     runner_factory=self._runner_factory,
                     workspace_reservation=workspace_reservation,

@@ -1,8 +1,8 @@
-"""End-to-end tests for AutopilotService real dispatch (RFC-222 revised, Phase C).
+"""End-to-end tests for AutopilotService real dispatch (RFC-222 revised, Phase C, RFC-625).
 
 Covers the full path: submit_task → scheduling tick → WorkerPool.pick_worker
 → claim_goal → LoopRunRequest dispatch → fake runner emits GoalCompletionChunk
-→ AutopilotService updates GoalEngine state and releases worker.
+→ AutopilotService updates ContextEngine state and releases worker.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from soothe.config.models import AutonomousConfig
-from soothe.foundation.autopilot.engine import GoalEngine
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.autopilot.service.context_store import InMemoryGoalDispatchContextStore
 from soothe.foundation.autopilot.service.workspace_reservation import WorkspaceReservation
+from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 
 # ---- Fakes -------------------------------------------------------------
@@ -85,11 +85,11 @@ def _mock_consensus_model(*, decision: str = "accept", reasoning: str = "test") 
 
 def _service(*, outcome: str = "completed", with_reservation: bool = False) -> AutopilotService:
     bus = InternalEventBus()
-    ge = GoalEngine(internal_bus=bus)
+    ce = ContextEngine()
     factory = _FakeFactory(outcome=outcome)
     res = WorkspaceReservation() if with_reservation else None
     svc = AutopilotService(
-        goal_engine=ge,
+        ce=ce,
         config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
         runner_factory=factory,
@@ -122,9 +122,9 @@ class TestRealDispatchHasFlag:
 
     def test_no_factory_keeps_legacy_path(self) -> None:
         bus = InternalEventBus()
-        ge = GoalEngine(internal_bus=bus)
+        ce = ContextEngine()
         svc = AutopilotService(
-            goal_engine=ge,
+            ce=ce,
             config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
             internal_bus=bus,
         )
