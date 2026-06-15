@@ -4,9 +4,9 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from soothe.context.ledger import LedgerManager
-from soothe.context.models import GoalNode, GoalStepDAG, StepNode
-from soothe.context.semantic import SemanticLoader
+from soothe.foundation.context.ledger import LedgerManager
+from soothe.foundation.context.models import GoalNode, GoalStepDAG, StepNode
+from soothe.foundation.context.semantic import SemanticLoader
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +238,7 @@ class ProjectionEngine:
     @staticmethod
     def _render_prior_goals(dag: GoalStepDAG, max_goals: int) -> list[PriorGoalSummary]:
         """Build PriorGoalSummary list from completed/failed goals."""
-        from soothe.context.models import TERMINAL_STATES
+        from soothe.foundation.context.models import TERMINAL_STATES
 
         terminal = [g for g in dag.goals.values() if g.status in TERMINAL_STATES]
         # Most recent first

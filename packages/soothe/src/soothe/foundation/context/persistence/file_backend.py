@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe.context.models import GoalStepDAG, GoalStepDAGSnapshot
+from soothe.foundation.context.models import GoalStepDAG, GoalStepDAGSnapshot
 
 logger = logging.getLogger(__name__)
 

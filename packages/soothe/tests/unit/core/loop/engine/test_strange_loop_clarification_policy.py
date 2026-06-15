@@ -63,7 +63,7 @@ def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
 
 def _make_mock_ce() -> Mock:
     """Build a mock ContextEngine with all required attributes."""
-    from soothe.context.planning.models import CompletionStrategy
+    from soothe.foundation.context.planning.models import CompletionStrategy
 
     mock_ce = Mock()
     mock_goal = Mock()

@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.context.engine import ContextEngine
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import Executor
 from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 

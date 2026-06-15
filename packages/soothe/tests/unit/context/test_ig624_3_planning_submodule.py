@@ -11,16 +11,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import GoalNode, StepNode
-from soothe.context.planning import (
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode, StepNode
+from soothe.foundation.context.planning import (
     GoalPlanningSubengine,
     GoalScheduler,
     PlanningFacade,
     StepPlanManagerAdapter,
     StepPlanningSubengine,
 )
-from soothe.context.planning.completion import (
+from soothe.foundation.context.planning.completion import (
     DAG_DEPENDENCY_THRESHOLD,
     LOW_SUCCESS_RATE_THRESHOLD,
     SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
@@ -34,7 +34,7 @@ from soothe.context.planning.completion import (
     is_simple_execution,
     overlaps_with_plan_output,
 )
-from soothe.context.planning.models import (
+from soothe.foundation.context.planning.models import (
     DecompositionRequest,
     DecompositionResult,
     OrchestrationStrategy,

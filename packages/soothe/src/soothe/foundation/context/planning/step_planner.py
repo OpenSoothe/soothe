@@ -12,14 +12,18 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from soothe.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
-from soothe.context.planning.completion import (
+from soothe.foundation.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
+from soothe.foundation.context.planning.completion import (
     determine_completion_strategy as _determine_completion_strategy,
 )
-from soothe.context.planning.completion import (
+from soothe.foundation.context.planning.completion import (
     determine_goal_completion_needs as _determine_goal_completion_needs,
 )
-from soothe.context.planning.models import CompletionStrategy, DagPlanningContext, PlanWave
+from soothe.foundation.context.planning.models import (
+    CompletionStrategy,
+    DagPlanningContext,
+    PlanWave,
+)
 
 if TYPE_CHECKING:
     from soothe.foundation.loop.state.schemas import PlanResult, StepResult

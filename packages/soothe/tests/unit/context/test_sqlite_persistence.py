@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from soothe.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 @pytest.fixture

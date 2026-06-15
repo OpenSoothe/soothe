@@ -1131,7 +1131,7 @@ class ContextEngineConfig(BaseModel):
 
     def to_projection_config(self) -> Any:
         """Build a ``ProjectionConfig`` from these settings."""
-        from soothe.context.projection import ProjectionConfig
+        from soothe.foundation.context.projection import ProjectionConfig
 
         return ProjectionConfig(
             max_goals=self.projection_max_goals,

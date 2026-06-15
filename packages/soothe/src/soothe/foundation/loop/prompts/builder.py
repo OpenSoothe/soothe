@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.context.projection import ContextBundle
+    from soothe.foundation.context.projection import ContextBundle
     from soothe.foundation.loop.state.schemas import LoopState
     from soothe.protocols.planner import PlanContext
 

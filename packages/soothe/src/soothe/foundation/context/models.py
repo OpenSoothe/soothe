@@ -1,4 +1,4 @@
-"""Data models for the Context Engine (RFC-624)."""
+"""Data models for the Context Engine (RFC-624, RFC-625)."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ GoalStatus = Literal[
 ]
 
 TERMINAL_STATES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
+BLOCKED_STATES: frozenset[str] = frozenset({"awaiting_clarification", "suspended"})
 
 StepStatus = Literal["pending", "completed", "failed", "skipped"]
 
@@ -208,34 +209,78 @@ class StepDAG(BaseModel):
 
 
 class GoalNode(BaseModel):
-    """Single goal in the unified Goal+Step DAG."""
+    """Single goal in the unified Goal+Step DAG (RFC-624, RFC-625).
 
+    Migrated fields from Goal model (autopilot/engine/models.py) per RFC-625:
+    - retry_count, max_retries, send_back_count, max_send_backs (RFC-204)
+    - source_file, workspace, attempts_after_crash (RFC-222)
+    - pending_clarification (RFC-622)
+    - guidance_accumulated (RFC-228)
+    - report (GoalReport on completion)
+
+    New dreaming fields per RFC-625:
+    - topic, findings, distilled
+    """
+
+    # Core identity
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     description: str
     priority: int = 50
     status: GoalStatus = "pending"
 
+    # DAG relationships
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
     informs: list[str] = Field(default_factory=list)
     conflicts_with: list[str] = Field(default_factory=list)
 
+    # Embedded step DAG
     steps: StepDAG = Field(default_factory=StepDAG)
 
+    # Lineage
     generating_reasoning: str | None = None
     source: Literal["user", "directive", "file_discovery", "decomposition"] = "user"
 
+    # Execution tracking
     total_tokens_used: int = 0
     total_duration_ms: int = 0
     max_iterations: int = 0
     thread_id: str | None = None
     assigned_loop_id: str | None = None
-
     previous_plan: dict[str, Any] | None = None
     action_history: list[str] = Field(default_factory=list)
 
+    # Retry/backoff (from Goal, RFC-204)
+    retry_count: int = 0
+    max_retries: int = 2
+    send_back_count: int = 0  # Consensus send-backs
+    max_send_backs: int = 3
+    attempts_after_crash: int = 0  # RFC-222 H4
+
+    # Workspace/source (from Goal, RFC-222)
+    source_file: str | None = None  # GOAL.md path if file-sourced
+    workspace: str | None = None  # Autopilot dispatch workspace
+
+    # Completion/completion state (from Goal)
+    # report is serialized GoalReport (avoid circular import)
+    report: dict[str, Any] | None = None  # Serialized GoalReport on completion
+    pending_clarification: dict[str, Any] | None = None  # RFC-622
+
+    # Guidance (from Goal, RFC-228)
+    guidance_accumulated: list[dict[str, Any]] = Field(default_factory=list)
+
+    # Dreaming (NEW, RFC-625)
+    topic: str | None = None  # Topic tag for cross-loop dreaming
+    findings: list[str] = Field(default_factory=list)  # Key findings from execution
+    distilled: bool = False  # Whether goal has been distilled
+
+    # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def touch(self) -> None:
+        """Update updated_at timestamp."""
+        self.updated_at = datetime.now(UTC)
 
 
 class GoalStepDAGSnapshot(BaseModel):
@@ -382,6 +427,110 @@ class GoalStepDAG(BaseModel):
             )
         return recovered
 
+    # ── RFC-625: Monitor-required methods ──────────────────────────────
+
+    def remove_goal(self, goal_id: str) -> bool:
+        """Remove a goal from the DAG. Validates no dependents.
+
+        Returns True if removed, False if goal not found or has dependents.
+        """
+        goal = self.goals.get(goal_id)
+        if goal is None:
+            return False
+
+        # Check if any goal depends on this one
+        dependents = self.get_goal_dependents(goal_id)
+        if dependents:
+            logger.warning(
+                "Cannot remove goal %s: has dependents %s",
+                goal_id,
+                dependents,
+            )
+            return False
+
+        del self.goals[goal_id]
+        logger.info("Removed goal %s from DAG", goal_id)
+        return True
+
+    def merge_goals(
+        self, goal_ids: list[str], merged_description: str, merged_id: str | None = None
+    ) -> GoalNode | None:
+        """Merge multiple goals into a single consolidated goal.
+
+        Preserves union of dependencies, informs, and findings.
+        Returns new merged goal, or None if any goal not found.
+        """
+        goals_to_merge = [self.goals.get(gid) for gid in goal_ids]
+        if not all(goals_to_merge):
+            logger.warning("Cannot merge: some goals not found")
+            return None
+
+        # Collect union of dependencies and informs
+        merged_depends_on: set[str] = set()
+        merged_informs: set[str] = set()
+        merged_findings: list[str] = []
+        merged_priority = max(g.priority for g in goals_to_merge)
+
+        for g in goals_to_merge:
+            merged_depends_on.update(g.depends_on)
+            merged_informs.update(g.informs)
+            merged_findings.extend(g.findings)
+            # Remove self-references
+            merged_depends_on.difference_update(goal_ids)
+            merged_informs.difference_update(goal_ids)
+
+        merged = GoalNode(
+            id=merged_id or uuid.uuid4().hex[:8],
+            description=merged_description,
+            priority=merged_priority,
+            status="pending",
+            depends_on=list(merged_depends_on),
+            informs=list(merged_informs),
+            findings=merged_findings,
+            source="decomposition",
+            generating_reasoning=f"Merged from goals: {', '.join(goal_ids)}",
+        )
+
+        # Remove old goals (they have no dependents by construction)
+        for gid in goal_ids:
+            self.goals.pop(gid, None)
+
+        self.goals[merged.id] = merged
+        logger.info("Merged goals %s → %s", goal_ids, merged.id)
+        return merged
+
+    def is_dag_complete(self) -> bool:
+        """Check if all goals in DAG are in terminal states."""
+        if not self.goals:
+            return True
+        return all(g.status in TERMINAL_STATES for g in self.goals.values())
+
+    def get_goals_by_status(self, status: GoalStatus | None = None) -> list[GoalNode]:
+        """Filter goals by status (None = all goals)."""
+        if status is None:
+            return list(self.goals.values())
+        return [g for g in self.goals.values() if g.status == status]
+
+    def get_goal_dependents(self, goal_id: str) -> list[str]:
+        """Get all goal IDs that depend on this goal."""
+        dependents: list[str] = []
+        for gid, g in self.goals.items():
+            if goal_id in g.depends_on:
+                dependents.append(gid)
+        return dependents
+
+    def update_dependencies(self, goal_id: str, depends_on: list[str]) -> bool:
+        """Update goal dependencies (for mode switch flattening).
+
+        Returns True if updated, False if goal not found.
+        """
+        goal = self.goals.get(goal_id)
+        if goal is None:
+            return False
+        goal.depends_on = depends_on
+        goal.touch()
+        return True
+
     # ── Internal helpers ────────────────────────────────────────
 
     def _goal_depth(self, goal_id: str) -> int:
@@ -400,3 +549,21 @@ class GoalStepDAG(BaseModel):
             if depth > MAX_GOAL_DEPTH + 1:
                 break
         return depth
+
+
+# ── Dreaming models (RFC-625) ────────────────────────────────────────────────
+
+
+class EpisodeSummary(BaseModel):
+    """Distilled episodic memory from goal execution (RFC-625 dreaming).
+
+    Created by DreamingCoordinator.episodic mode, stored in ContextEngine
+    episodic memory store.
+    """
+
+    goal_id: str = Field(description="Source goal ID")
+    description: str = Field(description="Goal description")
+    outcome_summary: str = Field(description="Outcome summary")
+    key_steps: list[str] = Field(default_factory=list, description="Key steps executed")
+    lessons_learned: str = Field(default="", description="Lessons learned")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
