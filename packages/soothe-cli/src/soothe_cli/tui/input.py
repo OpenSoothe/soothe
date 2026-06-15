@@ -16,9 +16,6 @@ from soothe_cli.tui.path_utils import path_exists, path_is_dir, path_is_file
 from soothe_cli.tui.preview_limits import (
     CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT,
     CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT,
-    CHAT_INPUT_PASTE_PREVIEW_HEAD_LINES,
-    CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS,
-    CHAT_INPUT_PASTE_PREVIEW_TAIL_LINES,
 )
 
 logger = logging.getLogger(__name__)
@@ -806,16 +803,44 @@ def should_abbreviate_pasted_input(text: str) -> bool:
     return len(text) > CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT
 
 
-def _truncate_paste_preview_line(line: str) -> str:
-    """Truncate a single preview line for the chat input."""
-    if len(line) <= CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS:
-        return line
-    budget = CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS - 1
-    return f"{line[:budget]}…"
+def compose_paste_into_input(
+    existing_text: str,
+    pasted_text: str,
+    *,
+    replace_start: int | None = None,
+    replace_end: int | None = None,
+) -> str:
+    """Return input text after applying a paste at the given replacement range.
+
+    Args:
+        existing_text: Current input text before paste.
+        pasted_text: Raw pasted payload.
+        replace_start: Inclusive replacement start offset. Defaults to the end.
+        replace_end: Exclusive replacement end offset. Defaults to start.
+
+    Returns:
+        Full input text after replacing ``[replace_start:replace_end]`` with
+        ``pasted_text``.
+    """
+    text_len = len(existing_text)
+    if replace_start is None:
+        start = text_len
+    else:
+        start = max(0, min(replace_start, text_len))
+
+    if replace_end is None:
+        end = start
+    else:
+        end = max(0, min(replace_end, text_len))
+
+    if end < start:
+        start, end = end, start
+
+    return f"{existing_text[:start]}{pasted_text}{existing_text[end:]}"
 
 
 def abbreviate_pasted_input_display(text: str) -> str:
-    """Build a short multi-line preview for a large pasted payload.
+    """Build a compact one-line preview for a large pasted payload.
 
     The full ``text`` is retained separately for submission; this string is
     only for on-screen display in the input widget.
@@ -824,25 +849,11 @@ def abbreviate_pasted_input_display(text: str) -> str:
         text: Full pasted content.
 
     Returns:
-        Abbreviated display text with a header and head/tail line previews.
+        Abbreviated display text containing only a summary header.
     """
     lines = text.splitlines()
     if not lines and text:
         lines = [text]
     n_lines = len(lines) if lines else 1
     n_chars = len(text)
-    header = f"[pasted {n_lines} lines, {n_chars} characters]"
-
-    head_n = min(CHAT_INPUT_PASTE_PREVIEW_HEAD_LINES, n_lines)
-    tail_n = min(CHAT_INPUT_PASTE_PREVIEW_TAIL_LINES, max(0, n_lines - head_n))
-    omitted = n_lines - head_n - tail_n
-
-    parts: list[str] = [header]
-    parts.extend(_truncate_paste_preview_line(line) for line in lines[:head_n])
-    if omitted > 0:
-        parts.append(f"… ({omitted} more lines) …")
-    if tail_n > 0:
-        tail_start = n_lines - tail_n
-        if tail_start > head_n:
-            parts.extend(_truncate_paste_preview_line(line) for line in lines[tail_start:])
-    return "\n".join(parts)
+    return f"[pasted {n_lines} lines, {n_chars} characters]"
