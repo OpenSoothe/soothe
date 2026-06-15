@@ -244,8 +244,8 @@ class TestPlanAdapterPlanManagerEquivalence:
         assert "FAILED" in ce_report
 
 
-class TestLedgerAdapterDualWrite:
-    """Verify _record_ledger_message writes to CE LedgerManager when CE is present."""
+class TestLedgerAdapterCEOnly:
+    """Verify _record_ledger_message writes to CE LedgerManager (RFC-624 Phase 4 Stage 2)."""
 
     @pytest.mark.asyncio
     async def test_ce_ledger_receives_all_phases(self) -> None:
@@ -256,35 +256,15 @@ class TestLedgerAdapterDualWrite:
 
         ce = ContextEngine()
 
-        loop_messages: list = []
-
-        # Simulate the 5 phases — pass ContextEngine directly
-        _record_ledger_message(
-            ce, HumanMessage(content="Execute step 1"), "execute_step", loop_messages
-        )
-        _record_ledger_message(ce, AIMessage(content="Step 1 done"), "execute_step", loop_messages)
-        _record_ledger_message(
-            ce, HumanMessage(content="Plan assess"), "plan_assess", loop_messages
-        )
-        _record_ledger_message(
-            ce, AIMessage(content="Assessment result"), "plan_assess", loop_messages
-        )
-        _record_ledger_message(
-            ce, HumanMessage(content="Plan generate"), "plan_generate", loop_messages
-        )
-        _record_ledger_message(
-            ce, AIMessage(content="Generated plan"), "plan_generate", loop_messages
-        )
-        _record_ledger_message(
-            ce, HumanMessage(content="Goal complete"), "goal_completion", loop_messages
-        )
-        _record_ledger_message(
-            ce, AIMessage(content="Final output"), "goal_completion", loop_messages
-        )
-
-        # With CE active, loop_messages is NOT populated — CE is the sole source.
-        # Consumers must call state.sync_loop_messages_from_ce() to read back.
-        assert len(loop_messages) == 0
+        # Simulate the 5 phases — CE-only writes (no loop_messages argument)
+        _record_ledger_message(ce, HumanMessage(content="Execute step 1"), "execute_step")
+        _record_ledger_message(ce, AIMessage(content="Step 1 done"), "execute_step")
+        _record_ledger_message(ce, HumanMessage(content="Plan assess"), "plan_assess")
+        _record_ledger_message(ce, AIMessage(content="Assessment result"), "plan_assess")
+        _record_ledger_message(ce, HumanMessage(content="Plan generate"), "plan_generate")
+        _record_ledger_message(ce, AIMessage(content="Generated plan"), "plan_generate")
+        _record_ledger_message(ce, HumanMessage(content="Goal complete"), "goal_completion")
+        _record_ledger_message(ce, AIMessage(content="Final output"), "goal_completion")
 
         # LedgerManager should have all 8 messages with correct phase tags
         exec_msgs = ce._ledger.get_messages(["execute_step"])
@@ -301,19 +281,19 @@ class TestLedgerAdapterDualWrite:
         assert len(all_msgs) == 8
 
     @pytest.mark.asyncio
-    async def test_non_ce_path_appends_normally(self) -> None:
-        """When context_engine is None, _record_ledger_message just appends."""
+    async def test_no_ce_raises_value_error(self) -> None:
+        """Stage 2: _record_ledger_message requires a CE instance."""
         from langchain_core.messages import HumanMessage
 
         from soothe.foundation.loop.utils.messages import _record_ledger_message
 
-        loop_messages: list = []
         msg = HumanMessage(content="test")
-
-        _record_ledger_message(None, msg, "execute_step", loop_messages)
-
-        assert len(loop_messages) == 1
-        assert loop_messages[0] is msg
+        try:
+            _record_ledger_message(None, msg, "execute_step")
+        except ValueError as e:
+            assert "requires a ContextEngine instance" in str(e)
+        else:
+            raise AssertionError("Expected ValueError")
 
 
 class TestNamedConstantsEquivalence:

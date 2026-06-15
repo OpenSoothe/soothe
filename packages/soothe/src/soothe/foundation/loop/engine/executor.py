@@ -1786,12 +1786,8 @@ class Executor:
                     phase="execute_step",
                     step_id=step.id,
                 )
-                _record_ledger_message(
-                    self._context_engine, human_msg, "execute_step", state.loop_messages
-                )
-                _record_ledger_message(
-                    self._context_engine, ai_err_msg, "execute_step", state.loop_messages
-                )
+                _record_ledger_message(self._context_engine, human_msg, "execute_step")
+                _record_ledger_message(self._context_engine, ai_err_msg, "execute_step")
                 continue
 
             _events, step_result, step_messages, delegate_final = raw
@@ -1841,12 +1837,8 @@ class Executor:
                 step_id=step.id,
                 response_metadata=meta,
             )
-            _record_ledger_message(
-                self._context_engine, human_msg, "execute_step", state.loop_messages
-            )
-            _record_ledger_message(
-                self._context_engine, ai_msg, "execute_step", state.loop_messages
-            )
+            _record_ledger_message(self._context_engine, human_msg, "execute_step")
+            _record_ledger_message(self._context_engine, ai_msg, "execute_step")
 
         # RFC-227: refresh per-wave digest for plan-assess / plan-generate grounding.
         self._update_prior_progress(state, steps, gather_results)

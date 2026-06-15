@@ -370,7 +370,7 @@ class StrangeLoop:
             max_iterations=max_iterations,
             intent=intent,
             routing_classification=routing_classification,
-            loop_messages=goal_record.loop_messages if goal_record else [],
+            loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
         )
 
         # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring

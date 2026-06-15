@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.clarification import (
     ClarificationAnswer,
     answer_to_state,
@@ -19,6 +23,13 @@ from soothe.foundation.loop.orchestrator.nodes.execute_steps import (
 )
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.loop.state.schemas import AgentDecision, StepAction, StepResult
+
+
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
 
 
 def _make_loop_state() -> Any:
@@ -41,6 +52,8 @@ def _make_ctx(
     *,
     clarification_policy: Any = None,
     loop_state: Any | None = None,
+    ce: ContextEngine | None = None,
+    goal: GoalNode | None = None,
 ) -> LoopRuntimeContext:
     async def emit(event_type: str, event_data: Any) -> None:
         emit_sink.append((event_type, event_data))
@@ -69,6 +82,8 @@ def _make_ctx(
         emit=emit,
         scratch=scratch,
         clarification_policy=clarification_policy,
+        ce=ce,
+        ce_goal_id=goal.id if goal else None,
     )
 
 
@@ -92,7 +107,10 @@ async def test_branch2_short_circuits_when_planner_emits_ask_user(
         execution_mode="parallel",
     )
     emitted: list[tuple[str, Any]] = []
-    ctx = _make_ctx(decision, emitted, clarification_policy=object())
+    ce = _make_ce()
+    goal = GoalNode(description="test goal")
+    ce._dag.add_goal(goal)
+    ctx = _make_ctx(decision, emitted, clarification_policy=object(), ce=ce, goal=goal)
 
     executor_called = MagicMock()
 
@@ -176,7 +194,12 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     loop_state = _make_loop_state()
     # Simulate that the answered step id is already considered complete by
     # state when get_ready_steps runs (which it would be after add_step_result).
-    ctx = _make_ctx(decision, emitted, clarification_policy=object(), loop_state=loop_state)
+    ce = _make_ce()
+    goal = GoalNode(description="test goal")
+    ce._dag.add_goal(goal)
+    ctx = _make_ctx(
+        decision, emitted, clarification_policy=object(), loop_state=loop_state, ce=ce, goal=goal
+    )
 
     pending_clar = {
         "questions": ["Which output format?"],
@@ -238,10 +261,11 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     assert applied.outcome["questions"] == ["Which output format?"]
     assert applied.outcome["confidence"] == pytest.approx(0.9)
 
-    # The Q&A pair was appended to loop_messages so the next plan iteration
+    # The Q&A pair was appended to CE ledger so the next plan iteration
     # sees the resolved clarification (otherwise the planner re-asks).
-    assert len(loop_state.loop_messages) == 2
-    human_msg, ai_msg = loop_state.loop_messages
+    msgs = ce.ledger.get_messages()
+    assert len(msgs) == 2
+    human_msg, ai_msg = msgs
     assert human_msg.type == "human"
     assert "Which output format?" in human_msg.content
     assert ai_msg.type == "ai"
@@ -288,7 +312,10 @@ async def test_branch2_picks_first_ask_user_in_mixed_wave(
         execution_mode="parallel",
     )
     emitted: list[tuple[str, Any]] = []
-    ctx = _make_ctx(decision, emitted, clarification_policy=object())
+    ce = _make_ce()
+    goal = GoalNode(description="test goal")
+    ce._dag.add_goal(goal)
+    ctx = _make_ctx(decision, emitted, clarification_policy=object(), ce=ce, goal=goal)
 
     executor_called = MagicMock()
 
@@ -386,6 +413,7 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     # Real LoopState so loop_messages is a list we can mutate and read back.
     from soothe.foundation.loop.state.schemas import LoopState
 
+    ce = _make_ce()
     loop_state = LoopState(
         goal="count file types per package",
         thread_id="thread-1",
@@ -393,13 +421,18 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
         iteration=2,
         max_iterations=10,
     )
-    # Simulate prior plan-phase pairs already on the in-memory ledger that
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+    # Simulate prior plan-phase pairs already on the CE ledger that
     # never reached the goal record (synth path runs before record_iteration).
-    loop_state.loop_messages.extend(
-        [
-            LoopHumanMessage(content="prior assess", thread_id="thread-1", iteration=1),
-            LoopAIMessage(content="prior assess A", thread_id="thread-1", iteration=1),
-        ]
+    ce.ledger.record_message(
+        LoopHumanMessage(content="prior assess", thread_id="thread-1", iteration=1),
+        phase="plan_assess",
+    )
+    ce.ledger.record_message(
+        LoopAIMessage(content="prior assess A", thread_id="thread-1", iteration=1),
+        phase="plan_assess",
     )
 
     goal_record = MagicMock()
@@ -443,6 +476,8 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
         emit=emit,
         scratch=scratch,
         clarification_policy=None,
+        ce=ce,
+        ce_goal_id=goal.id,
     )
 
     pending_clar = {
@@ -476,14 +511,15 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     # Synth path was taken.
     assert result.get("resume_synth") is True
     # State got the new Q&A pair appended (2 prior + 2 new = 4).
-    assert len(loop_state.loop_messages) == 4
-    new_human, new_ai = loop_state.loop_messages[-2:]
+    msgs = ce.ledger.get_messages()
+    assert len(msgs) == 4
+    new_human, new_ai = msgs[-2:]
     assert "Which package next?" in new_human.content
     assert "soothe-daemon" in new_ai.content
 
-    # goal_record was updated with the full ledger snapshot and the advanced iteration.
-    assert len(goal_record.loop_messages) == 4
-    assert "soothe-daemon" in goal_record.loop_messages[-1].content
+    # RFC-624 Phase 4: goal_record.loop_messages is no longer populated;
+    # CE LedgerManager spans all goals and ce.save() persists the ledger.
+    # goal_record.iteration is still advanced inline.
     assert goal_record.iteration == 3  # 2 → +1 in synth path
 
     # Checkpoint was persisted exactly once with our checkpoint object.

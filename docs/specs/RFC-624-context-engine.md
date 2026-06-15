@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-12
-**Updated**: 2026-06-15 (Phase 4 revised)
+**Updated**: 2026-06-15 (Phase 4 Stage 2 cleanup)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-215 (Persistence Backend)
 **Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture)
 
@@ -63,7 +63,8 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 | 3b | Adapter Hardening + Projection Wiring (Sub-project 2) | Adapters use public API; ContextBundle wired into prompts | Done |
 | 3c | CE Planning Submodule (Sub-project 3) | `soothe.context.planning` submodule: StepPlanningSubengine, GoalPlanningSubengine, GoalScheduler, PlanningFacade; eliminates adapter heuristic duplication | Done |
 | 3d | CE-StrangeLoop Full Integration (Sub-project 4) | Wire CE into StrangeLoop as fully functional parallel path; close 5 integration gaps | Done |
-| 4 | CE-as-LoopState-Backend (Revised) | CE-backed properties, persistence polish (remove in-memory, add pgsql), loop-scoped CE lifecycle, big-bang migration | This update |
+| 4 Stage 1 | CE-backed properties + loop-scoped CE lifecycle | Property migration, persistence polish, loop-scoped CE, projection config | Done |
+| 4 Stage 2 | Remaining cleanup + deeper integration | Slim GER, CE-only ledger writes, delete deprecated functions, replace goal_history reads with CE queries | This update |
 
 ---
 
@@ -1199,6 +1200,50 @@ No prompt format changes. `PromptBuilder` renders `prior_goals` into the same `<
 - `GoalExecutionRecord` trimmed to 7 fields; schema 4.0
 - ContextBundle includes `prior_goals` and `cross_goal_ledger`
 - All existing tests pass; new tests cover properties, pgsql persistence, cross-goal continuity
+
+### §60 Phase 4 Stage 2: Remaining Cleanup
+
+Stage 1 (big-bang property migration) shipped with some items deferred. Stage 2 completes the Phase 4 acceptance criteria.
+
+**Items completed in Stage 1:**
+
+| Criterion | Status |
+|---|---|
+| `InMemoryContextPersistence` deleted | Done |
+| `PgsqlContextPersistence` available | Done |
+| CE-backed properties on LoopState | Done |
+| CE instance loop-scoped on `StrangeLoop._ce` | Done |
+| `ce.load()` on `run_with_progress()` startup | Done |
+| `ce.create_goal()` accumulates in existing DAG | Done |
+| `state_manager` untouched (checkpoint, thread-switch) | Done |
+| `StepExecution` enriched with all fields | Done |
+| Projection config in `ContextEngineConfig` | Done |
+
+**Items deferred to Stage 2:**
+
+| Criterion | Current state | Stage 2 fix |
+|---|---|---|
+| `_record_ledger_message()` CE-only writes | Still has `loop_messages` param (unused when CE bound) | Remove param; raise ValueError without CE |
+| `sync_loop_messages_from_ce()` deleted | Exists as no-op, zero callers | Delete entirely |
+| `seed_loop_ledger_from_prior_goal()` deleted | Deprecated docstring, 2 test callers | Delete function, update tests |
+| `GoalExecutionRecord` trimmed to 7 fields | Still has all 18+ fields; `finalize_goal()` writes empty data | Remove CE-owned fields; schema 3.4 |
+| `completed_step_ids.clear()` in resolve_decision | Writes to cache (invisible when CE bound) | Remove call entirely |
+| `goal_completion` save/restore for step_results | `pre_clear_step_results` dance; cache-only writes when CE bound | Read from CE DAG directly |
+| `_prior_goal_summaries()` from CE | Reads `checkpoint.goal_history[:-1]` | Query `ce.get_all_goals(status='completed')` |
+
+**Stage 2 migration sequence:**
+
+| Step | Scope |
+|------|-------|
+| 1 | Slim `GoalExecutionRecord`: remove `loop_messages`, `step_results`, `completed_step_ids`, `evidence_ledger`, `current_plan`; remove mirroring in `finalize_goal()`; schema 3.4 |
+| 2 | Simplify `_record_ledger_message()`: remove `loop_messages` param; update 6 callers |
+| 3 | Eliminate goal_completion save/restore: synthesis reads from CE DAG; delete `pre_clear_step_results` |
+| 4 | Remove `state.completed_step_ids.clear()` in `resolve_decision.py:71` |
+| 5 | Replace `_prior_goal_summaries()` with CE query; delete `seed_loop_ledger_from_prior_goal()` |
+| 6 | Delete `sync_loop_messages_from_ce()` |
+| 7 | Update tests; run `verify_finally.sh` |
+
+**Design reference:** `docs/drafts/2026-06-13-ce-phase4-loopstate-backend-design.md` — Stage 2 section.
 
 ---
 

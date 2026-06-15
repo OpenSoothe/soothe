@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
+from soothe.context.engine import ContextEngine
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     Executor,
@@ -13,10 +17,25 @@ from soothe.foundation.loop.engine.executor import (
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
+
+
 def test_append_parallel_wave_ledger_success_and_exception() -> None:
     mock_agent = object()
-    ex = Executor(mock_agent, max_parallel_steps=4)
+    ce = _make_ce()
+    ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
+    # Bind CE to state so loop_messages property reads from CE ledger
+    from soothe.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+
     steps = [
         StepAction(id="s1", description="glob READMEs", expected_output="paths"),
         StepAction(id="s2", description="count them", expected_output="n"),
@@ -41,8 +60,10 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
 
     ex._append_parallel_wave_ledger(state, steps, gather_results)
 
-    assert len(state.loop_messages) == 4
-    h0, a0, h1, a1 = state.loop_messages
+    # Check CE ledger directly (state.loop_messages property reads from CE when bound)
+    ledger_msgs = ce.ledger.get_messages()
+    assert len(ledger_msgs) == 4
+    h0, a0, h1, a1 = ledger_msgs
     assert h0.content == "Execute: glob READMEs"
     assert getattr(h0, "step_id", None) == "s1"
     assert "a.md b.md" in (a0.content or "")
@@ -52,8 +73,16 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
 
 def test_append_parallel_wave_ledger_delegate_fallback() -> None:
     mock_agent = object()
-    ex = Executor(mock_agent, max_parallel_steps=4)
+    ce = _make_ce()
+    ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="g", thread_id="t1", iteration=0, max_iterations=8)
+    # Bind CE to state
+    from soothe.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+
     steps = [StepAction(id="only", description="delegate work", expected_output="x")]
     tup = (
         [],
@@ -69,8 +98,10 @@ def test_append_parallel_wave_ledger_delegate_fallback() -> None:
         "answer from task tool only",
     )
     ex._append_parallel_wave_ledger(state, steps, [tup])
-    assert len(state.loop_messages) == 2
-    assert state.loop_messages[1].content == "answer from task tool only"
+    # Check CE ledger directly
+    ledger_msgs = ce.ledger.get_messages()
+    assert len(ledger_msgs) == 2
+    assert ledger_msgs[1].content == "answer from task tool only"
 
 
 def test_last_tool_result_block_empty_when_no_tool_messages() -> None:
@@ -110,8 +141,16 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
     """Ledger AI body carries the assistant prose only; tool output is NOT
     injected into the message content."""
     mock_agent = object()
-    ex = Executor(mock_agent, max_parallel_steps=4)
+    ce = _make_ce()
+    ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
+    # Bind CE to state
+    from soothe.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+
     steps = [StepAction(id="s1", description="count", expected_output="counts")]
     tup = (
         [],
@@ -130,7 +169,9 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
         "",
     )
     ex._append_parallel_wave_ledger(state, steps, [tup])
-    ai_body = state.loop_messages[1].content or ""
+    # Check CE ledger directly
+    ledger_msgs = ce.ledger.get_messages()
+    ai_body = ledger_msgs[1].content or ""
     assert "Counted files by extension." in ai_body
     assert "<LAST_TOOL_RESULT" not in ai_body
     assert "md 33" not in ai_body
@@ -139,8 +180,16 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
 def test_append_parallel_wave_ledger_uses_outcome_summary_when_no_ai_text() -> None:
     """When assistant text is empty, use execute output summary before placeholder."""
     mock_agent = object()
-    ex = Executor(mock_agent, max_parallel_steps=4)
+    ce = _make_ce()
+    ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="list files", thread_id="t1", iteration=1, max_iterations=8)
+    # Bind CE to state
+    from soothe.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+
     steps = [StepAction(id="s1", description="list files", expected_output="listing")]
     tup = (
         [],
@@ -156,7 +205,9 @@ def test_append_parallel_wave_ledger_uses_outcome_summary_when_no_ai_text() -> N
         "",
     )
     ex._append_parallel_wave_ledger(state, steps, [tup])
-    ai_body = state.loop_messages[1].content or ""
+    # Check CE ledger directly
+    ledger_msgs = ce.ledger.get_messages()
+    ai_body = ledger_msgs[1].content or ""
     assert "Step completed with no AI text captured" not in ai_body
     assert "Result: README.md pyproject.toml src/" in ai_body
 

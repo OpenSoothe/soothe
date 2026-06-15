@@ -13,7 +13,6 @@ import logging
 import random
 from typing import Any, Literal
 
-from soothe.foundation.loop.state.checkpoint import GoalExecutionRecord, StrangeLoopCheckpoint
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -21,7 +20,6 @@ from soothe.foundation.loop.state.schemas import (
     StatusAssessment,
     StepAction,
 )
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_GOAL_DONE
@@ -68,87 +66,36 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
 ]
 
 
-def _prior_goal_summaries(checkpoint: StrangeLoopCheckpoint) -> list[dict]:
+def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
     """Compact summary of completed prior goals for the continuation_assess prompt.
 
-    Excludes the active (new) goal at the end of ``goal_history`` and any
-    non-completed records. Data is drawn from RFC-225 enrichment fields.
+    RFC-624 Phase 4 Stage 2: Reads from CE GoalStepDAG instead of checkpoint.goal_history.
+    CE DAG contains completed goals with step data; checkpoint GER is metadata-only.
 
     Args:
-        checkpoint: Current StrangeLoopCheckpoint with goal_history.
+        ctx: LoopRuntimeContext with CE reference.
 
     Returns:
         List of dicts (one per completed prior goal) with keys:
-        ``goal_id``, ``goal_text``, ``completion``, ``step_count``,
-        ``current_plan_action``.
+        ``goal_id``, ``goal_text``, ``completion``, ``step_count``.
     """
+    if ctx.ce is None:
+        # Fallback: no CE, return empty (tests without CE)
+        return []
     out: list[dict] = []
-    for g in checkpoint.goal_history[:-1]:
-        if g.status != "completed":
+    for goal in ctx.ce.get_all_goals():
+        if goal.status != "completed":
             continue
+        completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
         out.append(
             {
-                "goal_id": g.goal_id,
-                "goal_text": g.goal_text,
-                "completion": g.goal_completion or "",
-                "step_count": len(g.step_results),
-                "current_plan_action": (g.current_plan.next_action if g.current_plan else ""),
+                "goal_id": goal.id,
+                "goal_text": goal.description,
+                "completion": goal.action_history[-1] if goal.action_history else "",
+                "step_count": len(completed_steps),
             }
         )
     return out
-
-
-def seed_loop_ledger_from_prior_goal(
-    checkpoint: StrangeLoopCheckpoint,
-    new_goal: GoalExecutionRecord,
-    thread_id: str,
-) -> None:
-    """Copy prior goal context into a new goal's ledger for same-loop follow-ups.
-
-    .. deprecated:: RFC-624 Phase 4 Step 3
-        No longer called from ``strange_loop.py`` — CE ledger spans all goals
-        via ``ce.load()``. Kept for test compatibility.
-
-    When ``loop_id`` is stable per conversation thread, the new goal starts with an
-    empty ``loop_messages`` list while Execute prompts still reference the RFC-214
-    ledger. Reuse the previous completed goal's ledger, or fall back to
-    ``goal_completion`` text when the ledger was not persisted.
-
-    Args:
-        checkpoint: Loaded checkpoint whose ``goal_history`` ends with ``new_goal``.
-        new_goal: The goal record just appended for this user turn (last in history).
-        thread_id: Active conversation thread id for message metadata.
-    """
-    history = checkpoint.goal_history
-    if len(history) < 2:
-        return
-    prev = history[-2]
-    if prev.status != "completed":
-        return
-    if prev.loop_messages:
-        new_goal.loop_messages.extend(m.model_copy(deep=True) for m in prev.loop_messages)
-        return
-    completion = (prev.goal_completion or "").strip()
-    if not completion:
-        return
-    gtext = prev.goal_text or "Previous request"
-    new_goal.loop_messages.extend(
-        [
-            LoopHumanMessage(
-                content=gtext,
-                thread_id=thread_id,
-                iteration=0,
-                goal_summary=gtext[:200] if gtext else None,
-                phase=None,
-            ),
-            LoopAIMessage(
-                content=completion,
-                thread_id=thread_id,
-                iteration=0,
-                phase=None,
-            ),
-        ]
-    )
 
 
 def build_continue_loop_bootstrap_plan(
@@ -232,11 +179,13 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             or (
                 ctx.goal_record is not None
                 and ctx.goal_record.iteration == 0
-                and not ctx.goal_record.loop_messages
+                # RFC-624 Phase 4 Stage 2: loop_messages removed from GER
+                # Check CE ledger instead
+                and (ctx.ce is None or len(ctx.ce.ledger.get_messages()) == 0)
             )
         )
     ):
-        prior_goals = _prior_goal_summaries(ctx.checkpoint)
+        prior_goals = _prior_goal_summaries(ctx)  # RFC-624 Phase 4 Stage 2: reads CE DAG
         if prior_goals:
             assessment = await strange_loop.loop_planner.assess_continuation(
                 current_goal=state.goal,
