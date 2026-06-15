@@ -132,7 +132,9 @@ class TestDreamingCoordinator:
 
         assert mock_bus.emit.call_count >= 2
 
-    async def test_gather_dreaming_context_loop_scope(self, coordinator: DreamingCoordinator) -> None:
+    async def test_gather_dreaming_context_loop_scope(
+        self, coordinator: DreamingCoordinator
+    ) -> None:
         """_gather_dreaming_context returns context for loop scope."""
         context = await coordinator._gather_dreaming_context("loop")
 
@@ -149,7 +151,9 @@ class TestDreamingCoordinator:
         assert isinstance(context, DreamingContext)
         assert context.scope_id == "workspace"
 
-    async def test_gather_dreaming_context_topic_scope(self, coordinator: DreamingCoordinator) -> None:
+    async def test_gather_dreaming_context_topic_scope(
+        self, coordinator: DreamingCoordinator
+    ) -> None:
         """_gather_dreaming_context returns context for topic scope."""
         context = await coordinator._gather_dreaming_context("topic")
 
@@ -182,7 +186,9 @@ class TestDreamingCoordinator:
 
         coordinator._ce.record_episodic_memory.assert_called_once()
 
-    async def test_apply_distillation_result_handles_none(self, coordinator: DreamingCoordinator) -> None:
+    async def test_apply_distillation_result_handles_none(
+        self, coordinator: DreamingCoordinator
+    ) -> None:
         """_apply_distillation_result handles None result."""
         await coordinator._apply_distillation_result("episodic", None)
 
