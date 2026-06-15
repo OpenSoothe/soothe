@@ -117,7 +117,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             return_value=mock_sm,
         ),
         patch(
-            "soothe.context.engine.ContextEngine",
+            "soothe.foundation.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
@@ -167,7 +167,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
             return_value=mock_sm,
         ),
         patch(
-            "soothe.context.engine.ContextEngine",
+            "soothe.foundation.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
@@ -211,7 +211,7 @@ async def test_completed_payload_for_summary_path() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.context.engine.ContextEngine",
+            "soothe.foundation.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
@@ -257,7 +257,7 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.context.engine.ContextEngine",
+            "soothe.foundation.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(

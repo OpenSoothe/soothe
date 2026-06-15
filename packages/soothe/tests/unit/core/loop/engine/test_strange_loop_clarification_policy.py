@@ -131,7 +131,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.context.engine.ContextEngine",
+            "soothe.foundation.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
@@ -189,7 +189,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
             return_value=mock_sm,
         ),
         patch(
-            "soothe.context.engine.ContextEngine",
+            "soothe.foundation.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
