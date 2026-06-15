@@ -1,10 +1,12 @@
 """Integration tests for ContextEngine lifecycle (soothe.context.engine)."""
 
+from pathlib import Path
+
 import pytest
 
 from soothe.context.engine import ContextEngine
 from soothe.context.models import StepExecution, StepNode
-from soothe.context.persistence.in_memory import InMemoryContextPersistence
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 class TestContextEngineGoalLifecycle:
@@ -128,7 +130,7 @@ class TestContextEngineLedger:
 class TestContextEnginePersistence:
     @pytest.mark.asyncio
     async def test_save_and_load_roundtrip(self) -> None:
-        persistence = InMemoryContextPersistence()
+        persistence = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         engine = ContextEngine(persistence=persistence)
         goal = await engine.create_goal("Persist me")
         await engine.add_step(goal.id, StepNode(id="S1", description="Step"))
@@ -143,7 +145,7 @@ class TestContextEnginePersistence:
 
     @pytest.mark.asyncio
     async def test_load_empty_returns_false(self) -> None:
-        persistence = InMemoryContextPersistence()
+        persistence = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         engine = ContextEngine(persistence=persistence)
         loaded = await engine.load()
         assert loaded is False

@@ -1,15 +1,20 @@
 """Tests for persistence backends (soothe.context.persistence)."""
 
+from pathlib import Path
+
 import pytest
 
 from soothe.context.models import GoalNode, GoalStepDAG, StepNode
-from soothe.context.persistence.in_memory import InMemoryContextPersistence
 
 
-class TestInMemoryPersistence:
+class TestSqliteMemoryPersistence:
+    """Tests using SQLite :memory: backend (replaces InMemoryContextPersistence)."""
+
     @pytest.mark.asyncio
     async def test_save_and_load_dag(self) -> None:
-        p = InMemoryContextPersistence()
+        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+
+        p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         dag = GoalStepDAG()
         goal = GoalNode(description="Test")
         goal.steps.add_step(StepNode(id="S1", description="Step"))
@@ -25,12 +30,16 @@ class TestInMemoryPersistence:
 
     @pytest.mark.asyncio
     async def test_load_empty_returns_none(self) -> None:
-        p = InMemoryContextPersistence()
+        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+
+        p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         assert await p.load_dag() is None
 
     @pytest.mark.asyncio
     async def test_save_and_load_ledger(self) -> None:
-        p = InMemoryContextPersistence()
+        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+
+        p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         data = [{"type": "HumanMessage", "content": "hello", "phase": "plan"}]
         await p.save_ledger(data)
         loaded = await p.load_ledger()
@@ -39,12 +48,16 @@ class TestInMemoryPersistence:
 
     @pytest.mark.asyncio
     async def test_load_ledger_empty(self) -> None:
-        p = InMemoryContextPersistence()
+        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+
+        p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         assert await p.load_ledger() == []
 
     @pytest.mark.asyncio
     async def test_clear(self) -> None:
-        p = InMemoryContextPersistence()
+        from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+
+        p = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         dag = GoalStepDAG()
         dag.add_goal(GoalNode(description="X"))
         await p.save_dag(dag)

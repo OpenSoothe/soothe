@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-12
-**Updated**: 2026-06-12
+**Updated**: 2026-06-15 (Phase 4 revised)
 **Dependencies**: RFC-000 (System Conceptual Design), RFC-200 (Autonomous Goal Management), RFC-201 (StrangeLoop Plan-Execute Loop), RFC-214 (Loop Message Surface), RFC-215 (Persistence Backend)
 **Related**: RFC-217 (Goal Context Management), RFC-224 (Automatic Context Window Management), RFC-222 (Autopilot GoalEngine Architecture)
 
@@ -15,7 +15,7 @@
 
 This RFC introduces `ContextEngine`, a unified interface for context management across Soothe's GoalEngine (goal-level) and StrangeLoop (execution-level). ContextEngine consolidates scattered context handling — goal DAG, step DAG, message ledger, working memory, and project instructions — into a single module with clear ownership boundaries. It provides a unified Goal+Step DAG data structure with lineage tracking, a bounded projection mechanism that outputs structured data for prompt templates, and pluggable persistence.
 
-Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into StrangeLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop.
+Phase 1 delivers ContextEngine as a standalone module in `soothe.context` with no changes to existing code. Phase 2 wires it into GoalEngine. Phase 3 wires it into StrangeLoop via an adapter pattern that guarantees behavioral equivalence with the existing Plan-Exec loop. Phase 4 makes CE the sole data source for goal/step/ledger state, deleting all adapters and trimming LoopState to a thin `ExecutionState` facade holding only execution-only fields.
 
 ---
 
@@ -62,7 +62,8 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 | 3a | CE Engine Completeness (Sub-project 1) | CE internal: public API, state transitions, callbacks, lossless persistence, compaction | Done |
 | 3b | Adapter Hardening + Projection Wiring (Sub-project 2) | Adapters use public API; ContextBundle wired into prompts | Done |
 | 3c | CE Planning Submodule (Sub-project 3) | `soothe.context.planning` submodule: StepPlanningSubengine, GoalPlanningSubengine, GoalScheduler, PlanningFacade; eliminates adapter heuristic duplication | Done |
-| 3d | CE-StrangeLoop Full Integration (Sub-project 4) | Wire CE into StrangeLoop as fully functional parallel path; close 5 integration gaps | This update |
+| 3d | CE-StrangeLoop Full Integration (Sub-project 4) | Wire CE into StrangeLoop as fully functional parallel path; close 5 integration gaps | Done |
+| 4 | CE-as-LoopState-Backend (Revised) | CE-backed properties, persistence polish (remove in-memory, add pgsql), loop-scoped CE lifecycle, big-bang migration | This update |
 
 ---
 
@@ -87,22 +88,23 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 │   • ContextBundle (projection output)                         │
 │   • GoalStepDAGSnapshot (persistence format)                  │
 └──────────────────────────────────────────────────────────────┘
-          ↓ Phase 3: Adapter pattern
+          ↓ Phase 3: Adapter pattern (deprecated in Phase 4)
 ┌──────────────────────────────────────────────────────────────┐
-│ Context Adapters                                              │
+│ Phase 3: Context Adapters (deleted in Phase 4)               │
 │  • ContextEnginePlanAdapter → PlanManager interface           │
 │  • ContextEngineLedgerAdapter → mirrors to LedgerManager     │
 │  • ContextEngineGoalContextAdapter → GoalContextManager iface │
 └──────────────────────────────────────────────────────────────┘
-          ↓ Identical interfaces
+          ↓ Phase 4: Direct CE access (no adapters)
 ┌──────────────────────────────────────────────────────────────┐
-│ Existing StrangeLoop (unchanged)                                │
+│ StrangeLoop Graph Nodes (Phase 4: call ctx.ce directly)       │
 │  • PromptBuilder — same XML fragments                         │
 │  • Executor — same step execution                             │
 │  • LangGraph — same node topology                             │
 │  • Step ID allocator — same KFA-01 composite IDs              │
-│  • Ledger writers — same LoopHumanMessage/LoopAIMessage       │
-│  • StrangeLoopStateManager — same DB persistence                │
+│  • Ledger writers → ce.ledger.record_message() (sole source)  │
+│  • ExecutionState — thin facade, CE-backed properties         │
+│  • StrangeLoopStateManager — trimmed checkpoint (schema 4.0)  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -818,6 +820,388 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 
 ---
 
+
+## Phase 4: CE-as-LoopState-Backend (Revised)
+
+### §48 Purpose
+
+Make ContextEngine the sole data source for goal/step/ledger state via CE-backed `@property` accessors on LoopState. Three changes ship together in a big-bang migration:
+
+1. **Persistence backend polish** — remove `InMemoryContextPersistence`, add `PgsqlContextPersistence`, improve file/sqlite backends
+2. **LoopState property migration** — `loop_messages`, `step_results`, `completed_step_ids` become CE-backed properties; no sync calls needed
+3. **Loop-scoped CE lifecycle** — CE instance persists across goals within a loop_id, `ce.load()` on startup, goals accumulate in the DAG
+
+**`state_manager` stays alongside CE** — checkpoint persistence, iteration recording, and thread-switch detection remain its responsibility. CE owns goal/step/ledger data only.
+
+### §49 Persistence Backend Polish
+
+**Remove `InMemoryContextPersistence`:**
+
+- Delete `context/persistence/in_memory.py`
+- Remove from `__init__.py` exports and `ContextEngine.__init__()` default
+- CE now requires an explicit persistence backend
+- All tests that create CE without persistence must provide sqlite `:memory:` or file in tmp
+- Update `ContextEngineConfig.persistence_backend` to `Literal["file", "sqlite", "pgsql"]`
+
+**Add `PgsqlContextPersistence`:**
+
+New file: `context/persistence/pgsql_backend.py`. Uses `asyncpg` connection pool. Same `ContextPersistenceProtocol` as other backends.
+
+```python
+class PgsqlContextPersistence:
+    def __init__(self, loop_id: str, dsn: str, *,
+                 pool_min_size: int = 2, pool_max_size: int = 10):
+```
+
+Schema uses JSONB for queryability and compression:
+```sql
+CREATE TABLE IF NOT EXISTS ce_dag (
+    loop_id TEXT PRIMARY KEY,
+    dag_json JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS ce_ledger (
+    loop_id TEXT PRIMARY KEY,
+    ledger_json JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Natively async (no `asyncio.to_thread`). Upsert same as sqlite (`INSERT ... ON CONFLICT DO UPDATE`). Pool created lazily on first use, closed via `close()` or `clear()`.
+
+Config:
+```python
+class PgsqlPersistenceConfig(BaseModel):
+    dsn: str
+    pool_min_size: int = 2
+    pool_max_size: int = 10
+
+class ContextEngineConfig(BaseModel):
+    persistence_backend: Literal["file", "sqlite", "pgsql"] = "sqlite"
+    pgsql_config: PgsqlPersistenceConfig | None = None
+```
+
+**FileContextPersistence improvements:** Add `asyncio.to_thread` for file I/O (currently synchronous, blocks event loop).
+
+**SqliteContextPersistence improvements:** Add public `close()` method, fix thread-safety in `_ensure_connection()` with a lock.
+
+### §50 LoopState Property Migration
+
+Three fields become CE-backed `@property` accessors. When CE is bound, the property queries CE in-process (no I/O, <1ms). When CE is not bound (test/legacy mode), a private `_cache` field serves as fallback.
+
+**Become CE-backed properties:**
+
+| Field | CE source | Write path |
+|---|---|---|
+| `loop_messages` | `ce.ledger.get_messages()` + Loop-type wrapping | `ce.ledger.record_message()` |
+| `step_results` | `ce.get_goal_sync(goal_id).steps.nodes` → map to `StepResult` | `ce.complete_step()` / `ce.fail_step()` |
+| `completed_step_ids` | `{s.id for s in goal.steps.nodes.values() if s.status == "completed"}` | `ce.complete_step()` / `ce.fail_step()` |
+
+**Fields staying on LoopState** (execution-only):
+
+| Cluster | Fields | Reason |
+|---|---|---|
+| Execution context | `goal`, `thread_id`, `workspace`, `git_status`, `goal_user_submission`, `skill_context` | Per-invocation routing |
+| Wave metrics | `last_wave_*`, `total_tokens_used`, `total_duration_ms`, `context_percentage_consumed` | Ephemeral per-wave |
+| Skill/MCP | `sent_skill_names`, `activated_skill_names`, `invoked_skill_names`, etc. | UI/middleware concern |
+| Orchestration | `intent`, `routing_classification`, `continue_loop`, `current_decision`, `plan_id`, `previous_plan` | Control flow |
+| Execution signals | `last_execute_assistant_text`, `last_wave_answer_from_delegate_final`, etc. | Executor internals |
+| Step-thread map | `step_thread_ids` | Executor isolation |
+| Tracking | `iteration`, `max_iterations`, `action_history`, `evidence_summary`, `evidence_ledger`, `working_memory`, `prior_progress` | Future migration candidates |
+
+**Property implementation pattern:**
+
+```python
+class LoopState:
+    _loop_messages_cache: list[LoopHumanMessage | LoopAIMessage]
+    _step_results_cache: list[StepResult]
+    _completed_step_ids_cache: set[str]
+
+    @property
+    def loop_messages(self) -> list[LoopHumanMessage | LoopAIMessage]:
+        if self._ce is None:
+            return self._loop_messages_cache
+        return self._build_loop_messages_from_ce()
+
+    @property
+    def step_results(self) -> list[StepResult]:
+        if self._ce is None:
+            return self._step_results_cache
+        return self._build_step_results_from_ce()
+
+    @property
+    def completed_step_ids(self) -> set[str]:
+        if self._ce is None:
+            return self._completed_step_ids_cache
+        goal = self._ce.get_goal_sync(self._ce_goal_id)
+        if goal is None:
+            return set()
+        return {sid for sid, n in goal.steps.nodes.items() if n.status == "completed"}
+```
+
+**Key invariant**: Properties return fresh collections each call. `state.loop_messages.append()` is a no-op (appends to an orphaned list). This enforces single source of truth — all writes must go through CE methods.
+
+**StepResult mapping from CE:**
+
+All 11 `StepResult` fields map to CE data:
+
+| StepResult field | CE source | Notes |
+|---|---|---|
+| `step_id` | `StepNode.id` | Direct |
+| `success` | `StepNode.status == "completed"` | Derived |
+| `outcome` | `StepExecution.outcome or {}` | Direct |
+| `error` | `StepExecution.error` | Direct |
+| `error_type` | `_clamp_error_type(StepExecution.error_type)` | Unknown values → `"unknown"` |
+| `duration_ms` | `StepExecution.duration_ms` | Direct |
+| `thread_id` | `StepExecution.thread_id or ""` | Nullable → empty string |
+| `tool_call_count` | `StepExecution.tool_call_count` | Direct |
+| `subagent_task_completions` | `StepExecution.subagent_task_completions` | Direct |
+| `hit_subagent_cap` | `StepExecution.hit_subagent_cap` | Direct |
+| `hit_tool_budget` | `StepExecution.hit_tool_budget` | Direct |
+
+**`_record_ledger_message()` simplification**: The `loop_messages` parameter is removed. When CE is bound, always write to CE. When CE is not bound, raise `ValueError` — tests must provide CE.
+
+**`sync_loop_messages_from_ce()` retirement**: Public method deleted. The `loop_messages` property replaces it — every read automatically gets fresh data from CE.
+
+**`bind_ce()` change**: After binding CE, clears the cache fields (CE is now authoritative).
+
+### §51 Adapter Deletion & Direct CE Access
+
+| Deleted component | Current role | Replacement |
+|---|---|---|
+| `_record_ledger_message()` dual-write | Writes to both `state.loop_messages` and `ce.ledger` | Simplified: CE-only writes |
+| `sync_loop_messages_from_ce()` | Repopulates loop_messages from CE ledger | Deleted: property replaces it |
+| `state.add_step_result()` | Appends to `state.step_results` list | Deleted: `ce.complete_step()` / `ce.fail_step()` is the sole write |
+| `state.completed_step_ids.add()` / `.clear()` | Direct mutation of set | Deleted: property derives from CE StepDAG |
+| `state.loop_messages.append()` | Direct mutation of list | Deleted: all writes through `ce.ledger.record_message()` |
+| `InMemoryContextPersistence` | Default no-op backend | Deleted: explicit backend required |
+| `seed_loop_ledger_from_prior_goal()` | Copies prior goal messages | Deleted: CE ledger spans all goals |
+
+**What stays:**
+
+| Component | Why |
+|---|---|
+| `ContextEngineGoalContextAdapter` | Thin convenience for plan context; reads completed goals from CE DAG |
+| `StepPlanManagerAdapter` | Binds goal_id to planning submodule |
+| `state_manager` | Checkpoint persistence, iteration recording, thread-switch detection — distinct from CE |
+
+**Graph node migration pattern:**
+
+Before (dual-write):
+```python
+_record_ledger_message(ctx.ce, human_msg, "record_iteration", state.loop_messages)
+state.step_results.append(result)
+state.completed_step_ids.add(step_id)
+```
+
+After (CE-only writes):
+```python
+ctx.ce.ledger.record_message(human_msg, "record_iteration")
+await ctx.ce.complete_step(ctx.ce_goal_id, step_id, execution)
+# step_results and completed_step_ids are properties — no explicit mutation needed
+```
+
+### §52 Loop-Scoped CE Lifecycle
+
+CE instance is created lazily on first `run_with_progress()` call and stored on `StrangeLoop._ce`. Subsequent calls reuse the same instance.
+
+```
+run_with_progress():
+  if self._ce is None:
+      persistence = _select_backend(ce_config, loop_id)
+      self._ce = ContextEngine(persistence=persistence, ...)
+  await self._ce.load()  # restore prior goals
+  ce_goal = await self._ce.create_goal(execution_goal, ...)
+  await self._ce.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+  state.bind_ce(self._ce, ce_goal.id)
+  ... run graph ...
+```
+
+**Cross-goal continuity:**
+
+```
+Goal 1 completes:
+  ├─ await ce.finalize_goal(goal_1_id, status="completed")
+  ├─ await ce.save()  # persist DAG with goal_1 (completed) + full ledger
+  └─ run_with_progress() returns
+
+Goal 2 starts (same loop_id):
+  └─ run_with_progress()
+       ├─ ce.load() → DAG: goal_1 (completed), ledger: all prior messages
+       ├─ goal_2 = ce.create_goal("Goal 2 description")
+       ├─ ce.activate_goal(goal_2.id)
+       └─ Graph runs with full context (prior goals in DAG)
+```
+
+`ContextEngineGoalContextAdapter.get_plan_context()` already reads completed goals from the CE DAG. With loop-scoped CE, completed goals are always present — no changes needed to the adapter's logic.
+
+### §53 AgentLoopCheckpoint Simplification
+
+**GoalExecutionRecord: 18 fields → 7.** A lightweight index: goal_id, text, thread_id, status, completion text, timestamps.
+
+| Field | After | Reason |
+|---|---|---|
+| `goal_id` | kept | Identity |
+| `goal_text` | kept | Human-readable summary |
+| `thread_id` | kept | Thread routing |
+| `iteration` | deleted | CE StepDAG query |
+| `max_iterations` | deleted | `GoalNode.max_iterations` |
+| `status` | kept | Checkpoint-level status |
+| `current_plan` | deleted | `GoalNode.previous_plan` |
+| `completed_step_ids` | deleted | CE StepDAG property |
+| `plan_revision_count` | deleted | `GoalNode.plan_revision_count` |
+| `step_results` | deleted | CE StepDAG + StepExecution |
+| `evidence_ledger` | deleted | CE `GoalNode.evidence_ledger` |
+| `loop_messages` | deleted | CE LedgerManager |
+| `goal_completion` | kept | Final user-facing text |
+| `evidence_summary` | deleted | CE `ledger.render_for_reason()` |
+| `duration_ms` | deleted | `GoalNode.total_duration_ms` |
+| `tokens_used` | deleted | `GoalNode.total_tokens_used` |
+| `started_at` | kept | Timestamp |
+| `completed_at` | kept | Timestamp |
+
+**AgentLoopCheckpoint: 16 fields → 12.** `goal_history` is an index, not a data store.
+
+| Field | After | Reason |
+|---|---|---|
+| `working_memory_state` | deleted | CE LedgerManager replaces |
+| `total_goals_completed` | deleted | Derived from `goal_history` |
+| `total_tokens_used` | deleted | Derived from CE DAG |
+| `schema_version` | bumped | `"4.0"` |
+
+**Schema migration: 3.3 → 4.0.** On `load()`, if `schema_version < "4.0"`:
+
+1. Load old-format checkpoint (with full GoalExecutionRecord data)
+2. Reconstruct CE state from goal_history: create GoalNode per record, populate steps from step_results, populate ledger from loop_messages
+3. Save new-format checkpoint (trimmed) + CE state
+4. Update `schema_version = "4.0"`
+
+One-time migration per loop. Lazy upgrade.
+
+### §54 StepExecution Enrichment
+
+Enrich `StepExecution` to carry all `StepResult` fields. `StepResult` becomes a view over `StepNode` + `StepExecution`.
+
+```python
+class StepExecution(BaseModel):
+    input_messages: list[dict[str, Any]] = []
+    output_messages: list[dict[str, Any]] = []
+    tokens_used: int = 0
+    duration_ms: int = 0
+    error: str | None = None
+    error_type: str | None = None          # NEW
+    thread_id: str | None = None
+    outcome: dict[str, Any] | None = None  # NEW
+    tool_call_count: int = 0               # NEW
+    subagent_task_completions: int = 0     # NEW
+    hit_subagent_cap: bool = False         # NEW
+    hit_tool_budget: bool = False          # NEW
+```
+
+`StepResult` class is not deleted — it remains the shape that planner prompts and synthesis consume. But it is no longer stored independently; it is derived via `_step_node_to_result()`.
+
+### §55 Migration Sequence (Big-Bang)
+
+All steps ship together in one PR.
+
+| Step | Scope |
+|------|-------|
+| 1 | Persistence backend polish: delete InMemory, add Pgsql, fix File/Sqlite |
+| 2 | Add CE-backed properties to LoopState (with cache fallback) |
+| 3 | Migrate all write sites to CE-only (remove dual-write, delete add_step_result, etc.) |
+| 4 | Migrate all read sites (remove sync calls, verify property access) |
+| 5 | Wire loop-scoped CE (lazy creation on StrangeLoop, ce.load() + create_goal()) |
+| 6 | Cleanup: remove cache fallbacks, clean docstrings, run verify_finally.sh |
+
+### §56 Error Handling
+
+**CE-backed property failure**: Properties catch exceptions from CE queries and return empty defaults:
+
+```python
+@property
+def step_results(self) -> list[StepResult]:
+    if self._ce is None:
+        return self._step_results_cache
+    try:
+        return self._build_step_results_from_ce()
+    except Exception:
+        logger.warning("step_results property: CE query failed", exc_info=True)
+        return []
+```
+
+**4-tier degradation model:**
+
+| Tier | Scenario | Behavior |
+|------|----------|----------|
+| 1 | `ce.save()` transient failure | Log warning, continue. In-memory CE still authoritative. |
+| 2 | `ce.load()` failure on startup | Start with empty DAG. Degraded mode: no prior goal context. |
+| 3 | `ce.complete_step()` mutation failure | Catch at graph node, log, continue. Step stays pending → benign replan. |
+| 4 | Complete CE unavailability | Fall back to cache-backed LoopState fields. |
+
+### §57 Projection Updates for Multi-Goal Context
+
+**New model: `PriorGoalSummary`**:
+
+```python
+class PriorGoalSummary(BaseModel):
+    goal_id: str
+    description: str
+    status: str
+    step_summary: str
+    completion_text: str
+    total_duration_ms: int
+    total_tokens_used: int
+```
+
+**ContextBundle additions**:
+
+```python
+class ContextBundle(BaseModel):
+    # ... existing fields unchanged ...
+    prior_goals: list[PriorGoalSummary]  # completed goals in this loop
+    cross_goal_ledger: list[dict]         # recent messages from prior goals
+```
+
+**Projection behavior**: When `ce.project(goal_id)` is called, `prior_goals` is populated from all goals with terminal status, bounded by `ProjectionConfig.max_goals` (default 5). `cross_goal_ledger` from most recent N messages, bounded by `ProjectionConfig.max_ledger_messages`.
+
+No prompt format changes. `PromptBuilder` renders `prior_goals` into the same `<previous_goal>` format.
+
+### §58 Phase 4 Files
+
+| File | Change |
+|------|--------|
+| `packages/soothe/src/soothe/context/models.py` | Enrich `StepExecution` (add 6 fields) |
+| `packages/soothe/src/soothe/context/engine.py` | `create_goal()` accepts `max_iterations` |
+| `packages/soothe/src/soothe/context/projection.py` | Add `PriorGoalSummary`, populate `prior_goals` and `cross_goal_ledger` |
+| `packages/soothe/src/soothe/context/persistence/pgsql_backend.py` | **New**: `PgsqlContextPersistence` |
+| `packages/soothe/src/soothe/context/persistence/in_memory.py` | **Delete**: `InMemoryContextPersistence` |
+| `packages/soothe/src/soothe/context/persistence/file_backend.py` | Add `asyncio.to_thread` for file I/O |
+| `packages/soothe/src/soothe/context/persistence/sqlite_backend.py` | Add `close()`, fix thread-safety |
+| `packages/soothe/src/soothe/context/persistence/__init__.py` | Remove InMemory export, add Pgsql export |
+| `packages/soothe/src/soothe/foundation/loop/state/schemas.py` | Add CE-backed properties for `loop_messages`, `step_results`, `completed_step_ids`; delete `sync_loop_messages_from_ce()`; simplify `bind_ce()` |
+| `packages/soothe/src/soothe/foundation/loop/state/checkpoint.py` | Trim `GoalExecutionRecord` to 7 fields; schema 4.0 |
+| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Lazy CE creation, `ce.load()` on startup, remove InMemory fallback |
+| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/*.py` | Replace dual-write with CE-only writes; remove sync calls |
+| `packages/soothe/src/soothe/foundation/loop/utils/messages.py` | Simplify `_record_ledger_message()`; delete `seed_loop_ledger_from_prior_goal()` |
+| `packages/soothe/src/soothe/config/models.py` | Default `"sqlite"`, add `"pgsql"`, remove `"in_memory"`; add `PgsqlPersistenceConfig` |
+
+### §59 Acceptance Criteria
+
+- `InMemoryContextPersistence` deleted; `PgsqlContextPersistence` available with asyncpg
+- `state.loop_messages`, `state.step_results`, `state.completed_step_ids` are CE-backed properties (no sync calls)
+- `_record_ledger_message()` writes to CE only (no `loop_messages` parameter)
+- `sync_loop_messages_from_ce()` deleted
+- `seed_loop_ledger_from_prior_goal()` deleted
+- CE instance is loop-scoped (persists across goals within a loop_id)
+- `ce.load()` called on `run_with_progress()` startup; successive goals accumulate in DAG
+- `state_manager` still handles checkpoint persistence, iteration recording, thread-switch detection
+- `StepExecution` enriched with all `StepResult` fields
+- `GoalExecutionRecord` trimmed to 7 fields; schema 4.0
+- ContextBundle includes `prior_goals` and `cross_goal_ledger`
+- All existing tests pass; new tests cover properties, pgsql persistence, cross-goal continuity
+
+---
+
 ## Data Flow
 
 ### Phase 1: Standalone ContextEngine
@@ -910,6 +1294,50 @@ The loop message ledger is always derivable from the GoalStepDAG. Given a `GoalS
 
 This makes the ledger a view of the DAG rather than a separate source of truth.
 
+### Phase 4: CE-as-LoopState-Backend (multi-goal DAG flow)
+
+```
+AgentLoop.run_with_progress(goal, ...)
+  │
+  ├─ ce = ContextEngine(persistence=SqliteContextPersistence(loop_id))
+  ├─ ce.load() → DAG: prior goals (completed), ledger: all prior messages
+  ├─ goal = ce.create_goal(description, max_iterations=...)
+  ├─ ce.activate_goal(goal.id, loop_id)
+  │
+  ▼
+LangGraph iteration cycle (nodes call ctx.ce directly, no adapters):
+  │
+  plan_assess / plan_generate
+  │  → ctx.ce.ledger.record_message(human_msg, "plan")
+  │  → ctx.ce.project(ce_goal_id) → ContextBundle (includes prior_goals, cross_goal_ledger)
+  │  → LLM returns PlanResult
+  │
+  ▼
+resolve_decision
+  │  → ctx.ce.planning.step.ingest_plan(ce_goal_id, plan_result, ...)
+  │  → ctx.ce.save()  ← persists new step nodes
+  │
+  ▼
+execute
+  │  → Executor runs steps (unchanged)
+  │
+  ▼
+record_iteration
+  │  → ctx.ce.complete_step(ce_goal_id, step_id, execution)  ← sole write
+  │  → ctx.ce.ledger.record_message(ai_msg, "execute_step")
+  │  → ctx.ce.save()  ← persists step outcomes
+  │  → state.step_results / state.completed_step_ids → CE-backed properties
+  │
+  ▼
+  ... loop until goal complete ...
+  │
+  ▼
+goal_completion
+  │  → ctx.ce.finalize_goal(ce_goal_id)  ← sets completed, clears active_plan
+  │  → ctx.ce.save()  ← persists final goal state
+  │  → state_manager.finalize_goal()  ← writes trimmed checkpoint (7-field GoalExecutionRecord)
+```
+
 ---
 
 ## Error Handling
@@ -922,6 +1350,15 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 | Crash recovery | On `load()`, `recover()` resets active goals to pending. Steps with no execution reset to pending. |
 | Invalid DAG operation | Cycle detection on `add_dependency`. Depth limit on goal nesting (max 5). |
 
+### Phase 4: 4-Tier Degradation Model (Revised)
+
+| Tier | Scenario | Behavior |
+|------|----------|----------|
+| 1 | `ce.save()` transient failure | Log warning, continue. In-memory CE still authoritative. Next successful save persists full state. |
+| 2 | `ce.load()` failure on startup | Start with empty DAG. Degraded mode: no prior goal context. `ce.recover_from_checkpoint()` can rebuild from checkpoint index. |
+| 3 | `ce.complete_step()` / `ce.ingest_plan()` mutation failure | Catch at graph node, log, continue. Step stays pending → benign replan. No data loss. |
+| 4 | Complete CE unavailability | CE-backed properties return cache fallback values (empty defaults if no cache). |
+
 ---
 
 ## Invariants
@@ -932,10 +1369,18 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 4. The message ledger is derivable from the GoalStepDAG (via `StepExecution` records).
 5. `ContextPersistenceProtocol` implementations must support atomic save/load (no partial writes).
 6. `ContextEngine` does not depend on `GoalEngine`, `StrangeLoop`, or `CoreAgent` — it is standalone.
-7. When the ContextEngine path is enabled in StrangeLoop, all adapter outputs must be indistinguishable from the current Plan-Exec loop outputs (behavioral equivalence).
+7. When the ContextEngine path is enabled in StrangeLoop, all outputs must be indistinguishable from the current Plan-Exec loop outputs (behavioral equivalence).
 8. The existing StrangeLoop path (CE disabled) must remain completely untouched — zero behavioral changes.
-9. `ContextEngineLifecycle` is the sole entry point for CE interactions from graph nodes — nodes never call CE methods directly.
-10. CE failures must never propagate to graph nodes — the plan-exec loop continues regardless of CE errors.
+9. CE failures must never propagate to graph nodes — the plan-exec loop continues regardless of CE errors.
+
+### Phase 4 additions (Revised)
+
+10. **CE-backed properties are the sole read path** — `state.loop_messages`, `state.step_results`, `state.completed_step_ids` are `@property` accessors that query CE when bound. No sync calls needed.
+11. **All mutations go through CE methods** — `state.loop_messages.append()`, `state.step_results.append()`, `state.completed_step_ids.add()` are deleted. Writes go to `ce.ledger.record_message()`, `ce.complete_step()`, `ce.fail_step()`.
+12. **CE persistence is loop-scoped** — CE instance persists across goals within a loop_id. `ce.load()` restores prior DAG on startup. No checkpoint fallback for goal data.
+13. **Checkpoint owns lifecycle; CE owns data** — `state_manager` handles checkpoint persistence, iteration recording, thread-switch detection. CE DAG holds goal/step/execution data. Complementary, not redundant.
+14. **`StepResult` is a view over `StepNode` + `StepExecution`** — not independently stored. Derived via `_step_node_to_result()`.
+15. **`InMemoryContextPersistence` is deleted** — CE requires an explicit persistence backend (file, sqlite, or pgsql). No no-op default.
 
 ---
 
@@ -948,7 +1393,7 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 - ContextProjector reads from ContextEngine instead of GoalDispatchContextStore
 - Backward-compatible: GoalEngine's public API unchanged, internal storage replaced
 
-### Phase 3: StrangeLoop Integration
+### Phase 3: StrangeLoop Integration (Done)
 
 - StrangeLoop's `PlanManager` replaced by `StepPlanManagerAdapter` wrapping `StepPlanningSubengine` (Phase 3c)
 - `ContextEnginePlanAdapter` removed — heuristic duplication eliminated via `completion.py` (Phase 3c)
@@ -960,3 +1405,18 @@ This makes the ledger a view of the DAG rather than a separate source of truth.
 - CE on-by-default for new installs (Phase 3d)
 - Existing prompt pipeline, executor, and LangGraph topology remain unchanged
 - DB persistence remains primary; CE file persistence supplements for DAG state
+
+### Phase 4: CE-as-LoopState-Backend (Revised)
+
+- CE-backed `@property` accessors for `loop_messages`, `step_results`, `completed_step_ids` — no sync calls
+- `InMemoryContextPersistence` deleted; `PgsqlContextPersistence` added with asyncpg
+- Loop-scoped CE lifecycle — instance persists across goals within a loop_id
+- `state_manager` kept alongside CE for checkpoint/iteration/thread-switch
+- `ContextEngineGoalContextAdapter` and `StepPlanManagerAdapter` kept as thin convenience wrappers
+- Dual-write eliminated: `_record_ledger_message()` simplified, `sync_loop_messages_from_ce()` deleted
+- `seed_loop_ledger_from_prior_goal()` deleted; CE ledger spans all goals
+- `StepExecution` enriched with `outcome`, `error_type`, `tool_call_count`, `subagent_task_completions`, `hit_subagent_cap`, `hit_tool_budget`
+- `GoalExecutionRecord` trimmed from 18 → 7 fields; `AgentLoopCheckpoint` schema 4.0
+- ContextBundle extended with `prior_goals` and `cross_goal_ledger` for multi-goal projection
+- Big-bang migration (6 steps, single PR)
+- 4-tier error handling: transient → load failure → mutation failure → cache fallback

@@ -22,7 +22,6 @@ from soothe.foundation.loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview
 
-from ..orchestrator.nodes.plan_assess import seed_loop_ledger_from_prior_goal
 from .anchor_manager import CheckpointAnchorManager
 
 if TYPE_CHECKING:
@@ -66,6 +65,9 @@ class StrangeLoop:
         self.config = config
 
         self.plan_phase = PlanPhase(loop_planner)
+
+        # RFC-624 Phase 4: Loop-scoped CE instance (created on first run_with_progress)
+        self._ce: Any | None = None
 
         # Eagerly resolve the fast model for scenario classification; None when
         # router.fast is unset (SynthesisGenerator falls back to planner model).
@@ -286,8 +288,7 @@ class StrangeLoop:
                 checkpoint.goal_history.append(goal_record)
                 checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
                 checkpoint.status = "running"
-                if len(checkpoint.goal_history) >= 2:
-                    seed_loop_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
+                # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
                 await state_manager.save(checkpoint)
                 iteration = 0
                 recovery_valid_resume = False
@@ -314,11 +315,8 @@ class StrangeLoop:
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
-            # RFC-225: always seed prior goal context for same-loop goals.
-            # A new goal within an existing loop benefits from prior context
-            # (e.g., "DUMP review to report" needs the review's findings).
-            if len(checkpoint.goal_history) >= 2:
-                seed_loop_ledger_from_prior_goal(checkpoint, goal_record, main_thread_id)
+            # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
+            # via ce.load() which restores prior DAG + ledger state.
             await state_manager.save(checkpoint)
             iteration = 0
             logger.debug(
@@ -404,42 +402,103 @@ class StrangeLoop:
 
         # RFC-624 Phase 4: ContextEngine is always active
         from soothe.context.engine import ContextEngine as _ContextEngine
-        from soothe.context.persistence.in_memory import InMemoryContextPersistence
         from soothe.context.planning import StepPlanManagerAdapter
 
         from .context_adapters import (
             ContextEngineGoalContextAdapter,
         )
 
-        ce_config = self.config.agent.loop.context_engine
+        persistence_backend = self.config.persistence.default_backend
 
-        persistence = InMemoryContextPersistence()
-        if ce_config.persistence_backend == "file":
-            from pathlib import Path as _Path
-
-            from soothe.context.persistence.file_backend import FileContextPersistence
-
-            soothe_home = (
-                _Path(self.config.home)
-                if hasattr(self.config, "home")
-                else _Path.home() / ".soothe"
-            )
-            persistence = FileContextPersistence(
-                loop_id=state_manager.loop_id,
-                soothe_home=soothe_home,
-            )
-
-        ce_instance = _ContextEngine(
-            persistence=persistence,
-            soothe_home=Path(self.config.home) if hasattr(self.config, "home") else None,
-            workspace=Path(workspace) if workspace else None,
+        soothe_home = (
+            Path(self.config.home) if hasattr(self.config, "home") else Path.home() / ".soothe"
         )
+
+        if persistence_backend == "postgresql":
+            try:
+                import asyncpg  # noqa: F401
+            except ImportError:
+                logger.warning(
+                    "[CE] asyncpg not installed; falling back to SQLite for CE persistence"
+                )
+                persistence_backend = "sqlite"
+            else:
+                from soothe.context.persistence.pgsql_backend import PgsqlContextPersistence
+
+                # RFC-612: prefer postgres_base_dsn + database name; fall back to
+                # soothe_postgres_dsn (single-database legacy DSN).
+                base_dsn = self.config.persistence.postgres_base_dsn
+                if base_dsn:
+                    # Strip trailing slash and append checkpoints database name
+                    db_name = self.config.persistence.postgres_databases.get(
+                        "checkpoints", "soothe_checkpoints"
+                    )
+                    pgsql_dsn = f"{base_dsn.rstrip('/')}/{db_name}"
+                else:
+                    pgsql_dsn = self.config.persistence.soothe_postgres_dsn
+                if not pgsql_dsn:
+                    msg = "PostgreSQL persistence backend requires postgres_base_dsn or soothe_postgres_dsn in config"
+                    raise ValueError(msg)
+                persistence = PgsqlContextPersistence(
+                    loop_id=state_manager.loop_id,
+                    dsn=pgsql_dsn,
+                )
+
+        if persistence_backend == "sqlite":
+            from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+            from soothe.foundation.loop.state.persistence.directory_manager import (
+                PersistenceDirectoryManager,
+            )
+
+            loop_dir = PersistenceDirectoryManager.get_loop_directory(state_manager.loop_id)
+            db_path = loop_dir / "ce_state.db"
+            persistence = SqliteContextPersistence(
+                loop_id=state_manager.loop_id,
+                db_path=db_path,
+            )
+        else:
+            msg = f"Unknown CE persistence backend: {persistence_backend}"
+            raise ValueError(msg)
+
+        # RFC-624 Phase 4: Loop-scoped CE lifecycle. Create once per
+        # loop_id, persist across goals. On subsequent calls, reuse the
+        # existing instance, load prior DAG, and add a new goal.
+        ce_config = self.config.agent.loop.context_engine
+        projection_config = ce_config.to_projection_config()
+
+        if self._ce is None:
+            self._ce = _ContextEngine(
+                persistence=persistence,
+                projection_config=projection_config,
+                soothe_home=soothe_home,
+                workspace=Path(workspace) if workspace else None,
+            )
+        else:
+            # Update workspace if it changed between goals
+            if workspace:
+                self._ce._semantic.workspace = Path(workspace)
+
+        ce_instance = self._ce
+
+        # Load prior DAG state for cross-goal continuity
+        loaded = await ce_instance.load()
+        if loaded:
+            logger.info(
+                "ContextEngine loaded prior state (goals=%d, backend=%s)",
+                len(ce_instance.get_all_goals()),
+                persistence_backend,
+            )
+
         ce_goal = await ce_instance.create_goal(
             execution_goal,
             generating_reasoning="StrangeLoop goal",
             source="user",
+            max_iterations=max_iterations,
         )
         await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+
+        # RFC-624 Phase 4 Step 3: bind CE to LoopState
+        state.bind_ce(ce_instance, ce_goal.id)
 
         # Load semantic context at goal start
         try:
@@ -466,7 +525,7 @@ class StrangeLoop:
         logger.info(
             "ContextEngine active (goal_id=%s, backend=%s)",
             ce_goal.id,
-            ce_config.persistence_backend,
+            persistence_backend,
         )
 
         ctx = LoopRuntimeContext(

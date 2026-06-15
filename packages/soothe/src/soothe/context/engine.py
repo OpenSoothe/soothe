@@ -77,7 +77,9 @@ class ContextEngine:
     and a pluggable persistence backend into a single interface.
 
     Args:
-        persistence: Persistence backend (defaults to InMemoryContextPersistence).
+        persistence: Persistence backend. Defaults to an in-memory SQLite
+            instance suitable for tests; production code should supply an
+            explicit backend (file, SQLite, or pgsql).
         projection_config: Limits for bounded projection.
         soothe_home: Base directory for SemanticLoader and FileContextPersistence.
         workspace: Working directory for SemanticLoader file lookup.
@@ -90,13 +92,16 @@ class ContextEngine:
         soothe_home: Path | None = None,
         workspace: Path | None = None,
     ) -> None:
-        from soothe.context.persistence.in_memory import InMemoryContextPersistence
+        if persistence is None:
+            from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+
+            persistence = SqliteContextPersistence(loop_id="default", db_path=Path(":memory:"))
 
         self._dag = GoalStepDAG()
         self._ledger = LedgerManager()
         self._semantic = SemanticLoader(soothe_home=soothe_home, workspace=workspace)
         self._projection = ProjectionEngine(projection_config)
-        self._persistence = persistence or InMemoryContextPersistence()
+        self._persistence = persistence
         self._callbacks: dict[str, list[Callable]] = {}
 
         # Planning submodule (RFC-624 Phase 3c)
@@ -186,6 +191,7 @@ class ContextEngine:
         depends_on: list[str] | None = None,
         generating_reasoning: str | None = None,
         source: str = "user",
+        max_iterations: int = 0,
         **kwargs: Any,
     ) -> GoalNode:
         """Create a new goal and add it to the DAG.
@@ -197,6 +203,7 @@ class ContextEngine:
             depends_on: Hard dependency goal IDs.
             generating_reasoning: Reasoning that produced this goal.
             source: Origin of the goal.
+            max_iterations: Maximum loop iterations for this goal.
 
         Returns:
             The created GoalNode.
@@ -211,6 +218,7 @@ class ContextEngine:
             depends_on=depends_on or [],
             generating_reasoning=generating_reasoning,
             source=source,
+            max_iterations=max_iterations,
             **kwargs,
         )
         self._dag.add_goal(goal)
@@ -282,6 +290,39 @@ class ContextEngine:
         logger.info("Unblocked goal %s", goal_id)
         self._fire("goal_unblocked", goal_id)
 
+    async def finalize_goal(self, goal_id: str, *, status: str = "completed") -> None:
+        """Finalize a goal: set terminal status and reset per-goal mutable state.
+
+        Unlike ``complete_goal`` which only sets status, finalize also
+        accumulates duration/tokens from steps and clears per-goal
+        execution state while preserving the step DAG for projection.
+
+        Args:
+            goal_id: Goal to finalize.
+            status: Terminal status (``"completed"`` or ``"failed"``).
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            return
+        # Duration/tokens already accumulated incrementally in complete_step/fail_step
+        goal.status = status
+        goal.updated_at = datetime.now(UTC)
+        logger.info("Finalized goal %s (status=%s)", goal_id, status)
+
+    def record_action(self, goal_id: str, action: str) -> None:
+        """Append an action description to the goal's action history."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is not None:
+            goal.action_history.append(action)
+
+    def set_previous_plan(self, goal_id: str, plan: Any) -> None:
+        """Store the previous plan result on the goal node."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is not None:
+            goal.previous_plan = (
+                plan.model_dump(mode="json") if hasattr(plan, "model_dump") else plan
+            )
+
     # ── Step management ──────────────────────────────────────────
 
     async def add_step(self, goal_id: str, step: StepNode) -> None:
@@ -316,6 +357,7 @@ class ContextEngine:
         if goal is None:
             return
         goal.steps.mark_completed(step_id, execution)
+        goal.total_duration_ms += execution.duration_ms
         goal.total_tokens_used += execution.tokens_used
         goal.updated_at = datetime.now(UTC)
         self._ledger.record_step_result(
@@ -339,6 +381,7 @@ class ContextEngine:
         if goal is None:
             return
         goal.steps.mark_failed(step_id, execution)
+        goal.total_duration_ms += execution.duration_ms
         goal.total_tokens_used += execution.tokens_used
         goal.updated_at = datetime.now(UTC)
         self._ledger.record_step_result(

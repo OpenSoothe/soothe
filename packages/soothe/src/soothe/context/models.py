@@ -43,7 +43,13 @@ class StepExecution(BaseModel):
     tokens_used: int = 0
     duration_ms: int = 0
     error: str | None = None
+    error_type: str | None = None
     thread_id: str | None = None
+    outcome: dict[str, Any] | None = None
+    tool_call_count: int = 0
+    subagent_task_completions: int = 0
+    hit_subagent_cap: bool = False
+    hit_tool_budget: bool = False
 
 
 # ── Step DAG ────────────────────────────────────────────────────────────
@@ -220,8 +226,13 @@ class GoalNode(BaseModel):
     source: Literal["user", "directive", "file_discovery", "decomposition"] = "user"
 
     total_tokens_used: int = 0
+    total_duration_ms: int = 0
+    max_iterations: int = 0
     thread_id: str | None = None
     assigned_loop_id: str | None = None
+
+    previous_plan: dict[str, Any] | None = None
+    action_history: list[str] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

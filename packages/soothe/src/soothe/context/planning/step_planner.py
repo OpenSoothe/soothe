@@ -164,6 +164,12 @@ class StepPlanningSubengine:
                 duration_ms=r.duration_ms,
                 thread_id=r.thread_id,
                 error=r.error,
+                error_type=r.error_type,
+                outcome=r.outcome if r.outcome else None,
+                tool_call_count=r.tool_call_count,
+                subagent_task_completions=r.subagent_task_completions,
+                hit_subagent_cap=r.hit_subagent_cap,
+                hit_tool_budget=r.hit_tool_budget,
             )
             if r.success:
                 goal.steps.mark_completed(r.step_id, execution)

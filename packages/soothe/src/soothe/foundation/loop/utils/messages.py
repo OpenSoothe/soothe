@@ -18,23 +18,29 @@ def _record_ledger_message(
     phase: str,
     loop_messages: list[Any],
 ) -> None:
-    """Append a message to loop_messages and CE LedgerManager.
+    """Append a message to CE LedgerManager (or loop_messages when CE is absent).
 
-    Always appends to ``loop_messages``. When ``context_engine`` is provided,
-    also records the message in the CE ``LedgerManager`` with the phase tag.
+    When ``context_engine`` is provided, writes only to the CE ledger.
+    The ``loop_messages`` property on LoopState automatically reflects CE
+    state when bound — no explicit sync call is needed.
+
+    When CE is None, falls back to appending to ``loop_messages`` directly.
 
     Args:
         context_engine: ContextEngine instance for direct LedgerManager writes.
         msg: Message to record.
         phase: Phase tag (e.g., "execute_step", "plan_assess", "goal_completion").
-        loop_messages: The LoopState.loop_messages list to append to.
+        loop_messages: Legacy parameter — only used when CE is absent.
+            When CE is present, this list is not modified.
     """
-    loop_messages.append(msg)
     if context_engine is not None:
         from langchain_core.messages import BaseMessage
 
         if isinstance(msg, BaseMessage):
             context_engine.ledger.record_message(msg, phase)
+            return
+    # Fallback: no CE available, write directly to loop_messages
+    loop_messages.append(msg)
 
 
 def last_ledger_ai_content(state: LoopState) -> str:

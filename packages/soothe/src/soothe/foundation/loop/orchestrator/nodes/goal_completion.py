@@ -158,13 +158,13 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             state.thread_id,
         )
 
-    # RFC-624 Phase 4: Close goal lifecycle + persist CE state
+    # RFC-624 Phase 4: Finalize goal lifecycle + persist CE state
     if ctx.ce is not None:
         try:
-            await ctx.ce.complete_goal(ctx.ce_goal_id)
+            await ctx.ce.finalize_goal(ctx.ce_goal_id, status="completed")
             await ctx.ce.save()
         except Exception:
-            logger.warning("[goal_completion] CE goal completion failed", exc_info=True)
+            logger.warning("[goal_completion] CE goal finalization failed", exc_info=True)
 
     final_output = None
     used_synthesis_fallback = False

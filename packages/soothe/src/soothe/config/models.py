@@ -1076,14 +1076,71 @@ class ContextEngineConfig(BaseModel):
     and GoalContextManager as the internal state backend. The existing prompt
     pipeline, executor, and LangGraph topology remain unchanged.
 
+    The persistence backend follows ``persistence.default_backend`` — no
+    separate ``persistence_backend`` knob is needed. When the global backend
+    is ``postgresql``, CE uses PgsqlContextPersistence with the same DSN.
+    When ``sqlite``, CE uses SqliteContextPersistence (default). If
+    ``postgresql`` is configured but ``asyncpg`` is not installed, CE
+    falls back to SQLite automatically.
+
     Args:
-        persistence_backend: Persistence backend type ("file" or "in_memory").
+        projection_max_goals: Max goals in projection output.
+        projection_max_steps_per_goal: Max steps per goal in projection output.
+        projection_max_ledger_chars: Max total chars for ledger summary in projection.
+        projection_max_ledger_messages: Max messages in projection ledger output.
+        projection_max_lineage_chars: Max chars for lineage context in projection.
+        projection_max_project_instructions_chars: Max chars for project instructions.
     """
 
-    persistence_backend: Literal["file", "in_memory"] = Field(
-        default="file",
-        description="Persistence backend for ContextEngine ('file' or 'in_memory')",
+    projection_max_goals: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Max goals in CE projection output",
     )
+    projection_max_steps_per_goal: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max steps per goal in CE projection output",
+    )
+    projection_max_ledger_chars: int = Field(
+        default=4000,
+        ge=0,
+        le=500_000,
+        description="Max total chars for ledger summary in CE projection (0 = unlimited)",
+    )
+    projection_max_ledger_messages: int = Field(
+        default=20,
+        ge=0,
+        le=500,
+        description="Max messages in CE projection ledger output (0 = unlimited)",
+    )
+    projection_max_lineage_chars: int = Field(
+        default=2000,
+        ge=0,
+        le=100_000,
+        description="Max chars for lineage context in CE projection (0 = unlimited)",
+    )
+    projection_max_project_instructions_chars: int = Field(
+        default=8000,
+        ge=0,
+        le=500_000,
+        description="Max chars for project instructions in CE projection (0 = unlimited)",
+    )
+
+    def to_projection_config(self) -> Any:
+        """Build a ``ProjectionConfig`` from these settings."""
+        from soothe.context.projection import ProjectionConfig
+
+        return ProjectionConfig(
+            max_goals=self.projection_max_goals,
+            max_steps_per_goal=self.projection_max_steps_per_goal,
+            max_ledger_chars=self.projection_max_ledger_chars,
+            max_ledger_messages=self.projection_max_ledger_messages,
+            max_lineage_chars=self.projection_max_lineage_chars,
+            max_project_instructions_chars=self.projection_max_project_instructions_chars,
+        )
 
 
 class StrangeLoopConfig(BaseModel):

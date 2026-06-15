@@ -105,6 +105,10 @@ def seed_loop_ledger_from_prior_goal(
 ) -> None:
     """Copy prior goal context into a new goal's ledger for same-loop follow-ups.
 
+    .. deprecated:: RFC-624 Phase 4 Step 3
+        No longer called from ``strange_loop.py`` — CE ledger spans all goals
+        via ``ce.load()``. Kept for test compatibility.
+
     When ``loop_id`` is stable per conversation thread, the new goal starts with an
     empty ``loop_messages`` list while Execute prompts still reference the RFC-214
     ledger. Reuse the previous completed goal's ledger, or fall back to
