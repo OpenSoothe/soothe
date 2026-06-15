@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from soothe.context.models import GoalStepDAG
+from soothe.foundation.context.models import GoalStepDAG
 
 
 @runtime_checkable

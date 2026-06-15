@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import
-from soothe.context.engine import ContextEngine
-from soothe.context.models import GoalNode
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.planning.planner import LLMPlanner
 from soothe.foundation.loop.state.schemas import (
     LoopState,

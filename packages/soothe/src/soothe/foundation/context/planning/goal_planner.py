@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.context.models import GoalNode, GoalStepDAG
-from soothe.context.planning.models import (
+from soothe.foundation.context.models import GoalNode, GoalStepDAG
+from soothe.foundation.context.planning.models import (
     DecompositionRequest,
     DecompositionResult,
     OrchestrationStrategy,

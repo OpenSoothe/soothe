@@ -6,8 +6,8 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from soothe.context.engine import ContextEngine
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     Executor,
@@ -30,7 +30,7 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
     # Bind CE to state so loop_messages property reads from CE ledger
-    from soothe.context.models import GoalNode
+    from soothe.foundation.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -77,7 +77,7 @@ def test_append_parallel_wave_ledger_delegate_fallback() -> None:
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="g", thread_id="t1", iteration=0, max_iterations=8)
     # Bind CE to state
-    from soothe.context.models import GoalNode
+    from soothe.foundation.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -145,7 +145,7 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
     # Bind CE to state
-    from soothe.context.models import GoalNode
+    from soothe.foundation.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -184,7 +184,7 @@ def test_append_parallel_wave_ledger_uses_outcome_summary_when_no_ai_text() -> N
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="list files", thread_id="t1", iteration=1, max_iterations=8)
     # Bind CE to state
-    from soothe.context.models import GoalNode
+    from soothe.foundation.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)

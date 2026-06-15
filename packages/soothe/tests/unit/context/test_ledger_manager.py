@@ -2,7 +2,7 @@
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from soothe.context.ledger import LedgerManager, _LedgerEntry
+from soothe.foundation.context.ledger import LedgerManager, _LedgerEntry
 
 
 class TestLedgerRecordAndRetrieve:

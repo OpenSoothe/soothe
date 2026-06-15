@@ -41,7 +41,7 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # RFC-624 Phase 4: async step feedback + CE persistence
     if ctx.ce is not None:
         try:
-            from soothe.context.models import StepExecution
+            from soothe.foundation.context.models import StepExecution
 
             for r in step_results:
                 execution = StepExecution(

@@ -12,9 +12,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import StepNode
-from soothe.context.planning import StepPlanManagerAdapter
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import StepNode
+from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.loop.planning.manager import (
     PlanManager,
 )
@@ -301,7 +301,7 @@ class TestNamedConstantsEquivalence:
 
     def test_threshold_values_defined(self) -> None:
         """The constants in completion.py are the canonical definitions."""
-        from soothe.context.planning.completion import (
+        from soothe.foundation.context.planning.completion import (
             DAG_DEPENDENCY_THRESHOLD,
             LOW_SUCCESS_RATE_THRESHOLD,
             SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,

@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.context.engine import ContextEngine
-from soothe.context.ledger import LedgerManager
-from soothe.context.models import GoalNode, StepExecution, StepNode
-from soothe.context.planning import StepPlanManagerAdapter
-from soothe.context.projection import ContextBundle
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.ledger import LedgerManager
+from soothe.foundation.context.models import GoalNode, StepExecution, StepNode
+from soothe.foundation.context.planning import StepPlanManagerAdapter
+from soothe.foundation.context.planning.models import DagPlanningContext
+from soothe.foundation.context.projection import ContextBundle
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
     _format_execute_briefing_from_ce_goals,
 )
-from soothe.foundation.loop.planning.manager import DagPlanningContext
 
 # ── StepPlanManagerAdapter public API ────────────────────────────────
 

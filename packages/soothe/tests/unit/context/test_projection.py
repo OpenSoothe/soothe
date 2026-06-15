@@ -3,10 +3,10 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.context.ledger import LedgerManager
-from soothe.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
-from soothe.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
-from soothe.context.semantic import SemanticLoader
+from soothe.foundation.context.ledger import LedgerManager
+from soothe.foundation.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
+from soothe.foundation.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
+from soothe.foundation.context.semantic import SemanticLoader
 
 
 def _make_dag_with_goal(**goal_kwargs) -> tuple[GoalStepDAG, GoalNode]:

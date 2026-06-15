@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-from soothe.context.planning.models import CompletionStrategy
+from soothe.foundation.context.planning.models import CompletionStrategy
 from soothe.foundation.loop.engine.fallback_summary import generate_user_fallback_summary
 from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
 from soothe.foundation.loop.state.schemas import LoopState

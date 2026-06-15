@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import GoalNode
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.clarification import (
     ClarificationAnswer,
     answer_to_state,

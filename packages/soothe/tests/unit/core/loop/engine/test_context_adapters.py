@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import StepNode
-from soothe.context.planning import StepPlanManagerAdapter
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import StepNode
+from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.loop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
 )
@@ -258,7 +258,7 @@ class TestPlanAdapterFormatCompletionDagReport:
 
     @pytest.mark.asyncio
     async def test_report_shows_lineage_for_subgoal(self) -> None:
-        from soothe.context.models import GoalNode
+        from soothe.foundation.context.models import GoalNode
 
         ce = ContextEngine()
         parent = await ce.create_goal("Parent goal")

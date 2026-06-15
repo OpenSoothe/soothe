@@ -6,18 +6,18 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from soothe.context.planning.completion import (
+from soothe.foundation.context.planning.completion import (
     dag_requires_synthesis,
     heuristic_requires_goal_completion,
     is_simple_execution,
 )
-from soothe.context.planning.completion import (
+from soothe.foundation.context.planning.completion import (
     determine_completion_strategy as _determine_completion_strategy,
 )
-from soothe.context.planning.completion import (
+from soothe.foundation.context.planning.completion import (
     determine_goal_completion_needs as _determine_completion_needs,
 )
-from soothe.context.planning.models import CompletionStrategy, DagPlanningContext
+from soothe.foundation.context.planning.models import CompletionStrategy, DagPlanningContext
 from soothe.foundation.loop.utils.messages import last_ledger_ai_content
 
 from .dag import PlanDAG

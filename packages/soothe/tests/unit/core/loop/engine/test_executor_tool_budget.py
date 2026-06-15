@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import GoalNode
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import (
     _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     Executor,

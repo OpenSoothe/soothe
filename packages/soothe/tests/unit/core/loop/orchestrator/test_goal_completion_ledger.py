@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.context.engine import ContextEngine
-from soothe.context.models import GoalNode
-from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
 from soothe.foundation.loop.orchestrator.nodes.goal_completion import node_goal_completion
 from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch

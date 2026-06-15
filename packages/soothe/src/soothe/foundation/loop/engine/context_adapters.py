@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.context.engine import ContextEngine
+from soothe.foundation.context.engine import ContextEngine
 
 if TYPE_CHECKING:
     pass
