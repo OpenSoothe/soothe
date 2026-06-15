@@ -1482,6 +1482,26 @@ def _log_turn_event_stats(
     )
 
 
+def _should_show_clarification_prompt(
+    *, event_data: dict[str, Any], fallback_mode: str | None
+) -> bool:
+    """Return True when TUI should show the interactive clarification card.
+
+    In auto mode, clarifications are resolved/deferred by policy and should not
+    render "Awaiting your answer" UI prompts in the TUI message stream.
+    """
+    mode = event_data.get("mode")
+    if isinstance(mode, str) and mode.strip():
+        normalized = mode.strip().lower()
+    elif isinstance(fallback_mode, str) and fallback_mode.strip():
+        normalized = fallback_mode.strip().lower()
+    else:
+        normalized = "auto"
+    if normalized not in {"auto", "manual"}:
+        normalized = "auto"
+    return normalized == "manual"
+
+
 async def execute_task_textual(
     user_input: str,
     assistant_id: str | None,
@@ -2511,7 +2531,10 @@ async def execute_task_textual(
                                     questions_list = [
                                         str(q) for q in raw_questions if str(q).strip()
                                     ]
-                                    if questions_list:
+                                    if questions_list and _should_show_clarification_prompt(
+                                        event_data=data,
+                                        fallback_mode=clarification_mode,
+                                    ):
                                         # The ask_user step card was put into "running" by
                                         # ``step_started`` just before await_clarification.
                                         # Surface the pending questions on it so the user
