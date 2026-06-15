@@ -1,4 +1,4 @@
-"""Autopilot package - Layer 3 Goal lifecycle and dispatch.
+"""Autopilot package - Layer 3 Goal lifecycle and dispatch (RFC-222, RFC-625).
 
 Autopilot manages:
 - Goal DAG orchestration (create, schedule, dependencies)
@@ -6,12 +6,14 @@ Autopilot manages:
 - Backoff reasoning on failure
 - Dispatch to StrangeLoop workers
 
-This package merges GoalEngine and AutopilotService as unified Layer 3.
+RFC-625: GoalEngine deleted. ContextEngine (soothe.foundation.context) is the
+sole source of truth for goal/step state. AutopilotService uses ContextEngine
+and AutopilotMonitor for proactive DAG management.
 
 Import paths:
-    from soothe.foundation.autopilot import GoalEngine, AutopilotService
-    from soothe.foundation.autopilot.engine.models import Goal, BackoffDecision
-    from soothe.foundation.autopilot.service.worker_pool import WorkerPool
+    from soothe.foundation.autopilot import AutopilotService, AutopilotMonitor
+    from soothe.foundation.autopilot.engine.models import BackoffDecision, EvidenceBundle
+    from soothe.foundation.context.models import GoalNode  # Goal state
 """
 
 from __future__ import annotations
@@ -19,9 +21,8 @@ from __future__ import annotations
 from typing import Any
 
 __all__ = [
-    # GoalEngine exports
-    "GoalEngine",
-    "Goal",
+    # Context-based exports (RFC-625)
+    "AutopilotMonitor",
     "BackoffDecision",
     "EvidenceBundle",
     "GoalDirective",
@@ -38,15 +39,11 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Lazy import autopilot modules."""
-    # GoalEngine exports
-    if name == "GoalEngine":
-        from soothe.foundation.autopilot.engine.engine import GoalEngine
+    # RFC-625: AutopilotMonitor is the proactive DAG monitor
+    if name == "AutopilotMonitor":
+        from soothe.foundation.autopilot.monitor.monitor import AutopilotMonitor
 
-        return GoalEngine
-    if name == "Goal":
-        from soothe.foundation.autopilot.engine.models import Goal
-
-        return Goal
+        return AutopilotMonitor
     if name == "BackoffDecision":
         from soothe.foundation.autopilot.engine.models import BackoffDecision
 

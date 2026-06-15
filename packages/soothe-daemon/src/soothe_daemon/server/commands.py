@@ -464,24 +464,14 @@ async def _cmd_autopilot_toggle(
     if not lid:
         raise ValueError("loop_id required for autopilot toggle")
 
-    # Get current mode (solo vs autopilot)
-    # TODO: Implement mode tracking in runner/ContextEngine
-    # For now, assume solo mode is default and toggle to autopilot
-    current_mode = getattr(self._runner, "_autopilot_mode", "solo") if self._runner else "solo"
-    new_mode = "autopilot" if current_mode == "solo" else "solo"
-
-    if self._runner:
-        self._runner._autopilot_mode = new_mode
-
-    # Broadcast mode change event to TUI subscribers
-    await self._broadcast(
-        {
-            "type": "autopilot_mode_changed",
-            "loop_id": lid,
-            "mode": new_mode,
-            "previous_mode": current_mode,
-        }
+    from soothe_daemon.runtime.loop_autopilot_mode import (
+        get_loop_autopilot_mode,
+        set_loop_autopilot_mode,
     )
+
+    current_mode = await get_loop_autopilot_mode(self, lid)
+    new_mode = "autopilot" if current_mode == "solo" else "solo"
+    await set_loop_autopilot_mode(self, lid, new_mode, source="toggle")
 
     message = f"Switched from {current_mode} to {new_mode} mode"
 

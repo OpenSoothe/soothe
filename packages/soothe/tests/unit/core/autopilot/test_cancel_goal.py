@@ -1,12 +1,12 @@
-"""Tests for AutopilotService.cancel_goal worker propagation (RFC-222 H8)."""
+"""Tests for AutopilotService.cancel_goal worker propagation (RFC-222 H8, RFC-625)."""
 
 from __future__ import annotations
 
 import pytest
 
 from soothe.config.models import AutonomousConfig
-from soothe.foundation.autopilot.engine import GoalEngine
 from soothe.foundation.autopilot.service import AutopilotService
+from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 
 
@@ -29,10 +29,10 @@ class _FakeFactory:
 
 def _service() -> AutopilotService:
     bus = InternalEventBus()
-    ge = GoalEngine(internal_bus=bus)
+    ce = ContextEngine()
     cfg = AutonomousConfig(max_loops=2, max_parallel_goals=2)
     return AutopilotService(
-        goal_engine=ge,
+        ce=ce,
         config=cfg,
         internal_bus=bus,
         runner_factory=_FakeFactory(),
@@ -62,7 +62,7 @@ class TestCancelGoal:
         worker = await svc._worker_pool.pick_worker(goal)
         assert worker is not None
         # Mark goal active on this worker.
-        await svc._goal_engine.claim_goal(goal.id, loop_id=worker.loop_id)
+        svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
 
         result = await svc.cancel_goal(goal.id, reason="user_cancelled")
 
@@ -77,7 +77,7 @@ class TestCancelGoal:
         goal = await svc.submit_task("g", max_retries=5)
         worker = await svc._worker_pool.pick_worker(goal)
         assert worker is not None
-        await svc._goal_engine.claim_goal(goal.id, loop_id=worker.loop_id)
+        svc._ce.claim_goal(goal.id, loop_id=worker.loop_id)
 
         result = await svc.cancel_goal(goal.id)
 

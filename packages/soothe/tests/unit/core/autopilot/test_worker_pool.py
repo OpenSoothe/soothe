@@ -1,4 +1,4 @@
-"""Tests for WorkerPool sticky-affinity scheduling (RFC-222 revised)."""
+"""Tests for WorkerPool sticky-affinity scheduling (RFC-222 revised, RFC-625)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import asyncio
 
 import pytest
 
-from soothe.foundation.autopilot.engine.models import Goal
 from soothe.foundation.autopilot.service.worker_pool import (
     WorkerPool,
     WorkerSlot,
     is_autopilot_worker_loop_id,
 )
+from soothe.foundation.context.models import GoalNode
 
 # ---- Fakes -------------------------------------------------------------
 
@@ -38,8 +38,8 @@ class _FakeFactory:
         return _FakeRunner(loop_id)
 
 
-def _goal(gid: str, *, depends_on: list[str] | None = None) -> Goal:
-    return Goal(id=gid, description=f"goal {gid}", depends_on=depends_on or [])
+def _goal(gid: str, *, depends_on: list[str] | None = None) -> GoalNode:
+    return GoalNode(id=gid, description=f"goal {gid}", depends_on=depends_on or [])
 
 
 # ---- Basic API ---------------------------------------------------------

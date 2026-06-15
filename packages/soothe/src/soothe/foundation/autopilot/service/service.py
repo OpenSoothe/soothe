@@ -1,14 +1,15 @@
-"""AutopilotService for Layer 3 orchestration (RFC-222).
+"""AutopilotService for Layer 3 orchestration (RFC-222, RFC-625).
 
 This module provides the AutopilotService class that manages:
 - Loop pool (StrangeLoop worker creation, assignment, release)
 - Scheduling loop (goal → loop assignment with lineage reuse)
-- Internal EventBus integration (AL ↔ GE ↔ AP coordination)
+- Internal EventBus integration (AL ↔ CE ↔ AP coordination)
 - Dreaming mode transitions
 
-Architecture Position: Layer 3 peer with GoalEngine.
+Architecture Position: Layer 3 orchestrator using ContextEngine.
 - AutopilotService: Loop management, scheduling, webhooks
-- GoalEngine: Goal lifecycle, DAG, file locks
+- ContextEngine: Goal lifecycle, DAG (sole source of truth per RFC-625)
+- AutopilotMonitor: DAG verification, dreaming coordination
 
 Key Principle: Solo mode preserved - AutopilotService only active
 when autopilot.enabled is true.
@@ -22,8 +23,9 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.autopilot.engine.models import TERMINAL_STATES
 from soothe.foundation.autopilot.service.loop_pool import LoopHandle, LoopPool
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
 from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
@@ -32,7 +34,6 @@ from soothe.foundation.events.internal_events import (
     InternalAutopilotDreamingEvent,
     InternalAutopilotStartedEvent,
     InternalAutopilotStoppedEvent,
-    InternalFileReleasedEvent,
     InternalGoalsReadyEvent,
     InternalGoalStateChangedEvent,
     InternalLoopAssignedEvent,
@@ -44,18 +45,17 @@ from soothe.foundation.events.internal_events import (
 
 if TYPE_CHECKING:
     from soothe.config.models import AutonomousConfig
-    from soothe.foundation.autopilot.engine.engine import GoalEngine
-    from soothe.foundation.autopilot.engine.models import Goal
+    from soothe.foundation.autopilot.monitor.monitor import AutopilotMonitor
 
 logger = logging.getLogger(__name__)
 
 
 class AutopilotService:
-    """Layer 3 Autopilot orchestration service.
+    """Layer 3 Autopilot orchestration service (RFC-222, RFC-625).
 
     Manages StrangeLoop worker pool and goal scheduling with
-    lineage-aware loop reuse. Subscribes to GoalEngine events
-    for reactive scheduling.
+    lineage-aware loop reuse. Uses ContextEngine as the sole
+    source of truth for goal/step state.
 
     Responsibilities:
     - Spawn and manage StrangeLoop workers (loop pool)
@@ -66,21 +66,23 @@ class AutopilotService:
 
     NOT responsible for:
     - Single-goal execution logic (StrangeLoop owns this)
-    - Goal DAG management (GoalEngine owns this)
+    - Goal DAG management (ContextEngine owns this per RFC-625)
     - Tool/subagent execution (CoreAgent owns this)
 
     Args:
-        goal_engine: GoalEngine instance for goal management.
+        ce: ContextEngine instance for goal management (RFC-625).
         config: AutonomousConfig (RFC-222 fields live in this unified config).
         internal_bus: Internal EventBus for coordination.
+        monitor: Optional AutopilotMonitor for proactive DAG monitoring.
     """
 
     def __init__(
         self,
-        goal_engine: GoalEngine,
+        ce: ContextEngine,
         config: AutonomousConfig,
         internal_bus: Any | None = None,
         *,
+        monitor: AutopilotMonitor | None = None,
         subscribe_to_bus: bool = True,
         runner_factory: Any | None = None,
         workspace_reservation: Any | None = None,
@@ -90,11 +92,14 @@ class AutopilotService:
         """Initialize AutopilotService.
 
         Args:
-            goal_engine: GoalEngine instance for goal management.
+            ce: ContextEngine instance for goal management (RFC-625).
             config: Project-level AutonomousConfig carrying RFC-222 loop pool
                 fields (``max_loops``, ``loop_idle_timeout``, ``poll_interval``,
                 ``dreaming_poll_interval``).
             internal_bus: Internal EventBus (uses singleton if None).
+            monitor: Optional AutopilotMonitor for proactive DAG monitoring.
+                When provided (daemon mode), handles goal intake, verification,
+                and dreaming coordination.
             subscribe_to_bus: When True (default), subscribe handlers to the
                 bus immediately. RFC-222 (revised, Phase B): the daemon
                 constructs a daemon-owned ``AutopilotService`` alongside the
@@ -115,9 +120,10 @@ class AutopilotService:
             consensus_model: Optional LLM for RFC-204 consensus validation.
                 When ``None``, completed goals suspend until a model is configured.
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
-                the GoalEngine DAG snapshot across daemon restarts.
+                the ContextEngine DAG snapshot across daemon restarts.
         """
-        self._goal_engine = goal_engine
+        self._ce = ce
+        self._monitor = monitor
         self._config = config
         self._internal_bus = internal_bus if internal_bus is not None else InternalEventBus()
         self._loop_pool = LoopPool(max_loops=self._config.max_loops)
@@ -180,9 +186,9 @@ class AutopilotService:
         )
 
     async def _handle_goal_state_changed(self, event: InternalGoalStateChangedEvent) -> None:
-        """Handle goal state change from GoalEngine.
+        """Handle goal state change from ContextEngine.
 
-        Triggers scheduling re-evaluation and webhook notifications.
+        Triggers scheduling re-evaluation and loop cleanup.
 
         Args:
             event: Goal state change event.
@@ -193,10 +199,6 @@ class AutopilotService:
             event.old_status,
             event.new_status,
         )
-
-        # Release file locks if goal reached a terminal state
-        if event.new_status in TERMINAL_STATES:
-            await self._release_goal_locks(event.goal_id)
 
         # Release loop if goal completed
         if event.new_status == "completed" and event.loop_id:
@@ -210,31 +212,13 @@ class AutopilotService:
         """Handle goals ready for scheduling.
 
         Args:
-            event: Goals ready event from GoalEngine.
+            event: Goals ready event.
         """
         logger.info("Goals ready for scheduling: %d", event.count)
 
         if self._running and not self._dreaming:
             for goal_id in event.goal_ids:
                 await self._schedule_goal(goal_id)
-
-    async def _release_goal_locks(self, goal_id: str) -> None:
-        """Release file locks for completed/failed goal.
-
-        GoalEngine's ``complete_goal``/``fail_goal`` already release locks and
-        emit ``InternalFileReleasedEvent``. This is a defensive sweep for cases
-        where a state change reaches the bus via another path (e.g. external
-        callers that flip status directly). Safe to call multiple times.
-
-        Args:
-            goal_id: Goal whose locks to release.
-        """
-        released = self._goal_engine.file_registry.release_all_for_goal(goal_id)
-        for path in released:
-            await self._internal_bus.emit(
-                InternalFileReleasedEvent(goal_id=goal_id, file_path=path)
-            )
-            logger.debug("Released file lock: %s for goal %s", path, goal_id)
 
     async def _mark_loop_idle(self, loop_id: str, goal_id: str) -> None:
         """Mark loop as idle after goal completion.
@@ -356,12 +340,13 @@ class AutopilotService:
         priority: int = 50,
         parent_id: str | None = None,
         max_retries: int | None = None,
+        max_send_backs: int | None = None,
         depends_on: list[str] | None = None,
         informs: list[str] | None = None,
         source_file: str | None = None,
         workspace: str | None = None,
-    ) -> Goal:
-        """Create a goal in this service's GoalEngine (RFC-222 revised).
+    ) -> GoalNode:
+        """Create a goal in this service's ContextEngine (RFC-222 revised, RFC-625).
 
         Public entry point for callers (HTTP ``/autopilot/submit`` and other
         programmatic clients) to add a
@@ -373,6 +358,7 @@ class AutopilotService:
             priority: 0-100, higher schedules earlier.
             parent_id: Optional parent goal id for hierarchical decomposition.
             max_retries: Override default max retries.
+            max_send_backs: Override default max consensus send-backs.
             depends_on: Hard dependencies — goal won't run until these complete.
             informs: Soft dependencies — context flows from these but the
                 child can still run if they haven't completed yet.
@@ -382,7 +368,7 @@ class AutopilotService:
                 in this directory and scheduling-time reservation uses it.
 
         Returns:
-            The newly-created ``Goal``. Callers can read ``.id`` to track it.
+            The newly-created ``GoalNode``. Callers can read ``.id`` to track it.
 
         Raises:
             ValueError: If goal depth limit would be exceeded or workspace invalid.
@@ -393,11 +379,12 @@ class AutopilotService:
 
             resolved_workspace = str(validate_client_workspace(workspace))
 
-        goal = await self._goal_engine.create_goal(
+        goal = await self._ce.create_goal(
             description,
             priority=priority,
             parent_id=parent_id,
             max_retries=max_retries,
+            max_send_backs=max_send_backs,
             depends_on=depends_on,
             informs=informs,
             source_file=source_file,
@@ -408,16 +395,15 @@ class AutopilotService:
         await self._persist_goals()
         return goal
 
-    async def list_goals(self, *, status: str | None = None) -> list[Goal]:
-        """Read-through to the underlying GoalEngine for HTTP/CLI surfaces."""
-        # GoalStatus literal accepted; pass through as-is.
-        return await self._goal_engine.list_goals(status=status)  # type: ignore[arg-type]
+    async def list_goals(self, *, status: str | None = None) -> list[GoalNode]:
+        """Read-through to ContextEngine for HTTP/CLI surfaces."""
+        return await self._ce.list_goals(status=status)
 
-    async def get_goal(self, goal_id: str) -> Goal | None:
-        """Read-through to the underlying GoalEngine for HTTP/CLI surfaces."""
-        return await self._goal_engine.get_goal(goal_id)
+    async def get_goal(self, goal_id: str) -> GoalNode | None:
+        """Read-through to ContextEngine for HTTP/CLI surfaces."""
+        return await self._ce.get_goal(goal_id)
 
-    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> Goal | None:
+    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
         """Cancel a goal: stop the worker (if any) and transition to ``cancelled``.
 
         RFC-222 H8: when the goal is currently dispatched, resolve the assigned
@@ -429,9 +415,9 @@ class AutopilotService:
             reason: Logged with the cancellation for audit.
 
         Returns:
-            The Goal if it existed, else None.
+            The GoalNode if it existed, else None.
         """
-        goal = await self._goal_engine.get_goal(goal_id)
+        goal = await self._ce.get_goal(goal_id)
         if goal is None:
             return None
 
@@ -454,11 +440,11 @@ class AutopilotService:
                         exc_info=True,
                     )
 
-        await self._goal_engine.cancel_goal(goal_id, reason=reason)
+        await self._ce.cancel_goal(goal_id, reason=reason)
         if self._workspace_reservation is not None:
             self._workspace_reservation.release(goal_id)
         await self._persist_goals()
-        return await self._goal_engine.get_goal(goal_id)
+        return await self._ce.get_goal(goal_id)
 
     # ---- Internals ----------------------------------------------------
 
@@ -474,17 +460,6 @@ class AutopilotService:
         """
         loop = self._loop_pool.remove_loop(loop_id)
         if loop:
-            # Release any file locks held by this loop
-            released = self._goal_engine.file_registry.release_all_for_loop(loop_id)
-            for path in released:
-                await self._internal_bus.emit(
-                    InternalFileReleasedEvent(
-                        goal_id=loop.current_goal_id or "",
-                        file_path=path,
-                        loop_id=loop_id,
-                    )
-                )
-
             await self._internal_bus.emit(
                 InternalLoopReleasedEvent(
                     loop_id=loop_id,
@@ -525,7 +500,7 @@ class AutopilotService:
                 await self._release_idle_loops()
 
                 # 5. Check for dreaming transition
-                if self._goal_engine.is_complete():
+                if self._ce.is_dag_complete():
                     await self._enter_dreaming_mode()
 
                 # 6. Sleep for next tick
@@ -583,7 +558,7 @@ class AutopilotService:
         if max_par <= 0:
             return
 
-        candidates = await self._goal_engine.peek_ready_goals(limit=max_par)
+        candidates = await self._ce.peek_ready_goals(limit=max_par)
         for candidate in candidates:
             loop = await self._assign_loop_with_lineage(candidate)
             if not loop:
@@ -608,7 +583,7 @@ class AutopilotService:
         if cap_remaining <= 0:
             return
 
-        candidates = await self._goal_engine.peek_ready_goals(limit=cap_remaining)
+        candidates = self._ce.peek_ready_goals(limit=cap_remaining)
         for candidate in candidates:
             # Workspace reservation gate (RFC-222 revised Q1).
             if self._workspace_reservation is not None:
@@ -636,7 +611,7 @@ class AutopilotService:
                 break
 
             # Atomically claim — re-checks conflicts at flip time.
-            claimed = await self._goal_engine.claim_goal(candidate.id, loop_id=worker.loop_id)
+            claimed = self._ce.claim_goal(candidate.id, loop_id=worker.loop_id)
             if claimed is None:
                 # Race: another path consumed the goal first.
                 logger.debug("Goal %s vanished before claim; releasing worker", candidate.id)
@@ -647,7 +622,7 @@ class AutopilotService:
 
             await self._dispatch_to_worker(claimed, worker)
 
-    async def _dispatch_to_worker(self, goal: Goal, worker: Any) -> None:
+    async def _dispatch_to_worker(self, goal: GoalNode, worker: Any) -> None:
         """Build the LoopRunRequest and spawn a stream-consuming task."""
         from soothe.protocols.runner import GoalDispatchEnvelope, LoopRunRequest
 
@@ -686,7 +661,7 @@ class AutopilotService:
             request.autopilot_job.attempt,
         )
 
-    async def _build_merged_context(self, goal: Goal) -> Any:
+    async def _build_merged_context(self, goal: GoalNode) -> Any:
         """Build the GoalDispatchContextBundle for ``goal``.
 
         Hooks the ``ContextProjector`` if one was wired (Phase C+ optional).
@@ -698,7 +673,7 @@ class AutopilotService:
         if projector is None:
             return GoalDispatchContextBundle()
         try:
-            return await projector.project(goal, self._goal_engine._goals)
+            return await projector.project(goal, self._ce._dag.goals)
         except Exception:
             logger.warning(
                 "ContextProjector failed for goal %s; falling back to empty bundle",
@@ -753,7 +728,7 @@ class AutopilotService:
                         from soothe.protocols.planner import GoalDirective
 
                         directives = [GoalDirective(**d) for d in directives_data]
-                        created_ids = await self._goal_engine.apply_directives(
+                        created_ids = await self._ce.apply_directives(
                             directives,
                             source_goal_id=goal_id,
                         )
@@ -799,7 +774,7 @@ class AutopilotService:
                         source="layer2_execute",
                     )
                     try:
-                        await self._goal_engine.fail_goal(
+                        await self._ce.fail_goal(
                             goal_id, evidence=evidence, allow_retry=outcome == "needs_replan"
                         )
                     except Exception:
@@ -818,7 +793,7 @@ class AutopilotService:
             from soothe.foundation.autopilot.engine.models import EvidenceBundle as _EvBundle
 
             try:
-                await self._goal_engine.fail_goal(
+                await self._ce.fail_goal(
                     goal_id,
                     evidence=_EvBundle(
                         structured={"outcome": "no_completion_chunk"},
@@ -848,7 +823,7 @@ class AutopilotService:
         """RFC-204: validate worker completion before accepting the goal."""
         from soothe.foundation.autopilot.engine.consensus import evaluate_goal_completion
 
-        goal = await self._goal_engine.get_goal(goal_id)
+        goal = await self._ce.get_goal(goal_id)
         if goal is None:
             return
 
@@ -866,16 +841,16 @@ class AutopilotService:
 
         try:
             if decision == "accept":
-                await self._goal_engine.complete_goal(goal_id)
+                await self._ce.complete_goal(goal_id)
             elif decision == "send_back":
-                await self._goal_engine.send_back_goal(goal_id, reason=reasoning)
+                await self._ce.send_back_goal(goal_id, reason=reasoning)
             else:
-                await self._goal_engine.suspend_goal(goal_id, reason=reasoning)
+                await self._ce.suspend_goal(goal_id, reason=reasoning)
         except Exception:
             logger.exception("Goal transition failed after consensus for %s", goal_id)
 
     @staticmethod
-    def _infer_workspace(goal: Goal) -> str:
+    def _infer_workspace(goal: GoalNode) -> str:
         """Workspace path for scheduling-time reservation (RFC-222).
 
         Uses the goal's client workspace when set; otherwise a per-goal sentinel
@@ -894,7 +869,7 @@ class AutopilotService:
         Args:
             goal_id: Goal to schedule.
         """
-        goal = await self._goal_engine.get_goal(goal_id)
+        goal = await self._ce.get_goal(goal_id)
         if not goal:
             logger.warning("Goal %s not found for scheduling", goal_id)
             return
@@ -913,7 +888,7 @@ class AutopilotService:
             goal_id: Goal to activate.
             loop: Assigned LoopHandle.
         """
-        claimed = await self._goal_engine.claim_goal(goal_id, loop_id=loop.loop_id)
+        claimed = self._ce.claim_goal(goal_id, loop_id=loop.loop_id)
         if not claimed:
             logger.warning("Goal %s no longer claimable; releasing loop %s", goal_id, loop.loop_id)
             # Loop was already moved out of idle by assignment; put it back.
@@ -923,13 +898,13 @@ class AutopilotService:
             return
         logger.info("Scheduled goal %s to loop %s", goal_id, loop.loop_id)
 
-    async def _assign_loop_with_lineage(self, goal: Goal) -> LoopHandle | None:
+    async def _assign_loop_with_lineage(self, goal: GoalNode) -> LoopHandle | None:
         """Assign loop with lineage-aware reuse.
 
         Prefers parent's loop for context preservation.
 
         Args:
-            goal: Goal to assign loop for.
+            goal: GoalNode to assign loop for.
 
         Returns:
             LoopHandle if assigned, None if no capacity.
@@ -1068,7 +1043,7 @@ class AutopilotService:
 
             # Transition the goal to failed so backoff/retry logic can react.
             try:
-                await self._goal_engine.fail_goal(
+                await self._ce.fail_goal(
                     goal_id,
                     evidence=EvidenceBundle(
                         structured={
@@ -1193,28 +1168,31 @@ class AutopilotService:
     _GOALS_SNAPSHOT_KEY = "autopilot:goals:snapshot"
 
     async def _persist_goals(self) -> None:
-        """Persist GoalEngine DAG snapshot when a store is wired."""
+        """Persist ContextEngine DAG snapshot when a store is wired."""
         if self._goal_persist_store is None:
             return
         try:
             await self._goal_persist_store.save(
                 self._GOALS_SNAPSHOT_KEY,
-                self._goal_engine.snapshot(),
+                self._ce.get_dag_snapshot().model_dump(),
             )
         except Exception:
             logger.warning("Failed to persist autopilot goals snapshot", exc_info=True)
 
     async def _restore_persisted_goals(self) -> None:
-        """Restore GoalEngine DAG from persistence and recover stranded actives."""
+        """Restore ContextEngine DAG from persistence and recover stranded actives."""
         if self._goal_persist_store is None:
             return
         try:
             data = await self._goal_persist_store.load(self._GOALS_SNAPSHOT_KEY)
-            if isinstance(data, list) and data:
-                self._goal_engine.restore_from_snapshot(data)
+            if isinstance(data, dict) and "goals" in data:
+                from soothe.foundation.context.models import GoalStepDAGSnapshot
+
+                snapshot = GoalStepDAGSnapshot.model_validate(data)
+                self._ce._dag.restore_from_snapshot(snapshot)
         except Exception:
             logger.warning("Failed to restore autopilot goals snapshot", exc_info=True)
-        recovered = self._goal_engine.recover_active_goals()
+        recovered = await self._ce.recover()
         if recovered:
             logger.warning(
                 "[Autopilot] crash recovery: reset %d active goal(s) → pending: %s",
@@ -1277,11 +1255,11 @@ class AutopilotService:
             summary (if completed), findings (if completed).
             Edges contain: source, target for dependency relationships.
         """
-        goals = await self._goal_engine.list_goals()
+        goals = await self._ce.list_goals()
 
         # Build parent → children map from depends_on relationships
         children_map: dict[str, list[str]] = {}
-        goal_by_id: dict[str, Goal] = {}
+        goal_by_id: dict[str, GoalNode] = {}
 
         for g in goals:
             goal_by_id[g.id] = g
@@ -1291,7 +1269,7 @@ class AutopilotService:
                 children_map[dep_id].append(g.id)
 
         # Traverse descendants of root goal
-        descendants: list[Goal] = []
+        descendants: list[GoalNode] = []
         visited: set[str] = set()
         queue = [root_goal_id]
 

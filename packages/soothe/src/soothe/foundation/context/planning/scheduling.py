@@ -25,22 +25,18 @@ class GoalScheduler:
     def __init__(self, dag: GoalStepDAG) -> None:
         self._dag = dag
 
-    def ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Compute ready goals (read-only, no status mutation).
+    def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
+        """Compute ready goals (read-only, no status mutation, RFC-625).
 
-        Delegates to GoalStepDAG.ready_goals which implements:
+        Delegates to GoalStepDAG.peek_ready_goals which implements:
         - Filter by status == "pending"
         - Check hard dependencies (all in TERMINAL_STATES)
         - Check conflicts_with (no active goal)
         - Sort by (-priority, created_at)
         """
-        return self._dag.ready_goals(limit=limit)
+        return self._dag.peek_ready_goals(limit=limit)
 
-    def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Read-only variant — delegates to ready_goals."""
-        return self.ready_goals(limit)
-
-    async def claim_goal(
+    def claim_goal(
         self,
         goal_id: str,
         *,
@@ -48,35 +44,11 @@ class GoalScheduler:
     ) -> GoalNode | None:
         """Atomically transition a goal from pending to active.
 
-        Re-checks conflict constraints at claim time. Returns the
-        GoalNode if claimed, None if ineligible.
+        Delegates to GoalStepDAG.claim_goal which re-checks conflict
+        constraints at claim time. Returns the GoalNode if claimed,
+        None if ineligible.
         """
-        goal = self._dag.get_goal(goal_id)
-        if goal is None:
-            return None
-        if goal.status != "pending":
-            return None
-
-        # Re-check conflicts
-        active_ids = {gid for gid, g in self._dag.goals.items() if g.status == "active"}
-        if any(dep_id in active_ids for dep_id in goal.conflicts_with):
-            logger.info("GoalScheduler: goal %s has active conflicts, cannot claim", goal_id)
-            return None
-
-        # Re-check dependencies
-        deps_met = all(
-            (dep := self._dag.goals.get(dep_id)) is not None and dep.status in TERMINAL_STATES
-            for dep_id in goal.depends_on
-        )
-        if not deps_met:
-            logger.info("GoalScheduler: goal %s has unmet dependencies, cannot claim", goal_id)
-            return None
-
-        # Claim
-        goal.status = "active"
-        goal.assigned_loop_id = loop_id
-        logger.info("GoalScheduler: claimed goal %s (loop_id=%s)", goal_id, loop_id)
-        return goal
+        return self._dag.claim_goal(goal_id, loop_id=loop_id)
 
     def is_complete(self) -> bool:
         """Check if all goals are in terminal states."""

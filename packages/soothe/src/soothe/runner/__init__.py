@@ -52,7 +52,6 @@ __all__ = [
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe.foundation.autopilot.engine import GoalEngine
     from soothe.foundation.core.agent import CoreAgent
     from soothe.protocols.memory import MemoryProtocol
 
@@ -90,7 +89,6 @@ class SootheRunner(
         from soothe.runner.resolver import (
             resolve_checkpointer,
             resolve_durability,
-            resolve_goal_engine,
         )
 
         from ._concurrency import ConcurrencyController
@@ -150,13 +148,11 @@ class SootheRunner(
         self._planner: PlannerProtocol | None = self._agent.planner
         self._policy: PolicyProtocol | None = self._agent.policy
 
-        # GoalEngine resolved in Layer 3 (separate from CoreAgent Layer 1).
-        # RFC-222: the resolver wires GoalEngine to the singleton InternalEventBus.
-        # AutopilotService is now exclusively daemon-owned (Phase D); the runner
-        # no longer constructs a per-instance one. Autonomous-mode CLI runs talk
-        # to GoalEngine directly via _run_autonomous; HTTP-submitted goals go
-        # through the daemon's AutopilotService instance.
-        self._goal_engine: GoalEngine | None = resolve_goal_engine(self._config)
+        # RFC-625: GoalEngine deleted, ContextEngine is sole source of truth.
+        # The runner no longer holds a GoalEngine reference. Goal management
+        # is handled by ContextEngine in the daemon's AutopilotService.
+        # HTTP-submitted goals go through the daemon; autonomous CLI runs
+        # use the daemon's AutopilotService via the runner factory.
 
         durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)

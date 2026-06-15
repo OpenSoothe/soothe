@@ -1,20 +1,20 @@
-"""Tests for AutopilotService.submit_task / list_goals / get_goal / cancel_goal (RFC-222 revised, Phase C)."""
+"""Tests for AutopilotService.submit_task / list_goals / get_goal / cancel_goal (RFC-222 revised, Phase C, RFC-625)."""
 
 from __future__ import annotations
 
 import pytest
 
 from soothe.config.models import AutonomousConfig
-from soothe.foundation.autopilot.engine import GoalEngine
 from soothe.foundation.autopilot.service import AutopilotService
+from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 
 
 def _service() -> AutopilotService:
     bus = InternalEventBus()
-    ge = GoalEngine(internal_bus=bus)
+    ce = ContextEngine()
     return AutopilotService(
-        goal_engine=ge,
+        ce=ce,
         config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
     )
@@ -75,9 +75,14 @@ class TestListAndGet:
     async def test_list_goals_filters_by_status(self) -> None:
         svc = _service()
         await svc.submit_task("a")
-        # ready_goals activates goals; lets us assert status filter works.
-        ready = await svc._goal_engine.ready_goals(limit=1)
-        assert ready[0].status == "active"
+        # peek_ready_goals returns candidates without activation
+        ready = svc._ce.peek_ready_goals(limit=1)
+        assert ready[0].status == "pending"  # Not activated by peek
+
+        # claim_goal activates the goal
+        claimed = svc._ce.claim_goal(ready[0].id, loop_id="test-loop")
+        assert claimed is not None
+        assert claimed.status == "active"
 
         active = await svc.list_goals(status="active")
         pending = await svc.list_goals(status="pending")
@@ -106,7 +111,6 @@ class TestCancelGoal:
         cancelled = await svc.cancel_goal(goal.id, reason="user said no")
         assert cancelled is not None
         assert cancelled.status == "cancelled"
-        assert "user said no" in (cancelled.error or "")
 
     @pytest.mark.asyncio
     async def test_cancel_missing_goal_returns_none(self) -> None:

@@ -19,6 +19,7 @@ from langchain_core.messages import (
 
 from soothe.foundation.context.ledger import LedgerManager
 from soothe.foundation.context.models import (
+    TERMINAL_STATES,
     EpisodeSummary,
     GoalNode,
     GoalStatus,
@@ -218,6 +219,8 @@ class ContextEngine:
         Raises:
             ValueError: If depth limit exceeded or parent not found.
         """
+        # Filter None values from kwargs to avoid validation errors on list fields
+        filtered_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         goal = GoalNode(
             description=description,
             priority=priority,
@@ -226,7 +229,7 @@ class ContextEngine:
             generating_reasoning=generating_reasoning,
             source=source,
             max_iterations=max_iterations,
-            **kwargs,
+            **filtered_kwargs,
         )
         self._dag.add_goal(goal)
         logger.info('Created goal %s: "%s" (priority=%d)', goal.id, description, priority)
@@ -269,21 +272,42 @@ class ContextEngine:
         logger.info("Completed goal %s", goal_id)
         self._fire("goal_completed", goal_id)
 
-    async def fail_goal(self, goal_id: str, error: str) -> None:
-        self._dag.fail_goal(goal_id, error)
-        logger.info("Failed goal %s: %s", goal_id, error)
-        self._fire("goal_failed", goal_id, error)
+    async def fail_goal(
+        self,
+        goal_id: str,
+        error: str | None = None,
+        *,
+        evidence: Any | None = None,
+        allow_retry: bool = True,
+    ) -> None:
+        """Transition goal to failed (non-terminal if retries remain).
+
+        Args:
+            goal_id: Goal to fail.
+            error: Error message string.
+            evidence: Optional evidence bundle for structured failure info.
+            allow_retry: If False, skip retry logic and go straight to failed.
+        """
+        error_msg = error or (evidence.narrative if evidence else "unknown error")
+        self._dag.fail_goal(goal_id, error_msg)
+        logger.info("Failed goal %s: %s", goal_id, error_msg)
+        self._fire("goal_failed", goal_id, error_msg)
 
     async def suspend_goal(self, goal_id: str, reason: str) -> None:
         self._dag.suspend_goal(goal_id, reason)
         logger.info("Suspended goal %s: %s", goal_id, reason)
         self._fire("goal_suspended", goal_id, reason)
 
-    async def cancel_goal(self, goal_id: str) -> None:
-        """Transition goal to cancelled (terminal state)."""
+    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> None:
+        """Transition goal to cancelled (terminal state).
+
+        Args:
+            goal_id: Goal to cancel.
+            reason: Cancellation reason for logging/events.
+        """
         self._dag.cancel_goal(goal_id)
-        logger.info("Cancelled goal %s", goal_id)
-        self._fire("goal_cancelled", goal_id)
+        logger.info("Cancelled goal %s: %s", goal_id, reason)
+        self._fire("goal_cancelled", goal_id, reason)
 
     async def block_goal(self, goal_id: str) -> None:
         """Transition goal to blocked."""
@@ -377,6 +401,382 @@ class ContextEngine:
     def get_episodic_memory(self, limit: int = 10) -> list[EpisodeSummary]:
         """Retrieve recent episodic memories."""
         return self._episodic_memory[-limit:]
+
+    # ── Scheduler methods (RFC-222, RFC-625) ────────────────────────────────
+
+    def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
+        """Return ready candidates without mutation (read-only).
+
+        Delegates to GoalStepDAG.peek_ready_goals for scheduler
+        capacity planning. Goals are eligible when:
+        - status == "pending"
+        - all dependencies in TERMINAL_STATES
+        - no conflicts_with goals are active
+
+        Args:
+            limit: Max goals to return.
+
+        Returns:
+            List of ready GoalNodes, sorted by (-priority, created_at).
+        """
+        return self._dag.peek_ready_goals(limit)
+
+    def claim_goal(self, goal_id: str, loop_id: str | None = None) -> GoalNode | None:
+        """Atomically transition goal to active (dispatch claim).
+
+        Used by AutopilotService after peek_ready_goals selected a
+        candidate and a loop was assigned. Re-checks conflicts at
+        claim time to prevent race conditions.
+
+        Args:
+            goal_id: Goal to claim.
+            loop_id: Optional loop_id to stamp on the goal.
+
+        Returns:
+            GoalNode if claimed, None if ineligible or conflict appeared.
+        """
+        goal = self._dag.claim_goal(goal_id, loop_id)
+        if goal is not None:
+            self._fire("goal_activated", goal_id)
+        return goal
+
+    # ── RFC-204 consensus methods ───────────────────────────────────────────
+
+    async def send_back_goal(self, goal_id: str, reason: str = "") -> GoalNode:
+        """Return goal to pending after consensus rejection.
+
+        Increments send_back_count. When budget exhausted, suspends instead.
+
+        Args:
+            goal_id: Goal to send back.
+            reason: Consensus reasoning for the send-back.
+
+        Returns:
+            The updated GoalNode.
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+
+        goal.send_back_count += 1
+        if goal.send_back_count >= goal.max_send_backs:
+            await self.suspend_goal(goal_id, reason=reason or "send_back budget exhausted")
+            return goal
+
+        goal.status = "pending"
+        goal.assigned_loop_id = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "Sent goal %s back for rework (send_back %d/%d): %s",
+            goal_id,
+            goal.send_back_count,
+            goal.max_send_backs,
+            reason,
+        )
+        self._fire("goal_suspended", goal_id, reason)  # Use existing event
+        return goal
+
+    async def validate_goal(self, goal_id: str) -> GoalNode:
+        """Mark goal as validated (Layer 3 accepted completion).
+
+        Args:
+            goal_id: Goal to validate.
+
+        Returns:
+            The updated GoalNode.
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        goal.status = "validated"
+        goal.updated_at = datetime.now(UTC)
+        logger.info("Validated goal %s", goal_id)
+        self._fire("goal_completed", goal_id)  # validated is a completion form
+        return goal
+
+    async def reactivate_goal(self, goal_id: str) -> GoalNode:
+        """Reactivate a suspended/blocked goal back to pending.
+
+        Args:
+            goal_id: Goal to reactivate.
+
+        Returns:
+            The updated GoalNode.
+
+        Raises:
+            KeyError: If goal not found.
+            ValueError: If goal is not suspended/blocked.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        if goal.status not in ("suspended", "blocked"):
+            raise ValueError(f"Goal {goal_id} is {goal.status}, not suspended/blocked")
+        old = goal.status
+        goal.status = "pending"
+        goal.send_back_count = 0  # Reset send-back budget
+        goal.updated_at = datetime.now(UTC)
+        logger.info("Reactivated goal %s (was %s)", goal_id, old)
+        self._fire("goal_unblocked", goal_id)
+        return goal
+
+    async def check_reactivated_goals(self) -> list[GoalNode]:
+        """Auto-reactivate goals whose dependencies are now resolved.
+
+        Returns:
+            List of reactivated goals.
+        """
+        reactivated: list[GoalNode] = []
+        for goal in self._dag.goals.values():
+            if goal.status not in ("suspended", "blocked"):
+                continue
+            deps_met = all(
+                (dep := self._dag.goals.get(dep_id)) is not None and dep.status in TERMINAL_STATES
+                for dep_id in goal.depends_on
+            )
+            if deps_met:
+                goal.status = "pending"
+                goal.send_back_count = 0
+                goal.updated_at = datetime.now(UTC)
+                reactivated.append(goal)
+                logger.info("Auto-reactivated goal %s (dependencies resolved)", goal.id)
+                self._fire("goal_unblocked", goal.id)
+        return reactivated
+
+    # ── RFC-204 Group C directives ──────────────────────────────────────────
+
+    async def apply_directives(
+        self,
+        directives: list[Any],  # GoalDirective type
+        source_goal_id: str,
+    ) -> list[str]:
+        """Apply goal directives from GoalCompletionChunk.
+
+        Handles six directive actions:
+        - create: Create new goal with parent_id defaulting to source_goal_id
+        - adjust_priority: Update goal.priority (clamped to 0-100)
+        - add_dependency: Extend goal.depends_on (deduplicated)
+        - fail: Transition goal to failed state
+        - complete: Transition goal to completed state
+        - decompose: Log warning (future work)
+
+        Args:
+            directives: List of GoalDirective to apply.
+            source_goal_id: Goal that emitted these directives (for parent_id default).
+
+        Returns:
+            List of newly created goal IDs.
+        """
+        created_ids: list[str] = []
+
+        for d in directives:
+            try:
+                action = getattr(d, "action", None)
+                if action == "create":
+                    parent = getattr(d, "parent_id", None) or source_goal_id
+                    priority = getattr(d, "priority", 50) or 50
+                    priority = max(0, min(100, priority))
+
+                    new_goal = await self.create_goal(
+                        description=getattr(d, "description", ""),
+                        priority=priority,
+                        parent_id=parent,
+                        depends_on=list(getattr(d, "depends_on", []) or []),
+                    )
+                    created_ids.append(new_goal.id)
+                    logger.info(
+                        "Directive created goal %s (parent=%s, priority=%d)",
+                        new_goal.id,
+                        parent,
+                        priority,
+                    )
+
+                elif action == "adjust_priority":
+                    goal_id = getattr(d, "goal_id", None)
+                    if goal_id:
+                        goal = self._dag.get_goal(goal_id)
+                        if goal:
+                            new_priority = max(
+                                0, min(100, getattr(d, "priority", goal.priority) or goal.priority)
+                            )
+                            old_priority = goal.priority
+                            goal.priority = new_priority
+                            goal.updated_at = datetime.now(UTC)
+                            logger.info(
+                                "Directive adjusted goal %s priority: %d → %d",
+                                goal_id,
+                                old_priority,
+                                new_priority,
+                            )
+
+                elif action == "add_dependency":
+                    goal_id = getattr(d, "goal_id", None)
+                    if goal_id:
+                        goal = self._dag.get_goal(goal_id)
+                        if goal:
+                            new_deps = list(getattr(d, "depends_on", []) or [])
+                            for dep_id in new_deps:
+                                if dep_id not in goal.depends_on:
+                                    goal.depends_on.append(dep_id)
+                            goal.updated_at = datetime.now(UTC)
+                            logger.info(
+                                "Directive added dependencies to goal %s: %s",
+                                goal_id,
+                                new_deps,
+                            )
+
+                elif action == "fail":
+                    goal_id = getattr(d, "goal_id", None)
+                    if goal_id:
+                        await self.fail_goal(
+                            goal_id,
+                            error=getattr(d, "rationale", "Directive-fail") or "Directive-fail",
+                        )
+                        logger.info("Directive marked goal %s as failed", goal_id)
+
+                elif action == "complete":
+                    goal_id = getattr(d, "goal_id", None)
+                    if goal_id:
+                        await self.complete_goal(goal_id)
+                        logger.info("Directive marked goal %s as completed", goal_id)
+
+                elif action == "decompose":
+                    logger.warning(
+                        "Directive 'decompose' not implemented (goal %s): %s",
+                        getattr(d, "goal_id", ""),
+                        getattr(d, "description", ""),
+                    )
+
+            except Exception:
+                logger.warning(
+                    "Directive application failed (action=%s): %s",
+                    getattr(d, "action", ""),
+                    exc_info=True,
+                )
+
+        return created_ids
+
+    # ── RFC-622 clarification ───────────────────────────────────────────────
+
+    async def mark_awaiting_clarification(
+        self,
+        goal_id: str,
+        pending_clarification: dict[str, Any],
+        reason: str = "",
+    ) -> GoalNode:
+        """Pause a goal until out-of-band clarification arrives.
+
+        Args:
+            goal_id: Goal to pause.
+            pending_clarification: Serialized ClarificationRequest to persist.
+            reason: Audit string.
+
+        Returns:
+            The updated GoalNode.
+
+        Raises:
+            KeyError: If goal not found.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        goal.status = "awaiting_clarification"
+        goal.pending_clarification = pending_clarification
+        goal.assigned_loop_id = None
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "[ClarificationRelay] goal %s -> awaiting_clarification: %s",
+            goal_id,
+            reason,
+        )
+        self._fire("goal_blocked", goal_id)
+        return goal
+
+    async def answer_clarification(
+        self,
+        goal_id: str,
+        answers: list[str],
+    ) -> GoalNode:
+        """Resume goal with clarification answers.
+
+        Clears pending_clarification and transitions back to pending.
+
+        Args:
+            goal_id: Goal currently in awaiting_clarification.
+            answers: Answers to consume on re-entry.
+
+        Returns:
+            The updated GoalNode.
+
+        Raises:
+            KeyError: If goal not found.
+            ValueError: If goal not awaiting clarification.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            raise KeyError(f"Goal {goal_id} not found")
+        if goal.status != "awaiting_clarification":
+            raise ValueError(
+                f"Goal {goal_id} is not awaiting clarification (status={goal.status!r})"
+            )
+        pending = goal.pending_clarification or {}
+        pending["answers"] = list(answers)
+        goal.pending_clarification = pending
+        goal.status = "pending"
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "[ClarificationRelay] goal %s clarification answered (%d answers)",
+            goal_id,
+            len(answers),
+        )
+        self._fire("goal_unblocked", goal_id)
+        return goal
+
+    # ── RFC-228 guidance ─────────────────────────────────────────────────────
+
+    def absorb_guidance(
+        self,
+        goal_id: str,
+        guidance_text: str,
+        scope: str = "goal",
+    ) -> bool:
+        """Absorb user guidance from desktop LOR.
+
+        Accumulates guidance for use in next reasoning cycle.
+
+        Args:
+            goal_id: Target goal ID.
+            guidance_text: User's guidance/instruction.
+            scope: "goal" for specific, "job" for root (full DAG).
+
+        Returns:
+            True if absorbed, False if goal not found.
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            logger.warning("[Guidance] Goal %s not found", goal_id)
+            return False
+
+        guidance_entry = {
+            "text": guidance_text,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "scope": scope,
+        }
+        goal.guidance_accumulated.append(guidance_entry)
+        goal.updated_at = datetime.now(UTC)
+        logger.info(
+            "[Guidance] Absorbed guidance for goal %s (scope=%s): %s",
+            goal_id,
+            scope,
+            guidance_text[:50],
+        )
+        return True
 
     # ── Step management ──────────────────────────────────────────
 

@@ -3,6 +3,7 @@
 **RFC**: 625
 **Title**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion
 **Created**: 2026-06-15
+**Updated**: 2026-06-15
 **Status**: In Progress
 
 ---
@@ -19,10 +20,10 @@ This IG tracks implementation of RFC-625: unifying goal management under Context
 |-------|-------|--------|-----------|
 | 1 | Relocate `soothe.context` → `soothe.foundation.context` | Done | 2 days |
 | 2 | Enhance GoalNode with Goal fields, add CE API methods | Done | 2 days |
-| 3 | Delete GoalEngine, migrate BackoffReasoner | Pending | 3 days |
+| 3 | Delete GoalEngine, migrate BackoffReasoner | Done | 3 days |
 | 4 | Implement AutopilotMonitor (Verifier, Intake, Dreaming) | Pending | 5 days |
 | 5 | Implement TUI GoalDAGCard, mode switch logic | Pending | 3 days |
-| 6 | Integration tests, verify_finally.sh | Pending | 2 days |
+| 6 | Integration tests, verify_finally.sh | In Progress | 2 days |
 
 ### Phase 1 Completion Summary
 
@@ -79,6 +80,76 @@ Added `BLOCKED_STATES` constant.
 - `EpisodeSummary` — Distilled episodic memory from goal execution
 
 **Tests:** 278 passed, lint passes.
+
+### Phase 3 Completion Summary
+
+**Completed:** 2026-06-15
+
+**Files deleted:**
+- `foundation/autopilot/engine/engine.py` (1821 lines) — GoalEngine deleted
+- `foundation/autopilot/engine/file_lock_registry.py` (270 lines) — FileLockRegistry deleted
+- `foundation/autopilot/engine/backoff_reasoner.py` (232 lines) — Migrated to monitor/
+
+**Goal class deleted from models.py:**
+- Removed Goal class entirely
+- Fields migrated to GoalNode in `foundation/context/models.py`
+
+**ContextEngine enhanced with GoalEngine methods:**
+- `peek_ready_goals(limit)` — Scheduler read-only query (renamed from `ready_goals`)
+- `claim_goal(goal_id, loop_id)` — Atomic dispatch claim (sync, not async)
+- `send_back_goal(goal_id, reason)` — RFC-204 consensus send-back
+- `validate_goal(goal_id)` — RFC-204 acceptance
+- `reactivate_goal(goal_id)` — RFC-204 resume
+- `check_reactivated_goals()` — Auto-reactivate on deps resolved
+- `apply_directives(directives, source_goal_id)` — RFC-204 Group C
+- `mark_awaiting_clarification()` — RFC-622 pause
+- `answer_clarification()` — RFC-622 resume
+- `absorb_guidance()` — RFC-228 LOR guidance
+
+**AutopilotService migrated:**
+- Constructor signature changed: `_goal_engine: GoalEngine` → `_ce: ContextEngine`
+- Added `_monitor: AutopilotMonitor | None` parameter
+- Removed FileLockRegistry code (`_release_goal_locks`, loop file release)
+- All `_goal_engine` calls replaced with `_ce` calls
+- Return types changed from `Goal` to `GoalNode`
+
+**Daemon core.py migrated:**
+- Imports ContextEngine, AutopilotMonitor instead of GoalEngine
+- Creates ContextEngine + AutopilotMonitor instead of GoalEngine
+
+**Runner references removed:**
+- Deleted `resolve_goal_engine()` from `_resolver_tools.py`
+- Removed `_goal_engine` field from SootheRunner
+
+**Test files deleted:**
+- `tests/unit/core/goal_engine/` directory (10 files)
+- `tests/integration/core/goal_engine/` directory (1 file)
+- `tests/unit/middleware/test_file_lock.py`
+
+**Test files updated:**
+- `test_submit_task.py` — Uses ContextEngine
+- `test_cancel_goal.py` — Uses ContextEngine
+- `test_real_dispatch.py` — Uses ContextEngine
+- `test_subscribe_to_bus.py` — Uses ContextEngine
+- `test_deadline_monitor.py` — Uses ContextEngine
+- `test_consensus_dispatch.py` — Uses ContextEngine
+- `test_worker_pool.py` — Uses GoalNode
+- `test_context_projector.py` — Uses GoalNode
+- `test_relationship_detector.py` — Uses GoalNode
+
+**relationship_detector.py updated:**
+- Import changed from `Goal` (engine/models) to `GoalNode` (context/models)
+- Function signatures updated: `GoalNode` instead of `Goal`
+
+**Export updates:**
+- `foundation/autopilot/__init__.py` — Removed GoalEngine, Goal exports; added AutopilotMonitor
+- `foundation/__init__.py` — Removed GoalEngine export; added AutopilotMonitor (lazy)
+- `foundation/autopilot/engine/__init__.py` — Removed GoalEngine, FileLockRegistry, Goal exports
+
+**Status:** Core migration complete. Tests require additional fixes:
+- `test_goal_step_dag.py`, `test_ig624_3_planning_submodule.py` — `ready_goals` → `peek_ready_goals` renaming
+- GoalNode validation errors — `submit_task()` kwargs mapping to GoalNode fields
+- `claim_goal` async/sync signature change in GoalScheduler tests
 
 ---
 
