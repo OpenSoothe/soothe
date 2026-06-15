@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from soothe.config import SootheConfig
+from soothe.context.engine import ContextEngine
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import Executor
 from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
+
+
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
 
 
 def _make_step() -> StepAction:
@@ -49,7 +59,7 @@ async def test_stream_stops_after_subagent_cap(monkeypatch: pytest.MonkeyPatch) 
     ]
     agent = _make_mock_agent(chunks)
 
-    ex = Executor(agent, max_parallel_steps=1, config=cfg)
+    ex = Executor(agent, max_parallel_steps=1, config=cfg, context_engine=_make_ce())
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
     step = _make_step()
 
@@ -82,7 +92,7 @@ async def test_unlimited_subagent_when_cap_zero(monkeypatch: pytest.MonkeyPatch)
     ]
     agent = _make_mock_agent(chunks)
 
-    ex = Executor(agent, max_parallel_steps=1, config=cfg)
+    ex = Executor(agent, max_parallel_steps=1, config=cfg, context_engine=_make_ce())
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
     step = _make_step()
 

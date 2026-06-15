@@ -16,31 +16,35 @@ def _record_ledger_message(
     context_engine: Any | None,
     msg: Any,
     phase: str,
-    loop_messages: list[Any],
 ) -> None:
-    """Append a message to CE LedgerManager (or loop_messages when CE is absent).
+    """Record a message to the CE LedgerManager (RFC-624 Phase 4 Stage 2).
 
-    When ``context_engine`` is provided, writes only to the CE ledger.
+    When ``context_engine`` is provided, writes to the CE ledger.
     The ``loop_messages`` property on LoopState automatically reflects CE
     state when bound — no explicit sync call is needed.
 
-    When CE is None, falls back to appending to ``loop_messages`` directly.
-
     Args:
-        context_engine: ContextEngine instance for direct LedgerManager writes.
-        msg: Message to record.
+        context_engine: ContextEngine instance for LedgerManager writes.
+            Must be provided in production code. Tests without CE must
+            use a sqlite :memory: ContextEngine instance.
+        msg: Message to record (should be a BaseMessage subclass).
         phase: Phase tag (e.g., "execute_step", "plan_assess", "goal_completion").
-        loop_messages: Legacy parameter — only used when CE is absent.
-            When CE is present, this list is not modified.
-    """
-    if context_engine is not None:
-        from langchain_core.messages import BaseMessage
 
-        if isinstance(msg, BaseMessage):
-            context_engine.ledger.record_message(msg, phase)
-            return
-    # Fallback: no CE available, write directly to loop_messages
-    loop_messages.append(msg)
+    Raises:
+        ValueError: If context_engine is None (production code must provide CE).
+    """
+    if context_engine is None:
+        raise ValueError("_record_ledger_message requires a ContextEngine instance")
+    from langchain_core.messages import BaseMessage
+
+    if isinstance(msg, BaseMessage):
+        context_engine.ledger.record_message(msg, phase)
+    else:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "_record_ledger_message: non-BaseMessage dropped: %s", type(msg)
+        )
 
 
 def last_ledger_ai_content(state: LoopState) -> str:

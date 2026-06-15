@@ -22,11 +22,13 @@ logger = logging.getLogger(__name__)
 def _is_fresh_loop(ctx: LoopRuntimeContext) -> bool:
     """Detect fresh-loop conditions where plan_assess can be skipped (IG-476).
 
+    RFC-624 Phase 4 Stage 2: Uses CE query instead of checkpoint.goal_history.
+
     A loop is "fresh" when ALL of:
     - state.iteration == 0
     - not state.step_results (no prior execution)
     - not ctx.continue_loop_mode (not a continuation)
-    - len(ctx.checkpoint.goal_history) < 2 (no prior completed goals)
+    - CE has no completed goals (no prior goal context)
     - No recovery state requiring assessment
     """
     state = ctx.loop_state
@@ -36,8 +38,15 @@ def _is_fresh_loop(ctx: LoopRuntimeContext) -> bool:
         return False
     if ctx.continue_loop_mode:
         return False
-    if len(ctx.checkpoint.goal_history) >= 2:
-        return False
+    # RFC-624 Phase 4 Stage 2: Check CE DAG for completed goals instead of goal_history
+    if ctx.ce is not None:
+        has_completed_goals = any(g.status == "completed" for g in ctx.ce.get_all_goals())
+        if has_completed_goals:
+            return False
+    else:
+        # Fallback: no CE, use checkpoint.goal_history
+        if len(ctx.checkpoint.goal_history) >= 2:
+            return False
     # Recovery paths may need assessment
     if ctx.recovery_valid_resume:
         return False

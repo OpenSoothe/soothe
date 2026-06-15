@@ -31,8 +31,6 @@ from soothe.foundation.loop.state.persistence.directory_manager import (
 from soothe.foundation.loop.state.persistence.sqlite_backend import (
     SQLitePersistenceBackend,
 )
-from soothe.foundation.loop.state.schemas import EvidenceEntry, PlanResult, StepResult
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -40,6 +38,8 @@ if TYPE_CHECKING:
     from soothe.foundation.loop.state.schemas import (
         AgentDecision,
         LoopState,
+        PlanResult,
+        StepResult,
     )
     from soothe.foundation.loop.state.working_memory import LoopWorkingMemory
 
@@ -366,19 +366,11 @@ class StrangeLoopStateManager:
 
                 goal_history = []
                 for goal_row in goal_rows_data:
-                    # Deserialize loop_messages (RFC-214: replaces reason_history/act_history)
-                    loop_messages_raw = json.loads(goal_row[6]) if goal_row[6] else []
-                    loop_messages = [
-                        LoopHumanMessage.model_validate(msg)
-                        if msg.get("type") == "human"
-                        else LoopAIMessage.model_validate(msg)
-                        for msg in loop_messages_raw
-                    ]
-
                     # RFC-225: unpack enriched fields stored in extras_jsonb
                     extras_raw = goal_row[13] if len(goal_row) > 13 else None
                     extras = json.loads(extras_raw) if extras_raw else {}
 
+                    # RFC-624 Phase 4: GER slimmed to metadata-only; CE owns loop state
                     goal_record = GoalExecutionRecord(
                         goal_id=goal_row[0],
                         goal_text=goal_row[2],
@@ -386,28 +378,12 @@ class StrangeLoopStateManager:
                         iteration=goal_row[4],
                         max_iterations=extras.get("max_iterations", 10),
                         status=goal_row[5],
-                        loop_messages=loop_messages,  # RFC-214: ledger
+                        plan_revision_count=extras.get("plan_revision_count", 0),
                         goal_completion=goal_row[7] or "",
-                        evidence_summary=goal_row[8] or "",
                         duration_ms=goal_row[9],
                         tokens_used=goal_row[10],
                         started_at=datetime.fromisoformat(goal_row[11]),
                         completed_at=datetime.fromisoformat(goal_row[12]) if goal_row[12] else None,
-                        # RFC-225 enrichment (default to empty on legacy rows)
-                        current_plan=(
-                            PlanResult.model_validate(extras["current_plan"])
-                            if extras.get("current_plan")
-                            else None
-                        ),
-                        completed_step_ids=set(extras.get("completed_step_ids", [])),
-                        plan_revision_count=extras.get("plan_revision_count", 0),
-                        step_results=[
-                            StepResult.model_validate(s) for s in extras.get("step_results", [])
-                        ],
-                        evidence_ledger=[
-                            EvidenceEntry.model_validate(e)
-                            for e in extras.get("evidence_ledger", [])
-                        ],
                     )
                     goal_history.append(goal_record)
 
@@ -620,34 +596,24 @@ class StrangeLoopStateManager:
         # Save goal_history to goal_records table
         for goal_record in checkpoint.goal_history:
             logger.debug(
-                "save goal: id=%s status=%s iter=%d ledger_msgs=%d done=%s",
+                "save goal: id=%s status=%s iter=%d done=%s",
                 goal_record.goal_id,
                 goal_record.status,
                 goal_record.iteration,
-                len(goal_record.loop_messages),
                 goal_record.completed_at.isoformat() if goal_record.completed_at else "None",
             )
 
-            # Serialize loop_messages to JSON (RFC-214: replaces reason_history/act_history)
-            loop_messages_json = json.dumps(
-                [msg.model_dump(mode="json") for msg in goal_record.loop_messages],
-                ensure_ascii=False,
-            )
+            # RFC-624 Phase 4 Stage 2: loop_messages field removed from GER.
+            # CE LedgerManager is the authoritative source. Save empty placeholder.
+            loop_messages_json = json.dumps([], ensure_ascii=False)
             completed_at_str = (
                 goal_record.completed_at.isoformat() if goal_record.completed_at else None
             )
-            # RFC-225: pack enriched fields into extras_jsonb
+            # RFC-624 Phase 4 Stage 2: extras contains only metadata fields.
+            # CE-owned fields removed: current_plan, completed_step_ids, step_results, evidence_ledger.
             extras_payload = {
                 "max_iterations": goal_record.max_iterations,
-                "current_plan": (
-                    goal_record.current_plan.model_dump(mode="json")
-                    if goal_record.current_plan is not None
-                    else None
-                ),
-                "completed_step_ids": sorted(goal_record.completed_step_ids),
                 "plan_revision_count": goal_record.plan_revision_count,
-                "step_results": [s.model_dump(mode="json") for s in goal_record.step_results],
-                "evidence_ledger": [e.model_dump(mode="json") for e in goal_record.evidence_ledger],
             }
             extras_json = json.dumps(extras_payload, ensure_ascii=False)
 
@@ -668,7 +634,7 @@ class StrangeLoopStateManager:
                     goal_record.status,
                     loop_messages_json,
                     goal_record.goal_completion,
-                    goal_record.evidence_summary,
+                    "",  # RFC-624 Phase 4 Stage 2: evidence_summary removed, use empty placeholder
                     goal_record.duration_ms,
                     goal_record.tokens_used,
                     goal_record.started_at.isoformat(),
@@ -776,30 +742,14 @@ class StrangeLoopStateManager:
         target_goal.goal_completion = goal_completion
         target_goal.completed_at = datetime.now(UTC)
 
-        # RFC-225: mirror LoopState orchestration overlay into the goal record
-        if loop_state is not None:
-            if loop_state.current_decision is not None:
-                # Snapshot the latest plan + decision as the goal's final plan DAG.
-                from soothe.foundation.loop.state.schemas import PlanResult as _PlanResult
-
-                target_goal.current_plan = _PlanResult(
-                    status="done",
-                    decision=loop_state.current_decision,
-                    evidence_summary=loop_state.evidence_summary,
-                    goal_progress="complete",
-                )
-            target_goal.completed_step_ids = set(loop_state.completed_step_ids)
-            target_goal.step_results = list(loop_state.step_results)
-            target_goal.evidence_ledger = list(loop_state.evidence_ledger)
-            target_goal.evidence_summary = (
-                loop_state.evidence_summary or target_goal.evidence_summary
-            )
+        # RFC-624 Phase 4 Stage 2: No mirroring of CE-owned data.
+        # GoalExecutionRecord is metadata-only. CE DAG is the real data store.
+        # Removed: current_plan, completed_step_ids, step_results, evidence_ledger.
 
         logger.debug(
-            "finalize_goal: modified id=%s iter=%d ledger_msgs=%d",
+            "finalize_goal: modified id=%s iter=%d",
             target_goal.goal_id,
             target_goal.iteration,
-            len(target_goal.loop_messages),
         )
 
         # Update loop metrics
@@ -869,15 +819,14 @@ class StrangeLoopStateManager:
             return
 
         logger.debug(
-            "record_iteration: found id=%s same_obj=%s ledger_len=%d",
+            "record_iteration: found id=%s same_obj=%s",
             target_goal.goal_id,
             target_goal is goal_record,
-            len(state.loop_messages),
         )
 
-        # RFC-214: Persist ledger snapshots. ``LoopState`` may hold a distinct list from
-        # Pydantic construction or graph merges; keep ``goal_history`` aligned for reload.
-        target_goal.loop_messages = [m.model_copy(deep=True) for m in state.loop_messages]
+        # RFC-624 Phase 4 Stage 2: No loop_messages deep-copy.
+        # CE LedgerManager spans all goals, persisted via ce.save().
+        # GoalExecutionRecord.loop_messages field removed.
 
         # Record working memory state
         if working_memory is not None:
@@ -889,11 +838,10 @@ class StrangeLoopStateManager:
         target_goal.tokens_used = state.total_tokens_used
 
         logger.debug(
-            "record_iteration: updated iter=%d dur=%dms tok=%d ledger=%d",
+            "record_iteration: updated iter=%d dur=%dms tok=%d",
             target_goal.iteration,
             target_goal.duration_ms,
             target_goal.tokens_used,
-            len(target_goal.loop_messages),
         )
 
         # Save checkpoint

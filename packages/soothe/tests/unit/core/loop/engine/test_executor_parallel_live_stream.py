@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.context.engine import ContextEngine
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.engine.executor import Executor, StreamEvent
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
+
+
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
 
 
 @pytest.mark.asyncio
@@ -44,7 +54,7 @@ async def test_execute_parallel_yields_stream_events_before_all_steps_finish() -
         )
         return ([event], result, [], "")
 
-    executor = Executor(MagicMock(), max_parallel_steps=4)
+    executor = Executor(MagicMock(), max_parallel_steps=4, context_engine=_make_ce())
     executor._execute_step_collecting_events = fake_collect  # type: ignore[method-assign]
 
     state = LoopState(goal="g", thread_id="t-par", iteration=0, max_iterations=4)
@@ -106,10 +116,18 @@ async def test_execute_parallel_ledger_uses_step_id_when_completion_order_differ
         )
         return ([], result, [], "")
 
-    executor = Executor(MagicMock(), max_parallel_steps=4)
+    executor = Executor(MagicMock(), max_parallel_steps=4, context_engine=_make_ce())
     executor._execute_step_collecting_events = fake_collect  # type: ignore[method-assign]
 
+    ce = _make_ce()
+    from soothe.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
     state = LoopState(goal="g", thread_id="t-order", iteration=0, max_iterations=4)
+    state.bind_ce(ce, goal.id)
+    executor._context_engine = ce
+
     steps = [
         StepAction(id="first", description="slow first in plan"),
         StepAction(id="second", description="fast second in plan"),
@@ -119,8 +137,10 @@ async def test_execute_parallel_ledger_uses_step_id_when_completion_order_differ
         pass
 
     assert order[0] == "second"
-    assert len(state.loop_messages) == 4
-    assert state.loop_messages[0].content == "Execute: slow first in plan"
-    assert getattr(state.loop_messages[0], "step_id", None) == "first"
-    assert state.loop_messages[2].content == "Execute: fast second in plan"
-    assert getattr(state.loop_messages[2], "step_id", None) == "second"
+    # Check CE ledger directly
+    ledger_msgs = ce.ledger.get_messages()
+    assert len(ledger_msgs) == 4
+    assert ledger_msgs[0].content == "Execute: slow first in plan"
+    assert getattr(ledger_msgs[0], "step_id", None) == "first"
+    assert ledger_msgs[2].content == "Execute: fast second in plan"
+    assert getattr(ledger_msgs[2], "step_id", None) == "second"

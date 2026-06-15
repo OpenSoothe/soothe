@@ -1,4 +1,4 @@
-"""Tests for RFC-624 Phase 4: CE-backed properties on LoopState."""
+"""Tests for RFC-624 Phase 4 Stage 2: CE-only ledger writes."""
 
 from __future__ import annotations
 
@@ -30,50 +30,54 @@ def _make_state_with_ce() -> tuple[LoopState, ContextEngine]:
     return state, ce
 
 
-class TestRecordLedgerMessageCESoleSource:
-    """_record_ledger_message writes to CE only when available."""
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend."""
+    from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 
-    def test_writes_to_ce_when_available(self) -> None:
-        state, ce = _make_state_with_ce()
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
+
+
+class TestRecordLedgerMessageCEOnly:
+    """_record_ledger_message writes to CE only (RFC-624 Phase 4 Stage 2)."""
+
+    def test_writes_to_ce_ledger(self) -> None:
+        ce = _make_ce()
         msg = LoopHumanMessage(content="Hello", phase="plan_assess")
-        _record_ledger_message(ce, msg, "plan_assess", state.loop_messages)
+        _record_ledger_message(ce, msg, "plan_assess")
 
-        # Message should be in CE ledger
         ledger_msgs = ce.ledger.get_messages()
         assert len(ledger_msgs) == 1
         assert ledger_msgs[0].content == "Hello"
 
-        # loop_messages property queries CE directly — so it reflects the write
-        assert len(state.loop_messages) == 1
-
-    def test_writes_to_loop_messages_when_no_ce(self) -> None:
-        state = LoopState(goal="test", thread_id="thread-1")
+    def test_raises_value_error_without_ce(self) -> None:
+        """Stage 2: _record_ledger_message requires a CE instance."""
         msg = LoopHumanMessage(content="Hello", phase="plan_assess")
-        _record_ledger_message(None, msg, "plan_assess", state.loop_messages)
+        try:
+            _record_ledger_message(None, msg, "plan_assess")
+        except ValueError as e:
+            assert "requires a ContextEngine instance" in str(e)
+        else:
+            raise AssertionError("Expected ValueError")
 
-        # Message should be in loop_messages
-        assert len(state.loop_messages) == 1
-        assert state.loop_messages[0].content == "Hello"
-
-    def test_ce_receives_ai_messages(self) -> None:
-        state, ce = _make_state_with_ce()
+    def test_ce_receives_human_and_ai_pair(self) -> None:
+        ce = _make_ce()
         human = LoopHumanMessage(content="Plan this", phase="plan_assess")
         ai = LoopAIMessage(content="Here's the plan", phase="plan_assess")
-        _record_ledger_message(ce, human, "plan_assess", state.loop_messages)
-        _record_ledger_message(ce, ai, "plan_assess", state.loop_messages)
+        _record_ledger_message(ce, human, "plan_assess")
+        _record_ledger_message(ce, ai, "plan_assess")
 
         ledger_msgs = ce.ledger.get_messages()
         assert len(ledger_msgs) == 2
         assert isinstance(ledger_msgs[0], HumanMessage)
         assert isinstance(ledger_msgs[1], AIMessage)
 
-    def test_non_base_message_falls_back_to_loop_messages(self) -> None:
-        """When msg is not a BaseMessage, falls back to loop_messages even with CE."""
-        state, ce = _make_state_with_ce()
-        # Pass a plain dict (not a BaseMessage) — should fall back to loop_messages
-        _record_ledger_message(ce, {"content": "not a message"}, "plan_assess", state.loop_messages)
-        # The dict gets appended to the loop_messages list argument
-        # (which is a temporary list from the property, so it's orphaned)
+    def test_non_base_message_logs_warning(self) -> None:
+        """When msg is not a BaseMessage, logs warning and drops."""
+        ce = _make_ce()
+        # Pass a plain dict (not a BaseMessage) — should log warning, not write to ledger
+        _record_ledger_message(ce, {"content": "not a message"}, "plan_assess")
         # CE ledger should be unchanged
         assert len(ce.ledger.get_messages()) == 0
 
@@ -241,26 +245,13 @@ class TestWriteThenReadRoundtrip:
     def test_write_to_ce_read_from_property(self) -> None:
         state, ce = _make_state_with_ce()
 
-        # Write via CE path
+        # Write via CE path (no loop_messages argument)
         human = LoopHumanMessage(content="Plan step", thread_id="thread-1", phase="plan_assess")
         ai = LoopAIMessage(content="Here's the plan", thread_id="thread-1", phase="plan_assess")
-        _record_ledger_message(ce, human, "plan_assess", state.loop_messages)
-        _record_ledger_message(ce, ai, "plan_assess", state.loop_messages)
+        _record_ledger_message(ce, human, "plan_assess")
+        _record_ledger_message(ce, ai, "plan_assess")
 
         # Property reads directly from CE — no sync needed
         assert len(state.loop_messages) == 2
         assert state.loop_messages[0].content == "Plan step"
         assert state.loop_messages[1].content == "Here's the plan"
-
-    def test_legacy_path_still_works_without_ce(self) -> None:
-        """Without CE, _record_ledger_message still writes to loop_messages directly."""
-        state = LoopState(goal="test", thread_id="thread-1")
-
-        human = LoopHumanMessage(content="Hello", phase="execute_step")
-        ai = LoopAIMessage(content="Done", phase="execute_step")
-        _record_ledger_message(None, human, "execute_step", state.loop_messages)
-        _record_ledger_message(None, ai, "execute_step", state.loop_messages)
-
-        assert len(state.loop_messages) == 2
-        assert state.loop_messages[0].content == "Hello"
-        assert state.loop_messages[1].content == "Done"

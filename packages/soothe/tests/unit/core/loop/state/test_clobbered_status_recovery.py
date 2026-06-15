@@ -7,12 +7,13 @@ Reproduces the failure mode where the daemon's pre-query
 
 1. ``strange_loop.py``: when status=running + invalid index but goal_history
    has completed goals, take the idle-continuation path (preserve history,
-   append new goal, seed prior ledger) instead of wiping.
+   append new goal) instead of wiping.
 2. ``postgres_backend.update_loop_metadata``: drop ``status`` from external
    writes when goal_history is non-empty (StrangeLoop owns status then).
 
-This test covers (1) — exercising the branching state transitions via the
-SQLite-backed manager and confirming the seeding path triggers.
+RFC-624 Phase 4 Stage 2: seed_loop_ledger_from_prior_goal is deleted.
+CE ledger spans all goals via ce.load(), so prior context is available
+without explicit seeding.
 """
 
 from __future__ import annotations
@@ -23,9 +24,6 @@ from unittest.mock import patch
 
 import pytest
 
-from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
-    seed_loop_ledger_from_prior_goal,
-)
 from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 
 
@@ -97,19 +95,15 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     loaded.goal_history.append(new_goal)
     loaded.current_goal_index = len(loaded.goal_history) - 1
     loaded.status = "running"
-    if len(loaded.goal_history) >= 2:
-        seed_loop_ledger_from_prior_goal(loaded, new_goal, "thread_001")
+    # RFC-624 Phase 4 Stage 2: seed_loop_ledger_from_prior_goal deleted.
+    # CE ledger spans all goals — prior context available via ce.load().
     await sm2.save(loaded)
 
-    # ── Assertions: history preserved, new goal appended, prior ledger seeded ──
+    # ── Assertions: history preserved, new goal appended ──
     assert len(loaded.goal_history) == 2
     assert loaded.goal_history[0].goal_id == goal1.goal_id
     assert loaded.goal_history[0].status == "completed"
     assert loaded.goal_history[1].goal_id == new_goal.goal_id
-    # seed_loop_ledger_from_prior_goal falls back to goal_completion text since
-    # the prior goal's loop_messages list is empty in this fixture setup.
-    assert len(new_goal.loop_messages) == 2
-    assert "12 file types" in new_goal.loop_messages[1].content
 
     # Final cold reload confirms persistence of preserved history.
     with patch(

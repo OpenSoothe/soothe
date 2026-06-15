@@ -10,11 +10,15 @@ dropped.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.loop.planning.planner import LLMPlanner
 from soothe.foundation.loop.state.schemas import (
     LoopState,
@@ -31,6 +35,13 @@ GOAL = "translate the README into French"
 RECORDED_HUMAN_CONTENT = (
     f"GOAL:\n{GOAL}\n\nPRIOR PROGRESS:\nhint=low\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
 )
+
+
+def _make_ce() -> ContextEngine:
+    """Create a ContextEngine with sqlite :memory: backend for tests."""
+    return ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
+    )
 
 
 def _make_human(phase: str) -> LoopHumanMessage:
@@ -60,11 +71,16 @@ async def test_assess_status_records_compacted_human_and_dropped_reasoning() -> 
         return_value=(assessment, assessment)
     )
 
+    ce = _make_ce()
     state = LoopState(goal=GOAL, thread_id="t1", iteration=1)
-    await planner.assess_status(GOAL, state, PlanContext())
+    goal = GoalNode(description=GOAL)
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+    await planner.assess_status(GOAL, state, PlanContext(), context_engine=ce)
 
-    assert len(state.loop_messages) == 2
-    recorded_human, recorded_ai = state.loop_messages
+    msgs = ce.ledger.get_messages()
+    assert len(msgs) == 2
+    recorded_human, recorded_ai = msgs
 
     # C1: volatile timestamp must be gone from the recorded human.
     assert "TIMESTAMP:" not in recorded_human.content
@@ -117,12 +133,19 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
         side_effect=lambda result, **_: result
     )
 
+    ce = _make_ce()
     state = LoopState(goal=GOAL, thread_id="t1", iteration=1)
+    goal = GoalNode(description=GOAL)
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
     assessment = StatusAssessment(status="continue", goal_progress="low")
-    await planner.generate_from_assessment(GOAL, state, PlanContext(), assessment)
+    await planner.generate_from_assessment(
+        GOAL, state, PlanContext(), assessment, context_engine=ce
+    )
 
-    assert len(state.loop_messages) == 2
-    recorded_human, recorded_ai = state.loop_messages
+    msgs = ce.ledger.get_messages()
+    assert len(msgs) == 2
+    recorded_human, recorded_ai = msgs
 
     # C1 + D1 still apply to plan-generate humans.
     assert "TIMESTAMP:" not in recorded_human.content
@@ -155,16 +178,26 @@ async def test_recorded_humans_are_cache_stable_across_iterations() -> None:
         )
     )
 
+    ce_a = _make_ce()
+    ce_b = _make_ce()
     state_a = LoopState(goal=GOAL, thread_id="t1", iteration=1)
     state_b = LoopState(goal=GOAL, thread_id="t1", iteration=2)
-    await planner.assess_status(GOAL, state_a, PlanContext())
+    goal_a = GoalNode(description=GOAL)
+    goal_b = GoalNode(description=GOAL)
+    ce_a._dag.add_goal(goal_a)
+    ce_b._dag.add_goal(goal_b)
+    state_a.bind_ce(ce_a, goal_a.id)
+    state_b.bind_ce(ce_b, goal_b.id)
+    await planner.assess_status(GOAL, state_a, PlanContext(), context_engine=ce_a)
     # Re-stub with a fresh human matching iter=2; same content is what we want.
     planner._prompt_builder.build_plan_messages = MagicMock(  # type: ignore[method-assign]
         return_value=[_make_human("plan_assess")]
     )
-    await planner.assess_status(GOAL, state_b, PlanContext())
+    await planner.assess_status(GOAL, state_b, PlanContext(), context_engine=ce_b)
 
-    assert state_a.loop_messages[0].content == state_b.loop_messages[0].content
+    msgs_a = ce_a.ledger.get_messages()
+    msgs_b = ce_b.ledger.get_messages()
+    assert msgs_a[0].content == msgs_b[0].content
 
 
 @pytest.mark.asyncio
@@ -181,6 +214,10 @@ async def test_assess_status_does_not_record_when_llm_fallback_yields_no_respons
         )
     )
 
+    ce = _make_ce()
     state = LoopState(goal=GOAL, thread_id="t1", iteration=1)
-    await planner.assess_status(GOAL, state, PlanContext())
-    assert state.loop_messages == []
+    goal = GoalNode(description=GOAL)
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+    await planner.assess_status(GOAL, state, PlanContext(), context_engine=ce)
+    assert ce.ledger.get_messages() == []
