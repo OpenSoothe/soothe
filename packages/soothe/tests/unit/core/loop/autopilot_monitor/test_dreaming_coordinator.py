@@ -160,10 +160,13 @@ class TestDreamingCoordinator:
         assert isinstance(context, DreamingContext)
         assert context.scope_id == "topic"
 
-    async def test_run_mode_returns_none_for_now(self, coordinator: DreamingCoordinator) -> None:
-        """_run_mode returns None (LLM integration pending)."""
+    async def test_run_mode_returns_none_on_llm_failure(
+        self, coordinator: DreamingCoordinator
+    ) -> None:
+        """_run_mode returns None when LLM fails (no mock model)."""
         context = await coordinator._gather_dreaming_context("loop")
 
+        # LLM call will fail since mock_config doesn't have create_chat_model
         result = await coordinator._run_mode("episodic", context)
 
         assert result is None
@@ -171,18 +174,26 @@ class TestDreamingCoordinator:
     async def test_apply_distillation_result_episodic(
         self, coordinator: DreamingCoordinator
     ) -> None:
-        """_apply_distillation_result stores episodic memory."""
-        episodes = [
-            EpisodeSpec(
-                goal_id="goal-1",
-                description="Completed task",
-                outcome_summary="Successfully completed",
-                key_steps=["step1", "step2"],
-                lessons_learned="Key takeaway",
-            )
-        ]
+        """_apply_distillation_result stores episodic memory from EpisodicDistillationResponse."""
+        from soothe.foundation.autopilot.monitor.dreaming_reasoner import (
+            EpisodeDistillationItem,
+            EpisodicDistillationResponse,
+        )
 
-        await coordinator._apply_distillation_result("episodic", episodes)
+        response = EpisodicDistillationResponse(
+            episodes=[
+                EpisodeDistillationItem(
+                    goal_id="goal-1",
+                    description="Completed task",
+                    outcome_summary="Successfully completed",
+                    key_steps=["step1", "step2"],
+                    lessons_learned="Key takeaway",
+                )
+            ],
+            reasoning="Test reasoning",
+        )
+
+        await coordinator._apply_distillation_result("episodic", response)
 
         coordinator._ce.record_episodic_memory.assert_called_once()
 

@@ -543,6 +543,44 @@ class ProtocolsConfig(BaseModel):
     durability: DurabilityProtocolConfig = Field(default_factory=DurabilityProtocolConfig)
 
 
+class DreamingModeConfig(BaseModel):
+    """Per-mode dreaming configuration (RFC-625 §13).
+
+    Args:
+        enabled: Whether this dreaming mode is enabled.
+        max_episodes: Maximum episodes to distill (episodic mode only).
+        min_success_rate: Minimum success rate for procedure extraction (procedure mode only).
+    """
+
+    enabled: bool = True
+    max_episodes: int = Field(
+        default=10, ge=1, le=100, description="Max episodes for episodic mode"
+    )
+    min_success_rate: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="Min success rate for procedure mode"
+    )
+
+
+class DreamingModesConfig(BaseModel):
+    """Dreaming modes configuration container (RFC-625 §13).
+
+    Args:
+        episodic: Episodic memory distillation config.
+        procedure: Procedure/skill extraction config.
+        semantic: Project MEMORY.md update config.
+        profile: User profile extraction config.
+    """
+
+    episodic: DreamingModeConfig = Field(
+        default_factory=lambda: DreamingModeConfig(max_episodes=10)
+    )
+    procedure: DreamingModeConfig = Field(
+        default_factory=lambda: DreamingModeConfig(min_success_rate=0.8)
+    )
+    semantic: DreamingModeConfig = Field(default_factory=DreamingModeConfig)
+    profile: DreamingModeConfig = Field(default_factory=DreamingModeConfig)
+
+
 class AutonomousConfig(BaseModel):
     """Unified self-running configuration (autonomous + autopilot merged).
 
@@ -601,6 +639,35 @@ class AutonomousConfig(BaseModel):
     dreaming_enabled: bool = True
     dreaming_consolidation_interval: int = Field(default=300, ge=10)
     dreaming_health_check_interval: int = Field(default=60, ge=5)
+
+    # RFC-625: AutopilotMonitor settings
+    verify_interval: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        description="Background verification loop interval (seconds, RFC-625)",
+    )
+    """Seconds between DAG health verification cycles."""
+
+    dreaming_interval: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Time-based dreaming trigger interval (seconds, RFC-625)",
+    )
+    """Seconds between time-triggered dreaming mode entries."""
+
+    dreaming_scope: Literal["loop", "workspace", "topic"] = Field(
+        default="workspace",
+        description="Cross-loop dreaming scope for memory distillation (RFC-625)",
+    )
+    """Scope for dreaming: loop (current), workspace (all goals), topic (tagged goals)."""
+
+    dreaming_modes: DreamingModesConfig = Field(
+        default_factory=lambda: DreamingModesConfig(),
+        description="Per-mode dreaming distillation config (RFC-625 §13)",
+    )
+    """Configuration for each dreaming distillation mode."""
 
     # === Scheduler ===
     scheduler_enabled: bool = True

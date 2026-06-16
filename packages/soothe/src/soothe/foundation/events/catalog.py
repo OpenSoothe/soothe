@@ -55,6 +55,7 @@ from .constants import (
     AUTOPILOT_GOAL_SUSPENDED,
     AUTOPILOT_GOAL_VALIDATED,
     # ... more imports below
+    AUTOPILOT_MODE_SWITCHED,
     AUTOPILOT_RELATIONSHIP_DETECTED,
     AUTOPILOT_SEND_BACK,
     # System - Autopilot
@@ -69,11 +70,12 @@ from .constants import (
     DAEMON_HEARTBEAT,
     GOAL_BATCH_STARTED,
     GOAL_COMPLETED,
-    # Cognition - Goal
     GOAL_CREATED,
+    GOAL_DECOMPOSED,
     GOAL_DEFERRED,
     GOAL_DIRECTIVES_APPLIED,
     GOAL_FAILED,
+    GOAL_REMOVED,
     GOAL_REPORT,
     ITERATION_COMPLETED,
     # Lifecycle - Iteration
@@ -373,6 +375,30 @@ class GoalFailedEvent(ProtocolEvent):
     retry_count: int = 0
 
 
+class GoalRemovedEvent(ProtocolEvent):
+    """Goal removed from DAG (RFC-625).
+
+    Emitted when a goal is removed from the ContextEngine DAG,
+    typically during cleanup or restructuring operations.
+    """
+
+    type: Literal["soothe.cognition.goal.removed"] = "soothe.cognition.goal.removed"
+    goal_id: str = ""
+    reason: str = ""
+
+
+class GoalDecomposedEvent(ProtocolEvent):
+    """Goal decomposed into sub-goals (RFC-625).
+
+    Emitted when a complex goal is decomposed into multiple sub-goals
+    by the AutopilotMonitor or DAG verification process.
+    """
+
+    type: Literal["soothe.cognition.goal.decomposed"] = "soothe.cognition.goal.decomposed"
+    parent_goal_id: str = ""
+    child_goal_ids: list[str] = []  # noqa: RUF012
+
+
 class GoalBatchStartedEvent(ProtocolEvent):
     type: Literal["soothe.cognition.goal.batch.started"] = "soothe.cognition.goal.batch.started"
     goal_ids: list[str] = []  # noqa: RUF012
@@ -402,6 +428,20 @@ class GoalDeferredEvent(ProtocolEvent):
     goal_id: str = ""
     reason: str = ""
     plan_preserved: bool = False
+
+
+class AutopilotModeSwitchedEvent(ProtocolEvent):
+    """Autopilot mode switched (RFC-625).
+
+    Emitted when autopilot mode is toggled on/off for a loop.
+    Used by TUI and other subscribers to update their state.
+    """
+
+    type: Literal["soothe.cognition.autopilot.mode_switched"] = (
+        "soothe.cognition.autopilot.mode_switched"
+    )
+    loop_id: str = ""
+    enabled: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -764,6 +804,17 @@ _reg(
     summary_template="Directives applied: {directives_count} changes",
 )
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
+_reg(GOAL_REMOVED, GoalRemovedEvent, summary_template="Goal {goal_id} removed: {reason}")
+_reg(
+    GOAL_DECOMPOSED,
+    GoalDecomposedEvent,
+    summary_template="Goal {parent_goal_id} decomposed into {len(child_goal_ids)} sub-goals",
+)
+_reg(
+    AUTOPILOT_MODE_SWITCHED,
+    AutopilotModeSwitchedEvent,
+    summary_template="Autopilot mode {'enabled' if enabled else 'disabled'} for loop {loop_id}",
+)
 
 # -- Autopilot (RFC-204) -------------------------------------------------
 

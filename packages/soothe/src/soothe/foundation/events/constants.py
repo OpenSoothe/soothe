@@ -77,10 +77,15 @@ AUTOPILOT_CHECKPOINT_SAVED = "soothe.internal.autopilot.checkpoint.saved"
 GOAL_CREATED = "soothe.cognition.goal.created"
 GOAL_COMPLETED = "soothe.cognition.goal.completed"
 GOAL_FAILED = "soothe.cognition.goal.failed"
+GOAL_REMOVED = "soothe.cognition.goal.removed"
+GOAL_DECOMPOSED = "soothe.cognition.goal.decomposed"
 GOAL_BATCH_STARTED = "soothe.cognition.goal.batch.started"
 GOAL_REPORT = "soothe.cognition.goal.reported"
 GOAL_DIRECTIVES_APPLIED = "soothe.cognition.goal.directives.applied"
 GOAL_DEFERRED = "soothe.cognition.goal.deferred"
+
+# Autopilot mode switching
+AUTOPILOT_MODE_SWITCHED = "soothe.cognition.autopilot.mode_switched"
 
 # Plan cognition (client UX)
 PLAN_CREATED = "soothe.cognition.plan.created"

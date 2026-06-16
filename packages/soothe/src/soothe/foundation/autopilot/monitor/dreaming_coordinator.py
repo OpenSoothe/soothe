@@ -9,6 +9,8 @@ Coordinates 4 distillation modes:
 Triggered by:
 1. DAG completion (all goals terminal)
 2. Timer interval (configurable)
+
+Uses DreamingDistillationReasoner for structured LLM calls.
 """
 
 from __future__ import annotations
@@ -16,11 +18,17 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
+from soothe.foundation.autopilot.monitor.dreaming_reasoner import (
+    DreamingDistillationReasoner,
+    EpisodicDistillationContext,
+    ProcedureDistillationContext,
+    ProfileDistillationContext,
+    SemanticDistillationContext,
+)
 from soothe.foundation.autopilot.monitor.models import (
     DreamingContext,
     DreamingMode,
     DreamingScope,
-    EpisodeSpec,
 )
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import EpisodeSummary
@@ -39,6 +47,14 @@ class DreamingCoordinator:
 
     Orchestrates episodic, procedure, semantic, and profile distillation
     using LLM reasoning to extract structured knowledge from goal execution.
+
+    Args:
+        ce: ContextEngine instance for goal access.
+        config: SootheConfig for LLM model access.
+        bus: Optional InternalEventBus for events.
+
+    Attributes:
+        _reasoner: DreamingDistillationReasoner for LLM calls.
     """
 
     def __init__(
@@ -58,7 +74,7 @@ class DreamingCoordinator:
         self._config = config
         self._bus = bus
         self._dreaming_state: DreamingState = "idle"
-        # TODO: Initialize DreamingDistillationReasoner
+        self._reasoner = DreamingDistillationReasoner(config)
 
     async def enter_dreaming_mode(
         self,
@@ -151,13 +167,56 @@ class DreamingCoordinator:
         Returns:
             Distillation result for the mode
         """
-        # TODO: LLM integration per RFC-625 spec
         logger.info(
             "Running %s distillation on %d goals",
             mode,
             len(context.goals),
         )
-        return None
+
+        try:
+            if mode == "episodic":
+                episodic_context = EpisodicDistillationContext.from_context(
+                    context,
+                    max_episodes=self._get_max_episodes(),
+                )
+                return await self._reasoner.distill_episodic(episodic_context)
+
+            elif mode == "procedure":
+                procedure_context = ProcedureDistillationContext.from_context(
+                    context,
+                    min_success_rate=self._get_min_success_rate(),
+                )
+                return await self._reasoner.distill_procedure(procedure_context)
+
+            elif mode == "semantic":
+                semantic_context = SemanticDistillationContext.from_context(context)
+                return await self._reasoner.distill_semantic(semantic_context)
+
+            elif mode == "profile":
+                profile_context = ProfileDistillationContext.from_context(context)
+                return await self._reasoner.distill_profile(profile_context)
+
+            else:
+                logger.warning("Unknown dreaming mode: %s", mode)
+                return None
+
+        except Exception:
+            logger.exception("LLM distillation failed for mode %s", mode)
+            return None
+
+    def _get_max_episodes(self) -> int:
+        """Get max episodes from config."""
+        cfg = getattr(self._config.agent.autonomous, "dreaming_modes", None)
+        if cfg:
+            return getattr(cfg.episodic, "max_episodes", 10)
+        return 10
+
+    def _get_min_success_rate(self) -> float:
+        """Get min success rate for procedure extraction from config."""
+        cfg = getattr(self._config.agent.autonomous, "dreaming_modes", None)
+        if cfg:
+            return getattr(cfg.procedure, "min_success_rate", 0.8)
+        return 0.8
 
     async def _apply_distillation_result(self, mode: DreamingMode, result: Any) -> None:
         """Apply distillation result to appropriate store.
@@ -166,33 +225,46 @@ class DreamingCoordinator:
             mode: Distillation mode
             result: Structured result from distillation
         """
-        if mode == "episodic" and result:
+        if result is None:
+            return
+
+        if mode == "episodic":
             # Store episodes in CE episodic memory
-            if isinstance(result, list):
-                episodes = [
+            episodes = []
+            for ep in result.episodes:
+                episodes.append(
                     EpisodeSummary(
                         goal_id=ep.goal_id,
                         description=ep.description,
                         outcome_summary=ep.outcome_summary,
-                        key_steps=ep.key_steps,
+                        key_steps=list(ep.key_steps),
                         lessons_learned=ep.lessons_learned,
                     )
-                    for ep in result
-                    if isinstance(ep, EpisodeSpec)
-                ]
+                )
+            if episodes:
                 await self._ce.record_episodic_memory(episodes)
+                logger.info("Stored %d episodes in episodic memory", len(episodes))
 
-        elif mode == "procedure" and result:
+        elif mode == "procedure":
             # TODO: Create Skill definitions
             logger.info(
-                "Procedure distillation result: %s procedures",
-                len(result) if isinstance(result, list) else 0,
+                "Procedure distillation extracted %s procedures: %s",
+                len(result.procedures),
+                [p.name for p in result.procedures],
             )
 
-        elif mode == "semantic" and result:
+        elif mode == "semantic":
             # TODO: Update MEMORY.md
-            logger.info("Semantic distillation result: %s", result)
+            logger.info(
+                "Semantic distillation: %s additions, %s modifications",
+                len(result.additions),
+                len(result.modifications),
+            )
 
-        elif mode == "profile" and result:
+        elif mode == "profile":
             # TODO: Update user profile store
-            logger.info("Profile distillation result: %s", result)
+            logger.info(
+                "Profile distillation: style=%s, expertise=%s",
+                result.communication_style,
+                result.expertise_level,
+            )

@@ -12,6 +12,9 @@
 - Earlier RFC-222 §"Loop Pool Management", §"Lineage-Aware Loop Assignment", §"File Lock Conflict Resolution" — replaced by the design herein.
 - RFC-200 §"Pull-Based Architecture" / §"StrangeLoop ↔ GoalEngine Integration": the inverted control flow ("StrangeLoop pulls from GoalEngine, GoalEngine never invokes StrangeLoop") is replaced by **autopilot push**: daemon's `AutopilotService` dispatches goals to StrangeLoop workers via the job contract. StrangeLoop never sees `GoalEngine`. RFC-200's backoff reasoning, evidence schema, and goal-directives sections remain authoritative.
 
+**Superseded by (in part)**:
+- RFC-625 (AutopilotMonitor and ContextEngine Unification) — deletes `GoalEngine` entirely (~1821 lines). All goal/step/ledger state consolidated into `ContextEngine`; autopilot scheduling migrated to `AutopilotMonitor`. This RFC's `GoalEngine` references are historical only.
+
 ---
 
 ## Abstract
