@@ -300,7 +300,7 @@ def test_status_line_still_excludes_nested_task_tools() -> None:
     assert "Glob" not in suffix
 
 
-def test_task_branch_shows_latest_five_child_tools_above_running() -> None:
+def test_task_branch_shows_latest_three_child_tools_above_running() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-child-preview")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -317,30 +317,30 @@ def test_task_branch_shows_latest_five_child_tools_above_running() -> None:
         )
     card.set_running()
     text = _plain(card._step_task_activity_content())
-    assert "Grep(p2)" in text
-    assert "Grep(p3)" in text
     assert "Grep(p4)" in text
     assert "Grep(p5)" in text
     assert "Grep(p6)" in text
     assert "Grep(p0)" not in text
     assert "Grep(p1)" not in text
+    assert "Grep(p2)" not in text
+    assert "Grep(p3)" not in text
     assert text.index("Grep(p6)") < text.index("Running...")
 
 
-def test_step_first_level_shows_latest_five_main_tools() -> None:
+def test_step_first_level_shows_latest_three_main_tools() -> None:
     card = CognitionStepMessage("ABC-01", "Scan only", id="stp-main-preview")
     for i in range(7):
         card.add_tool_call(f"ABC_01:s:grep:{i}", "grep", {"pattern": f"m{i}"})
     assert card._has_task_activity_body()
     text = _plain(card._step_task_activity_content())
     assert not text.startswith("\n")
-    assert "Grep(m2)" in text
-    assert "Grep(m3)" in text
     assert "Grep(m4)" in text
     assert "Grep(m5)" in text
     assert "Grep(m6)" in text
     assert "Grep(m0)" not in text
     assert "Grep(m1)" not in text
+    assert "Grep(m2)" not in text
+    assert "Grep(m3)" not in text
 
 
 def test_orphan_subgraph_tool_rows_still_render_on_step_card() -> None:
