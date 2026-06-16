@@ -1,32 +1,30 @@
-# Docker Compose for Soothe development and production deployment
+# Docker Compose for Soothe Development
 # RFC-612: Multi-database PostgreSQL architecture
 #
 # Profiles:
 #   - default:    Dev dependencies (soothe-pgvector)
 #   - langfuse:   Langfuse v3 observability stack (optional)
 #   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
-#   - production: Registry soothed daemon (deploy; set secrets in deploy/.env)
 #
 # Usage:
 #   # Dev dependencies only (default):
 #   docker compose up -d
-#   make docker-up
+#   make docker-dev-up
 #
 #   # Dev deps + Langfuse UI/API:
 #   docker compose --profile langfuse up -d
 #
 #   # Dev deps + local daemon (after building image):
 #   docker compose --profile daemon up -d
-#   make docker-up-daemon
-#
-#   # Production stack (from repo root, secrets in deploy/.env):
-#   docker compose --env-file deploy/.env --profile production up -d
+#   make docker-daemon-up
 #
 #   # Build local daemon image first:
 #   make docker-daemon-build
 #
+# Production deployment: See deploy/docker-compose.yml and deploy/README.md
+#
 # Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) requires --profile langfuse.
-# UI (browser): http://localhost:3300 — deploy/config.dev.yml uses http://langfuse-web:3000 for the daemon container.
+# UI (browser): http://localhost:3300 — config/config.docker-dev.yml uses http://langfuse-web:3000 for the daemon container.
 # Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector.
 # Internal Langfuse backends use langfuse-internal (no host routes). langfuse-web also joins
 # langfuse-edge so Docker can publish port 3300 to the host.
@@ -35,19 +33,14 @@
 # Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
 # Fresh Langfuse DB/volumes: docker compose --profile langfuse down -v
 #
-# Environment variables (set in deploy/.env for daemon/production profiles):
-#   POSTGRES_PASSWORD=...            # PostgreSQL password
-#   POSTGRES_PORT=5432               # Production host port (default dev: 6432)
-#   POSTGRES_BIND_IP=127.0.0.1       # Production bind address (default dev: 0.0.0.0)
-#   LANGFUSE_WEB_PORT=3300           # Langfuse UI host port (--profile langfuse)
-#   LANGFUSE_WEB_BIND_IP=127.0.0.1   # Langfuse UI bind address (default: all interfaces)
+# Environment variables (set in deploy/.env for daemon profile):
+#   POSTGRES_PASSWORD=...            # PostgreSQL password (dev default: postgres)
 #   DASHSCOPE_API_KEY=...            # DashScope provider key
 #   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
 #   DASHSCOPE_BASE_URL=...           # DashScope API base URL
 #   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
 #   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
-#   SOOTHE_CONFIG_PATH=./deploy/config.dev.yml   # Dev daemon config (default)
-#   SOOTHE_CONFIG_PATH=./deploy/config.prod.yml  # Production daemon config
+#   SOOTHE_CONFIG_PATH=./config/config.docker-dev.yml   # Dev daemon config (default)
 
 services:
   # ===========================================================================
@@ -279,14 +272,13 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-SootheLangfuseLocalDev1}
 
   # ===========================================================================
-  # Soothe Daemon (dev: daemon profile | deploy: production profile)
+  # Soothe Daemon (dev only - daemon profile)
   # ===========================================================================
 
   soothed:
     profiles:
       - daemon
-      - production
-    image: ${SOOTHE_IMAGE:-registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:${SOOTHE_VERSION:-0.6.4}}
+    image: ${SOOTHE_IMAGE:-soothed:local-slim}
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
@@ -331,7 +323,7 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - soothe_daemon_data:/var/lib/soothe
-      - ${SOOTHE_CONFIG_PATH:-./deploy/config.dev.yml}:/app/config.yml:ro
+      - ${SOOTHE_CONFIG_PATH:-./config/config.docker-dev.yml}:/app/config.yml:ro
       - ./deploy/logs:/var/lib/soothe/logs
       # RFC-621: Workspace host convention — mount host workspace root.
       - ${SOOTHE_WORKSPACE_HOST_ROOT:-${SOOTHE_HOST_WORKSPACE:-/Users/chenxm/Workspace}}:/var/lib/soothe/workspaces
