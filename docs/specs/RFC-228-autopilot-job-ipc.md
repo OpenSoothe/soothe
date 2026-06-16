@@ -7,7 +7,7 @@
 **Created**: 2026-06-04
 **Updated**: 2026-06-04
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
-**Related**: RFC-625 (Autopilot Monitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
+**Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)
 
 ## Abstract
 

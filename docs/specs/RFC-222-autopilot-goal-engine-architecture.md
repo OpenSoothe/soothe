@@ -14,7 +14,7 @@
 
 **Superseded by (in part)**:
 - RFC-625 (AutopilotMonitor and ContextEngine Unification) — deletes `GoalEngine` entirely (~1821 lines). All goal/step/ledger state consolidated into `ContextEngine`; autopilot scheduling migrated to `AutopilotMonitor`. This RFC's `GoalEngine` references are historical only.
-- RFC-626 (Entity Model and State Management Consolidation) — consolidates all entity models under ContextEngine, eliminates `LoopState`, unifies ledger management. Job abstraction refined to operate directly on CE GoalNode entities without intermediate state containers.
+- RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination) — consolidates all entity models under ContextEngine, eliminates `LoopState`, unifies ledger management. Job abstraction refined to operate directly on CE GoalNode entities without intermediate state containers.
 
 ---
 
