@@ -5,6 +5,11 @@ from .checkpoint import (
     StrangeLoopCheckpoint,
     WorkingMemoryState,
 )
+from .execution_checkpoint import (
+    ExecutionCheckpoint,
+    GoalIndexEntry,
+    WaveMetrics,
+)
 from .schemas import (
     AgentDecision,
     EvidenceEntry,
@@ -29,7 +34,9 @@ GoalExecutionRecord.model_rebuild(
 __all__ = [
     "AgentDecision",
     "EvidenceEntry",
+    "ExecutionCheckpoint",
     "GoalExecutionRecord",
+    "GoalIndexEntry",
     "LoopState",
     "LoopWorkingMemory",
     "PlanResult",
@@ -37,5 +44,6 @@ __all__ = [
     "StrangeLoopStateManager",
     "StepAction",
     "StepResult",
+    "WaveMetrics",
     "WorkingMemoryState",
 ]

@@ -33,6 +33,26 @@ StepStatus = Literal["pending", "completed", "failed", "skipped"]
 MAX_GOAL_DEPTH = 5
 
 
+# ── Evidence ledger ───────────────────────────────────────────────────────
+
+
+class EvidenceEntry(BaseModel):
+    """Evidence row for plan validation (RFC-220).
+
+    Reused from loop/state/schemas.py for GoalNode.evidence_ledger field
+    in RFC-624 Phase 4 Step 4 consolidation.
+
+    Attributes:
+        evidence_id: Stable id for the evidence ledger.
+        summary: Compact summary for prompts and validation.
+        kind: Provenance classification.
+    """
+
+    evidence_id: str
+    summary: str = ""
+    kind: Literal["tool", "bootstrap", "ledger"] = "bootstrap"
+
+
 # ── Execution record ────────────────────────────────────────────────────
 
 
@@ -241,7 +261,8 @@ class GoalNode(BaseModel):
     generating_reasoning: str | None = None
     source: Literal["user", "directive", "file_discovery", "decomposition"] = "user"
 
-    # Execution tracking
+    # Execution tracking (RFC-624 Phase 4 Step 4)
+    iteration_count: int = 0  # Current iteration number for this goal
     total_tokens_used: int = 0
     total_duration_ms: int = 0
     max_iterations: int = 0
@@ -249,6 +270,10 @@ class GoalNode(BaseModel):
     assigned_loop_id: str | None = None
     previous_plan: dict[str, Any] | None = None
     action_history: list[str] = Field(default_factory=list)
+    evidence_ledger: list[EvidenceEntry] = Field(
+        default_factory=list,
+        description="Append-only evidence ids for plan validation (RFC-220).",
+    )
 
     # Retry/backoff (from Goal, RFC-204)
     retry_count: int = 0
