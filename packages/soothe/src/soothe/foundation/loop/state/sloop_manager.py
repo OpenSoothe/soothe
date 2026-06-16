@@ -249,6 +249,7 @@ class StrangeLoopStateManager:
         """Create new loop for thread (RFC-216: loop-scoped).
 
         IG-258 Phase 2: Database schema initialized lazily by writer connection.
+        RFC-626 Phase 3: Initialize with schema_version 5.0 and execution_checkpoint.
 
         Args:
             thread_id: First thread for this loop
@@ -274,14 +275,21 @@ class StrangeLoopStateManager:
             total_tokens_used=0,
             created_at=now,
             updated_at=now,
-            schema_version="3.2",  # RFC-225 enrichment
+            schema_version="5.0",  # RFC-626 Phase 3: execution_checkpoint pattern
+            execution_checkpoint={
+                "loop_id": self.loop_id,
+                "thread_id": thread_id,
+                "iteration": 0,
+                "wave_metrics": {},
+                "status": "idle",
+            },
         )
 
         self._checkpoint = checkpoint
         await self._save_checkpoint_to_db(checkpoint)
 
         logger.info(
-            "Initialized loop %s on thread %s (status: idle)",
+            "Initialized loop %s on thread %s (status: idle, schema: 5.0)",
             self.loop_id,
             thread_id,
         )
@@ -516,11 +524,19 @@ class StrangeLoopStateManager:
         and save, the subprocess preserves it instead of clobbering.
         Also preserves daemon-managed fields: client_workspace, detached_at,
         created_at, schema_version.
+
+        RFC-626 Phase 3: Includes execution_checkpoint field for schema 5.0.
         """
         # Serialize complex structures to JSON strings
         thread_ids_json = json.dumps(checkpoint.thread_ids, ensure_ascii=False)
         working_memory_json = checkpoint.working_memory_state.model_dump_json()
         thread_health_json = checkpoint.thread_health_metrics.model_dump_json()
+        # RFC-626 Phase 3: Serialize execution_checkpoint
+        execution_checkpoint_json = (
+            json.dumps(checkpoint.execution_checkpoint, ensure_ascii=False)
+            if checkpoint.execution_checkpoint
+            else None
+        )
 
         # UPDATE agentloop_loops — preserves daemon-managed fields and statuses
         conn.execute(
@@ -540,7 +556,8 @@ class StrangeLoopStateManager:
                 total_duration_ms = ?,
                 total_tokens_used = ?,
                 thread_switch_pending = ?,
-                updated_at = ?
+                updated_at = ?,
+                execution_checkpoint = ?
             WHERE loop_id = ?
             """,
             (
@@ -556,6 +573,7 @@ class StrangeLoopStateManager:
                 checkpoint.total_tokens_used,
                 int(checkpoint.thread_switch_pending),
                 checkpoint.updated_at.isoformat(),
+                execution_checkpoint_json,
                 checkpoint.loop_id,
             ),
         )
@@ -571,8 +589,8 @@ class StrangeLoopStateManager:
                  working_memory_state, thread_health_metrics,
                  total_goals_completed, total_thread_switches,
                  total_duration_ms, total_tokens_used, thread_switch_pending,
-                 created_at, updated_at, schema_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 created_at, updated_at, schema_version, execution_checkpoint)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     checkpoint.loop_id,
@@ -590,6 +608,7 @@ class StrangeLoopStateManager:
                     checkpoint.created_at.isoformat(),
                     checkpoint.updated_at.isoformat(),
                     checkpoint.schema_version,
+                    execution_checkpoint_json,
                 ),
             )
 

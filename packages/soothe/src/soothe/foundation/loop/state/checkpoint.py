@@ -1,8 +1,9 @@
-"""StrangeLoop Checkpoint Models (RFC-216, RFC-214).
+"""StrangeLoop Checkpoint Models (RFC-216, RFC-214, RFC-626).
 
 Defines step-level semantic traces for agentic goal execution.
 RFC-216 extends to multi-thread spanning with infinite lifecycle.
 RFC-214 introduces unified message ledger replacing fragmented traces.
+RFC-626 Phase 3: ExecutionCheckpoint pattern with execution-only fields.
 """
 
 from __future__ import annotations
@@ -138,11 +139,15 @@ class GoalExecutionRecord(BaseModel):
 
     The checkpoint goal_history is now a lightweight index. CE DAG is the
     real data store for goal/step/ledger state.
+
+    RFC-626 Phase 3: goal_text, plan_revision_count, goal_completion removed.
+    Use GoalIndexEntry for schema 5.0 checkpoints. GoalExecutionRecord retained
+    for backward compatibility with schema 3.x/4.x.
     """
 
     # Identity (RFC-216: goal_id independent of thread)
     goal_id: str  # "{loop_id}_goal_{seq}"
-    goal_text: str
+    goal_text: str  # DEPRECATED in schema 5.0 — recovered from CE GoalNode
     thread_id: str  # RFC-216: which thread executed this goal
 
     # Execution state
@@ -151,10 +156,10 @@ class GoalExecutionRecord(BaseModel):
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
     # Plan revision tracking (still useful for monitoring)
-    plan_revision_count: int = 0
+    plan_revision_count: int = 0  # DEPRECATED in schema 5.0
 
     # Goal output (kept for checkpoint-level summary)
-    goal_completion: str = ""
+    goal_completion: str = ""  # DEPRECATED in schema 5.0 — recovered from CE GoalNode
 
     # Metrics
     duration_ms: int = 0
@@ -166,7 +171,12 @@ class GoalExecutionRecord(BaseModel):
 
 
 class StrangeLoopCheckpoint(BaseModel):
-    """Complete StrangeLoop state (RFC-216: multi-thread spanning)."""
+    """Complete StrangeLoop state (RFC-216: multi-thread spanning).
+
+    RFC-626 Phase 3: Added execution_checkpoint field for schema 5.0.
+    goal_history is now a lightweight index (GoalIndexEntry pattern).
+    Goal/step/ledger state recovered from CE persistence on restart.
+    """
 
     # Identity (RFC-216: loop_id independent of thread)
     loop_id: str  # UUID
@@ -177,6 +187,8 @@ class StrangeLoopCheckpoint(BaseModel):
     status: Literal["running", "idle", "finalized", "cancelled"]
 
     # Goal execution history (RFC-216: across all threads)
+    # RFC-626 Phase 3: goal_history is now a lightweight index (GoalIndexEntry-like)
+    # Goal content recovered from CE GoalNode on restart
     goal_history: list[GoalExecutionRecord] = Field(default_factory=list)
     current_goal_index: int = -1  # -1 if no active goal
 
@@ -205,7 +217,13 @@ class StrangeLoopCheckpoint(BaseModel):
     updated_at: datetime
 
     # Metadata (informational only, no migration logic)
-    schema_version: str = "3.4"  # RFC-624 Phase 4 Stage 2: slimmed GoalExecutionRecord
+    schema_version: str = "5.0"  # RFC-626 Phase 3: execution_checkpoint pattern
+
+    # RFC-626 Phase 3: Execution-only checkpoint (optional for backward compat)
+    execution_checkpoint: dict[str, Any] | None = Field(
+        default=None,
+        description="ExecutionCheckpoint fields for schema 5.0 (lazy migration)",
+    )
 
 
 def normalize_checkpoint_data(
@@ -218,6 +236,9 @@ def normalize_checkpoint_data(
     PostgreSQL ``register_loop`` / ``update_loop_metadata`` persist a minimal JSONB
     document for daemon bookkeeping. ``StrangeLoopStateManager.load()`` expects a full
     ``StrangeLoopCheckpoint`` schema.
+
+    RFC-626 Phase 3: Supports schema 5.0 execution_checkpoint field.
+    Lazy migration: fills defaults for missing execution_checkpoint.
     """
     out = dict(data)
     resolved_loop_id = out.get("loop_id") or loop_id
@@ -247,7 +268,20 @@ def normalize_checkpoint_data(
     out.setdefault("total_duration_ms", 0)
     out.setdefault("total_tokens_used", 0)
     out.setdefault("thread_switch_pending", False)
-    out.setdefault("schema_version", "3.4")
+
+    # Schema version handling
+    schema_version = out.get("schema_version", "3.4")
+    out.setdefault("schema_version", schema_version)
+
+    # RFC-626 Phase 3: execution_checkpoint defaults for schema 5.0
+    if schema_version == "5.0" and "execution_checkpoint" not in out:
+        out["execution_checkpoint"] = {
+            "loop_id": resolved_loop_id or "",
+            "thread_id": current_thread_id,
+            "iteration": 0,
+            "wave_metrics": {},
+            "status": "idle",
+        }
 
     status = out.get("status")
     if status not in _SLOOP_CHECKPOINT_STATUSES:
