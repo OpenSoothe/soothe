@@ -2,12 +2,14 @@
 
 **RFC**: 300
 **Title**: Context and Memory Architecture Design
-**Status**: Superseded
-**Superseded By**: RFC-400 (ContextProtocol Architecture), RFC-402 (MemoryProtocol Architecture)
-**Superseded Date**: 2026-04-17
-**Reason**: RFC-300 was the original combined specification. RFC-400 and RFC-402 provide more detailed, separated specifications for ContextProtocol and MemoryProtocol respectively. This RFC is retained for historical context but new implementations should reference RFC-400/402.
+**Status**: Deprecated
+**Superseded By**: RFC-302 (ContextProtocol Architecture), RFC-303 (MemoryProtocol Architecture)
+**Superseded Date**: 2026-06-16
+**Deprecation Reason**: Combined spec split into separate ContextProtocol and MemoryProtocol specifications.
+**Archive Date**: 2026-09-14
+**Kind**: Architecture Design
 **Created**: 2026-03-14
-**Updated**: 2026-03-27
+**Updated**: 2026-06-16
 **Related**: RFC-000, RFC-001, RFC-500
 
 ## Abstract

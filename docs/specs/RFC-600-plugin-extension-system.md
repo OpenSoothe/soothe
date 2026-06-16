@@ -6,8 +6,8 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-23
 **Updated**: 2026-03-27
-**Dependencies**: RFC-000, RFC-001, RFC-200, RFC-400
-**Related**: RFC-400
+**Dependencies**: RFC-000, RFC-001, RFC-200, RFC-302
+**Related**: RFC-302
 
 ## Abstract
 

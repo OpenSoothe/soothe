@@ -195,7 +195,7 @@ See: [Production Setup](production-setup.md#systemd-deployment)
 ### Scenario 1: Development Team (10 users)
 
 **Setup**:
-- Single PostgreSQL instance (4 databases per RFC-612)
+- Single PostgreSQL instance (4 databases per RFC-802)
 - Single Soothe daemon
 - Unix Socket transport
 - SQLite fallback for testing

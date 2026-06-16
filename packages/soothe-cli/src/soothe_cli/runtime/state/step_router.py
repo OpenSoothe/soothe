@@ -17,7 +17,7 @@ from typing import Any, TypeAlias
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     is_inner_subgraph_task_tool_id,
-    normalize_step_task_tool_call_id,
+    normalize_main_task_delegation_id,
     parse_unified_tool_call_id,
     prune_bound_pending_namespaces,
     register_task_spawn_for_step,
@@ -219,14 +219,12 @@ class StepTaskRouter:
         if not tcid or is_inner_subgraph_task_tool_id(tcid):
             return False
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
-        if type_code == "t":
-            return False
-        sid = parsed_sid if (parsed_sid and type_code == "s") else ""
+        sid = parsed_sid if (parsed_sid and type_code in ("s", "t")) else ""
         if not sid:
             sid = str(step_id).strip()
         if not sid:
             return False
-        normalized_tcid = normalize_step_task_tool_call_id(sid, tcid)
+        normalized_tcid = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
         spawn_key = (sid, normalized_tcid)
         if spawn_key in self._spawn_recorded:
             return False

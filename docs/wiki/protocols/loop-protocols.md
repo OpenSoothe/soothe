@@ -528,7 +528,7 @@ Different abstraction levels:
 - **RFC-203**: StrangeLoop State Memory
 - **RFC-604**: Reason Phase Robustness
 - **RFC-220**: LangGraph Agent Loop Orchestrator
-- **RFC-617**: Operation Security Protocol
+- **RFC-901**: Operation Security Protocol
 
 ## Related Documentation
 

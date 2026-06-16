@@ -4,7 +4,7 @@
 
 ## Authentication Architecture
 
-As of RFC-400 and RFC-402, Soothe follows a "security by delegation" model:
+As of RFC-302 and RFC-303, Soothe follows a "security by delegation" model:
 
 - **No built-in authentication**: Soothe daemon does not validate API keys, JWT tokens, or user credentials
 - **No authorization layer**: All clients that can reach the daemon are trusted

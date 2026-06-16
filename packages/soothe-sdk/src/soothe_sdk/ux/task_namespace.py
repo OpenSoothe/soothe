@@ -181,6 +181,66 @@ def is_inner_subgraph_task_tool_id(tool_call_id: str) -> bool:
     return (tool_info or "").split(":")[0] == "task"
 
 
+def _task_index_from_task_tool_call_id(tool_call_id: str) -> int | None:
+    """Extract delegation index from a main-graph ``task`` tool_call_id, if present."""
+    tid = str(tool_call_id).strip()
+    if not tid or is_inner_subgraph_task_tool_id(tid):
+        return None
+    parsed_sid, type_code, task_idx, tool_info = parse_unified_tool_call_id(tid)
+    if type_code == "s":
+        head = (tool_info or "").split(":")[0]
+        if head != "task":
+            return None
+        tail = (tool_info or "").split(":")[-1]
+        return int(tail) if tail.isdigit() else 0
+    if type_code == "t":
+        head = (tool_info or "").split(":")[0]
+        if head == "task":
+            tail = (tool_info or "").split(":")[-1]
+            if tail.isdigit():
+                return int(tail)
+        if task_idx is not None:
+            return task_idx
+    short = _shorten_tool_call_id(tid)
+    if short.startswith("task"):
+        tail = short.split(":")[-1]
+        return int(tail) if tail.isdigit() else 0
+    _ = parsed_sid
+    return None
+
+
+def normalize_main_task_delegation_id(
+    step_id: str,
+    tool_call_id: str,
+    *,
+    tool_name: str = "",
+) -> str:
+    """Normalize a main-graph ``task`` delegation to ``{step_wire}:s:task:{n}``.
+
+    Providers sometimes stamp step-level delegations with task-level ``t{n}:…`` prefixes
+    (opaque call ids). Remap those onto canonical step-level ids so spawn registration
+    and subgraph ``t{n}:…`` inner tools stay aligned.
+    """
+    sid = str(step_id).strip()
+    tcid = str(tool_call_id).strip()
+    if not sid or not tcid:
+        return tcid
+    if is_inner_subgraph_task_tool_id(tcid):
+        return tcid
+    name = str(tool_name or "").strip()
+    idx = _task_index_from_task_tool_call_id(tcid)
+    is_task = name == "task"
+    if not is_task:
+        _, type_code, _, tool_info = parse_unified_tool_call_id(tcid)
+        is_task = type_code in ("s", "t") and (
+            (tool_info or "").split(":")[0] == "task"
+            or _shorten_tool_call_id(tcid).startswith("task")
+        )
+    if is_task and idx is not None:
+        return _format_unified_tool_call_id(sid, "s", f"task:{idx}")
+    return normalize_step_task_tool_call_id(sid, tcid)
+
+
 def normalize_step_task_tool_call_id(step_id: str, tool_call_id: str) -> str:
     """Return step-scoped unified id for a main-graph ``task`` delegation.
 
@@ -303,15 +363,21 @@ def resolve_task_scope_for_subgraph_tool(
     if not tcid:
         return None
     step_id, type_code, task_idx, _ = parse_unified_tool_call_id(tcid)
-    if type_code == "t" and step_id and task_idx is not None and spawns_by_task_id:
-        parent_id = step_level_parent_task_call_id(step_id, task_idx)
-        scope = spawns_by_task_id.get(parent_id)
-        if scope is not None:
-            return scope
-        for scope in spawns_by_task_id.values():
-            sid = task_scope_step_id(scope)
-            if sid == step_id and task_scope_task_idx(scope, sid) == task_idx:
+    if type_code == "t" and step_id and task_idx is not None:
+        if spawns_by_task_id:
+            parent_id = step_level_parent_task_call_id(step_id, task_idx)
+            scope = spawns_by_task_id.get(parent_id)
+            if scope is not None:
                 return scope
+            for scope in spawns_by_task_id.values():
+                sid = task_scope_step_id(scope)
+                if sid == step_id and task_scope_task_idx(scope, sid) == task_idx:
+                    return scope
+            if any(task_scope_step_id(s) == step_id for s in spawns_by_task_id.values()):
+                return None
+        if task_idx == 0:
+            return spawns_by_step.get(step_id)
+        return None
     if step_id:
         return spawns_by_step.get(step_id)
     return None
@@ -464,6 +530,7 @@ __all__ = [
     "is_inner_subgraph_task_tool_id",
     "is_step_level_task_tool_id",
     "is_unified_tool_call_id",
+    "normalize_main_task_delegation_id",
     "normalize_step_task_tool_call_id",
     "normalize_unified_tool_call_id",
     "_shorten_tool_call_id",

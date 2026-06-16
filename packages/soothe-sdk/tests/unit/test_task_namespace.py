@@ -6,6 +6,7 @@ from collections import deque
 
 from soothe_sdk.ux.task_namespace import (
     _shorten_tool_call_id,
+    normalize_main_task_delegation_id,
     normalize_step_task_tool_call_id,
     normalize_unified_tool_call_id,
     parse_unified_tool_call_id,
@@ -76,6 +77,32 @@ def test_parallel_spawns_bind_via_unified_tool_call_id() -> None:
     assert bindings[("tools:aaa",)] == ("YKF_01:s:task:0", "explore", "YKF-01")
     assert bindings[("tools:bbb",)] == ("YKF_02:s:task:0", "explore", "YKF-02")
     assert bindings[("tools:ccc",)] == ("YKF_03:s:task:0", "explore", "YKF-03")
+
+
+def test_normalize_main_task_delegation_id_remaps_task_level_opaque_prefix() -> None:
+    """Step-level task delegations stamped as ``t{n}:tool-…`` normalize to ``s:task:{n}``."""
+    assert (
+        normalize_main_task_delegation_id("ZCH-01", "ZCH_01:t0:tool-abc123", tool_name="task")
+        == "ZCH_01:s:task:0"
+    )
+    assert (
+        normalize_main_task_delegation_id("WAV-01", "WAV_01:t1:tool-xyz", tool_name="task")
+        == "WAV_01:s:task:1"
+    )
+
+
+def test_resolve_task_scope_for_subgraph_tool_no_steal_from_spawns_by_step() -> None:
+    """``t1`` tools must not fall back to ``spawns_by_step`` (often ``task:0``)."""
+    spawns_by_step = {"WAV-01": ("WAV_01:s:task:0", "explore", "WAV-01")}
+    spawns_by_task = {
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+    }
+    scope = resolve_task_scope_for_subgraph_tool(
+        "WAV_01:t1:grep:0",
+        spawns_by_step,
+        spawns_by_task,
+    )
+    assert scope is None
 
 
 def test_normalize_step_task_tool_call_id_embeds_step() -> None:

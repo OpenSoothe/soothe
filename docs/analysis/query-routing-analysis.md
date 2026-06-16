@@ -1080,7 +1080,7 @@ Per-loop queues ensure:
 | RFC-200 | Agentic Goal Execution |
 | RFC-220 | Loop Graph topology |
 | RFC-399 | Descriptive Progress Levels |
-| RFC-400 | Daemon Communication Protocol |
+| RFC-302 | Daemon Communication Protocol |
 | RFC-221 | Loop Runner Architecture |
 | RFC-604 | Plan Phase Robustness (StatusAssessment) |
 

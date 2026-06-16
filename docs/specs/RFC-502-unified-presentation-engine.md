@@ -49,9 +49,9 @@ This RFC defines:
 
 Non-goals:
 
-- transport protocol changes (RFC-400)
+- transport protocol changes (RFC-302)
 - plan/goal execution semantics (RFC-200/200)
-- event naming schema changes (RFC-400)
+- event naming schema changes (RFC-302)
 
 ---
 
@@ -135,7 +135,7 @@ No daemon protocol changes are required.
 
 ## 9. References
 
-- RFC-400: Event Processing & Filtering
+- RFC-302: Event Processing & Filtering
 - RFC-501: Display & Verbosity
 - RFC-500: CLI/TUI Architecture
 

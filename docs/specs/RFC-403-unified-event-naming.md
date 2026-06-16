@@ -35,10 +35,10 @@ This RFC defines:
 
 This RFC does **not** define:
 
-* Event processing architecture (see RFC-400)
-* Event registry implementation (see RFC-400)
+* Event processing architecture (see RFC-302)
+* Event registry implementation (see RFC-302)
 * VerbosityTier classification (see RFC-501)
-* Transport or filtering mechanisms (see RFC-400, RFC-400)
+* Transport or filtering mechanisms (see RFC-302, RFC-302)
 * Specific event type definitions (see event-catalog.md)
 
 ---
@@ -345,7 +345,7 @@ Optional community plugin event modules (see `community/src/soothe_plugins/`)
 #### Phase 4: Documentation & Verification (1 day)
 
 **Tasks**:
-1. Update RFC-400 references to RFC-402
+1. Update RFC-302 references to RFC-303
 2. Update CLAUDE.md event naming examples
 3. Update event-catalog.md with new naming
 4. Run full verification suite: `./scripts/verify_finally.sh`
@@ -482,7 +482,7 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 
 ### 9.5 Phase 4: Documentation & Verification
 
-- [ ] Update RFC-400 references
+- [ ] Update RFC-302 references
 - [ ] Update CLAUDE.md
 - [ ] Update event-catalog.md
 - [ ] Run `./scripts/verify_finally.sh`
@@ -514,7 +514,7 @@ Migration is successful when:
 * **RFC-401 (Event Processing)**: Architecture and registry implementation; RFC-403 defines naming semantics
 * **RFC-501 (Display & Verbosity)**: VerbosityTier classification for events
 * **RFC-600 (Plugin Extension System)**: Plugin lifecycle managed by core
-* **event-catalog.md**: Complete event type registry using RFC-402 naming
+* **event-catalog.md**: Complete event type registry using RFC-303 naming
 
 ---
 
@@ -551,4 +551,4 @@ This RFC establishes unified semantics for Soothe's event naming:
 
 * Design draft: `docs/drafts/2026-04-15-event-naming-semantics-unification-design.md`
 * Event catalog: `docs/specs/event-catalog.md`
-* RFC-400: Event Processing & Filtering
+* RFC-302: Event Processing & Filtering

@@ -1,13 +1,14 @@
-# RFC-402: MemoryProtocol Architecture
+# RFC-303: MemoryProtocol Architecture
 
-**RFC**: 402
+**RFC**: 303
 **Title**: MemoryProtocol: Cross-Thread Memory & Context Separation
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-000, RFC-400
-**Related**: RFC-408 (Durability), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
-**Implemented by**: CE's EpisodicSubmodule (RFC-625, RFC-626) — ContextEngine's episodic memory store implements MemoryProtocol API for persistent cross-thread memory
+**Dependencies**: RFC-000, RFC-302
+**Related**: RFC-306 (Durability), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
+**Implemented by**: CE's EpisodicSubmodule (RFC-625, RFC-626)
+**Note**: Moved from 4xx (RFC-303) per RFC-900 reclassification — ContextEngine's episodic memory store implements MemoryProtocol API for persistent cross-thread memory
 
 ---
 
@@ -91,7 +92,7 @@ Memory queryable by semantic relevance:
 
 ### 3. Context vs Memory Separation
 
-**ContextProtocol** (RFC-400):
+**ContextProtocol** (RFC-302):
 - Within-thread knowledge
 - Unbounded accumulation
 - Append-only ledger
@@ -269,7 +270,7 @@ protocols:
 ## References
 
 - RFC-000: System Conceptual Design
-- RFC-400: ContextProtocol Architecture
+- RFC-302: ContextProtocol Architecture
 - RFC-001: Core Modules Architecture (original Module 2)
 
 ---
@@ -277,7 +278,7 @@ protocols:
 ## Changelog
 
 ### 2026-04-17
-- Consolidated RFC-001 Module 2 (MemoryProtocol) with Context vs Memory separation principles from RFC-402
+- Consolidated RFC-001 Module 2 (MemoryProtocol) with Context vs Memory separation principles from RFC-303
 - Defined explicit population vs auto-memorization distinction
 - Unified semantic recall with context integration flow
 - Maintained cross-thread persistence and recall patterns

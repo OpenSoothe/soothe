@@ -2,7 +2,11 @@
 
 **RFC**: 203
 **Title**: StrangeLoop State & Memory Architecture
-**Status**: Draft
+**Status**: Deprecated
+**Superseded By**: RFC-626
+**Superseded Date**: 2026-06-16
+**Deprecation Reason**: LoopState eliminated and consolidated into ExecutionState.
+**Archive Date**: 2026-09-14
 **Kind**: Architecture Design / Impl Interface
 **Created**: 2026-04-17
 **Dependencies**: RFC-201, RFC-100
@@ -72,7 +76,7 @@ class LoopState(BaseModel):
 
 The agentic Plan-Execute loop passes progress to the next Plan call mainly via truncated step outputs. That loses structure and forces redundant exploration. **Loop working memory** provides a small, explicit store of durable facts and pointers that survives iterations, can live entirely in RAM, and **spills to the thread workspace** when content is too large for inline prompts.
 
-**Not a second context ledger** (see RFC-400). This is a **bounded scratchpad** scoped to one agentic goal run, optimized for planner-facing summaries and spill artifacts.
+**Not a second context ledger** (see RFC-302). This is a **bounded scratchpad** scoped to one agentic goal run, optimized for planner-facing summaries and spill artifacts.
 
 ### Design Principles
 
@@ -364,7 +368,7 @@ Layer 2 State Hierarchy:
   ├─ LoopState (iteration-bounded metrics)
   ├─ WorkingMemory (iteration-bounded scratchpad)
   ├─ CheckpointEnvelope (durable persistence)
-  └─ ContextProtocol (unbounded knowledge ledger, separate RFC-400)
+  └─ ContextProtocol (unbounded knowledge ledger, separate RFC-302)
 ```
 
 **Boundaries**:
@@ -410,7 +414,7 @@ agentic:
 - RFC-200: StrangeLoop Plan-Execute Loop Architecture
 - RFC-100: CoreAgent Runtime
 - RFC-207: StrangeLoop Thread Management & Goal Context
-- RFC-400: ContextProtocol (separate unbounded knowledge system)
+- RFC-302: ContextProtocol (separate unbounded knowledge system)
 
 ---
 

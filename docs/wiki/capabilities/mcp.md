@@ -705,7 +705,7 @@ grep -i "mcp.*connected" ~/.soothe/logs/soothe.log
 |-----|-------|--------------|
 | [RFC-412](../../specs/RFC-412-mcp-management.md) | MCP Management | Full specification |
 | [RFC-105](../../specs/RFC-105-progressive-skill-loading.md) | Progressive Skill Loading | Progressive disclosure pattern |
-| [RFC-406](../../specs/RFC-406-policy-protocol-architecture.md) | Policy Protocol | Permission model |
+| [RFC-305](../../specs/RFC-305-policy-protocol-architecture.md) | Policy Protocol | Permission model |
 | [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System | MCP integration |
 
 ---

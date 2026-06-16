@@ -197,7 +197,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### 2026-04
 
-- **2026-04-30**: RFC-617 - OperationSecurityProtocol: Unified Workspace and Tool Operation Security
+- **2026-04-30**: RFC-901 - OperationSecurityProtocol: Unified Workspace and Tool Operation Security
   - Status: Draft
   - Kind: Architecture Design
 
@@ -250,7 +250,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Draft
   - Kind: Implementation Interface Design
 
-- **2026-04-22**: RFC-612 - Persistence Architecture Refactor
+- **2026-04-22**: RFC-802 - Persistence Architecture Refactor
   - Status: Draft
   - Kind: Architecture Design
   - Authors: Platonic Coding Workflow
@@ -270,23 +270,23 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-17**: RFC-400 - ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
+- **2026-04-17**: RFC-302 - ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-17**: RFC-402 - MemoryProtocol: Cross-Thread Memory & Context Separation
+- **2026-04-17**: RFC-303 - MemoryProtocol: Cross-Thread Memory & Context Separation
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-17**: RFC-404 - PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
+- **2026-04-17**: RFC-304 - PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-17**: RFC-406 - PolicyProtocol: Permission Checking & Scope Matching
+- **2026-04-17**: RFC-305 - PolicyProtocol: Permission Checking & Scope Matching
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-04-17**: RFC-408 - DurabilityProtocol: Thread Lifecycle & Metadata Management
+- **2026-04-17**: RFC-306 - DurabilityProtocol: Thread Lifecycle & Metadata Management
   - Status: Draft
   - Kind: Architecture Design
 
@@ -338,7 +338,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 - **2026-04-05**: RFC-601 supersedes RFC-0021
 
-- **2026-04-04**: RFC-602 - SQLite Backend for Persistence, Durability, and Vector Store
+- **2026-04-04**: RFC-801 - SQLite Backend for Persistence, Durability, and Vector Store
   - Status: Draft
   - Kind: Architecture Design + Implementation Interface Design
 
@@ -480,13 +480,13 @@ RFCs are organized into numbered series by category:
 
 ### 4xx - Daemon & Transport
 
-- RFC-400: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
+- RFC-302: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
 - RFC-401: Event Processing & Filtering
-- RFC-402: MemoryProtocol: Cross-Thread Memory & Context Separation
+- RFC-303: MemoryProtocol: Cross-Thread Memory & Context Separation
 - RFC-403: Unified Event Naming Semantics
-- RFC-404: PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
-- RFC-406: PolicyProtocol: Permission Checking & Scope Matching
-- RFC-408: DurabilityProtocol: Thread Lifecycle & Metadata Management
+- RFC-304: PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
+- RFC-305: PolicyProtocol: Permission Checking & Scope Matching
+- RFC-306: DurabilityProtocol: Thread Lifecycle & Metadata Management
 - RFC-411: Event Stream Replay & History Reconstruction
 - RFC-412: MCP Management
 - RFC-413: Server-Owned Display Card Ledger
@@ -507,18 +507,18 @@ RFCs are organized into numbered series by category:
 
 - RFC-600: Plugin Extension Specification
 - RFC-601: Built-in Plugin Agents
-- RFC-602: SQLite Backend for Persistence, Durability, and Vector Store
+- RFC-801: SQLite Backend for Persistence, Durability, and Vector Store
 - RFC-603: Reasoning Quality & Progressive Actions
 - RFC-604: Plan Phase Robustness (Three-Layer Defense)
 - RFC-605: Explore Subagent and Parallel Spawning
 - RFC-606: DeepAgents CLI TUI Migration
 - RFC-607: Progressive Display Refinements Post-Migration
 - RFC-610: SDK Module Structure Refactoring
-- RFC-612: Persistence Architecture Refactor
+- RFC-802: Persistence Architecture Refactor
 - RFC-613: Explore Agent — LLM-Orchestrated Iterative Search
 - RFC-614: Unified Daemon → Client Streaming Messaging Framework
 - RFC-616: Scenario-Driven Goal Completion Synthesis
-- RFC-617: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
+- RFC-901: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
 - RFC-618: Plan Subagent — Structured Planning with Explore Delegation
 - RFC-619: Tacitus Subagent
 - RFC-620: Unified Channel Architecture for Extensible Communication Endpoints

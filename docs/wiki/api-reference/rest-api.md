@@ -832,4 +832,4 @@ Interactive API documentation is available:
 - **[Autopilot Documentation](../autonomous-mode.md)** - Autopilot system overview
 - **[Daemon Management](../daemon-management.md)** - Daemon lifecycle management
 - **[RFC-222 Autopilot](../../specs/RFC-222-autopilot-engine.md)** - Autopilot specification
-- **[RFC-400 REST](../../specs/RFC-400-daemon-communication.md)** - REST protocol specification
+- **[RFC-302 REST](../../specs/RFC-302-daemon-communication.md)** - REST protocol specification

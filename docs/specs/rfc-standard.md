@@ -54,11 +54,49 @@ This project recognizes three kinds of RFC specifications:
 
 ## RFC Lifecycle
 
-1. **Draft**: Initial design work in `docs/drafts/`
-2. **Proposed**: RFC submitted for review
-3. **Accepted**: RFC approved for implementation
-4. **Implemented**: RFC fully implemented in code
-5. **Deprecated**: RFC superseded by newer design
+RFCs progress through defined states. Each state transition has specific criteria
+and affects how the RFC is displayed in the index.
+
+### Lifecycle States
+
+```
+Draft → Proposed → Accepted → Implemented → Deprecated → Archived
+                     ↓
+                   Rejected
+```
+
+**Status Definitions:**
+
+| Status | Definition | Duration |
+|--------|-------------|----------|
+| **Draft** | Initial design, not ready for implementation review | Indefinite |
+| **Proposed** | Ready for implementation review, seeking approval | ≤30 days |
+| **Accepted** | Approved for implementation, not yet started | ≤90 days |
+| **Implemented** | Fully implemented in codebase | Until superseded |
+| **Deprecated** | Superseded by newer RFC, retained for historical reference | Minimum 90 days |
+| **Archived** | Removed from active index, moved to `docs/specs/archive/` | Permanent |
+| **Rejected** | Not approved for implementation | Permanent |
+
+### Deprecation Process
+
+1. **Supersession Notice**: Add "Superseded By: RFC-XXX" to deprecated RFC header
+2. **Dependency Update**: Update all RFCs that reference the deprecated RFC
+3. **Index Update**: Move from active to deprecated section in `rfc-index.md`
+4. **Archive Timeline**: After 90 days in Deprecated status, move to `docs/specs/archive/`
+
+### RFC Header Template for Deprecated RFCs
+
+```markdown
+**RFC**: XXX
+**Title**: [Title]
+**Status**: Deprecated
+**Superseded By**: RFC-YYY
+**Superseded Date**: YYYY-MM-DD
+**Deprecation Reason**: [Brief reason]
+**Archive Date**: [Superseded Date + 90 days]
+**Kind**: [Kind]
+**Created**: YYYY-MM-DD
+```
 
 ## RFC Numbering
 

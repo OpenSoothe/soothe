@@ -36,7 +36,7 @@ This RFC does **not** define:
 
 - Plugin extension system (see RFC-600)
 - Protocol interfaces (see RFC-301)
-- Event processing (see RFC-400)
+- Event processing (see RFC-302)
 - Tool interfaces (see RFC-101)
 - Skillify, Weaver, and other optional community agents (see community docs)
 

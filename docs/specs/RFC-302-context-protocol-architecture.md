@@ -1,12 +1,13 @@
-# RFC-400: ContextProtocol Architecture
+# RFC-302: ContextProtocol Architecture
 
-**RFC**: 400
+**RFC**: 302
 **Title**: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Dependencies**: RFC-000, RFC-001
-**Related**: RFC-402 (Memory), RFC-408 (Durability)
+**Related**: RFC-303 (Memory), RFC-306 (Durability)
+**Note**: Moved from 4xx (RFC-302) per RFC-900 reclassification
 
 ---
 
@@ -408,7 +409,7 @@ protocols:
 - ✅ ContextProjection bounded view (defined in this RFC)
 - ⚠️ KeywordContext implementation (not yet implemented - critical gap)
 - ⚠️ VectorContext implementation (future work)
-- ✅ ContextRetrievalModule stable API (design documented - RFC-400 §128-191)
+- ✅ ContextRetrievalModule stable API (design documented - RFC-302 §128-191)
 - ⚠️ Goal-centric retrieval v1_keyword (not yet implemented)
 - ⚠️ v2_embedding algorithm (future work)
 - ⚠️ Persistence integration (not yet implemented)
@@ -421,8 +422,8 @@ protocols:
 
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture (original Module 1)
-- RFC-402: MemoryProtocol Architecture
-- RFC-408: DurabilityProtocol Architecture
+- RFC-303: MemoryProtocol Architecture
+- RFC-306: DurabilityProtocol Architecture
 
 ---
 

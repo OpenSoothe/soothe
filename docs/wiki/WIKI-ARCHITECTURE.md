@@ -471,21 +471,21 @@ Related modules should be linked:
 | core/runner | RFC-200, RFC-201 | RFC-220 |
 | core/goal_engine | RFC-200, RFC-204 | RFC-222 |
 | core/loop | RFC-201, RFC-220 | RFC-200 |
-| core/events | RFC-401, RFC-403 | RFC-402 |
+| core/events | RFC-401, RFC-403 | RFC-303 |
 | core/workspace | RFC-103 | RFC-102 |
 | core/context | RFC-104, RFC-217 | RFC-300 |
 | core/scheduling | RFC-216 | RFC-221 |
-| core/persistence | RFC-612 | RFC-215 |
+| core/persistence | RFC-802 | RFC-215 |
 
 ### Protocols → RFCs
 
 | Protocol | RFC |
 |----------|-----|
-| ContextProtocol | RFC-300, RFC-400 |
-| MemoryProtocol | RFC-300, RFC-402 |
-| PlannerProtocol | RFC-404 |
-| PolicyProtocol | RFC-406 |
-| DurabilityProtocol | RFC-408 |
+| ContextProtocol | RFC-300, RFC-302 |
+| MemoryProtocol | RFC-300, RFC-303 |
+| PlannerProtocol | RFC-304 |
+| PolicyProtocol | RFC-305 |
+| DurabilityProtocol | RFC-306 |
 | VectorStoreProtocol | RFC-611 |
 | LoopWorkingMemory | RFC-224 |
 | LoopPlanner | RFC-226 |

@@ -1,12 +1,13 @@
-# RFC-602: SQLite Backend Specification
+# RFC-801: SQLite Backend Specification
 
-**RFC**: 602
+**RFC**: 801
 **Title**: SQLite Backend for Persistence, Durability, and Vector Store
 **Status**: Draft
 **Kind**: Architecture Design + Implementation Interface Design
 **Created**: 2026-04-04
-**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-402
+**Dependencies**: RFC-000, RFC-001, RFC-302, RFC-303
 **Related**: RFC-200
+**Note**: Moved from 6xx (RFC-801) per RFC-900 reclassification
 
 ## Abstract
 
@@ -334,7 +335,7 @@ vector_store_router:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) -- System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) -- Core Modules Architecture
-- [RFC-400](./RFC-400-context-protocol-architecture.md) -- Context Protocol
-- [RFC-402](./RFC-402-memory-protocol-architecture.md) -- Memory Protocol
+- [RFC-302](./RFC-302-context-protocol-architecture.md) -- Context Protocol
+- [RFC-303](./RFC-303-memory-protocol-architecture.md) -- Memory Protocol
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)

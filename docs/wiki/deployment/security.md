@@ -4,7 +4,7 @@ Comprehensive security guide for production Soothe deployments.
 
 ## Overview
 
-Soothe follows a **security by delegation** model (RFC-400, RFC-402):
+Soothe follows a **security by delegation** model (RFC-302, RFC-303):
 
 - **No built-in authentication**: All auth handled by reverse proxy
 - **No authorization layer**: Reverse proxy controls access
@@ -685,7 +685,7 @@ mount /dev/mapper/postgres_encrypted /var/lib/postgresql
 
 ### Database Access Control
 
-**Separate databases for isolation** (RFC-612):
+**Separate databases for isolation** (RFC-802):
 ```sql
 -- Checkpoints database (LangGraph + StrangeLoop)
 CREATE DATABASE soothe_checkpoints OWNER soothe_user;
