@@ -74,39 +74,41 @@ async def _fetch_ready_state(ws_url: str, timeout: float = 5.0) -> dict[str, Any
     return None
 
 
-def _render_connection_table(config: Any, ws_url: str) -> Table:
-    """Render connection settings table."""
-    table = Table(title="Connection Settings")
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-
-    table.add_row("WebSocket URL", ws_url)
-    table.add_row("Daemon Host", config.daemon_host)
-    table.add_row("Daemon Port", str(config.daemon_port))
-    table.add_row("Soothe Home", str(config.soothe_home))
-
-    return table
-
-
-def _render_daemon_table(
+def _render_unified_status_table(
+    config: Any,
     ws_url: str,
-    running: bool,
-    port_live: bool,
-    active_threads: int,
-    daemon_pid: int | None,
+    running: bool | None = None,
+    port_live: bool | None = None,
+    active_threads: int | None = None,
+    daemon_pid: int | None = None,
     ready_state: dict[str, Any] | None = None,
+    daemon_live: bool = True,
 ) -> Table:
-    """Render daemon status table."""
-    table = Table(title="Daemon Status")
+    """Render unified status table without duplicated info.
+
+    Sections:
+    - Connection: WebSocket URL, Soothe Home
+    - Daemon: Running, Threads, PID (only when daemon is live)
+    """
+    table = Table(title="Soothe Status")
+    table.add_column("Section", style="dim", width=12)
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
 
-    table.add_row("WebSocket URL", ws_url)
-    table.add_row("Running", "[green]Yes[/green]" if running else "[red]No[/red]")
-    table.add_row("Port Live", "[green]Yes[/green]" if port_live else "[red]No[/red]")
-    table.add_row("Active Threads", str(active_threads))
+    # Connection section
+    table.add_row("Connection", "WebSocket URL", ws_url)
+    table.add_row("", "Soothe Home", str(config.soothe_home))
+
+    # Daemon section
+    if not daemon_live:
+        table.add_row("Daemon", "Status", "[red]Not running[/red]")
+        return table
+
+    table.add_row("Daemon", "Status", "[green]Running[/green]")
     if daemon_pid:
-        table.add_row("Daemon PID", str(daemon_pid))
+        table.add_row("", "PID", str(daemon_pid))
+    if active_threads is not None:
+        table.add_row("", "Active Threads", str(active_threads))
 
     if ready_state:
         state = ready_state.get("state", "unknown")
@@ -118,9 +120,9 @@ def _render_daemon_table(
             "warming": "blue",
             "stopped": "dim",
         }.get(state, "white")
-        table.add_row("Readiness", f"[{state_color}]{state}[/{state_color}]")
+        table.add_row("", "Readiness", f"[{state_color}]{state}[/{state_color}]")
         if ready_state.get("message"):
-            table.add_row("Message", ready_state["message"])
+            table.add_row("", "Message", ready_state["message"])
 
     return table
 
@@ -163,15 +165,9 @@ def daemon_status(
                 )
             )
         else:
-            console.print(
-                Panel(
-                    f"WebSocket URL: {ws_url}\n"
-                    "Status: [red]Not running[/red]\n"
-                    "Hint: Start with 'soothed start'",
-                    title="Daemon Status",
-                    border_style="red",
-                )
-            )
+            table = _render_unified_status_table(config, ws_url, daemon_live=False)
+            console.print(table)
+            console.print("\n[dim]Hint: Start with 'soothed start'[/dim]")
         sys.exit(1)
 
     # Fetch detailed status
@@ -218,14 +214,14 @@ def daemon_status(
         console.print_json(json.dumps(output))
         return
 
-    # Render daemon status table
+    # Render unified daemon status table
     running = status.get("running", True)
     port_live = status.get("port_live", True)
     active_threads = status.get("active_threads", 0)
     daemon_pid = status.get("daemon_pid")
 
-    table = _render_daemon_table(
-        ws_url, running, port_live, active_threads, daemon_pid, ready_state
+    table = _render_unified_status_table(
+        config, ws_url, running, port_live, active_threads, daemon_pid, ready_state
     )
     console.print(table)
 
@@ -261,7 +257,12 @@ def connection_status(
         )
         return
 
-    table = _render_connection_table(config, ws_url)
+    # Simple connection table
+    table = Table(title="Connection Settings")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("WebSocket URL", ws_url)
+    table.add_row("Soothe Home", str(config.soothe_home))
     console.print(table)
 
 
@@ -313,20 +314,11 @@ def status_main(
         console.print_json(json.dumps(output))
         return
 
-    # Render combined status with tables
+    # Render unified status table
     if not live:
-        console.print(
-            Panel(
-                f"WebSocket URL: {ws_url}\n"
-                f"Daemon Host: {config.daemon_host}\n"
-                f"Daemon Port: {config.daemon_port}\n"
-                f"Soothe Home: {config.soothe_home}\n\n"
-                "Daemon Status: [red]Not running[/red]\n"
-                "Hint: Start with 'soothed start'",
-                title="Soothe Status",
-                border_style="red",
-            )
-        )
+        table = _render_unified_status_table(config, ws_url, daemon_live=False)
+        console.print(table)
+        console.print("\n[dim]Hint: Start with 'soothed start'[/dim]")
         sys.exit(1)
 
     # Fetch detailed daemon status
@@ -335,29 +327,22 @@ def status_main(
     if "error" in status:
         console.print(
             Panel(
-                f"WebSocket URL: {ws_url}\n"
-                f"Daemon Host: {config.daemon_host}\n"
-                f"Daemon Port: {config.daemon_port}\n"
-                f"Soothe Home: {config.soothe_home}\n\n"
-                f"Daemon Status: [red]Error[/red]\n"
-                f"Error: {status['error']}",
-                title="Soothe Status",
+                f"WebSocket URL: {ws_url}\nError: [red]{status['error']}[/red]",
+                title="Daemon Status",
                 border_style="red",
             )
         )
         sys.exit(1)
-
-    # Render both tables
-    connection_table = _render_connection_table(config, ws_url)
-    console.print(connection_table)
 
     running = status.get("running", True)
     port_live = status.get("port_live", True)
     active_threads = status.get("active_threads", 0)
     daemon_pid = status.get("daemon_pid")
 
-    daemon_table = _render_daemon_table(ws_url, running, port_live, active_threads, daemon_pid)
-    console.print(daemon_table)
+    table = _render_unified_status_table(
+        config, ws_url, running, port_live, active_threads, daemon_pid
+    )
+    console.print(table)
 
 
 __all__ = [
