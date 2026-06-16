@@ -20,8 +20,8 @@ def _get_rate_limit_threshold(ctx: LoopRuntimeContext) -> int:
     if available, otherwise falls back to the default (3).
     """
     try:
-        loop_limits = ctx.strange_loop.config.agent.loop.limits
-        tsp = getattr(loop_limits, "thread_switch_policy", None)
+        loop_cfg = ctx.strange_loop.config.agent.loop
+        tsp = getattr(loop_cfg, "thread_switch_policy", None)
         if tsp is not None and tsp.consecutive_rate_limit_threshold is not None:
             return tsp.consecutive_rate_limit_threshold
     except (AttributeError, TypeError):

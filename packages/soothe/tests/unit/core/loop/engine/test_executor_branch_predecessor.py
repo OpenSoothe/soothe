@@ -223,7 +223,7 @@ async def test_multi_dep_respects_plan_ledger_max_messages_cap() -> None:
 
     cfg = MagicMock()
     cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_messages = 3
-    cfg.agent.loop.limits.max_parallel_tools = 5
+    cfg.agent.loop.concurrency.max_parallel_tools = 5
 
     step_c = StepAction(
         id="C",

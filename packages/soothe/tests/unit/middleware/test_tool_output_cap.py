@@ -14,8 +14,8 @@ from soothe.middleware.tool_output_cap import ToolOutputCapMiddleware, _truncate
 @pytest.fixture
 def config() -> SootheConfig:
     cfg = SootheConfig()
-    cfg.agent.loop.limits.code_exec_max_output_chars = 100
-    cfg.agent.loop.limits.tool_output_max_chars = 50
+    cfg.agent.loop.tool_output.code_exec_max_output_chars = 100
+    cfg.agent.loop.tool_output.tool_output_max_chars = 50
     return cfg
 
 

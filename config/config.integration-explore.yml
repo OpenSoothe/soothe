@@ -54,14 +54,19 @@ agent:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 60000
       plan_ledger_max_message_chars: 8000
-    limits:
+    concurrency:
       max_parallel_steps: 4
       max_parallel_tools: 10
       global_max_llm_calls: 10
-      llm_call_timeout_max_seconds: 240
-      tool_call_limit:
-        global_thread_limit: 220
-        global_run_limit: 80
+    tool_call_limit:
+      global_thread_limit: 220
+      global_run_limit: 80
+    llm_rate_limit:
+      enabled: true
+      call_timeout_seconds: 120
+      call_timeout_max_seconds: 300
+      timeout_retry_multiplier: 1.2
+      max_timeout_retries: 3
 
 observability:
   log_file_level: DEBUG

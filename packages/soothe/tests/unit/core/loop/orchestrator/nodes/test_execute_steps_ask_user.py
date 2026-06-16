@@ -65,7 +65,7 @@ def _make_ctx(
     scratch.plan_result = MagicMock()
 
     strange_loop = MagicMock()
-    strange_loop.config.agent.loop.limits.max_parallel_steps = 4
+    strange_loop.config.agent.loop.concurrency.max_parallel_steps = 4
     strange_loop.core_agent.graph.checkpointer = None
 
     return LoopRuntimeContext(
@@ -563,7 +563,7 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     scratch.plan_result = None
 
     strange_loop = MagicMock()
-    strange_loop.config.agent.loop.limits.max_parallel_steps = 4
+    strange_loop.config.agent.loop.concurrency.max_parallel_steps = 4
     strange_loop.core_agent.graph.checkpointer = None
 
     checkpoint_obj = MagicMock()

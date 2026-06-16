@@ -224,50 +224,56 @@ agent:
       projection_max_lineage_chars: 2000
       projection_max_project_instructions_chars: 8000
 
-    # Infrastructure limits (rate limiting, concurrency, timeouts)
-    limits:
+    checkpoint:
+      progressive: true
+      auto_resume_on_start: false
+
+    concurrency:
       max_parallel_goals: 1
       max_parallel_steps: 2
       max_parallel_subagents: 4
       max_parallel_tools: 15
       global_max_llm_calls: 5
       step_parallelism: dependency
-      llm_rpm_limit: 120
-      llm_concurrent_limit: 10
-      llm_call_timeout_seconds: 60
-      llm_call_timeout_adaptive: true
-      llm_call_timeout_max_seconds: 60
-      llm_retry_on_timeout: true
-      llm_max_timeout_retries: 2
-      llm_timeout_retry_multiplier: 2.0
+
+    tool_output:
       code_exec_max_output_chars: 32000
       tool_output_max_chars: 10000
-      recovery:
-        progressive_checkpoints: true
-        auto_resume_on_start: false
-      tool_call_limit:
-        global_thread_limit: 150
-        global_run_limit: 56
-        tool_specific_limits:
-          wizsearch_search:
-            thread_limit: 5
-            run_limit: 3
-          wizsearch_crawl:
-            thread_limit: 5
-            run_limit: 3
-          web_search:
-            thread_limit: 5
-            run_limit: 3
-          fetch_url:
-            thread_limit: 5
-            run_limit: 3
-          search:
-            thread_limit: 5
-            run_limit: 3
-      tool_retry:
-        max_retries: 3
-        backoff_factor: 2.0
-        initial_delay: 1.0
+
+    tool_call_limit:
+      global_thread_limit: 150
+      global_run_limit: 56
+      tool_specific_limits:
+        wizsearch_search:
+          thread_limit: 5
+          run_limit: 3
+        wizsearch_crawl:
+          thread_limit: 5
+          run_limit: 3
+        web_search:
+          thread_limit: 5
+          run_limit: 3
+        fetch_url:
+          thread_limit: 5
+          run_limit: 3
+        search:
+          thread_limit: 5
+          run_limit: 3
+
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
+
+    llm_rate_limit:
+      enabled: false
+      rpm_limit: 120
+      concurrent_limit: 10
+      call_timeout_seconds: 120
+      call_timeout_max_seconds: 300
+      retry_on_timeout: true
+      max_timeout_retries: 3
+      timeout_retry_multiplier: 1.2
 
   # === PROTOCOLS (Backend Selection) ===
   protocols:

@@ -509,7 +509,7 @@ def _execution_max_output_from_config(config: Any | None) -> int:
     if config is None:
         return DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
     try:
-        return int(config.agent.loop.limits.code_exec_max_output_chars)
+        return int(config.agent.loop.tool_output.code_exec_max_output_chars)
     except (AttributeError, TypeError, ValueError):
         return DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
 
