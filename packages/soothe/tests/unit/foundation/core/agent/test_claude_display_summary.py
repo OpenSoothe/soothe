@@ -1,6 +1,6 @@
 """Tests for Claude Code one-line display summary."""
 
-from soothe.foundation.core.agent.claude_display_summary import claude_text_summary_for_display
+from soothe.foundation.core.agent._claude_display import claude_text_summary_for_display
 
 
 def test_prefers_markdown_heading() -> None:

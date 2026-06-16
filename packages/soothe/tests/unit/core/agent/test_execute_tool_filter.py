@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.core.agent.execute_tool_filter import (
+from soothe.foundation.core.agent._execute_filter import (
     tool_entry_name,
     without_execute_tool_when_sandbox_disabled,
 )
