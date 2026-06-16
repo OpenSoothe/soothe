@@ -6,7 +6,8 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Dependencies**: RFC-000, RFC-400
-**Related**: RFC-408 (Durability)
+**Related**: RFC-408 (Durability), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
+**Implemented by**: CE's EpisodicSubmodule (RFC-625, RFC-626) — ContextEngine's episodic memory store implements MemoryProtocol API for persistent cross-thread memory
 
 ---
 
@@ -186,6 +187,56 @@ class MemUMemory(MemoryProtocol):
 **Backend**: MemU memory store + configured chat/embedding models
 **Persistence**: Files under `protocols.memory.persist_dir` (defaults to `$SOOTHE_HOME/memory/`)
 **Features**: Semantic recall, tags, metadata
+
+### CEEpisodicMemory (RFC-625, RFC-626)
+
+```python
+class CEEpisodicMemory(MemoryProtocol):
+    """ContextEngine's EpisodicSubmodule implementation of MemoryProtocol.
+
+    Provides persistent cross-thread memory via CE's SQLite/PostgreSQL backend,
+    integrated with dreaming coordinator for automated episodic distillation.
+    """
+
+    def __init__(self, ce: ContextEngine, persist_backend: ContextPersistenceProtocol):
+        self._ce = ce
+        self._episodic_store = EpisodicStore(persist_backend)
+
+    async def remember(self, item: MemoryItem) -> str:
+        """Store memory item as EpisodeSummary."""
+        summary = EpisodeSummary(
+            content=item.content,
+            source_thread=item.source_thread,
+            importance=item.importance,
+            tags=item.tags,
+        )
+        return await self._episodic_store.store(summary)
+
+    async def recall(self, query: str, limit: int = 5) -> list[MemoryItem]:
+        """Recall episodes via semantic search."""
+        episodes = await self._episodic_store.search(query, limit)
+        return [
+            MemoryItem(
+                id=ep.id,
+                content=ep.content,
+                source_thread=ep.source_thread or "",
+                created_at=ep.created_at,
+                tags=ep.tags,
+                importance=ep.importance,
+            )
+            for ep in episodes
+        ]
+
+    async def recall_by_tags(self, tags: list[str], limit: int = 10) -> list[MemoryItem]:
+        """Recall episodes by tag filtering."""
+        episodes = await self._episodic_store.search_by_tags(tags, limit)
+        return [MemoryItem.model_validate(ep) for ep in episodes]
+```
+
+**Backend**: CE persistence backend (SQLite default, PostgreSQL optional)
+**Persistence**: Unified with CE GoalStepDAG and LedgerManager
+**Features**: Semantic recall, dreaming distillation, goal lineage integration
+**Integration**: Used by AutopilotMonitor's DreamingCoordinator (RFC-625)
 
 ---
 
