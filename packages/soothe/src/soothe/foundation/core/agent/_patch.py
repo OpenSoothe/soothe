@@ -288,9 +288,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
                 runtime.state.get("_subagent_routing_directive", "none"),
             )
             subagent = subagent_graphs[subagent_type]
-            subagent_state = {
-                k: v for k, v in runtime.state.items() if k not in all_excluded_keys
-            }
+            subagent_state = {k: v for k, v in runtime.state.items() if k not in all_excluded_keys}
             subagent_state["messages"] = [HumanMessage(content=description)]
             # IG-340: Propagate workspace from config.configurable to subagent
             # state. The executor passes workspace in config (not graph state),
