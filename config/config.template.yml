@@ -101,6 +101,26 @@ agent:
     dreaming_consolidation_interval: 300
     dreaming_health_check_interval: 60
 
+    # RFC-625: AutopilotMonitor settings
+    # Background verification loop for DAG health checks.
+    verify_interval: 30 # seconds between verification cycles
+    # Time-triggered dreaming (in addition to DAG completion trigger).
+    dreaming_interval: 300 # seconds between time-based dreaming entries
+    # Cross-loop dreaming scope for memory distillation.
+    dreaming_scope: workspace # loop | workspace | topic
+    # Per-mode dreaming configuration.
+    dreaming_modes:
+      episodic:
+        enabled: true
+        max_episodes: 10
+      procedure:
+        enabled: true
+        min_success_rate: 0.8
+      semantic:
+        enabled: true
+      profile:
+        enabled: true
+
     # Scheduled tasks
     scheduler_enabled: true
     max_scheduled_tasks: 100

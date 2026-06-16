@@ -197,6 +197,54 @@ async def _record_and_emit_step_completed(
     await ctx.emit("step_completed", payload)
 
 
+async def _persist_planner_ask_step_outcome(
+    ctx: LoopRuntimeContext,
+    result: StepResult,
+) -> None:
+    """Record a synthesized planner ``ask_user`` step into the plan DAG and CE.
+
+    ``LoopState.add_step_result`` is a no-op when CE is bound; without explicit
+    persistence here, Branch 2 would re-detect the same ready ``ask_user`` step
+    and loop forever through ``await_clarification``.
+    """
+    try:
+        ctx.plan_manager.record_step_outcomes([result])
+    except Exception:
+        logger.exception(
+            "[execute] plan_manager.record_step_outcomes failed for planner ask step %s",
+            result.step_id,
+        )
+
+    if ctx.ce is None or not ctx.ce_goal_id:
+        return
+
+    try:
+        from soothe.foundation.context.models import StepExecution
+
+        execution = StepExecution(
+            duration_ms=result.duration_ms,
+            thread_id=result.thread_id,
+            error=result.error,
+            error_type=result.error_type,
+            outcome=result.outcome if result.outcome else None,
+            tool_call_count=result.tool_call_count,
+            subagent_task_completions=result.subagent_task_completions,
+            hit_subagent_cap=result.hit_subagent_cap,
+            hit_tool_budget=result.hit_tool_budget,
+        )
+        if result.success:
+            await ctx.ce.complete_step(ctx.ce_goal_id, result.step_id, execution)
+        else:
+            await ctx.ce.fail_step(ctx.ce_goal_id, result.step_id, execution)
+        await ctx.ce.save()
+    except Exception:
+        logger.warning(
+            "[execute] CE step feedback failed for planner ask step %s",
+            result.step_id,
+            exc_info=True,
+        )
+
+
 async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> dict[str, Any]:
     """Run ready steps, stream events, apply step results to ``LoopState``."""
     strange_loop = ctx.strange_loop
@@ -282,13 +330,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # ask_user step would remain PENDING in the plan DAG forever and
             # surface in the goal_completion report even though the user
             # already answered.
-            try:
-                ctx.plan_manager.record_step_outcomes([synth_result])
-            except Exception:
-                logger.exception(
-                    "[execute] plan_manager.record_step_outcomes failed for resumed step %s",
-                    planner_ask_answered_step_id,
-                )
+            await _persist_planner_ask_step_outcome(ctx, synth_result)
             logger.info(
                 "[execute] resumed clarification answer (no scratch decision); "
                 "synthesized step_completed for %s, deferring further execution to next iteration",
@@ -400,6 +442,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             context_engine=ctx.ce,
         )
         await _record_and_emit_step_completed(ctx, result=synth_result, step_desc=step_desc)
+        await _persist_planner_ask_step_outcome(ctx, synth_result)
 
     # RFC-223: Pass checkpointer for thread fork inheritance
     checkpointer = strange_loop.core_agent.checkpointer
@@ -410,7 +453,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     # other steps; we honor that by short-circuiting on the first such ready
     # step. Other ready steps will run on the resumed wave once the answer
     # arrives.
-    if ctx.clarification_policy is not None:
+    if ctx.clarification_policy is not None and planner_ask_answered_step_id is None:
         ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
         ask_step = next((s for s in ready_steps if s.kind == "ask_user"), None)
         if ask_step is not None and ask_step.questions:

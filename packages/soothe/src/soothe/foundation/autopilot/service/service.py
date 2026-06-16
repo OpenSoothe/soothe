@@ -1174,7 +1174,7 @@ class AutopilotService:
         try:
             await self._goal_persist_store.save(
                 self._GOALS_SNAPSHOT_KEY,
-                self._ce.get_dag_snapshot().model_dump(),
+                self._ce.get_dag_snapshot().model_dump(mode="json"),
             )
         except Exception:
             logger.warning("Failed to persist autopilot goals snapshot", exc_info=True)

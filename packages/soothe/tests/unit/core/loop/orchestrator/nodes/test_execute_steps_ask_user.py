@@ -228,8 +228,11 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
             yield None
 
     captured_executor_kwargs: dict[str, Any] = {}
+    executor_called = False
 
     def _factory(*args: Any, **kwargs: Any) -> Any:
+        nonlocal executor_called
+        executor_called = True
         captured_executor_kwargs.update(kwargs)
         mock_ex = MagicMock()
         mock_ex.execute = _empty_stream
@@ -287,9 +290,112 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
 
     # Executor was invoked with resume_answer_payload=None (no fake interrupt key).
     assert captured_executor_kwargs.get("clarification_resume_answer_payload") is None
+    assert executor_called is True
+
+    # Must not re-route to await_clarification for the step we just answered.
+    assert not result.get("pending_clarification")
 
     # Answer state is cleared so the next iteration doesn't re-consume it.
     assert result["pending_clarification_answer"] is None
+
+
+@pytest.mark.asyncio
+async def test_branch1_ce_bound_does_not_re_emit_planner_ask(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CE-bound loop state must persist the synth result before Branch 2 runs."""
+    from soothe.foundation.context.models import StepNode
+    from soothe.foundation.loop.state.schemas import LoopState
+
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[
+            StepAction(
+                id="ASK-01",
+                description="Ask which aspect to prioritize",
+                kind="ask_user",
+                questions=["Which output format?"],
+            ),
+        ],
+        execution_mode="parallel",
+    )
+    emitted: list[tuple[str, Any]] = []
+    ce = _make_ce()
+    goal = GoalNode(description="test goal")
+    ce._dag.add_goal(goal)
+    await ce.add_steps(
+        goal.id,
+        [StepNode(id="ASK-01", description="Ask which aspect to prioritize")],
+    )
+
+    loop_state = LoopState(
+        goal="test goal",
+        thread_id="thread-1",
+        workspace=None,
+        iteration=0,
+        max_iterations=10,
+    )
+    loop_state.bind_ce(ce, goal.id)
+    loop_state.current_decision = decision
+
+    plan_manager = MagicMock()
+    ctx = _make_ctx(
+        decision,
+        emitted,
+        clarification_policy=object(),
+        loop_state=loop_state,
+        ce=ce,
+        goal=goal,
+    )
+    ctx.plan_manager = plan_manager
+
+    executor_called = False
+
+    async def _empty_stream(*_a: Any, **_k: Any):
+        nonlocal executor_called
+        executor_called = True
+        if False:
+            yield None
+
+    mock_executor = MagicMock()
+    mock_executor.execute = _empty_stream
+
+    import soothe.foundation.loop.orchestrator.nodes.execute_steps as mod
+
+    monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
+
+    pending_clar = {
+        "questions": ["Which output format?"],
+        "origin_node": "execute",
+        "origin_interrupt_id": f"{PLANNER_ASK_INTERRUPT_PREFIX}ASK-01",
+        "loop_state": {
+            "goal_id": "",
+            "goal_description": "",
+            "user_request": "",
+            "iteration": 0,
+            "intent_classification": None,
+            "plan_summary": None,
+            "recent_step_outputs": [],
+            "workspace_summary": None,
+            "active_skills": [],
+            "active_mcp_servers": [],
+        },
+    }
+    answer = ClarificationAnswer(answers=("json",), source="veritas", confidence=0.9)
+
+    result = await node_execute(
+        ctx,
+        {
+            "pending_clarification": pending_clar,
+            "pending_clarification_answer": answer_to_state(answer),
+        },
+    )
+
+    assert not result.get("pending_clarification")
+    assert result["pending_clarification_answer"] is None
+    assert executor_called is True
+    plan_manager.record_step_outcomes.assert_called_once()
+    assert "ASK-01" in loop_state.dependency_completion_ids()
 
 
 @pytest.mark.asyncio

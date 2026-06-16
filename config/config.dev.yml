@@ -57,6 +57,22 @@ agent:
     poll_interval: 2
     loop_idle_timeout: 60
 
+    # RFC-625: AutopilotMonitor settings (dev defaults)
+    verify_interval: 30
+    dreaming_interval: 300
+    dreaming_scope: workspace
+    dreaming_modes:
+      episodic:
+        enabled: true
+        max_episodes: 10
+      procedure:
+        enabled: true
+        min_success_rate: 0.8
+      semantic:
+        enabled: true
+      profile:
+        enabled: true
+
   loop:
     max_iterations: 99
     # RFC-224: Context window management (dev defaults aligned with template)
