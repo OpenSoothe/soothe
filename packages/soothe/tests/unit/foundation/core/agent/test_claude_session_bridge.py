@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.core.agent.claude_session_bridge import (
+from soothe.foundation.core.agent._claude_session import (
     record_claude_session,
     resolve_resume_session_id,
 )
@@ -37,7 +37,7 @@ class MockThreadInfo:
 @pytest.fixture(autouse=True)
 def _clear_session_bridge_memory() -> None:
     """Isolate tests that touch the in-process Claude session cache."""
-    import soothe.foundation.core.agent.claude_session_bridge as bridge
+    import soothe.foundation.core.agent._claude_session as bridge
 
     bridge._memory_claude_sessions.clear()
     bridge._locks.clear()
@@ -155,7 +155,7 @@ async def test_astream_sets_resume_and_records_session() -> None:
         sys.modules["claude_agent_sdk"] = m
 
     from soothe.config import SootheConfig
-    from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent
+    from soothe.foundation.core.agent._claude_agent import ClaudeCoreAgent
 
     _install_fake_claude_sdk()
     try:
@@ -177,6 +177,6 @@ async def test_astream_sets_resume_and_records_session() -> None:
     assert last_options
     assert getattr(last_options[0], "resume", None) == "pre-resume"
 
-    import soothe.foundation.core.agent.claude_session_bridge as bridge
+    import soothe.foundation.core.agent._claude_session as bridge
 
     assert bridge._memory_claude_sessions[("thr1", "/ws")] == "sess-from-sdk"

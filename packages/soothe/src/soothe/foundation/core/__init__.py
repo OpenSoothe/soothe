@@ -20,6 +20,7 @@ __all__ = [
     "CoreAgent",
     "create_soothe_agent",
     "AgentBuilder",
+    "ClaudeCoreAgent",
 ]
 
 
@@ -37,6 +38,10 @@ def __getattr__(name: str) -> Any:
         from soothe.foundation.core.agent._builder import AgentBuilder
 
         return AgentBuilder
+    if name == "ClaudeCoreAgent":
+        from soothe.foundation.core.agent._claude_agent import ClaudeCoreAgent
+
+        return ClaudeCoreAgent
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)

@@ -11,12 +11,12 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
+from soothe.foundation.core.agent._execute_filter import (
+    without_execute_tool_when_sandbox_disabled,
+)
 
 # Import and apply runtime patches
 from soothe.foundation.core.agent._patch import *  # noqa: F403
-from soothe.foundation.core.agent.execute_tool_filter import (
-    without_execute_tool_when_sandbox_disabled,
-)
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.runner.resolver import (
     resolve_memory,
@@ -422,7 +422,7 @@ class AgentBuilder:
         """
         from pathlib import Path
 
-        from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent
+        from soothe.foundation.core.agent._claude_agent import ClaudeCoreAgent
 
         create_start = time.perf_counter()
 

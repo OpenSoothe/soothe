@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.core.agent.claude_core_agent import _preview_claude_tool_input
+from soothe.foundation.core.agent._claude_agent import _preview_claude_tool_input
 
 
 def test_preview_none_is_ellipsis() -> None:
