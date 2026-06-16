@@ -2,7 +2,7 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-06-05
+**Last Updated**: 2026-06-16
 
 ## Core Terminology
 
@@ -95,6 +95,17 @@ This document defines the terminology and naming conventions used in this projec
 | Context Envelope | Rich context package sent from Layer 3 to Layer 2 containing world info, goals, memory, instructions. | RFC-203 |
 | Same-Cron Conflict | Multiple tasks with identical cron expression. Resolved by sequential execution, ordered by creation/priority. | RFC-203 |
 | Critical Message | Channel message requiring acknowledgment (e.g., blocker_alert, MUST goal confirmation). Retries with backoff. | RFC-203 |
+
+### Entity Model Consolidation Terms (RFC-626)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| ExecutionState | Thin facade holding execution-only runtime fields (iteration, max_iterations, wave metrics, context window stats) with CE-backed properties for goal/step data. Replaces LoopState. | RFC-626 |
+| Job | Root GoalNode with `parent_id=None` submitted to AutopilotService. Single entry point for DAG visualization and status queries. | RFC-626, RFC-228 |
+| GoalNode | Unified entity model combining goal lifecycle, retry/backoff semantics, workspace metadata, and dreaming fields. CE's atomic unit of persistence. | RFC-624, RFC-625, RFC-626 |
+| StepNode | Execution step entity within GoalNode's embedded StepDAG with lineage tracking (plan_iteration, reasoning_trace). | RFC-624, RFC-626 |
+| LedgerManager | Unified message ledger replacing LoopWorkingMemory and loop_messages list, with phase-scoped retrieval and bounded projection. | RFC-624, RFC-626 |
+| CheckpointEnvelope | Consolidated checkpoint structure storing CE GoalStepDAG snapshot and ExecutionState fields, eliminating duplicate StrangeLoop checkpoint schemas. | RFC-626 |
 
 ### Layer 2 Execution Terms (RFC-200)
 
