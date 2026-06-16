@@ -13,7 +13,6 @@
 .PHONY: docker-dev-up docker-dev-down docker-dev-ps
 .PHONY: docker-daemon-build docker-daemon-build-pypi
 .PHONY: docker-daemon-up docker-daemon-down docker-daemon-ps
-.PHONY: docker-prod-up docker-prod-down docker-prod-ps
 
 # Docker Compose env file (all commands use deploy/.env)
 DOCKER_ENV_FILE := --env-file deploy/.env
@@ -61,11 +60,6 @@ help:
 	@echo "  make docker-daemon-down      - Stop dev stack"
 	@echo "  make docker-daemon-ps        - Show daemon stack status"
 	@echo ""
-	@echo "Docker (Production):"
-	@echo "  make docker-prod-up    - Start production stack (requires deploy/.env)"
-	@echo "  make docker-prod-down  - Stop production stack"
-	@echo "  make docker-prod-ps    - Show production containers"
-	@echo ""
 	@echo "Docker (Reset):"
 	@echo "  make reset-the-world   - Reset all state and restart clean"
 	@echo ""
@@ -110,18 +104,16 @@ sync-verify:
 # ============================================================================
 #
 # Profiles in docker-compose.yml:
-#   - default:    Dev dependencies (soothe-pgvector + Langfuse)
+#   - default:    Dev dependencies (soothe-pgvector)
+#   - langfuse:   Langfuse v3 observability stack
 #   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
-#   - production: Registry soothed daemon (deploy; secrets in deploy/.env)
 #
 # Config files:
-#   - Dev:        deploy/config.dev.yml (default)
-#   - Production: deploy/config.prod.yml (via SOOTHE_CONFIG_PATH in .env)
+#   - Dev:        config/config.docker-dev.yml (default)
 #
 # Quick reference:
 #   Dev stack (deps + Langfuse): make docker-dev-up
 #   Full dev stack:             make docker-daemon-build && make docker-daemon-up
-#   Production deploy:          make docker-prod-up (requires deploy/.env)
 
 # Version from VERSION file
 SOOTHE_VERSION := $(shell cat VERSION)
@@ -182,26 +174,6 @@ docker-daemon-down:
 
 docker-daemon-ps:
 	docker compose $(DOCKER_ENV_FILE) --profile daemon ps
-
-# --- Production Deploy (production profile, config.prod.yml) ----------------
-
-docker-prod-up:
-	@echo "Starting production stack..."
-	@if [ ! -f deploy/.env ]; then \
-		echo "ERROR: deploy/.env required for production"; \
-		exit 1; \
-	fi
-	SOOTHE_CONFIG_PATH=./deploy/config.prod.yml \
-		docker compose $(DOCKER_ENV_FILE) --profile production up -d
-	@echo ""
-	@echo "Production stack running. Check status: make docker-prod-ps"
-
-docker-prod-down:
-	@echo "Stopping production stack..."
-	docker compose $(DOCKER_ENV_FILE) --profile production down
-
-docker-prod-ps:
-	docker compose $(DOCKER_ENV_FILE) --profile production ps
 
 # --- Reset -----------------------------------------------------------------
 
