@@ -47,6 +47,11 @@ def mock_ce() -> ContextEngine:
         goal.steps = MagicMock()
         goal.steps.total_steps = 5 - i
         goal.steps.completed_steps = 2 - i
+        goal.steps.failed_steps = 0
+        goal.report = None  # GoalReport on completion (dict serialization)
+        goal.findings = []  # Key findings from execution
+        goal.total_duration_ms = 0
+        goal.total_tokens_used = 0
         ce._dag.goals[id_] = goal
         goals.append(goal)
 

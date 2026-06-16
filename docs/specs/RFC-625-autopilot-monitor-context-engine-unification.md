@@ -2,10 +2,10 @@
 
 **RFC**: 625
 **Title**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-06-15
-**Updated**: 2026-06-15
+**Updated**: 2026-06-16
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
 **Related**: RFC-204 (Autopilot Mode), RFC-217 (Goal Context Management)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
@@ -886,8 +886,6 @@ agent:
 
 ---
 
----
-
 ## RFC-222 Relationship: GoalEngine Replacement
 
 This RFC modifies RFC-222 by replacing GoalEngine with ContextEngine + AutopilotMonitor:
@@ -930,6 +928,47 @@ class AutopilotService:
 ```
 
 **Key invariant preserved:** StrangeLoop remains the pure execution unit. It hydrates from `GoalDispatchContextBundle` and emits `GoalCompletionChunk`. AutopilotMonitor handles all DAG-level concerns in the daemon process.
+
+---
+
+## Implementation Status
+
+**Status**: Implemented (2026-06-16)
+
+### Completed Sections
+
+| Section | Status | Notes |
+|---------|--------|-------|
+| §1 Module relocation | ✅ Complete | `soothe.context` → `soothe.foundation.context` |
+| §2 GoalNode enhancement | ✅ Complete | All Goal fields migrated, dreaming fields added |
+| §3 GoalEngine deletion | ✅ Complete | `soothe.core.goal_engine/` empty, BackoffReasoner migrated |
+| §4 LLM Verification Reasoner | ✅ Complete | `verifier_reasoner.py`, `verifier_prompts.py` implemented |
+| §4 LLM Dreaming Reasoner | ✅ Complete | `dreaming_reasoner.py`, `dreaming_prompts.py` implemented |
+| §5 AutopilotMonitor | ✅ Complete | Core monitor with event handlers implemented |
+| §6 DreamingCoordinator | ✅ Complete | 4-mode distillation coordinator implemented |
+| §7 ContextEngine API additions | ✅ Complete | `remove_goal`, `merge_goals`, `is_dag_complete`, etc. |
+| §8 Solo/Autopilot mode behavior | ✅ Complete | Mode-specific goal chaining implemented |
+| §9 TUI GoalDAGCard | ✅ Complete | Widget for autopilot DAG visualization |
+| §10 Live mode switching | ✅ Complete | Toggle API and routing implemented |
+| §11-§12 Data flow & phases | ✅ Complete | Implementation phases completed |
+| §13 Config additions | ✅ Complete | All configuration fields added |
+| §14 Event definitions | ✅ Complete | GoalRemoved, GoalDecomposed, AutopilotModeSwitched events added |
+
+### Implementation Notes
+
+All LLM-driven verification and distillation reasoners are fully implemented:
+
+- `GoalDAGVerifier.verify_dag_health()` — LLM-based health verification
+- `GoalDAGVerifier.analyze_placement()` — LLM-based placement analysis
+- `DreamingCoordinator._run_mode()` — all 4 distillation modes operational
+- `AutopilotMonitor._analyze_placement()` — LLM integration complete
+- Event definitions complete: `GoalCreatedEvent`, `GoalCompletedEvent`, `GoalFailedEvent`, `GoalRemovedEvent`, `GoalDecomposedEvent`, `AutopilotModeSwitchedEvent`
+
+The `BackoffReasoner` (migrated from GoalEngine) has full LLM integration and serves as the pattern for all reasoners.
+
+### Completion Tracking
+
+See `docs/impl/IG-625-completion.md` for remaining implementation work.
 
 ---
 

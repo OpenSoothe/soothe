@@ -32,6 +32,18 @@ class TestPublicReadAPI:
         assert snapshot.goals[0].description == "Test goal"
 
     @pytest.mark.asyncio
+    async def test_dag_snapshot_model_dump_json_serializable(self) -> None:
+        """Autopilot goal persistence uses model_dump(mode='json') for PostgreSQL JSONB."""
+        import json
+
+        ce = _ce()
+        goal = await ce.create_goal("Test goal")
+        await ce.add_step(goal.id, StepNode(id="s1", description="Step 1"))
+        await ce.complete_step(goal.id, "s1", StepExecution(duration_ms=1))
+        snapshot = ce.get_dag_snapshot()
+        json.dumps(snapshot.model_dump(mode="json"))
+
+    @pytest.mark.asyncio
     async def test_get_step_dag(self) -> None:
         ce = _ce()
         goal = await ce.create_goal("Test goal")
