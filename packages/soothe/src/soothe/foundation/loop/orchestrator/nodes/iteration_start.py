@@ -32,4 +32,7 @@ async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         checkpointer=core_agent_checkpointer(strange_loop),
     )
 
-    return {"plan_route": None, "assess_route": None, "last_outcome": None}
+    # RFC-226 fix: clear resume_synth to prevent stale flag from prior clarification
+    # synthesis from affecting subsequent goals/iterations. Without this, once set,
+    # every execution would skip record_iteration and loop indefinitely.
+    return {"plan_route": None, "assess_route": None, "last_outcome": None, "resume_synth": None}
