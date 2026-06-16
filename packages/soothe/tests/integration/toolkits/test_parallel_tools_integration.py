@@ -152,7 +152,7 @@ async def test_parallel_tools_default_parallelism(requires_llm_api):
     config.agent.protocols.memory.enabled = False
 
     # Check default value for max_parallel_steps
-    assert config.agent.loop.limits.max_parallel_steps == 2
+    assert config.agent.loop.concurrency.max_parallel_steps == 2
 
     create_soothe_agent(
         model=config.create_chat_model("agent"),
@@ -176,7 +176,7 @@ async def test_parallel_tools_extreme_cases(requires_llm_api):
 
     # Test sequential (max_parallel_steps=1)
     config_seq = SootheConfig(router=router)
-    config_seq.agent.loop.limits.max_parallel_steps = 1
+    config_seq.agent.loop.concurrency.max_parallel_steps = 1
     config_seq.agent.protocols.memory.enabled = False
 
     create_soothe_agent(
@@ -187,7 +187,7 @@ async def test_parallel_tools_extreme_cases(requires_llm_api):
 
     # Test high parallelism (max_parallel_steps=10)
     config_high = SootheConfig(router=router)
-    config_high.agent.loop.limits.max_parallel_steps = 10
+    config_high.agent.loop.concurrency.max_parallel_steps = 10
     config_high.agent.protocols.memory.enabled = False
 
     create_soothe_agent(
@@ -206,7 +206,7 @@ async def test_parallel_tools_zero_means_unlimited(requires_llm_api):
     router = _get_router_config_for_available_credentials()
     # 0 is valid - it means unlimited parallelism
     config_unlimited = SootheConfig(router=router)
-    config_unlimited.agent.loop.limits.max_parallel_steps = 0
+    config_unlimited.agent.loop.concurrency.max_parallel_steps = 0
     config_unlimited.agent.protocols.memory.enabled = False
 
     # Should create successfully

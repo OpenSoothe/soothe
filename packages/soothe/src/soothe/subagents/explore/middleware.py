@@ -903,28 +903,18 @@ def build_explore_middleware_stack(
 
     # Build tool limit and retry middleware from config
     tool_middlewares: list[AgentMiddleware[Any, None]] = []
-    if soothe_config is not None and soothe_config.agent.loop.limits is not None:
-        # Use explore-specific limits if set, otherwise use global config
-        limits_config = soothe_config.agent.loop.limits
+    if soothe_config is not None:
+        loop = soothe_config.agent.loop
         thread_limit = (
-            explore_config.tool_call_limit_thread
-            or limits_config.tool_call_limit.global_thread_limit
+            explore_config.tool_call_limit_thread or loop.tool_call_limit.global_thread_limit
         )
-        run_limit = (
-            explore_config.tool_call_limit_run or limits_config.tool_call_limit.global_run_limit
-        )
+        run_limit = explore_config.tool_call_limit_run or loop.tool_call_limit.global_run_limit
 
-        # Build a temporary config with explore-specific limits
-        from soothe.config.models import InfrastructureLimitsConfig
-
-        explore_limits_config = InfrastructureLimitsConfig(
-            tool_call_limit=limits_config.tool_call_limit.model_copy(
-                update={"global_thread_limit": thread_limit, "global_run_limit": run_limit}
-            ),
-            tool_retry=limits_config.tool_retry,
+        tool_call_limit = loop.tool_call_limit.model_copy(
+            update={"global_thread_limit": thread_limit, "global_run_limit": run_limit}
         )
-        tool_middlewares.extend(build_tool_limit_middleware(explore_limits_config))
-        tool_middlewares.extend(build_tool_retry_middleware(explore_limits_config))
+        tool_middlewares.extend(build_tool_limit_middleware(tool_call_limit))
+        tool_middlewares.extend(build_tool_retry_middleware(loop.tool_retry))
 
     return [
         # Tool call limit and retry middleware (outermost - applied first)

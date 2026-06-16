@@ -855,15 +855,15 @@ class PlanPromptLedgerConfig(BaseModel):
     )
 
 
-class RecoveryConfig(BaseModel):
-    """Failure recovery configuration (RFC-0010).
+class LoopCheckpointConfig(BaseModel):
+    """Loop checkpoint and recovery configuration (RFC-203).
 
     Args:
-        progressive_checkpoints: Save checkpoint after each step/goal.
+        progressive: Save checkpoint after each step/goal completion.
         auto_resume_on_start: Auto-resume incomplete threads on daemon start.
     """
 
-    progressive_checkpoints: bool = True
+    progressive: bool = True
     auto_resume_on_start: bool = False
 
 
@@ -906,33 +906,45 @@ class ToolRetryConfig(BaseModel):
     initial_delay: float = Field(default=1.0, ge=0, description="Initial delay in seconds")
 
 
-class InfrastructureLimitsConfig(BaseModel):
-    """Infrastructure limits configuration (IG-407: unified strange_loop.limits).
+class LLMRateLimitConfig(BaseModel):
+    """LLM rate limiting, timeout, and retry configuration.
 
-    Consolidates execution limits and concurrency controls into flat structure.
-    ConcurrencyPolicy fields are flattened directly into this config (no nested concurrency).
+    Args:
+        enabled: When false, LLM rate-limit middleware is not installed.
+        rpm_limit: Soft cap on LLM HTTP requests per minute.
+        concurrent_limit: Max concurrent in-flight LLM calls per thread.
+        call_timeout_seconds: Per-LLM-call timeout.
+        call_timeout_max_seconds: Upper bound for retry timeout escalation.
+        retry_on_timeout: Enable retry with timeout escalation (IG-295).
+        max_timeout_retries: Max retry attempts after timeout (IG-295).
+        timeout_retry_multiplier: Timeout multiplier on retry (IG-295).
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable LLM rate-limit middleware (RPM, concurrency, timeouts, retries)",
+    )
+    rpm_limit: int = Field(default=120, ge=1, le=10_000)
+    concurrent_limit: int = Field(default=10, ge=1, le=500)
+    call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
+    call_timeout_max_seconds: int = Field(default=300, ge=30, le=3600)
+    retry_on_timeout: bool = True
+    max_timeout_retries: int = Field(default=2, ge=0, le=5)
+    timeout_retry_multiplier: float = Field(default=1.2, ge=1.0, le=5.0)
+
+
+class LoopConcurrencyConfig(BaseModel):
+    """Loop execution concurrency and scheduling controls.
 
     Args:
         max_parallel_goals: Maximum goals running simultaneously (autonomous mode).
-        max_parallel_steps: Maximum plan steps running concurrently per execute batch (executor
-            schedules further batches until ready steps are exhausted).
+        max_parallel_steps: Maximum plan steps running concurrently per execute batch.
         max_parallel_subagents: Maximum subagents running simultaneously.
         global_max_llm_calls: Cross-level circuit breaker for concurrent LLM calls.
         step_parallelism: Scheduling strategy for plan steps (sequential/dependency/max).
-        llm_rpm_limit: Soft cap on LLM HTTP requests per minute.
-        llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
-        llm_call_timeout_seconds: Per-LLM-call timeout floor.
-        llm_call_timeout_adaptive: Scale timeout based on prompt size.
-        llm_call_timeout_max_seconds: Upper bound for adaptive timeout.
-        llm_retry_on_timeout: Enable retry with timeout escalation (IG-295).
-        llm_max_timeout_retries: Max retry attempts after timeout (IG-295).
-        llm_timeout_retry_multiplier: Timeout multiplier on retry (IG-295).
-        recovery: Failure recovery settings.
-        tool_call_limit: Tool call limit configuration.
-        tool_retry: Tool retry configuration.
+        max_parallel_tools: Maximum concurrent tool calls per thread.
     """
 
-    # Concurrency controls (flattened from ConcurrencyPolicy)
     max_parallel_goals: int = Field(
         default=1, ge=0, description="Maximum parallel goals (0=unlimited)"
     )
@@ -950,26 +962,19 @@ class InfrastructureLimitsConfig(BaseModel):
     step_parallelism: Literal["sequential", "dependency", "max"] = Field(
         default="dependency", description="Step scheduling strategy"
     )
-    # IG-XXX: Tool-level concurrency limit
     max_parallel_tools: int = Field(
         default=15, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
     )
 
-    # Rate limiting
-    llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
-    llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
 
-    # Timeout controls
-    llm_call_timeout_seconds: int = Field(default=60, ge=5, le=3600)
-    llm_call_timeout_adaptive: bool = True
-    llm_call_timeout_max_seconds: int = Field(default=60, ge=30, le=3600)
+class LoopToolOutputConfig(BaseModel):
+    """Tool result size caps for graph state and model context.
 
-    # IG-295: Retry with timeout escalation
-    llm_retry_on_timeout: bool = True
-    llm_max_timeout_retries: int = Field(default=2, ge=0, le=5)
-    llm_timeout_retry_multiplier: float = Field(default=2.0, ge=1.0, le=5.0)
+    Args:
+        code_exec_max_output_chars: Max chars for shell/code tool stdout.
+        tool_output_max_chars: Max chars for non-code_exec tool output.
+    """
 
-    # Tool output caps (model context / graph state)
     code_exec_max_output_chars: int = Field(
         default=32_000,
         ge=1000,
@@ -982,11 +987,6 @@ class InfrastructureLimitsConfig(BaseModel):
         le=500_000,
         description="Max chars for non-code_exec tool output in graph state and model context",
     )
-
-    # Tool limits
-    recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
-    tool_call_limit: ToolCallLimitConfig = Field(default_factory=ToolCallLimitConfig)
-    tool_retry: ToolRetryConfig = Field(default_factory=ToolRetryConfig)
 
 
 class OutputStreamingConfig(BaseModel):
@@ -1213,9 +1213,8 @@ class ContextEngineConfig(BaseModel):
 class StrangeLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
 
-    Unified configuration consolidating agentic behavior fields and infrastructure limits.
-    Behavior fields are placed directly under strange_loop.* for easy access (max 2 levels nesting).
-    Infrastructure limits are grouped in dedicated strange_loop.limits.* subsection.
+    Unified configuration consolidating agentic behavior fields and loop execution controls.
+    Behavior fields are placed directly under loop.* for easy access.
 
     Args:
         enabled: Enable agent loop mode.
@@ -1231,7 +1230,12 @@ class StrangeLoopConfig(BaseModel):
         goal_completion_mode: How planner completion (`require_goal_completion`) combines with
             execution heuristics when the goal is assessed as done (IG-298).
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
-        limits: Infrastructure limits configuration (rate limiting, concurrency, timeouts, tool limits).
+        checkpoint: Progressive checkpoint persistence and startup resume (RFC-203).
+        concurrency: Parallelism caps and step scheduling strategy.
+        tool_output: Tool result size caps for graph state and model context.
+        tool_call_limit: Tool call count limits per thread/run.
+        tool_retry: Tool failure retry policy.
+        llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1357,10 +1361,34 @@ class StrangeLoopConfig(BaseModel):
         description="Plan-phase ledger projection limits (IG-380); zeros = full ledger passthrough",
     )
 
-    # IG-407: Infrastructure limits subsection
-    limits: InfrastructureLimitsConfig = Field(
-        default_factory=InfrastructureLimitsConfig,
-        description="Infrastructure limits (rate limiting, concurrency, timeouts, tool limits)",
+    checkpoint: LoopCheckpointConfig = Field(
+        default_factory=LoopCheckpointConfig,
+        description="Progressive checkpoint persistence and startup resume (RFC-203)",
+    )
+
+    concurrency: LoopConcurrencyConfig = Field(
+        default_factory=LoopConcurrencyConfig,
+        description="Parallelism caps and step scheduling strategy",
+    )
+
+    tool_output: LoopToolOutputConfig = Field(
+        default_factory=LoopToolOutputConfig,
+        description="Tool result size caps for graph state and model context",
+    )
+
+    tool_call_limit: ToolCallLimitConfig = Field(
+        default_factory=ToolCallLimitConfig,
+        description="Tool call count limits per thread/run",
+    )
+
+    tool_retry: ToolRetryConfig = Field(
+        default_factory=ToolRetryConfig,
+        description="Tool failure retry policy",
+    )
+
+    llm_rate_limit: LLMRateLimitConfig = Field(
+        default_factory=LLMRateLimitConfig,
+        description="LLM rate limiting, per-call timeouts, and retry escalation",
     )
 
     context_engine: ContextEngineConfig = Field(

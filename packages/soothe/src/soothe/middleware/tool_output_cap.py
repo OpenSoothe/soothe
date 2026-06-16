@@ -21,10 +21,10 @@ _TRUNCATION_SUFFIX = "\n...[truncated for model context]"
 
 
 def _cap_for_tool(tool_name: str, config: SootheConfig) -> int:
-    limits = config.agent.loop.limits
+    tool_output = config.agent.loop.tool_output
     if get_outcome_type(tool_name) == "code_exec":
-        return int(limits.code_exec_max_output_chars)
-    return int(limits.tool_output_max_chars)
+        return int(tool_output.code_exec_max_output_chars)
+    return int(tool_output.tool_output_max_chars)
 
 
 def _truncate_content(content: Any, max_chars: int) -> Any:

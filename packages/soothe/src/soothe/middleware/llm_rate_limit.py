@@ -22,12 +22,9 @@ from soothe.utils.token_counting import estimate_content_chars
 
 logger = logging.getLogger(__name__)
 
-# Extra wall-clock seconds per this many estimated prompt characters (IG-301).
-_CHARS_PER_EXTRA_TIMEOUT_SECOND = 400
-
 
 def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
-    """Sum system prompt and user/tool message text lengths for timeout scaling (IG-301)."""
+    """Sum system prompt and message text lengths for timeout error metadata."""
     total = 0
     try:
         sys_text = request.system_prompt
@@ -41,31 +38,6 @@ def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
         except Exception:  # noqa: BLE001
             continue
     return total
-
-
-def compute_effective_llm_call_timeout(
-    *,
-    base_seconds: int,
-    max_seconds: int,
-    prompt_char_estimate: int,
-    adaptive: bool,
-) -> int:
-    """Compute per-call timeout with optional scaling for large prompts (IG-301).
-
-    Args:
-        base_seconds: Configured floor (``llm_call_timeout_seconds``).
-        max_seconds: Configured ceiling (``llm_call_timeout_max_seconds``).
-        prompt_char_estimate: Estimated input characters for this request.
-        adaptive: When False, return ``base_seconds`` only.
-
-    Returns:
-        Timeout in whole seconds, clamped to ``[base_seconds, max_seconds]``.
-    """
-    cap = max(max_seconds, base_seconds)
-    if not adaptive or prompt_char_estimate <= 0:
-        return min(base_seconds, cap)
-    extra = prompt_char_estimate // _CHARS_PER_EXTRA_TIMEOUT_SECOND
-    return min(cap, max(base_seconds, base_seconds + extra))
 
 
 class EnhancedTimeoutError(TimeoutError):
@@ -203,26 +175,24 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         middleware = LLMRateLimitMiddleware(
             requests_per_minute=120,
             max_concurrent_requests_per_thread=10,
-            call_timeout_seconds=60,
-            call_timeout_max_seconds=600,
-            call_timeout_adaptive=True,
+            call_timeout_seconds=120,
+            call_timeout_max_seconds=300,
             thread_local=True,  # IG-258 Phase 2
             retry_on_timeout=True,  # IG-295
             max_timeout_retries=2,  # IG-295
-            timeout_retry_multiplier=2.0,  # IG-295
+            timeout_retry_multiplier=1.2,  # IG-295
         )
         ```
 
     Args:
         requests_per_minute: Global RPM limit (distributed across threads).
         max_concurrent_requests_per_thread: Max concurrent per thread (Phase 2).
-        call_timeout_seconds: Floor duration per LLM call before timeout.
-        call_timeout_max_seconds: Ceiling when adaptive scaling is enabled (IG-301).
-        call_timeout_adaptive: Scale timeout from the floor by prompt size (IG-301).
+        call_timeout_seconds: Base duration per LLM call before timeout.
+        call_timeout_max_seconds: Ceiling for retry timeout escalation (IG-295).
         thread_local: Enable thread-local budgets (Phase 2, default True).
         retry_on_timeout: Enable retry with timeout escalation (IG-295, default True).
         max_timeout_retries: Max retry attempts after timeout (IG-295, default 2).
-        timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 2.0).
+        timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 1.2).
     """
 
     name = "LLMRateLimitMiddleware"
@@ -231,33 +201,30 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         self,
         requests_per_minute: int = 120,
         max_concurrent_requests_per_thread: int = 10,
-        call_timeout_seconds: int = 60,
-        call_timeout_max_seconds: int = 600,
-        call_timeout_adaptive: bool = True,
+        call_timeout_seconds: int = 120,
+        call_timeout_max_seconds: int = 300,
         thread_local: bool = True,  # IG-258 Phase 2
         retry_on_timeout: bool = True,  # IG-295
         max_timeout_retries: int = 2,  # IG-295
-        timeout_retry_multiplier: float = 2.0,  # IG-295
+        timeout_retry_multiplier: float = 1.2,  # IG-295
     ) -> None:
         """Initialize rate limiter with thread-local budgets and retry (Phase 2, IG-295).
 
         Args:
             requests_per_minute: Global RPM limit (default: 120).
             max_concurrent_requests_per_thread: Max concurrent per thread (Phase 2, default: 10).
-            call_timeout_seconds: Floor max duration per LLM call (default: 60s).
-            call_timeout_max_seconds: Ceiling when adaptive (default: 600s, IG-301).
-            call_timeout_adaptive: Scale timeout from floor by prompt size (IG-301).
+            call_timeout_seconds: Base max duration per LLM call (default: 120s).
+            call_timeout_max_seconds: Retry timeout ceiling (default: 300s).
             thread_local: Enable thread-local budgets (Phase 2, default True).
             retry_on_timeout: Enable retry with timeout escalation (IG-295, default True).
             max_timeout_retries: Max retry attempts after timeout (IG-295, default 2).
-            timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 2.0).
+            timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 1.2).
         """
         super().__init__()
         self._rpm_limit_global = requests_per_minute
         self._concurrent_limit_per_thread = max_concurrent_requests_per_thread
         self._call_timeout = call_timeout_seconds
         self._call_timeout_max = max(call_timeout_max_seconds, call_timeout_seconds)
-        self._call_timeout_adaptive = call_timeout_adaptive
         self._thread_local_enabled = thread_local
 
         # Retry configuration (IG-295)
@@ -272,13 +239,12 @@ class LLMRateLimitMiddleware(AgentMiddleware):
 
             logger.info(
                 "LLM rate limiter initialized (thread-local): global_rpm=%d, "
-                "per_thread_concurrent=%d, timeout_floor=%ds timeout_cap=%ds adaptive=%s "
+                "per_thread_concurrent=%d, timeout=%ds timeout_cap=%ds "
                 "retry=%s max_retries=%d retry_multiplier=%.1f",
                 requests_per_minute,
                 max_concurrent_requests_per_thread,
                 call_timeout_seconds,
                 self._call_timeout_max,
-                call_timeout_adaptive,
                 retry_on_timeout,
                 max_timeout_retries,
                 timeout_retry_multiplier,
@@ -291,13 +257,12 @@ class LLMRateLimitMiddleware(AgentMiddleware):
 
             logger.info(
                 "LLM rate limiter initialized (global): rpm=%d, concurrent=%d, "
-                "timeout_floor=%ds timeout_cap=%ds adaptive=%s "
+                "timeout=%ds timeout_cap=%ds "
                 "retry=%s max_retries=%d retry_multiplier=%.1f",
                 requests_per_minute,
                 max_concurrent_requests_per_thread,
                 call_timeout_seconds,
                 self._call_timeout_max,
-                call_timeout_adaptive,
                 retry_on_timeout,
                 max_timeout_retries,
                 timeout_retry_multiplier,
@@ -352,46 +317,22 @@ class LLMRateLimitMiddleware(AgentMiddleware):
 
             return self._thread_budgets[thread_id]
 
-    def _effective_call_timeout(self, request: ModelRequest[Any]) -> int:
-        """Per-request timeout (adaptive for large prompts, IG-301)."""
-        est = estimate_model_request_prompt_chars(request)
-        return compute_effective_llm_call_timeout(
-            base_seconds=self._call_timeout,
-            max_seconds=self._call_timeout_max,
-            prompt_char_estimate=est,
-            adaptive=self._call_timeout_adaptive,
-        )
-
     def _calculate_retry_timeout(
         self,
         base_timeout: int,
         attempt: int,
-        request: ModelRequest[Any],
     ) -> int:
         """Calculate timeout with escalation on retry (IG-295).
 
-        Timeout escalates by multiplier on each retry attempt, capped at max.
-        Adaptive scaling still applies on top of escalated base.
-
         Args:
-            base_timeout: Initial timeout floor.
+            base_timeout: Initial timeout base.
             attempt: Retry attempt number (0-indexed).
-            request: Model request for adaptive scaling.
 
         Returns:
             Escalated timeout in seconds, capped at max_seconds.
         """
-        # Escalate base timeout on retry (IG-295)
-        escalated_base = int(base_timeout * (self._timeout_retry_multiplier**attempt))
-
-        # Apply adaptive scaling on escalated base (IG-301)
-        est = estimate_model_request_prompt_chars(request)
-        return compute_effective_llm_call_timeout(
-            base_seconds=escalated_base,
-            max_seconds=self._call_timeout_max,
-            prompt_char_estimate=est,
-            adaptive=self._call_timeout_adaptive,
-        )
+        escalated = int(base_timeout * (self._timeout_retry_multiplier**attempt))
+        return min(escalated, self._call_timeout_max)
 
     async def _redistribute_budgets(self) -> None:
         """Redistribute RPM budgets when threads exit (Phase 2).
@@ -484,7 +425,6 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                     eff_timeout = self._calculate_retry_timeout(
                         base_timeout=self._call_timeout,
                         attempt=attempt,
-                        request=request,
                     )
 
                     try:
@@ -494,7 +434,7 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                     except TimeoutError:
                         if attempt < max_attempts - 1:
                             # Retry with increased timeout
-                            logger.warning(
+                            logger.debug(
                                 "LLM call timeout (attempt %d/%d, %ds) - retrying with increased timeout (thread_id=%s)",
                                 attempt + 1,
                                 max_attempts,
@@ -528,7 +468,6 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                     eff_timeout = self._calculate_retry_timeout(
                         base_timeout=self._call_timeout,
                         attempt=attempt,
-                        request=request,
                     )
 
                     try:
@@ -537,7 +476,7 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                         return response
                     except TimeoutError:
                         if attempt < max_attempts - 1:
-                            logger.warning(
+                            logger.debug(
                                 "LLM call timeout (attempt %d/%d, %ds) - retrying",
                                 attempt + 1,
                                 max_attempts,

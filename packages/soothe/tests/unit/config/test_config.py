@@ -64,14 +64,23 @@ class TestSootheConfig:
             "  name: LegacyFold\n"
             "strange_loop:\n"
             "  max_iterations: 42\n"
-            "  limits:\n"
+            "  concurrency:\n"
             "    max_parallel_steps: 7\n",
             encoding="utf-8",
         )
         cfg = SootheConfig.from_yaml_file(str(p))
         assert cfg.agent.name == "LegacyFold"
         assert cfg.agent.loop.max_iterations == 42
-        assert cfg.agent.loop.limits.max_parallel_steps == 7
+        assert cfg.agent.loop.concurrency.max_parallel_steps == 7
+
+    def test_llm_rate_limit_disabled_by_default(self) -> None:
+        cfg = SootheConfig()
+        assert cfg.agent.loop.llm_rate_limit.enabled is False
+
+    def test_checkpoint_defaults(self) -> None:
+        cfg = SootheConfig()
+        assert cfg.agent.loop.checkpoint.progressive is True
+        assert cfg.agent.loop.checkpoint.auto_resume_on_start is False
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()

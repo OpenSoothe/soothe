@@ -37,7 +37,6 @@ def middleware_with_retry() -> LLMRateLimitMiddleware:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        call_timeout_adaptive=False,
         thread_local=True,
         retry_on_timeout=True,
         max_timeout_retries=2,
@@ -53,7 +52,6 @@ def middleware_no_retry() -> LLMRateLimitMiddleware:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        call_timeout_adaptive=False,
         thread_local=True,
         retry_on_timeout=False,
     )
@@ -233,14 +231,12 @@ async def test_thread_budget_cleanup_on_success(
 
 def test_calculate_retry_timeout_escalation(
     middleware_with_retry: LLMRateLimitMiddleware,
-    mock_request: ModelRequest,
 ) -> None:
     """Test _calculate_retry_timeout escalates correctly."""
     # Attempt 0: base timeout
     timeout_0 = middleware_with_retry._calculate_retry_timeout(
         base_timeout=60,
         attempt=0,
-        request=mock_request,
     )
     assert timeout_0 == 60  # No escalation on initial attempt
 
@@ -248,7 +244,6 @@ def test_calculate_retry_timeout_escalation(
     timeout_1 = middleware_with_retry._calculate_retry_timeout(
         base_timeout=60,
         attempt=1,
-        request=mock_request,
     )
     assert timeout_1 == 120  # 60 * 2 = 120
 
@@ -256,7 +251,6 @@ def test_calculate_retry_timeout_escalation(
     timeout_2 = middleware_with_retry._calculate_retry_timeout(
         base_timeout=60,
         attempt=2,
-        request=mock_request,
     )
     assert timeout_2 == 240  # 60 * 4 = 240
 
@@ -376,7 +370,6 @@ async def test_global_mode_retry(
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        call_timeout_adaptive=False,
         thread_local=False,  # Global mode
         retry_on_timeout=True,
         max_timeout_retries=2,
