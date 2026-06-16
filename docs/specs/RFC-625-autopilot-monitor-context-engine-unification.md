@@ -9,6 +9,8 @@
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
 **Related**: RFC-204 (Autopilot Mode), RFC-217 (Goal Context Management)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
+**Related**: RFC-626 (Entity Model and State Management Consolidation) — extends this RFC's CE unification with entity model consolidation and LoopState elimination
+**Implements**: RFC-402 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 
 ---
 
@@ -47,6 +49,7 @@ This RFC unifies goal management under ContextEngine, deletes GoalEngine entirel
 - Multi-process goal orchestration (deferred to future RFC).
 - RAG/vector store integration for dreaming memory (deferred).
 - Cross-workspace dreaming (topic-based dreaming scope only).
+- Deletion of MemoryProtocol (MemoryProtocol is retained as protocol interface for external memory integration; CE's EpisodicSubmodule implements MemoryProtocol API).
 
 ---
 
@@ -79,7 +82,7 @@ packages/soothe/src/soothe/foundation/context/
 │   └── scheduling.py        # GoalScheduler
 └── episodic/
     ├── __init__.py
-    ├── store.py             # EpisodicStore interface
+    ├── store.py             # EpisodicStore interface (implements MemoryProtocol API)
     └── models.py            # EpisodeSummary model
 ```
 
@@ -764,7 +767,108 @@ class AutopilotService:
 
 ---
 
-### §11 Data Flow Summary
+### §11 RFC-626 Entity Model Refinements
+
+> **Note**: RFC-626 (Entity Model and State Management Consolidation) refines the entity model architecture established in this RFC. The following refinements apply to AutopilotMonitor's interaction with ContextEngine:
+
+#### Refined Entity Identity
+
+Per RFC-626 §2, all entity identity is consolidated under ContextEngine:
+
+- **GoalNode**: Sole goal entity (no dual `Goal` / `GoalNode` + `goal_history` entry)
+- **StepNode**: Sole step entity (no intermediate `PlanStep` or `StepAction`)
+- **LedgerEntry**: Unified message entity (no separate `ContextEntry` vs `LedgerMessage`)
+
+**AutopilotMonitor Impact**:
+- `monitor.intake_goal()` creates `GoalNode` via `ce.create_goal()` (unchanged)
+- `monitor.on_goal_completed()` reads `GoalNode.status` directly (no checkpoint fallback)
+- `verifier.analyze_placement()` queries CE DAG, not `goal_engine.goals` (already aligned)
+
+#### State Management Simplification
+
+Per RFC-626 §3, LoopState deleted and metrics consolidated:
+
+**Wave Metrics Migration**:
+```python
+# Before (LoopState):
+state.last_wave_tool_call_count = executor.tool_calls
+state.last_wave_subagent_task_count = executor.subagent_tasks
+
+# After (RFC-626):
+await ce.record_wave_metrics(WaveMetrics(
+    goal_id=goal.id,
+    iteration=state.iteration,
+    tool_call_count=executor.tool_calls,
+    subagent_task_count=executor.subagent_tasks,
+))
+```
+
+**AutopilotMonitor Impact**:
+- Completion chunk reads `ce.wave_metrics` for goal stats
+- No `LoopState.previous_plan` — stored in `GoalNode.previous_plan` field
+- No `LoopState.iteration` counter — CE tracks per-goal iteration
+
+#### Unified Ledger Integration
+
+Per RFC-626 Decision 1, ContextProtocol → CE CognitiveSubmodule:
+
+**AutopilotMonitor Changes**:
+- Goal intake ingests user input via `ce.ingest_cognitive(message, phase="intake")`
+- Completion handler ingests assistant output via `ce.ingest_cognitive(message, phase="completion")`
+- Dreaming coordinator reads unified ledger via `ce.ledger.entries(phases=["execute", "reflect"])`
+
+#### Episodic Memory Alignment
+
+Per RFC-626 Decision 2, MemoryProtocol retained as protocol interface, CE EpisodicSubmodule implements MemoryProtocol API:
+
+**AutopilotMonitor Impact**:
+- Dreaming handlers write episodes via `ce.episodic.remember_episode(summary)` (MemoryProtocol API)
+- Goal intake recalls relevant episodes via `ce.episodic.recall(query)` (MemoryProtocol API)
+- External memory systems (MemUMemory, Mem0) integrate via MemoryProtocol interface
+- CE's EpisodicSubmodule provides default implementation for persistent episodic memory
+
+#### Job Abstraction Alignment (RFC-222 §147-178)
+
+Per RFC-222 refined job abstraction:
+
+**AutopilotMonitor Impact on Dispatch**:
+- `GoalDispatchContextBundle` built from CE `CognitiveSubmodule.projection()`
+- No separate `GoalDispatchContextStore` — CE persistence backend handles storage
+- `GoalCompletionChunk.context_contribution` written to CE `GoalNode` and `EpisodicSubmodule`
+
+**Implementation Changes**:
+```python
+# Before (dual storage):
+await goal_dispatch_store.put(goal_id, contribution)
+await memory.remember(MemoryItem(...))
+
+# After (RFC-626 unified):
+await ce.update_goal_contribution(goal_id, contribution)
+await ce.episodic.remember_episode(EpisodeSummary(...))
+```
+
+#### Verification Phase Metrics
+
+All verification and dreaming phases operate on CE unified entity model:
+
+```python
+# DagVerificationReasoner context:
+snapshot = ce.get_dag_snapshot()  # Single source, no aggregation
+health_response = await verifier.verify_health(snapshot)
+
+# DreamingDistillationReasoner context:
+episodes = await ce.episodic.get_episodes_for_topic(topic)
+ledger_entries = ce.ledger.entries(phases=["execute", "reflect"])
+distill_response = await dreamer.distill_episodic(
+    goals=[ce.get_goal(gid) for gid in completed_goals],
+    ledger=ledger_entries,
+    episodes=episodes,
+)
+```
+
+---
+
+### §12 Data Flow Summary
 
 **Solo mode:**
 

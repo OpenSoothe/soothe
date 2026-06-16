@@ -7,6 +7,7 @@
 **Created**: 2026-06-04
 **Updated**: 2026-06-04
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
+**Related**: RFC-625 (Autopilot Monitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
 
 ## Abstract
 
@@ -97,6 +98,71 @@ Follows RFC-450 JSON message format with required `type` field.
 | `JOB_COMPLETED` | Operation not valid on completed job |
 | `JOB_FAILED` | Operation not valid on failed job |
 | `GUIDANCE_REJECTED` | GoalEngine rejected guidance (invalid directive) |
+
+---
+
+## RFC-626 Entity Model Alignment
+
+> **Note**: RFC-626 (Entity Model and State Management Consolidation) unifies entity identity under ContextEngine. This section describes how IPC commands operate on the refined entity model.
+
+### Unified Entity Identity
+
+Per RFC-626, the IPC protocol operates on CE entities directly:
+
+| IPC Term | RFC-626 Entity | Notes |
+|----------|---------------|-------|
+| `job_id` | `GoalNode.id` | Root goal identifier, 8-char hex |
+| `goal_id` | `GoalNode.id` | Any goal in DAG, same entity type |
+| `status` | `GoalNode.status` | CE GoalStatus enum value |
+| `workers` | `GoalNode.assigned_loop_id` | CE field, not separate registry |
+| `dag` | `GoalStepDAGSnapshot` | CE `get_dag_snapshot()` result |
+
+### Command Changes (RFC-626 Refined)
+
+**job_create**:
+- AutopilotMonitor calls `ce.create_goal()` (no GoalEngine)
+- Returns `GoalNode.id` as `job_id`
+- Placement analysis queries CE DAG via `ce.get_all_goals()`
+
+**job_status**:
+- Queries CE via `ce.get_goal(job_id)`
+- `active_goals` = count of `ce.get_goals_by_status("active")`
+- `workers` = `[goal.assigned_loop_id]` from GoalNode field
+- No separate worker registry lookup
+
+**job_dag**:
+- Calls `ce.get_dag_snapshot()`
+- Returns `GoalStepDAGSnapshot` serialized as JSON
+- No GoalEngine DAG aggregation
+
+**job_guidance**:
+- Guidance stored in `GoalNode.guidance_accumulated` list
+- Backoff reasoner reads from CE GoalNode
+- No separate guidance store
+
+### Event Stream Changes (RFC-626 Refined)
+
+Event emission unified through CE callbacks:
+
+| Event | CE Callback Trigger | Fields |
+|-------|---------------------|--------|
+| `soothe.goal.status` | `ce.on("goal_activated", ...)` | `goal_id`, `status` from GoalNode |
+| `soothe.goal.progress` | `ce.on("step_completed", ...)` | `goal_id`, `steps_completed` from StepDAG |
+| `soothe.goal.created` | `ce.on("goal_created", ...)` | `goal_id`, `description` from GoalNode |
+| `soothe.goal.completed` | `ce.on("goal_completed", ...)` | `goal_id`, `summary` from GoalNode.report |
+
+**Implementation**: AutopilotService subscribes to CE callbacks and emits IPC events to subscribed desktop clients.
+
+### Data Flow (RFC-626 Unified)
+
+```
+Desktop app → WebSocket IPC → AutopilotService
+  → AutopilotMonitor → ContextEngine API calls
+  → CE callbacks → InternalEventBus → IPC event stream
+  → Desktop app receives goal/status/progress events
+```
+
+No intermediate GoalEngine, no dual state containers, no checkpoint fallbacks.
 
 ### Event Types (Server → Client)
 

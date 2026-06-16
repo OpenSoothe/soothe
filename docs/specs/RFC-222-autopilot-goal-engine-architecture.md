@@ -14,6 +14,7 @@
 
 **Superseded by (in part)**:
 - RFC-625 (AutopilotMonitor and ContextEngine Unification) — deletes `GoalEngine` entirely (~1821 lines). All goal/step/ledger state consolidated into `ContextEngine`; autopilot scheduling migrated to `AutopilotMonitor`. This RFC's `GoalEngine` references are historical only.
+- RFC-626 (Entity Model and State Management Consolidation) — consolidates all entity models under ContextEngine, eliminates `LoopState`, unifies ledger management. Job abstraction refined to operate directly on CE GoalNode entities without intermediate state containers.
 
 ---
 
@@ -175,6 +176,27 @@ Properties:
 - `merged_context` is **pre-computed in the daemon**. Worker never reads `GoalEngine`, never queries parents, never sees the DAG.
 - `deadline_seconds` bounds runaway goals (closes gap H5).
 - `attempt` lets the worker adapt strategy on retries without daemon-side prompt mutation.
+
+### Refined Job Abstraction (RFC-626 Alignment)
+
+> **Note**: RFC-626 (Entity Model and State Management Consolidation) refines the job abstraction to eliminate intermediate state containers (`LoopState`) and operate directly on ContextEngine entity model.
+
+**Key refinements applied:**
+
+1. **Entity Identity Unification**: `goal_id` in `AutopilotJob` references CE `GoalNode` directly, no intermediate `Goal` or `goal_history` entry.
+
+2. **Metrics Consolidation**: Wave execution metrics (`tool_call_count`, `subagent_task_count`, etc.) stored in CE `WaveMetrics` property instead of `LoopState`.
+
+3. **Context Bundle Source**: `merged_context` built from CE `CognitiveSubmodule.projection()` and `GoalNode.lineage`, eliminating dual `ContextProtocol` + `LedgerManager` ingestion.
+
+4. **Completion Chunk State**: `GoalCompletionChunk.context_contribution` written directly to CE `GoalNode` and `EpisodicSubmodule`, no separate `GoalDispatchContextStore`.
+
+**Migration Impact**:
+- StrangeLoop reads `ce.wave_metrics` instead of `state.last_wave_*`
+- Executor writes to `ce.ingest_cognitive()` instead of dual `context.ingest()` + ledger
+- Completion handler updates CE GoalNode status directly via `ce.complete_goal()`
+
+**Backward Compatibility**: Job contract (`AutopilotJob` dataclass) unchanged; only internal state management refined. Workers continue to hydrate from bundle, emit completion chunk.
 
 ### Stream Contract — Worker → Autopilot
 
