@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-05
-**Total RFCs**: 73
+**Last Updated**: 2026-06-16
+**Total RFCs**: 76
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -9,7 +9,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 51 |
+| Draft | 54 |
 | Implemented | 16 |
 | Proposed | 2 |
 | Superseded | 2 |
@@ -20,7 +20,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 50 |
+| Architecture Design | 53 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
@@ -472,6 +472,31 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-622 (CoreAgent Clarification Relay), RFC-220 (Agentic Goal Execution / StrangeLoop), RFC-403 (Unified Event Naming)
   - Authors: Soothe Team
 
+- **RFC-624**: [Context Engine — Unified Context Management for Goals, Steps, and Projection](RFC-624-context-engine.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-12
+  - Updated: 2026-06-15
+  - Depends on: RFC-000, RFC-200, RFC-201, RFC-214, RFC-215
+  - Authors: Soothe Team
+
+- **RFC-625**: [AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion](RFC-625-autopilot-monitor-context-engine-unification.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-06-15
+  - Updated: 2026-06-16
+  - Depends on: RFC-624, RFC-222, RFC-200
+  - Supersedes: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
+  - Authors: Soothe Team
+
+- **RFC-626**: [Entity Model and State Management Consolidation — LoopState Elimination](RFC-626-entity-model-state-consolidation.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-16
+  - Depends on: RFC-624, RFC-625, RFC-203, RFC-201
+  - Extends: RFC-625 — entity model consolidation, LoopState elimination, job abstraction refinement
+  - Authors: Soothe Team
+
 ---
 
 ### Product & Applications (7xx)
@@ -505,11 +530,15 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-600 | Plugin Extension Specification | 2026-03-23 |
 | RFC-601 | Built-in Plugin Agents | 2026-03-31 |
 | RFC-604 | Plan Phase Robustness (Three-Layer Defense) | 2026-04-11 |
+| RFC-625 | AutopilotMonitor as ContextEngine Monitor Submodul | 2026-06-15 |
 
 ### Recently Drafted RFCs (Top 10)
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
+| RFC-626 | Entity Model and State Management Consolidation | Draft | 2026-06-16 |
+| RFC-625 | AutopilotMonitor and ContextEngine Unification | Implemented | 2026-06-15 |
+| RFC-624 | Context Engine | Draft | 2026-06-12 |
 | RFC-413 | Server-Owned Display Card Ledger | Draft | 2026-06-04 |
 | RFC-505 | Soothe Desktop Client Architecture | Draft | 2026-06-04 |
 | RFC-623 | Veritas Auto-Mode Robustness | Draft | 2026-06-03 |
@@ -517,9 +546,6 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-622 | CoreAgent Clarification Relay | Draft | 2026-06-02 |
 | RFC-227 | Plan-Assess Prior-Progress Digest | Draft | 2026-06-01 |
 | RFC-105 | Progressive Skill Loading | Draft | 2026-05-29 |
-| RFC-225 | Loop Continuity and Goal Record Enrichme | Draft | 2026-05-29 |
-| RFC-226 | Continuation-Aware plan_assess and Post- | Draft | 2026-05-29 |
-| RFC-412 | MCP Management | Draft | 2026-05-29 |
 
 ### Supersede Relationships
 
@@ -533,6 +559,8 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-601 | RFC-0004, RFC-0005, RFC-0021 |
 | RFC-613 | RFC-605 |
 | RFC-619 | RFC-601 |
+| RFC-625 | RFC-200 (GoalEngine deleted, features migrated to CE) |
+| RFC-626 | RFC-203 (LoopState eliminated, consolidated into ExecutionState) |
 
 ---
 
@@ -546,13 +574,16 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | 3xx | Protocols | 2 |
 | 4xx | Daemon & Transport | 13 |
 | 5xx | CLI & TUI | 6 |
-| 6xx | Plugin System & Extensions | 20 |
+| 6xx | Plugin System & Extensions | 23 |
 | 7xx | Product & Applications | 1 |
 
 ---
 
 ## Recently Added
 
+- **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
+- **RFC-625**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion (2026-06-15)
+- **RFC-624**: Context Engine — Unified Context Management for Goals, Steps, and Projection (2026-06-12)
 - **RFC-228**: Autopilot Job IPC Commands for Desktop Integration (2026-06-04)
 - **RFC-413**: Server-Owned Display Card Ledger (2026-06-04)
 - **RFC-505**: Soothe Desktop Client Architecture (2026-06-04)
