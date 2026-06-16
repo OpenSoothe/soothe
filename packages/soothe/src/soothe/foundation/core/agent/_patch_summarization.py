@@ -162,8 +162,7 @@ def _patch_summarization_token_count_optimization() -> None:
     def patched_truncate_args(
         self: Any,
         messages: list[Any],
-        system_message: Any,
-        tools: list[Any] | None,
+        total_tokens: int,
     ) -> tuple[list[Any], bool]:
         truncate_trigger = getattr(self, "_truncate_args_trigger", None)
         if truncate_trigger is not None:
@@ -171,7 +170,7 @@ def _patch_summarization_token_count_optimization() -> None:
             if trigger_type == "messages" and len(messages) < trigger_value:
                 return messages, False
 
-        return _original_truncate_args(self, messages, system_message, tools)
+        return _original_truncate_args(self, messages, total_tokens)
 
     def patched_wrap_model_call(self: Any, request: Any, handler: Any) -> Any:
         self._soothe_token_count_cache = {}

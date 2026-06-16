@@ -53,8 +53,7 @@ def test_truncate_args_skips_token_count_for_message_trigger() -> None:
     result_messages, modified = SummarizationMiddleware._truncate_args(
         middleware,
         messages,
-        None,
-        [],
+        1000,  # total_tokens (new signature)
     )
 
     assert result_messages is messages
