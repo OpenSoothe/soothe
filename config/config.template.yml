@@ -272,7 +272,7 @@ agent:
       call_timeout_seconds: 120
       call_timeout_max_seconds: 300
       retry_on_timeout: true
-      max_timeout_retries: 3
+      max_timeout_retries: 2
       timeout_retry_multiplier: 1.2
 
   # === PROTOCOLS (Backend Selection) ===
