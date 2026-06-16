@@ -87,3 +87,12 @@ def cleanup_claude_sessions(thread_ids: list[str]) -> None:
         logger.debug(
             "Cleaned up %d Claude session cache entries for deleted loop", len(keys_to_remove)
         )
+
+
+__all__ = [
+    "cleanup_claude_sessions",
+    "record_claude_session",
+    "resolve_resume_session_id",
+    "_memory_claude_sessions",
+    "_locks",
+]

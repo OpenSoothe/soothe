@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.config import SootheConfig
-from soothe.foundation.core.agent.claude_core_agent import ClaudeCoreAgent, _resolve_claude_cwd
+from soothe.foundation.core.agent._claude_agent import ClaudeCoreAgent, _resolve_claude_cwd
 
 
 @pytest.fixture
@@ -247,12 +247,12 @@ class TestClaudeCoreAgentAstream:
 
             # Mock session bridge functions
             with patch(
-                "soothe.foundation.core.agent.claude_core_agent.resolve_resume_session_id",
+                "soothe.foundation.core.agent._claude_agent.resolve_resume_session_id",
                 new_callable=AsyncMock,
                 return_value=None,
             ):
                 with patch(
-                    "soothe.foundation.core.agent.claude_core_agent.record_claude_session",
+                    "soothe.foundation.core.agent._claude_agent.record_claude_session",
                     new_callable=AsyncMock,
                 ):
                     # Execute astream
@@ -280,12 +280,12 @@ class TestClaudeCoreAgentAstream:
             mock_query.return_value = mock_stream
 
             with patch(
-                "soothe.foundation.core.agent.claude_core_agent.resolve_resume_session_id",
+                "soothe.foundation.core.agent._claude_agent.resolve_resume_session_id",
                 new_callable=AsyncMock,
                 return_value=None,
             ):
                 with patch(
-                    "soothe.foundation.core.agent.claude_core_agent.record_claude_session",
+                    "soothe.foundation.core.agent._claude_agent.record_claude_session",
                     new_callable=AsyncMock,
                 ):
                     # Execute astream - should not raise

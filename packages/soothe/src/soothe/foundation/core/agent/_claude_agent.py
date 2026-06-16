@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
-from soothe.foundation.core.agent.claude_display_summary import claude_text_summary_for_display
-from soothe.foundation.core.agent.claude_session_bridge import (
+from soothe.foundation.core.agent._claude_display import claude_text_summary_for_display
+from soothe.foundation.core.agent._claude_session import (
     record_claude_session,
     resolve_resume_session_id,
 )
@@ -493,4 +493,5 @@ __all__ = [
     "ClaudeCoreAgent",
     "_preview_claude_tool_input",
     "_resolve_claude_cwd",
+    "_get_langgraph_configurable",
 ]
