@@ -2,13 +2,14 @@
 
 **RFC**: 605
 **Title**: Explore Subagent and Parallel Spawning
-**Status**: Superseded
-**Superseded By**: RFC-613 (Explore Agent — LLM-Orchestrated Iterative Search)
-**Superseded Date**: 2026-05-01
-**Reason**: RFC-613 replaces the fixed wave-based progression with LLM-orchestrated iterative search. The parallel subagent spawning portion will be addressed in a separate future RFC.
+**Status**: Deprecated
+**Superseded By**: RFC-613
+**Superseded Date**: 2026-06-16
+**Deprecation Reason**: Fixed wave-based search replaced by LLM-orchestrated iterative search.
+**Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-04-13
-**Updated**: 2026-04-13
+**Updated**: 2026-06-16
 **Dependencies**: RFC-000, RFC-001, RFC-200, RFC-100, RFC-600
 **Related**: RFC-211
 

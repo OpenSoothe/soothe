@@ -16,7 +16,7 @@ from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 _ARG_PREVIEW_MAX_CHARS = 80
 _EDIT_STRING_PREVIEW_MAX_CHARS = 30
 _EDIT_STRING_ARG_KEYS = frozenset({"old_string", "new_string"})
-_SKIP_ARG_KEYS = frozenset({"_raw"})
+_SKIP_ARG_KEYS = frozenset({"_raw", "_subgraph_tool", "value"})
 
 
 def compact_arg_text(text: str) -> str:

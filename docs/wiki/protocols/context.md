@@ -9,7 +9,7 @@
 
 ContextProtocol is **planned** as Soothe's unbounded knowledge accumulator for cognitive context engineering. It serves as StrangeLoop's "consciousness" layer, maintaining complete execution knowledge across threads.
 
-⚠️ **Implementation Status**: ContextProtocol is defined in RFC-400 (draft status) but **not yet implemented**. The current architecture uses alternative mechanisms for context management. This documentation describes the **planned design**.
+⚠️ **Implementation Status**: ContextProtocol is defined in RFC-302 (draft status) but **not yet implemented**. The current architecture uses alternative mechanisms for context management. This documentation describes the **planned design**.
 
 ## Planned Purpose
 
@@ -25,7 +25,7 @@ ContextProtocol is **planned** as Soothe's unbounded knowledge accumulator for c
 class ContextProtocol(Protocol):
     """Unbounded knowledge accumulator for cognitive context engineering.
     
-    Planned design per RFC-400.
+    Planned design per RFC-302.
     """
 
     async def ingest(self, entry: ContextEntry) -> None:
@@ -149,7 +149,7 @@ class ContextProjection(BaseModel):
     token_count: int
 ```
 
-## Design Principles (RFC-400)
+## Design Principles (RFC-302)
 
 ### 1. Accumulate, Never Discard
 
@@ -238,23 +238,23 @@ When ContextProtocol is implemented:
 
 ## Specification Reference
 
-- **RFC-400**: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval (draft)
-- **RFC-001**: Core Modules Architecture (references RFC-400 for retrieval)
-- **RFC-300**: Context and Memory Architecture Design (superseded by RFC-400)
+- **RFC-302**: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval (draft)
+- **RFC-001**: Core Modules Architecture (references RFC-302 for retrieval)
+- **RFC-300**: Context and Memory Architecture Design (superseded by RFC-302)
 
 ## Implementation Timeline
 
 ContextProtocol is planned for future implementation. Current blockers:
 
-- RFC-400 is in draft status
+- RFC-302 is in draft status
 - Retrieval module design needs finalization
 - Backend architecture decisions pending
 
-**Track RFC-400 status** for implementation updates.
+**Track RFC-302 status** for implementation updates.
 
 ## Related Documentation
 
-- [RFC-400 Draft](../specs/RFC-400-context-protocol-architecture.md)
+- [RFC-302 Draft](../specs/RFC-302-context-protocol-architecture.md)
 - [Memory Protocol](memory.md) - Current cross-thread memory
 - [LoopWorkingMemory Protocol](loop-protocols.md) - Current bounded scratchpad
 - [Planner Protocol](planner.md) - Uses bounded context for planning

@@ -150,6 +150,23 @@ class TestExtractToolArgsDict:
     def test_anthropic_style_input_dict(self) -> None:
         assert extract_tool_args_dict({"name": "ls", "input": {"path": "/b"}}) == {"path": "/b"}
 
+    def test_value_wrapper_key_stripped(self) -> None:
+        """Sentinel ``{"value": X}`` from non-dict args must not appear as fake arg.
+
+        When raw args is a boolean/int (e.g., ``True``), textual_adapter wraps it as
+        ``{"value": True}``. This sentinel must be stripped to avoid displaying
+        ``ReadFile(True)`` instead of proper ``ReadFile``.
+        """
+        assert extract_tool_args_dict({"value": True}) == {}
+        assert extract_tool_args_dict({"value": False}) == {}
+        assert extract_tool_args_dict({"value": 123}) == {}
+        assert extract_tool_args_dict({"value": "str"}) == {}
+
+    def test_subgraph_tool_placeholder_stripped(self) -> None:
+        """Wire placeholder ``{"_subgraph_tool": true}`` must not display as ``ReadFile(True)``."""
+        assert extract_tool_args_dict({"_subgraph_tool": True}) == {}
+        assert extract_tool_args_dict({"_subgraph_tool": False}) == {}
+
 
 class TestNormalizeToolNameForArgMap:
     """Snake_case normalization for step-card tool stats."""

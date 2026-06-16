@@ -1,12 +1,13 @@
-# RFC-406: PolicyProtocol Architecture
+# RFC-305: PolicyProtocol Architecture
 
-**RFC**: 406
+**RFC**: 305
 **Title**: PolicyProtocol: Permission Checking & Scope Matching
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Dependencies**: RFC-000, RFC-001
 **Related**: RFC-100 (CoreAgent)
+**Note**: Moved from 4xx (RFC-305) per RFC-900 reclassification
 
 ---
 
@@ -295,7 +296,7 @@ policy:
 ## Changelog
 
 ### 2026-04-17
-- Consolidated RFC-001 Module 4 (PolicyProtocol) with Permission structure design from RFC-406
+- Consolidated RFC-001 Module 4 (PolicyProtocol) with Permission structure design from RFC-305
 - Unified fine-grained permission model with scope-aware matching
 - Defined permission categories (fs, shell, net, mcp, subagent) with action/scope structure
 - Maintained least-privilege delegation principle and approval workflow

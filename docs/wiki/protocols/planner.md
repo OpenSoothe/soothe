@@ -642,7 +642,7 @@ Controlled concurrency (RFC-000 Principle 8):
 
 ## Specification Reference
 
-- **RFC-404**: Planner Protocol Architecture
+- **RFC-304**: Planner Protocol Architecture
 - **RFC-604**: Reason Phase Robustness (two-phase architecture)
 - **RFC-211**: Layer2 Tool Result Optimization
 - **RFC-226**: Continuation-Aware Plan Assess

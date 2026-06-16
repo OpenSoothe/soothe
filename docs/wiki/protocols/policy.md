@@ -629,7 +629,7 @@ Named profiles simplify configuration:
 
 ## Specification Reference
 
-- **RFC-406**: Policy Protocol Architecture
+- **RFC-305**: Policy Protocol Architecture
 - **RFC-102**: Security Filesystem Policy
 - **RFC-000**: System Conceptual Design (least-privilege principle)
 

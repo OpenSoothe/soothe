@@ -34,9 +34,9 @@ This RFC defines:
 
 This RFC does **not** define:
 
-* RendererProtocol interface (see RFC-400)
-* Event processing pipeline (see RFC-400)
-* Daemon transport (see RFC-400)
+* RendererProtocol interface (see RFC-302)
+* Event processing pipeline (see RFC-302)
+* Daemon transport (see RFC-302)
 * CLI/TUI architecture (see RFC-500)
 
 ---

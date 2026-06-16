@@ -150,9 +150,9 @@ class ThreadMetadata(BaseModel):
         tags: Categorical tags for filtering.
         plan_summary: Brief summary of the thread's plan (if any).
         policy_profile: Name of the active policy profile.
-        labels: User-defined labels for organization (RFC-402).
-        priority: Thread priority level (RFC-402).
-        category: User-defined category (RFC-402).
+        labels: User-defined labels for organization (RFC-303).
+        priority: Thread priority level (RFC-303).
+        category: User-defined category (RFC-303).
         claude_sessions: Maps resolved workspace cwd to Claude Agent SDK
             session UUID for resumption (IG-202).
     """
@@ -160,7 +160,7 @@ class ThreadMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
     policy_profile: str = "standard"
-    # RFC-402: Enhanced metadata
+    # RFC-303: Enhanced metadata
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
@@ -232,12 +232,12 @@ class ThreadFilter(BaseModel):
 
 **Status**: Production implementation  
 **Location**: `packages/soothe/src/soothe/backends/durability/postgresql.py`  
-**Dependencies**: PostgreSQL database (metadata database per RFC-612)
+**Dependencies**: PostgreSQL database (metadata database per RFC-802)
 
 **Features**:
 - Production-grade persistence
 - Connection pooling
-- Multi-database architecture (RFC-612)
+- Multi-database architecture (RFC-802)
 - Thread prefix matching
 - Async operations
 
@@ -558,8 +558,8 @@ Separate states for different lifecycle phases.
 
 ## Specification Reference
 
-- **RFC-408**: Durability Protocol Architecture
-- **RFC-612**: Persistence Architecture Refactor (multi-database)
+- **RFC-306**: Durability Protocol Architecture
+- **RFC-802**: Persistence Architecture Refactor (multi-database)
 - **RFC-452**: Unified Thread Management
 - **RFC-000**: System Conceptual Design (protocol philosophy)
 

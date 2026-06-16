@@ -508,7 +508,15 @@ def extract_tool_args_dict(tool_like: Any) -> dict[str, Any]:
         if base:
             return base
 
-    skip = _TOOL_CALL_METADATA_KEYS | {"args", "arguments", "input", "_raw", "raw_args_str"}
+    skip = _TOOL_CALL_METADATA_KEYS | {
+        "args",
+        "arguments",
+        "input",
+        "_raw",
+        "raw_args_str",
+        "value",
+        "_subgraph_tool",
+    }
     flat = {k: v for k, v in tool_like.items() if k not in skip}
     if flat:
         return flat

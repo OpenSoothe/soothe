@@ -189,11 +189,11 @@ Soothe follows a **protocol-first, runtime-second** design. Every module is defi
 
 | Protocol | Purpose | RFC |
 |----------|---------|-----|
-| **ContextProtocol** | Context management (keyword, vector) | RFC-300, RFC-400 |
-| **MemoryProtocol** | Memory management (keyword, vector) | RFC-300, RFC-402 |
-| **PlannerProtocol** | Planning and goal decomposition | RFC-404 |
-| **PolicyProtocol** | Security policy enforcement | RFC-406 |
-| **DurabilityProtocol** | State persistence and recovery | RFC-408 |
+| **ContextProtocol** | Context management (keyword, vector) | RFC-300, RFC-302 |
+| **MemoryProtocol** | Memory management (keyword, vector) | RFC-300, RFC-303 |
+| **PlannerProtocol** | Planning and goal decomposition | RFC-304 |
+| **PolicyProtocol** | Security policy enforcement | RFC-305 |
+| **DurabilityProtocol** | State persistence and recovery | RFC-306 |
 | **VectorStoreProtocol** | Vector database abstraction | RFC-611 |
 | **LoopWorkingMemory** | Working memory for StrangeLoop | RFC-224 |
 | **LoopPlanner** | Planning within StrangeLoop | RFC-226 |
@@ -371,11 +371,11 @@ Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graph
 
 - **[RFC-300](../../specs/RFC-300-context-memory-protocols.md)** - Context & Memory Protocols
 - **[RFC-301](../../specs/RFC-301-protocol-registry.md)** - Protocol Registry
-- **[RFC-400](../../specs/RFC-400-context-protocol-architecture.md)** - Context Protocol Architecture
-- **[RFC-402](../../specs/RFC-402-memory-protocol-architecture.md)** - Memory Protocol Architecture
-- **[RFC-404](../../specs/RFC-404-planner-protocol-architecture.md)** - Planner Protocol Architecture
-- **[RFC-406](../../specs/RFC-406-policy-protocol-architecture.md)** - Policy Protocol Architecture
-- **[RFC-408](../../specs/RFC-408-durability-protocol-architecture.md)** - Durability Protocol Architecture
+- **[RFC-302](../../specs/RFC-302-context-protocol-architecture.md)** - Context Protocol Architecture
+- **[RFC-303](../../specs/RFC-303-memory-protocol-architecture.md)** - Memory Protocol Architecture
+- **[RFC-304](../../specs/RFC-304-planner-protocol-architecture.md)** - Planner Protocol Architecture
+- **[RFC-305](../../specs/RFC-305-policy-protocol-architecture.md)** - Policy Protocol Architecture
+- **[RFC-306](../../specs/RFC-306-durability-protocol-architecture.md)** - Durability Protocol Architecture
 
 ### Plugin System (6xx)
 

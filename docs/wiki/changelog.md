@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Version | Release Date | Summary |
 |---------|-------------|---------|
 | **0.5.x** | 2025-01+ | Current development - RFC-220 loop orchestrator, deployment guides |
-| **0.4.x** | 2024-Q4 | Protocol consolidation, multi-package monorepo, RFC-612 PostgreSQL |
+| **0.4.x** | 2024-Q4 | Protocol consolidation, multi-package monorepo, RFC-802 PostgreSQL |
 | **0.3.x** | 2024-Q3 | Daemon multi-transport (WebSocket, HTTP REST), event system |
 | **0.2.x** | 2024-Q2 | CoreAgent + StrangeLoop, autonomous goal execution |
 | **0.1.x** | 2024-Q1 | Initial prototype - basic agent runtime |
@@ -68,7 +68,7 @@ agent:
 ### Added - Deployment Infrastructure
 
 - **Docker Compose**: Production stack with PostgreSQL + pgvector
-- **Multi-database architecture**: RFC-612 separate databases for checkpoints, metadata, vectors, memory
+- **Multi-database architecture**: RFC-802 separate databases for checkpoints, metadata, vectors, memory
 - **Workspace host convention**: RFC-621 path mapping for container deployments
 - **Health checks**: Daemon status, PostgreSQL connectivity
 - **Backup strategies**: pg_dump, WAL streaming, Barman
@@ -147,7 +147,7 @@ agent:
 
 ### Added - PostgreSQL Multi-Database Architecture
 
-**RFC-612**: Separate databases for lifecycle isolation.
+**RFC-802**: Separate databases for lifecycle isolation.
 
 ```
 PostgreSQL Cluster:
@@ -221,7 +221,7 @@ packages/soothe/tests/unit/core/strange_loop/
 
 ### Added - Daemon Multi-Transport
 
-**RFC-400**: Multi-transport daemon server.
+**RFC-302**: Multi-transport daemon server.
 
 | Transport | Use Case |
 |-----------|----------|
@@ -248,7 +248,7 @@ daemon:
 
 ### Added - External Authentication
 
-**RFC-402**: Security by delegation model.
+**RFC-303**: Security by delegation model.
 
 - **No built-in auth**: Soothe daemon trusts connections from reverse proxy
 - **Reverse proxy handles**: TLS, authentication, authorization, rate limiting
@@ -397,8 +397,8 @@ Major features reference RFCs:
 - RFC-100: CoreAgent runtime
 - RFC-201: StrangeLoop execution
 - RFC-220: Loop orchestrator
-- RFC-400: Daemon multi-transport
-- RFC-612: PostgreSQL multi-database
+- RFC-302: Daemon multi-transport
+- RFC-802: PostgreSQL multi-database
 
 See [RFC Index](../specs/).
 
@@ -460,7 +460,7 @@ pip install soothe
 pip install 'soothe[all]' soothe-cli soothe-daemon
 ```
 
-**PostgreSQL multi-database** (RFC-612):
+**PostgreSQL multi-database** (RFC-802):
 - Run `init-db.sql` to create 4 databases
 - Update connection strings
 

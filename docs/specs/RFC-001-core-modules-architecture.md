@@ -4,8 +4,8 @@
 **Title**: Architecture Design for Core Protocol Modules
 **Status**: Implemented
 **Created**: 2026-03-12
-**Updated**: 2026-04-17 (RFC consolidation; retrieval module canonical in RFC-400)
-**Related**: RFC-000, RFC-200, RFC-400, RFC-402
+**Updated**: 2026-04-17 (RFC consolidation; retrieval module canonical in RFC-302)
+**Related**: RFC-000, RFC-200, RFC-302, RFC-303
 
 ## Abstract
 
@@ -28,7 +28,7 @@ class ContextProtocol(Protocol):
     def get_retrieval_module(self) -> ContextRetrievalModule: ...
 ```
 
-**Extended methods**: `get_retrieval_module()` and the `ContextRetrievalModule` type are fully specified in [RFC-400](./RFC-400-context-protocol-architecture.md) (canonical retrieval surface). This RFC keeps the summary above aligned with implementations that expose goal-centric retrieval.
+**Extended methods**: `get_retrieval_module()` and the `ContextRetrievalModule` type are fully specified in [RFC-302](./RFC-302-context-protocol-architecture.md) (canonical retrieval surface). This RFC keeps the summary above aligned with implementations that expose goal-centric retrieval.
 
 ### Data Models
 
@@ -41,12 +41,12 @@ class ContextProtocol(Protocol):
 
 **Retrieval Authority Clarification** (brainstorming-derived architectural separation):
 
-- **ContextProtocol ownership**: Retrieval module implementation (RFC-400 `ContextRetrievalModule`), algorithm versions, stable API boundary
+- **ContextProtocol ownership**: Retrieval module implementation (RFC-302 `ContextRetrievalModule`), algorithm versions, stable API boundary
 - **StrangeLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output (RFC-201 §61-78)
 - **Architectural principle**: Retrieval algorithms evolve behind stable API in ContextProtocol, preserving integration contracts with StrangeLoop
 
 **Implementation Status**:
-- ✅ ContextProtocol interface defined (RFC-400)
+- ✅ ContextProtocol interface defined (RFC-302)
 - ⚠️ KeywordContext implementation (not yet implemented - critical gap)
 - ⚠️ ContextRetrievalModule (not yet implemented)
 
@@ -56,9 +56,9 @@ class ContextProtocol(Protocol):
 4. **Hierarchical summarization** -- entries summarized at multiple levels
 5. **Subagent isolation** -- subagents receive projections, not full context; return results only
 
-### Goal-centric retrieval (canonical: RFC-400)
+### Goal-centric retrieval (canonical: RFC-302)
 
-`ContextRetrievalModule`, `retrieve_by_goal_relevance(...)`, algorithm-version notes, and default wiring for `KeywordContext` / `VectorContext` are defined in **[RFC-400](./RFC-400-context-protocol-architecture.md)**. RFC-001 references that document as the **single authoritative** copy of the retrieval API to avoid schema drift.
+`ContextRetrievalModule`, `retrieve_by_goal_relevance(...)`, algorithm-version notes, and default wiring for `KeywordContext` / `VectorContext` are defined in **[RFC-302](./RFC-302-context-protocol-architecture.md)**. RFC-001 references that document as the **single authoritative** copy of the retrieval API to avoid schema drift.
 
 **Typical call pattern** (Layer 2 runner or runner integration assembling Plan / Execute context):
 
@@ -348,11 +348,11 @@ $SOOTHE_HOME/
 
 | Module | Protocol | RFC | Status |
 |--------|----------|-----|--------|
-| **Module 1** | ContextProtocol | [RFC-400](./RFC-400-context-protocol-architecture.md) | Draft |
-| **Module 2** | MemoryProtocol | [RFC-402](./RFC-402-memory-protocol-architecture.md) | Draft |
-| **Module 3** | PlannerProtocol | [RFC-404](./RFC-404-planner-protocol-architecture.md) | Draft |
-| **Module 4** | PolicyProtocol | [RFC-406](./RFC-406-policy-protocol-architecture.md) | Draft |
-| **Module 5** | DurabilityProtocol | [RFC-408](./RFC-408-durability-protocol-architecture.md) | Draft |
+| **Module 1** | ContextProtocol | [RFC-302](./RFC-302-context-protocol-architecture.md) | Draft |
+| **Module 2** | MemoryProtocol | [RFC-303](./RFC-303-memory-protocol-architecture.md) | Draft |
+| **Module 3** | PlannerProtocol | [RFC-304](./RFC-304-planner-protocol-architecture.md) | Draft |
+| **Module 4** | PolicyProtocol | [RFC-305](./RFC-305-policy-protocol-architecture.md) | Draft |
+| **Module 5** | DurabilityProtocol | [RFC-306](./RFC-306-durability-protocol-architecture.md) | Draft |
 | **Module 6** | ConcurrencyPolicy | Stayed in RFC-001 | — |
 | **Module 7** | VectorStoreProtocol | Stayed in RFC-001 | — |
 

@@ -22,7 +22,7 @@ The current thread management system has several critical issues:
 
 2. **Transport Limitations**: Thread operations primarily work via WebSocket. HTTP REST endpoints defined in RFC-101 are unimplemented placeholders, preventing web UIs and REST clients from managing threads.
 
-3. **Protocol Gaps**: The daemon protocol (RFC-400) lacks dedicated thread management messages. Thread operations require slash commands or are limited to `resume_thread`/`new_thread` primitives.
+3. **Protocol Gaps**: The daemon protocol (RFC-302) lacks dedicated thread management messages. Thread operations require slash commands or are limited to `resume_thread`/`new_thread` primitives.
 
 4. **Single-Threaded Execution**: The daemon maintains a single active thread (`SootheRunner.current_thread_id`). Multiple clients cannot execute queries in different threads simultaneously.
 
@@ -55,7 +55,7 @@ Current `ThreadInfo` only captures basic metadata (status, timestamps, tags). Mi
 
 ### Non-Goals
 
-- **Authentication/authorization**: Handled by reverse proxy (RFC-400)
+- **Authentication/authorization**: Handled by reverse proxy (RFC-302)
 - **Thread collaboration**: Multi-user thread sharing not in scope
 - **Thread templates**: Pre-configured thread setups deferred to future RFC
 
@@ -79,7 +79,7 @@ Thread statistics are calculated lazily on request, not stored permanently. This
 
 ### Principle 5: Progressive Enhancement
 
-New thread features (labels, categories, priority) are optional additions to existing metadata. Threads created before RFC-402 continue working with default values.
+New thread features (labels, categories, priority) are optional additions to existing metadata. Threads created before RFC-303 continue working with default values.
 
 ## Architecture
 
@@ -98,7 +98,7 @@ New thread features (labels, categories, priority) are optional additions to exi
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Protocol Layer (RFC-400)                   │
+│                  Protocol Layer (RFC-302)                   │
 │                                                              │
 │  Protocol message validation and routing                     │
 │  thread_list, thread_create, thread_get, ...                │
@@ -223,7 +223,7 @@ class ThreadMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
     policy_profile: str = "standard"
-    # RFC-402 additions:
+    # RFC-303 additions:
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
@@ -285,7 +285,7 @@ class ThreadContextManagerProtocol(Protocol):
     async def get_thread_stats(self, thread_id: str) -> ThreadStats: ...
 ```
 
-### Daemon Protocol Extensions (RFC-400)
+### Daemon Protocol Extensions (RFC-302)
 
 Thread management operations are exposed through daemon protocol messages:
 
@@ -398,7 +398,7 @@ Implementation phases are detailed in the associated implementation guide. The m
 
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture Design
-- RFC-400: Unified Daemon Communication Protocol
+- RFC-302: Unified Daemon Communication Protocol
 - RFC-101: HTTP REST API Specification
 - LangGraph Checkpointer Documentation
 - ThreadLogger Implementation

@@ -588,7 +588,7 @@ def my_tool(file_path: str, runtime: ToolRuntime = None) -> str:
 | [RFC-101](../../specs/RFC-101-tool-interface.md) | Tool Interface & Event Naming | §4-5 (naming, events) |
 | [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System | §2 (@tool decorator) |
 | [RFC-102](../../specs/RFC-102-security-filesystem-policy.md) | Security Filesystem Policy | Workspace boundaries |
-| [RFC-617](../../specs/RFC-617-operation-security-protocol.md) | Operation Security Protocol | Security integration |
+| [RFC-901](../../specs/RFC-901-operation-security-protocol.md) | Operation Security Protocol | Security integration |
 
 ## Troubleshooting
 

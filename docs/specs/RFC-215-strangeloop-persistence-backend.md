@@ -567,7 +567,7 @@ Per-row purge failures are isolated (try/except) so a single failure does not ab
 - RFC-216: StrangeLoop Multi-Thread Lifecycle
 - RFC-503: Loop-First User Experience
 - RFC-411: Event Stream Replay
-- RFC-602: SQLite Backend (existing)
+- RFC-801: SQLite Backend (existing)
 
 ---
 

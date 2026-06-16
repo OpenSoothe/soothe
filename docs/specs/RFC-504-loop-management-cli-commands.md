@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines CLI commands for users to manage StrangeLoop instances: list active loops, inspect loop details, visualize checkpoint trees (main line + failed branches), prune old branches, and delete loops. Commands provide loop-centric user interface aligned with RFC-612's loop-first user experience, replacing thread-based commands with loop-based commands.
+This RFC defines CLI commands for users to manage StrangeLoop instances: list active loops, inspect loop details, visualize checkpoint trees (main line + failed branches), prune old branches, and delete loops. Commands provide loop-centric user interface aligned with RFC-802's loop-first user experience, replacing thread-based commands with loop-based commands.
 
 ---
 
@@ -704,7 +704,7 @@ loop_app.command("status")(show_loop_status)
 
 ## Related Specifications
 
-- RFC-612: Loop-First User Experience
+- RFC-802: Loop-First User Experience
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-215: StrangeLoop Persistence Backend
 - RFC-454: Slash Command Architecture

@@ -1,12 +1,13 @@
-# RFC-404: PlannerProtocol Architecture
+# RFC-304: PlannerProtocol Architecture
 
-**RFC**: 404
+**RFC**: 304
 **Title**: PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-000, RFC-400
+**Dependencies**: RFC-000, RFC-302
 **Related**: RFC-201 (StrangeLoop)
+**Note**: Moved from 4xx (RFC-304) per RFC-900 reclassification
 
 ---
 

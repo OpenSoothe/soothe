@@ -2,11 +2,14 @@
 
 **RFC**: 411
 **Title**: Event Stream Replay & History Reconstruction
-**Status**: Deprecated. Superseded by RFC-413.
+**Status**: Deprecated
+**Superseded By**: RFC-413
+**Superseded Date**: 2026-06-16
+**Deprecation Reason**: Event stream replay replaced by server-owned display card ledger.
+**Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-04-22
 **Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-215 (Persistence Backend)
-**Superseded by**: RFC-413 (Server-Owned Display Card Ledger)
 **Author**: Claude Sonnet 4.6
 
 ---
@@ -584,7 +587,7 @@ class EventProcessor:
 ## Related Specifications
 
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
-- RFC-612: Loop-First User Experience
+- RFC-802: Loop-First User Experience
 - RFC-613: StrangeLoop Persistence Backend
 - RFC-401: Event Processing (existing)
 - RFC-500: CLI/TUI Architecture (existing)

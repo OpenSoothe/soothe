@@ -514,7 +514,7 @@ rm -rf ~/.soothe/data/threads/*
 - [Troubleshooting Guide](wiki/troubleshooting.md) - Common issues and solutions
 - [Configuration Guide](wiki/configuration.md) - Configuration reference
 - [Daemon Management](wiki/daemon-management.md) - Daemon lifecycle
-- [RFC-400](specs/RFC-400-context-protocol-architecture.md) - Progress event protocol
+- [RFC-302](specs/RFC-302-context-protocol-architecture.md) - Progress event protocol
 - [RFC-401](specs/RFC-401.md) - Event filtering and verbosity
 
 ---

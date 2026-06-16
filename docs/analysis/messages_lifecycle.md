@@ -55,7 +55,7 @@ Soothe uses a **daemon-based client-server architecture** with three key layers:
 
 ### Transport Layer
 
-Soothe daemon supports **three simultaneous transports** (RFC-400):
+Soothe daemon supports **three simultaneous transports** (RFC-302):
 
 ```mermaid
 graph LR
@@ -85,7 +85,7 @@ graph LR
 | **WebSocket** | ❌ Opt-in | 8765 | Web applications, remote clients |
 | **HTTP REST** | ❌ Opt-in | 8766 | CRUD operations, health checks |
 
-**Note on Authentication (RFC-400, RFC-402):** Soothe does not implement built-in authentication. Authentication and authorization are handled by external services such as reverse proxies, API gateways, or SSH tunneling. This design keeps Soothe simple and single-tenant.
+**Note on Authentication (RFC-302, RFC-303):** Soothe does not implement built-in authentication. Authentication and authorization are handled by external services such as reverse proxies, API gateways, or SSH tunneling. This design keeps Soothe simple and single-tenant.
 
 ### Message Protocol
 
@@ -713,7 +713,7 @@ SUBAGENT_CLAUDE_TEXT = "soothe.subagent.claude.text"
 **Protocol Definition:**
 
 ```python
-# Conceptual ledger shape; see RFC-400 / RFC-300 and `LoopWorkingMemoryProtocol`
+# Conceptual ledger shape; see RFC-302 / RFC-300 and `LoopWorkingMemoryProtocol`
 class ContextEntry(BaseModel):
     """Single entry in the context ledger."""
     source: str  # Origin: tool, subagent, user, memory

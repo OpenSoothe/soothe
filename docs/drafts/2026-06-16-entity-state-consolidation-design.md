@@ -5,8 +5,8 @@
 **Status**: Draft for user validation
 **Proposed RFC**: RFC-626
 **Dependencies**: RFC-624 (Context Engine), RFC-625 (Autopilot Monitor Unification)
-**Supersedes Portions**: RFC-400 (ContextProtocol), RFC-203 (LoopState)
-**Implements**: RFC-402 (MemoryProtocol) — CE EpisodicSubmodule implements MemoryProtocol API
+**Supersedes Portions**: RFC-302 (ContextProtocol), RFC-203 (LoopState)
+**Implements**: RFC-303 (MemoryProtocol) — CE EpisodicSubmodule implements MemoryProtocol API
 
 ---
 
@@ -191,7 +191,7 @@ MemoryProtocol (interface)
 
 **API Contract**:
 ```python
-# MemoryProtocol remains as interface (RFC-402)
+# MemoryProtocol remains as interface (RFC-303)
 class MemoryProtocol(Protocol):
     async def remember(self, item: MemoryItem) -> str:
         """Store a memory item, return ID."""
@@ -369,7 +369,7 @@ class CognitiveSubmodule:
     
     def retrieve_by_goal_relevance(self, goal_id: str, limit: int) -> list[ContextEntry]:
         """Goal-centric retrieval for StrangeLoop."""
-        # Implementation matches RFC-400 ContextRetrievalModule API
+        # Implementation matches RFC-302 ContextRetrievalModule API
         ...
 ```
 
@@ -405,7 +405,7 @@ class EpisodicStore:
 
 | Module | Location | Reason |
 |--------|----------|--------|
-| `MemoryProtocol` | `protocols/memory.py` | Protocol interface for external memory integration (RFC-402) |
+| `MemoryProtocol` | `protocols/memory.py` | Protocol interface for external memory integration (RFC-303) |
 | `CE EpisodicSubmodule` | `context/episodic/store.py` | Implements MemoryProtocol API for persistent episodic memory |
 
 ### 4.4 Modified Modules
@@ -505,7 +505,7 @@ class EpisodicStore:
 - `grep -r "goal_history" packages/soothe/src/soothe/foundation/loop/` returns zero matches
 - All entity reads/writes via CE public API
 - Checkpoint is purely metadata (loop_id, thread_ids, status)
-- RFC-400, RFC-402, RFC-203 updated with superseded notices
+- RFC-302, RFC-303, RFC-203 updated with superseded notices
 
 ---
 
@@ -642,8 +642,8 @@ for episode in relevant_episodes:
 1. **Create RFC-626 draft**: Document entity consolidation design in `docs/specs/RFC-626-entity-state-consolidation.md`
 
 2. **Update superseded RFCs**:
-   - RFC-400: Mark ContextProtocol sections superseded by CE CognitiveSubmodule
-   - RFC-402: Update MemoryProtocol to document CE EpisodicSubmodule as implementation
+   - RFC-302: Mark ContextProtocol sections superseded by CE CognitiveSubmodule
+   - RFC-303: Update MemoryProtocol to document CE EpisodicSubmodule as implementation
    - RFC-203: Mark LoopState sections superseded by CE metrics
 
 3. **Create IG-626 implementation guide**: Detailed file changes and test updates per phase
@@ -665,7 +665,7 @@ for episode in relevant_episodes:
 | **StrangeLoop Nodes** | - | `executor.py`, `plan_assess.py`, `bounded_evidence_gather.py` | - |
 | **Runner** | - | `runner/__init__.py` | - |
 | **Tests** | `tests/unit/context/test_entity_identity.py` | All existing tests updated | - |
-| **Documentation** | `docs/specs/RFC-626-*.md` | RFC-400, RFC-402, RFC-203, RFC-000 | - |
+| **Documentation** | `docs/specs/RFC-626-*.md` | RFC-302, RFC-303, RFC-203, RFC-000 | - |
 
 **Estimated Total Changes**: ~35 files modified, ~5 files deleted, ~3 files added.
 

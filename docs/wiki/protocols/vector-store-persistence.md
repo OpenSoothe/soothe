@@ -148,14 +148,14 @@ class VectorRecord(BaseModel):
 
 **Status**: Production implementation  
 **Location**: `packages/soothe/src/soothe/backends/vector_store/pgvector.py`  
-**Dependencies**: PostgreSQL with pgvector extension (RFC-612 vector database)
+**Dependencies**: PostgreSQL with pgvector extension (RFC-802 vector database)
 
 **Features**:
 - Production-grade vector storage
 - Connection pooling
 - Cosine/L2/IP distance metrics
 - Metadata filtering
-- Dedicated vector database (RFC-612)
+- Dedicated vector database (RFC-802)
 
 **Configuration**:
 ```yaml
@@ -310,7 +310,7 @@ data = await store.load("thread:abc123")
 - Production-grade persistence
 - Connection pooling
 - Namespace support
-- Multi-database architecture (RFC-612)
+- Multi-database architecture (RFC-802)
 
 **Usage**:
 ```python
@@ -457,7 +457,7 @@ if data:
 
 ## Multi-Database Architecture
 
-### RFC-612 Architecture
+### RFC-802 Architecture
 
 PostgreSQL implementations use dedicated databases:
 
@@ -571,7 +571,7 @@ Swappable implementations:
 
 ### Why Multi-Database Architecture?
 
-Isolation benefits (RFC-612):
+Isolation benefits (RFC-802):
 - Metadata vs vectors vs checkpoints
 - Independent scaling and backup
 - Clear ownership boundaries
@@ -581,8 +581,8 @@ Isolation benefits (RFC-612):
 
 - **RFC-000**: System Conceptual Design (Module 8)
 - **RFC-300**: Context and Memory Architecture Design
-- **RFC-612**: Persistence Architecture Refactor
-- **RFC-602**: SQLite Backend
+- **RFC-802**: Persistence Architecture Refactor
+- **RFC-801**: SQLite Backend
 
 ## Related Documentation
 

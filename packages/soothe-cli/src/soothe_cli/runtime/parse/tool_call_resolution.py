@@ -39,6 +39,18 @@ def tool_args_meaningful(raw: Any) -> bool:
     return True
 
 
+def is_execute_step_namespace(ns_key: tuple[str, ...]) -> bool:
+    """True for CoreAgent execute root namespace (``execute:{run_id}``), not nested ``tools:`` subgraphs."""
+    if len(ns_key) != 1:
+        return False
+    return str(ns_key[0] or "").startswith("execute:")
+
+
+def is_step_card_tool_scope(*, ns_key: tuple[str, ...]) -> bool:
+    """True when tool activity belongs on the step card as main execute-graph tools."""
+    return ns_key == () or is_execute_step_namespace(ns_key)
+
+
 def is_main_step_level_tool_call_id(tool_call_id: str) -> bool:
     """True for unified main-graph step tools (``{step}:s:{tool}:{n}``), not ``task`` rows."""
     from soothe_sdk.ux.task_namespace import is_step_level_task_tool_id, parse_unified_tool_call_id
@@ -52,9 +64,23 @@ def is_main_step_level_tool_call_id(tool_call_id: str) -> bool:
     return not is_step_level_task_tool_id(tcid)
 
 
+def is_task_level_subgraph_tool_call_id(tool_call_id: str) -> bool:
+    """True for unified subgraph tools (``{step}:t{n}:{tool}:{seq}``), not nested ``task`` rows."""
+    from soothe_sdk.ux.task_namespace import (
+        is_inner_subgraph_task_tool_id,
+        parse_unified_tool_call_id,
+    )
+
+    tcid = str(tool_call_id or "").strip()
+    if not tcid or is_inner_subgraph_task_tool_id(tcid):
+        return False
+    _, type_code, _, _ = parse_unified_tool_call_id(tcid)
+    return type_code == "t"
+
+
 def should_ingest_tool_for_step_stats(
     *,
-    is_main_agent: bool,
+    is_step_card_scope: bool,
     tool_name: str,
     tool_call_id: str,
     args_meaningful: bool,
@@ -70,7 +96,10 @@ def should_ingest_tool_for_step_stats(
         return False
     if args_meaningful:
         return True
-    return is_main_agent and is_main_step_level_tool_call_id(tcid)
+    if is_step_card_scope and is_main_step_level_tool_call_id(tcid):
+        return True
+    # Subgraph explore tools often arrive with ``{"_subgraph_tool": true}`` before real args.
+    return not is_step_card_scope and is_task_level_subgraph_tool_call_id(tcid)
 
 
 def _args_from_toolish_block(block: dict[str, Any]) -> dict[str, Any]:
@@ -465,7 +494,10 @@ def build_streaming_args_overlay(
 __all__ = [
     "ResolvedToolInvocation",
     "build_streaming_args_overlay",
+    "is_execute_step_namespace",
     "is_main_step_level_tool_call_id",
+    "is_step_card_tool_scope",
+    "is_task_level_subgraph_tool_call_id",
     "is_toolish_display_block",
     "materialize_ai_blocks_with_resolved_tools",
     "merge_tool_display_args",

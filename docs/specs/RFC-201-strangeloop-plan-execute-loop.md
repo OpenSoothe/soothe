@@ -2,10 +2,11 @@
 
 **RFC**: 201
 **Title**: StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
-**Status**: Implemented
+**Status**: Implemented (Partially Superseded)
+**Partially Superseded By**: RFC-220 (§loop driver)
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Last Updated**: 2026-04-29
+**Last Updated**: 2026-06-16
 **Dependencies**: RFC-000, RFC-001, RFC-100
 **Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning)
 
@@ -113,10 +114,10 @@ Configuration (`agentic.final_response`): `adaptive` (default) applies the polic
 
 **Architectural clarification**: Brainstorming sessions sometimes assign "unbounded retrieval authority" to StrangeLoop. RFCs clarify the ownership boundary:
 
-**ContextProtocol ownership** (RFC-001, RFC-400):
+**ContextProtocol ownership** (RFC-001, RFC-302):
 - Append-only ledger semantics (unbounded knowledge accumulator)
 - Persistence hooks (thread-level restore/persist)
-- **Retrieval module implementation** (RFC-400 `ContextRetrievalModule`)
+- **Retrieval module implementation** (RFC-302 `ContextRetrievalModule`)
 - Retrieval algorithm evolution behind stable API
 
 **StrangeLoop operational authority** (this RFC):
@@ -139,7 +140,7 @@ relevant_history = retrieval.retrieve_by_goal_relevance(
 # Combine with GoalContextManager output for Plan/Execute context
 ```
 
-**Reference**: RFC-400 defines canonical retrieval API. RFC-001 §28-62 references RFC-400 as single authoritative retrieval specification.
+**Reference**: RFC-302 defines canonical retrieval API. RFC-001 §28-62 references RFC-302 as single authoritative retrieval specification.
 
 ### Dual Trigger Synchronization Ordering
 

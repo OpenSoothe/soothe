@@ -455,7 +455,7 @@ persistence:
 
 ### PostgreSQL Persistence
 
-**Production persistence** (RFC-612 multi-database):
+**Production persistence** (RFC-802 multi-database):
 
 ```yaml
 persistence:

@@ -52,6 +52,9 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
         return
 
     excluded_state_keys = sm._EXCLUDED_STATE_KEYS
+    # Parent-owned channels: parallel subagent completions must not merge these back
+    # (LangGraph LastValue rejects multiple ``workspace`` writes per step).
+    parent_owned_state_keys = frozenset({"workspace", "git_status"})
     task_tool_description_template = sm.TASK_TOOL_DESCRIPTION
     # Import create_sub_agent for compiling raw SubAgent specs
     create_sub_agent = sm.create_sub_agent
@@ -64,7 +67,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
         state_schema: Any = None,
     ):
         # Combine excluded_state_keys (deepagents default) with private_state_keys
-        all_excluded_keys = excluded_state_keys | private_state_keys
+        all_excluded_keys = excluded_state_keys | private_state_keys | parent_owned_state_keys
 
         # Compile raw SubAgent specs first (deepagents 0.6.10+ API)
         # Raw specs lack 'runnable'; they need create_sub_agent() compilation.

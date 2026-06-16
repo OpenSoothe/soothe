@@ -687,6 +687,77 @@ async def test_stream_and_collect_logs_tool_call_args(caplog: pytest.LogCaptureF
     )
 
 
+@pytest.mark.asyncio
+async def test_stream_and_collect_assigns_task_idx_per_subgraph_namespace() -> None:
+    """Parallel ``task:0`` and ``task:1`` subgraphs stamp ``t0`` / ``t1`` inner tool ids."""
+    from langchain_core.messages import AIMessageChunk
+
+    main_task_chunk: tuple = (
+        (),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {"name": "task", "args": {}, "id": "functions.task:0"},
+                    {"name": "task", "args": {}, "id": "functions.task:1"},
+                ],
+            ),
+            {},
+        ),
+    )
+    subgraph_a: tuple = (
+        ("tools:subgraph-a",),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": "grep", "id": "functions.grep:0", "args": "{}"}],
+            ),
+            {},
+        ),
+    )
+    subgraph_b: tuple = (
+        ("tools:subgraph-b",),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": "grep", "id": "functions.grep:0", "args": "{}"}],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield main_task_chunk
+        yield subgraph_a
+        yield subgraph_b
+
+    executor = Executor(mock_agent)
+    rewritten_ids: list[str] = []
+    async for _out, event, _tc, _msgs, _df, _outcomes, _has_error in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="WAV-01",
+    ):
+        if not isinstance(event, tuple) or len(event) != 3:
+            continue
+        _ns, mode, data = event
+        if mode != "messages" or not isinstance(data, tuple):
+            continue
+        msg = data[0]
+        if not isinstance(msg, AIMessageChunk):
+            continue
+        for tc in getattr(msg, "tool_call_chunks", None) or []:
+            if isinstance(tc, dict) and tc.get("id"):
+                rewritten_ids.append(str(tc["id"]))
+
+    assert "WAV_01:t0:grep:0" in rewritten_ids
+    assert "WAV_01:t1:grep:0" in rewritten_ids
+
+
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:
     """Parallel wave with no task returns keeps assistant text empty."""
     from soothe.foundation.loop.state.schemas import LoopState

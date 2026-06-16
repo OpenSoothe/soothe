@@ -2,10 +2,14 @@
 
 **RFC**: 200
 **Title**: Autonomous Goal Management Loop
-**Status**: Implemented — control-flow sections partially superseded by RFC-222 (revised 2026-05-28)
+**Status**: Deprecated
+**Superseded By**: RFC-222 (control flow), RFC-625 (GoalEngine architecture)
+**Superseded Date**: 2026-06-16
+**Deprecation Reason**: Control flow replaced by autopilot push model; GoalEngine responsibilities updated. Sections on GoalEngine responsibilities, backoff reasoning, and EvidenceBundle remain authoritative.
+**Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-03-15
-**Updated**: 2026-05-28
+**Updated**: 2026-06-16
 
 **Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
 

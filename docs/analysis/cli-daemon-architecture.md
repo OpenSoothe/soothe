@@ -199,7 +199,7 @@ tui:
 ### Architecture Cleanliness
 
 - **Clear separation**: Client vs server responsibilities
-- **Protocol-based communication**: WebSocket protocol documented in RFC-400
+- **Protocol-based communication**: WebSocket protocol documented in RFC-302
 - **Independent testing**: CLI and daemon tested separately
 - **Better maintainability**: Changes to CLI don't affect daemon runtime
 
@@ -307,7 +307,7 @@ python -m build
 
 ### WebSocket Protocol
 
-See RFC-400 for full protocol specification. Key message types:
+See RFC-302 for full protocol specification. Key message types:
 
 **Client → Server**:
 - `input`: User query
@@ -354,7 +354,7 @@ See RFC-400 for full protocol specification. Key message types:
 ## References
 
 - **Implementation Guide**: IG-173
-- **RFC-400**: Daemon Communication Protocol
+- **RFC-302**: Daemon Communication Protocol
 - **RFC-0013**: Multi-transport daemon architecture
 - **RFC-0022**: Verbosity filtering
 

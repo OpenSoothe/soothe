@@ -21,8 +21,9 @@ import asyncio
 import json
 import logging
 import time
+from collections import deque
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
@@ -30,6 +31,7 @@ from langgraph.types import Command, Interrupt
 from soothe_sdk.utils import get_outcome_type
 from soothe_sdk.ux.task_namespace import (
     _shorten_tool_call_id,
+    _task_index_from_task_tool_call_id,
     normalize_unified_tool_call_id,
     parse_unified_tool_call_id,
 )
@@ -231,6 +233,51 @@ def _unified_tool_call_id_for_stream(
     if task_idx is None:
         return _make_step_tool_call_id(step_id, raw_tid, 0)
     return _make_task_inner_tool_call_id(step_id, task_idx, raw_tid, 0)
+
+
+@dataclass
+class _SubgraphNamespaceTaskBinder:
+    """Map LangGraph subgraph namespaces to main-graph ``task:N`` indices."""
+
+    _pending_indices: deque[int] = field(default_factory=deque)
+    _ns_to_idx: dict[tuple[str, ...], int] = field(default_factory=dict)
+
+    def note_main_graph_task_invocations(self, msg: BaseMessage, step_id: str) -> None:
+        """Queue ``task`` indices from step-level delegations before subgraphs start."""
+        if not isinstance(msg, (AIMessage, AIMessageChunk)):
+            return
+        sid = str(step_id).strip()
+        if not sid:
+            return
+        seen: set[int] = set()
+        for source in (
+            getattr(msg, "tool_calls", None) or [],
+            getattr(msg, "tool_call_chunks", None) or [],
+        ):
+            for tc in source:
+                if not isinstance(tc, dict):
+                    continue
+                if str(tc.get("name") or "").strip() != "task":
+                    continue
+                tid = str(tc.get("id") or "").strip()
+                if not tid:
+                    continue
+                idx = _task_index_from_task_tool_call_id(tid)
+                if idx is None or idx in seen:
+                    continue
+                seen.add(idx)
+                self._pending_indices.append(idx)
+
+    def task_idx_for_namespace(self, namespace: tuple[str, ...]) -> int:
+        """Return the ``task`` index bound to a subgraph namespace (FIFO by default)."""
+        if not namespace:
+            return 0
+        bound = self._ns_to_idx.get(namespace)
+        if bound is not None:
+            return bound
+        idx = self._pending_indices.popleft() if self._pending_indices else 0
+        self._ns_to_idx[namespace] = idx
+        return idx
 
 
 _TASK_KWARG_DESC_KEYS = ("description", "prompt", "task", "instruction")
@@ -499,11 +546,11 @@ def _rewrite_tool_call_ids_to_unified(
     def _needs_unified(raw_id: str) -> bool:
         if not raw_id:
             return False
-        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
+        parsed_sid, type_code, parsed_tidx, _ = parse_unified_tool_call_id(raw_id)
         if parsed_sid == sid and type_code == "s":
             return False
         if parsed_sid == sid and type_code == "t" and task_idx is not None:
-            return False
+            return parsed_tidx != task_idx
         return True
 
     needs_rewrite = False
@@ -2593,6 +2640,7 @@ class Executor:
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
         tool_args = ToolCallArgsCollector()
+        subgraph_task_binder = _SubgraphNamespaceTaskBinder()
 
         # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
@@ -2635,9 +2683,16 @@ class Executor:
                     and len(data_chunk) >= 2
                 ):
                     msg0 = data_chunk[0]
-                    task_idx = 0 if _ns_chunk else None
+                    task_idx: int | None = None
+                    if _ns_chunk:
+                        task_idx = subgraph_task_binder.task_idx_for_namespace(stream_ns)
                     if isinstance(msg0, (AIMessage, AIMessageChunk)):
                         filled_msg = _backfill_tool_calls_args_from_chunks(msg0)
+                        if not _ns_chunk:
+                            subgraph_task_binder.note_main_graph_task_invocations(
+                                filled_msg,
+                                step_id or "",
+                            )
                         rewritten_msg = _rewrite_tool_call_ids_to_unified(
                             filled_msg, step_id, task_idx=task_idx
                         )
@@ -2773,11 +2828,16 @@ class Executor:
                             break
                 elif isinstance(msg, AIMessageChunk):
                     if not step_id:
+                        task_idx = (
+                            subgraph_task_binder.task_idx_for_namespace(stream_ns)
+                            if stream_ns
+                            else None
+                        )
                         tool_args.record_ai_pair(
                             msg,
                             msg,
                             step_id="",
-                            task_idx=0 if stream_ns else None,
+                            task_idx=task_idx,
                         )
                     messages.append(msg)  # Collect chunks for assistant text extraction
                     t = extract_text_from_message_content(msg.content)
@@ -2785,11 +2845,16 @@ class Executor:
                         chunks.append(t)
                 elif isinstance(msg, AIMessage):
                     if not step_id:
+                        task_idx = (
+                            subgraph_task_binder.task_idx_for_namespace(stream_ns)
+                            if stream_ns
+                            else None
+                        )
                         tool_args.record_ai_pair(
                             msg,
                             msg,
                             step_id="",
-                            task_idx=0 if stream_ns else None,
+                            task_idx=task_idx,
                         )
                     messages.append(msg)
                     t = extract_text_from_message_content(msg.content)

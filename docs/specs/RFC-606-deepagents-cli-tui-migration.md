@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design + Implementation Interface Design
 **Created**: 2026-04-13
-**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-500, RFC-501, RFC-203, RFC-402
+**Dependencies**: RFC-000, RFC-001, RFC-302, RFC-500, RFC-501, RFC-203, RFC-303
 **Related**: RFC-600
 
 ## Abstract
@@ -618,7 +618,7 @@ class ThreadBackendBridge:
     """Bridge for thread_selector to use Soothe persistence.
 
     Mimics: deepagents SessionManager interface
-    Uses: Soothe ThreadContextManager backend (RFC-402)
+    Uses: Soothe ThreadContextManager backend (RFC-303)
     """
 
     def __init__(self, thread_manager: ThreadContextManager, daemon_client: DaemonClient):
@@ -1268,11 +1268,11 @@ self.command_registry.register("/detach", self.action_detach)
 
 - **RFC-000**: System Conceptual Design
 - **RFC-001**: Core Modules Architecture
-- **RFC-400**: Daemon Communication Protocol
+- **RFC-302**: Daemon Communication Protocol
 - **RFC-500**: CLI TUI Architecture (current)
 - **RFC-501**: VerbosityTier Unification
 - **RFC-203**: Autopilot Mode
-- **RFC-402**: Unified Thread Management
+- **RFC-303**: Unified Thread Management
 - **RFC-600**: Plugin Extension System
 - **deepagents-cli source**: `/Users/xiamingchen/Workspace/mirasurf/deepagents/libs/cli/`
 - **Design draft**: `docs/drafts/2026-04-13-deepagents-cli-migration-design.md`

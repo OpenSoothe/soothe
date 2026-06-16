@@ -9,7 +9,7 @@
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
 **Related**: RFC-204 (Autopilot Mode), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
-**Implements**: RFC-402 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
+**Implements**: RFC-303 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 
 ---
 

@@ -444,8 +444,8 @@ None. All decisions finalized through design brainstorming session.
 
 - Design Draft: [2026-03-31-thread-aware-workspace-design.md](../drafts/2026-03-31-thread-aware-workspace-design.md)
 - RFC-102: Secure Filesystem Path Handling
-- RFC-400: Daemon Communication Protocol
-- RFC-402: Unified Thread Management
+- RFC-302: Daemon Communication Protocol
+- RFC-303: Unified Thread Management
 - Python `contextvars` documentation
 - LangGraph `RunnableConfig.configurable` pattern
 
