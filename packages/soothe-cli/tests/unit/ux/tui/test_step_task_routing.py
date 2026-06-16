@@ -7,6 +7,13 @@ from unittest.mock import MagicMock
 from soothe_cli.runtime.state.step_router import StepTaskRouter
 
 
+def test_register_task_spawn_normalizes_task_level_opaque_delegation_id() -> None:
+    router = StepTaskRouter()
+    assert router.register_task_spawn("ZCH_01:t0:tool-abc123", "explore", step_id="ZCH-01") is True
+    assert router._spawns_by_step_id["ZCH-01"][0] == "ZCH_01:s:task:0"
+    assert router._spawns_by_task_id["ZCH_01:s:task:0"][1] == "explore"
+
+
 def test_register_task_spawn_rejects_inner_subgraph_task_id() -> None:
     router = StepTaskRouter()
     assert router.register_task_spawn("MLG_02:t0:task:0", "explore", step_id="MLG-02") is False

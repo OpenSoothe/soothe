@@ -35,7 +35,7 @@ This RFC defines:
 This RFC does **not** define:
 
 * Tool execution runtime (see RFC-100 CoreAgent Runtime)
-* Event processing pipeline (see RFC-400)
+* Event processing pipeline (see RFC-302)
 * Security policy for tool permissions (see RFC-102)
 * Backend implementations (see tool module code)
 

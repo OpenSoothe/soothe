@@ -50,7 +50,7 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UP
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     is_inner_subgraph_task_tool_id,
-    normalize_step_task_tool_call_id,
+    normalize_main_task_delegation_id,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
 )
@@ -62,6 +62,8 @@ from soothe_cli.runtime.parse.message_processing import (
 )
 from soothe_cli.runtime.parse.tool_call_resolution import (
     build_streaming_args_overlay,
+    is_execute_step_namespace,
+    is_step_card_tool_scope,
     materialize_ai_blocks_with_resolved_tools,
     merge_tool_display_args,
     resolve_stream_tool_name,
@@ -521,7 +523,7 @@ def _ingest_main_task_tool_on_step_card(
             adapter._tool_display_by_call_id,
         )
         return
-    norm_tcid = normalize_step_task_tool_call_id(sid, tcid)
+    norm_tcid = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
     step_w = _resolve_step_widget_for_tool(
         adapter,
         router,
@@ -858,7 +860,7 @@ async def apply_tool_call_wire_update(
     if str(data.get("type", "")) != STREAM_TOOL_CALL_UPDATE:
         return False
 
-    if ns_key:
+    if ns_key and not is_execute_step_namespace(ns_key):
         router.on_subgraph_namespace(ns_key)
 
     tcid = str(data.get("tool_call_id", "")).strip()
@@ -866,62 +868,70 @@ async def apply_tool_call_wire_update(
         return True
 
     name = str(data.get("name") or "").strip() or "tool"
-    raw_args = data.get("args")
-    if not isinstance(raw_args, dict):
-        raw_args = {}
-    is_main = ns_key == ()
-    if not raw_args and not should_ingest_tool_for_step_stats(
-        is_main_agent=is_main,
+    raw_args_field = data.get("args")
+    if not isinstance(raw_args_field, dict):
+        raw_args_field = {}
+    display_args = extract_tool_args_dict(raw_args_field)
+    is_step_scope = is_step_card_tool_scope(ns_key=ns_key)
+    if not display_args and not should_ingest_tool_for_step_stats(
+        is_step_card_scope=is_step_scope,
         tool_name=name,
         tool_call_id=tcid,
         args_meaningful=False,
     ):
         return True
 
-    if ui_coalesce is not None and ui_coalesce.note_wire_apply(tcid, raw_args):
+    if ui_coalesce is not None and ui_coalesce.note_wire_apply(
+        tcid, display_args or raw_args_field
+    ):
         return True
 
     overlay = streaming_overlay if streaming_overlay is not None else {}
     ts = router.resolve_task_scope(ns_key) if ns_key else None
     merge_id, row_key = (
-        (tcid, tcid) if is_main else canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
+        (tcid, tcid) if is_step_scope else canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     )
 
+    overlay_payload = display_args if display_args else dict(raw_args_field)
     for key in {tcid, merge_id, row_key}:
         if not key:
             continue
-        overlay[key] = dict(raw_args)
+        overlay[key] = dict(overlay_payload)
         pending_tool_calls_lc[key] = {
             "name": name,
-            "args_str": json.dumps(raw_args, separators=(",", ":")),
+            "args_str": json.dumps(overlay_payload, separators=(",", ":")),
             "is_complete_json": True,
             "emitted": False,
-            "is_main": is_main,
+            "is_main": is_step_scope,
         }
 
-    if ns_key:
+    if ns_key and not is_execute_step_namespace(ns_key):
         alias_subgraph_pending_and_overlay(pending_tool_calls_lc, overlay, router, ns_key)
 
     display_args = merge_tool_display_args(
         merge_id or tcid,
-        block_args=raw_args,
+        block_args=display_args,
         streaming_overlay=overlay,
         pending_tool_calls_lc=pending_tool_calls_lc,
         tool_name=name,
     )
 
-    if file_op_tracker is not None and name in FILE_CHANGE_TOOLS and tool_args_meaningful(raw_args):
+    if (
+        file_op_tracker is not None
+        and name in FILE_CHANGE_TOOLS
+        and tool_args_meaningful(display_args)
+    ):
         file_tcid = str(merge_id or tcid)
-        track_file_operation(file_op_tracker, name, raw_args, file_tcid)
+        track_file_operation(file_op_tracker, name, display_args, file_tcid)
         await mount_file_change_preview(
             adapter,
             tool_name=name,
-            args=raw_args,
+            args=display_args,
             tool_call_id=file_tcid,
             assistant_id=adapter._file_preview_assistant_id,
         )
 
-    if is_main and name == "task":
+    if is_step_scope and name == "task":
         if is_inner_subgraph_task_tool_id(tcid):
             return True
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
@@ -935,7 +945,7 @@ async def apply_tool_call_wire_update(
         )
         return True
 
-    if is_main:
+    if is_step_scope:
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
         step_w = _resolve_step_widget_for_tool(
@@ -1736,6 +1746,7 @@ async def execute_task_textual(
                     # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
                     # prose with main). Tool stats attach to step cards on the main graph only.
                     is_main_agent = ns_key == ()
+                    is_step_scope = is_step_card_tool_scope(ns_key=ns_key)
                     suppress_subgraph_assistant_text = not is_main_agent
                     suppress_main_agent_assistant_text = False
 
@@ -1765,7 +1776,7 @@ async def execute_task_textual(
                             message, metadata = data
                             message = _normalize_lc_stream_message(message)
 
-                        if ns_key:
+                        if ns_key and not is_execute_step_namespace(ns_key):
                             router.on_subgraph_namespace(ns_key)
 
                         # Filter out summarization model output, but keep UI feedback.
@@ -2285,7 +2296,7 @@ async def execute_task_textual(
                                     parsed_args = extract_tool_args_dict(parsed_args)
 
                                 merge_lookup_id = lookup_id
-                                if lookup_id and not is_main_agent:
+                                if lookup_id and not is_step_scope:
                                     ts_merge = router.resolve_task_scope(ns_key)
                                     merge_lookup_id, _rk = canonical_subgraph_tool_ids(
                                         ns_key, str(lookup_id), task_scope=ts_merge
@@ -2327,7 +2338,7 @@ async def execute_task_textual(
 
                                 args_meaningful = tool_args_meaningful(parsed_args)
                                 ingest_for_stats = should_ingest_tool_for_step_stats(
-                                    is_main_agent=is_main_agent,
+                                    is_step_card_scope=is_step_scope,
                                     tool_name=str(buffer_name or ""),
                                     tool_call_id=str(lookup_id or ""),
                                     args_meaningful=args_meaningful,
@@ -2339,7 +2350,7 @@ async def execute_task_textual(
                                 if lookup_id and buffer_name and ingest_for_stats:
                                     if buffer_name in FILE_CHANGE_TOOLS and args_meaningful:
                                         file_tcid = str(lookup_id)
-                                        if not is_main_agent:
+                                        if not is_step_scope:
                                             ts_file = router.resolve_task_scope(ns_key)
                                             file_tcid, _fk = canonical_subgraph_tool_ids(
                                                 ns_key, file_tcid, task_scope=ts_file
@@ -2359,7 +2370,7 @@ async def execute_task_textual(
                                             assistant_id=assistant_id,
                                         )
 
-                                    if is_main_agent and buffer_name == "task":
+                                    if is_step_scope and buffer_name == "task":
                                         if not is_inner_subgraph_task_tool_id(str(lookup_id)):
                                             parsed_step_id, _, _, _ = parse_unified_tool_call_id(
                                                 str(lookup_id)
@@ -2374,7 +2385,7 @@ async def execute_task_textual(
                                                 parsed_args,
                                                 bound_step_id=bound_step_id,
                                             )
-                                    elif is_main_agent and buffer_name != "task":
+                                    elif is_step_scope and buffer_name != "task":
                                         parsed_sid, _, _, _ = parse_unified_tool_call_id(
                                             str(lookup_id)
                                         )
@@ -2410,7 +2421,7 @@ async def execute_task_textual(
                                                 parsed_args,
                                                 raw_args=raw_args_stream,
                                             )
-                                    elif not is_main_agent:
+                                    elif not is_step_scope:
                                         ts_disp = router.resolve_task_scope(ns_key)
                                         _merge_disp, display_key = canonical_subgraph_tool_ids(
                                             ns_key, str(lookup_id), task_scope=ts_disp

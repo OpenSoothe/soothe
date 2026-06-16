@@ -349,7 +349,7 @@ Keyword matching alone misses conceptual relationships:
 
 ## Specification Reference
 
-- **RFC-402**: Memory Protocol Architecture (full specification)
+- **RFC-303**: Memory Protocol Architecture (full specification)
 - **RFC-300**: Context and Memory Architecture Design (superseded)
 - **RFC-000**: System Conceptual Design (protocol philosophy)
 

@@ -45,7 +45,7 @@ POSTGRES_USER="postgres"
 # Create backup directory
 mkdir -p ${BACKUP_DIR}/${DATE}
 
-# Backup each database (RFC-612 multi-database)
+# Backup each database (RFC-802 multi-database)
 for db in soothe_checkpoints soothe_metadata soothe_vectors soothe_memory; do
     pg_dump -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d ${db} \
         --format=custom \

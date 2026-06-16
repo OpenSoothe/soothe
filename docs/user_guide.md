@@ -99,7 +99,7 @@ Technical documentation for developers and system architects.
 | [RFC-200](specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management |
 | [RFC-201](specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop |
 | [RFC-300](specs/RFC-300-context-memory-protocols.md) | Context and Memory Protocols |
-| [RFC-400](specs/RFC-400-context-protocol-architecture.md) | Context Protocol Architecture |
+| [RFC-302](specs/RFC-302-context-protocol-architecture.md) | Context Protocol Architecture |
 | [RFC-401](specs/RFC-401-event-processing.md) | Event Processing |
 | [RFC-450](specs/RFC-450-daemon-communication-protocol.md) | Daemon Communication Protocol |
 | [RFC-500](specs/RFC-500-cli-tui-architecture.md) | CLI TUI Architecture |

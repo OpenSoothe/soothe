@@ -73,7 +73,7 @@ Structured API requests for daemon state/actions via `command_request` message t
 | `/resume` | `resume` | Resume thread | `thread_id` (from params) |
 | `/autopilot` | `autopilot_dashboard` | Show autopilot dashboard | `thread_id` (required) |
 
-**Protocol** (RFC-400 extension):
+**Protocol** (RFC-302 extension):
 ```
 Request:  {"type": "command_request", "command": "memory", "thread_id": "..."}
 Response: {"type": "command_response", "command": "memory", "data": {"memory_stats": {...}}}
@@ -94,7 +94,7 @@ Behavior indicators sent as plain text via the existing input path. Daemon input
 | `/explore <query>` | Route to Explore subagent | Yes |
 | `/<subagent_id> <query>` | When `subagents.<subagent_id>` is enabled (including optional plugins), route to that subagent | Yes |
 
-**Protocol**: Plain text input (no changes to RFC-400)
+**Protocol**: Plain text input (no changes to RFC-302)
 ```
 CLI sends:  "/research market outlook" (plain text)
 Daemon parses: detects /research prefix, routes to the research subagent
@@ -118,7 +118,7 @@ Daemon parses: detects /research prefix, routes to the research subagent
 - Zero CLI imports
 - Zero UI library imports (no Rich, no Textual)
 
-**WebSocket Protocol** (RFC-400 extension):
+**WebSocket Protocol** (RFC-302 extension):
 - New message type: `command_request` (RPC commands)
 - Response type: `command_response` (structured data)
 - Existing input path: routing commands as plain text
@@ -328,12 +328,12 @@ def _handle_command_response(self, event: dict[str, Any]) -> None:
 
 ## Daemon Implementation
 
-### RFC-400 Protocol Extension
+### RFC-302 Protocol Extension
 
 **New message type**: `command_request`
 
 ```typescript
-// WebSocket message types (RFC-400 extension)
+// WebSocket message types (RFC-302 extension)
 type: "input" | "command_request" | "subscription" | "status" | "event" | 
       "subscription_confirmed" | "error"
 
@@ -543,7 +543,7 @@ async def _handle_input(self, client_id: str, msg: dict[str, Any]) -> None:
 3. **Daemon RPC handler** - Implement `_handle_command_request` and individual handlers
 4. **Wire CLI event processor** - Add `command_response` handling
 5. **Update tests** - New tests for registry, router, handlers
-6. **Documentation** - Update RFC-400 spec, user guide
+6. **Documentation** - Update RFC-302 spec, user guide
 
 ---
 
@@ -571,7 +571,7 @@ async def _handle_input(self, client_id: str, msg: dict[str, Any]) -> None:
 
 ## References
 
-- RFC-400: Daemon Communication Protocol
+- RFC-302: Daemon Communication Protocol
 - RFC-500: CLI/TUI Architecture
 - IG-176: Move Rich to CLI
 - RFC-000: System Conceptual Design

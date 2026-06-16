@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-12
 **Updated**: 2026-04-29
-**Related**: RFC-000, RFC-001, RFC-400, RFC-402
+**Related**: RFC-000, RFC-001, RFC-302, RFC-303
 
 ## Abstract
 
@@ -107,7 +107,7 @@ Context ingestion → Context persistence → Memory storage → Plan reflection
 
 ## IPC Protocol
 
-See **RFC-400: Unified Daemon Communication Protocol**.
+See **RFC-302: Unified Daemon Communication Protocol**.
 
 ### Transports
 
@@ -115,7 +115,7 @@ See **RFC-400: Unified Daemon Communication Protocol**.
 
 2. **HTTP REST API** — Default port `8766` (localhost), HTTP/1.1 with JSON bodies, health checks, CRUD operations, management endpoints.
 
-See RFC-400 for full protocol specification.
+See RFC-302 for full protocol specification.
 
 ### WebSocket Messages
 
@@ -222,8 +222,8 @@ TUI inherits `PolicyProtocol` enforcement (`deny` blocks tools; `need_approval` 
 
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
-- RFC-400: Context protocol architecture
-- RFC-402: Memory protocol architecture
+- RFC-302: Context protocol architecture
+- RFC-303: Memory protocol architecture
 - RFC-201: Unified StrangeLoop execution (replaces deprecated RFC-202)
 - RFC-450: Unified daemon communication
 - RFC-501: VerbosityTier unification

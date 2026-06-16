@@ -24,11 +24,11 @@ This document defines the terminology and naming conventions used in this projec
 | Orchestrator | The Soothe agent instance created by `create_soothe_agent()`. Wires together all protocols and delegates to deepagents. | RFC-000 |
 | Thread | One continuous agent conversation/execution. Has a unique ID, persistable state, and metadata. | RFC-000 |
 | Delegation | Routing work to a subagent (local or remote) via deepagents' `task` tool. | RFC-000 |
-| Parallel Delegation | Routing work to multiple subagents concurrently via multiple `task` tool calls in a single CoreAgent turn. Each subagent gets isolated thread branch automatically. | RFC-605 |
-| Explore Subagent | Specialized subagent for targeted filesystem searches using wave-based strategy (list → glob → grep), LLM-driven search planning, and match validation with relevance ranking. | RFC-605 |
-| Search Wave | Progressive search depth in explore subagent: Wave 1 (directory listing), Wave 2 (glob patterns), Wave 3 (content search). Minimizes expensive operations. | RFC-605 |
-| Search Strategy | LLM-generated plan for filesystem search including priority directories, file patterns, content keywords, and search type classification. | RFC-605 |
-| Match Validation | LLM assessment of found candidates against search target, ranking by relevance ("high", "medium", "low") and returning top 3-5 matches with brief descriptions. | RFC-605 |
+| Parallel Delegation | Routing work to multiple subagents concurrently via multiple `task` tool calls in a single CoreAgent turn. Each subagent gets isolated thread branch automatically. | RFC-613 |
+| Explore Agent | Specialized subagent for targeted filesystem searches using LLM-orchestrated iterative tool selection. Adapts strategy dynamically based on findings. | RFC-613 |
+| Search Thoroughness | Configurable search depth levels: quick (3 iterations, minimal reading), medium (6 iterations, selective reading), thorough (10 iterations, deep analysis). | RFC-613 |
+| Search Strategy | LLM-generated plan for filesystem search including priority directories, file patterns, content keywords, and search type classification. | RFC-613 |
+| Match Validation | LLM assessment of found candidates against search target, ranking by relevance ("high", "medium", "low") and returning top 3-5 matches with brief descriptions. | RFC-613 |
 | Context Ledger | The orchestrator's unbounded, append-only accumulation of `ContextEntry` items. Distinct from conversation history. | RFC-000, RFC-001 |
 | Context Projection | A bounded, purpose-scoped view of the context ledger, assembled to fit within a token budget. | RFC-000, RFC-001 |
 | Long-Term Memory | Cross-thread persistent knowledge managed by `MemoryProtocol`. Explicitly populated, semantically queryable. | RFC-000, RFC-001 |
@@ -62,12 +62,12 @@ This document defines the terminology and naming conventions used in this projec
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| Progress Event | A `soothe.*` custom event dict emitted via the LangGraph stream for protocol observability. Follows the 4-segment naming convention `soothe.<domain>.<component>.<action>`. | RFC-400 |
-| Event Domain | The second segment of a progress event type string. One of: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`. Enables structural classification without heuristics. | RFC-400 |
-| `SootheEvent` | Pydantic `BaseModel` base class for all typed progress events. Subclassed by domain base classes (`LifecycleEvent`, `ProtocolEvent`, `ToolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent`). | RFC-400 |
-| `EventRegistry` | Central registry mapping event type strings to `EventMeta` (model, domain, verbosity, summary template) and handler callables. Provides O(1) dispatch. | RFC-400 |
-| `EventRenderer` | Protocol for rendering progress events. Implementations: `CliEventRenderer` (stderr text), `TuiEventRenderer` (Rich Text), `JsonlEventRenderer` (passthrough). | RFC-400 |
-| `EventMeta` | Frozen dataclass holding metadata for a registered event type: type string, model class, domain, component, action, verbosity category, and summary template. | RFC-400 |
+| Progress Event | A `soothe.*` custom event dict emitted via the LangGraph stream for protocol observability. Follows the 4-segment naming convention `soothe.<domain>.<component>.<action>`. | RFC-401 |
+| Event Domain | The second segment of a progress event type string. One of: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`. Enables structural classification without heuristics. | RFC-401 |
+| `SootheEvent` | Pydantic `BaseModel` base class for all typed progress events. Subclassed by domain base classes (`LifecycleEvent`, `ProtocolEvent`, `ToolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent`). | RFC-401 |
+| `EventRegistry` | Central registry mapping event type strings to `EventMeta` (model, domain, verbosity, summary template) and handler callables. Provides O(1) dispatch. | RFC-401 |
+| `EventRenderer` | Protocol for rendering progress events. Implementations: `CliEventRenderer` (stderr text), `TuiEventRenderer` (Rich Text), `JsonlEventRenderer` (passthrough). | RFC-401 |
+| `EventMeta` | Frozen dataclass holding metadata for a registered event type: type string, model class, domain, component, action, verbosity category, and summary template. | RFC-401 |
 
 ### Tool Interface Terms (RFC-101)
 

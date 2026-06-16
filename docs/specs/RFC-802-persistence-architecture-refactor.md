@@ -1,12 +1,13 @@
-# RFC-612: Persistence Architecture Refactor
+# RFC-802: Persistence Architecture Refactor
 
-**RFC**: 612
+**RFC**: 802
 **Title**: Persistence Architecture Refactor
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
 **Updated**: 2026-04-22
 **Authors**: Platonic Coding Workflow
+**Note**: Moved from 6xx (RFC-802) per RFC-900 reclassification
 
 ---
 
@@ -515,7 +516,7 @@ class PostgreSQLPersistStore:
 
 **Documentation**:
 - `docs/persistence-migration.md` - SQLite → PostgreSQL guide
-- RFC-215 updates - Reference RFC-612 architecture
+- RFC-215 updates - Reference RFC-802 architecture
 - User guide - New persistence configuration section
 
 ---
@@ -653,4 +654,4 @@ CREATE INDEX embeddings_hnsw_idx ON embeddings USING hnsw (embedding);
 
 ---
 
-**End of RFC-612**
+**End of RFC-802**

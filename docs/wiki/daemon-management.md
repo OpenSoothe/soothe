@@ -79,7 +79,7 @@ soothed restart
 
 ### Attach to Daemon
 
-**Note**: The `soothe thread continue` command was removed in RFC-402. To reconnect to a running daemon, use:
+**Note**: The `soothe thread continue` command was removed in RFC-303. To reconnect to a running daemon, use:
 
 ```bash
 # Resume last active thread via daemon

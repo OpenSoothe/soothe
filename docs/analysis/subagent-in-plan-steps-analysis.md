@@ -191,7 +191,7 @@ When subagent is used in a step, the CLI display shows:
 
 ## References
 
-- RFC-404: Planner Protocol Architecture
+- RFC-304: Planner Protocol Architecture
 - RFC-211: Outcome Metadata (Step execution results)
 - IG-261: Task tool display polish (quoted descriptions, brief results)
 - `schemas.py`: StepAction model (line 14-31)

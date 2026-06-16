@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-600, RFC-400
+**Dependencies**: RFC-600, RFC-302
 **Related**: RFC-174 (IG-174 CLI Import Violations Fix), RFC-175 (IG-175 WebSocket Migration)
 
 ## Abstract
@@ -562,7 +562,7 @@ __all__ = [
 ## References
 
 - RFC-600: Plugin Extension System (plugin API context)
-- RFC-400: Daemon Communication Protocol (client utilities context)
+- RFC-302: Daemon Communication Protocol (client utilities context)
 - IG-173: CLI-Daemon Split Refactoring (SDK package creation)
 - IG-174: CLI Import Violations Fix (SDK Phase 1 exports)
 - IG-175: WebSocket Migration (SDK client package)

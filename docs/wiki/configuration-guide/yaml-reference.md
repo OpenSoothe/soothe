@@ -638,7 +638,7 @@ observability:
 
 Configure storage backends for checkpoints and metadata.
 
-### PostgreSQL Persistence (RFC-612)
+### PostgreSQL Persistence (RFC-802)
 
 ```yaml
 persistence:

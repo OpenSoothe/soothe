@@ -1064,4 +1064,4 @@ class HttpRestConfig(BaseModel):
 - **[SDK API: WebSocketClient](sdk-api.md#websocket-client)** - WebSocket client usage
 - **[Daemon Management Guide](../daemon-management.md)** - Daemon lifecycle management
 - **[Multi-Transport Communication](../multi-transport.md)** - Transport architecture
-- **[RFC-400 Daemon Communication](../../specs/RFC-400-daemon-communication.md)** - Daemon specification
+- **[RFC-302 Daemon Communication](../../specs/RFC-302-daemon-communication.md)** - Daemon specification

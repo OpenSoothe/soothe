@@ -1,11 +1,12 @@
-# RFC-617: OperationSecurityProtocol for Workspace and Tool Execution
+# RFC-901: OperationSecurityProtocol for Workspace and Tool Execution
 
-**RFC**: 617
+**RFC**: 901
 **Title**: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-30
-**Dependencies**: RFC-102, RFC-103, RFC-406, RFC-613
+**Dependencies**: RFC-102, RFC-103, RFC-305, RFC-613
+**Note**: Moved from 6xx (RFC-901) per RFC-900 reclassification
 
 ---
 
@@ -139,5 +140,5 @@ Operation security is evaluated before profile permission matching:
 
 - RFC-102: Secure Filesystem Path Handling and Security Policy
 - RFC-103: Thread-Aware Workspace
-- RFC-406: PolicyProtocol Architecture
+- RFC-305: PolicyProtocol Architecture
 - RFC-613: Explore Agent LLM-Orchestrated Search

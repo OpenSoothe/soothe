@@ -53,7 +53,7 @@ Soothe's 9+ core protocols organize into three categories:
 
 | Protocol | Status | RFC |
 |----------|---------|-----|
-| **ContextProtocol** | Draft (RFC-400) | Unbounded knowledge accumulator |
+| **ContextProtocol** | Draft (RFC-302) | Unbounded knowledge accumulator |
 
 ## Protocol Relationships
 
@@ -417,10 +417,10 @@ All backends must satisfy:
 |-----|-------|-------------------|
 | RFC-000 | System Conceptual Design | Protocol philosophy |
 | RFC-001 | Core Modules Architecture | All protocols overview |
-| RFC-402 | Memory Protocol Architecture | MemoryProtocol |
-| RFC-408 | Durability Protocol Architecture | DurabilityProtocol |
-| RFC-406 | Policy Protocol Architecture | PolicyProtocol |
-| RFC-404 | Planner Protocol Architecture | PlannerProtocol |
+| RFC-303 | Memory Protocol Architecture | MemoryProtocol |
+| RFC-306 | Durability Protocol Architecture | DurabilityProtocol |
+| RFC-305 | Policy Protocol Architecture | PolicyProtocol |
+| RFC-304 | Planner Protocol Architecture | PlannerProtocol |
 | RFC-604 | Reason Phase Robustness | LoopPlannerProtocol |
 | RFC-203 | StrangeLoop State Memory | LoopWorkingMemoryProtocol |
 | RFC-221 | Loop Runner Protocol | LoopRunnerProtocol |
@@ -429,27 +429,27 @@ All backends must satisfy:
 
 | RFC | Title | Protocol Integration |
 |-----|-------|---------------------|
-| RFC-612 | Persistence Architecture Refactor | Multi-database |
+| RFC-802 | Persistence Architecture Refactor | Multi-database |
 | RFC-222 | Autopilot Goal Engine Architecture | LoopRunner + AutopilotJob |
-| RFC-617 | Operation Security Protocol | OperationSecurityProtocol |
+| RFC-901 | Operation Security Protocol | OperationSecurityProtocol |
 
 ## Implementation Status
 
 | Protocol | Implemented | Backend(s) | RFC Status |
 |----------|-------------|------------|------------|
-| MemoryProtocol | ✅ | MemU | RFC-402 |
-| DurabilityProtocol | ✅ | PostgreSQL, SQLite | RFC-408 |
+| MemoryProtocol | ✅ | MemU | RFC-303 |
+| DurabilityProtocol | ✅ | PostgreSQL, SQLite | RFC-306 |
 | VectorStoreProtocol | ✅ | PGVector, SQLiteVec, Weaviate | RFC-000 Module 8 |
 | AsyncPersistStore | ✅ | PostgreSQL, SQLite | RFC-300 |
-| PlannerProtocol | ✅ | LLMPlanner | RFC-404 |
+| PlannerProtocol | ✅ | LLMPlanner | RFC-304 |
 | LoopPlannerProtocol | ✅ | LLMPlanner (two-phase) | RFC-604 |
-| PolicyProtocol | ✅ | ConfigDrivenPolicy | RFC-406 |
+| PolicyProtocol | ✅ | ConfigDrivenPolicy | RFC-305 |
 | LoopRunnerProtocol | ✅ | SootheRunner | RFC-221 |
 | RemoteAgentProtocol | ✅ | Direct access | RFC-000 Module 6 |
 | ToolkitProtocol | ✅ | Built-in + Plugins | RFC-101 |
 | LoopWorkingMemoryProtocol | ✅ | Default implementation | RFC-203 |
-| OperationSecurityProtocol | ✅ | Default implementation | RFC-617 |
-| ContextProtocol | ⚠️ Draft | RFC-400 draft | RFC-400 |
+| OperationSecurityProtocol | ✅ | Default implementation | RFC-901 |
+| ContextProtocol | ⚠️ Draft | RFC-302 draft | RFC-302 |
 
 ## Protocol Documentation Index
 

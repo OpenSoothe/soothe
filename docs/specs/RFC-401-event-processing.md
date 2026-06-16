@@ -41,7 +41,7 @@ This RFC defines:
 
 This RFC does **not** define:
 
-* Daemon transport layer (see RFC-400)
+* Daemon transport layer (see RFC-302)
 * CLI/TUI display implementation (see RFC-500)
 * Specific event types (see event-catalog.md)
 * VerbosityTier classification (see RFC-501)

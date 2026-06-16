@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-06-16
-**Total RFCs**: 76
+**Total RFCs**: 77 (5 deprecated, 8 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -9,18 +9,19 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 54 |
-| Implemented | 16 |
-| Proposed | 2 |
-| Superseded | 2 |
-| Deprecated. Superseded by RFC-413. | 1 |
+| Draft | 52 |
+| Implemented | 14 |
+| Implemented (Partially Superseded) | 1 |
+| Implemented — runtime architecture refined | 1 |
+| Deprecated | 5 |
+| Proposed | 3 |
 | Accepted | 1 |
 
 ## RFC Kind Summary
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 53 |
+| Architecture Design | 52 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
@@ -29,6 +30,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
+| Process Specification | 1 |
 
 ---
 
@@ -90,17 +92,22 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-200**: [Autonomous Goal Management Loop](RFC-200-autonomous-goal-management.md)
   - Kind: Architecture Design
-  - Status: Implemented
+  - Status: Deprecated
+  - Superseded By: RFC-222 (control flow), RFC-625 (GoalEngine architecture)
+  - Superseded Date: 2026-06-16
   - Created: 2026-03-15
 
 - **RFC-201**: [StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)](RFC-201-strangeloop-plan-execute-loop.md)
   - Kind: Architecture Design
-  - Status: Implemented
+  - Status: Implemented (Partially Superseded)
+  - Partially Superseded By: RFC-220 (§loop driver)
   - Created: 2026-04-17
 
 - **RFC-203**: [StrangeLoop State & Memory Architecture](RFC-203-strangeloop-state-memory.md)
   - Kind: Architecture Design / Impl Interface
-  - Status: Draft
+  - Status: Deprecated
+  - Superseded By: RFC-626
+  - Superseded Date: 2026-06-16
   - Created: 2026-04-17
 
 - **RFC-204**: [Autopilot Mode (Layer 3 Extension)](RFC-204-autopilot-mode.md)
@@ -216,25 +223,63 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 ### Protocols (3xx)
 
 - **RFC-300**: [Context and Memory Architecture Design](RFC-300-context-memory-protocols.md)
-  - Kind: Not stated
-  - Status: Superseded
+  - Kind: Architecture Design
+  - Status: Deprecated
+  - Superseded By: RFC-302, RFC-303
+  - Superseded Date: 2026-06-16
   - Created: 2026-03-14
 
 - **RFC-301**: [Protocol Registry](RFC-301-protocol-registry.md)
   - Kind: Implementation Interface Design
   - Status: Implemented
   - Created: 2026-03-31
-  - Depends on: RFC-001 (Core Modules Architecture), RFC-400 (Context Protocol), RFC-402 (Memory Protocol)
+  - Depends on: RFC-001 (Core Modules Architecture), RFC-302 (Context Protocol), RFC-303 (Memory Protocol)
   - Authors: Xiaming Chen
+
+- **RFC-302**: [ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval](RFC-302-context-protocol-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-17
+  - Dependencies: RFC-000, RFC-001
+  - Related: RFC-303 (Memory), RFC-306 (Durability)
+  - Note: Moved from 4xx (RFC-302) per RFC-900 reclassification
+
+- **RFC-303**: [MemoryProtocol: Cross-Thread Memory & Context Separation](RFC-303-memory-protocol-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-17
+  - Dependencies: RFC-000, RFC-302
+  - Related: RFC-306 (Durability), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation)
+  - Implemented by: CE's EpisodicSubmodule (RFC-625, RFC-626)
+  - Note: Moved from 4xx (RFC-303) per RFC-900 reclassification
+
+- **RFC-304**: [PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern](RFC-304-planner-protocol-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-17
+  - Dependencies: RFC-000, RFC-302
+  - Related: RFC-201 (StrangeLoop)
+  - Note: Moved from 4xx (RFC-304) per RFC-900 reclassification
+
+- **RFC-305**: [PolicyProtocol: Permission Checking & Scope Matching](RFC-305-policy-protocol-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-17
+  - Dependencies: RFC-000, RFC-001
+  - Related: RFC-100 (CoreAgent)
+  - Note: Moved from 4xx (RFC-305) per RFC-900 reclassification
+
+- **RFC-306**: [DurabilityProtocol: Thread Lifecycle & Metadata Management](RFC-306-durability-protocol-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-17
+  - Dependencies: RFC-000, RFC-001
+  - Related: RFC-203 (Checkpoint), RFC-303 (Memory)
+  - Note: Moved from 4xx (RFC-306) per RFC-900 reclassification
 
 ---
 
 ### Daemon & Transport (4xx)
-
-- **RFC-400**: [ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval](RFC-400-context-protocol-architecture.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-17
 
 - **RFC-401**: [Event Processing & Filtering](RFC-401-event-processing.md)
   - Kind: Implementation Interface Design
@@ -244,37 +289,18 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-450 (Daemon Communication), RFC-403 (Unified Event Naming), RFC-500 (CLI/TUI Architecture)
   - Authors: Soothe Team
 
-- **RFC-402**: [MemoryProtocol: Cross-Thread Memory & Context Separation](RFC-402-memory-protocol-architecture.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-17
-
 - **RFC-403**: [Unified Event Naming Semantics](RFC-403-unified-event-naming.md)
   - Kind: Implementation Interface Design
   - Status: Draft
   - Created: 2026-04-15
   - Authors: Platonic Brainstorming Session
 
-- **RFC-404**: [PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern](RFC-404-planner-protocol-architecture.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-17
-
-- **RFC-406**: [PolicyProtocol: Permission Checking & Scope Matching](RFC-406-policy-protocol-architecture.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-17
-
-- **RFC-408**: [DurabilityProtocol: Thread Lifecycle & Metadata Management](RFC-408-durability-protocol-architecture.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-17
-
 - **RFC-411**: [Event Stream Replay & History Reconstruction](RFC-411-event-stream-replay.md)
   - Kind: Architecture Design
-  - Status: Deprecated. Superseded by RFC-413.
+  - Status: Deprecated
+  - Superseded By: RFC-413
+  - Superseded Date: 2026-06-16
   - Created: 2026-04-22
-  - Superseded by: RFC-413 (Server-Owned Display Card Ledger)
 
 - **RFC-412**: [MCP Management](RFC-412-mcp-management.md)
   - Kind: Implementation Interface Design
@@ -361,11 +387,6 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-600 (Plugin Extension System), RFC-301 (Protocol Registry)
   - Authors: Soothe Team
 
-- **RFC-602**: [SQLite Backend for Persistence, Durability, and Vector Store](RFC-602-sqlite-backend.md)
-  - Kind: Architecture Design + Implementation Interface Design
-  - Status: Draft
-  - Created: 2026-04-04
-
 - **RFC-603**: [Reasoning Quality & Progressive Actions](RFC-603-reasoning-quality-progressive-actions.md)
   - Kind: Feature Enhancement
   - Status: Draft
@@ -381,7 +402,9 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-605**: [Explore Subagent and Parallel Spawning](RFC-605-explore-subagent-parallel-spawning.md)
   - Kind: Architecture Design
-  - Status: Superseded
+  - Status: Deprecated
+  - Superseded By: RFC-613
+  - Superseded Date: 2026-06-16
   - Created: 2026-04-13
 
 - **RFC-606**: [DeepAgents CLI TUI Migration](RFC-606-deepagents-cli-tui-migration.md)
@@ -401,12 +424,6 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-612**: [Persistence Architecture Refactor](RFC-612-persistence-architecture-refactor.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-22
-  - Authors: Platonic Coding Workflow
-
 - **RFC-613**: [Explore Agent — LLM-Orchestrated Iterative Search](RFC-613-explore-agent-llm-orchestrated-search.md)
   - Kind: Architecture Design
   - Status: Draft
@@ -425,11 +442,6 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-28
-
-- **RFC-617**: [OperationSecurityProtocol: Unified Workspace and Tool Operation Security](RFC-617-operation-security-protocol.md)
-  - Kind: Architecture Design
-  - Status: Draft
-  - Created: 2026-04-30
 
 - **RFC-618**: [Plan Subagent — Structured Planning with Explore Delegation](RFC-618-plan-subagent-delegation.md)
   - Kind: Architecture Design
@@ -508,6 +520,43 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 ---
 
+### Persistence & Backends (8xx)
+
+- **RFC-801**: [SQLite Backend for Persistence, Durability, and Vector Store](RFC-801-sqlite-backend.md)
+  - Kind: Architecture Design + Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-04-04
+  - Dependencies: RFC-000, RFC-001, RFC-302, RFC-303
+  - Related: RFC-200
+  - Note: Moved from 6xx (RFC-801) per RFC-900 reclassification
+
+- **RFC-802**: [Persistence Architecture Refactor](RFC-802-persistence-architecture-refactor.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-22
+  - Updated: 2026-04-22
+  - Authors: Platonic Coding Workflow
+  - Note: Moved from 6xx (RFC-802) per RFC-900 reclassification
+
+---
+
+### Security & Policy (9xx)
+
+- **RFC-901**: [OperationSecurityProtocol: Unified Workspace and Tool Operation Security](RFC-901-operation-security-protocol.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-30
+  - Dependencies: RFC-102, RFC-103, RFC-305, RFC-613
+  - Note: Moved from 6xx (RFC-901) per RFC-900 reclassification
+
+- **RFC-900**: [RFC Deprecation List and Number Segment Reclassification Scheme](RFC-900-deprecation-reclassification-scheme.md)
+  - Kind: Process Specification
+  - Status: Proposed
+  - Created: 2026-06-16
+  - Authors: Soothe Team
+
+---
+
 ## Quick Reference
 
 ### Implemented RFCs
@@ -519,8 +568,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-101 | Tool Interface & Event Naming | 2026-03-31 |
 | RFC-102 | Secure Filesystem Path Handling and Security Polic | 2026-03-18 |
 | RFC-104 | Dynamic System Context Injection | 2026-03-31 |
-| RFC-200 | Autonomous Goal Management Loop | 2026-03-15 |
-| RFC-201 | StrangeLoop Plan-Execute Loop Architecture (Consolid | 2026-04-17 |
+| RFC-201 | StrangeLoop Plan-Execute Loop Architecture | 2026-04-17 |
 | RFC-204 | Autopilot Mode (Layer 3 Extension) | 2026-04-03 |
 | RFC-219 | Goal Completion Module Architecture | 2026-04-28 |
 | RFC-301 | Protocol Registry | 2026-03-31 |
@@ -531,6 +579,18 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | RFC-601 | Built-in Plugin Agents | 2026-03-31 |
 | RFC-604 | Plan Phase Robustness (Three-Layer Defense) | 2026-04-11 |
 | RFC-625 | AutopilotMonitor as ContextEngine Monitor Submodul | 2026-06-15 |
+
+### Deprecated RFCs
+
+| RFC | Title | Superseded By | Archive Date |
+|-----|-------|---------------|--------------|
+| RFC-200 | Autonomous Goal Management Loop | RFC-222, RFC-625 | 2026-09-14 |
+| RFC-203 | StrangeLoop State & Memory Architecture | RFC-626 | 2026-09-14 |
+| RFC-300 | Context and Memory Architecture Design | RFC-302, RFC-303 | 2026-09-14 |
+| RFC-411 | Event Stream Replay & History Reconstruction | RFC-413 | 2026-09-14 |
+| RFC-605 | Explore Subagent and Parallel Spawning | RFC-613 | 2026-09-14 |
+
+See [archive/README.md](archive/README.md) for archival schedule and process.
 
 ### Recently Drafted RFCs (Top 10)
 
@@ -552,7 +612,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | New RFC | Supersedes |
 |---------|------------|
 | RFC-101 | RFC-0016, RFC-0025 |
-| RFC-220 | RFC-201 |
+| RFC-220 | RFC-201 (partial - §loop driver) |
 | RFC-401 | RFC-0015, RFC-0019, RFC-0022 |
 | RFC-413 | RFC-411 |
 | RFC-501 | RFC-0020, RFC-0024 |
@@ -571,11 +631,13 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 6 |
 | 2xx | StrangeLoop & Cognition | 23 |
-| 3xx | Protocols | 2 |
-| 4xx | Daemon & Transport | 13 |
+| 3xx | Protocols | 7 |
+| 4xx | Daemon & Transport | 8 |
 | 5xx | CLI & TUI | 6 |
-| 6xx | Plugin System & Extensions | 23 |
+| 6xx | Plugin System & Extensions | 20 |
 | 7xx | Product & Applications | 1 |
+| 8xx | Persistence & Backends | 2 |
+| 9xx | Security & Policy | 3 |
 
 ---
 

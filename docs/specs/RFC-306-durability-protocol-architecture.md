@@ -1,12 +1,13 @@
-# RFC-408: DurabilityProtocol Architecture
+# RFC-306: DurabilityProtocol Architecture
 
-**RFC**: 408
+**RFC**: 306
 **Title**: DurabilityProtocol: Thread Lifecycle & Metadata Management
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Dependencies**: RFC-000, RFC-001
-**Related**: RFC-203 (Checkpoint), RFC-402 (Memory)
+**Related**: RFC-203 (Checkpoint), RFC-303 (Memory)
+**Note**: Moved from 4xx (RFC-306) per RFC-900 reclassification
 
 ---
 
@@ -123,7 +124,7 @@ All agent state persistable and resumable:
 - Thread lifecycle managed by DurabilityProtocol
 - Conversation state managed by langgraph checkpointer
 - StrangeLoop checkpoint managed by CheckpointEnvelope (RFC-203)
-- Context ledger managed by ContextProtocol (RFC-400)
+- Context ledger managed by ContextProtocol (RFC-302)
 
 **Separation**: DurabilityProtocol manages thread metadata + lifecycle, NOT execution state (which is CheckpointEnvelope in Layer 2).
 
@@ -272,7 +273,7 @@ async def _post_stream(thread_id: str):
 - ✅ Metadata persistence
 - ✅ Thread filtering
 - ✅ LangGraph durability backend
-- ⚠️ SQLite backend (RFC-602)
+- ⚠️ SQLite backend (RFC-801)
 - ⚠️ PostgreSQL backend (future)
 
 ---
@@ -281,7 +282,7 @@ async def _post_stream(thread_id: str):
 
 - RFC-000: System Conceptual Design (§5 Durable by default)
 - RFC-203: StrangeLoop State & Memory (CheckpointEnvelope - Layer 2 implementation)
-- RFC-400: ContextProtocol (context persistence)
+- RFC-302: ContextProtocol (context persistence)
 - RFC-001: Core Modules Architecture (original Module 5)
 
 ---

@@ -12,6 +12,26 @@ from langchain.agents import AgentState
 from pydantic import BaseModel, Field
 
 
+def _last_wins(left: str | None, right: str | None) -> str | None:
+    """Reducer for workspace: last non-empty value wins (IG-328, LangGraph InvalidUpdateError fix).
+
+    LangGraph's ``LastValue`` channel rejects multiple writes per step. When both
+    ``WorkspaceContextMiddleware`` and ``ExploreWireMiddleware`` write ``workspace``
+    in the same tick, ``InvalidUpdateError`` is raised. This reducer allows multiple
+    writes, with the last non-empty value winning.
+
+    Args:
+        left: Previous workspace value (or None).
+        right: New workspace value (or None).
+
+    Returns:
+        ``right`` if non-empty, else ``left``.
+    """
+    if right is not None and str(right).strip():
+        return right
+    return left
+
+
 class MatchEntry(BaseModel):
     """A single match result from the explore agent."""
 
@@ -45,7 +65,7 @@ class ExploreResult(BaseModel):
 class ExploreAgentState(AgentState[ExploreResult]):
     """State for LangChain ``create_agent`` explore subgraph."""
 
-    workspace: NotRequired[str]
+    workspace: NotRequired[Annotated[str, _last_wins]]
     search_target: NotRequired[str]
     thoroughness: NotRequired[str]
     findings: NotRequired[Annotated[list[dict[str, Any]], operator.add]]
