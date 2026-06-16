@@ -1139,7 +1139,7 @@ wheels = [
 
 [[package]]
 name = "deepagents"
-version = "0.5.7"
+version = "0.6.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain" },
@@ -1149,9 +1149,9 @@ dependencies = [
     { name = "langsmith" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/81/7c2285e29816a0f1c33211cda31770ddca3b6bb6baf8d645e4d85f133e7d/deepagents-0.5.7.tar.gz", hash = "sha256:8a9e28f2d2c48b5eb1f659573c95829ac31db563cb223d561b0d1dddce133187", size = 165168, upload-time = "2026-05-05T15:54:23.992Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/ab/3225f47404d401559ab67819b3b20833cdefe7e283e39f796d6019c7dfa7/deepagents-0.6.10.tar.gz", hash = "sha256:bce9f8e6b7870fe1bba5e5a128588e6f38df810f60695e01dd568e6e62e74a89", size = 203631, upload-time = "2026-06-13T00:00:00.000Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fd/bb/c1c68ad0ca96cdddd601e7fca0f274be202411378af6da76a35f0e4a1b66/deepagents-0.5.7-py3-none-any.whl", hash = "sha256:2783f87cfeade4c6fbbb86b427e35bf9d12c6cc29d1f0f2b978cd2529082bb66", size = 187645, upload-time = "2026-05-05T15:54:22.764Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/81/49f1a98434b462aa60a07ef5a98437bd6a4445219b91c459e1e7e5d5564e/deepagents-0.6.10-py3-none-any.whl", hash = "sha256:21486ba213f027f7f2d5b4822bf6099f806a1d325dd33e93d3f5b9e857b2ea89", size = 228251, upload-time = "2026-06-13T00:00:00.000Z" },
 ]
 
 [[package]]
@@ -8547,7 +8547,7 @@ requires-dist = [
     { name = "claude-agent-sdk", marker = "extra == 'claude'", specifier = ">=0.1.0,<1.0.0" },
     { name = "dashscope", marker = "extra == 'all'", specifier = ">=1.20.0" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.20.0" },
-    { name = "deepagents", specifier = ">=0.4.10,<1.0.0" },
+    { name = "deepagents", specifier = ">=0.6.10,<1.0.0" },
     { name = "deepxiv-sdk", marker = "extra == 'all'", specifier = ">=0.2.5" },
     { name = "deepxiv-sdk", marker = "extra == 'research'", specifier = ">=0.2.5" },
     { name = "docx2txt", marker = "extra == 'all'", specifier = ">=0.8.0" },
