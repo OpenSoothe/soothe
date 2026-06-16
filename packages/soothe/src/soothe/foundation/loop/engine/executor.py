@@ -1696,7 +1696,7 @@ class Executor:
         """Configured concurrent tool-call cap for a single execute step stream."""
         if self._config is None:
             return 5
-        return self._config.agent.loop.limits.max_parallel_tools
+        return self._config.agent.loop.concurrency.max_parallel_tools
 
     def _wave_size(self, remaining: int) -> int:
         """Concurrent step count for the next execute batch (``0`` = unlimited).
@@ -2690,16 +2690,16 @@ class Executor:
                     if text_out:
                         # Truncate large tool outputs in aggregated stream text; full payloads
                         # remain in CoreAgent graph state (and LangGraph eviction when enabled).
-                        limits = (
-                            self._config.agent.loop.limits
+                        tool_output = (
+                            self._config.agent.loop.tool_output
                             if self._config and hasattr(self._config, "agent")
                             else None
                         )
-                        if limits is not None:
+                        if tool_output is not None:
                             max_tool_output_chars = (
-                                int(limits.code_exec_max_output_chars)
+                                int(tool_output.code_exec_max_output_chars)
                                 if get_outcome_type(tool_name) == "code_exec"
-                                else int(limits.tool_output_max_chars)
+                                else int(tool_output.tool_output_max_chars)
                             )
                         else:
                             max_tool_output_chars = (
@@ -2803,17 +2803,17 @@ class Executor:
                 subgraph_tool_call_count += 1
                 text_out = extract_text_from_message_content(getattr(tm, "content", None))
                 if text_out and str(getattr(tm, "name", "") or "") != "task":
-                    limits = (
-                        self._config.agent.loop.limits
+                    tool_output = (
+                        self._config.agent.loop.tool_output
                         if self._config and hasattr(self._config, "agent")
                         else None
                     )
                     tname = str(getattr(tm, "name", "") or "unknown")
-                    if limits is not None:
+                    if tool_output is not None:
                         max_tool_output_chars = (
-                            int(limits.code_exec_max_output_chars)
+                            int(tool_output.code_exec_max_output_chars)
                             if get_outcome_type(tname) == "code_exec"
-                            else int(limits.tool_output_max_chars)
+                            else int(tool_output.tool_output_max_chars)
                         )
                     else:
                         max_tool_output_chars = (

@@ -73,11 +73,11 @@ async def test_conditional_context_projection(test_config: SootheConfig, require
 @pytest.mark.asyncio
 async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
     """Execution concurrency limits remain configurable."""
-    test_config.agent.loop.limits.max_parallel_steps = 2
+    test_config.agent.loop.concurrency.max_parallel_steps = 2
     runner = SootheRunner(test_config)
 
     try:
-        assert test_config.agent.loop.limits.max_parallel_steps == 2
+        assert test_config.agent.loop.concurrency.max_parallel_steps == 2
 
     finally:
         await runner.cleanup()

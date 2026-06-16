@@ -159,7 +159,7 @@ def build_soothe_middleware_stack(
 
     # 2. Tool concurrency limit (bounds parallel tool calls per thread)
     stack.append(ToolConcurrencyMiddleware())
-    max_parallel_tools = config.agent.loop.limits.max_parallel_tools
+    max_parallel_tools = config.agent.loop.concurrency.max_parallel_tools
     logger.info(
         "[Middleware] Tool concurrency enabled: max_parallel_tools=%d",
         max_parallel_tools,
@@ -208,40 +208,33 @@ def build_soothe_middleware_stack(
 
     # 4. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
-    rpm = config.agent.loop.limits.llm_rpm_limit
-    concurrent = config.agent.loop.limits.llm_concurrent_limit
-    timeout = config.agent.loop.limits.llm_call_timeout_seconds
-    timeout_max = config.agent.loop.limits.llm_call_timeout_max_seconds
-    timeout_adaptive = config.agent.loop.limits.llm_call_timeout_adaptive
-    retry_on_timeout = config.agent.loop.limits.llm_retry_on_timeout
-    max_timeout_retries = config.agent.loop.limits.llm_max_timeout_retries
-    timeout_retry_multiplier = config.agent.loop.limits.llm_timeout_retry_multiplier
-
-    stack.append(
-        LLMRateLimitMiddleware(
-            requests_per_minute=rpm,
-            max_concurrent_requests_per_thread=concurrent,
-            call_timeout_seconds=timeout,
-            call_timeout_max_seconds=timeout_max,
-            call_timeout_adaptive=timeout_adaptive,
-            thread_local=True,
-            retry_on_timeout=retry_on_timeout,
-            max_timeout_retries=max_timeout_retries,
-            timeout_retry_multiplier=timeout_retry_multiplier,
+    llm_rl = config.agent.loop.llm_rate_limit
+    if llm_rl.enabled:
+        stack.append(
+            LLMRateLimitMiddleware(
+                requests_per_minute=llm_rl.rpm_limit,
+                max_concurrent_requests_per_thread=llm_rl.concurrent_limit,
+                call_timeout_seconds=llm_rl.call_timeout_seconds,
+                call_timeout_max_seconds=llm_rl.call_timeout_max_seconds,
+                thread_local=True,
+                retry_on_timeout=llm_rl.retry_on_timeout,
+                max_timeout_retries=llm_rl.max_timeout_retries,
+                timeout_retry_multiplier=llm_rl.timeout_retry_multiplier,
+            )
         )
-    )
-    logger.info(
-        "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, "
-        "timeout_floor=%ds timeout_cap=%ds adaptive=%s retry=%s max_retries=%d multiplier=%.1f",
-        rpm,
-        concurrent,
-        timeout,
-        timeout_max,
-        timeout_adaptive,
-        retry_on_timeout,
-        max_timeout_retries,
-        timeout_retry_multiplier,
-    )
+        logger.info(
+            "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, "
+            "timeout=%ds timeout_cap=%ds retry=%s max_retries=%d multiplier=%.1f",
+            llm_rl.rpm_limit,
+            llm_rl.concurrent_limit,
+            llm_rl.call_timeout_seconds,
+            llm_rl.call_timeout_max_seconds,
+            llm_rl.retry_on_timeout,
+            llm_rl.max_timeout_retries,
+            llm_rl.timeout_retry_multiplier,
+        )
+    else:
+        logger.debug("[Middleware] LLM rate limiting disabled")
 
     # 5. Execution hints (Layer 2 → Layer 1 integration)
     stack.append(ExecutionHintsMiddleware())

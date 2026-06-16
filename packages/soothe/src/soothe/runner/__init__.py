@@ -179,14 +179,14 @@ class SootheRunner(
         self._artifact_store: Any | None = (
             None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
         )
-        _lim = self._config.agent.loop.limits
+        _concurrency_cfg = self._config.agent.loop.concurrency
         self._concurrency = ConcurrencyController(
             ConcurrencyPolicy(
-                max_parallel_goals=_lim.max_parallel_goals,
-                max_parallel_steps=_lim.max_parallel_steps,
-                max_parallel_subagents=_lim.max_parallel_subagents,
-                global_max_llm_calls=_lim.global_max_llm_calls,
-                step_parallelism=_lim.step_parallelism,
+                max_parallel_goals=_concurrency_cfg.max_parallel_goals,
+                max_parallel_steps=_concurrency_cfg.max_parallel_steps,
+                max_parallel_subagents=_concurrency_cfg.max_parallel_subagents,
+                global_max_llm_calls=_concurrency_cfg.global_max_llm_calls,
+                step_parallelism=_concurrency_cfg.step_parallelism,
             )
         )
         self._context_restore_lock = asyncio.Lock()

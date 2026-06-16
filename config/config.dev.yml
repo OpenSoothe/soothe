@@ -48,8 +48,6 @@ router:
 # AGENT (Unified)
 # ============================================================
 agent:
-  name: Soothe
-  core_agent_backend: langgraph
   autonomous:
     enabled: true
     max_iterations: 15
@@ -57,55 +55,22 @@ agent:
     poll_interval: 2
     loop_idle_timeout: 60
 
-    # RFC-625: AutopilotMonitor settings (dev defaults)
-    verify_interval: 30
-    dreaming_interval: 300
-    dreaming_scope: workspace
-    dreaming_modes:
-      episodic:
-        enabled: true
-        max_episodes: 10
-      procedure:
-        enabled: true
-        min_success_rate: 0.8
-      semantic:
-        enabled: true
-      profile:
-        enabled: true
-
   loop:
     max_iterations: 99
-    # RFC-224: Context window management (dev defaults aligned with template)
-    context_window_limit: 200000
-    context_overflow_threshold_pct: 0.80
-    context_compaction_target_pct: 0.60
-    step_context_check_enabled: false
     plan_prompt_ledger:
       plan_ledger_max_messages: 20
-    limits:
+    concurrency:
       max_parallel_steps: 4
       max_parallel_tools: 50
-      llm_rpm_limit: 10000  # effectively disable rate limiting (max allowed)
-      llm_concurrent_limit: 500  # effectively disable concurrent limit (max allowed)
       global_max_llm_calls: 10
-      tool_call_limit:
-        global_thread_limit: 200
-        global_run_limit: 80
-
-# ============================================================
-# SUBAGENTS
-# ============================================================
-# Built-in subagents (explore, plan, tacitus) are registered automatically.
-# browser_use requires soothe[browser_use]. Claude Code uses agent.core_agent_backend: claude.
-subagents:
-  browser_use:
-    enabled: false
+    tool_call_limit:
+      global_thread_limit: 200
+      global_run_limit: 80
 
 # ============================================================
 # OBSERVABILITY
 # ============================================================
 observability:
-  profile_model_calls: false
   log_file_level: DEBUG
   langfuse:
     enabled: true
@@ -121,13 +86,8 @@ observability:
 # ============================================================
 persistence:
   default_backend: postgresql
-  # Thread pool (daemon_config.dev.yml): one checkpointer + one StrangeLoop pool per daemon process.
-  postgres_pool_min_size: 4
-  checkpointer_pool_size: 24
-  sloop_pool_size: 24
   postgres_pool_max_idle_seconds: 90
   postgres_pool_max_lifetime_seconds: 900
-  postgres_pool_acquire_timeout_seconds: 30
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
 
 vector_stores:
@@ -138,23 +98,3 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
-
-# ============================================================
-# SECURITY
-# ============================================================
-security:
-  allow_paths_outside_workspace: false
-
-# ============================================================
-# OPTIMIZATION
-# ============================================================
-# Uses defaults from OptimizationConfig (IG-433).
-# All semantic features enabled with graceful keyword/regex fallback.
-
-# ============================================================
-# PROGRESSIVE SKILL LOADING (RFC-105)
-# ============================================================
-progressive_skills:
-  budget_pct: 0.01
-  max_listing_chars_per_entry: 250
-  min_listing_chars_per_entry: 20

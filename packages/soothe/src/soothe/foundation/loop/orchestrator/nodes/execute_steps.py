@@ -489,7 +489,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     run_executor = Executor(
         strange_loop.core_agent,
         checkpointer=checkpointer,
-        max_parallel_steps=strange_loop.config.agent.loop.limits.max_parallel_steps,
+        max_parallel_steps=strange_loop.config.agent.loop.concurrency.max_parallel_steps,
         config=strange_loop.config,
         goal_context_manager=goal_context_manager,
         loop_id=ctx.state_manager.loop_id,
