@@ -21,7 +21,6 @@ providers:
     api_base_url: "${DASHSCOPE_BASE_URL}"
     api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - qwen-max              # Premium reasoning model
       - multimodal-embedding-v1  # Embedding model
 
   # Coding-Plan - Alibaba's coding-focused endpoint
@@ -32,10 +31,8 @@ providers:
     api_key: "${DASHSCOPE_CP_API_KEY}"
     models:
       - glm-5                 # Zhipu AI GLM model
-      - qwen3.6-plus          # Coding-optimized Qwen
       - kimi-k2.5             # Moonshot AI model
       - MiniMax-M2.5          # Alternative reasoning
-      - deepseek-v3.2         # DeepSeek reasoning model
 
 # =============================================================================
 # Model Router
@@ -44,7 +41,7 @@ router:
   default: "coding-plan:glm-5"
   fast: "coding-plan:kimi-k2.5"
   think: "coding-plan:glm-5"
-  image: "coding-plan:qwen3.6-plus"
+  image: "coding-plan:kimi-k2.5"
   embedding: "dashscope:multimodal-embedding-v1"
 
 # =============================================================================
