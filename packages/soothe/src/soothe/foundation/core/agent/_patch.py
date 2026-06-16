@@ -235,7 +235,12 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
     def _build_task_tool(  # noqa: C901
         subagents: list[Any],
         task_description: str | None = None,
+        *,
+        private_state_keys: frozenset[str] = frozenset(),
+        state_schema: Any = None,  # noqa: ARG001 - forwarded for API compatibility
     ):
+        # Combine excluded_state_keys (deepagents default) with private_state_keys
+        all_excluded_keys = excluded_state_keys | private_state_keys
         subagent_graphs: dict[str, Runnable] = {
             spec["name"]: spec["runnable"] for spec in subagents
         }
@@ -261,7 +266,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
                 )
                 raise ValueError(error_msg)
 
-            state_update = {k: v for k, v in result.items() if k not in excluded_state_keys}
+            state_update = {k: v for k, v in result.items() if k not in all_excluded_keys}
             message_text = (
                 result["messages"][-1].text.rstrip() if result["messages"][-1].text else ""
             )
@@ -284,7 +289,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             )
             subagent = subagent_graphs[subagent_type]
             subagent_state = {
-                k: v for k, v in runtime.state.items() if k not in excluded_state_keys
+                k: v for k, v in runtime.state.items() if k not in all_excluded_keys
             }
             subagent_state["messages"] = [HumanMessage(content=description)]
             # IG-340: Propagate workspace from config.configurable to subagent
