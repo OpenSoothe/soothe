@@ -21,6 +21,7 @@ from soothe.foundation.context.ledger import LedgerManager
 from soothe.foundation.context.models import (
     TERMINAL_STATES,
     EpisodeSummary,
+    EvidenceEntry,
     GoalNode,
     GoalStatus,
     GoalStepDAG,
@@ -345,6 +346,61 @@ class ContextEngine:
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
             goal.action_history.append(action)
+
+    def increment_iteration(self, goal_id: str) -> int:
+        """Increment the iteration count for a goal (RFC-624 Phase 4 Step 4).
+
+        Called by iteration_start node after plan-assess completes each
+        iteration cycle. Returns the new iteration value.
+
+        Args:
+            goal_id: Goal whose iteration to increment.
+
+        Returns:
+            New iteration_count value (after increment).
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            logger.warning("increment_iteration called on missing goal %s", goal_id)
+            return 0
+        goal.iteration_count += 1
+        goal.touch()
+        return goal.iteration_count
+
+    def record_evidence(
+        self,
+        goal_id: str,
+        evidence_id: str,
+        summary: str,
+        kind: str = "tool",
+    ) -> None:
+        """Append an evidence entry to the goal's evidence ledger.
+
+        Args:
+            goal_id: Goal to update.
+            evidence_id: Stable identifier for the evidence.
+            summary: Compact summary text for prompts/validation.
+            kind: Provenance classification ("tool", "bootstrap", "ledger").
+        """
+        goal = self._dag.get_goal(goal_id)
+        if goal is None:
+            logger.warning("record_evidence called on missing goal %s", goal_id)
+            return
+        entry = EvidenceEntry(evidence_id=evidence_id, summary=summary, kind=kind)
+        goal.evidence_ledger.append(entry)
+        goal.touch()
+
+    def get_iteration(self, goal_id: str) -> int:
+        """Get current iteration count for a goal.
+
+        Args:
+            goal_id: Goal to query.
+
+        Returns:
+            Current iteration_count, or 0 if goal not found.
+        """
+        goal = self._dag.get_goal(goal_id)
+        return goal.iteration_count if goal is not None else 0
 
     def set_previous_plan(self, goal_id: str, plan: Any) -> None:
         """Store the previous plan result on the goal node."""
