@@ -12,6 +12,7 @@ Pydantic validation and the task tool would fail at runtime.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import logging
@@ -219,7 +220,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
     """
     try:
         from deepagents.middleware import subagents as sm
-        from langchain_core.messages import HumanMessage, ToolMessage
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
         from langchain_core.runnables import Runnable
         from langchain_core.tools import StructuredTool
         from langgraph.types import Command
@@ -231,21 +232,48 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
 
     excluded_state_keys = sm._EXCLUDED_STATE_KEYS
     task_tool_description_template = sm.TASK_TOOL_DESCRIPTION
+    # Import create_sub_agent for compiling raw SubAgent specs
+    create_sub_agent = sm.create_sub_agent
 
     def _build_task_tool(  # noqa: C901
         subagents: list[Any],
         task_description: str | None = None,
         *,
         private_state_keys: frozenset[str] = frozenset(),
-        state_schema: Any = None,  # noqa: ARG001 - forwarded for API compatibility
+        state_schema: Any = None,
     ):
         # Combine excluded_state_keys (deepagents default) with private_state_keys
         all_excluded_keys = excluded_state_keys | private_state_keys
+
+        # Compile raw SubAgent specs first (deepagents 0.6.10+ API)
+        # Raw specs lack 'runnable'; they need create_sub_agent() compilation.
+        def _compile_spec(spec: Any) -> Any:
+            if "runnable" in spec:
+                # CompiledSubAgent: apply config metadata
+                runnable = spec["runnable"].with_config(
+                    {
+                        "metadata": {"lc_agent_name": spec["name"]},
+                        "run_name": spec["name"],
+                    }
+                )
+                return {
+                    "name": spec["name"],
+                    "description": spec["description"],
+                    "runnable": runnable,
+                }
+            # Raw SubAgent: compile via create_sub_agent
+            return {
+                "name": spec["name"],
+                "description": spec["description"],
+                "runnable": create_sub_agent(spec, state_schema=state_schema),
+            }
+
+        compiled_subagents = [_compile_spec(spec) for spec in subagents]
         subagent_graphs: dict[str, Runnable] = {
-            spec["name"]: spec["runnable"] for spec in subagents
+            spec["name"]: spec["runnable"] for spec in compiled_subagents
         }
         subagent_description_str = "\n".join(
-            f"- {s['name']}: {s['description']}" for s in subagents
+            f"- {s['name']}: {s['description']}" for s in compiled_subagents
         )
 
         if task_description is None:
@@ -267,13 +295,31 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
                 raise ValueError(error_msg)
 
             state_update = {k: v for k, v in result.items() if k not in all_excluded_keys}
-            message_text = (
-                result["messages"][-1].text.rstrip() if result["messages"][-1].text else ""
-            )
+
+            # Handle structured_response serialization (deepagents 0.6.10+)
+            structured = result.get("structured_response")
+            if structured is not None:
+                if hasattr(structured, "model_dump_json"):
+                    content: str = structured.model_dump_json()
+                elif dataclasses.is_dataclass(structured) and not isinstance(structured, type):
+                    content = json.dumps(dataclasses.asdict(structured))
+                else:
+                    content = json.dumps(structured)
+            else:
+                # Walk back to find last AIMessage with non-empty text
+                # (handles Anthropic trailing empty AIMessage)
+                content = ""
+                for msg in reversed(result["messages"]):
+                    if isinstance(msg, AIMessage):
+                        text = msg.text.rstrip() if msg.text else ""
+                        if text:
+                            content = text
+                            break
+
             return Command(
                 update={
                     **state_update,
-                    "messages": [ToolMessage(message_text, tool_call_id=tool_call_id)],
+                    "messages": [ToolMessage(content, tool_call_id=tool_call_id)],
                 }
             )
 
