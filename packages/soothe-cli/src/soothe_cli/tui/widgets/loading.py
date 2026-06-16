@@ -170,10 +170,8 @@ class LoadingWidget(Static):
 
         if self._spinner_widget:
             frame = self._spinner.next_frame()
-            # Use refresh with layout=False to avoid expensive layout recalculation
-            self._spinner_widget._content = frame
-            self._spinner_widget._render_cache = None
-            self._spinner_widget.refresh(repaint=True, layout=False)
+            # layout=False avoids expensive layout recalculation on single-char updates
+            self._spinner_widget.update(frame, layout=False)
 
         if self._hint_widget and self._turn_start_mono is not None:
             now = monotonic()
