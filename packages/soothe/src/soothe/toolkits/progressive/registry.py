@@ -15,6 +15,11 @@ DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "edit_file",
         "glob",
         "grep",
+        # soothe surgical file ops (must be core to avoid shell misinterpretation)
+        "delete_file",
+        "edit_file_lines",
+        "insert_lines",
+        "delete_lines",
         # deepagents other
         "write_todos",
         "task",
