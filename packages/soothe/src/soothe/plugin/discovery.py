@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from soothe.config import SOOTHE_HOME
+
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
 
@@ -151,7 +153,7 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
         ```
     """
     if base_dir is None:
-        base_dir = Path.home() / ".soothe" / "plugins"
+        base_dir = SOOTHE_HOME / "plugins"
 
     base = base_dir.expanduser()
 

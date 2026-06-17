@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from soothe.config import SOOTHE_HOME
+
 _BUILTIN_SKILLS_DIR_NAME = "builtin_skills"
 
 
@@ -41,7 +43,7 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     skills_dir = Path(__file__).resolve().parent
     candidate_roots = [
         skills_dir / "builtin_skills",
-        Path.home() / ".soothe" / "skills",
+        SOOTHE_HOME / "skills",
         Path.home() / ".agents" / "skills",
     ]
 
