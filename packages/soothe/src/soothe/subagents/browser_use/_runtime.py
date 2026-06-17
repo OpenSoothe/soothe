@@ -10,10 +10,12 @@ import logging
 import shutil
 from pathlib import Path
 
+from soothe.config import SOOTHE_HOME
+
 logger = logging.getLogger(__name__)
 
 # Default browser runtime base directory
-_DEFAULT_BROWSER_BASE = Path.home() / ".soothe" / "agents" / "browser"
+_DEFAULT_BROWSER_BASE = SOOTHE_HOME / "agents" / "browser"
 
 
 def get_browser_runtime_dir() -> Path:

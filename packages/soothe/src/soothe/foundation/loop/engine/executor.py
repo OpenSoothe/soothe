@@ -2835,6 +2835,9 @@ class Executor:
                             if stream_ns
                             else None
                         )
+                        # For subgraph AIMessageChunks without step_id context, args will be
+                        # captured via ToolMessage processing (promote_tool_message) which
+                        # ingests from invocation registry and maps provider IDs to unified IDs.
                         tool_args.record_ai_pair(
                             msg,
                             msg,
@@ -2906,12 +2909,18 @@ class Executor:
                 tname = str(getattr(tm, "name", "") or "unknown").strip() or "unknown"
                 # Rewrite provider ID to unified ID for args lookup (IG-416).
                 # Namespaced ToolMessages may have provider IDs; subgraph_placeholder_update
-                # requires unified IDs and args are stored under unified IDs from AIMessageChunk.
+                # requires unified IDs. Ingest from invocation registry and map to unified ID.
                 subgraph_task_idx = subgraph_task_binder.task_idx_for_namespace(ns_tuple)
+                tool_args.ingest_invocation_registry(raw_tcid)
                 rewritten_tm = _rewrite_tool_message_tool_call_id(
                     tm, step_id or "", task_idx=subgraph_task_idx
                 )
                 unified_tcid = str(getattr(rewritten_tm, "tool_call_id", "") or "").strip()
+                # Copy args from provider ID to unified ID (like promote_tool_message does)
+                if raw_tcid and unified_tcid and raw_tcid != unified_tcid:
+                    raw_args = tool_args.lookup(raw_tcid)
+                    if raw_args:
+                        tool_args.by_id[unified_tcid] = dict(raw_args)
                 messages.append(rewritten_tm)
                 logger.info(
                     "[SubagentTool] ns=%s name=%s id=%s -> unified=%s preview=%s",
