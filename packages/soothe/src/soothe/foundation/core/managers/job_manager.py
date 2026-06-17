@@ -14,7 +14,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.context.models import GoalNode
-from soothe.foundation.core.entities.job import (
+from soothe.foundation.core.entities import (
     JOB_TERMINAL_STATES,
     Job,
     JobCheckpoint,

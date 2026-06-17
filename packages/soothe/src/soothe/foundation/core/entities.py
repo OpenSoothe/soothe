@@ -1,11 +1,9 @@
-"""Job entity, state enum, and checkpoint value object (RFC-228, RFC-626).
+"""Core entities module (RFC-228, RFC-626).
 
-This module defines core abstractions for the Job concept, which represents
-a root GoalNode submitted to AutopilotService. Jobs are the primary unit
-of work for desktop app integration and CLI job management commands.
-
-Per RFC-626 §2: A Job is a root GoalNode with parent_id=None. The Job entity
-operates directly on ContextEngine GoalNode without intermediate wrappers.
+This module provides core entity abstractions for job management:
+- Job: Facade over root GoalNode
+- JobState: Job lifecycle state enum
+- JobCheckpoint: IPC checkpoint value object
 """
 
 from __future__ import annotations
@@ -318,3 +316,12 @@ class Job:
             f"completion={self.completion_percentage():.1f}%, "
             f"worker={self.worker_id or 'none'})"
         )
+
+
+__all__ = [
+    "Job",
+    "JobState",
+    "JobCheckpoint",
+    "JOB_TERMINAL_STATES",
+    "JOB_BLOCKED_STATES",
+]

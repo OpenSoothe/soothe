@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.foundation.context.models import GoalNode
-from soothe.foundation.core.entities.job import Job, JobState
+from soothe.foundation.core.entities import Job, JobState
 from soothe.foundation.core.managers.job_manager import JobManager
 
 
