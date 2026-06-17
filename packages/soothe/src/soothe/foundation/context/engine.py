@@ -107,7 +107,9 @@ class ContextEngine:
             persistence = SqliteContextPersistence(loop_id="default", db_path=Path(":memory:"))
 
         self._dag = GoalStepDAG()
-        self._ledger = LedgerManager()
+        # Preserve full ledger history for downstream LLM calls unless a caller
+        # explicitly sets a positive cap on LedgerManager.
+        self._ledger = LedgerManager(max_entries=0)
         self._semantic = SemanticLoader(soothe_home=soothe_home, workspace=workspace)
         self._projection = ProjectionEngine(projection_config)
         self._persistence = persistence

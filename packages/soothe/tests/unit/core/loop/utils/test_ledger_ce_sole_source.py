@@ -138,8 +138,8 @@ class TestLoopMessagesProperty:
         assert isinstance(state.loop_messages[1], LoopAIMessage)
         assert state.loop_messages[0].content == "plain human"
 
-    def test_respects_max_bound(self) -> None:
-        """loop_messages property respects MAX_LOOP_MESSAGES_PER_GOAL."""
+    def test_ce_bound_loop_messages_returns_full_ledger(self) -> None:
+        """When CE is bound, loop_messages returns full ledger (no local cache cap)."""
         from soothe.foundation.loop.state.schemas import MAX_LOOP_MESSAGES_PER_GOAL
 
         state, ce = _make_state_with_ce()
@@ -150,9 +150,8 @@ class TestLoopMessagesProperty:
                 "execute_step",
             )
 
-        assert len(state.loop_messages) == MAX_LOOP_MESSAGES_PER_GOAL
-        # Should keep the most recent messages
-        assert state.loop_messages[0].content == f"msg-{20}"
+        assert len(state.loop_messages) == MAX_LOOP_MESSAGES_PER_GOAL + 20
+        assert state.loop_messages[0].content == "msg-0"
 
     def test_always_fresh(self) -> None:
         """Each access to loop_messages queries CE — always fresh."""

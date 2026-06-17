@@ -42,7 +42,7 @@ class LedgerManager:
     def record_message(self, message: BaseMessage, phase: str) -> None:
         """Append a message to the ledger with phase metadata."""
         self._entries.append(_LedgerEntry(message=message, phase=phase))
-        if len(self._entries) > self.max_entries:
+        if self.max_entries > 0 and len(self._entries) > self.max_entries:
             self.compact()
 
     def get_messages(self, phases: list[str] | None = None) -> list[BaseMessage]:
@@ -105,6 +105,8 @@ class LedgerManager:
 
         If no compact_fn is set, entries beyond max_entries are dropped.
         """
+        if self.max_entries <= 0:
+            return
         if len(self._entries) <= self.max_entries:
             return
 

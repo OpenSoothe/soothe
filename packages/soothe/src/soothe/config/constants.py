@@ -10,7 +10,7 @@ Centralizing constants ensures consistency and easier maintenance.
 
 # Default maximum iterations for StrangeLoop execution (RFC-201)
 # Higher values allow more complex multi-step reasoning and execution
-DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = 10
+DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = 99
 
 # ============================================================================
 # Autonomous Goal Management Limits

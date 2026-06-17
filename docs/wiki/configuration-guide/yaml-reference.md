@@ -283,11 +283,11 @@ agent:
     
     # Infrastructure limits
     limits:
-      max_parallel_goals: 1
-      max_parallel_steps: 2
+      max_parallel_goals: 4
+      max_parallel_steps: 4
       max_parallel_subagents: 4
-      max_parallel_tools: 15
-      global_max_llm_calls: 5
+      max_parallel_tools: 50
+      global_max_llm_calls: 10
       step_parallelism: dependency  # sequential | dependency | max
       llm_rpm_limit: 120
       llm_concurrent_limit: 10
@@ -301,8 +301,8 @@ agent:
         progressive_checkpoints: true
         auto_resume_on_start: false
       tool_call_limit:
-        global_thread_limit: 150
-        global_run_limit: 56
+        global_thread_limit: 200
+        global_run_limit: 200
         tool_specific_limits:
           wizsearch_search:
             thread_limit: 5
