@@ -301,9 +301,9 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     al.limits.max_parallel_goals = 1
     al.limits.max_parallel_tools = 5
     al.limits.max_parallel_subagents = 4
-    # Thread switch policy (mock to return None for proper fallback)
-    # Return None so _get_rate_limit_threshold falls back to default (3)
-    al.limits.thread_switch_policy = None
+    # Thread switch policy: set on loop config directly, not on limits
+    # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
+    al.thread_switch_policy = None
     # Goal completion / synthesis config
     al.goal_completion_mode = "llm_only"
     al.report_output.synthesis_max_chars = 10000
