@@ -13,7 +13,7 @@ from soothe.foundation.loop.planning.planner import (
     _parse_status_assessment_from_raw_message,
 )
 from soothe.foundation.loop.state.schemas import StatusAssessment
-from soothe.utils.llm.structured_invoke import StructuredOutputError
+from soothe.utils.llm.structured import StructuredOutputError
 
 
 def test_parse_status_assessment_from_reasoning_content() -> None:

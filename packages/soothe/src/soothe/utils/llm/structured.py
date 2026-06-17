@@ -426,9 +426,51 @@ def invoke_structured_chat_sync_typed(
     return schema(**data)
 
 
+async def invoke_structured(
+    factory: Any,
+    messages: list[Any],
+    json_schema: dict[str, Any],
+    *,
+    role: str = "default",
+    schema_name: str | None = None,
+    strict: bool = True,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create model from factory and invoke structured output.
+
+    Convenience wrapper combining factory model creation with structured output invocation.
+    Use when you have a factory but don't need to reuse the model for multiple calls.
+
+    Args:
+        factory: LLMFactory instance (typed as Any to avoid circular import).
+        messages: Message list for invoke.
+        json_schema: Client JSON Schema dict.
+        role: Model role to use (default, fast, think, image, embedding).
+        schema_name: Optional provider schema name.
+        strict: Post-validate parsed output.
+        config: Optional RunnableConfig.
+
+    Returns:
+        Parsed and validated dict.
+
+    Raises:
+        StructuredOutputError: On provider or validation failure.
+    """
+    chat = factory.create_chat_model(role)
+    return await invoke_structured_chat(
+        chat,
+        messages,
+        json_schema=json_schema,
+        schema_name=schema_name,
+        strict=strict,
+        config=config,
+    )
+
+
 __all__ = [
     "StructuredOutputError",
     "ensure_json_keyword_in_messages",
+    "invoke_structured",
     "invoke_structured_chat",
     "invoke_structured_chat_sync",
     "invoke_structured_chat_sync_typed",

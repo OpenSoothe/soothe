@@ -327,14 +327,14 @@ class TestModelProvider:
                 ),
             ]
         )
-        p = cfg._find_provider("dashscope")
+        p = cfg.llm_factory._registry.get_provider("dashscope")  # noqa: SLF001
         assert p is not None
         assert p.name == "dashscope"
         assert p.api_base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
     def test_find_provider_missing(self) -> None:
         cfg = SootheConfig()
-        assert cfg._find_provider("nonexistent") is None
+        assert cfg.llm_factory._registry.get_provider("nonexistent") is None  # noqa: SLF001
 
 
 class TestResolveEnv:
@@ -494,7 +494,7 @@ class TestPropagateEnv:
                 ),
             ]
         )
-        provider_type, kwargs = cfg._provider_kwargs("dashscope")
+        provider_type, kwargs = cfg.llm_factory._registry.get_provider_kwargs("dashscope")  # noqa: SLF001
         assert provider_type == "openai"
         assert kwargs["base_url"] == "https://dashscope.example.com/v1"
 
@@ -512,7 +512,7 @@ class TestPropagateEnv:
             ]
         )
         with caplog.at_level(logging.WARNING):
-            provider_type, kwargs = cfg._provider_kwargs("dashscope")
+            provider_type, kwargs = cfg.llm_factory._registry.get_provider_kwargs("dashscope")  # noqa: SLF001
         # Should return the provider type
         assert provider_type == "openai"
         # base_url should not be in kwargs since it couldn't be resolved

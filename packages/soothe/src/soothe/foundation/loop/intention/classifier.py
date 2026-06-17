@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.utils.llm.structured_invoke import invoke_structured_chat
+from soothe.utils.llm.structured import invoke_structured_chat
 
 from .models import (
     IntentClassification,

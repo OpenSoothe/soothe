@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from soothe.config.models import StructuredPlanConfig
 from soothe.foundation.loop.planning.parser import parse_plan_from_text
 from soothe.protocols.planner import Plan, PlanStep
-from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
+from soothe.utils.llm.structured import invoke_structured_chat_typed
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
