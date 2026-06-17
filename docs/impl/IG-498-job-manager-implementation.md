@@ -1,4 +1,4 @@
-# IG-628: JobManager Implementation (RFC-228, RFC-626)
+# IG-498: JobManager Implementation (RFC-228, RFC-626)
 
 > **Status**: Completed
 > **RFC**: RFC-228 (Autopilot Job IPC Commands), RFC-626 (Entity Model Consolidation)

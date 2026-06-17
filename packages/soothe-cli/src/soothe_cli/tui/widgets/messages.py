@@ -1873,6 +1873,10 @@ class CognitionStepMessage(Vertical):
             phase = self._task_children_aggregate_phase(child_rows)
         else:
             phase = (task_row.phase or "pending").strip().lower()
+        # While step is executing with child rows, prevent transient "Done" (success)
+        # flashes between tool waves. Only override "success" → "running" (IG-492).
+        if self._status == "running" and child_rows and phase == "success":
+            return "running"
         if self._status == "success" and phase in ("pending", "running", "skipped"):
             return "success"
         return phase

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.foundation.core.agent._core import CoreAgent
-from soothe.foundation.loop.engine.ephemeral_execute_stream import ephemeral_execute_stream_enabled
+from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
 
 
 def test_ephemeral_execute_stream_enabled_default(monkeypatch: pytest.MonkeyPatch) -> None:

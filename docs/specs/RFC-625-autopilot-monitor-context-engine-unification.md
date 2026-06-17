@@ -1071,7 +1071,7 @@ The `BackoffReasoner` (migrated from GoalEngine) has full LLM integration and se
 
 ### Completion Tracking
 
-See `docs/impl/IG-625-completion.md` for remaining implementation work.
+See `docs/impl/IG-494-rfc625-completion.md` for remaining implementation work.
 
 ---
 

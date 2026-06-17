@@ -1,4 +1,4 @@
-# IG-626 Phase 3: Checkpoint Schema 5.0 — Execution-Only Fields
+# IG-496 Phase 3: Checkpoint Schema 5.0 — Execution-Only Fields
 
 **Status**: In Progress
 **RFC**: RFC-626 Phase 3 (§419–§428)

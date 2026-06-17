@@ -1846,7 +1846,9 @@ class MessageRouter:
         from soothe_sdk.display.card_ledger import card_to_wire_dict
 
         try:
-            ledger = await card_manager.ensure_for_loop(str(loop_id))
+            # Force re-derivation so TUI resume receives the latest final
+            # goal-completion response, not a stale cached snapshot.
+            ledger = await card_manager.refresh(str(loop_id))
             snapshot = ledger.snapshot()
             wire_cards = [card_to_wire_dict(card) for card in snapshot]
             latest_seq = ledger.next_seq() - 1

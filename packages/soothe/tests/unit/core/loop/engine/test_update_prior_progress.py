@@ -1,10 +1,10 @@
 """Unit tests for Executor._update_prior_progress (RFC-227).
 
 Payloads mirror production: ``Executor._stream_and_collect`` returns a
-``messages`` list that contains ``AIMessage``/``AIMessageChunk`` only —
-``ToolMessage`` instances are routed into outcome/budget accounting and
-intentionally excluded from the list. Tool names therefore come from
-``AIMessage.tool_calls``, not from ``ToolMessage`` walks.
+``_ExecuteStepResult`` dataclass containing ``messages`` list with
+``AIMessage``/``AIMessageChunk`` only — ``ToolMessage`` instances are routed
+into outcome/budget accounting and intentionally excluded from the list.
+Tool names therefore come from ``AIMessage.tool_calls``, not from ``ToolMessage`` walks.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.engine.executor import Executor, _ExecuteStepResult
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
@@ -41,15 +41,15 @@ def _ok_payload(
     tool_calls: list[dict] | None = None,
     extra_messages: list = None,
     delegate_final: str = "",
-) -> tuple:
-    """Build a successful payload tuple matching production gather_results shape."""
+) -> _ExecuteStepResult:
+    """Build a successful _ExecuteStepResult matching production gather_results shape."""
     messages: list = list(extra_messages or [])
     if tool_calls:
         messages.append(_ai_with_tool_calls(text="", tool_calls=tool_calls))
     messages.append(AIMessage(content=final_text))
-    return (
-        [],
-        StepResult(
+    return _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id=step_id,
             success=True,
             outcome={"type": "generic"},
@@ -57,15 +57,16 @@ def _ok_payload(
             thread_id="t1",
             tool_call_count=len(tool_calls or []),
         ),
-        messages,
-        delegate_final,
+        messages=messages,
+        delegate_final=delegate_final,
+        output=final_text,
     )
 
 
-def _failed_payload(step_id: str = "s1", error: str = "boom") -> tuple:
-    return (
-        [],
-        StepResult(
+def _failed_payload(step_id: str = "s1", error: str = "boom") -> _ExecuteStepResult:
+    return _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id=step_id,
             success=False,
             outcome={"type": "error", "error": error},
@@ -74,8 +75,9 @@ def _failed_payload(step_id: str = "s1", error: str = "boom") -> tuple:
             duration_ms=1,
             thread_id="t1",
         ),
-        [AIMessage(content=f"failed: {error}")],
-        "",
+        messages=[AIMessage(content=f"failed: {error}")],
+        delegate_final="",
+        output=f"failed: {error}",
     )
 
 
@@ -232,9 +234,9 @@ def test_evidence_uses_chunked_assistant_text_when_final_ai_is_empty() -> None:
     state = LoopState(goal="g", thread_id="t1", iteration=0)
     steps = [StepAction(id="s1", description="count", expected_output="counts")]
     payloads = [
-        (
-            [],
-            StepResult(
+        _ExecuteStepResult(
+            events=[],
+            step_result=StepResult(
                 step_id="s1",
                 success=True,
                 outcome={"type": "generic"},
@@ -242,7 +244,7 @@ def test_evidence_uses_chunked_assistant_text_when_final_ai_is_empty() -> None:
                 thread_id="t1",
                 tool_call_count=1,
             ),
-            [
+            messages=[
                 _ai_with_tool_calls(
                     tool_calls=[
                         {"name": "run_command", "args": {"command": "wc -l"}, "id": "a"},
@@ -252,7 +254,8 @@ def test_evidence_uses_chunked_assistant_text_when_final_ai_is_empty() -> None:
                 AIMessageChunk(content="1139 Python files."),
                 AIMessage(content=""),
             ],
-            "",
+            delegate_final="",
+            output="The repo has 1139 Python files.",
         )
     ]
     ex._update_prior_progress(state, steps, payloads)
@@ -265,9 +268,9 @@ def test_evidence_falls_back_to_delegate_final() -> None:
     state = LoopState(goal="g", thread_id="t1", iteration=0)
     steps = [StepAction(id="s1", description="delegate", expected_output="x")]
     payloads = [
-        (
-            [],
-            StepResult(
+        _ExecuteStepResult(
+            events=[],
+            step_result=StepResult(
                 step_id="s1",
                 success=True,
                 outcome={"type": "generic"},
@@ -275,8 +278,9 @@ def test_evidence_falls_back_to_delegate_final() -> None:
                 thread_id="t1",
                 tool_call_count=0,
             ),
-            [AIMessage(content="")],
-            "subagent produced: total=42",
+            messages=[AIMessage(content="")],
+            delegate_final="subagent produced: total=42",
+            output="",  # Empty output -> delegate_final used for evidence
         )
     ]
     ex._update_prior_progress(state, steps, payloads)
@@ -390,9 +394,9 @@ def test_streamed_aimessage_chunks_resolve_real_tool_name_and_args() -> None:
     # Single tool call streamed across three chunks. First carries name + id,
     # following chunks carry args deltas. langchain's chunks-to-tool_calls
     # resolver runs at chunk level only, not across chunks — we must aggregate.
-    payload = (
-        [],
-        StepResult(
+    payload = _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},
@@ -400,7 +404,7 @@ def test_streamed_aimessage_chunks_resolve_real_tool_name_and_args() -> None:
             thread_id="t1",
             tool_call_count=1,
         ),
-        [
+        messages=[
             AIMessageChunk(
                 content="",
                 tool_call_chunks=[
@@ -425,7 +429,8 @@ def test_streamed_aimessage_chunks_resolve_real_tool_name_and_args() -> None:
             AIMessageChunk(content="Found 1139 files."),
             AIMessage(content=""),
         ],
-        "",
+        delegate_final="",
+        output="Found 1139 files.",
     )
     ex._update_prior_progress(state, steps, [payload])
 
@@ -444,9 +449,9 @@ def test_streamed_chunks_with_multiple_tool_calls_aggregate_by_index() -> None:
     state = LoopState(goal="g", thread_id="t1", iteration=0)
     steps = [StepAction(id="s1", description="multi", expected_output="y")]
 
-    payload = (
-        [],
-        StepResult(
+    payload = _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},
@@ -454,7 +459,7 @@ def test_streamed_chunks_with_multiple_tool_calls_aggregate_by_index() -> None:
             thread_id="t1",
             tool_call_count=2,
         ),
-        [
+        messages=[
             AIMessageChunk(
                 content="",
                 tool_call_chunks=[
@@ -471,7 +476,8 @@ def test_streamed_chunks_with_multiple_tool_calls_aggregate_by_index() -> None:
             ),
             AIMessage(content=""),
         ],
-        "",
+        delegate_final="",
+        output="",
     )
     ex._update_prior_progress(state, steps, [payload])
 
@@ -487,9 +493,9 @@ def test_streamed_chunks_without_ids_fall_back_to_index() -> None:
     state = LoopState(goal="g", thread_id="t1", iteration=0)
     steps = [StepAction(id="s1", description="no ids", expected_output="y")]
 
-    payload = (
-        [],
-        StepResult(
+    payload = _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},
@@ -497,7 +503,7 @@ def test_streamed_chunks_without_ids_fall_back_to_index() -> None:
             thread_id="t1",
             tool_call_count=1,
         ),
-        [
+        messages=[
             AIMessageChunk(
                 content="",
                 tool_call_chunks=[{"name": "read_file", "args": "", "id": None, "index": 0}],
@@ -510,7 +516,8 @@ def test_streamed_chunks_without_ids_fall_back_to_index() -> None:
             ),
             AIMessage(content=""),
         ],
-        "",
+        delegate_final="",
+        output="",
     )
     ex._update_prior_progress(state, steps, [payload])
     assert state.prior_progress.tool_calls[0].name == "read_file"

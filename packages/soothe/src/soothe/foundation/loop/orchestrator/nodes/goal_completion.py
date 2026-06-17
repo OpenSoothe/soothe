@@ -8,8 +8,10 @@ import time
 from typing import Any
 
 from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.loop.engine.fallback_summary import generate_user_fallback_summary
-from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
+from soothe.foundation.loop.engine.synthesis import (
+    SynthesisGenerator,
+    generate_user_fallback_summary,
+)
 from soothe.foundation.loop.state.schemas import LoopState
 from soothe.foundation.loop.utils.messages import (
     LoopAIMessage,

@@ -1,6 +1,6 @@
-# IG-627: Unified LLM Utilities Module Implementation
+# IG-497: Unified LLM Utilities Module Implementation
 
-**IG**: 627
+**IG**: 497
 **RFC**: RFC-627 — Unified LLM Utilities Module
 **Status**: Draft
 **Created**: 2026-06-17
