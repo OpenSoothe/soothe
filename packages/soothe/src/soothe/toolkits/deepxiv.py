@@ -376,9 +376,7 @@ class DeepxivToolkit:
                 logger.warning(
                     "[DeepXiv] deepxiv_sdk not installed; install/upgrade soothe for academic tools"
                 )
-                raise RuntimeError(
-                    "deepxiv_sdk not installed. Install with: pip install -U soothe"
-                )
+                raise RuntimeError("deepxiv_sdk not installed. Install with: pip install -U soothe")
         return self._reader
 
     def get_tools(self) -> list[BaseTool]:
