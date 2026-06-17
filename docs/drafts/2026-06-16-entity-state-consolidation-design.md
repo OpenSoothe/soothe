@@ -646,7 +646,7 @@ for episode in relevant_episodes:
    - RFC-303: Update MemoryProtocol to document CE EpisodicSubmodule as implementation
    - RFC-203: Mark LoopState sections superseded by CE metrics
 
-3. **Create IG-626 implementation guide**: Detailed file changes and test updates per phase
+3. **Create IG-496 implementation guide**: Detailed file changes and test updates per phase
 
 4. **Begin Phase 5 implementation**: LoopState deletion with wave metrics migration
 

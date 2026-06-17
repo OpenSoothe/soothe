@@ -155,24 +155,3 @@ class ThreadSwitchPolicyManager:
             logger.warning("Custom trigger '%s' evaluation failed: %s", trigger.trigger_name, e)
 
         return False
-
-
-def get_default_policy() -> ThreadSwitchPolicy:
-    """Get default thread switching policy.
-
-    Returns:
-        ThreadSwitchPolicy with default thresholds
-    """
-    return ThreadSwitchPolicy()
-
-
-def load_policy_from_config(config_dict: dict) -> ThreadSwitchPolicy:
-    """Load thread switching policy from configuration.
-
-    Args:
-        config_dict: Policy configuration dictionary
-
-    Returns:
-        ThreadSwitchPolicy instance
-    """
-    return ThreadSwitchPolicy.model_validate(config_dict)

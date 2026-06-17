@@ -180,7 +180,7 @@ class TestExecutorHints:
             loop_messages=[],
         )
 
-        _events, step_result, _msgs, _df = await executor._execute_step_collecting_events(
+        result = await executor._execute_step_collecting_events(
             step,
             "logical-thread",
             loop_state=state,
@@ -190,7 +190,7 @@ class TestExecutorHints:
         configurable = call_args.kwargs["config"]["configurable"]
         # IG-477: creates __step_ prefixed thread for isolation
         assert configurable["thread_id"] == "logical-thread__step_a1b2c3d4"
-        assert step_result.thread_id == "logical-thread"
+        assert result.step_result.thread_id == "logical-thread"
         assert state.step_thread_ids["a1b2c3d4"] == "logical-thread__step_a1b2c3d4"
 
     @pytest.mark.asyncio

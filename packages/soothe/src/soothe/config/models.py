@@ -1661,12 +1661,6 @@ class StructuredPlanConfig(BaseModel):
     enabled: bool = False
 
 
-class ToolResultRegistryConfig(BaseModel):
-    """Tool-specific result parsers (IG-433)."""
-
-    enabled: bool = True
-
-
 class OptimizationConfig(BaseModel):
     """Keyword/heuristic optimization settings (IG-433)."""
 
@@ -1676,7 +1670,6 @@ class OptimizationConfig(BaseModel):
     )
     failure_intent: FailureIntentConfig = Field(default_factory=FailureIntentConfig)
     structured_plan: StructuredPlanConfig = Field(default_factory=StructuredPlanConfig)
-    tool_result_registry: ToolResultRegistryConfig = Field(default_factory=ToolResultRegistryConfig)
 
 
 class FilesystemMiddlewareConfig(BaseModel):

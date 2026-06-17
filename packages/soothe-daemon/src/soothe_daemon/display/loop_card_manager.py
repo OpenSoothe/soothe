@@ -257,7 +257,10 @@ class LoopCardManager:
         Returns:
             Number of ``card.created`` frames sent.
         """
-        ledger = await self.ensure_for_loop(loop_id)
+        # Always refresh before replay so resume/subscription sees the latest
+        # goal-completion card (card-only lazy derivation can otherwise return
+        # a stale snapshot from an earlier turn).
+        ledger = await self.refresh(loop_id)
         async with ledger.lock():
             mutations = ledger.to_mutations_snapshot()
         total = len(mutations)

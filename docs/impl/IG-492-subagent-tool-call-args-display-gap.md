@@ -1,7 +1,7 @@
-# Analysis: Subagent Tool Call Args Display Gap
+# IG-492: Analysis — Subagent Tool Call Args Display Gap
 
-**Date**: 2026-06-16  
-**Status**: Investigation Complete  
+**Date**: 2026-06-16
+**Status**: Investigation Complete
 **Impact**: Medium - TUI does not display tool call args for subagent executions
 
 ---
