@@ -72,13 +72,12 @@ soothe
 soothe -p "Research top 5 Python web frameworks"
 ```
 
-### 2) Alternative: Install from source
+### 2) Alternative: Install from pip
 
-**Requirements:** Python 3.11+, `uv`.
+**Requirements:** Python 3.11+.
 
 ```bash
-uv sync
-mkdir -p ~/.soothe/config
+pip install -U 'soothe[all]' soothe-cli soothe-daemon
 cp config/config.template.yml ~/.soothe/config/config.yml
 export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY / DASHSCOPE_API_KEY
 soothed start
