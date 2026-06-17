@@ -43,15 +43,6 @@ INTERNAL_EVENT_TYPES: frozenset[str] = frozenset()
 # and is now filtered automatically by `is_internal_event`.
 SKIP_EVENT_TYPES: frozenset[str] = frozenset()
 
-PLAN_EVENT_TYPES = frozenset(
-    {
-        "soothe.cognition.plan.created",
-        "soothe.cognition.plan.reflected",
-    }
-)
-
-MILESTONE_EVENT_TYPES = frozenset()
-
 # =============================================================================
 # Display Policy Class
 # =============================================================================

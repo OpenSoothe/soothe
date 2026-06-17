@@ -15,7 +15,6 @@ from soothe.config import SootheConfig
 from soothe.foundation.loop.state.persistence.manager import StrangeLoopCheckpointPersistenceManager
 from soothe.foundation.workspace import (
     cleanup_anonymous_workspaces,
-    cleanup_legacy_per_loop_workspaces,
     resolve_daemon_workspace,
 )
 from soothe.logging import ThreadLogger
@@ -1233,7 +1232,6 @@ class SootheDaemon(DaemonHandlersMixin):
 
         # Clean up anonymous workspace directories
         cleanup_anonymous_workspaces()
-        cleanup_legacy_per_loop_workspaces()
 
         # Stop channel manager
         if self._channel_manager:

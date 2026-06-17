@@ -46,67 +46,6 @@ def resolve_daemon_workspace() -> Path:
     return workspace
 
 
-def compute_workspace_id(user: str | None, client_workspace: str) -> str:
-    """Compute legacy flat workspace dir name (deprecated).
-
-    Prefer ``compute_scoped_workspace_dir_name`` and ``resolve_loop_workspace``.
-    """
-    from soothe.foundation.workspace.loop_workspace import compute_scoped_workspace_dir_name
-
-    return compute_scoped_workspace_dir_name(user, str(Path(client_workspace).resolve()))
-
-
-def resolve_user_workspace(
-    user: str | None,
-    client_workspace: str,
-    *,
-    soothe_home: Path | None = None,
-    create: bool = True,
-) -> Path:
-    """Resolve workspace when only a client path is available (deprecated layout).
-
-    Delegates to ``resolve_loop_workspace`` with a synthetic loop scope.
-    """
-    from soothe.foundation.workspace.loop_workspace import resolve_loop_workspace
-
-    return resolve_loop_workspace(
-        loop_id="legacy",
-        client_workspace=client_workspace,
-        user_id=user,
-        soothe_home=soothe_home,
-        create=create,
-    )
-
-
-def cleanup_legacy_per_loop_workspaces() -> None:
-    """Clean up old per-loop workspace directories (one-time migration).
-
-    Removes `$SOOTHE_HOME/data/loops/*/workspace/` directories created by
-    the previous per-loop workspace scheme.
-    """
-    import shutil
-
-    from soothe.config import SOOTHE_HOME
-
-    loops_dir = Path(SOOTHE_HOME) / "data" / "loops"
-    if not loops_dir.exists():
-        return
-
-    cleaned = 0
-    for loop_dir in loops_dir.iterdir():
-        ws = loop_dir / "workspace"
-        if ws.is_dir():
-            try:
-                shutil.rmtree(ws)
-                cleaned += 1
-                logger.info("Cleaned legacy per-loop workspace: %s", ws)
-            except OSError as e:
-                logger.warning("Failed to cleanup %s: %s", ws, e)
-
-    if cleaned > 0:
-        logger.info("Cleaned %d legacy per-loop workspace directories", cleaned)
-
-
 def cleanup_anonymous_workspaces() -> None:
     """Clean up anonymous workspace directories (daemon shutdown).
 
@@ -142,30 +81,6 @@ def cleanup_anonymous_workspaces() -> None:
                     logger.info("Cleaned legacy anonymous workspace: %s", ws_dir)
                 except OSError as e:
                     logger.warning("Failed to cleanup %s: %s", ws_dir, e)
-
-    if cleaned > 0:
-        logger.info("Cleaned %d anonymous workspace location(s)", cleaned)
-    if not workspaces_dir.exists():
-        return
-
-    cleaned = 0
-    anon_tree = workspaces_dir / normalize_user_id(None)
-    if anon_tree.is_dir():
-        try:
-            shutil.rmtree(anon_tree)
-            cleaned += 1
-            logger.info("Cleaned anonymous workspace tree: %s", anon_tree)
-        except OSError as e:
-            logger.warning("Failed to cleanup %s: %s", anon_tree, e)
-
-    for ws_dir in workspaces_dir.glob("anon_*"):
-        if ws_dir.is_dir():
-            try:
-                shutil.rmtree(ws_dir)
-                cleaned += 1
-                logger.info("Cleaned legacy anonymous workspace: %s", ws_dir)
-            except OSError as e:
-                logger.warning("Failed to cleanup %s: %s", ws_dir, e)
 
     if cleaned > 0:
         logger.info("Cleaned %d anonymous workspace location(s)", cleaned)
