@@ -62,6 +62,21 @@ def _subgraph_pending_key(ns_key: tuple[str, ...], lookup_id: str) -> tuple[tupl
     return (ns_key, str(lookup_id).strip())
 
 
+def _is_task_metadata_subgraph_tool(item: PendingSubgraphTool) -> bool:
+    """True when a buffered subgraph item is task metadata, not a user-facing tool row."""
+    if (item.tool_name or "").strip() == "task":
+        return True
+    for candidate in (item.lookup_id, item.display_key):
+        cid = str(candidate or "").strip()
+        if cid and is_inner_subgraph_task_tool_id(cid):
+            return True
+    args = item.args if isinstance(item.args, dict) else {}
+    subagent_type = str(args.get("subagent_type") or "").strip()
+    prompt = str(args.get("description") or args.get("prompt") or "").strip()
+    # Some providers emit opaque names (e.g. "tool-<id>") for task chunks.
+    return bool(subagent_type and prompt)
+
+
 @dataclass
 class StepTaskRouter:
     """High-performance per-turn router for steps, tools, and task namespaces.
@@ -373,7 +388,7 @@ class StepTaskRouter:
         tool_to_step: dict[str, ParentWidget],
     ) -> bool:
         """Register one subgraph tool row on an already-resolved parent step card."""
-        if (item.tool_name or "").strip() == "task":
+        if _is_task_metadata_subgraph_tool(item):
             # Inner explore ``task`` chunks are not user-facing tool stats; ingesting
             # them used to rewrite the main ``{step}:s:task:…`` delegation row args.
             return True
@@ -397,7 +412,14 @@ class StepTaskRouter:
         if has_row(row_id):
             update = getattr(parent, "update_tool_args", None)
             if callable(update):
-                update(row_id, item.args)
+                resolved_args = dict(item.args or {})
+                if item.raw_args and not resolved_args:
+                    from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+
+                    parsed = extract_tool_args_dict({"_raw": item.raw_args})
+                    if parsed:
+                        resolved_args = parsed
+                update(row_id, resolved_args)
         else:
             parent_task_id = str(scope[0]).strip()
             ingest(
