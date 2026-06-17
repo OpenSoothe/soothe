@@ -277,6 +277,47 @@ def test_subgraph_inner_task_tool_is_not_ingested_on_step_card() -> None:
     step.add_tool_call.assert_not_called()
 
 
+def test_subgraph_opaque_task_metadata_tool_is_not_ingested_on_step_card() -> None:
+    """Opaque provider ids with task metadata should not create visible tool rows."""
+    router = StepTaskRouter()
+    step = MagicMock()
+    step.has_tool_call_row.return_value = False
+    step_cards = {"FHG-01": step}
+    display = {"FHG_01:s:task:0": step}
+
+    router.register_task_spawn("FHG_01:s:task:0", "explore", step_id="FHG-01")
+    router.on_subgraph_namespace(("tools:sub",))
+    # Bind namespace via a non-task tool first
+    router.try_route_subgraph_tool(
+        ns_key=("tools:sub",),
+        lookup_id="FHG_01:t0:grep:0",
+        display_key="FHG_01:t0:grep:0",
+        tool_name="grep",
+        args={"pattern": "x"},
+        step_cards=step_cards,
+        tool_to_step={},
+        tool_display_by_call_id=display,
+    )
+    step.reset_mock()
+    assert (
+        router.try_route_subgraph_tool(
+            ns_key=("tools:sub",),
+            lookup_id="tool-49EA56F8116423E97FF19695B55Cca1",
+            display_key="tool-49EA56F8116423E97FF19695B55Cca1",
+            tool_name="tool-49EA56F8116423E97FF19695B55Cca1",
+            args={
+                "subagent_type": "explore",
+                "description": "Count all file types in workspace",
+            },
+            step_cards=step_cards,
+            tool_to_step={},
+            tool_display_by_call_id=display,
+        )
+        is True
+    )
+    step.add_tool_call.assert_not_called()
+
+
 def test_parallel_subgraph_tools_route_under_explore_row() -> None:
     """Subgraph tools route to parent step card using unified tool call IDs."""
     router = StepTaskRouter()

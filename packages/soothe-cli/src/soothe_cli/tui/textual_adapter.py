@@ -869,8 +869,14 @@ async def apply_tool_call_wire_update(
 
     name = str(data.get("name") or "").strip() or "tool"
     raw_args_field = data.get("args")
-    if not isinstance(raw_args_field, dict):
-        raw_args_field = {}
+    raw_args_stream = ""
+    if isinstance(raw_args_field, str):
+        raw_args_stream = raw_args_field
+    elif raw_args_field is not None:
+        try:
+            raw_args_stream = json.dumps(raw_args_field, separators=(",", ":"), default=str)
+        except (TypeError, ValueError):
+            raw_args_stream = str(raw_args_field)
     display_args = extract_tool_args_dict(raw_args_field)
     is_step_scope = is_step_card_tool_scope(ns_key=ns_key)
     if not display_args and not should_ingest_tool_for_step_stats(
@@ -892,14 +898,17 @@ async def apply_tool_call_wire_update(
         (tcid, tcid) if is_step_scope else canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     )
 
-    overlay_payload = display_args if display_args else dict(raw_args_field)
+    overlay_payload = dict(display_args or {})
     for key in {tcid, merge_id, row_key}:
         if not key:
             continue
-        overlay[key] = dict(overlay_payload)
+        if overlay_payload:
+            overlay[key] = dict(overlay_payload)
         pending_tool_calls_lc[key] = {
             "name": name,
-            "args_str": json.dumps(overlay_payload, separators=(",", ":")),
+            "args_str": raw_args_stream
+            if raw_args_stream
+            else json.dumps(overlay_payload, separators=(",", ":")),
             "is_complete_json": True,
             "emitted": False,
             "is_main": is_step_scope,
@@ -955,10 +964,13 @@ async def apply_tool_call_wire_update(
             ns_key=ns_key,
         )
         if step_w is not None and name != "task":
+            update_payload = dict(display_args or {})
+            if not update_payload and raw_args_stream:
+                update_payload = {"_raw": raw_args_stream}
             if step_w.has_tool_call_row(tcid):
-                step_w.update_tool_args(tcid, display_args)
+                step_w.update_tool_args(tcid, update_payload)
             else:
-                step_w.add_tool_call(tcid, name, display_args)
+                step_w.add_tool_call(tcid, name, update_payload, raw_args=raw_args_stream)
             adapter._tool_to_step[tcid] = step_w
         return True
 
@@ -970,6 +982,7 @@ async def apply_tool_call_wire_update(
             display_key=display_key,
             tool_name=name,
             args=display_args,
+            raw_args=raw_args_stream,
             step_cards=adapter._current_step_messages,
             tool_to_step=adapter._tool_to_step,
             tool_display_by_call_id=adapter._tool_display_by_call_id,
@@ -982,6 +995,7 @@ async def apply_tool_call_wire_update(
                 display_key=display_key,
                 tool_name=name,
                 args=display_args,
+                raw_args=raw_args_stream,
                 ns_key=ns_key,
             )
     return True
