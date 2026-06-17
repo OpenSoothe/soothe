@@ -11,6 +11,7 @@ def create_persist_store(
     dsn: str | None = None,
     namespace: str = "default",
     db_path: str | None = None,
+    reader_pool_size: int = 8,
 ) -> AsyncPersistStore | None:
     """Factory for async persistence backends.
 
@@ -20,6 +21,7 @@ def create_persist_store(
         dsn: PostgreSQL DSN (required for backend="postgresql").
         namespace: Namespace for key isolation (PostgreSQL and SQLite).
         db_path: SQLite database file path (SQLite only).
+        reader_pool_size: SQLite reader connection pool size for concurrent reads.
 
     Returns:
         An AsyncPersistStore instance, or None if persistence is disabled.
@@ -34,6 +36,6 @@ def create_persist_store(
     if backend == "sqlite":
         from soothe.backends.persistence.sqlite_store import SQLitePersistStore
 
-        return SQLitePersistStore(db_path, namespace=namespace)
+        return SQLitePersistStore(db_path, namespace=namespace, reader_pool_size=reader_pool_size)
 
     raise ValueError(f"Unknown persistence backend: {backend!r}. Supported: 'postgresql', 'sqlite'")

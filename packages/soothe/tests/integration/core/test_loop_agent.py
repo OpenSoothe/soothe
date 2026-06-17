@@ -315,6 +315,11 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     cfg.router.fast = None
     cfg.observability.langfuse.trace_name = None
     cfg.observability.langfuse.enabled = False
+    # Persistence backend for ContextEngine (RFC-624 Phase 4)
+    cfg.persistence.default_backend = "sqlite"
+    # Delete 'home' attribute so strange_loop uses SOOTHE_HOME default
+    # (MagicMock creates attributes lazily, so we must explicitly delete)
+    del cfg.home
     return cfg
 
 

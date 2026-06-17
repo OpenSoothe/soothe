@@ -9,9 +9,12 @@ ledger-body excerpt).
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.engine.step_wave_types import _ExecuteStepResult
 from soothe.foundation.loop.prompts import PromptBuilder
 from soothe.foundation.loop.state.schemas import (
     LoopState,
@@ -21,16 +24,27 @@ from soothe.foundation.loop.state.schemas import (
 from soothe.protocols.planner import PlanContext
 
 
+def _mock_context_engine() -> MagicMock:
+    """Create a mock ContextEngine for Executor tests (RFC-624 Phase 4).
+
+    The executor requires ContextEngine for ledger recording. Tests that don't
+    need actual CE persistence can use this mock.
+    """
+    mock_ce = MagicMock()
+    mock_ce.ledger.record_message = MagicMock()
+    return mock_ce
+
+
 def _payload(
     *,
     step_id: str,
     final_text: str,
     tool_calls: list[dict],
     tool_messages: list[ToolMessage] | None = None,
-) -> tuple:
+) -> _ExecuteStepResult:
     """Production-shaped gather_results entry.
 
-    ``_stream_and_collect`` returns only AIMessage/AIMessageChunk in messages;
+    ``_stream_and_collect`` returns _ExecuteStepResult dataclass (IG-493);
     tests that need tool-result evidence in PriorProgressDigest may pass
     ToolMessages via ``tool_messages`` (test-only convenience).
     """
@@ -40,9 +54,9 @@ def _payload(
     if tool_messages:
         messages.extend(tool_messages)
     messages.append(AIMessage(content=final_text))
-    return (
-        [],
-        StepResult(
+    return _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id=step_id,
             success=True,
             outcome={"type": "code_exec"},
@@ -50,8 +64,9 @@ def _payload(
             thread_id="t1",
             tool_call_count=len(tool_calls),
         ),
-        messages,
-        "",
+        messages=messages,
+        delegate_final="",
+        output=final_text,
     )
 
 
@@ -65,7 +80,7 @@ def test_count_file_types_replay_assess_prompt_carries_evidence() -> None:
         thread_id="t1",
         iteration=1,
     )
-    ex = Executor(object(), max_parallel_steps=4)
+    ex = Executor(object(), max_parallel_steps=4, context_engine=_mock_context_engine())
 
     steps = [
         StepAction(id="s1", description="count .py files", expected_output="n"),
@@ -139,7 +154,7 @@ def test_count_file_types_replay_assess_prompt_carries_evidence() -> None:
 
 def test_replay_also_visible_to_plan_generate() -> None:
     state = LoopState(goal="count files", thread_id="t1", iteration=1)
-    ex = Executor(object(), max_parallel_steps=4)
+    ex = Executor(object(), max_parallel_steps=4, context_engine=_mock_context_engine())
     steps = [StepAction(id="s1", description="count py", expected_output="n")]
     ex._append_parallel_wave_ledger(
         state,
@@ -164,7 +179,7 @@ def test_replay_also_visible_to_plan_generate() -> None:
 
 def test_stale_digest_drops_out_of_prompt_after_two_iterations() -> None:
     state = LoopState(goal="count files", thread_id="t1", iteration=1)
-    ex = Executor(object(), max_parallel_steps=4)
+    ex = Executor(object(), max_parallel_steps=4, context_engine=_mock_context_engine())
     ex._append_parallel_wave_ledger(
         state,
         [StepAction(id="s1", description="count", expected_output="n")],
@@ -188,14 +203,14 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
     """Regression for trace 87e146e3: production AIMessage at end of stream has
     empty content; assistant text lives in earlier AIMessageChunk entries.
     Digest must still surface that text via the ledger-body extractor."""
-    ex = Executor(object(), max_parallel_steps=4)
+    ex = Executor(object(), max_parallel_steps=4, context_engine=_mock_context_engine())
     state = LoopState(goal="count files", thread_id="t1", iteration=1)
     steps = [StepAction(id="s1", description="count", expected_output="n")]
 
     # No ToolMessage in messages list — matches what _stream_and_collect returns.
-    payload = (
-        [],
-        StepResult(
+    payload = _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},
@@ -203,7 +218,7 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
             thread_id="t1",
             tool_call_count=2,
         ),
-        [
+        messages=[
             AIMessage(
                 content="",
                 tool_calls=[
@@ -215,7 +230,8 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
             AIMessageChunk(content="1139 Python files and 665 JSON files."),
             AIMessage(content=""),
         ],
-        "",
+        delegate_final="",
+        output="The repo has 1139 Python files and 665 JSON files.",
     )
     ex._append_parallel_wave_ledger(state, steps, [payload])
 
