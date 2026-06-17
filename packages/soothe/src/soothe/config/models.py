@@ -451,6 +451,18 @@ class PersistenceConfig(BaseModel):
         None  # None = $SOOTHE_DATA_DIR/soothe_checkpoints.db (shared)
     )
 
+    # SQLite concurrency settings for multiple loop support
+    sqlite_reader_pool_size: int = Field(
+        default=8,
+        ge=1,
+        le=32,
+        description=(
+            "SQLite reader connection pool size for concurrent reads. "
+            "Higher values support more parallel loops reading simultaneously. "
+            "Writer operations are serialized via WAL mode."
+        ),
+    )
+
 
 class MemUConfig(BaseModel):
     """MemU memory backend configuration.

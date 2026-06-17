@@ -1,7 +1,7 @@
-# Local development defaults (DashScope / coding-plan routers, Docker Postgres + Langfuse).
-# Unlisted keys use Soothe Pydantic defaults. Full default-aligned reference: config/config.template.yml.
+# Local development defaults (DashScope / coding-plan routers, Langfuse).
+# Unlisted keys use Soothe Pydantic defaults. Full reference: config/config.template.yml.
 #
-# Docker (repo root): docker compose up -d  → Postgres + pgvector on localhost:6432
+# Persistence: SQLite by default (no external database required).
 # Langfuse (optional): docker compose --profile langfuse up -d  → UI on :3300
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local (see docker-compose LANGFUSE_INIT_*). Export DASHSCOPE_*.
 
@@ -73,19 +73,22 @@ observability:
       - soothe
 
 # ============================================================
-# PERSISTENCE & STORAGE
+# PERSISTENCE & STORAGE (SQLite default)
 # ============================================================
-persistence:
-  default_backend: postgresql
-  postgres_pool_max_idle_seconds: 90
-  postgres_pool_max_lifetime_seconds: 900
-  postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
+# SQLite is the default backend - no configuration needed.
+# Data stored in $SOOTHE_HOME/data/ (metadata.db, checkpoints.db, vector.db).
+# Supports multiple concurrent loops via WAL mode and reader pool.
 
-vector_stores:
-  - name: pgvector_dev
-    provider_type: pgvector
-    dsn: "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
-    pool_size: 4
-
-vector_store_router:
-  default: pgvector_dev:soothe_default
+# PostgreSQL alternative (uncomment to use):
+# persistence:
+#   default_backend: postgresql
+#   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
+#   postgres_pool_max_idle_seconds: 90
+#   postgres_pool_max_lifetime_seconds: 900
+# vector_stores:
+#   - name: pgvector_dev
+#     provider_type: pgvector
+#     dsn: "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
+#     pool_size: 4
+# vector_store_router:
+#   default: pgvector_dev:soothe_default
