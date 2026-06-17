@@ -563,13 +563,40 @@ class StrangeLoop:
 
                 await invoke_strange_loop_graph(ctx)
             except Exception as e:
-                logger.error(
-                    "[pump_graph] Graph execution error: %s: %s",
-                    type(e).__name__,
-                    e,
-                    exc_info=True,
+                # Check if this is a recoverable DB connection error
+                from soothe.foundation.loop.state.persistence.retry_utils import (
+                    is_recoverable_connection_error,
                 )
-                raise
+
+                if is_recoverable_connection_error(e):
+                    logger.error(
+                        "[pump_graph] DB connection error after retries: %s: %s. "
+                        "Emitting fatal_error event instead of crashing daemon.",
+                        type(e).__name__,
+                        e,
+                    )
+                    await queue.put(
+                        (
+                            "fatal_error",
+                            {
+                                "error": f"Database connection lost: {type(e).__name__}",
+                                "recoverable": True,
+                            },
+                        )
+                    )
+                else:
+                    logger.error(
+                        "[pump_graph] Graph execution error: %s: %s",
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
+                    )
+                    await queue.put(
+                        (
+                            "fatal_error",
+                            {"error": str(e), "recoverable": False},
+                        )
+                    )
             finally:
                 await queue.put(_graph_sentinel)
 
