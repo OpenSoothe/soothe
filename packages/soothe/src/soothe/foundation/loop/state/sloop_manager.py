@@ -137,6 +137,7 @@ class StrangeLoopStateManager:
                                 self._postgres_backend = PostgreSQLPersistenceBackend(
                                     dsn=self._postgres_dsn,
                                     pool_size=0,  # pool_size=0: use provided pool
+                                    shared_pool=self._shared_pool,  # For pool reset capability
                                 )
                                 self._postgres_backend._pool = pool  # Use shared pool directly
                                 logger.info(
