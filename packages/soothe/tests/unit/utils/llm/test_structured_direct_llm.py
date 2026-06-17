@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from soothe.utils.llm.schema_wire import validate_response_schema
-from soothe.utils.llm.structured_invoke import (
+from soothe.utils.llm.structured import (
     StructuredOutputError,
     ensure_json_keyword_in_messages,
     invoke_structured_chat,

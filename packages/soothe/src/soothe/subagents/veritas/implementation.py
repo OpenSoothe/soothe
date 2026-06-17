@@ -17,7 +17,7 @@ from soothe.subagents.veritas.schemas import (
     VeritasAnswerSchema,
     build_veritas_response_schema,
 )
-from soothe.utils.llm.structured_invoke import (
+from soothe.utils.llm.structured import (
     StructuredOutputError,
     invoke_structured_chat,
 )

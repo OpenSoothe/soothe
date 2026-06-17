@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -104,9 +103,6 @@ class SootheConfigLoggingView:
         return self._cfg.observability.log_file_level
 
 
-_model_cache_lock = threading.Lock()
-
-
 class SootheConfig(BaseSettings):
     """Top-level configuration for a Soothe agent.
 
@@ -115,8 +111,24 @@ class SootheConfig(BaseSettings):
 
     model_config = {"env_prefix": "SOOTHE_"}
 
-    _model_cache: dict[str, BaseChatModel] = {}
-    _embedding_cache: dict[str, Embeddings] = {}
+    _llm_factory: Any = None  # LLMFactory instance (lazy-initialized)
+
+    @property
+    def llm_factory(self) -> Any:
+        """Lazy-initialized LLM factory.
+
+        Decouples model creation logic from config schema per RFC-627.
+        Returns an LLMFactory instance that handles model creation,
+        caching, and provider-specific wrapper application.
+
+        Returns:
+            LLMFactory instance bound to this config.
+        """
+        if self._llm_factory is None:
+            from soothe.utils.llm import LLMFactory
+
+            self._llm_factory = LLMFactory(self)
+        return self._llm_factory
 
     @classmethod
     def from_yaml_file(cls, path: str) -> SootheConfig:
@@ -632,71 +644,12 @@ class SootheConfig(BaseSettings):
                 return plugin.config
         return {}
 
-    def _find_provider(self, provider_name: str) -> ModelProviderConfig | None:
-        """Find a provider config by name.
-
-        Args:
-            provider_name: The provider name to look up.
-
-        Returns:
-            The matching provider config, or None.
-        """
-        for p in self.providers:
-            if p.name == provider_name:
-                return p
-        return None
-
-    def _provider_kwargs(self, provider_name: str) -> tuple[str, dict[str, Any]]:
-        """Build init string and kwargs for a provider:model pair.
-
-        Args:
-            provider_name: Provider name from the router string.
-
-        Returns:
-            Tuple of (model_name portion after ``:``, kwargs dict with
-            ``base_url``, ``api_key``, etc.).
-        """
-        provider = self._find_provider(provider_name)
-        kwargs: dict[str, Any] = {}
-        provider_type = provider_name
-        if provider:
-            provider_type = provider.provider_type
-            # Limited OpenAI providers use OpenAI API, but need special handling later
-            actual_provider_type = "openai" if provider_type == "limited_openai" else provider_type
-
-            if provider.api_base_url:
-                resolved = _resolve_provider_env(
-                    provider.api_base_url,
-                    provider_name=provider.name,
-                    field_name="api_base_url",
-                )
-                if resolved:
-                    kwargs["base_url"] = resolved
-                    if actual_provider_type == "openai":
-                        kwargs["use_responses_api"] = False
-            if provider.api_key:
-                resolved = _resolve_provider_env(
-                    provider.api_key,
-                    provider_name=provider.name,
-                    field_name="api_key",
-                )
-                if resolved:
-                    kwargs["api_key"] = resolved
-
-            # Return actual provider_type for langchain, but keep original for wrapper logic
-            return actual_provider_type, kwargs
-        return provider_type, kwargs
-
     def create_chat_model(self, role: ModelRole = "default") -> BaseChatModel:
         """Create a ``BaseChatModel`` for a given role with caching.
 
-        Resolves the role to a ``provider:model`` pair, looks up the
-        provider's credentials, and calls ``init_chat_model()``.
-        Caches the result to avoid recreating models.
-
-        For limited OpenAI-compatible providers (LMStudio, Ollama, etc.)
-        that don't support the full ``tool_choice`` object format, the model
-        is wrapped to force ``json_mode`` for structured output.
+        Delegates to ``llm_factory.create_chat_model``. All model creation logic
+        (provider resolution, wrapper application, caching) is handled by LLMFactory
+        per RFC-627.
 
         Args:
             role: Purpose role — one of the :data:`~soothe.config.models.ModelRole` values.
@@ -704,50 +657,7 @@ class SootheConfig(BaseSettings):
         Returns:
             A configured ``BaseChatModel`` instance, possibly wrapped for provider compatibility.
         """
-        import logging
-
-        from langchain.chat_models import init_chat_model
-
-        logger = logging.getLogger(__name__)
-
-        model_str = self.resolve_model(role)
-        provider_name, _, model_name = model_str.partition(":")
-        if not model_name:
-            model_name = provider_name
-            provider_name = ""
-
-        cache_key = f"{model_str}:streaming"
-        with _model_cache_lock:
-            if cache_key in self._model_cache:
-                return self._model_cache[cache_key]
-
-            provider_type, kwargs = self._provider_kwargs(provider_name)
-            init_str = f"{provider_type}:{model_name}" if provider_name else model_str
-
-            model = init_chat_model(init_str, streaming=True, stream_usage=True, **kwargs)
-
-            # Check if this is a limited OpenAI provider (limited API compatibility)
-            if provider_name:
-                provider = self._find_provider(provider_name)
-                if provider and provider.provider_type == "limited_openai":
-                    logger.info(
-                        "Provider '%s' is limited_openai type, applying compatibility wrapper",
-                        provider_name,
-                    )
-                    from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
-
-                    model = LimitedProviderModelWrapper(model, provider_name)
-
-            from soothe.utils.observability.llm_token_observability import (
-                bind_llm_token_observability,
-            )
-
-            model = bind_llm_token_observability(model)
-
-            self._model_cache[cache_key] = model
-            logger.debug("Created and cached model for '%s'", model_str)
-
-            return model
+        return self.llm_factory.create_chat_model(role)
 
     def create_chat_model_for_spec(
         self,
@@ -757,8 +667,8 @@ class SootheConfig(BaseSettings):
     ) -> BaseChatModel:
         """Create a chat model from an explicit ``provider:model`` string (per-turn overrides).
 
-        Unlike `create_chat_model(role=...)`, this does not resolve router roles.
-        Results are cached under a key derived from the spec and merged params.
+        Delegates to ``llm_factory.create_chat_model_for_spec``. All model creation logic
+        is handled by LLMFactory per RFC-627.
 
         Args:
             model_spec: Resolved model string, e.g. ``anthropic:claude-sonnet-4-5``.
@@ -770,122 +680,18 @@ class SootheConfig(BaseSettings):
         Raises:
             ValueError: If ``model_spec`` is empty after stripping.
         """
-        import json
-        import logging
-
-        from langchain.chat_models import init_chat_model
-
-        logger = logging.getLogger(__name__)
-
-        model_str = (model_spec or "").strip()
-        if not model_str:
-            msg = "model_spec is required for create_chat_model_for_spec"
-            raise ValueError(msg)
-
-        merged_params = dict(model_params or {})
-        cache_key = (
-            f"spec:{model_str}:streaming:{json.dumps(merged_params, sort_keys=True, default=str)}"
-        )
-        with _model_cache_lock:
-            if cache_key in self._model_cache:
-                return self._model_cache[cache_key]
-
-            provider_name, _, model_name = model_str.partition(":")
-            if not model_name:
-                model_name = provider_name
-                provider_name = ""
-
-            provider_type, kwargs = self._provider_kwargs(provider_name)
-            init_str = f"{provider_type}:{model_name}" if provider_name else model_str
-            merged_kwargs = {**kwargs, **merged_params}
-
-            model = init_chat_model(init_str, streaming=True, stream_usage=True, **merged_kwargs)
-
-            # Check if this is a limited OpenAI provider (limited API compatibility)
-            if provider_name:
-                provider = self._find_provider(provider_name)
-                if provider and provider.provider_type == "limited_openai":
-                    logger.info(
-                        "Provider '%s' is limited_openai type, applying compatibility wrapper",
-                        provider_name,
-                    )
-                    from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
-
-                    model = LimitedProviderModelWrapper(model, provider_name)
-
-            from soothe.utils.observability.llm_token_observability import (
-                bind_llm_token_observability,
-            )
-
-            model = bind_llm_token_observability(model)
-
-            self._model_cache[cache_key] = model
-            logger.debug("Created model for explicit spec '%s'", model_str)
-        return model
+        return self.llm_factory.create_chat_model_for_spec(model_spec, model_params)
 
     def create_embedding_model(self) -> Embeddings:
         """Create an ``Embeddings`` instance using the ``embedding`` role with caching.
 
+        Delegates to ``llm_factory.create_embedding_model``. All embedding creation logic
+        (DashScope special handling, caching) is handled by LLMFactory per RFC-627.
+
         Returns:
             A configured langchain ``Embeddings`` instance.
         """
-        import logging
-
-        from langchain.embeddings import init_embeddings
-
-        logger = logging.getLogger(__name__)
-
-        model_str = self.resolve_model("embedding")
-        provider_name, _, model_name = model_str.partition(":")
-        if not model_name:
-            model_name = provider_name
-            provider_name = ""
-
-        cache_key = model_str
-        if cache_key in self._embedding_cache:
-            return self._embedding_cache[cache_key]
-
-        provider_type, kwargs = self._provider_kwargs(provider_name)
-        kwargs.pop("use_responses_api", None)
-
-        # Check if DashScope is using OpenAI-compatible endpoint
-        if provider_name == "dashscope":
-            base_url = kwargs.get("base_url", "")
-            # If using OpenAI-compatible endpoint, use custom wrapper
-            if "compatible-mode" in base_url:
-                logger.debug(
-                    "DashScope provider using OpenAI-compatible endpoint, using custom wrapper"
-                )
-                from soothe.utils.embeddings_dashscope_openai import (
-                    DashScopeOpenAIEmbeddings,
-                )
-
-                # Remove base_url from kwargs to avoid duplicate parameter
-                embedding_kwargs = {k: v for k, v in kwargs.items() if k != "base_url"}
-                embeddings = DashScopeOpenAIEmbeddings(
-                    model=model_name,
-                    dimension=self.embedding_dims,
-                    base_url=base_url,
-                    **embedding_kwargs,
-                )
-            else:
-                # Use native DashScope SDK for non-compatible endpoints
-                from soothe.utils.embeddings_dashscope import DashScopeEmbeddings
-
-                embeddings = DashScopeEmbeddings(
-                    model=model_name, dimension=self.embedding_dims, **kwargs
-                )
-            self._embedding_cache[cache_key] = embeddings
-            logger.debug("Created and cached DashScope embedding model for '%s'", model_str)
-            return embeddings
-
-        init_str = f"{provider_type}:{model_name}" if provider_name else model_str
-
-        embeddings = init_embeddings(init_str, **kwargs)
-        self._embedding_cache[cache_key] = embeddings
-        logger.debug("Created and cached embedding model for '%s'", model_str)
-
-        return embeddings
+        return self.llm_factory.create_embedding_model()
 
     def resolve_system_prompt(self) -> str:
         """Return the effective system prompt with current date context.

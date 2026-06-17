@@ -599,10 +599,15 @@ def _fallback_ingest_subgraph_tool_on_step_card(
     if step_w is None:
         return False
     row_id = lookup if type_code == "t" else (display or lookup)
+    resolved_args = dict(args or {})
+    if raw_args and not resolved_args:
+        parsed = extract_tool_args_dict({"_raw": raw_args})
+        if parsed:
+            resolved_args = parsed
     if step_w.has_tool_call_row(row_id):
-        step_w.update_tool_args(row_id, args)
+        step_w.update_tool_args(row_id, resolved_args)
     else:
-        step_w.add_tool_call(row_id, tool_name, args, raw_args=raw_args)
+        step_w.add_tool_call(row_id, tool_name, resolved_args, raw_args=raw_args)
     adapter._tool_to_step[row_id] = step_w
     adapter._tool_display_by_call_id[row_id] = step_w
     return True

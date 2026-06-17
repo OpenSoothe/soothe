@@ -179,6 +179,27 @@ def test_task_branch_parses_raw_args_when_structured_args_are_empty() -> None:
     assert "Grep(x)" in text
 
 
+def test_task_branch_late_explicit_args_override_stale_raw_placeholder() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-stale-raw")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "ABC_01:t0:list_files:0",
+        "list_files",
+        {"_subgraph_tool": True},
+        raw_args='{"_subgraph_tool":true}',
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+    card.update_tool_args("ABC_01:t0:list_files:0", {"path": "/Users/tester/project"})
+    text = _plain(card._step_task_activity_content())
+    assert "ListFiles(" in text
+    assert "project" in text
+
+
 def test_pending_step_shows_branch_pending_without_task_rows() -> None:
     card = CognitionStepMessage("WAA-02", "Blocked step", id="stp-wait")
     # After IG-422 refactor, pending status is handled by _status_widget, not _step_task_activity_content.

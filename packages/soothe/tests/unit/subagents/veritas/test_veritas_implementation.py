@@ -13,7 +13,7 @@ from soothe.foundation.loop.clarification.protocol import (
 )
 from soothe.subagents.veritas import answer
 from soothe.subagents.veritas import implementation as veritas_impl
-from soothe.utils.llm.structured_invoke import StructuredOutputError
+from soothe.utils.llm.structured import StructuredOutputError
 
 
 def _request(num_q: int = 1) -> ClarificationRequest:

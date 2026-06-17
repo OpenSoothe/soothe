@@ -6,7 +6,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-from soothe.utils.observability.llm_token_observability import (
+from soothe.utils.llm.observability import (
     SootheTokenUsageChatModel,
     bind_llm_token_observability,
     ensure_openai_style_token_usage_on_llm_result,
@@ -60,7 +60,7 @@ def test_soothe_token_usage_model_delegates_with_structured_output() -> None:
     """Regression: wrapper must not inherit BaseChatModel.with_structured_output (daemon IntentClassifier)."""
     from unittest.mock import MagicMock
 
-    from soothe.utils.llm.structured_invoke import _JsonKeywordSafeRunnable
+    from soothe.utils.llm.structured import _JsonKeywordSafeRunnable
 
     inner = MagicMock(spec=BaseChatModel)
     inner.bind_tools.side_effect = lambda *a, **k: inner

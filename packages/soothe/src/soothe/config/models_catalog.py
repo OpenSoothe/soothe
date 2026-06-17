@@ -22,7 +22,7 @@ def _provider_has_credentials(cfg: SootheConfig, provider_name: str) -> bool | N
     """Return whether the provider appears credentialed on the daemon host."""
     if not provider_name:
         return None
-    p = cfg._find_provider(provider_name)  # noqa: SLF001
+    p = cfg.llm_factory._registry.get_provider(provider_name)  # noqa: SLF001
     if p is None:
         return None
     if p.provider_type in _IMPLICIT_AUTH or p.provider_type == "ollama":

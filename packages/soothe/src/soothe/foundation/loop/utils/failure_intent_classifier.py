@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field
 
 from soothe.config.models import FailureIntentConfig
-from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
+from soothe.utils.llm.structured import invoke_structured_chat_typed
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel

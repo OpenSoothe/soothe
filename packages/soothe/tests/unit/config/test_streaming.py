@@ -85,8 +85,8 @@ def test_model_cache_includes_streaming_key():
     # Should be the same cached instance
     assert model1 is model2
 
-    # Check cache key format includes streaming
-    cache_keys = list(config._model_cache.keys())
+    # Check cache key format includes streaming (now in llm_factory._cache)
+    cache_keys = list(config.llm_factory._cache.keys())
     assert len(cache_keys) == 1
     assert "streaming" in cache_keys[0]
 
@@ -122,8 +122,8 @@ def test_create_chat_model_for_spec_cache_key_streaming():
     )
     assert model2 is model4
 
-    # Check all cache keys include streaming
-    for cache_key in config._model_cache.keys():
+    # Check all cache keys include streaming (now in llm_factory._cache)
+    for cache_key in config.llm_factory._cache.keys():
         assert "streaming" in cache_key
 
 

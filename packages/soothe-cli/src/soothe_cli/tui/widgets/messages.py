@@ -2690,9 +2690,16 @@ class CognitionStepMessage(Vertical):
         merged = dict(row.args or {})
         if incoming:
             merged.update(incoming)
-        parsed_from_raw = extract_tool_args_dict(merged)
-        if parsed_from_raw:
-            merged.update(parsed_from_raw)
+        explicit_args = {
+            k: v for k, v in merged.items() if k not in {"_raw", "_subgraph_tool", "value"}
+        }
+        if explicit_args:
+            # Once explicit args arrive, stale placeholder ``_raw`` should not shadow them.
+            merged.pop("_raw", None)
+        else:
+            parsed_from_raw = extract_tool_args_dict({"_raw": merged.get("_raw", "")})
+            if parsed_from_raw:
+                merged.update(parsed_from_raw)
         if not tool_args_meaningful(merged):
             return
         if merged == row.args:

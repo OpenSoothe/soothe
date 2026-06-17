@@ -43,6 +43,23 @@ def test_format_command_without_args_is_display_name_only() -> None:
     assert format_step_tool_activity_command("grep", {}) == "Grep"
 
 
+def test_format_command_parses_raw_args_payload() -> None:
+    line = format_step_tool_activity_command(
+        "list_files",
+        {"_raw": '{"path":"/Users/tester/project"}'},
+    )
+    assert line.startswith("ListFiles(")
+    assert "project" in line
+
+
+def test_format_command_parses_json_string_value_payload() -> None:
+    line = format_step_tool_activity_command(
+        "glob",
+        {"value": '{"glob_pattern":"**/*.py"}'},
+    )
+    assert line == "Glob(**/*.py)"
+
+
 def test_format_status_tail_success_duration() -> None:
     assert format_step_tool_activity_status_tail("success", duration_ms=3200) == " (3.2s)"
 
