@@ -17,6 +17,10 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
+from soothe.foundation.loop.engine.tool_call_id import (
+    _rewrite_tool_message_tool_call_id,
+    _unified_tool_call_id_for_stream,
+)
 from soothe.middleware.tool_call_args_registry import (
     coerce_tool_call_args,
     get_recorded_tool_call_args,
@@ -64,8 +68,6 @@ def _predict_unified_id(
     task_idx: int | None = None,
 ) -> str:
     """Map provider ids or chunk index+name to unified wire ``tool_call_id``."""
-    from soothe.foundation.loop.engine.executor import _unified_tool_call_id_for_stream
-
     sid = str(step_id).strip()
     if not sid:
         return str(raw_tool_call_id or "").strip()
@@ -95,7 +97,9 @@ def _record_from_ai_message(
     if not isinstance(msg, (AIMessage, AIMessageChunk)):
         return
 
-    from soothe.foundation.loop.engine.executor import _backfill_tool_calls_args_from_chunks
+    from soothe.foundation.loop.engine.tool_call_enrichment import (
+        _backfill_tool_calls_args_from_chunks,
+    )
 
     filled = _backfill_tool_calls_args_from_chunks(msg)
     sid = str(step_id).strip()
@@ -253,8 +257,6 @@ class ToolCallArgsCollector:
     ) -> tuple[ToolMessage, list[dict[str, Any]]]:
         """Rewrite ``tool_call_id``, merge invocation args, return wire update events."""
         from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
-
-        from soothe.foundation.loop.engine.executor import _rewrite_tool_message_tool_call_id
 
         raw_tcid = str(getattr(msg, "tool_call_id", "") or "").strip()
         self.ingest_invocation_registry(raw_tcid)

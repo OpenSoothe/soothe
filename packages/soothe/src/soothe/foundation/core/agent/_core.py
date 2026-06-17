@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.loop.engine.ephemeral_execute_stream import ephemeral_execute_stream_enabled
+from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
 from soothe.utils.text_preview import log_preview
 
 if TYPE_CHECKING:

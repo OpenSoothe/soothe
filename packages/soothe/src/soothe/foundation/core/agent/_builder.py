@@ -285,9 +285,7 @@ class AgentBuilder:
 
         execute_graph = None
         if checkpointer is not None:
-            from soothe.foundation.loop.engine.ephemeral_execute_stream import (
-                ephemeral_execute_stream_enabled,
-            )
+            from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
 
             if ephemeral_execute_stream_enabled():
                 execute_start = time.perf_counter()

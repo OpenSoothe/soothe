@@ -201,6 +201,40 @@ async def test_replay_to_client_emits_begin_created_end(
 
 
 @pytest.mark.asyncio
+async def test_replay_to_client_refreshes_before_replay(
+    loops_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_bind_thread(monkeypatch)
+    runner = _make_runner(checkpoint_messages=[HumanMessage(content="turn1")])
+    daemon = SimpleNamespace(_runner=runner)
+    manager = LoopCardManager(daemon)
+    await manager.ensure_for_loop("loop_refresh")
+
+    # Simulate new persisted state after the initial derivation.
+    runner.get_thread_state_values = AsyncMock(
+        return_value={
+            "messages": [
+                HumanMessage(content="turn1"),
+                AIMessage(content="final goal completion response"),
+            ]
+        }
+    )
+
+    sent: list[dict] = []
+
+    async def collect(frame: dict) -> None:
+        sent.append(frame)
+
+    await manager.replay_to_client("loop_refresh", collect)
+    replay_texts = [
+        str(frame.get("data", {}).get("content", ""))
+        for frame in sent
+        if frame.get("type") == CARD_CREATED
+    ]
+    assert any("final goal completion response" in text for text in replay_texts)
+
+
+@pytest.mark.asyncio
 async def test_stop_for_loop_releases_in_memory_state(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

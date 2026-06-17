@@ -1,4 +1,4 @@
-# IG-488: AgentLoop → StrangeLoop Migration Summary
+# IG-486: AgentLoop → StrangeLoop Migration Summary
 
 ## Overview
 

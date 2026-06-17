@@ -18,23 +18,15 @@ replay (IG-355); it is True iff provenance is ``task_tool_aggregate``.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import os
 import time
-from collections import deque
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.types import Command, Interrupt
 from soothe_sdk.utils import get_outcome_type
-from soothe_sdk.ux.task_namespace import (
-    _shorten_tool_call_id,
-    _task_index_from_task_tool_call_id,
-    normalize_unified_tool_call_id,
-    parse_unified_tool_call_id,
-)
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
@@ -45,6 +37,15 @@ from soothe.foundation.loop.clarification import (
     ClarificationDetector,
     ClarificationOrigin,
     LoopStateView,
+)
+from soothe.foundation.loop.engine.act_wave_finalize import (
+    DELEGATE_FINAL_WAVE_CAP,
+    _aggregate_tool_calls_from_step_messages,
+    _first_arg_head_for_tool_call,
+    _last_tool_result_block,
+    _outcome_summary_text,
+    compute_act_wave_finalize,
+    provenance_is_task_delegate,
 )
 from soothe.foundation.loop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
@@ -60,11 +61,39 @@ from soothe.foundation.loop.engine.predecessor_branch_context import (
     prior_loop_execute_messages,
     transitive_dependency_step_ids,
 )
+from soothe.foundation.loop.engine.step_wave_types import (
+    _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+    _DELEGATE_FINAL_PER_TASK_CAP,
+    _TUPLE_LEN,
+    StepWaveQueued,
+    StepWaveStart,
+    StreamEvent,
+    _ActStreamBudget,
+    _append_parallel_stream_event,
+    _ExecuteStepResult,
+    _first_tool_error_message,
+    _ParallelLiveQueueItem,
+    _ParallelStepDone,
+)
+from soothe.foundation.loop.engine.thread_selection import (
+    _select_thread_for_step,
+    _wire_subagent_from_routing,
+)
 from soothe.foundation.loop.engine.tool_call_args import (
     ToolCallArgsCollector,
     filter_redundant_stream_tool_updates,
     format_args_for_log,
     wire_updates_from_ai_message,
+)
+from soothe.foundation.loop.engine.tool_call_enrichment import (
+    _backfill_tool_calls_args_from_chunks,
+    _enrich_execute_step_task_kwargs_on_message,
+    _stringify_tool_call_chunk_args_on_message,
+)
+from soothe.foundation.loop.engine.tool_call_id import (
+    _rewrite_tool_call_ids_to_unified,
+    _rewrite_tool_message_tool_call_id,
+    _SubgraphNamespaceTaskBinder,
 )
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
@@ -95,851 +124,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Per execute-step cap on root-graph tool results consumed from the Act stream.
-_DEFAULT_MAX_TOOL_CALLS_PER_STEP = 99
 
+def ephemeral_execute_stream_enabled() -> bool:
+    """Whether execute uses the checkpointer-free twin graph (default: on).
 
-def _wire_subagent_from_routing(routing_classification: Any | None) -> str | None:
-    """Subagent name when wire routing requests explicit subagent delegation (IG-349)."""
-    if routing_classification is None:
-        return None
-    if isinstance(routing_classification, dict):
-        routing_hint = routing_classification.get("routing_hint")
-        preferred = routing_classification.get("preferred_subagent")
-    else:
-        routing_hint = getattr(routing_classification, "routing_hint", None)
-        preferred = getattr(routing_classification, "preferred_subagent", None)
-    if routing_hint != "subagent" or not preferred:
-        return None
-    if isinstance(preferred, str):
-        stripped = preferred.strip()
-        return stripped or None
-    return str(preferred) if preferred is not None else None
+    LangGraph graphs compiled with a checkpointer load checkpoint channel history on
+    each ``astream`` tick, causing unbounded RSS during execute. CoreAgent therefore
+    builds a twin graph with ``checkpointer=None`` for execute-only streaming while
+    the main graph keeps Postgres/SQLite persistence for planner and clarification.
 
-
-def _count_dependents(predecessor_id: str, decision: AgentDecision) -> int:
-    """Count how many steps in ``decision`` directly depend on ``predecessor_id``.
-
-    Used for sole-child chain reuse: when only one step depends on a given
-    predecessor, that step can reuse the predecessor's thread_id directly
-    without creating a new namespace.
+    Set ``SOOTHE_EPHEMERAL_EXECUTE_STREAM=0`` only for emergency rollback.
     """
-    count = 0
-    for s in getattr(decision, "steps", None) or []:
-        deps = getattr(s, "dependencies", None) or []
-        if predecessor_id in deps:
-            count += 1
-    return count
-
-
-def _select_thread_for_step(
-    step: StepAction,
-    decision: AgentDecision,
-    state: LoopState,
-    main_thread_id: str,
-) -> str:
-    """Select thread_id for a step with sole-child chain reuse optimization.
-
-    IG-477: Thread isolation via __step_<id> namespace for parallel safety.
-    Predecessor context arrives via message injection, not checkpoint fork.
-
-    Strategy:
-    | Direct deps | Predecessor's other dependents | Action                     |
-    |-------------|--------------------------------|----------------------------|
-    | 0           | n/a                            | new __step_<id> thread     |
-    | 1           | 0 (sole child)                 | reuse predecessor's thread |
-    | 1           | ≥1 (has siblings)              | new __step_<id> thread     |
-    | ≥2          | n/a                            | new __step_<id> thread     |
-
-    Returns:
-        Thread_id for the step's CoreAgent execution.
-    """
-    direct_deps = step.dependencies or []
-
-    # No dependencies → fresh isolated thread
-    if not direct_deps:
-        return f"{main_thread_id}__step_{step.id}"
-
-    # Multiple dependencies → fresh isolated thread (predecessor context via message injection)
-    if len(direct_deps) > 1:
-        return f"{main_thread_id}__step_{step.id}"
-
-    # Singleton dependency
-    pred_step_id = direct_deps[0]
-    pred_thread_id = state.step_thread_ids.get(pred_step_id)
-
-    # Predecessor thread not tracked → fresh isolated thread
-    if not pred_thread_id:
-        logger.debug(
-            "Predecessor thread not found for step %s (dep: %s), creating new thread",
-            step.id,
-            pred_step_id,
-        )
-        return f"{main_thread_id}__step_{step.id}"
-
-    # Sole-child optimization: reuse predecessor's thread when no siblings
-    if _count_dependents(pred_step_id, decision) <= 1:
-        logger.debug(
-            "Sole-child reuse: step %s reusing predecessor %s's thread %s",
-            step.id,
-            pred_step_id,
-            pred_thread_id,
-        )
-        return pred_thread_id
-
-    # Has siblings → new isolated thread to prevent namespace collision
-    return f"{main_thread_id}__step_{step.id}"
-
-
-def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
-    """Generate unified step-level tool call ID.
-
-    Format: {step_wire}:s:{tool}:{idx}
-
-    Examples:
-        ('GHT-01', 'functions.task:0', 0) → 'GHT_01:s:task:0'
-        ('GHT-01', 'functions.read_file:1', 1) → 'GHT_01:s:read_file:1'
-    """
-    from soothe_sdk.ux.task_namespace import _format_unified_tool_call_id
-
-    short_tid = _shorten_tool_call_id(raw_tid)
-    return _format_unified_tool_call_id(step_id, "s", short_tid)
-
-
-def _make_task_inner_tool_call_id(
-    step_id: str, task_idx: int, raw_tid: str, inner_call_idx: int
-) -> str:
-    """Generate unified task-level (subagent inner) tool call ID.
-
-    Format: {step_wire}:t{task_idx}:{tool}:{idx}
-
-    Examples:
-        ('GHT-01', 0, 'functions.read_file:1', 0) → 'GHT_01:t0:read_file:1'
-        ('GHT-01', 0, 'functions.grep:2', 1) → 'GHT_01:t0:grep:2'
-    """
-    from soothe_sdk.ux.task_namespace import _format_unified_tool_call_id
-
-    short_tid = _shorten_tool_call_id(raw_tid)
-    return _format_unified_tool_call_id(step_id, f"t{task_idx}", short_tid)
-
-
-def _unified_tool_call_id_for_stream(
-    step_id: str,
-    raw_tid: str,
-    *,
-    task_idx: int | None,
-) -> str:
-    """Build step- or task-level unified tool_call_id for stream rewriting."""
-    if task_idx is None:
-        return _make_step_tool_call_id(step_id, raw_tid, 0)
-    return _make_task_inner_tool_call_id(step_id, task_idx, raw_tid, 0)
-
-
-@dataclass
-class _SubgraphNamespaceTaskBinder:
-    """Map LangGraph subgraph namespaces to main-graph ``task:N`` indices."""
-
-    _pending_indices: deque[int] = field(default_factory=deque)
-    _ns_to_idx: dict[tuple[str, ...], int] = field(default_factory=dict)
-
-    def note_main_graph_task_invocations(self, msg: BaseMessage, step_id: str) -> None:
-        """Queue ``task`` indices from step-level delegations before subgraphs start."""
-        if not isinstance(msg, (AIMessage, AIMessageChunk)):
-            return
-        sid = str(step_id).strip()
-        if not sid:
-            return
-        seen: set[int] = set()
-        for source in (
-            getattr(msg, "tool_calls", None) or [],
-            getattr(msg, "tool_call_chunks", None) or [],
-        ):
-            for tc in source:
-                if not isinstance(tc, dict):
-                    continue
-                if str(tc.get("name") or "").strip() != "task":
-                    continue
-                tid = str(tc.get("id") or "").strip()
-                if not tid:
-                    continue
-                idx = _task_index_from_task_tool_call_id(tid)
-                if idx is None or idx in seen:
-                    continue
-                seen.add(idx)
-                self._pending_indices.append(idx)
-
-    def task_idx_for_namespace(self, namespace: tuple[str, ...]) -> int:
-        """Return the ``task`` index bound to a subgraph namespace (FIFO by default)."""
-        if not namespace:
-            return 0
-        bound = self._ns_to_idx.get(namespace)
-        if bound is not None:
-            return bound
-        idx = self._pending_indices.popleft() if self._pending_indices else 0
-        self._ns_to_idx[namespace] = idx
-        return idx
-
-
-_TASK_KWARG_DESC_KEYS = ("description", "prompt", "task", "instruction")
-
-
-def _coerce_tool_call_args_mapping(raw: Any) -> dict[str, Any]:
-    """Normalize tool-call ``args`` to a dict when possible."""
-    if isinstance(raw, dict):
-        inp = raw.get("input")
-        if isinstance(inp, dict) and inp:
-            return dict(inp)
-        return dict(raw)
-    if isinstance(raw, str) and raw.strip():
-        try:
-            import json
-
-            loaded = json.loads(raw)
-            if isinstance(loaded, dict):
-                return loaded
-        except json.JSONDecodeError:
-            pass
-    return {}
-
-
-def _task_kwargs_have_description(args: dict[str, Any]) -> bool:
-    for key in _TASK_KWARG_DESC_KEYS:
-        val = args.get(key)
-        if isinstance(val, str) and val.strip():
-            return True
-    return False
-
-
-def _chunk_args_dict(chunk: dict[str, Any]) -> dict[str, Any]:
-    """Extract parsed args from one ``tool_call_chunk`` block."""
-    cargs = chunk.get("args")
-    if isinstance(cargs, dict) and cargs:
-        return dict(cargs)
-    if isinstance(cargs, str) and cargs.strip():
-        return _coerce_tool_call_args_mapping(cargs)
-    return {}
-
-
-def _backfill_tool_calls_args_from_chunks(msg: BaseMessage) -> BaseMessage:
-    """Fill empty ``tool_calls[].args`` from ``tool_call_chunks`` on the same message.
-
-      Some providers emit a terminal ``AIMessage`` whose ``tool_calls`` have ``{}`` while
-      the accumulated chunk args on the same object are complete. The TUI needs those
-    kwargs on ``tool_calls`` for wire deserialization and overlay seeding.
-    """
-    from copy import deepcopy
-
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    if not isinstance(msg, (AIMessage, AIMessageChunk)):
-        return msg
-    chunks = getattr(msg, "tool_call_chunks", None) or []
-    calls = getattr(msg, "tool_calls", None) or []
-    if not chunks or not calls:
-        return msg
-
-    args_by_id: dict[str, dict[str, Any]] = {}
-    args_by_index: dict[int, dict[str, Any]] = {}
-    for tc in chunks:
-        if not isinstance(tc, dict):
-            continue
-        parsed = _chunk_args_dict(tc)
-        if not parsed:
-            continue
-        tid = str(tc.get("id") or "").strip()
-        if tid:
-            args_by_id[tid] = parsed
-        idx_raw = tc.get("index")
-        if idx_raw is not None:
-            try:
-                args_by_index[int(idx_raw)] = parsed
-            except (TypeError, ValueError):
-                pass
-
-    if not args_by_id and not args_by_index:
-        return msg
-
-    changed = False
-    new_calls: list[dict[str, Any]] = []
-    for call_idx, tc in enumerate(calls):
-        if not isinstance(tc, dict):
-            new_calls.append(tc)
-            continue
-        tid = str(tc.get("id") or "").strip()
-        existing_args = tc.get("args")
-        empty = existing_args is None or existing_args == {} or existing_args == ""
-        fill: dict[str, Any] | None = None
-        if empty and tid and tid in args_by_id:
-            fill = args_by_id[tid]
-        elif empty and call_idx in args_by_index:
-            fill = args_by_index[call_idx]
-        if fill is not None:
-            patched = dict(tc)
-            patched["args"] = fill
-            new_calls.append(patched)
-            changed = True
-        else:
-            new_calls.append(tc)
-
-    if not changed:
-        return msg
-    modified = deepcopy(msg)
-    if hasattr(modified, "__dict__"):
-        modified.__dict__["tool_calls"] = new_calls
-    return modified
-
-
-def _patch_task_tool_call_dict(
-    tc: dict[str, Any],
-    *,
-    step_description: str,
-    step_subagent: str | None,
-) -> tuple[dict[str, Any], bool]:
-    """Fill missing ``task`` kwargs from execute-step metadata (main graph only)."""
-    if str(tc.get("name") or "").strip() != "task":
-        return tc, False
-    args = _coerce_tool_call_args_mapping(tc.get("args"))
-    desc = (step_description or "").strip()
-    sub = (step_subagent or "").strip() if step_subagent else ""
-    if _task_kwargs_have_description(args):
-        if sub and not str(args.get("subagent_type") or "").strip():
-            merged = dict(args)
-            merged["subagent_type"] = sub
-            patched = dict(tc)
-            patched["args"] = merged
-            return patched, True
-        return tc, False
-    if not desc and not sub:
-        return tc, False
-    merged = dict(args)
-    if desc:
-        merged.setdefault("description", desc)
-    if sub:
-        merged.setdefault("subagent_type", sub)
-    patched = dict(tc)
-    patched["args"] = merged
-    return patched, True
-
-
-def _enrich_execute_step_task_kwargs_on_message(
-    msg: BaseMessage,
-    *,
-    step_description: str,
-    step_subagent: str | None,
-    task_idx: int | None,
-) -> BaseMessage:
-    """Ensure main-graph ``task`` tool calls carry a description for TUI delegation cards.
-
-    Parallel execute often streams ``tool_calls`` with empty ``args`` and no
-    ``tool_call_chunks`` on the terminal chunk. The model still has the step brief in the
-    HumanMessage envelope; copy wire ``preferred_subagent`` onto ``task`` kwargs when set
-    at emit time so clients always receive a real delegation description.
-    """
-    from copy import deepcopy
-
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    if task_idx is not None:
-        return msg
-    if not isinstance(msg, (AIMessage, AIMessageChunk)):
-        return msg
-    desc = (step_description or "").strip()
-    sub = (step_subagent or "").strip() if step_subagent else ""
-    if not desc and not sub:
-        return msg
-
-    changed = False
-    modified = deepcopy(msg)
-
-    new_calls: list[Any] = []
-    for tc in getattr(modified, "tool_calls", None) or []:
-        if isinstance(tc, dict):
-            patched, did = _patch_task_tool_call_dict(
-                tc, step_description=desc, step_subagent=sub or None
-            )
-            new_calls.append(patched)
-            changed = changed or did
-        else:
-            new_calls.append(tc)
-    if changed and hasattr(modified, "__dict__"):
-        modified.__dict__["tool_calls"] = new_calls
-
-    new_chunks: list[Any] = []
-    chunk_changed = False
-    for tc in getattr(modified, "tool_call_chunks", None) or []:
-        if isinstance(tc, dict):
-            chunk_tc = dict(tc)
-            if str(chunk_tc.get("name") or "").strip() == "task":
-                inner_args = _chunk_args_dict(chunk_tc)
-                if not _task_kwargs_have_description(inner_args):
-                    merged = dict(inner_args)
-                    if desc:
-                        merged.setdefault("description", desc)
-                    if sub:
-                        merged.setdefault("subagent_type", sub)
-                    import json
-
-                    chunk_tc["args"] = json.dumps(merged, separators=(",", ":"))
-                    chunk_changed = True
-            new_chunks.append(chunk_tc)
-        else:
-            new_chunks.append(tc)
-    if chunk_changed and hasattr(modified, "__dict__"):
-        modified.__dict__["tool_call_chunks"] = new_chunks
-        changed = True
-
-    return modified if changed else msg
-
-
-def _stringify_tool_call_chunk_args_on_message(msg: BaseMessage) -> BaseMessage:
-    """Ensure ``tool_call_chunks[].args`` are JSON strings (LangChain wire invariant)."""
-    from copy import deepcopy
-
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    if not isinstance(msg, (AIMessage, AIMessageChunk)):
-        return msg
-    chunks = getattr(msg, "tool_call_chunks", None) or []
-    if not chunks:
-        return msg
-
-    changed = False
-    new_chunks: list[Any] = []
-    for tc in chunks:
-        if not isinstance(tc, dict):
-            new_chunks.append(tc)
-            continue
-        block = dict(tc)
-        args = block.get("args")
-        if isinstance(args, dict):
-            block["args"] = json.dumps(args, separators=(",", ":"))
-            changed = True
-        new_chunks.append(block)
-    if not changed:
-        return msg
-    modified = deepcopy(msg)
-    if hasattr(modified, "__dict__"):
-        modified.__dict__["tool_call_chunks"] = new_chunks
-    return modified
-
-
-def _rewrite_tool_call_ids_to_unified(
-    msg: BaseMessage,
-    step_id: str,
-    *,
-    task_idx: int | None = None,
-) -> BaseMessage:
-    """Rewrite tool_call_ids in AI message/chunk to unified format.
-
-    IG-416: Transforms provider tool_call_ids like ``functions.task:0`` to
-    ``{step_id}:s:{tool}`` (root) or ``{step_id}:t{idx}:{tool}`` (subgraph).
-
-    Returns the original message if no modifications needed, or a new
-    message object with rewritten IDs.
-    """
-    from copy import deepcopy
-
-    sid = str(step_id).strip()
-    if not sid:
-        return msg
-
-    def _needs_unified(raw_id: str) -> bool:
-        if not raw_id:
-            return False
-        parsed_sid, type_code, parsed_tidx, _ = parse_unified_tool_call_id(raw_id)
-        if parsed_sid == sid and type_code == "s":
-            return False
-        if parsed_sid == sid and type_code == "t" and task_idx is not None:
-            return parsed_tidx != task_idx
-        return True
-
-    needs_rewrite = False
-    seen_ids: set[str] = set()
-
-    if isinstance(msg, AIMessageChunk):
-        for tc in getattr(msg, "tool_call_chunks", None) or []:
-            if isinstance(tc, dict) and "id" in tc:
-                raw_id = str(tc.get("id", ""))
-                if raw_id and raw_id not in seen_ids:
-                    seen_ids.add(raw_id)
-                    if _needs_unified(raw_id):
-                        needs_rewrite = True
-                        break
-        if not needs_rewrite:
-            for tc in getattr(msg, "tool_calls", None) or []:
-                if isinstance(tc, dict) and "id" in tc:
-                    raw_id = str(tc.get("id", ""))
-                    if raw_id and raw_id not in seen_ids:
-                        seen_ids.add(raw_id)
-                        if _needs_unified(raw_id):
-                            needs_rewrite = True
-                            break
-    elif isinstance(msg, AIMessage):
-        for tc in getattr(msg, "tool_calls", None) or []:
-            if isinstance(tc, dict) and "id" in tc:
-                raw_id = str(tc.get("id", ""))
-                if raw_id and raw_id not in seen_ids:
-                    seen_ids.add(raw_id)
-                    if _needs_unified(raw_id):
-                        needs_rewrite = True
-                        break
-
-    if not needs_rewrite:
-        return msg
-
-    modified = deepcopy(msg)
-
-    def _unified(raw_id: str) -> str:
-        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
-        if parsed_sid and type_code in ("s", "t"):
-            return normalize_unified_tool_call_id(raw_id)
-        return _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
-
-    if isinstance(modified, AIMessageChunk):
-        new_chunks = []
-        for tc in getattr(modified, "tool_call_chunks", None) or []:
-            if isinstance(tc, dict):
-                new_tc = dict(tc)
-                raw_id = str(tc.get("id", ""))
-                if raw_id:
-                    new_tc["id"] = _unified(raw_id)
-                new_chunks.append(new_tc)
-        if hasattr(modified, "tool_call_chunks") and new_chunks:
-            if hasattr(modified, "__dict__"):
-                modified.__dict__["tool_call_chunks"] = new_chunks
-
-        new_calls = []
-        for tc in getattr(modified, "tool_calls", None) or []:
-            if isinstance(tc, dict):
-                new_tc = dict(tc)
-                raw_id = str(tc.get("id", ""))
-                if raw_id:
-                    new_tc["id"] = _unified(raw_id)
-                new_calls.append(new_tc)
-        if hasattr(modified, "tool_calls") and new_calls:
-            if hasattr(modified, "__dict__"):
-                modified.__dict__["tool_calls"] = new_calls
-
-    elif isinstance(modified, AIMessage):
-        new_calls = []
-        for tc in getattr(modified, "tool_calls", None) or []:
-            if isinstance(tc, dict):
-                new_tc = dict(tc)
-                raw_id = str(tc.get("id", ""))
-                if raw_id:
-                    new_tc["id"] = _unified(raw_id)
-                new_calls.append(new_tc)
-        if hasattr(modified, "__dict__"):
-            modified.__dict__["tool_calls"] = new_calls
-
-    return modified
-
-
-def _rewrite_tool_message_tool_call_id(
-    msg: BaseMessage,
-    step_id: str,
-    *,
-    task_idx: int | None = None,
-) -> BaseMessage:
-    """Align ``ToolMessage.tool_call_id`` with unified AIMessage ids (IG-416).
-
-    Args:
-        msg: Stream message (typically ``ToolMessage``).
-        step_id: Current execute step id.
-        task_idx: When set, use task-level ``{step_id}:t{idx}:…`` ids (subgraph).
-
-    Returns:
-        Original message when unchanged, or a shallow-copied ``ToolMessage``.
-    """
-    if not isinstance(msg, ToolMessage):
-        return msg
-    sid = str(step_id).strip()
-    if not sid:
-        return msg
-    raw_id = str(getattr(msg, "tool_call_id", "") or "").strip()
-    if not raw_id:
-        return msg
-    parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
-    if parsed_sid and type_code in ("s", "t"):
-        return msg
-    unified = _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
-    return msg.model_copy(update={"tool_call_id": unified})
-
-
-def _rewrite_root_tool_message_tool_call_id(msg: BaseMessage, step_id: str) -> BaseMessage:
-    """Align root-graph ``ToolMessage.tool_call_id`` with unified AIMessage ids."""
-    return _rewrite_tool_message_tool_call_id(msg, step_id, task_idx=None)
-
-
-def _extract_tool_name_from_ai_chunk(msg: BaseMessage, tool_call_id: str) -> str:
-    """Extract tool name for a specific tool_call_id from AI message/chunk.
-
-    Args:
-        msg: AIMessage or AIMessageChunk containing tool call info.
-        tool_call_id: The tool_call_id to extract info for.
-
-    Returns:
-        Tool name string, or empty string if not found.
-    """
-    tool_name: str = ""
-
-    if isinstance(msg, AIMessageChunk):
-        # Check tool_call_chunks first (streaming)
-        for tc in getattr(msg, "tool_call_chunks", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() == tool_call_id:
-                tool_name = str(tc.get("name", "") or "").strip()
-                break
-        # Fallback to tool_calls if not found in chunks
-        if not tool_name:
-            for tc in getattr(msg, "tool_calls", None) or []:
-                if not isinstance(tc, dict):
-                    continue
-                tid = tc.get("id")
-                if isinstance(tid, str) and tid.strip() == tool_call_id:
-                    tool_name = str(tc.get("name", "") or "").strip()
-                    break
-    elif isinstance(msg, AIMessage):
-        for tc in getattr(msg, "tool_calls", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() == tool_call_id:
-                tool_name = str(tc.get("name", "") or "").strip()
-                break
-
-    return tool_name
-
-
-# --- Act-wave finalize resolution (merged from execute_wave_finalize.py) ---
-
-ActWaveAnswerProvenance = Literal["root_assistant_stream", "task_tool_aggregate", "none"]
-
-# Cap for joined delegate text and for root assistant text stored on state (memory bound).
-DELEGATE_FINAL_WAVE_CAP = 120_000
-
-# Char budget for the <LAST_TOOL_RESULT> evidence block used by
-# ``_update_prior_progress`` as a fallback when the assistant produced no
-# prose text. Plan-assess reads this to grade goal progress on concrete
-# tool output rather than only the AI's prose summary.
-LAST_TOOL_RESULT_HEAD_CHARS = 500
-
-
-def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
-    """Return a compact head string for a single AIMessage tool-call (RFC-227).
-
-    Picks the first non-empty argument value (in declaration order), stringifies
-    it on one line, strips, and caps at 120 chars. Returns ``""`` when no usable
-    arg exists. Used by ``_update_prior_progress`` to give ``<PRIOR_PROGRESS>``
-    a concrete handle on what the LLM asked the tool to do (e.g. the command
-    string for ``run_command``, the path for ``read_file``).
-    """
-    args = call.get("args") or {}
-    if not isinstance(args, dict):
-        return ""
-    for value in args.values():
-        if value is None:
-            continue
-        try:
-            text = str(value)
-        except Exception:  # noqa: BLE001
-            continue
-        first_line = text.strip().splitlines()[0] if text.strip() else ""
-        if first_line:
-            return first_line[:120]
-    return ""
-
-
-def _aggregate_tool_calls_from_step_messages(
-    messages: list[BaseMessage],
-) -> list[dict[str, Any]]:
-    """Aggregate tool calls across streamed AI message chunks (RFC-227).
-
-    The executor's stream collector appends raw ``AIMessageChunk`` deltas to
-    ``step_messages`` — each chunk's own ``tool_calls`` is partial: the first
-    chunk for a call carries ``name`` with empty ``args``, subsequent chunks
-    only carry JSON ``args`` deltas under ``tool_call_chunks``. Reading any
-    single chunk's ``.tool_calls`` therefore yields ``name="tool"`` placeholders
-    with empty ``args``.
-
-    This aggregator walks the full message list, groups deltas by tool-call id
-    (falling back to chunk ``index`` when id is missing), concatenates the
-    JSON args string, and resolves to a list of ``{name, args}`` dicts in
-    arrival order. Complete ``tool_calls`` on a fully-formed ``AIMessage``
-    (non-chunk) are honored verbatim and take precedence when present.
-    """
-    import json
-
-    by_key: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
-    # Continuation chunks often omit ``id``; we group them with the prior
-    # chunk that shares the same stream ``index`` (OpenAI streaming pattern).
-    tid_by_index: dict[int, str] = {}
-
-    for msg in messages:
-        # AIMessageChunk: aggregate streaming deltas. Skip Path 2 because
-        # AIMessageChunk.tool_calls is a derived view of this chunk's own
-        # tool_call_chunks (partial info) that would shadow the aggregated state.
-        if isinstance(msg, AIMessageChunk):
-            for tcc in getattr(msg, "tool_call_chunks", None) or ():
-                if not isinstance(tcc, dict):
-                    continue
-                tid_raw = tcc.get("id")
-                idx_raw = tcc.get("index")
-                tid: str
-                if tid_raw:
-                    tid = str(tid_raw).strip()
-                elif idx_raw is not None and idx_raw in tid_by_index:
-                    tid = tid_by_index[idx_raw]
-                else:
-                    tid = f"_idx_{idx_raw}" if idx_raw is not None else f"_pos_{len(order)}"
-                if idx_raw is not None and idx_raw not in tid_by_index:
-                    tid_by_index[idx_raw] = tid
-                if tid not in by_key:
-                    order.append(tid)
-                    by_key[tid] = {"name": "", "args_str": "", "args": None}
-                entry = by_key[tid]
-                if tcc.get("name") and not entry["name"]:
-                    entry["name"] = str(tcc["name"])
-                args_chunk = tcc.get("args")
-                if isinstance(args_chunk, str) and args_chunk:
-                    entry["args_str"] += args_chunk
-            continue
-
-        if not isinstance(msg, AIMessage):
-            continue
-
-        # Plain (non-chunk) AIMessage: fully-formed tool_calls take precedence.
-        for tc in getattr(msg, "tool_calls", None) or ():
-            if not isinstance(tc, dict):
-                continue
-            tid_raw = tc.get("id")
-            tid = str(tid_raw).strip() if tid_raw else f"_full_{len(order)}"
-            if tid not in by_key:
-                order.append(tid)
-                by_key[tid] = {"name": "", "args_str": "", "args": None}
-            entry = by_key[tid]
-            if tc.get("name"):
-                entry["name"] = str(tc["name"])
-            args_val = tc.get("args")
-            if isinstance(args_val, dict) and args_val:
-                entry["args"] = args_val
-
-    out: list[dict[str, Any]] = []
-    for tid in order:
-        entry = by_key[tid]
-        args = entry["args"]
-        if not args:
-            raw = entry["args_str"]
-            if raw:
-                try:
-                    parsed = json.loads(raw)
-                    args = parsed if isinstance(parsed, dict) else {}
-                except ValueError:
-                    args = {}
-            else:
-                args = {}
-        out.append({"name": entry["name"], "args": args})
-    return out
-
-
-def _last_tool_result_block(messages: list[BaseMessage]) -> str:
-    """Return a ``<LAST_TOOL_RESULT>`` evidence block, or ``""`` when none.
-
-    Walks ``messages`` in reverse for the most recent ``ToolMessage`` with
-    non-empty text content and emits a CDATA-wrapped head so plan-assess sees
-    the actual tool output (counts, listings, paths) in the ledger.
-    """
-    from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
-
-    for msg in reversed(messages):
-        if not isinstance(msg, ToolMessage):
-            continue
-        text = extract_text_from_message_content(getattr(msg, "content", None))
-        if not text or not text.strip():
-            continue
-        name = getattr(msg, "name", None) or "tool"
-        head = preview_first(text, LAST_TOOL_RESULT_HEAD_CHARS)
-        return (
-            f'<LAST_TOOL_RESULT name="{name}" bytes="{len(text)}">\n'
-            f"<![CDATA[\n{head}\n]]>\n"
-            f"</LAST_TOOL_RESULT>"
-        )
-    return ""
-
-
-def _outcome_summary_text(outcome: dict[str, Any] | None) -> str:
-    """Normalize ``outcome['output_summary']`` into plain text.
-
-    ``create_output_summary`` returns ``{"first": "...", "last": "..."}``.
-    We should surface non-empty parts, but avoid stringifying empty dict payloads
-    into evidence like ``"{'first': '', 'last': ''}"``.
-    """
-    if not isinstance(outcome, dict):
-        return ""
-    summary = outcome.get("output_summary")
-    if summary is None:
-        return ""
-    if isinstance(summary, str):
-        return summary.strip()
-    if isinstance(summary, dict):
-        first = str(summary.get("first", "") or "").strip()
-        last = str(summary.get("last", "") or "").strip()
-        if first and last:
-            return f"{first}\n...\n{last}"
-        return first or last
-    return ""
-
-
-@dataclass(frozen=True, slots=True)
-class ActWaveFinalizeSnapshot:
-    """Resolved user-visible text for the last Execute wave and how it was obtained."""
-
-    visible_text: str | None
-    provenance: ActWaveAnswerProvenance
-
-
-def compute_act_wave_finalize(
-    *,
-    parallel_multi_step: bool,
-    root_assistant_text: str,
-    delegate_final_text: str | None,
-    wave_text_cap: int = DELEGATE_FINAL_WAVE_CAP,
-) -> ActWaveFinalizeSnapshot:
-    """Compute visible assistant text and provenance for one Execute wave.
-
-    Args:
-        parallel_multi_step: Whether this wave ran multiple parallel steps.
-        root_assistant_text: Pre-aggregated root-graph assistant text (ignored when
-            ``parallel_multi_step`` is True except conceptually empty).
-        delegate_final_text: Joined ``task`` tool return bodies for this wave, if any.
-        wave_text_cap: Maximum stored length for delegate (and enforced consistently upstream).
-
-    Returns:
-        Snapshot with trimmed ``visible_text`` and ``provenance``.
-    """
-    delegate = (delegate_final_text or "").strip()
-    if parallel_multi_step:
-        if delegate:
-            text = delegate[:wave_text_cap] if len(delegate) > wave_text_cap else delegate
-            return ActWaveFinalizeSnapshot(text, "task_tool_aggregate")
-        return ActWaveFinalizeSnapshot(None, "none")
-
-    if delegate:
-        text = delegate[:wave_text_cap] if len(delegate) > wave_text_cap else delegate
-        return ActWaveFinalizeSnapshot(text, "task_tool_aggregate")
-
-    root = root_assistant_text.strip()
-    if root:
-        return ActWaveFinalizeSnapshot(root, "root_assistant_stream")
-    return ActWaveFinalizeSnapshot(None, "none")
-
-
-def provenance_is_task_delegate(snapshot: ActWaveFinalizeSnapshot) -> bool:
-    """True when visible text came from ``task`` tool returns (delegate finals)."""
-    return snapshot.provenance == "task_tool_aggregate"
+    return os.environ.get("SOOTHE_EPHEMERAL_EXECUTE_STREAM", "1").lower() not in (
+        "0",
+        "false",
+        "no",
+    )
 
 
 # --- Helper functions ---
@@ -972,78 +172,6 @@ def _log_dependency_execution_residual(
         len(decision.steps),
         "; ".join(details),
     )
-
-
-@dataclass
-class _ActStreamBudget:
-    """Mutable counters for a single CoreAgent stream (IG-130)."""
-
-    max_subagent_tasks_per_wave: int = 0
-    max_tool_calls_per_step: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP
-    subagent_task_completions: int = 0
-    tool_call_count: int = 0
-    hit_subagent_cap: bool = False
-    hit_tool_budget: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class StepWaveQueued:
-    """Ready steps waiting for a later execute batch (``max_parallel_steps`` cap)."""
-
-    steps: tuple[StepAction, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class StepWaveStart:
-    """Marks the start of a bounded execute batch (``max_parallel_steps`` cap).
-
-    Emitted before a wave runs so UIs can show only actively executing steps as
-    ``running``; overflow ready steps are announced via :class:`StepWaveQueued`.
-    """
-
-    steps: tuple[StepAction, ...]
-
-
-@dataclass(slots=True)
-class _ParallelStepDone:
-    """Sentinel placed on the parallel live-event queue when one step finishes."""
-
-    step_id: str
-    payload: tuple[list[StreamEvent], StepResult, list[BaseMessage], str] | BaseException
-
-
-_TUPLE_LEN = 3
-# ``task`` tool return text cap per invocation before joining (delegate finals).
-_DELEGATE_FINAL_PER_TASK_CAP = 80_000
-
-
-def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
-    """Return the first tool error preview from RFC-211 outcome metadata."""
-    for outcome in outcomes:
-        if outcome.get("has_error"):
-            preview = outcome.get("error_preview")
-            if preview:
-                return str(preview)[:200]
-            tool_name = outcome.get("tool_name") or "tool"
-            return f"{tool_name} failed"
-    return "Tool execution error"
-
-
-# Type for stream events yielded during execution
-StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
-
-_ParallelLiveQueueItem = StreamEvent | _ParallelStepDone
-
-
-def _append_parallel_stream_event(
-    events: list[StreamEvent],
-    event: StreamEvent,
-    live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None,
-) -> None:
-    """Record a stream chunk for the step result and optionally fan out to the TUI queue."""
-    events.append(event)
-    if live_event_queue is not None:
-        live_event_queue.put_nowait(event)
 
 
 class Executor:
@@ -1813,8 +941,6 @@ class Executor:
         """
         from langchain_core.messages import AIMessage
 
-        from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
-
         for i, step in enumerate(steps):
             raw = gather_results[i]
             human_msg = LoopHumanMessage(
@@ -1827,9 +953,8 @@ class Executor:
                 step_id=step.id,
             )
             if isinstance(raw, Exception):
-                err_text = str(raw).strip() or repr(raw)
                 ai_err_msg = LoopAIMessage(
-                    content=f"Step failed: {err_text}",
+                    content=self._finalize_execute_step_ledger_ai_content(""),
                     thread_id=state.thread_id,
                     iteration=state.iteration,
                     phase="execute_step",
@@ -1839,44 +964,27 @@ class Executor:
                 _record_ledger_message(self._context_engine, ai_err_msg, "execute_step")
                 continue
 
-            _events, step_result, step_messages, delegate_final = raw
-            ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
+            # IG-493: unpack _ExecuteStepResult dataclass
+            result: _ExecuteStepResult = raw
+            content = self._resolve_execute_step_ledger_ai_content(
+                step_messages=result.messages,
+                delegate_final=result.delegate_final,
+                output=result.output,
+            )
+            content = self._finalize_execute_step_ledger_ai_content(content)
+
+            # IG-493: Debug logging for step execution ledger
+            logger.debug(
+                "[Ledger] step=%s success=%s input='%s' output='%s' ai_text_len=%d",
+                step.id,
+                result.step_result.success if result.step_result else False,
+                preview_first(step.description, 80),
+                preview_first(result.output or "", 80),
+                len(content),
+            )
+
+            ai_messages = [m for m in result.messages if isinstance(m, AIMessage)]
             final_ai = ai_messages[-1] if ai_messages else None
-
-            if step_result.success:
-                content = ""
-                if final_ai is not None:
-                    ledger_body = self._ledger_execute_ai_content(
-                        messages=step_messages,
-                        final_ai_msg=final_ai,
-                        total_steps=1,
-                    )
-                    content = (ledger_body or "").strip()
-                    if not content:
-                        content = extract_text_from_message_content(
-                            getattr(final_ai, "content", None)
-                        ).strip()
-                if not content:
-                    content = _outcome_summary_text(step_result.outcome)
-                df = (delegate_final or "").strip()
-                if not content and df:
-                    content = (
-                        df if len(df) <= DELEGATE_FINAL_WAVE_CAP else df[:DELEGATE_FINAL_WAVE_CAP]
-                    )
-                if not content:
-                    content = "Step completed with no AI text captured"
-            else:
-                content = (step_result.error or "").strip() or "Step failed"
-                if final_ai is not None:
-                    ledger_body = self._ledger_execute_ai_content(
-                        messages=step_messages,
-                        final_ai_msg=final_ai,
-                        total_steps=1,
-                    )
-                    lb = (ledger_body or "").strip()
-                    if lb:
-                        content = lb
-
             meta = getattr(final_ai, "response_metadata", {}) if final_ai is not None else {}
             ai_msg = LoopAIMessage(
                 content=content,
@@ -1891,6 +999,56 @@ class Executor:
 
         # RFC-227: refresh per-wave digest for plan-assess / plan-generate grounding.
         self._update_prior_progress(state, steps, gather_results)
+
+    def _extract_final_assistant_text_from_step_messages(
+        self, step_messages: list[BaseMessage]
+    ) -> str:
+        """Return final assistant text from streamed AI messages/chunks only."""
+        from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
+
+        ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
+        ai_chunks = [m for m in step_messages if isinstance(m, AIMessageChunk)]
+        final_ai = ai_messages[-1] if ai_messages else None
+        content = ""
+        if ai_chunks:
+            content = self._assemble_assistant_text_from_stream_messages(step_messages).strip()
+        if not content and final_ai is not None:
+            content = extract_text_from_message_content(getattr(final_ai, "content", None)).strip()
+        return content
+
+    def _resolve_execute_step_ledger_ai_content(
+        self,
+        *,
+        step_messages: list[BaseMessage],
+        delegate_final: str | None,
+        output: str | None = None,
+    ) -> str:
+        """Resolve execute-step ledger AI content: final assistant response.
+
+        IG-493: For step execution, the ledger records only:
+        1. CoreAgent input message (HumanMessage)
+        2. Final assistant response (AIMessage/AIMessageChunk text, or accumulated output)
+
+        Tool outputs (delegate_final, ToolMessage content) are never recorded to ledger.
+        The final assistant response is the user-facing synthesis of all tool results.
+
+        Args:
+            step_messages: Messages collected from stream (AIMessage, AIMessageChunk, ToolMessage).
+            delegate_final: Ignored per IG-493 (raw task tool output).
+            output: Accumulated text chunks from stream (fallback when messages have no AI text).
+        """
+        _ = delegate_final  # Ignored per IG-493
+        ai_text = self._extract_final_assistant_text_from_step_messages(step_messages)
+        if ai_text:
+            return ai_text
+        # Fallback: use accumulated output when messages have no AI text
+        # (e.g., synthesis came as dict chunks not AIMessage objects)
+        return (output or "").strip()
+
+    @staticmethod
+    def _finalize_execute_step_ledger_ai_content(content: str) -> str:
+        """Finalize execute-step ledger AI content without synthetic fallbacks."""
+        return (content or "").strip()
 
     _PROGRESS_HINT_KEYWORDS = ("done", "completed", "total", "count", "finished")
     _PROGRESS_HINT_GLYPHS = ("|",)
@@ -1934,8 +1092,8 @@ class Executor:
             if raw is None or isinstance(raw, Exception):
                 steps_failed += 1
                 continue
-            _events, step_result, step_messages, delegate_final = raw
-            if step_result.success:
+            result: _ExecuteStepResult = raw
+            if result.step_result and result.step_result.success:
                 steps_completed += 1
             else:
                 steps_failed += 1
@@ -1943,7 +1101,7 @@ class Executor:
             # Tool call heads: aggregate per-call across streamed chunks
             # (per-chunk `tool_calls` is partial; real name/args live across
             # `tool_call_chunks` deltas).
-            for call in _aggregate_tool_calls_from_step_messages(step_messages):
+            for call in _aggregate_tool_calls_from_step_messages(result.messages):
                 if len(tool_calls) >= 8:
                     break
                 name = (call.get("name") or "tool").strip()[:64]
@@ -1951,7 +1109,7 @@ class Executor:
                 tool_calls.append(ToolCallHead(name=name, head=head[:120]))
 
             # Evidence excerpt: assistant prose, then tool evidence fallback.
-            ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
+            ai_messages = [m for m in result.messages if isinstance(m, AIMessage)]
             final_ai = ai_messages[-1] if ai_messages else None
             excerpt_src = ""
             if final_ai is not None:
@@ -1964,14 +1122,14 @@ class Executor:
                 ).strip()
                 if not excerpt_src:
                     excerpt_src = self._assemble_assistant_text_from_stream_messages(
-                        step_messages
+                        result.messages
                     ).strip()
             if not excerpt_src:
-                excerpt_src = _last_tool_result_block(step_messages)
-            if not excerpt_src:
-                excerpt_src = _outcome_summary_text(step_result.outcome)
-            if not excerpt_src and delegate_final:
-                excerpt_src = (delegate_final or "").strip()
+                excerpt_src = _last_tool_result_block(result.messages)
+            if not excerpt_src and result.step_result:
+                excerpt_src = _outcome_summary_text(result.step_result.outcome)
+            if not excerpt_src and result.delegate_final:
+                excerpt_src = (result.delegate_final or "").strip()
             if not excerpt_src:
                 continue
             excerpt = excerpt_src[:200]
@@ -2129,15 +1287,17 @@ class Executor:
                         all_step_results.append(step_result)
                         yield step_result
                     else:
-                        _events, step_result, step_messages, delegate_final = result
+                        # IG-493: result is _ExecuteStepResult dataclass
+                        res: _ExecuteStepResult = result
                         if n_steps == 1:
-                            single_wave_messages = step_messages
-                            wave_delegate_final = delegate_final
-                        df = (delegate_final or "").strip()
+                            single_wave_messages = res.messages
+                            wave_delegate_final = res.delegate_final
+                        df = (res.delegate_final or "").strip()
                         if df:
                             wave_delegate_parts.append(df)
-                        all_step_results.append(step_result)
-                        yield step_result
+                        if res.step_result:
+                            all_step_results.append(res.step_result)
+                            yield res.step_result
                 else:
                     yield item
         except asyncio.CancelledError:
@@ -2512,9 +1672,9 @@ class Executor:
                     tool_call_count,
                 )
 
-            return (
-                events,
-                StepResult(
+            return _ExecuteStepResult(
+                events=events,
+                step_result=StepResult(
                     step_id=step.id,
                     success=step_success,
                     outcome=primary_outcome,  # RFC-211: outcome metadata
@@ -2526,8 +1686,9 @@ class Executor:
                     hit_subagent_cap=budget.hit_subagent_cap,
                     hit_tool_budget=budget.hit_tool_budget,
                 ),
-                messages,
-                delegate_final,
+                messages=messages,
+                delegate_final=delegate_final,
+                output=output,  # IG-493: accumulated text for ledger fallback
             )
 
         except asyncio.CancelledError:
@@ -2559,9 +1720,9 @@ class Executor:
 
             error_msg = self._extract_error_message(e, "Step execution failed")
 
-            return (
-                events,
-                StepResult(
+            return _ExecuteStepResult(
+                events=events,
+                step_result=StepResult(
                     step_id=step.id,
                     success=False,
                     outcome={"type": "error", "error": error_msg},  # RFC-211: error outcome
@@ -2573,8 +1734,9 @@ class Executor:
                     hit_subagent_cap=False,
                     hit_tool_budget=False,
                 ),
-                [],
-                "",
+                messages=[],
+                delegate_final="",
+                output="",  # IG-493: empty output for error case
             )
 
     async def _stream_and_collect(
@@ -2716,6 +1878,14 @@ class Executor:
                         tool_update_events = filter_redundant_stream_tool_updates(
                             wire_updates_from_ai_message(enriched_msg)
                         )
+                        # IG-493: Collect namespaced AIMessages for ledger recording.
+                        # iter_messages_for_act_aggregation filters out subgraph messages,
+                        # but the final synthesis from task subagent should be captured.
+                        if _ns_chunk and isinstance(msg0, (AIMessage, AIMessageChunk)):
+                            messages.append(rewritten_msg)
+                            t = extract_text_from_message_content(rewritten_msg.content)
+                            if t:
+                                chunks.append(t)
                     elif isinstance(msg0, ToolMessage):
                         modified_msg, tool_update_events = tool_args.promote_tool_message(
                             msg0,
@@ -2777,7 +1947,9 @@ class Executor:
 
                     tool_meta_cfg = None
                     if self._config and hasattr(self._config, "optimization"):
-                        tool_meta_cfg = self._config.optimization.tool_result_registry
+                        opt = self._config.optimization
+                        if hasattr(opt, "tool_result_registry"):
+                            tool_meta_cfg = opt.tool_result_registry
                     outcome = generate_outcome_metadata(
                         tool_name,
                         content,
@@ -3048,30 +2220,15 @@ class Executor:
         final_ai_msg: BaseMessage,
         total_steps: int,
     ) -> str:
-        """Body for ``LoopAIMessage`` ledger entries (RFC-214, IG-373).
+        """Backward-compatible wrapper for execute-step assistant extraction.
 
-        The stream collector may end with an ``AIMessage`` whose ``content`` is empty while
-        assistant-visible text lives in earlier ``AIMessageChunk`` entries — same situation as
-        ``_assemble_assistant_text_from_stream_messages`` / Act-wave finalize.
-
-        Tool-result evidence is NOT injected into the ledger message content; it is
-        provided to plan-assess separately via ``PriorProgressDigest.evidence_excerpts``.
-
-        Args:
-            messages: Full message list from ``_stream_and_collect`` (AI + chunk entries).
-            final_ai_msg: AIMessage chosen for this step's ledger entry.
-            total_steps: Number of steps in this execute wave.
-
-        Returns:
-            Non-empty string when assistant text exists; otherwise ``""``.
+        Ledger write path now uses modular helpers:
+        `_resolve_execute_step_ledger_ai_content()` +
+        `_finalize_execute_step_ledger_ai_content()`.
+        This wrapper remains for tests that assert chunk/final-AI extraction behavior.
         """
-        from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
-
-        direct = extract_text_from_message_content(getattr(final_ai_msg, "content", None)).strip()
-        if not direct and total_steps == 1:
-            direct = self._assemble_assistant_text_from_stream_messages(messages).strip()
-
-        return direct
+        _ = final_ai_msg, total_steps
+        return self._extract_final_assistant_text_from_step_messages(messages)
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:
         """Extract meaningful error message from exception.

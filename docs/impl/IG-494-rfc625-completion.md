@@ -1,7 +1,7 @@
-# IG-625: RFC-625 Completion — LLM Reasoners, TUI, Config
+# IG-494: RFC-625 Completion — LLM Reasoners, TUI, Config
 
 **RFC**: 625 — AutopilotMonitor and ContextEngine Unification
-**IG**: 625-completion
+**IG**: 494-rfc625-completion
 **Status**: Complete
 **Created**: 2026-06-15
 **Owner**: Claude

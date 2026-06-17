@@ -11,7 +11,7 @@ import pytest
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.engine.executor import Executor, StreamEvent
+from soothe.foundation.loop.engine.executor import Executor, StreamEvent, _ExecuteStepResult
 from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
@@ -35,7 +35,7 @@ async def test_execute_parallel_yields_stream_events_before_all_steps_finish() -
         *,
         live_event_queue: asyncio.Queue[Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[StreamEvent], StepResult, list, str]:
+    ) -> _ExecuteStepResult:
         del thread_id, workspace, kwargs
         if step.id == "slow":
             await asyncio.sleep(0.25)
@@ -52,7 +52,7 @@ async def test_execute_parallel_yields_stream_events_before_all_steps_finish() -
             thread_id="t-par",
             tool_call_count=1,
         )
-        return ([event], result, [], "")
+        return _ExecuteStepResult(events=[event], step_result=result)
 
     executor = Executor(MagicMock(), max_parallel_steps=4, context_engine=_make_ce())
     executor._execute_step_collecting_events = fake_collect  # type: ignore[method-assign]
@@ -99,7 +99,7 @@ async def test_execute_parallel_ledger_uses_step_id_when_completion_order_differ
         *,
         live_event_queue: asyncio.Queue[Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[StreamEvent], StepResult, list, str]:
+    ) -> _ExecuteStepResult:
         del thread_id, workspace, live_event_queue, kwargs
         if step.id == "first":
             await asyncio.sleep(0.2)
@@ -114,7 +114,7 @@ async def test_execute_parallel_ledger_uses_step_id_when_completion_order_differ
             thread_id="t-order",
             tool_call_count=0,
         )
-        return ([], result, [], "")
+        return _ExecuteStepResult(step_result=result)
 
     executor = Executor(MagicMock(), max_parallel_steps=4, context_engine=_make_ce())
     executor._execute_step_collecting_events = fake_collect  # type: ignore[method-assign]

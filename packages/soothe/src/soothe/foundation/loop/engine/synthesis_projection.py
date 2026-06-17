@@ -221,7 +221,6 @@ __all__ = [
     "SynthesisUserContext",
     "build_synthesis_human_payload",
     "build_synthesis_messages",
-    "flatten_execute_human_content",
     "normalize_user_query",
     "project_synthesis_user_context",
     "render_synthesis_system_prompt",
