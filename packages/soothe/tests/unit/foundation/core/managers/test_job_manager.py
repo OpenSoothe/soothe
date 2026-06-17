@@ -7,7 +7,7 @@ import pytest
 
 from soothe.foundation.context.models import GoalNode
 from soothe.foundation.core.entities import Job, JobState
-from soothe.foundation.core.managers.job_manager import JobManager
+from soothe.foundation.core.managers import JobManager
 
 
 @pytest.fixture
