@@ -59,11 +59,18 @@ class SQLiteVecStore:
     Falls back to Python-side similarity computation if sqlite-vec
     virtual tables are unavailable.
 
+    Supports multiple concurrent loops via:
+    - WAL mode for concurrent reads with single writer
+    - Reader pool for parallel reads
+    - Writer lock for serialized writes
+    - asyncio.to_thread for non-blocking operations
+
     Args:
         collection: Collection name (becomes table name prefix).
         db_path: Path to SQLite database. Defaults to $SOOTHE_HOME/vector.db.
         vector_size: Dimension of vectors (default: 1536).
         distance: Distance metric (cosine, l2, ip).
+        reader_pool_size: Number of reader connections for concurrent reads.
     """
 
     def __init__(
@@ -72,6 +79,7 @@ class SQLiteVecStore:
         db_path: str | None = None,
         vector_size: int = 1536,
         distance: str = "cosine",
+        reader_pool_size: int = 8,
     ) -> None:
         """Initialize SQLiteVecStore.
 
@@ -80,59 +88,127 @@ class SQLiteVecStore:
             db_path: Path to SQLite database file. Defaults to $SOOTHE_HOME/vector.db.
             vector_size: Dimension of vectors (default: 1536).
             distance: Distance metric (cosine, l2, ip).
+            reader_pool_size: Number of reader connections for concurrent reads.
         """
         self._collection = collection
         self._db_path = db_path or str(Path(SOOTHE_HOME) / "vector.db")
         self._vector_size = vector_size
         self._distance = distance
-        self._conn: sqlite3.Connection | None = None
+        self._reader_pool_size = reader_pool_size
+
+        # Writer connection (single writer for consistency)
+        self._writer_conn: sqlite3.Connection | None = None
+
+        # Reader pool (multiple readers for concurrent reads)
+        self._reader_pool: list[sqlite3.Connection] = []
+        self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
+
         self._lock = asyncio.Lock()
         self._thread_lock = threading.Lock()
+        self._writer_lock = asyncio.Lock()
         self._has_vec_ext = False
+        self._has_vec0 = False
 
-    def _ensure_connection(self) -> sqlite3.Connection:
-        """Lazy connection initialization.
+    async def _ensure_writer_connection(self) -> sqlite3.Connection:
+        """Lazy writer connection initialization with WAL mode.
 
         Returns:
-            Active SQLite connection with vec extension loaded.
+            Active SQLite writer connection.
         """
-        if self._conn is not None:
-            return self._conn
+        if self._writer_conn is not None:
+            return self._writer_conn
 
-        with self._thread_lock:
-            if self._conn is not None:
-                return self._conn
+        async with self._lock:
+            if self._writer_conn is not None:
+                return self._writer_conn
 
-            db_path = Path(self._db_path)
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+            # Initialize writer in thread pool (sync operation)
+            await asyncio.to_thread(self._init_writer_connection)
 
-            self._conn = sqlite3.connect(
-                str(db_path),
-                check_same_thread=False,
-                timeout=30,
+            return self._writer_conn
+
+    def _init_writer_connection(self) -> None:
+        """Sync writer initialization executed in thread pool."""
+        db_path = Path(self._db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._writer_conn = sqlite3.connect(
+            str(db_path),
+            check_same_thread=False,
+            timeout=30,
+        )
+        self._writer_conn.execute("PRAGMA journal_mode=WAL")
+        self._writer_conn.execute("PRAGMA foreign_keys=ON")
+        self._writer_conn.row_factory = sqlite3.Row
+
+        self._load_vec_extension(self._writer_conn)
+
+        # Create table on writer connection
+        self._create_table_sync(self._writer_conn)
+
+        logger.info(
+            "SQLite vector store writer initialized at %s (collection=%s, has_vec_ext=%s)",
+            self._db_path,
+            self._collection,
+            self._has_vec_ext,
+        )
+
+    async def _get_reader_connection(self) -> sqlite3.Connection:
+        """Get reader connection from pool.
+
+        Uses semaphore to limit concurrent reads to pool size.
+
+        Returns:
+            Reader connection from pool.
+        """
+        async with self._lock:
+            if not self._reader_pool:
+                # Initialize reader pool
+                await asyncio.to_thread(self._init_reader_pool)
+
+            # Return connection from pool (or create new if pool empty)
+            return (
+                self._reader_pool.pop() if self._reader_pool else await self._create_reader_conn()
             )
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.row_factory = sqlite3.Row
 
-            self._load_vec_extension()
-            logger.info(
-                "SQLite vector store initialized at %s (collection=%s, has_vec_ext=%s)",
-                self._db_path,
-                self._collection,
-                self._has_vec_ext,
-            )
-            return self._conn
+    def _init_reader_pool(self) -> None:
+        """Sync reader pool initialization executed in thread pool."""
+        # Ensure writer exists first (creates schema)
+        if self._writer_conn is None:
+            self._init_writer_connection()
 
-    def _load_vec_extension(self) -> None:
-        """Load sqlite-vec extension."""
-        if self._conn is None:
-            return
+        for i in range(self._reader_pool_size):
+            conn = self._create_connection_sync()
+            self._reader_pool.append(conn)
+
+        logger.info(
+            "SQLite vector reader pool initialized: size=%d collection=%s",
+            self._reader_pool_size,
+            self._collection,
+        )
+
+    async def _create_reader_conn(self) -> sqlite3.Connection:
+        """Create new reader connection if pool empty."""
+        return await asyncio.to_thread(self._create_connection_sync)
+
+    def _create_connection_sync(self) -> sqlite3.Connection:
+        """Sync connection creation with WAL mode."""
+        db_path = Path(self._db_path)
+        conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.row_factory = sqlite3.Row
+        self._load_vec_extension(conn)
+        return conn
+
+    def _load_vec_extension(self, conn: sqlite3.Connection) -> None:
+        """Load sqlite-vec extension on a connection."""
         try:
             import sqlite_vec
 
-            self._conn.enable_load_extension(enable=True)
-            self._conn.load_extension(sqlite_vec.loadable_path())
-            self._conn.enable_load_extension(enable=False)
+            conn.enable_load_extension(enable=True)
+            conn.load_extension(sqlite_vec.loadable_path())
+            conn.enable_load_extension(enable=False)
             self._has_vec_ext = True
 
             # sqlite-vec v0.1.x provides SQL functions (vec_distance_cosine, etc.)
@@ -150,6 +226,11 @@ class SQLiteVecStore:
         except Exception as e:
             logger.warning("Failed to load sqlite-vec extension: %s", e)
             self._has_vec_ext = False
+
+    def _create_table_sync(self, conn: sqlite3.Connection) -> None:
+        """Create vector table if it does not exist (sync)."""
+        conn.execute(self._create_table_sql())
+        conn.commit()
 
     def _table_name(self) -> str:
         """Get the table name for this collection."""
@@ -183,12 +264,14 @@ class SQLiteVecStore:
         self._vector_size = vector_size
         self._distance = distance
 
-        def _create() -> None:
-            conn = self._ensure_connection()
-            conn.execute(self._create_table_sql())
-            conn.commit()
+        async with self._writer_lock:
+            conn = await self._ensure_writer_connection()
 
-        await asyncio.to_thread(_create)
+            def _create() -> None:
+                conn.execute(self._create_table_sql())
+                conn.commit()
+
+            await asyncio.to_thread(_create)
 
     async def insert(
         self,
@@ -206,20 +289,19 @@ class SQLiteVecStore:
         payloads = payloads or [{}] * len(vectors)
         ids = ids or [str(uuid.uuid4()) for _ in vectors]
 
-        async with self._lock:
-            await self.create_collection(self._vector_size, self._distance)
+        async with self._writer_lock:
+            await self._ensure_writer_connection()
 
             def _insert() -> None:
-                conn = self._ensure_connection()
                 table = self._table_name()
                 for vid, vec, payload in zip(ids, vectors, payloads, strict=False):
                     packed = _pack_vector(vec)
                     payload_json = json.dumps(payload)
-                    conn.execute(
+                    self._writer_conn.execute(
                         f"INSERT OR REPLACE INTO {table} (id, embedding, vector_size, payload) VALUES (?, ?, ?, ?)",
                         (vid, packed, len(vec), payload_json),
                     )
-                conn.commit()
+                self._writer_conn.commit()
 
             await asyncio.to_thread(_insert)
 
@@ -241,36 +323,48 @@ class SQLiteVecStore:
         Returns:
             Records ordered by descending similarity.
         """
+        # Ensure schema exists before reader queries
+        await self._ensure_writer_connection()
 
-        def _search() -> list[VectorRecord]:
-            conn = self._ensure_connection()
-            table = self._table_name()
-            packed = _pack_vector(vector)
+        # Use reader connection from pool
+        async with self._pool_semaphore:
+            conn = await self._get_reader_connection()
 
-            # Try SQL distance function first (sqlite-vec v0.1.x)
-            try:
-                rows = conn.execute(
-                    f"""
-                    SELECT id, payload, vec_distance_cosine(embedding, ?) as dist
-                    FROM {table}
-                    ORDER BY dist ASC
-                    LIMIT ?
-                    """,
-                    (packed, limit),
-                ).fetchall()
-            except sqlite3.OperationalError:
-                return self._brute_force_search(table, vector, limit, filters)
+            def _search_sync() -> list[VectorRecord]:
+                table = self._table_name()
+                packed = _pack_vector(vector)
 
-            results = []
-            for row in rows:
-                payload = json.loads(row["payload"]) if row["payload"] else {}
-                if filters and not self._match_filters(payload, filters):
-                    continue
-                score = 1.0 - row["dist"]
-                results.append(VectorRecord(id=row["id"], payload=payload, score=score))
+                # Try SQL distance function first (sqlite-vec v0.1.x)
+                try:
+                    rows = conn.execute(
+                        f"""
+                        SELECT id, payload, vec_distance_cosine(embedding, ?) as dist
+                        FROM {table}
+                        ORDER BY dist ASC
+                        LIMIT ?
+                        """,
+                        (packed, limit),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return self._brute_force_search(conn, table, vector, limit, filters)
+
+                results = []
+                for row in rows:
+                    payload = json.loads(row["payload"]) if row["payload"] else {}
+                    if filters and not self._match_filters(payload, filters):
+                        continue
+                    score = 1.0 - row["dist"]
+                    results.append(VectorRecord(id=row["id"], payload=payload, score=score))
+                return results
+
+            # Execute sync search in thread pool
+            results = await asyncio.to_thread(_search_sync)
+
+            # Return connection to pool
+            async with self._lock:
+                self._reader_pool.append(conn)
+
             return results
-
-        return await asyncio.to_thread(_search)
 
     async def delete(self, record_id: str) -> None:
         """Delete a record by ID.
@@ -278,14 +372,15 @@ class SQLiteVecStore:
         Args:
             record_id: The record to delete.
         """
+        async with self._writer_lock:
+            await self._ensure_writer_connection()
 
-        def _delete() -> None:
-            conn = self._ensure_connection()
-            table = self._table_name()
-            conn.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
-            conn.commit()
+            def _delete() -> None:
+                table = self._table_name()
+                self._writer_conn.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
+                self._writer_conn.commit()
 
-        await asyncio.to_thread(_delete)
+            await asyncio.to_thread(_delete)
 
     async def update(
         self,
@@ -305,17 +400,18 @@ class SQLiteVecStore:
             payloads = [payload] if payload is not None else [{}]
             await self.insert([vector], payloads, [record_id])
         elif payload is not None:
+            async with self._writer_lock:
+                await self._ensure_writer_connection()
 
-            def _update_payload() -> None:
-                conn = self._ensure_connection()
-                table = self._table_name()
-                conn.execute(
-                    f"UPDATE {table} SET payload = ? WHERE id = ?",
-                    (json.dumps(payload), record_id),
-                )
-                conn.commit()
+                def _update_payload() -> None:
+                    table = self._table_name()
+                    self._writer_conn.execute(
+                        f"UPDATE {table} SET payload = ? WHERE id = ?",
+                        (json.dumps(payload), record_id),
+                    )
+                    self._writer_conn.commit()
 
-            await asyncio.to_thread(_update_payload)
+                await asyncio.to_thread(_update_payload)
 
     async def get(self, record_id: str) -> VectorRecord | None:
         """Retrieve a single record by ID.
@@ -326,20 +422,30 @@ class SQLiteVecStore:
         Returns:
             The record, or None if not found.
         """
+        # Ensure schema exists before reader queries
+        await self._ensure_writer_connection()
 
-        def _get() -> VectorRecord | None:
-            conn = self._ensure_connection()
-            table = self._table_name()
-            row = conn.execute(
-                f"SELECT id, embedding, payload FROM {table} WHERE id = ?",
-                (record_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            payload = json.loads(row["payload"]) if row["payload"] else {}
-            return VectorRecord(id=row["id"], payload=payload)
+        async with self._pool_semaphore:
+            conn = await self._get_reader_connection()
 
-        return await asyncio.to_thread(_get)
+            def _get_sync() -> VectorRecord | None:
+                table = self._table_name()
+                row = conn.execute(
+                    f"SELECT id, embedding, payload FROM {table} WHERE id = ?",
+                    (record_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                payload = json.loads(row["payload"]) if row["payload"] else {}
+                return VectorRecord(id=row["id"], payload=payload)
+
+            result = await asyncio.to_thread(_get_sync)
+
+            # Return connection to pool
+            async with self._lock:
+                self._reader_pool.append(conn)
+
+            return result
 
     async def list_records(
         self,
@@ -355,68 +461,97 @@ class SQLiteVecStore:
         Returns:
             Matching records.
         """
+        # Ensure schema exists before reader queries
+        await self._ensure_writer_connection()
 
-        def _list() -> list[VectorRecord]:
-            conn = self._ensure_connection()
-            table = self._table_name()
-            limit_clause = f" LIMIT {limit}" if limit else ""
-            try:
-                rows = conn.execute(
-                    f"SELECT id, payload FROM {table}{limit_clause}",
-                ).fetchall()
-            except sqlite3.OperationalError:
-                # Table doesn't exist (e.g. after delete_collection)
-                return []
+        async with self._pool_semaphore:
+            conn = await self._get_reader_connection()
 
-            results = []
-            for row in rows:
-                payload = json.loads(row["payload"]) if row["payload"] else {}
-                if filters and not self._match_filters(payload, filters):
-                    continue
-                results.append(VectorRecord(id=row["id"], payload=payload))
+            def _list_sync() -> list[VectorRecord]:
+                table = self._table_name()
+                limit_clause = f" LIMIT {limit}" if limit else ""
+                try:
+                    rows = conn.execute(
+                        f"SELECT id, payload FROM {table}{limit_clause}",
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    # Table doesn't exist (e.g. after delete_collection)
+                    return []
+
+                results = []
+                for row in rows:
+                    payload = json.loads(row["payload"]) if row["payload"] else {}
+                    if filters and not self._match_filters(payload, filters):
+                        continue
+                    results.append(VectorRecord(id=row["id"], payload=payload))
+                return results
+
+            results = await asyncio.to_thread(_list_sync)
+
+            # Return connection to pool
+            async with self._lock:
+                self._reader_pool.append(conn)
+
             return results
-
-        return await asyncio.to_thread(_list)
 
     async def delete_collection(self) -> None:
         """Delete the entire collection and its data."""
+        async with self._writer_lock:
+            await self._ensure_writer_connection()
 
-        def _drop() -> None:
-            conn = self._ensure_connection()
-            table = self._table_name()
-            conn.execute(f"DROP TABLE IF EXISTS {table}")
-            conn.commit()
+            def _drop() -> None:
+                table = self._table_name()
+                self._writer_conn.execute(f"DROP TABLE IF EXISTS {table}")
+                self._writer_conn.commit()
 
-        await asyncio.to_thread(_drop)
+            await asyncio.to_thread(_drop)
 
     async def reset(self) -> None:
         """Clear all records from the collection without deleting it."""
+        async with self._writer_lock:
+            await self._ensure_writer_connection()
 
-        def _reset() -> None:
-            conn = self._ensure_connection()
-            table = self._table_name()
-            conn.execute(f"DELETE FROM {table}")
-            conn.commit()
+            def _reset() -> None:
+                table = self._table_name()
+                self._writer_conn.execute(f"DELETE FROM {table}")
+                self._writer_conn.commit()
 
-        await asyncio.to_thread(_reset)
+            await asyncio.to_thread(_reset)
 
     async def close(self) -> None:
         """Close connections and release resources."""
-        if self._conn is not None:
-            with self._thread_lock:
-                if self._conn is not None:
-                    with contextlib.suppress(Exception):
-                        self._conn.commit()
-                    self._conn.close()
-                    self._conn = None
-                    logger.info("SQLite vector store closed")
+        async with self._writer_lock:
+            async with self._lock:
+                # Close writer connection
+                if self._writer_conn is not None:
+                    await asyncio.to_thread(self._close_conn_sync, self._writer_conn)
+                    self._writer_conn = None
+
+                # Close reader pool
+                for conn in self._reader_pool:
+                    await asyncio.to_thread(self._close_conn_sync, conn)
+                self._reader_pool.clear()
+
+                logger.info("SQLite vector store closed (collection=%s)", self._collection)
+
+    def _close_conn_sync(self, conn: sqlite3.Connection) -> None:
+        """Sync connection close executed in thread pool."""
+        with contextlib.suppress(Exception):
+            conn.commit()
+        conn.close()
 
     def _brute_force_search(
-        self, table: str, vector: list[float], limit: int, filters: dict[str, Any] | None
+        self,
+        conn: sqlite3.Connection,
+        table: str,
+        vector: list[float],
+        limit: int,
+        filters: dict[str, Any] | None,
     ) -> list[VectorRecord]:
         """Brute-force vector search with Python-side similarity computation.
 
         Args:
+            conn: Database connection to use.
             table: Table name to search.
             vector: Query vector.
             limit: Maximum results.
@@ -425,7 +560,6 @@ class SQLiteVecStore:
         Returns:
             Records sorted by similarity.
         """
-        conn = self._ensure_connection()
         rows = conn.execute(
             f"SELECT id, embedding, vector_size, payload FROM {table} LIMIT 1000",
         ).fetchall()

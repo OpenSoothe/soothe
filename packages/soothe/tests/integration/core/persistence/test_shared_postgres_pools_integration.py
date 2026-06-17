@@ -35,18 +35,42 @@ def _dsn_with_connect_timeout(dsn: str, seconds: int = 2) -> str:
 
 def _postgres_integration_config() -> SootheConfig:
     base = os.getenv("SOOTHE_TEST_POSTGRES_BASE_DSN", _DEFAULT_BASE_DSN).rstrip("/")
-    # Configure router based on available credentials (order: Anthropic, Dashscope, OpenAI)
+    # Configure router and providers based on available credentials (order: Anthropic, Dashscope, OpenAI)
+    providers = []
     if os.getenv("ANTHROPIC_API_KEY"):
         # Anthropic doesn't support embeddings, disable memory for this test
+        providers.append(
+            {
+                "name": "anthropic",
+                "provider_type": "anthropic",
+                "api_key": "${ANTHROPIC_API_KEY}",
+            }
+        )
         router_config = {
             "default": "anthropic:claude-sonnet-4-5",
             "fast": "anthropic:claude-haiku-3-5",
         }
         memory_config = {"enabled": False}
     elif os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL"):
+        # coding-plan uses OpenAI-compatible API, must register provider with provider_type=openai
+        providers.append(
+            {
+                "name": "coding-plan",
+                "provider_type": "openai",
+                "api_base_url": "${DASHSCOPE_CP_BASE_URL}",
+                "api_key": "${DASHSCOPE_CP_API_KEY}",
+            }
+        )
         router_config = {"default": "coding-plan:kimi-k2.5", "fast": "coding-plan:kimi-k2.5"}
         memory_config = {"enabled": False}
     elif os.getenv("OPENAI_API_KEY"):
+        providers.append(
+            {
+                "name": "openai",
+                "provider_type": "openai",
+                "api_key": "${OPENAI_API_KEY}",
+            }
+        )
         router_config = {"default": "openai:gpt-4o-mini", "fast": "openai:gpt-4o-mini"}
         memory_config = {"enabled": False}
     else:
@@ -63,6 +87,7 @@ def _postgres_integration_config() -> SootheConfig:
             "postgres_pool_max_lifetime_seconds": 300,
             "postgres_pool_acquire_timeout_seconds": 5,
         },
+        providers=providers,
         router=router_config,
         agent={"protocols": {"memory": memory_config}},
     )

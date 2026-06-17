@@ -513,27 +513,41 @@ update:
 # ============================================================
 # PERSISTENCE & STORAGE
 # ============================================================
+# SQLite backend is the default (no external database required).
+# PostgreSQL is optional for production deployments with high concurrency.
 persistence:
-  postgres_base_dsn: null
+  # Backend selection: 'sqlite' (default) or 'postgresql'
+  default_backend: sqlite
+
+  # SQLite paths (default to $SOOTHE_DATA_DIR if null)
+  metadata_sqlite_path: null  # $SOOTHE_DATA_DIR/metadata.db
+  checkpoint_sqlite_path: null  # $SOOTHE_DATA_DIR/soothe_checkpoints.db
+
+  # SQLite concurrency settings for multiple loop support
+  sqlite_reader_pool_size: 8  # Reader connections for concurrent reads (1-32)
+
+  # PostgreSQL options (only used when default_backend='postgresql')
+  postgres_base_dsn: null  # e.g., "postgresql://user:pass@host:port"
   postgres_databases:
     checkpoints: soothe_checkpoints
     metadata: soothe_metadata
     vectors: soothe_vectors
     memory: soothe_memory
   soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
-  default_backend: sqlite
   postgres_pool_min_size: 4
   checkpointer_pool_size: 24
   sloop_pool_size: 24
   postgres_pool_max_idle_seconds: 120
   postgres_pool_max_lifetime_seconds: 1800
   postgres_pool_acquire_timeout_seconds: 30
-  metadata_sqlite_path: null
-  checkpoint_sqlite_path: null
 
+# Vector store configuration
+# sqlite_vec is the default (uses sqlite-vec extension for vector search)
 vector_stores:
   - name: sqlite_vec_default
     provider_type: sqlite_vec
+    # db_path defaults to $SOOTHE_HOME/vector.db if not specified
+    # reader_pool_size: 8  # Concurrent readers for multi-loop support
 
 vector_store_router:
   default: sqlite_vec_default:soothe_default
