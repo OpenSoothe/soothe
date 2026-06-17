@@ -258,23 +258,8 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                     "AsyncSqliteSaver created and tables initialized at %s", self._checkpointer_pool
                 )
             else:
-                await self._checkpointer_pool.open()
-
-                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-                from soothe_sdk.utils.serde import create_soothe_serde
-
-                checkpointer = AsyncPostgresSaver(
-                    self._checkpointer_pool, serde=create_soothe_serde()
-                )
-                await checkpointer.setup()
-
-                self._checkpointer = checkpointer
-                self._agent.graph.checkpointer = checkpointer
-
-                self._checkpointer_initialized = True
-                logger.info(
-                    "AsyncPostgresSaver pool open and tables initialized, checkpointer replaced"
-                )
+                # PostgreSQL: wrap initialization with retry for DB restart resilience
+                await self._init_postgres_checkpointer_with_retry()
         except ModuleNotFoundError as exc:
             logger.error("Missing dependency for checkpointer: %s", exc)
             missing = str(exc.name) if exc.name else "unknown"
@@ -289,6 +274,97 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 f"Checkpointer initialization failed: {exc}\n"
                 f"Persistent storage required - no fallback available."
             )
+
+    async def _init_postgres_checkpointer_with_retry(
+        self,
+        max_attempts: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 8.0,
+    ) -> None:
+        """Initialize PostgreSQL checkpointer with connection retry.
+
+        Wraps pool.open() and checkpointer.setup() with exponential backoff
+        retry for transient connection errors (AdminShutdown, server restart).
+
+        Args:
+            max_attempts: Maximum retry attempts (default: 3).
+            base_delay: Initial retry delay in seconds (default: 1.0).
+            max_delay: Maximum retry delay cap (default: 8.0).
+
+        Raises:
+            ConfigurationError if all retries exhausted.
+        """
+        from soothe.foundation.loop.state.persistence.retry_utils import (
+            is_recoverable_connection_error,
+        )
+        from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+
+        delay = base_delay
+        for attempt in range(1, max_attempts + 1):
+            try:
+                await self._checkpointer_pool.open()
+
+                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+                from soothe_sdk.utils.serde import create_soothe_serde
+
+                checkpointer = AsyncPostgresSaver(
+                    self._checkpointer_pool, serde=create_soothe_serde()
+                )
+                await checkpointer.setup()
+
+                self._checkpointer = checkpointer
+                self._agent.graph.checkpointer = checkpointer
+                self._checkpointer_initialized = True
+                logger.info(
+                    "AsyncPostgresSaver pool open and tables initialized, checkpointer replaced"
+                )
+                return
+            except Exception as exc:
+                # Check if this is a recoverable connection error
+                if not is_recoverable_connection_error(exc):
+                    logger.error(
+                        "[checkpointer_init] Unrecoverable error: %s: %s",
+                        type(exc).__name__,
+                        exc,
+                    )
+                    raise
+
+                # Last attempt - no more retries
+                if attempt >= max_attempts:
+                    logger.error(
+                        "[checkpointer_init] All %d retries exhausted, last error: %s: %s",
+                        max_attempts,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    raise
+
+                # Log retry and reset pool
+                logger.warning(
+                    "[checkpointer_init] Recoverable connection error on attempt %d/%d: %s. "
+                    "Resetting pool and retrying in %.1fs...",
+                    attempt,
+                    max_attempts,
+                    type(exc).__name__,
+                    delay,
+                )
+
+                # Reset shared pool to force fresh connections
+                if SharedCheckpointerPool.is_shared_pool(self._checkpointer_pool):
+                    self._checkpointer_pool = await SharedCheckpointerPool.reset_shared_instance(
+                        self._config
+                    )
+                    if self._checkpointer_pool is None:
+                        raise RuntimeError(
+                            "Failed to recreate shared checkpointer pool after reset"
+                        )
+
+                # Exponential backoff with cap
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, max_delay)
+
+        # Should never reach here
+        raise RuntimeError("Unexpected retry loop exit for checkpointer initialization")
 
     async def _load_recent_messages(
         self,
