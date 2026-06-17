@@ -1,11 +1,7 @@
-"""JobManager for job lifecycle management and checkpoint persistence (RFC-228, RFC-626).
+"""Core managers module (RFC-228, RFC-626).
 
-This module provides the JobManager class that manages job lifecycle transitions
-and checkpoint persistence for root GoalNodes (jobs). JobManager integrates with
-ContextEngine for goal state management and AsyncPersistStore for durability.
-
-Per RFC-626 §2: Job operates directly on GoalNode. JobManager provides lifecycle
-operations and checkpoint persistence without intermediate wrappers.
+This module provides manager classes for job lifecycle operations:
+- JobManager: Manages job lifecycle transitions and checkpoint persistence
 """
 
 from __future__ import annotations
@@ -538,3 +534,6 @@ class JobManager:
                 queue.append(child_id)
 
         return descendants
+
+
+__all__ = ["JobManager"]

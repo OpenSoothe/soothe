@@ -11,6 +11,7 @@ Import paths:
     from soothe.foundation.core import CoreAgent, create_soothe_agent
     from soothe.foundation.core.agent import AgentBuilder
     from soothe.foundation.core.entities import Job, JobState, JobCheckpoint
+    from soothe.foundation.core.managers import JobManager
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ __all__ = [
     "JobCheckpoint",
     "JOB_TERMINAL_STATES",
     "JOB_BLOCKED_STATES",
+    # Managers (RFC-228, RFC-626)
+    "JobManager",
 ]
 
 
@@ -66,6 +69,12 @@ def __getattr__(name: str) -> Any:
             "JOB_TERMINAL_STATES": JOB_TERMINAL_STATES,
             "JOB_BLOCKED_STATES": JOB_BLOCKED_STATES,
         }[name]
+
+    # Managers lazy import
+    if name == "JobManager":
+        from soothe.foundation.core.managers import JobManager
+
+        return JobManager
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)
