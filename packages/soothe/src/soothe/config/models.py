@@ -1477,7 +1477,7 @@ class PreviewDefaults(BaseModel):
 
 
 class LangfuseIntegrationConfig(BaseModel):
-    """Langfuse OpenTelemetry + LangChain callback integration (optional extra ``soothe[langfuse]``).
+    """Langfuse OpenTelemetry + LangChain callback integration (install ``langfuse`` package).
 
     When ``enabled`` is true, Soothe attaches Langfuse's LangChain ``CallbackHandler`` to
     LangGraph ``astream`` calls. Credentials may be set here (values support ``${ENV}``) or
@@ -1625,7 +1625,7 @@ class ObservabilityConfig(BaseModel):
 
     langfuse: LangfuseIntegrationConfig = Field(
         default_factory=LangfuseIntegrationConfig,
-        description="Langfuse tracing (install optional extra soothe[langfuse])",
+        description="Langfuse tracing (install `langfuse` package)",
     )
 
 

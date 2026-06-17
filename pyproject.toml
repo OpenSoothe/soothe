@@ -32,7 +32,7 @@ dev = [
     "pyinstrument>=5.1.2",
     "pytest>=9.0.2",
     "textual-dev>=1.8.0",
-    "soothe[langfuse]",
+    "langfuse>=3.0.0,<4.0.0",
     "pyinstaller>=6.20.0",
 ]
 

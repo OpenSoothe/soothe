@@ -27,24 +27,6 @@ dependencies = [
     "aiohttp>=3.9.0,<4.0.0",
     "aiosqlite>=0.22.1,<1.0.0",
     "anyio>=3.0.0,<5.0.0",
-    "bubus>=1.5.6",
-    "deepagents>=0.6.10,<1.0.0",  # 0.6.10+ required for private_state_keys in _build_task_tool
-    "jinja2>=3.1.0",    # Prompt fragment template rendering
-    "langchain>=1.2.11,<2.0.0",
-    "langchain-community>=0.3.0,<1.0.0",
-    "langchain-experimental>=0.0.50,<1.0.0",
-    "langchain-core>=1.2.18,<2.0.0",
-    "langchain-mcp-adapters>=0.2.0,<1.0.0",
-    "langchain-openai>=0.3.0,<1.0.0",
-    # Direct pin: langchain-openai needs openai>=1.104.2 (DefaultHttpxClient, etc.).
-    # Declaring it here avoids broken/partial installs resolving without a full openai wheel.
-    "openai>=1.104.2,<3.0.0",
-    # Direct pin: langchain-anthropic (via deepagents) needs anthropic>=0.96 with DefaultHttpxClient.
-    "anthropic>=0.96.0,<1.0.0",
-    "langgraph>=1.1.1,<2.0.0",
-    "langgraph-checkpoint>=4.0.0,<5.0.0",
-    "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
-    "sqlite-vec>=0.1.0",
     "pexpect>=4.9.0,<5.0.0",
     "pydantic-settings>=2.0.0,<3.0.0",
     "pydantic>=2.0.0,<3.0.0",
@@ -53,20 +35,41 @@ dependencies = [
     "pyyaml>=6.0.0,<7.0.0",
     "pathspec>=0.12.0,<2.0.0",
     "requests>=2.32.3,<3.0.0",
-    "psycopg[binary,pool]>=3.2.0,<4.0.0",
-    # 3.1+ aligns with langgraph-checkpoint 4.x; 2.x/3.0.x require checkpoint <4
+    "bubus>=1.5.6",
+    "jinja2>=3.1.0",    # Prompt fragment template rendering
+    # Direct pin: langchain-openai needs openai>=1.104.2 (DefaultHttpxClient, etc.).
+    "openai>=1.104.2,<3.0.0",
+    "dashscope>=1.20.0",
+    # Direct pin: langchain-anthropic (via deepagents) needs anthropic>=0.96 with DefaultHttpxClient.
+    "anthropic>=0.96.0,<1.0.0",
+    "deepagents>=0.6.10,<1.0.0",  # 0.6.10+ required for private_state_keys in _build_task_tool
+    "langchain>=1.2.11,<2.0.0",
+    "langchain-community>=0.3.0,<1.0.0",
+    "langchain-experimental>=0.0.50,<1.0.0",
+    "langchain-core>=1.2.18,<2.0.0",
+    "langchain-mcp-adapters>=0.2.0,<1.0.0",
+    "langchain-openai>=0.3.0,<1.0.0",
+    "langchain-quickjs>=0.1.0",
+    "langgraph>=1.1.1,<2.0.0",
+    "langgraph-checkpoint>=4.0.0,<5.0.0",
+    "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
     "langgraph-checkpoint-postgres>=3.1.0,<4.0.0",
-]
-
-[project.optional-dependencies]
-research = [
+    "sqlite-vec>=0.1.0",
+    # Promoted from optional group: research
     "arxiv>=2.1.0",
     "langchain-tavily>=0.2.17",
     "tavily-python>=0.5.0",
     "wizsearch>=1.1.8,<2.0.0",
     "chardet<6",
     "deepxiv-sdk>=0.2.5",
+    # Promoted from optional group: semantic
+    "fastembed>=0.6.0,<1.0.0",
+    # Promoted from optional group: browser_use
+    "browser-use>=0.11.0,<0.13.0",
+    "psycopg[binary,pool]>=3.2.0,<4.0.0",
 ]
+
+[project.optional-dependencies]
 tabular = [
     "pandas>=2.0.0",
     "openpyxl>=3.1.0",
@@ -79,27 +82,12 @@ document = [
 github = [
     "pygithub>=2.0.0",
 ]
-semantic = [
-    "fastembed>=0.6.0,<1.0.0",
-]
-langfuse = [
-    "langfuse>=3.0.0,<4.0.0",
-]
-quickjs = [
-    "langchain-quickjs>=0.1.0",
-]
-dashscope = [
-    "dashscope>=1.20.0",
-]
-browser_use = [
-    "browser-use>=0.11.0,<0.13.0",
-]
 claude = [
     "anthropic>=0.96.0,<1.0.0",
     "claude-agent-sdk>=0.1.0,<1.0.0",
 ]
 all = [
-    "soothe[research,tabular,document,github,dashscope,semantic,langfuse,browser_use,claude]",
+    "soothe[tabular,document,github,claude]",
 ]
 dev = [
     "pytest>=8.0.0",
@@ -107,7 +95,7 @@ dev = [
     "pytest-cov",
     "ruff>=0.12.0",
     "mypy>=1.0.0",
-    "soothe[langfuse]",
+    "langfuse>=3.0.0,<4.0.0",
 ]
 
 [project.entry-points."soothe.plugins"]

@@ -201,7 +201,7 @@ research = await task(
 
 **Purpose**: Browser automation for web tasks
 
-**Dependencies**: Requires `soothe[browser_use]` extra
+**Dependencies**: Included in base `soothe` dependencies
 
 **Key Features**:
 - Navigate pages, click elements, fill forms
@@ -212,7 +212,7 @@ research = await task(
 ```yaml
 subagents:
   browser_use:
-    enabled: true  # Requires browser_use extra
+    enabled: true
 ```
 
 **Usage**:
@@ -524,7 +524,7 @@ register_event(MyAgentStartedEvent)
 
 1. **ImportError on subagent load**:
    - Check dependencies in plugin manifest
-   - Verify extra packages installed (`soothe[browser_use]`, `soothe[claude]`)
+   - Verify required packages installed (`soothe`, and `soothe[claude]` when using claude)
 
 2. **CompiledSubAgent contract violation**:
    - Ensure `messages: Annotated[list, add_messages]` in state

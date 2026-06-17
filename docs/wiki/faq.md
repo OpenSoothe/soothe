@@ -76,20 +76,18 @@ Add daemon later: `pip install soothe-daemon`
 
 | Extra | Adds |
 |-------|------|
-| `research` | Tavily web search |
-| `wizsearch` | Multi-engine search (Tavily, DuckDuckGo, Brave) |
-| `jina` | Jina web reader |
-| `media` | Image generation (DALL-E), audio/video analysis |
-| `pgvector` | PostgreSQL vector store |
-| `weaviate` | Weaviate vector store |
-| `rocksdb` | RocksDB persistence |
-| `langfuse` | Langfuse LLM observability |
-| `dashscope` | DashScope provider (Qwen, GLM, etc.) |
-| `all` | Everything above |
+| `tabular` | Pandas/Excel workflows |
+| `document` | PDF/DOCX/document parsing |
+| `github` | GitHub API integration |
+| `claude` | Claude agent SDK integration |
+| `all` | `tabular` + `document` + `github` + `claude` |
+
+Research, semantic embedding, DashScope, and browser-use dependencies are included in base `soothe`.
+Install Langfuse separately with `pip install langfuse` when observability is enabled.
 
 **Install specific extras**:
 ```bash
-pip install 'soothe[research,wizsearch,pgvector]' soothe-cli soothe-daemon
+pip install 'soothe[document,github]' soothe-cli soothe-daemon
 ```
 
 ### Why do I need soothe-plugins?

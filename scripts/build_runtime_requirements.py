@@ -43,17 +43,12 @@ def main() -> None:
     add_reqs(requirements, core["project"].get("dependencies", []))
     add_reqs(requirements, daemon["project"].get("dependencies", []))
 
-    extras = ["research", "dashscope", "semantic", "langfuse"]
+    extras = ["tabular", "document", "github"]
     if args.include_browser:
         extras = [
-            "research",
             "tabular",
             "document",
             "github",
-            "dashscope",
-            "semantic",
-            "langfuse",
-            "browser_use",
             "claude",
         ]
 

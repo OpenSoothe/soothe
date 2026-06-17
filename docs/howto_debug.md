@@ -250,7 +250,7 @@ tail -f ~/.soothe/logs/soothed.log
 
 **Steps**:
 
-1. Enable Langfuse in `~/.soothe/config/config.yml` under `observability.langfuse` (`enabled`, keys, optional `host`). Install optional extra `soothe[langfuse]` if needed.
+1. Enable Langfuse in `~/.soothe/config/config.yml` under `observability.langfuse` (`enabled`, keys, optional `host`). Install `langfuse` if needed (`pip install langfuse`).
 
 2. Restart daemon:
 ```bash

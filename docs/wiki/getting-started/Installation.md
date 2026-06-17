@@ -32,7 +32,7 @@ pip install -U 'soothe[all]' soothe-cli soothe-daemon
 ```
 
 This includes:
-- **soothe[all]**: Core runtime, all tool groups, research capabilities
+- **soothe[all]**: Core runtime plus optional extras (`tabular`, `document`, `github`, `claude`)
 - **soothe-cli**: Interactive TUI and command-line interface
 - **soothe-daemon**: Background daemon (WebSocket, HTTP REST)
 
@@ -47,9 +47,6 @@ pip install -U soothe soothe-cli
 Add optional capability groups as needed:
 
 ```bash
-# Research tools (web search, academic papers)
-pip install -U 'soothe[research]'
-
 # Document processing (PDF, DOCX, etc.)
 pip install -U 'soothe[document]'
 
@@ -57,7 +54,7 @@ pip install -U 'soothe[document]'
 pip install -U 'soothe[github]'
 
 # Multiple groups
-pip install -U 'soothe[research,document,github]'
+pip install -U 'soothe[document,github]'
 ```
 
 ### Option 3: Using uv (Fast Alternative)
@@ -100,23 +97,20 @@ Soothe is organized as a monorepo with multiple packages:
 
 ### Capability Groups
 
-The `soothe[all]` extra includes all capability groups:
+The base `soothe` package already includes research, semantic embedding, DashScope,
+and browser-use dependencies. `soothe[all]` adds the remaining optional groups:
 
 | Group | Tools Included |
 |-------|----------------|
-| `research` | Web search, academic papers (arXiv, DeepXiv), research synthesis |
 | `document` | PDF, DOCX, TXT, Markdown processing |
 | `tabular` | CSV, Excel, Parquet, data analysis |
 | `github` | GitHub API integration |
-| `langfuse` | LLM tracing and observability |
-| `dashscope` | Alibaba Cloud LLM models |
-| `semantic` | Embedding models for vector search |
 | `claude` | Anthropic Claude models and agent SDK |
 
 Install specific groups:
 
 ```bash
-pip install -U 'soothe[research,document]'
+pip install -U 'soothe[document]'
 ```
 
 ---

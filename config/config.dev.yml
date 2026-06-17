@@ -66,6 +66,10 @@ agent:
     tool_call_limit:
       global_thread_limit: 200
       global_run_limit: 80
+  # Embedded QuickJS interpreter for programmatic tool calling (PTC).
+  # Dependency note: langchain-quickjs is included in soothe base dependencies.
+  code_interpreter:
+    enabled: false
 
 # ============================================================
 # OBSERVABILITY

@@ -47,7 +47,7 @@ def warmup_model(model_name: str = DEFAULT_MODEL, verbose: bool = False) -> bool
     except ImportError:
         if verbose:
             print("ERROR: fastembed not installed", file=sys.stderr)
-            print("Install with: pip install 'soothe[semantic]'", file=sys.stderr)
+            print("Install with: pip install -U soothe", file=sys.stderr)
         return False
 
     cache_dir = get_cache_dir()
