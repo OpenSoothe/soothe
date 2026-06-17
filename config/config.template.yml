@@ -153,7 +153,7 @@ agent:
   # Rarely edited. Defaults optimized for most use cases.
   loop:
     enabled: true
-    max_iterations: 10
+    max_iterations: 99
     max_subagent_tasks_per_wave: 4
     strange_loop_output_contract_enabled: true # Suppress full tool output re-paste during Execute
     prior_conversation_limit: 10

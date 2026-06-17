@@ -7,7 +7,7 @@ from pathlib import Path
 
 from soothe.backends.memory.memu.langchain_adapter import LangChainLLMAdapter
 from soothe.backends.memory.memu.memory_store import MemuMemoryStore
-from soothe.config import SootheConfig
+from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.protocols.memory import MemoryItem as SootheMemoryItem
 from soothe.protocols.memory import MemoryProtocol
 
@@ -39,7 +39,7 @@ class MemUMemory(MemoryProtocol):
         )
 
         # Resolve memory directory
-        memory_dir = Path(config.agent.protocols.memory.persist_dir or "~/.soothe/memory")
+        memory_dir = Path(config.agent.protocols.memory.persist_dir or str(SOOTHE_HOME / "memory"))
         memory_dir = memory_dir.expanduser()
 
         # Create MemuMemoryStore

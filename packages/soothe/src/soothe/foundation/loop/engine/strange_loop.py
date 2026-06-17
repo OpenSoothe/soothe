@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.loop.planning.phase import PlanPhase
@@ -410,9 +411,7 @@ class StrangeLoop:
 
         persistence_backend = self.config.persistence.default_backend
 
-        soothe_home = (
-            Path(self.config.home) if hasattr(self.config, "home") else Path.home() / ".soothe"
-        )
+        soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
 
         if persistence_backend == "postgresql":
             try:
