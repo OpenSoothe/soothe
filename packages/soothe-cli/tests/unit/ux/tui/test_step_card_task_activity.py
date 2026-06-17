@@ -141,6 +141,44 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
     assert "· Grep(1)" in text
 
 
+def test_task_branch_child_line_with_empty_args_has_no_empty_parentheses() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-empty-args")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "ABC_01:t0:read_file:0",
+        "read_file",
+        {},
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+    text = _plain(card._step_task_activity_content())
+    assert "ReadFile" in text
+    assert "ReadFile()" not in text
+
+
+def test_task_branch_parses_raw_args_when_structured_args_are_empty() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-raw-args")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "ABC_01:t0:grep:0",
+        "grep",
+        {},
+        raw_args='{"pattern":"x"}',
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+    text = _plain(card._step_task_activity_content())
+    assert "Grep(x)" in text
+
+
 def test_pending_step_shows_branch_pending_without_task_rows() -> None:
     card = CognitionStepMessage("WAA-02", "Blocked step", id="stp-wait")
     # After IG-422 refactor, pending status is handled by _status_widget, not _step_task_activity_content.
@@ -207,6 +245,28 @@ def test_subgraph_task_level_id_does_not_overwrite_main_delegation() -> None:
     text = _plain(card._step_task_activity_content())
     assert "Explore(Explore soothe-sdk package)" in text
     assert "Check soothe-cli" not in text
+
+
+def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
+    card = CognitionStepMessage("FHG-01", "Explore soothe-sdk", id="stp-hide-opaque-task")
+    card.add_tool_call(
+        "FHG_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "Count all file types"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "tool-49EA56F8116423E97FF19695B55Cca1",
+        "tool-49EA56F8116423E97FF19695B55Cca1",
+        {
+            "subagent_type": "explore",
+            "description": "Count all file types",
+        },
+        parent_tool_call_id="FHG_01:s:task:0",
+    )
+    text = _plain(card._step_task_activity_content())
+    assert "Explore(Count all file types)" in text
+    assert "Tool-49" not in text
 
 
 def test_child_stats_link_via_normalized_parent_id() -> None:

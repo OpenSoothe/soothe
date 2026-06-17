@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -1615,6 +1616,8 @@ class CognitionStepMessage(Vertical):
         for row in self._rows:
             if row.is_task_row:
                 continue
+            if self._is_task_metadata_only_tool_row(row):
+                continue
             if not self._row_belongs_to_step(row):
                 continue
             tcid = str(row.tool_call_id or "").strip()
@@ -1732,6 +1735,18 @@ class CognitionStepMessage(Vertical):
             ) == normalize_step_task_tool_call_id(self._step_id, parent_id)
         return False
 
+    def _is_task_metadata_only_tool_row(self, row: _StepToolRow) -> bool:
+        """True when a nested row is task metadata and should stay hidden in branch activity."""
+        if is_inner_subgraph_task_tool_id(row.tool_call_id):
+            return True
+        if (row.tool_name or "").strip() == "task":
+            return True
+        args = row.args if isinstance(row.args, dict) else {}
+        subagent_type = str(args.get("subagent_type") or "").strip()
+        desc = str(args.get("description") or args.get("prompt") or "").strip()
+        # Some streams emit opaque names/ids (e.g. ``tool-<id>``) for task chunks.
+        return bool(subagent_type and desc)
+
     def _child_rows_for_task(self, task_row: _StepToolRow) -> list[_StepToolRow]:
         """Subgraph tool rows for one task (``parent_tool_call_id`` or ``{step}:t{n}:…``)."""
         raw_parent = str(task_row.tool_call_id).strip()
@@ -1746,7 +1761,7 @@ class CognitionStepMessage(Vertical):
             if (
                 row.is_task_row
                 or is_step_level_task_tool_id(row.tool_call_id)
-                or is_inner_subgraph_task_tool_id(row.tool_call_id)
+                or self._is_task_metadata_only_tool_row(row)
             ):
                 continue
             tcid = str(row.tool_call_id).strip()
@@ -2519,6 +2534,19 @@ class CognitionStepMessage(Vertical):
             self.update_tool_args(tcid, args)
             return
         row_args: dict[str, Any] = dict(args or {})
+        if not row_args and raw_args:
+            # Subgraph rows often arrive before namespace binding with only raw JSON.
+            # Parse once so task-branch activity can render arguments immediately.
+            try:
+                loaded = json.loads(raw_args)
+            except (TypeError, ValueError):
+                loaded = None
+            if isinstance(loaded, dict):
+                from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+
+                parsed_from_raw = extract_tool_args_dict(loaded)
+                if parsed_from_raw:
+                    row_args.update(parsed_from_raw)
         if raw_args:
             row_args["_raw"] = raw_args
         row = _StepToolRow(
@@ -2662,6 +2690,9 @@ class CognitionStepMessage(Vertical):
         merged = dict(row.args or {})
         if incoming:
             merged.update(incoming)
+        parsed_from_raw = extract_tool_args_dict(merged)
+        if parsed_from_raw:
+            merged.update(parsed_from_raw)
         if not tool_args_meaningful(merged):
             return
         if merged == row.args:
