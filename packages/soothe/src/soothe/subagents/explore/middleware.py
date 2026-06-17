@@ -18,7 +18,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import Command, Overwrite
 
-from soothe.utils.llm.structured_invoke import (
+from soothe.utils.llm.structured import (
     invoke_structured_chat_sync_typed,
     invoke_structured_chat_typed,
 )

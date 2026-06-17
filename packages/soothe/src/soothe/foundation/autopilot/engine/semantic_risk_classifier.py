@@ -19,7 +19,7 @@ from soothe.foundation.autopilot.engine.criticality import (
     CriticalityResult,
     evaluate_criticality,
 )
-from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
+from soothe.utils.llm.structured import invoke_structured_chat_typed
 from soothe.utils.similarity import async_get_embedding_model, cosine_similarity, encode_texts
 
 if TYPE_CHECKING:

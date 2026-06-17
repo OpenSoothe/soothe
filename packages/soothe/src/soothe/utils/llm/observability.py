@@ -1,4 +1,8 @@
-"""LLM token usage extraction, Langfuse-friendly ``llm_output`` enrichment, and debug logging."""
+"""LLM token usage extraction, Langfuse-friendly ``llm_output`` enrichment, and debug logging.
+
+Moved from ``utils/observability/llm_token_observability.py`` to consolidate
+all LLM-related utilities under ``utils/llm/`` per RFC-627.
+"""
 
 from __future__ import annotations
 
@@ -173,7 +177,12 @@ def _prepend_token_usage_handler(run_manager: Any) -> None:
 
 
 class SootheTokenUsageChatModel(BaseChatModel):
-    """``BaseChatModel`` wrapper that prepends token usage handling on every generate path."""
+    """``BaseChatModel`` wrapper that prepends token usage handling on every generate path.
+
+    Applied automatically by ``LLMFactory`` to all models for consistent token tracking
+    across provider types. Ensures Langfuse callbacks receive properly formatted token
+    counts even when providers only populate ``AIMessage.usage_metadata``.
+    """
 
     def __init__(self, model: BaseChatModel) -> None:
         self._model = model
@@ -184,7 +193,7 @@ class SootheTokenUsageChatModel(BaseChatModel):
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
         """Delegate structured output and wrap for json_object prompt compatibility."""
-        from soothe.utils.llm.structured_invoke import wrap_json_keyword_safe
+        from soothe.utils.llm.structured import wrap_json_keyword_safe
 
         return wrap_json_keyword_safe(self._model.with_structured_output(schema, **kwargs))
 
@@ -258,3 +267,13 @@ def bind_llm_token_observability(model: BaseChatModel | None) -> BaseChatModel |
     if isinstance(model, SootheTokenUsageChatModel):
         return model
     return SootheTokenUsageChatModel(model)
+
+
+__all__ = [
+    "SootheLLMTokenUsageCallbackHandler",
+    "SootheTokenUsageChatModel",
+    "bind_llm_token_observability",
+    "extract_token_counts_from_llm_result",
+    "ensure_openai_style_token_usage_on_llm_result",
+    "get_llm_token_usage_callback_handler",
+]

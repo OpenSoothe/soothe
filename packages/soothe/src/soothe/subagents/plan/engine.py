@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
+from soothe.utils.llm.structured import invoke_structured_chat_typed
 
 from .schemas import CollectorDecision, PlanRefinement, PlanSubagentConfig
 

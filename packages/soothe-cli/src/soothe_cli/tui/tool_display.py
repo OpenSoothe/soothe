@@ -10,7 +10,10 @@ from soothe_sdk.tools.metadata import get_tool_meta
 from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.utils.formatting import convert_and_abbreviate_path
 
-from soothe_cli.runtime.parse.message_processing import _normalize_tool_name_for_arg_map
+from soothe_cli.runtime.parse.message_processing import (
+    _normalize_tool_name_for_arg_map,
+    extract_tool_args_dict,
+)
 from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 
 _ARG_PREVIEW_MAX_CHARS = 80
@@ -72,7 +75,18 @@ def _ordered_arg_keys(tool_name: str, clean: dict[str, Any]) -> list[str]:
 
 def _args_preview(tool_name: str, args: dict[str, Any]) -> str:
     """Comma-separated arg summary: primary value bare, extras as ``key=value``."""
-    clean = {k: v for k, v in (args or {}).items() if k not in _SKIP_ARG_KEYS}
+    normalized = extract_tool_args_dict(args or {})
+    if not normalized and isinstance(args, dict):
+        raw_value = args.get("value")
+        if isinstance(raw_value, str) and raw_value.strip():
+            try:
+                loaded = json.loads(raw_value)
+            except (TypeError, ValueError):
+                loaded = None
+            if isinstance(loaded, dict):
+                normalized = loaded
+    source_args = normalized if normalized else (args or {})
+    clean = {k: v for k, v in source_args.items() if k not in _SKIP_ARG_KEYS}
     if not clean:
         return ""
     segments: list[str] = []

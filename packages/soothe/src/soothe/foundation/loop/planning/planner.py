@@ -45,7 +45,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
-from soothe.utils.llm.structured_invoke import invoke_structured_chat_typed
+from soothe.utils.llm.structured import invoke_structured_chat_typed
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
 from soothe.utils.token_counting import estimate_content_chars

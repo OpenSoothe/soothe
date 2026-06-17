@@ -1,48 +1,92 @@
-"""LLM adaptation utilities for Soothe.
+"""Unified LLM utilities module.
 
-This module consolidates LLM-related adaptation and compatibility handling:
+This module consolidates all LLM calling and adaptation logic with:
+- LLMFactory: Model creation with automatic provider adaptation
+- Structured output: Method fallback chain for thinking models
+- Provider wrappers: Compatibility for limited OpenAI providers
+- Token observability: Langfuse-compatible token tracking
 
-1. **Provider Compatibility**: Wrappers for limited OpenAI-compatible providers
-2. **Structured Output**: Format conversions for providers with limited API support
+Architecture (RFC-627):
+- `types.py`: ProviderType enum, ModelRole alias
+- `registry.py`: Provider lookup and credential resolution
+- `factory.py`: LLMFactory class (model creation + caching)
+- `structured.py`: Structured output helpers with fallback chain
+- `wrappers.py`: LimitedProviderModelWrapper, JsonSchemaModelWrapper
+- `schema_wire.py`: JSON Schema wire helpers
+- `observability.py`: Token/streaming observability
 
-Architecture:
-- `wrappers.py`: LimitedProviderModelWrapper, JsonSchemaModelWrapper for compatibility
+Usage:
+    from soothe.utils.llm import LLMFactory, invoke_structured_chat
+
+    factory = LLMFactory(config)
+    model = factory.create_chat_model("default")
+    result = await invoke_structured_chat(model, messages, json_schema=my_schema)
 """
 
 from __future__ import annotations
 
+from soothe.utils.llm.factory import LLMFactory
+from soothe.utils.llm.observability import (
+    SootheLLMTokenUsageCallbackHandler,
+    SootheTokenUsageChatModel,
+    extract_token_counts_from_llm_result,
+    get_llm_token_usage_callback_handler,
+)
+from soothe.utils.llm.registry import ProviderRegistry
 from soothe.utils.llm.schema_wire import (
     DEFAULT_DIRECT_LLM_SCHEMA_NAME,
     build_json_schema_response_format,
     resolve_schema_name,
     validate_response_schema,
 )
-from soothe.utils.llm.structured_invoke import (
+from soothe.utils.llm.structured import (
     StructuredOutputError,
+    ensure_json_keyword_in_messages,
+    invoke_structured,
     invoke_structured_chat,
     invoke_structured_chat_sync,
     invoke_structured_chat_sync_typed,
     invoke_structured_chat_typed,
+    messages_contain_json_keyword,
     normalize_structured_result,
     post_validate_structured_dict,
+    wrap_json_keyword_safe,
 )
+from soothe.utils.llm.types import ModelRole, ProviderType
 from soothe.utils.llm.wrappers import (
     JsonSchemaModelWrapper,
     LimitedProviderModelWrapper,
 )
 
 __all__ = [
-    "DEFAULT_DIRECT_LLM_SCHEMA_NAME",
-    "JsonSchemaModelWrapper",
-    "LimitedProviderModelWrapper",
-    "StructuredOutputError",
-    "build_json_schema_response_format",
+    # Factory
+    "LLMFactory",
+    "ProviderRegistry",
+    "ProviderType",
+    "ModelRole",
+    # Structured output
+    "invoke_structured",
     "invoke_structured_chat",
+    "invoke_structured_chat_typed",
     "invoke_structured_chat_sync",
     "invoke_structured_chat_sync_typed",
-    "invoke_structured_chat_typed",
+    "StructuredOutputError",
+    "ensure_json_keyword_in_messages",
+    "messages_contain_json_keyword",
     "normalize_structured_result",
     "post_validate_structured_dict",
+    "wrap_json_keyword_safe",
+    # Wrappers (advanced use)
+    "LimitedProviderModelWrapper",
+    "JsonSchemaModelWrapper",
+    # Observability
+    "SootheTokenUsageChatModel",
+    "SootheLLMTokenUsageCallbackHandler",
+    "get_llm_token_usage_callback_handler",
+    "extract_token_counts_from_llm_result",
+    # Schema helpers
+    "DEFAULT_DIRECT_LLM_SCHEMA_NAME",
+    "build_json_schema_response_format",
     "resolve_schema_name",
     "validate_response_schema",
 ]
