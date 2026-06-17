@@ -96,5 +96,39 @@ class SharedCheckpointerPool:
             await close_async_pool(_shared_checkpointer_pool, label="checkpointer")
             _shared_checkpointer_pool = None
 
+    @classmethod
+    async def reset_shared_instance(cls, config: SootheConfig) -> AsyncConnectionPool | None:
+        """Reset the singleton pool after connection error.
+
+        Closes the stale pool and creates a fresh one. Called when
+        PostgreSQL restarts or connection is lost during checkpointer
+        operations.
+
+        Args:
+            config: SootheConfig to create new pool with same settings.
+
+        Returns:
+            New pool instance, or None if not using PostgreSQL.
+        """
+        global _shared_checkpointer_pool
+
+        async with _async_lock:
+            # Close stale pool
+            if _shared_checkpointer_pool is not None:
+                try:
+                    await _shared_checkpointer_pool.close()
+                    logger.info("Closed stale shared checkpointer pool for reset")
+                except Exception:
+                    logger.debug(
+                        "Error closing stale checkpointer pool during reset", exc_info=True
+                    )
+                _shared_checkpointer_pool = None
+
+            # Create fresh pool
+            new_pool = cls.get_or_create_pool(config)
+            if new_pool is not None:
+                logger.info("Created fresh shared checkpointer pool after reset")
+            return new_pool
+
 
 __all__ = ["SharedCheckpointerPool"]
