@@ -135,6 +135,15 @@ class _MockCoreAgent:
 
         return _stream()
 
+    def execution_astream(self, user_input: str, config: dict, **kwargs: Any):
+        """Return an async iterator like ``CoreAgent.execution_astream`` (ephemeral twin graph)."""
+
+        async def _stream():
+            self.call_count += 1
+            yield {"messages": [{"content": "n/a"}]}
+
+        return _stream()
+
 
 def _make_config(max_iterations: int = 4) -> Any:
     cfg = MagicMock()
@@ -147,10 +156,11 @@ def _make_config(max_iterations: int = 4) -> Any:
     al.working_memory.enabled = False
     al.working_memory.max_inline_chars = 4000
     al.working_memory.max_entry_chars_before_spill = 500
-    al.limits.max_parallel_steps = 1
-    al.limits.max_parallel_goals = 1
-    al.limits.max_parallel_tools = 5
-    al.limits.max_parallel_subagents = 4
+    # Concurrency config (LoopConcurrencyConfig)
+    al.concurrency.max_parallel_steps = 1
+    al.concurrency.max_parallel_goals = 1
+    al.concurrency.max_parallel_tools = 5
+    al.concurrency.max_parallel_subagents = 4
     # Thread switch policy: set on loop config directly, not on limits
     # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
     al.thread_switch_policy = MagicMock()
