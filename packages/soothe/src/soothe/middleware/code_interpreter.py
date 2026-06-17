@@ -152,7 +152,7 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         except ImportError:
             logger.warning(
                 "[CodeInterpreter] langchain_quickjs not installed. "
-                "Install with: uv add 'soothe[quickjs]'"
+                "Install with: uv add langchain-quickjs (or upgrade soothe)"
             )
             return None
 

@@ -59,7 +59,7 @@ The **Capabilities Layer** is Soothe's extensibility framework for adding specia
 - **explore** (RFC-613): LLM-orchestrated filesystem search
 - **plan** (RFC-618): Structured planning with explore delegation
 - **tacitus** (RFC-619): Public-domain research (web, academic, URLs)
-- **browser_use**: Browser automation (opt-in via `soothe[browser_use]`)
+- **browser_use**: Browser automation (included in base `soothe` dependencies)
 - **claude**: Claude Code agent (opt-in via `soothe[claude]`)
 
 See [Subagents Architecture](subagents.md) for detailed documentation.

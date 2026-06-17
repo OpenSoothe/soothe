@@ -35,7 +35,7 @@ def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
             message="Langfuse enabled in config but the langfuse package is not installed",
             details={
                 "enabled": True,
-                "remediation": "pip install 'soothe[langfuse]' (or pip install langfuse)",
+                "remediation": "pip install langfuse",
             },
         )
 

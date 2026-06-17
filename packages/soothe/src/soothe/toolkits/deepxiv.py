@@ -374,10 +374,10 @@ class DeepxivToolkit:
                 )
             except ImportError:
                 logger.warning(
-                    "[DeepXiv] deepxiv_sdk not installed; install soothe[research] for academic tools"
+                    "[DeepXiv] deepxiv_sdk not installed; install/upgrade soothe for academic tools"
                 )
                 raise RuntimeError(
-                    "deepxiv_sdk not installed. Install with: pip install 'soothe[research]'"
+                    "deepxiv_sdk not installed. Install with: pip install -U soothe"
                 )
         return self._reader
 

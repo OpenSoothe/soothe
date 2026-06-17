@@ -73,7 +73,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       extras="all"; \
       pip_extras="playwright"; \
     else \
-      extras="document,tabular,github,research,dashscope,semantic"; \
+      extras="document,tabular,github"; \
       pip_extras=""; \
     fi; \
     uv venv /app/.venv; \

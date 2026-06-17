@@ -52,76 +52,38 @@ Built on LangChain / DeepAgents, it adds a persistent **agentic loop** and **goa
 
 ## Getting Started
 
-### Installation
+Choose one of these two ways to run Soothe:
 
-**Requirements:** Python 3.11+
+### 1) Recommended: Docker deployment (`deploy/`)
 
-For everyday use you install three PyPI packages: **core** (`soothe`), **CLI** (`soothe-cli`), and **daemon** (`soothe-daemon`). `soothe-sdk` is pulled in automatically; you only need it directly when building plugins or custom clients.
-
-| Package | Version | Provides |
-|---------|---------|----------|
-| `soothe` | [![soothe](https://img.shields.io/pypi/v/soothe?label=%20)](https://pypi.org/project/soothe/) | Agent runtime, protocols, backends, tools |
-| `soothe-cli` | [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=%20)](https://pypi.org/project/soothe-cli/) | `soothe` command |
-| `soothe-daemon` | [![soothe-daemon](https://img.shields.io/pypi/v/soothe-daemon?label=%20)](https://pypi.org/project/soothe-daemon/) | `soothed` command (WebSocket, HTTP REST) |
-| `soothe-sdk` | [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=%20)](https://pypi.org/project/soothe-sdk/) | Shared protocol types and decorators |
-| `soothe-plugins` | [![soothe-plugins](https://img.shields.io/pypi/v/soothe-plugins?label=%20)](https://pypi.org/project/soothe-plugins/) | Community plugins ([separate repo](https://github.com/mirasoth/soothe-plugins)) |
-
-**Recommended — full daily stack** (core + all optional capability groups + CLI + daemon):
+Fastest path for daily use.
 
 ```bash
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+cd deploy
+# Configure env + keys (see deploy/README.md)
+docker compose up -d
 ```
 
-- `soothe[all]` — research, documents, tabular data, media, GitHub, semantic search, Langfuse, DashScope, and related tool dependencies
-- `soothe-cli` — interactive TUI and one-shot prompts (`soothe`, `soothe -p "…"`)
-- `soothe-daemon` — long-running server and lifecycle commands (`soothed start`, `soothed doctor`)
-
-**Minimal** — core + CLI only (lighter install; add `soothe-daemon` when you need background mode):
+Then use:
 
 ```bash
-pip install soothe soothe-cli
-```
-
-Install the daemon later with `pip install soothe-daemon`. Pick optional capability groups instead of `[all]` when you want a smaller footprint, for example `pip install 'soothe[research,document]' soothe-cli soothe-daemon`.
-
-**Verify:**
-
-```bash
-soothe --help
-soothed doctor
-```
-
-### Quick Start
-
-**1. Configure**:
-
-```bash
-mkdir -p ~/.soothe/config
-cp config/config.template.yml ~/.soothe/config/config.yml
-export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, DASHSCOPE_API_KEY
-```
-
-**2. Run**:
-
-```bash
-# Start daemon
-soothed start
-
-# Interactive TUI
 soothe
-
-# Single prompt
+# or
 soothe -p "Research top 5 Python web frameworks"
 ```
 
-**Commands**:
+### 2) Alternative: Install from source
 
-| Command | Description |
-|---------|-------------|
-| `soothe` | Interactive TUI |
-| `soothe -p "query"` | Single prompt |
-| `soothed start/stop/status` | Daemon management |
-| `soothed doctor` | Health diagnostics |
+**Requirements:** Python 3.11+, `uv`.
+
+```bash
+uv sync
+mkdir -p ~/.soothe/config
+cp config/config.template.yml ~/.soothe/config/config.yml
+export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY / DASHSCOPE_API_KEY
+soothed start
+soothe
+```
 
 ## Documentation
 

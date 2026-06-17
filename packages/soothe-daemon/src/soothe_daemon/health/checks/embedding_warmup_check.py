@@ -47,7 +47,7 @@ async def check_embedding_warmup(config: SootheConfig | None = None) -> Category
                 status=CheckStatus.SKIPPED,
                 message="fastembed not installed (semantic similarity optional)",
                 details={
-                    "remediation": "pip install 'soothe[semantic]' to enable caching checks",
+                    "remediation": "pip install -U soothe to enable caching checks",
                 },
             )
         ]

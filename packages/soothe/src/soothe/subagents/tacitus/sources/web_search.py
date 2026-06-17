@@ -307,7 +307,7 @@ class WebSearchSource:
                 logger.debug("DuckDuckGo failed for: %s", search_q, exc_info=True)
 
         logger.warning(
-            "No web search backend available for query (install soothe[research] or set TAVILY_API_KEY)"
+            "No web search backend available for query (install/upgrade soothe or set TAVILY_API_KEY)"
         )
         return []
 

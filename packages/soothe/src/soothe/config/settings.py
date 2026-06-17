@@ -154,8 +154,8 @@ class SootheConfig(BaseSettings):
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
 
     Builtin subagents (explore, plan, tacitus, browser_use) are added
-    automatically. browser_use requires opt-in extra (``soothe[browser_use]``)
-    and is disabled by default. Claude Code runs via ``agent.core_agent_backend:
+    automatically. browser_use is included in base dependencies
+    and is enabled by default. Claude Code runs via ``agent.core_agent_backend:
     claude`` (``soothe[claude]`` extra), not as a subagent.
     Plugin-discovered subagents are merged during config validation.
     """
@@ -253,12 +253,12 @@ class SootheConfig(BaseSettings):
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
         # Built-in subagent entries merged before user YAML and plugin registry.
-        # browser_use requires opt-in extra (soothe[browser_use]).
+        # browser_use ships in core dependencies.
         builtin_subagents = {
             "explore": SubagentConfig(),
             "plan": SubagentConfig(),
             "tacitus": SubagentConfig(),
-            "browser_use": SubagentConfig(enabled=False),
+            "browser_use": SubagentConfig(enabled=True),
         }
 
         # Import here to avoid circular dependency

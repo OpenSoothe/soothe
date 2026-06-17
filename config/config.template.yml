@@ -311,9 +311,9 @@ agent:
   # Embedded QuickJS interpreter for programmatic tool calling (PTC).
   # Opt-in feature — disabled by default. When enabled, agents can write
   # JavaScript code that calls tools directly via tools.* namespace.
-  # Install dependency: uv add 'soothe[quickjs]'
+  # Dependency note: langchain-quickjs is included in soothe base dependencies.
   code_interpreter:
-    enabled: false # opt-in; set to true and install soothe[quickjs] to enable
+    enabled: false # opt-in; set to true to enable
     ptc_allowlist: [] # tools exposed via tools.* namespace (empty = no PTC)
     memory_limit_mb: 128
     timeout_seconds: 30
@@ -416,7 +416,7 @@ subagents:
       effort: normal
     runtime_dir: ""
   browser_use:
-    enabled: false
+    enabled: true
     model: null
     transport: local
     url: null

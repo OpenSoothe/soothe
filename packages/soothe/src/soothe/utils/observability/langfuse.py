@@ -122,12 +122,12 @@ def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
     global _LANGFUSE_NOT_INSTALLED_WARNED, _LANGFUSE_HANDLER_UNAVAILABLE_WARNED
     lf = soothe_config.observability.langfuse
     try:
-        import langfuse.langchain  # noqa: F401 - optional extra soothe[langfuse]
+        import langfuse.langchain  # noqa: F401 - external langfuse package
     except ImportError:
         if not _LANGFUSE_NOT_INSTALLED_WARNED:
             logger.warning(
                 "observability.langfuse.enabled is true but langfuse is not installed; "
-                "install optional dependency (e.g. pip install 'soothe[langfuse]')"
+                "install dependency (e.g. pip install langfuse)"
             )
             _LANGFUSE_NOT_INSTALLED_WARNED = True
         return None
@@ -181,12 +181,12 @@ def _create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
     global _LANGFUSE_NOT_INSTALLED_WARNED, _LANGFUSE_HANDLER_UNAVAILABLE_WARNED
     lf = soothe_config.observability.langfuse
     try:
-        import langfuse.langchain  # noqa: F401 - optional extra soothe[langfuse]
+        import langfuse.langchain  # noqa: F401 - external langfuse package
     except ImportError:
         if not _LANGFUSE_NOT_INSTALLED_WARNED:
             logger.warning(
                 "observability.langfuse.enabled is true but langfuse is not installed; "
-                "install optional dependency (e.g. pip install 'soothe[langfuse]')"
+                "install dependency (e.g. pip install langfuse)"
             )
             _LANGFUSE_NOT_INSTALLED_WARNED = True
         return None

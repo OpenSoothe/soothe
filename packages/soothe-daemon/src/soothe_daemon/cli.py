@@ -450,7 +450,7 @@ def warmup_cache(
             err=True,
         )
         typer.echo(
-            "Install with: pip install 'soothe[semantic]'",
+            "Install with: pip install -U soothe",
             err=True,
         )
         raise typer.Exit(code=1)
