@@ -49,23 +49,10 @@ router:
 # ============================================================
 agent:
   autonomous:
-    enabled: true
-    max_iterations: 15
-    # RFC-222: faster scheduling cadence for local iteration
-    poll_interval: 2
-    loop_idle_timeout: 60
-
+    enabled: false
   loop:
-    max_iterations: 99
-    plan_prompt_ledger:
-      plan_ledger_max_messages: 20
     concurrency:
-      max_parallel_steps: 4
-      max_parallel_tools: 50
-      global_max_llm_calls: 10
-    tool_call_limit:
-      global_thread_limit: 200
-      global_run_limit: 80
+      max_parallel_goals: 4
   # Embedded QuickJS interpreter for programmatic tool calling (PTC).
   # Dependency note: langchain-quickjs is included in soothe base dependencies.
   code_interpreter:

@@ -1142,18 +1142,19 @@ class LLMPlanner:
 
         if human_msg is not None and ai_response is not None:
             from soothe.foundation.loop.planning.ledger_compaction import (
-                compact_plan_assess_ai_dump,
                 compact_planning_human_content,
             )
             from soothe.foundation.loop.utils.messages import LoopAIMessage, _record_ledger_message
 
-            # Compact the recorded pair so the next assess sees a cache-stable
-            # human and no prior `assessment_reasoning` anchor (A2 + C1 + D1).
+            # Compact the recorded human so the next assess sees cache-stable
+            # prompt prefix (C1 + D1), while preserving full AI response in ledger.
             recorded_human = human_msg.model_copy(
                 update={"content": compact_planning_human_content(str(human_msg.content))}
             )
             ai_msg = LoopAIMessage(
-                content=compact_plan_assess_ai_dump(ai_response),
+                content=str(ai_response.model_dump())
+                if hasattr(ai_response, "model_dump")
+                else str(ai_response),
                 thread_id=state.thread_id,
                 iteration=state.iteration,
                 phase="plan_assess",

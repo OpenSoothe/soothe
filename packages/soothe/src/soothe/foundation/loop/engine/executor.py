@@ -1206,7 +1206,9 @@ class Executor:
         """Max ledger messages to deep-copy into a parallel branch CoreAgent input (RFC-214).
 
         When ``plan_prompt_ledger.plan_ledger_max_messages`` is positive, reuse it as an
-        upper bound (capped at 256). Otherwise use ``DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES``.
+        upper bound (capped at 256). When it is zero, treat as unlimited so full
+        predecessor context is available. Without config, use
+        ``DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES``.
         """
         from soothe.foundation.loop.engine.predecessor_branch_context import (
             DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
@@ -1217,7 +1219,7 @@ class Executor:
         cap = int(self._config.agent.loop.plan_prompt_ledger.plan_ledger_max_messages)
         if cap > 0:
             return min(cap, 256)
-        return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
+        return 0
 
     async def _fetch_pending_interrupts_from_state(
         self,
@@ -2864,7 +2866,6 @@ class Executor:
 
             subgraph_tool_updates: list[tuple[tuple[str, ...], dict[str, Any]]] = []
             for ns_tuple, tm in iter_namespaced_tool_messages(chunk):
-                messages.append(tm)
                 subgraph_tool_call_count += 1
                 text_out = extract_text_from_message_content(getattr(tm, "content", None))
                 if text_out and str(getattr(tm, "name", "") or "") != "task":
@@ -2901,17 +2902,27 @@ class Executor:
                     extract_text_from_message_content(getattr(tm, "content", "")),
                     chars=160,
                 )
-                tcid = str(getattr(tm, "tool_call_id", "") or "").strip()
+                raw_tcid = str(getattr(tm, "tool_call_id", "") or "").strip()
                 tname = str(getattr(tm, "name", "") or "unknown").strip() or "unknown"
+                # Rewrite provider ID to unified ID for args lookup (IG-416).
+                # Namespaced ToolMessages may have provider IDs; subgraph_placeholder_update
+                # requires unified IDs and args are stored under unified IDs from AIMessageChunk.
+                subgraph_task_idx = subgraph_task_binder.task_idx_for_namespace(ns_tuple)
+                rewritten_tm = _rewrite_tool_message_tool_call_id(
+                    tm, step_id or "", task_idx=subgraph_task_idx
+                )
+                unified_tcid = str(getattr(rewritten_tm, "tool_call_id", "") or "").strip()
+                messages.append(rewritten_tm)
                 logger.info(
-                    "[SubagentTool] ns=%s name=%s id=%s preview=%s",
+                    "[SubagentTool] ns=%s name=%s id=%s -> unified=%s preview=%s",
                     "/".join(ns_tuple) if ns_tuple else "()",
                     tname,
-                    tcid,
+                    raw_tcid,
+                    unified_tcid,
                     body_preview,
                 )
-                if tcid and tname != "task":
-                    tool_ev = tool_args.subgraph_placeholder_update(tcid, tname)
+                if unified_tcid and tname != "task":
+                    tool_ev = tool_args.subgraph_placeholder_update(unified_tcid, tname)
                     if tool_ev is not None:
                         subgraph_tool_updates.append((ns_tuple, tool_ev))
             for ns_tuple, tool_ev in subgraph_tool_updates:

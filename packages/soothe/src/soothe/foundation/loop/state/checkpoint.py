@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 
 if TYPE_CHECKING:
     # Forward references — actual imports happen during model_rebuild() at the
@@ -152,7 +153,7 @@ class GoalExecutionRecord(BaseModel):
 
     # Execution state
     iteration: int = 0
-    max_iterations: int = 10
+    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
     # Plan revision tracking (still useful for monitoring)

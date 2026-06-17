@@ -138,7 +138,15 @@ class StepTaskRouter:
         if existing is None:
             self._pending_subgraph_tools[key] = item
             return
-        args = item.args if len(item.args) >= len(existing.args) else existing.args
+        # Prefer meaningful args over placeholder metadata like {"_subgraph_tool": true}.
+        from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+
+        item_meaningful = extract_tool_args_dict(item.args or {})
+        existing_meaningful = extract_tool_args_dict(existing.args or {})
+        if len(item_meaningful) >= len(existing_meaningful):
+            args = item.args
+        else:
+            args = existing.args
         raw = item.raw_args if len(item.raw_args) >= len(existing.raw_args) else existing.raw_args
         self._pending_subgraph_tools[key] = PendingSubgraphTool(
             ns_key=item.ns_key,
@@ -413,19 +421,30 @@ class StepTaskRouter:
             update = getattr(parent, "update_tool_args", None)
             if callable(update):
                 resolved_args = dict(item.args or {})
-                if item.raw_args and not resolved_args:
-                    from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+                # Placeholder args like {"_subgraph_tool": true} are not meaningful.
+                # Parse raw_args when resolved_args lacks real invocation kwargs.
+                from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
 
+                meaningful_args = extract_tool_args_dict(resolved_args)
+                if item.raw_args and not meaningful_args:
                     parsed = extract_tool_args_dict({"_raw": item.raw_args})
                     if parsed:
                         resolved_args = parsed
                 update(row_id, resolved_args)
         else:
             parent_task_id = str(scope[0]).strip()
+            resolved_args = dict(item.args or {})
+            from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+
+            meaningful_args = extract_tool_args_dict(resolved_args)
+            if item.raw_args and not meaningful_args:
+                parsed = extract_tool_args_dict({"_raw": item.raw_args})
+                if parsed:
+                    resolved_args = parsed
             ingest(
                 row_id,
                 item.tool_name,
-                dict(item.args or {}),
+                resolved_args,
                 raw_args=item.raw_args,
                 parent_tool_call_id=parent_task_id or None,
             )

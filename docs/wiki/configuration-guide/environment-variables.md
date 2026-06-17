@@ -208,7 +208,7 @@ agent:
   loop:
     limits:
       tool_call_limit:
-        global_thread_limit: 150
+        global_thread_limit: 200
 ```
 
 Maps to:

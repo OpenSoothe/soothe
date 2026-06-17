@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.state.checkpoint import (
     GoalExecutionRecord,
     StrangeLoopCheckpoint,
@@ -245,7 +246,11 @@ class StrangeLoopStateManager:
         conn.row_factory = sqlite3.Row
         return conn
 
-    async def initialize(self, thread_id: str, max_iterations: int = 10) -> StrangeLoopCheckpoint:
+    async def initialize(
+        self,
+        thread_id: str,
+        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+    ) -> StrangeLoopCheckpoint:
         """Create new loop for thread (RFC-216: loop-scoped).
 
         IG-258 Phase 2: Database schema initialized lazily by writer connection.
@@ -664,7 +669,11 @@ class StrangeLoopStateManager:
 
         conn.commit()
 
-    def start_new_goal(self, goal: str, max_iterations: int = 10) -> GoalExecutionRecord:
+    def start_new_goal(
+        self,
+        goal: str,
+        max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+    ) -> GoalExecutionRecord:
         """Create new goal record and clear working memory (RFC-216).
 
         Args:

@@ -92,15 +92,14 @@ def prior_loop_execute_messages(
     Returns:
         Messages to prepend before the bootstrap step's execute envelope, in ledger order.
     """
-    if max_messages <= 0:
-        return []
+    unlimited = max_messages <= 0
 
     out: list[BaseMessage] = []
     for msg in loop_messages:
         if getattr(msg, "phase", None) != "execute_step":
             continue
         out.append(_deep_copy_message(msg))
-        if len(out) >= max_messages:
+        if (not unlimited) and len(out) >= max_messages:
             logger.debug(
                 "[LoopContinuation] truncated prior ledger slice at max_messages=%d",
                 max_messages,
@@ -129,8 +128,9 @@ def predecessor_execute_messages_for_branch(
     Returns:
         Messages to prepend before the current step's execute envelope.
     """
-    if not predecessor_step_ids or max_messages <= 0:
+    if not predecessor_step_ids:
         return []
+    unlimited = max_messages <= 0
 
     out: list[BaseMessage] = []
     for msg in loop_messages:
@@ -140,7 +140,7 @@ def predecessor_execute_messages_for_branch(
         if sid is None or sid not in predecessor_step_ids:
             continue
         out.append(_deep_copy_message(msg))
-        if len(out) >= max_messages:
+        if (not unlimited) and len(out) >= max_messages:
             logger.debug(
                 "[BranchPred] truncated predecessor ledger slice at max_messages=%d",
                 max_messages,

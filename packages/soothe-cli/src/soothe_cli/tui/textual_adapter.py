@@ -600,7 +600,10 @@ def _fallback_ingest_subgraph_tool_on_step_card(
         return False
     row_id = lookup if type_code == "t" else (display or lookup)
     resolved_args = dict(args or {})
-    if raw_args and not resolved_args:
+    # Placeholder args like {"_subgraph_tool": true} are not meaningful.
+    # Parse raw_args when resolved_args lacks real invocation kwargs.
+    meaningful_args = extract_tool_args_dict(resolved_args)
+    if raw_args and not meaningful_args:
         parsed = extract_tool_args_dict({"_raw": raw_args})
         if parsed:
             resolved_args = parsed
