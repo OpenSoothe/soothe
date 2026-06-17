@@ -130,6 +130,28 @@ class SharedPostgreSQLPool:
             self._pool = None
             self._initialized = False
 
+    async def reset_pool(self) -> None:
+        """Reset the shared pool after connection error.
+
+        Closes existing pool and reopens with fresh connections.
+        Called when PostgreSQL restarts or connection is lost.
+        """
+        async with self._init_lock:
+            old_pool = self._pool
+            self._pool = None
+            self._initialized = False
+
+            if old_pool is not None:
+                try:
+                    await old_pool.close()
+                    logger.info("Closed stale shared PostgreSQL pool for reset")
+                except Exception:
+                    logger.debug("Error closing stale pool during reset", exc_info=True)
+
+            # Reopen pool with fresh connections
+            await self.open()
+            logger.info("Shared PostgreSQL pool reset complete (fresh connections)")
+
     def get_pool(self) -> AsyncConnectionPool | None:
         """Get the underlying pool instance (for direct access).
 
@@ -188,6 +210,20 @@ class SharedPostgreSQLPool:
             if _shared_pool is not None:
                 await _shared_pool.close()
                 _shared_pool = None
+
+    @classmethod
+    async def reset_shared_instance(cls) -> None:
+        """Reset the singleton shared pool after connection error.
+
+        Called by PostgreSQLPersistenceBackend when recoverable
+        connection errors occur (e.g., AdminShutdown during DB restart).
+        """
+        global _shared_pool
+
+        async with _pool_lock:
+            if _shared_pool is not None:
+                await _shared_pool.reset_pool()
+                logger.info("Reset singleton shared PostgreSQL pool for recovery")
 
 
 __all__ = ["SharedPostgreSQLPool"]
