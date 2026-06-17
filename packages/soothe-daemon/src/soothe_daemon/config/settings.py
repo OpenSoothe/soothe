@@ -30,14 +30,25 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 
+def _ensure_default_config_dir() -> Path:
+    """Ensure the default ``SOOTHE_HOME/config`` directory exists.
+
+    Returns:
+        Absolute path to the default config directory.
+    """
+    config_dir = Path(SOOTHE_HOME).expanduser() / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
 def default_soothe_config_path() -> Path:
     """Default path of the agent ``SootheConfig`` YAML the daemon loads."""
-    return Path(SOOTHE_HOME) / "config" / "config.yml"
+    return _ensure_default_config_dir() / "config.yml"
 
 
 def default_daemon_config_path() -> Path:
     """Default path of ``daemon_config.yml``."""
-    return Path(SOOTHE_HOME) / "config" / "daemon_config.yml"
+    return _ensure_default_config_dir() / "daemon_config.yml"
 
 
 class SootheDaemonConfig(BaseSettings):
