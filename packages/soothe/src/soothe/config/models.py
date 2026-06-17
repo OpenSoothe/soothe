@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 
@@ -877,9 +878,9 @@ class ToolCallLimitConfig(BaseModel):
     """
 
     global_thread_limit: int = Field(
-        default=150, ge=1, description="Global thread-level tool call limit"
+        default=200, ge=1, description="Global thread-level tool call limit"
     )
-    global_run_limit: int = Field(default=56, ge=1, description="Global run-level tool call limit")
+    global_run_limit: int = Field(default=200, ge=1, description="Global run-level tool call limit")
     tool_specific_limits: dict[str, dict[str, int]] = Field(
         default_factory=lambda: {
             "wizsearch_search": {"thread_limit": 5, "run_limit": 3},
@@ -946,10 +947,10 @@ class LoopConcurrencyConfig(BaseModel):
     """
 
     max_parallel_goals: int = Field(
-        default=1, ge=0, description="Maximum parallel goals (0=unlimited)"
+        default=4, ge=0, description="Maximum parallel goals (0=unlimited)"
     )
     max_parallel_steps: int = Field(
-        default=2,
+        default=4,
         ge=0,
         description="Max concurrent plan steps per batch; 0=unlimited; multiple batches per execute",
     )
@@ -957,13 +958,13 @@ class LoopConcurrencyConfig(BaseModel):
         default=4, ge=0, description="Maximum parallel subagents (0=unlimited)"
     )
     global_max_llm_calls: int = Field(
-        default=5, ge=0, description="Global LLM call cap (0=unlimited)"
+        default=10, ge=0, description="Global LLM call cap (0=unlimited)"
     )
     step_parallelism: Literal["sequential", "dependency", "max"] = Field(
         default="dependency", description="Step scheduling strategy"
     )
     max_parallel_tools: int = Field(
-        default=15, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
+        default=50, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
     )
 
 
@@ -1247,7 +1248,7 @@ class StrangeLoopConfig(BaseModel):
     )
 
     max_iterations: int = Field(
-        default=10,
+        default=DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
         description="Maximum agent loop iterations",
         ge=1,
         le=500,

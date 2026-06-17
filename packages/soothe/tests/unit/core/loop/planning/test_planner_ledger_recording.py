@@ -1,11 +1,10 @@
-"""Integration tests: planner records a compacted ledger pair (A2 + C1 + D1).
+"""Integration tests: planner records a compacted human ledger pair (C1 + D1).
 
 `LLMPlanner.assess_status` and `LLMPlanner.generate_from_assessment` are the
 two callsites that append (LoopHumanMessage, LoopAIMessage) pairs into
 `state.loop_messages`. After the compaction work, the *recorded* copy must
 have its `TIMESTAMP:` stripped, its `GOAL:` rewritten to
-`GOAL RECAP:`, and (for plan-assess) its dumped `assessment_reasoning`
-dropped.
+`GOAL RECAP:`. Plan-assess AI content stays full-fidelity in ledger.
 """
 
 from __future__ import annotations
@@ -55,7 +54,7 @@ def _make_human(phase: str) -> LoopHumanMessage:
 
 
 @pytest.mark.asyncio
-async def test_assess_status_records_compacted_human_and_dropped_reasoning() -> None:
+async def test_assess_status_records_compacted_human_and_preserves_ai_dump() -> None:
     planner = LLMPlanner(MagicMock())
     rendered_human = _make_human("plan_assess")
     planner._prompt_builder.build_plan_messages = MagicMock(  # type: ignore[method-assign]
@@ -91,10 +90,10 @@ async def test_assess_status_records_compacted_human_and_dropped_reasoning() -> 
     # PRIOR PROGRESS is preserved (not a target of C1/D1).
     assert "PRIOR PROGRESS:" in recorded_human.content
 
-    # A2: the LLM's assessment_reasoning must NOT appear in the recorded AI dump.
-    assert "assessment_reasoning" not in recorded_ai.content
-    assert "need more evidence" not in recorded_ai.content
-    # Schema-essential fields survive so plan-generate and auditing still work.
+    # Plan-assess AI dump is recorded in full for ledger auditing/inspection.
+    assert "assessment_reasoning" in recorded_ai.content
+    assert "need more evidence" in recorded_ai.content
+    # Schema-essential fields still present.
     assert "'status':" in recorded_ai.content and "'continue'" in recorded_ai.content
     assert "'goal_progress':" in recorded_ai.content and "'low'" in recorded_ai.content
     # Phase tagging is preserved (drives projection filtering).

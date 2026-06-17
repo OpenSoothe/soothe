@@ -146,13 +146,13 @@ async def test_parallel_tools_mixed_sync_async(requires_llm_api):
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_parallel_tools_default_parallelism(requires_llm_api):
-    """Verify default configuration uses max_parallel_steps=2."""
+    """Verify default configuration uses max_parallel_steps=4."""
     router = _get_router_config_for_available_credentials()
     config = SootheConfig(router=router)
     config.agent.protocols.memory.enabled = False
 
     # Check default value for max_parallel_steps
-    assert config.agent.loop.concurrency.max_parallel_steps == 2
+    assert config.agent.loop.concurrency.max_parallel_steps == 4
 
     create_soothe_agent(
         model=config.create_chat_model("agent"),

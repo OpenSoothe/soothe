@@ -668,7 +668,7 @@ class TestLoopState:
         assert state.thread_id == "thread_1"
         assert state.goal_user_submission is None
         assert state.iteration == 0
-        assert state.max_iterations == 10  # DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+        assert state.max_iterations == 99  # DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
         assert state.current_decision is None
         assert len(state.step_results) == 0
 

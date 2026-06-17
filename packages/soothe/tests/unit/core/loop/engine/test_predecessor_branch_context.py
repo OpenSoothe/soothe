@@ -41,12 +41,14 @@ def test_predecessor_execute_messages_empty_predecessor_ids() -> None:
     assert predecessor_execute_messages_for_branch([], frozenset()) == []
 
 
-def test_predecessor_execute_messages_max_messages_zero() -> None:
+def test_predecessor_execute_messages_max_messages_zero_means_unlimited() -> None:
     ledger = [
         LoopHumanMessage(content="h", phase="execute_step", step_id="A"),
         LoopAIMessage(content="a", phase="execute_step", step_id="A"),
     ]
-    assert predecessor_execute_messages_for_branch(ledger, frozenset({"A"}), max_messages=0) == []
+    out = predecessor_execute_messages_for_branch(ledger, frozenset({"A"}), max_messages=0)
+    assert len(out) == 2
+    assert [m.content for m in out] == ["h", "a"]
 
 
 def test_predecessor_execute_messages_step_id_from_additional_kwargs() -> None:

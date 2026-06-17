@@ -1178,8 +1178,6 @@ class LoopState(BaseModel):
         except Exception:
             logger.warning("loop_messages property: CE query failed", exc_info=True)
             return self._loop_messages_cache
-        if len(result) > MAX_LOOP_MESSAGES_PER_GOAL:
-            result = result[-MAX_LOOP_MESSAGES_PER_GOAL:]
         return result
 
     def _build_step_results_from_ce(self) -> list[StepResult]:
