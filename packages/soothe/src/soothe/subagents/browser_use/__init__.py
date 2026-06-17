@@ -42,7 +42,7 @@ class BrowserUsePlugin:
             from soothe_sdk.core.exceptions import PluginError
 
             raise PluginError(
-                "browser-use library not installed. Install with: pip install 'soothe[browser_use]'",
+                "browser-use library not installed. Install with: pip install -U soothe",
                 plugin_name="browser_use",
             ) from e
 

@@ -1,9 +1,8 @@
 """Built-in subagents shipped with the core ``soothe`` package.
 
 Importing this package registers curated ``soothe.subagent.*`` wire types from each
-subagent's ``events`` module. Heavy delegates (``browser_use``) require opt-in extras
-(``soothe[browser_use]``) — their ``on_load`` hooks verify the runtime dependency
-is installed.
+subagent's ``events`` module. ``browser_use`` ships with core dependencies; its
+``on_load`` hook still verifies that runtime dependencies are installed.
 """
 
 from .browser_use import events as _browser_use_events  # noqa: F401

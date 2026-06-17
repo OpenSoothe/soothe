@@ -185,16 +185,16 @@ Install additional capabilities as needed:
 
 | Extra | Command | Adds |
 |-------|---------|------|
-| `research` | `pip install soothe[research]` | Tavily web search, arXiv, DeepXiv |
+| `research` | Included in base `soothe` install | Tavily web search, arXiv, DeepXiv |
 | `tabular` | `pip install soothe[tabular]` | Pandas, Excel processing |
 | `document` | `pip install soothe[document]` | PDF, DOCX processing |
 | `github` | `pip install soothe[github]` | GitHub API integration |
-| `semantic` | `pip install soothe[semantic]` | Embedding models |
-| `langfuse` | `pip install soothe[langfuse]` | LLM tracing and observability |
-| `dashscope` | `pip install soothe[dashscope]` | Alibaba Cloud LLM models |
-| `browser_use` | `pip install soothe[browser_use]` | Browser automation subagent |
+| `semantic` | Included in base `soothe` install | Embedding models |
+| `langfuse` | `pip install langfuse` | LLM tracing and observability |
+| `dashscope` | Included in base `soothe` install | Alibaba Cloud LLM models |
+| `browser_use` | Included in base `soothe` install | Browser automation subagent |
 | `claude` | `pip install soothe[claude]` | Anthropic Claude models and agent SDK |
-| `all` | `pip install soothe[all]` | All above extras |
+| `all` | `pip install soothe[all]` | Optional extras (`tabular`, `document`, `github`, `claude`) |
 
 ## Using Ollama (Local Models)
 

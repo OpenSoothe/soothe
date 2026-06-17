@@ -8436,8 +8436,14 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "anthropic" },
     { name = "anyio" },
+    { name = "arxiv" },
+    { name = "browser-use" },
     { name = "bubus" },
+    { name = "chardet" },
+    { name = "dashscope" },
     { name = "deepagents" },
+    { name = "deepxiv-sdk" },
+    { name = "fastembed" },
     { name = "jinja2" },
     { name = "jsonschema" },
     { name = "langchain" },
@@ -8446,6 +8452,8 @@ dependencies = [
     { name = "langchain-experimental" },
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
+    { name = "langchain-quickjs" },
+    { name = "langchain-tavily" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint" },
     { name = "langgraph-checkpoint-postgres" },
@@ -8461,38 +8469,24 @@ dependencies = [
     { name = "requests" },
     { name = "soothe-sdk" },
     { name = "sqlite-vec" },
+    { name = "tavily-python" },
+    { name = "wizsearch" },
 ]
 
 [package.optional-dependencies]
 all = [
     { name = "anthropic" },
-    { name = "arxiv" },
-    { name = "browser-use" },
-    { name = "chardet" },
     { name = "claude-agent-sdk" },
-    { name = "dashscope" },
-    { name = "deepxiv-sdk" },
     { name = "docx2txt" },
-    { name = "fastembed" },
-    { name = "langchain-tavily" },
-    { name = "langfuse" },
     { name = "openpyxl" },
     { name = "pandas" },
     { name = "pygithub" },
     { name = "pymupdf" },
     { name = "pypdf" },
-    { name = "tavily-python" },
-    { name = "wizsearch" },
-]
-browser-use = [
-    { name = "browser-use" },
 ]
 claude = [
     { name = "anthropic" },
     { name = "claude-agent-sdk" },
-]
-dashscope = [
-    { name = "dashscope" },
 ]
 dev = [
     { name = "langfuse" },
@@ -8510,23 +8504,6 @@ document = [
 github = [
     { name = "pygithub" },
 ]
-langfuse = [
-    { name = "langfuse" },
-]
-quickjs = [
-    { name = "langchain-quickjs" },
-]
-research = [
-    { name = "arxiv" },
-    { name = "chardet" },
-    { name = "deepxiv-sdk" },
-    { name = "langchain-tavily" },
-    { name = "tavily-python" },
-    { name = "wizsearch" },
-]
-semantic = [
-    { name = "fastembed" },
-]
 tabular = [
     { name = "openpyxl" },
     { name = "pandas" },
@@ -8540,24 +8517,18 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'all'", specifier = ">=0.96.0,<1.0.0" },
     { name = "anthropic", marker = "extra == 'claude'", specifier = ">=0.96.0,<1.0.0" },
     { name = "anyio", specifier = ">=3.0.0,<5.0.0" },
-    { name = "arxiv", marker = "extra == 'all'", specifier = ">=2.1.0" },
-    { name = "arxiv", marker = "extra == 'research'", specifier = ">=2.1.0" },
-    { name = "browser-use", marker = "extra == 'all'", specifier = ">=0.11.0,<0.13.0" },
-    { name = "browser-use", marker = "extra == 'browser-use'", specifier = ">=0.11.0,<0.13.0" },
+    { name = "arxiv", specifier = ">=2.1.0" },
+    { name = "browser-use", specifier = ">=0.11.0,<0.13.0" },
     { name = "bubus", specifier = ">=1.5.6" },
-    { name = "chardet", marker = "extra == 'all'", specifier = "<6" },
-    { name = "chardet", marker = "extra == 'research'", specifier = "<6" },
+    { name = "chardet", specifier = "<6" },
     { name = "claude-agent-sdk", marker = "extra == 'all'", specifier = ">=0.1.0,<1.0.0" },
     { name = "claude-agent-sdk", marker = "extra == 'claude'", specifier = ">=0.1.0,<1.0.0" },
-    { name = "dashscope", marker = "extra == 'all'", specifier = ">=1.20.0" },
-    { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.20.0" },
+    { name = "dashscope", specifier = ">=1.20.0" },
     { name = "deepagents", specifier = ">=0.6.10,<1.0.0" },
-    { name = "deepxiv-sdk", marker = "extra == 'all'", specifier = ">=0.2.5" },
-    { name = "deepxiv-sdk", marker = "extra == 'research'", specifier = ">=0.2.5" },
+    { name = "deepxiv-sdk", specifier = ">=0.2.5" },
     { name = "docx2txt", marker = "extra == 'all'", specifier = ">=0.8.0" },
     { name = "docx2txt", marker = "extra == 'document'", specifier = ">=0.8.0" },
-    { name = "fastembed", marker = "extra == 'all'", specifier = ">=0.6.0,<1.0.0" },
-    { name = "fastembed", marker = "extra == 'semantic'", specifier = ">=0.6.0,<1.0.0" },
+    { name = "fastembed", specifier = ">=0.6.0,<1.0.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "jsonschema", specifier = ">=4.0.0,<5.0.0" },
     { name = "langchain", specifier = ">=1.2.11,<2.0.0" },
@@ -8566,12 +8537,9 @@ requires-dist = [
     { name = "langchain-experimental", specifier = ">=0.0.50,<1.0.0" },
     { name = "langchain-mcp-adapters", specifier = ">=0.2.0,<1.0.0" },
     { name = "langchain-openai", specifier = ">=0.3.0,<1.0.0" },
-    { name = "langchain-quickjs", marker = "extra == 'quickjs'", specifier = ">=0.1.0" },
-    { name = "langchain-tavily", marker = "extra == 'all'", specifier = ">=0.2.17" },
-    { name = "langchain-tavily", marker = "extra == 'research'", specifier = ">=0.2.17" },
-    { name = "langfuse", marker = "extra == 'all'", specifier = ">=3.0.0,<4.0.0" },
+    { name = "langchain-quickjs", specifier = ">=0.1.0" },
+    { name = "langchain-tavily", specifier = ">=0.2.17" },
     { name = "langfuse", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
-    { name = "langfuse", marker = "extra == 'langfuse'", specifier = ">=3.0.0,<4.0.0" },
     { name = "langgraph", specifier = ">=1.1.1,<2.0.0" },
     { name = "langgraph-checkpoint", specifier = ">=4.0.0,<5.0.0" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=3.1.0,<4.0.0" },
@@ -8602,12 +8570,10 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
-    { name = "tavily-python", marker = "extra == 'all'", specifier = ">=0.5.0" },
-    { name = "tavily-python", marker = "extra == 'research'", specifier = ">=0.5.0" },
-    { name = "wizsearch", marker = "extra == 'all'", specifier = ">=1.1.8,<2.0.0" },
-    { name = "wizsearch", marker = "extra == 'research'", specifier = ">=1.1.8,<2.0.0" },
+    { name = "tavily-python", specifier = ">=0.5.0" },
+    { name = "wizsearch", specifier = ">=1.1.8,<2.0.0" },
 ]
-provides-extras = ["all", "browser-use", "claude", "dashscope", "dev", "document", "github", "langfuse", "quickjs", "research", "semantic", "tabular"]
+provides-extras = ["all", "claude", "dev", "document", "github", "tabular"]
 
 [[package]]
 name = "soothe-cli"
@@ -8821,10 +8787,10 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "langfuse" },
     { name = "pyinstaller" },
     { name = "pyinstrument" },
     { name = "pytest" },
-    { name = "soothe", extra = ["langfuse"] },
     { name = "textual-dev" },
 ]
 
@@ -8838,10 +8804,10 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "langfuse", specifier = ">=3.0.0,<4.0.0" },
     { name = "pyinstaller", specifier = ">=6.20.0" },
     { name = "pyinstrument", specifier = ">=5.1.2" },
     { name = "pytest", specifier = ">=9.0.2" },
-    { name = "soothe", extras = ["langfuse"], editable = "packages/soothe" },
     { name = "textual-dev", specifier = ">=1.8.0" },
 ]
 
