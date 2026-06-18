@@ -220,11 +220,18 @@ def build_soothe_middleware_stack(
                 retry_on_timeout=llm_rl.retry_on_timeout,
                 max_timeout_retries=llm_rl.max_timeout_retries,
                 timeout_retry_multiplier=llm_rl.timeout_retry_multiplier,
+                # IG-499: 429 retry configuration
+                retry_on_rate_limit=llm_rl.retry_on_rate_limit,
+                max_rate_limit_retries=llm_rl.max_rate_limit_retries,
+                rate_limit_backoff_base=llm_rl.rate_limit_backoff_base,
+                rate_limit_backoff_max=llm_rl.rate_limit_backoff_max,
+                respect_retry_after_header=llm_rl.respect_retry_after_header,
             )
         )
         logger.info(
             "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, "
-            "timeout=%ds timeout_cap=%ds retry=%s max_retries=%d multiplier=%.1f",
+            "timeout=%ds timeout_cap=%ds retry_timeout=%s max_timeout_retries=%d multiplier=%.1f "
+            "retry_429=%s max_429_retries=%d backoff_base=%.1fs backoff_max=%.1fs retry_after_header=%s",
             llm_rl.rpm_limit,
             llm_rl.concurrent_limit,
             llm_rl.call_timeout_seconds,
@@ -232,6 +239,11 @@ def build_soothe_middleware_stack(
             llm_rl.retry_on_timeout,
             llm_rl.max_timeout_retries,
             llm_rl.timeout_retry_multiplier,
+            llm_rl.retry_on_rate_limit,
+            llm_rl.max_rate_limit_retries,
+            llm_rl.rate_limit_backoff_base,
+            llm_rl.rate_limit_backoff_max,
+            llm_rl.respect_retry_after_header,
         )
     else:
         logger.debug("[Middleware] LLM rate limiting disabled")
