@@ -274,6 +274,12 @@ agent:
       retry_on_timeout: true
       max_timeout_retries: 2
       timeout_retry_multiplier: 1.2
+      # IG-499: HTTP 429 rate limit retry configuration
+      retry_on_rate_limit: true
+      max_rate_limit_retries: 3
+      rate_limit_backoff_base: 2.0
+      rate_limit_backoff_max: 60.0
+      respect_retry_after_header: true
 
   # === PROTOCOLS (Backend Selection) ===
   protocols:

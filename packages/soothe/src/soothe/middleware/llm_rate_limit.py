@@ -4,6 +4,7 @@ This middleware throttles LLM API calls at the model level, not thread level,
 allowing multiple threads to run concurrently while limiting actual API request rate.
 
 IG-258 Phase 2: Thread-local rate limiting to prevent cross-thread contention.
+IG-499: HTTP 429 rate limit error retry with exponential backoff.
 """
 
 from __future__ import annotations
@@ -21,6 +22,74 @@ from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from soothe.utils.token_counting import estimate_content_chars
 
 logger = logging.getLogger(__name__)
+
+
+# IG-499: Helper functions for 429 error detection and retry-after extraction
+
+
+def _is_api_rate_limit_error(exc: Exception) -> bool:
+    """Check if exception is a 429 rate limit error from OpenAI/Anthropic APIs.
+
+    Detection strategy:
+    1. Check class name (OpenAI/Anthropic RateLimitError)
+    2. Check response.status_code attribute
+    3. Fallback: keyword matching in error string
+
+    Args:
+        exc: Exception to check.
+
+    Returns:
+        True if this is a 429 rate limit error that should trigger retry.
+    """
+    # Check by exception class name (works for OpenAI and Anthropic)
+    exc_type_name = type(exc).__name__
+    if exc_type_name == "RateLimitError":
+        return True
+
+    # Check response.status_code (httpx.Response from APIStatusError)
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status_code = getattr(response, "status_code", None)
+        if status_code == 429:
+            return True
+
+    # Fallback: keyword matching
+    error_str = str(exc).lower()
+    return "429" in error_str or "rate limit" in error_str or "throttling" in error_str
+
+
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Extract retry-after header value from API error response.
+
+    OpenAI and Anthropic often include a 'retry-after' header in 429 responses
+    indicating when the client should retry. Using this value is more efficient
+    than exponential backoff.
+
+    Args:
+        exc: Exception with response attribute containing headers.
+
+    Returns:
+        Retry-after value in seconds, or None if not present/parseable.
+    """
+    response = getattr(exc, "response", None)
+    if response is None:
+        return None
+
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return None
+
+    # Try standard retry-after header
+    retry_after = headers.get("retry-after")
+    if retry_after is None:
+        return None
+
+    # Parse as float (seconds)
+    try:
+        return float(retry_after)
+    except ValueError:
+        # Some APIs use date format; fall back to None
+        return None
 
 
 def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
@@ -168,6 +237,8 @@ class LLMRateLimitMiddleware(AgentMiddleware):
     - Global: One slow call monopolizes semaphore for 60s → others starve
     - Thread-local: Per-thread semaphore → no starvation, fair distribution
 
+    IG-499: HTTP 429 retry with exponential backoff and retry-after header support.
+
     Example:
         ```python
         from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
@@ -181,6 +252,11 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             retry_on_timeout=True,  # IG-295
             max_timeout_retries=2,  # IG-295
             timeout_retry_multiplier=1.2,  # IG-295
+            retry_on_rate_limit=True,  # IG-499
+            max_rate_limit_retries=3,  # IG-499
+            rate_limit_backoff_base=2.0,  # IG-499
+            rate_limit_backoff_max=60.0,  # IG-499
+            respect_retry_after_header=True,  # IG-499
         )
         ```
 
@@ -193,6 +269,11 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         retry_on_timeout: Enable retry with timeout escalation (IG-295, default True).
         max_timeout_retries: Max retry attempts after timeout (IG-295, default 2).
         timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 1.2).
+        retry_on_rate_limit: Enable retry on HTTP 429 errors (IG-499, default True).
+        max_rate_limit_retries: Max retry attempts after 429 (IG-499, default 3).
+        rate_limit_backoff_base: Exponential backoff base in seconds (IG-499, default 2.0).
+        rate_limit_backoff_max: Maximum backoff wait in seconds (IG-499, default 60.0).
+        respect_retry_after_header: Use retry-after header when present (IG-499, default True).
     """
 
     name = "LLMRateLimitMiddleware"
@@ -207,8 +288,13 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         retry_on_timeout: bool = True,  # IG-295
         max_timeout_retries: int = 2,  # IG-295
         timeout_retry_multiplier: float = 1.2,  # IG-295
+        retry_on_rate_limit: bool = True,  # IG-499
+        max_rate_limit_retries: int = 3,  # IG-499
+        rate_limit_backoff_base: float = 2.0,  # IG-499
+        rate_limit_backoff_max: float = 60.0,  # IG-499
+        respect_retry_after_header: bool = True,  # IG-499
     ) -> None:
-        """Initialize rate limiter with thread-local budgets and retry (Phase 2, IG-295).
+        """Initialize rate limiter with thread-local budgets and retry (Phase 2, IG-295, IG-499).
 
         Args:
             requests_per_minute: Global RPM limit (default: 120).
@@ -219,6 +305,11 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             retry_on_timeout: Enable retry with timeout escalation (IG-295, default True).
             max_timeout_retries: Max retry attempts after timeout (IG-295, default 2).
             timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 1.2).
+            retry_on_rate_limit: Enable retry on HTTP 429 errors (IG-499, default True).
+            max_rate_limit_retries: Max retry attempts after 429 (IG-499, default 3).
+            rate_limit_backoff_base: Exponential backoff base in seconds (IG-499, default 2.0).
+            rate_limit_backoff_max: Maximum backoff wait in seconds (IG-499, default 60.0).
+            respect_retry_after_header: Use retry-after header when present (IG-499, default True).
         """
         super().__init__()
         self._rpm_limit_global = requests_per_minute
@@ -232,6 +323,13 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         self._max_timeout_retries = max_timeout_retries
         self._timeout_retry_multiplier = timeout_retry_multiplier
 
+        # IG-499: Rate limit retry configuration
+        self._retry_on_rate_limit = retry_on_rate_limit
+        self._max_rate_limit_retries = max_rate_limit_retries
+        self._rate_limit_backoff_base = rate_limit_backoff_base
+        self._rate_limit_backoff_max = rate_limit_backoff_max
+        self._respect_retry_after_header = respect_retry_after_header
+
         if thread_local:
             # Thread-local budgets (Phase 2)
             self._thread_budgets: dict[str, ThreadBudget] = {}
@@ -240,7 +338,8 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             logger.info(
                 "LLM rate limiter initialized (thread-local): global_rpm=%d, "
                 "per_thread_concurrent=%d, timeout=%ds timeout_cap=%ds "
-                "retry=%s max_retries=%d retry_multiplier=%.1f",
+                "retry_timeout=%s max_timeout_retries=%d retry_multiplier=%.1f "
+                "retry_429=%s max_429_retries=%d backoff_base=%.1fs backoff_max=%.1fs retry_after_header=%s",
                 requests_per_minute,
                 max_concurrent_requests_per_thread,
                 call_timeout_seconds,
@@ -248,6 +347,11 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                 retry_on_timeout,
                 max_timeout_retries,
                 timeout_retry_multiplier,
+                retry_on_rate_limit,
+                max_rate_limit_retries,
+                rate_limit_backoff_base,
+                rate_limit_backoff_max,
+                respect_retry_after_header,
             )
         else:
             # Legacy global mode (fallback)
@@ -258,7 +362,8 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             logger.info(
                 "LLM rate limiter initialized (global): rpm=%d, concurrent=%d, "
                 "timeout=%ds timeout_cap=%ds "
-                "retry=%s max_retries=%d retry_multiplier=%.1f",
+                "retry_timeout=%s max_timeout_retries=%d retry_multiplier=%.1f "
+                "retry_429=%s max_429_retries=%d backoff_base=%.1fs backoff_max=%.1fs retry_after_header=%s",
                 requests_per_minute,
                 max_concurrent_requests_per_thread,
                 call_timeout_seconds,
@@ -266,6 +371,11 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                 retry_on_timeout,
                 max_timeout_retries,
                 timeout_retry_multiplier,
+                retry_on_rate_limit,
+                max_rate_limit_retries,
+                rate_limit_backoff_base,
+                rate_limit_backoff_max,
+                respect_retry_after_header,
             )
 
     @staticmethod
@@ -378,12 +488,35 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         logger.warning("Unexpected synchronous LLM call in async middleware")
         return handler(request)
 
+    def _calculate_rate_limit_backoff(self, attempt: int, exc: Exception | None = None) -> float:
+        """Calculate backoff delay for 429 rate limit retry (IG-499).
+
+        Prefers retry-after header from API when available and enabled.
+        Falls back to exponential backoff: base * 2^attempt.
+
+        Args:
+            attempt: Retry attempt number (0-indexed).
+            exc: Exception containing response with retry-after header (optional).
+
+        Returns:
+            Backoff delay in seconds, capped at backoff_max.
+        """
+        # Prefer retry-after header if available and enabled
+        if self._respect_retry_after_header and exc is not None:
+            retry_after = _extract_retry_after_seconds(exc)
+            if retry_after is not None:
+                return min(retry_after, self._rate_limit_backoff_max)
+
+        # Exponential backoff: base * 2^attempt
+        backoff = self._rate_limit_backoff_base * (2**attempt)
+        return min(backoff, self._rate_limit_backoff_max)
+
     async def awrap_model_call(
         self,
         request: ModelRequest[Any],
         handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]],
     ) -> ModelResponse[Any]:
-        """Async wrapper with thread-local rate limiting and retry (Phase 2, IG-295).
+        """Async wrapper with thread-local rate limiting and retry (Phase 2, IG-295, IG-499).
 
         Phase 2 improvements:
         - Thread-local budget isolation (no cross-thread blocking)
@@ -395,6 +528,11 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         - Enhanced timeout error with metadata
         - Graceful degradation (RFC-000 Principle #10)
 
+        IG-499 improvements:
+        - Retry on HTTP 429 rate limit errors with exponential backoff
+        - Respect retry-after header from API when present
+        - Separate retry counters for timeout vs rate limit errors
+
         Args:
             request: Model request with messages and parameters.
             handler: Next handler in middleware chain (actual LLM call).
@@ -403,12 +541,18 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             Model response from LLM.
 
         Raises:
-            EnhancedTimeoutError: When retries exhausted after timeout.
+            EnhancedTimeoutError: When timeout retries exhausted.
+            Exception: Original 429 error when rate limit retries exhausted.
         """
         thread_id = self._thread_id_from_request(request)
 
-        # Determine max attempts (retry + initial attempt)
-        max_attempts = self._max_timeout_retries + 1 if self._retry_on_timeout else 1
+        # IG-499: Separate retry counters for different error types
+        timeout_attempts = 0
+        rate_limit_attempts = 0
+        max_timeout_attempts = self._max_timeout_retries + 1 if self._retry_on_timeout else 1
+        max_rate_limit_attempts = (
+            self._max_rate_limit_retries + 1 if self._retry_on_rate_limit else 1
+        )
 
         if self._thread_local_enabled:
             # Phase 2: Thread-local rate limiting
@@ -419,82 +563,149 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                 # Thread-local RPM check (only blocks this thread)
                 await budget.wait_for_rpm_slot()
 
-                # Retry loop with timeout escalation (IG-295)
-                for attempt in range(max_attempts):
-                    # Calculate timeout (escalate on retry, IG-295)
+                # IG-499: Combined retry loop handling both timeout and 429 errors
+                while True:
+                    # Calculate timeout with escalation based on timeout attempts
                     eff_timeout = self._calculate_retry_timeout(
                         base_timeout=self._call_timeout,
-                        attempt=attempt,
+                        attempt=timeout_attempts,
                     )
 
                     try:
                         response = await asyncio.wait_for(handler(request), timeout=eff_timeout)
                         budget.record_request()
                         return response
+
                     except TimeoutError:
-                        if attempt < max_attempts - 1:
-                            # Retry with increased timeout
+                        # IG-295: Timeout retry handling
+                        if timeout_attempts < max_timeout_attempts - 1:
+                            timeout_attempts += 1
+                            backoff = 1.0 * timeout_attempts
                             logger.debug(
-                                "LLM call timeout (attempt %d/%d, %ds) - retrying with increased timeout (thread_id=%s)",
-                                attempt + 1,
-                                max_attempts,
+                                "LLM call timeout (attempt %d/%d, %ds) - retrying with backoff=%.1fs (thread_id=%s)",
+                                timeout_attempts,
+                                max_timeout_attempts,
                                 eff_timeout,
+                                backoff,
                                 thread_id,
                             )
-                            # Brief backoff before retry
-                            await asyncio.sleep(1.0 * attempt)
+                            await asyncio.sleep(backoff)
+                            continue
                         else:
-                            # Final attempt failed - emit enhanced timeout error (IG-295)
+                            # Final timeout attempt failed
                             logger.error(
                                 "LLM call exceeded timeout after %d retries (%ds final timeout, thread_id=%s)",
-                                max_attempts,
+                                max_timeout_attempts,
                                 eff_timeout,
                                 thread_id,
                             )
-                            # Raise enhanced TimeoutError with metadata
                             raise EnhancedTimeoutError(
                                 timeout_seconds=eff_timeout,
-                                retries=max_attempts - 1,
+                                retries=max_timeout_attempts - 1,
                                 prompt_chars=estimate_model_request_prompt_chars(request),
                                 thread_id=thread_id,
                             )
+
+                    except Exception as exc:
+                        # IG-499: Check for 429 rate limit error
+                        if _is_api_rate_limit_error(exc):
+                            if rate_limit_attempts < max_rate_limit_attempts - 1:
+                                rate_limit_attempts += 1
+                                backoff = self._calculate_rate_limit_backoff(
+                                    attempt=rate_limit_attempts - 1,
+                                    exc=exc,
+                                )
+                                logger.warning(
+                                    "LLM call rate limited (429) (attempt %d/%d) - retrying with backoff=%.1fs (thread_id=%s)",
+                                    rate_limit_attempts,
+                                    max_rate_limit_attempts,
+                                    backoff,
+                                    thread_id,
+                                )
+                                await asyncio.sleep(backoff)
+                                continue
+                            else:
+                                # Final rate limit attempt failed
+                                logger.error(
+                                    "LLM call rate limited (429) after %d retries (thread_id=%s)",
+                                    max_rate_limit_attempts,
+                                    thread_id,
+                                )
+                                raise
+                        else:
+                            # Non-rate-limit, non-timeout error: propagate immediately
+                            raise
+
         else:
             # Legacy global mode (fallback)
             async with self._semaphore:
                 await self._enforce_rpm_limit_global()
 
-                # Retry loop with timeout escalation (IG-295)
-                for attempt in range(max_attempts):
+                # IG-499: Combined retry loop handling both timeout and 429 errors
+                while True:
                     eff_timeout = self._calculate_retry_timeout(
                         base_timeout=self._call_timeout,
-                        attempt=attempt,
+                        attempt=timeout_attempts,
                     )
 
                     try:
                         response = await asyncio.wait_for(handler(request), timeout=eff_timeout)
                         await self._record_request_time_global()
                         return response
+
                     except TimeoutError:
-                        if attempt < max_attempts - 1:
+                        # IG-295: Timeout retry handling
+                        if timeout_attempts < max_timeout_attempts - 1:
+                            timeout_attempts += 1
+                            backoff = 1.0 * timeout_attempts
                             logger.debug(
-                                "LLM call timeout (attempt %d/%d, %ds) - retrying",
-                                attempt + 1,
-                                max_attempts,
+                                "LLM call timeout (attempt %d/%d, %ds) - retrying with backoff=%.1fs",
+                                timeout_attempts,
+                                max_timeout_attempts,
                                 eff_timeout,
+                                backoff,
                             )
-                            await asyncio.sleep(1.0 * attempt)
+                            await asyncio.sleep(backoff)
+                            continue
                         else:
                             logger.error(
                                 "LLM call exceeded timeout after %d retries (%ds final timeout)",
-                                max_attempts,
+                                max_timeout_attempts,
                                 eff_timeout,
                             )
                             raise EnhancedTimeoutError(
                                 timeout_seconds=eff_timeout,
-                                retries=max_attempts - 1,
+                                retries=max_timeout_attempts - 1,
                                 prompt_chars=estimate_model_request_prompt_chars(request),
                                 thread_id=thread_id,
                             )
+
+                    except Exception as exc:
+                        # IG-499: Check for 429 rate limit error
+                        if _is_api_rate_limit_error(exc):
+                            if rate_limit_attempts < max_rate_limit_attempts - 1:
+                                rate_limit_attempts += 1
+                                backoff = self._calculate_rate_limit_backoff(
+                                    attempt=rate_limit_attempts - 1,
+                                    exc=exc,
+                                )
+                                logger.warning(
+                                    "LLM call rate limited (429) (attempt %d/%d) - retrying with backoff=%.1fs",
+                                    rate_limit_attempts,
+                                    max_rate_limit_attempts,
+                                    backoff,
+                                )
+                                await asyncio.sleep(backoff)
+                                continue
+                            else:
+                                logger.error(
+                                    "LLM call rate limited (429) after %d retries",
+                                    max_rate_limit_attempts,
+                                )
+                                raise
+                        else:
+                            # Non-rate-limit, non-timeout error: propagate immediately
+                            raise
 
     async def _enforce_rpm_limit_global(self) -> None:
         """Legacy global RPM enforcement (fallback mode)."""
