@@ -59,7 +59,7 @@ agent:
       max_parallel_subagents: 6   # Increased from 4 for more subagent parallelism
       max_parallel_tools: 64      # Increased from 50 for higher tool throughput
       global_max_llm_calls: 16    # Increased from 10 for more concurrent LLM calls
-      step_parallelism: full      # Changed from 'dependency' for maximum parallelism
+      step_parallelism: max       # Changed from 'dependency' for maximum parallelism
     max_subagent_tasks_per_wave: 8  # Increased from 4 for larger subagent batches
   # Embedded QuickJS interpreter for programmatic tool calling (PTC).
   # Dependency note: langchain-quickjs is included in soothe base dependencies.
