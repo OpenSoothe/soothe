@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
+from soothe import __version__ as core_version
 from soothe.foundation.loop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
+from soothe_daemon import __version__ as daemon_version
 from soothe_daemon.bootstrap.logging import set_client_id
 from soothe_daemon.services.image_understanding import validate_and_normalize_image_attachments
 
@@ -612,8 +615,6 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with optional request_id.
         """
-        import os
-
         d = self._daemon
         request_id = msg.get("request_id")
 
@@ -640,6 +641,8 @@ class MessageRouter:
             "daemon_pid": os.getpid() if running else None,
             "readiness_state": d._readiness_state,
             "readiness_message": d._readiness_message,
+            "daemon_version": daemon_version,
+            "core_version": core_version,
         }
 
         await d._send_client_message(client_id, response)
