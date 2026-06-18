@@ -83,12 +83,14 @@ def _render_unified_status_table(
     daemon_pid: int | None = None,
     ready_state: dict[str, Any] | None = None,
     daemon_live: bool = True,
+    daemon_version: str | None = None,
+    core_version: str | None = None,
 ) -> Table:
     """Render unified status table without duplicated info.
 
     Sections:
     - Connection: WebSocket URL, Soothe Home
-    - Daemon: Running, Threads, PID (only when daemon is live)
+    - Daemon: Running, Threads, PID, Versions (only when daemon is live)
     """
     table = Table(title="Soothe Status")
     table.add_column("Section", style="dim", width=12)
@@ -109,6 +111,10 @@ def _render_unified_status_table(
         table.add_row("", "PID", str(daemon_pid))
     if active_threads is not None:
         table.add_row("", "Active Threads", str(active_threads))
+    if daemon_version:
+        table.add_row("", "Daemon Version", daemon_version)
+    if core_version:
+        table.add_row("", "Core Version", core_version)
 
     if ready_state:
         state = ready_state.get("state", "unknown")
@@ -207,6 +213,8 @@ def daemon_status(
             "port_live": status.get("port_live", True),
             "active_threads": status.get("active_threads", 0),
             "daemon_pid": status.get("daemon_pid"),
+            "daemon_version": status.get("daemon_version"),
+            "core_version": status.get("core_version"),
         }
         if ready_state:
             output["readiness_state"] = ready_state.get("state", "unknown")
@@ -219,9 +227,20 @@ def daemon_status(
     port_live = status.get("port_live", True)
     active_threads = status.get("active_threads", 0)
     daemon_pid = status.get("daemon_pid")
+    daemon_version = status.get("daemon_version")
+    core_version = status.get("core_version")
 
     table = _render_unified_status_table(
-        config, ws_url, running, port_live, active_threads, daemon_pid, ready_state
+        config,
+        ws_url,
+        running,
+        port_live,
+        active_threads,
+        daemon_pid,
+        ready_state,
+        daemon_live=True,
+        daemon_version=daemon_version,
+        core_version=core_version,
     )
     console.print(table)
 
@@ -311,6 +330,8 @@ def status_main(
                 output["daemon"]["port_live"] = status.get("port_live", True)
                 output["daemon"]["active_threads"] = status.get("active_threads", 0)
                 output["daemon"]["daemon_pid"] = status.get("daemon_pid")
+                output["daemon"]["daemon_version"] = status.get("daemon_version")
+                output["daemon"]["core_version"] = status.get("core_version")
         console.print_json(json.dumps(output))
         return
 
@@ -338,9 +359,19 @@ def status_main(
     port_live = status.get("port_live", True)
     active_threads = status.get("active_threads", 0)
     daemon_pid = status.get("daemon_pid")
+    daemon_version = status.get("daemon_version")
+    core_version = status.get("core_version")
 
     table = _render_unified_status_table(
-        config, ws_url, running, port_live, active_threads, daemon_pid
+        config,
+        ws_url,
+        running,
+        port_live,
+        active_threads,
+        daemon_pid,
+        daemon_live=True,
+        daemon_version=daemon_version,
+        core_version=core_version,
     )
     console.print(table)
 
