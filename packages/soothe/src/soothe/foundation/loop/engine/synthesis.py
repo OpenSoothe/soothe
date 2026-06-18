@@ -17,6 +17,7 @@ user-safe evidence payload plus system report instructions (``synthesis_projecti
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -139,7 +140,15 @@ class SynthesisGenerator:
             LangGraph ``messages``-mode stream tuples tagged with ``phase=goal_completion``.
         """
 
+        classify_start = time.perf_counter()
         classification = await self._classify_scenario(goal, state)
+        classify_elapsed_ms = int((time.perf_counter() - classify_start) * 1000)
+        logger.info(
+            "Synthesis Phase 1 (classify): scenario=%s elapsed_ms=%d",
+            classification.scenario,
+            classify_elapsed_ms,
+        )
+
         max_total = self._synthesis_max_chars()
         messages = build_synthesis_messages(
             state,
@@ -201,12 +210,23 @@ class SynthesisGenerator:
 
         # IG-477: Stream via LLM directly — avoids CoreAgent graph checkpointer
         # during goal-completion synthesis (same class of leak as execute streaming).
+        synthesis_start = time.perf_counter()
+        logger.info(
+            "Synthesis Phase 2 (generate): starting stream scenario=%s approx_chars=%d",
+            classification.scenario,
+            approx_chars,
+        )
         async for chunk in self.llm.astream(messages, config=graph_config):
             yield tag_messages_stream_chunk_for_goal_completion(
                 ((), "messages", (chunk, {})),
                 thread_id=state.thread_id,
                 iteration=state.iteration,
             )
+        synthesis_elapsed_ms = int((time.perf_counter() - synthesis_start) * 1000)
+        logger.info(
+            "Synthesis Phase 2 (generate): completed elapsed_ms=%d",
+            synthesis_elapsed_ms,
+        )
 
     def _synthesis_max_chars(self) -> int:
         """Return max total extracted text for system + evidence payload (IG-317)."""
