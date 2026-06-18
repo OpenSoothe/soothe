@@ -931,6 +931,11 @@ class LLMRateLimitConfig(BaseModel):
         retry_on_timeout: Enable retry with timeout escalation (IG-295).
         max_timeout_retries: Max retry attempts after timeout (IG-295).
         timeout_retry_multiplier: Timeout multiplier on retry (IG-295).
+        retry_on_rate_limit: Enable retry on HTTP 429 rate limit errors (IG-499).
+        max_rate_limit_retries: Max retry attempts after 429 error (IG-499).
+        rate_limit_backoff_base: Exponential backoff base in seconds (IG-499).
+        rate_limit_backoff_max: Maximum backoff wait in seconds (IG-499).
+        respect_retry_after_header: Use retry-after header from API when present (IG-499).
     """
 
     enabled: bool = Field(
@@ -944,6 +949,34 @@ class LLMRateLimitConfig(BaseModel):
     retry_on_timeout: bool = True
     max_timeout_retries: int = Field(default=2, ge=0, le=5)
     timeout_retry_multiplier: float = Field(default=1.2, ge=1.0, le=5.0)
+
+    # IG-499: HTTP 429 rate limit retry configuration
+    retry_on_rate_limit: bool = Field(
+        default=True,
+        description="Retry LLM calls on HTTP 429 rate limit errors",
+    )
+    max_rate_limit_retries: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Max retry attempts after 429 error",
+    )
+    rate_limit_backoff_base: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=10.0,
+        description="Exponential backoff base (seconds)",
+    )
+    rate_limit_backoff_max: float = Field(
+        default=60.0,
+        ge=10.0,
+        le=300.0,
+        description="Maximum backoff wait (seconds)",
+    )
+    respect_retry_after_header: bool = Field(
+        default=True,
+        description="Use retry-after header from API when present",
+    )
 
 
 class LoopConcurrencyConfig(BaseModel):
