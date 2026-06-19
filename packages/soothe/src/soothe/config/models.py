@@ -463,6 +463,24 @@ class PersistenceConfig(BaseModel):
         ),
     )
 
+    # IG-500: Loop archival configuration
+    archive_enabled: bool = Field(
+        default=True,
+        description="Enable loop checkpoint archival on /clear command.",
+    )
+    archive_retention_days: int = Field(
+        default=90,
+        ge=1,
+        le=365,
+        description="Days to retain archived loops before automatic cleanup.",
+    )
+    archive_max_count: int = Field(
+        default=1000,
+        ge=10,
+        le=10000,
+        description="Maximum number of archived loops to retain.",
+    )
+
 
 class MemUConfig(BaseModel):
     """MemU memory backend configuration.

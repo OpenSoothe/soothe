@@ -17,7 +17,7 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.loop.state.checkpoint import (
@@ -889,6 +889,134 @@ class StrangeLoopStateManager:
         await self.save(self._checkpoint)
 
         logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
+
+    async def archive_and_finalize(
+        self,
+        *,
+        reason: Literal["user_clear", "finalized", "expired"] = "user_clear",
+    ) -> dict[str, Any]:
+        """Archive loop checkpoint and mark as finalized (IG-500).
+
+        Saves checkpoint to archive storage, preserving goal_history and metrics.
+        Used by /clear command to preserve loop history before creating fresh loop.
+
+        Args:
+            reason: Archival trigger reason.
+
+        Returns:
+            Archive metadata dict for broadcast and knowledge transfer.
+        """
+        from soothe.foundation.loop.state.persistence.archive_backend import ArchiveBackend
+
+        if self._checkpoint is None:
+            raise ValueError("No active checkpoint to archive")
+
+        # Mark as finalized
+        self._checkpoint.status = "finalized"
+        self._checkpoint.updated_at = datetime.now(UTC)
+
+        # Archive via backend
+        archive_backend = ArchiveBackend()
+        archive_path = await archive_backend.archive_loop(
+            self._checkpoint,
+            reason=reason,
+        )
+
+        # Generate metadata
+        metadata = {
+            "loop_id": self.loop_id,
+            "archived_at": datetime.now(UTC).isoformat(),
+            "reason": reason,
+            "goal_count": len(self._checkpoint.goal_history),
+            "goals_completed": sum(
+                1 for g in self._checkpoint.goal_history if g.status == "completed"
+            ),
+            "total_tokens_used": self._checkpoint.total_tokens_used,
+            "total_duration_ms": self._checkpoint.total_duration_ms,
+            "archive_path": archive_path,
+        }
+
+        # Save finalized checkpoint to database
+        await self.save(self._checkpoint)
+
+        logger.info(
+            "Archived loop %s: goals=%d completed=%d reason=%s path=%s",
+            self.loop_id,
+            metadata["goal_count"],
+            metadata["goals_completed"],
+            reason,
+            archive_path,
+        )
+
+        return metadata
+
+    async def reinitialize_for_clear(
+        self,
+        old_thread_id: str,
+    ) -> tuple[str, StrangeLoopCheckpoint]:
+        """Create fresh loop after /clear (IG-500).
+
+        Generates new loop_id with fresh state (empty goal_history, reset metrics).
+        Thread_id reused for immediate continuation.
+
+        Args:
+            old_thread_id: Thread to reuse for new loop.
+
+        Returns:
+            Tuple of (new_loop_id, new_checkpoint).
+        """
+        # Generate new loop_id
+        new_loop_id = str(uuid.uuid4())
+
+        # Update self.loop_id to new value
+        self.loop_id = new_loop_id
+
+        # Update run_dir for new loop
+        self.run_dir = PersistenceDirectoryManager.get_loop_directory(new_loop_id)
+
+        # Create fresh checkpoint
+        now = datetime.now(UTC)
+        new_checkpoint = StrangeLoopCheckpoint(
+            loop_id=new_loop_id,
+            thread_ids=[old_thread_id],  # Reuse thread for immediate continuation
+            current_thread_id=old_thread_id,
+            status="idle",
+            goal_history=[],  # Empty
+            current_goal_index=-1,
+            working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
+            thread_health_metrics=ThreadHealthMetrics(
+                thread_id=old_thread_id,
+                last_updated=now,
+            ),
+            total_goals_completed=0,
+            total_thread_switches=0,
+            total_duration_ms=0,
+            total_tokens_used=0,
+            created_at=now,
+            updated_at=now,
+            schema_version="5.0",
+            execution_checkpoint={
+                "loop_id": new_loop_id,
+                "thread_id": old_thread_id,
+                "iteration": 0,
+                "wave_metrics": {},
+                "status": "idle",
+            },
+        )
+
+        # Update self
+        self._checkpoint = new_checkpoint
+
+        # Persist new checkpoint
+        await self._save_checkpoint_to_db(new_checkpoint)
+
+        logger.info(
+            "Reinitialized loop after clear: new_loop_id=%s thread=%s",
+            new_loop_id,
+            old_thread_id,
+        )
+
+        return new_loop_id, new_checkpoint
 
     async def close(self) -> None:
         """Close backend connection pools (IG-404, IG-406).

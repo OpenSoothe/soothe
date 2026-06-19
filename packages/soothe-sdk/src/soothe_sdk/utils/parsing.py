@@ -90,7 +90,7 @@ def resolve_provider_env(value: str, *, provider_name: str, field_name: str) -> 
 PATH_ARG_PATTERN = re.compile(r"^(file_path|path|directory|dir|folder|cwd)\b", re.IGNORECASE)
 """Regex pattern for detecting path-like argument names in tool calls.
 
-Renamed from is_path_argument in IG-XXX (SDK refactoring).
+Renamed from is_path_argument in IG-461 (SDK refactoring).
 The original name was misleading - this is a pattern, not a function.
 """
 

@@ -104,7 +104,7 @@ LC_COGNITION_HOVER = "#7BC9D3"
 
 
 # ---------------------------------------------------------------------------
-# Unified Card Palette — Grayscale system for Goal/Plan/Step/Task cards (IG-XXX)
+# Unified Card Palette — Grayscale system for Goal/Plan/Step/Task cards (IG-468)
 #
 # Design principles:
 # - Consistent visual style across all four card types
@@ -409,7 +409,7 @@ class ThemeColors:
     surface: str
     """Elevated card / panel background."""
 
-    # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+    # Unified card colors for Goal/Plan/Step/Task (IG-468)
     card_border: str
     """Card left border — unified gray across all card types."""
 
@@ -489,7 +489,7 @@ DARK_COLORS = ThemeColors(
     foreground=LC_BODY,
     background=LC_DARK,
     surface=LC_CARD,
-    # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+    # Unified card colors for Goal/Plan/Step/Task (IG-468)
     card_border=CARD_BORDER_DARK,
     card_border_hover=CARD_BORDER_HOVER_DARK,
     card_header=CARD_HEADER_DARK,
@@ -520,7 +520,7 @@ LIGHT_COLORS = ThemeColors(
     foreground=LC_LIGHT_BODY,
     background=LC_LIGHT_BG,
     surface=LC_LIGHT_SURFACE,
-    # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+    # Unified card colors for Goal/Plan/Step/Task (IG-468)
     card_border=CARD_BORDER_LIGHT,
     card_border_hover=CARD_BORDER_HOVER_LIGHT,
     card_header=CARD_HEADER_LIGHT,
@@ -873,7 +873,7 @@ def get_css_variable_defaults(
         "tool-hover": c.tool_hover,
         "cognition": c.cognition,
         "cognition-hover": c.cognition_hover,
-        # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+        # Unified card colors for Goal/Plan/Step/Task (IG-468)
         "card-border": c.card_border,
         "card-border-hover": c.card_border_hover,
         "card-header": c.card_header,
@@ -961,7 +961,7 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
         foreground=_hex_or(ct.foreground, base.foreground),
         background=_hex_or(ct.background, base.background),
         surface=_hex_or(ct.surface, base.surface),
-        # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+        # Unified card colors for Goal/Plan/Step/Task (IG-468)
         card_border=base.card_border,
         card_border_hover=base.card_border_hover,
         card_header=base.card_header,

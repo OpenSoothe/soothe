@@ -547,6 +547,11 @@ persistence:
   postgres_pool_max_lifetime_seconds: 1800
   postgres_pool_acquire_timeout_seconds: 30
 
+  # Loop archival configuration (IG-500: /clear enhancement)
+  archive_enabled: true
+  archive_retention_days: 90  # Days to keep archived loops before cleanup
+  archive_max_count: 1000  # Maximum archived loops to retain
+
 # Vector store configuration
 # sqlite_vec is the default (uses sqlite-vec extension for vector search)
 vector_stores:
