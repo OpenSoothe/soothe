@@ -147,21 +147,75 @@ async def _send_command_response(
 async def _cmd_clear(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Clear conversation history for the bound checkpoint (loop-scoped broadcast)."""
+    """Clear conversation history, archive loop, create fresh loop (IG-500).
+
+    Process:
+    1. Archive current loop checkpoint
+    2. Create new loop with fresh state
+    3. Update thread registry bindings
+    4. Broadcast clear event with archival metadata
+
+    Args:
+        checkpoint_thread_id: LangGraph checkpoint thread_id.
+        params: Command parameters (unused for clear).
+        loop_id: Current StrangeLoop subscription scope.
+
+    Returns:
+        Dict with cleared status, new loop_id, and archival metadata.
+    """
     if not checkpoint_thread_id:
         raise ValueError("Active loop required")
 
-    # Clear thread state
-    # TODO: Implement clear_thread in runner
+    old_loop_id = str(loop_id or "").strip()
+    if not old_loop_id:
+        raise ValueError("loop_id required for clear operation")
+
+    # Get state manager from runner
+    if self._runner is None or self._runner.state_manager is None:
+        raise ValueError("Runner not initialized")
+
+    state_manager = self._runner.state_manager
+
+    # 1. Archive old loop
+    archive_metadata = await state_manager.archive_and_finalize(
+        reason="user_clear",
+    )
+
+    # 2. Create new loop
+    new_loop_id, new_checkpoint = await state_manager.reinitialize_for_clear(
+        old_thread_id=checkpoint_thread_id,
+    )
+
+    # 3. Update thread registry
+    if hasattr(self, "_thread_registry"):
+        self._thread_registry.unbind_loop(checkpoint_thread_id, old_loop_id)
+        self._thread_registry.bind_loop(checkpoint_thread_id, new_loop_id)
+
+    # 4. Clear LangGraph thread state (reset checkpoint)
+    # NOTE: This clears message history in LangGraph's persistence
+    # TODO: Implement clear_thread in runner (RFC-454)
     # await self._runner.clear_thread(checkpoint_thread_id)
 
-    lid = str(loop_id or "").strip()
-    if lid:
-        await self._broadcast({"type": "clear", "loop_id": lid})
-    else:
-        logger.warning("RPC clear: missing loop_id; not routing clear event to loop subscribers")
+    # 5. Broadcast clear event with metadata
+    await self._broadcast(
+        {
+            "type": "clear",
+            "loop_id": new_loop_id,
+            "archived_loop_id": old_loop_id,
+            "archive_metadata": {
+                "goal_count": archive_metadata.get("goal_count", 0),
+                "goals_completed": archive_metadata.get("goals_completed", 0),
+                "archived_at": archive_metadata.get("archived_at", ""),
+            },
+        }
+    )
 
-    return {"cleared": True}
+    return {
+        "cleared": True,
+        "new_loop_id": new_loop_id,
+        "archived_loop_id": old_loop_id,
+        "goals_preserved": archive_metadata.get("goal_count", 0),
+    }
 
 
 async def _cmd_exit(

@@ -1,4 +1,4 @@
-# IG-XXX: Goal Directive and Proposal Queue Integration
+# IG-474: Goal Directive and Proposal Queue Integration
 
 **Status**: In Progress
 **Created**: 2026-06-07

@@ -1,4 +1,4 @@
-"""Middleware to limit concurrent tool calls per thread (IG-XXX).
+"""Middleware to limit concurrent tool calls per thread (IG-478).
 
 LangChain's ToolNode uses asyncio.gather for parallel tool execution without limits.
 This middleware intercepts each tool call via awrap_tool_call and acquires a semaphore
