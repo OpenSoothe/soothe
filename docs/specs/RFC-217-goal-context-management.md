@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-201 (Agentic Goal Execution), RFC-216 (Multi-Thread Lifecycle), RFC-203 (Layer 2 Unified State Model)
+**Dependencies**: RFC-201 (Agentic Goal Execution), RFC-207 (Thread Lifecycle & Goal Context), RFC-203 (Layer 2 Unified State Model)
 
 ## Abstract
 
@@ -18,7 +18,7 @@ Design a unified goal-level context management system for StrangeLoop that mirro
 StrangeLoop's `inject_previous_goal_context()` method exists but is never called. Previous goal final_reports are not injected into Plan or Execute phases, causing:
 
 1. **Same-thread continuation failure**: When user sends "translate to chinese" after "analyze performance", agent asks "please provide text" instead of translating previous report
-2. **Thread switch knowledge loss**: When RFC-216 thread switching occurs, CoreAgent on new thread has no conversation history and no goal-level context
+2. **Thread switch knowledge loss**: When RFC-207 thread switching occurs, CoreAgent on new thread has no conversation history and no goal-level context
 
 ### Architecture Principle
 
@@ -292,7 +292,7 @@ return self._format_execute_briefing(goal_context)
 
         Args:
             goal_id: Target goal for context
-            goal_history: Previous goal records from checkpoint (RFC-216 GoalExecutionRecord)
+            goal_history: Previous goal records from checkpoint (RFC-207 GoalExecutionRecord)
             options: Construction configuration
 
         Returns:
@@ -312,7 +312,7 @@ class GoalContext(BaseModel):
     """Target goal for context."""
 
     execution_memory: list[GoalExecutionRecord] = Field(default_factory=list)
-    """Previous goal execution records from RFC-216 checkpoint."""
+    """Previous goal execution records from RFC-207 checkpoint."""
 
     thread_ecosystem: dict[str, list[str]] = Field(default_factory=dict)
     """Thread relationship metadata: {thread_id: [related_goal_ids]}."""
@@ -324,7 +324,7 @@ class GoalContext(BaseModel):
     """Similarity scores for included goals: {goal_id: score}."""
 ```
 
-**Integration with GoalExecutionRecord** (RFC-216):
+**Integration with GoalExecutionRecord** (RFC-207):
 - `execution_memory` contains `GoalExecutionRecord` instances from checkpoint
 - Thread ecosystem maps thread_ids to goal_ids for relationship awareness
 - Similarity scores enable confidence-based filtering
@@ -577,7 +577,7 @@ Checkpoint: goal_history=[goal1(thread_A, completed)], thread_switch_pending=Fal
 └─ Goal continuity without duplication
 ```
 
-### Scenario 3: Thread Switch (RFC-216)
+### Scenario 3: Thread Switch (RFC-207)
 
 ```
 Thread switch: thread_A → thread_B
@@ -724,7 +724,7 @@ class GoalContextManager:
 
 ```python
 class StrangeLoopCheckpoint(BaseModel):
-    """Complete StrangeLoop state (RFC-216: multi-thread spanning)."""
+    """Complete StrangeLoop state (RFC-207: multi-thread spanning)."""
     
     # ... existing fields ...
     
@@ -906,7 +906,7 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 ## References
 
 - RFC-200: Agentic Goal Execution Loop
-- RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle
+- RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-203: Layer 2 Unified State Model
 - CoreAgent context briefing mechanism (existing)
 - Design draft: docs/drafts/2026-04-17-goal-context-management-design.md

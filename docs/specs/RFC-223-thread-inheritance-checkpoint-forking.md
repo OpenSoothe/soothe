@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-05-27
 **Revised**: 2026-05-28 — sole-child optimization; in-house ``copy_thread_via_public_api`` (no LangGraph saver implements ``acopy_thread`` natively).
-**Dependencies**: RFC-201, RFC-214, RFC-216, RFC-218
+**Dependencies**: RFC-201, RFC-214, RFC-207, RFC-218
 **Related**: RFC-222 (Autopilot loop management), RFC-452 (Unified Thread Management), RFC-224 (Context Window Management)
 
 ---
@@ -446,7 +446,7 @@ Step D (depends on B + C):
 
 - RFC-201: StrangeLoop Plan-Execute Loop Architecture
 - RFC-214: Unified message ledger (`predecessor_execute_messages_for_branch`)
-- RFC-216: StrangeLoop Multi-Thread Lifecycle
+- RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-222: Autopilot and Goal Engine Architecture (loop_id, loop pool)
 - RFC-452: Unified Thread Management Architecture

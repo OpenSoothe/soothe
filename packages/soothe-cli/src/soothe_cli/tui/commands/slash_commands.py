@@ -1,4 +1,4 @@
-"""Slash command handlers for CLI and TUI (RFC-404).
+"""Slash command handlers for CLI and TUI (RFC-454).
 
 Unified command registry with metadata-based routing:
 - CLI-only commands: handled locally
@@ -165,7 +165,7 @@ KEYBOARD_SHORTCUTS: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
-# Unified Command Registry (RFC-404)
+# Unified Command Registry (RFC-454)
 # ---------------------------------------------------------------------------
 
 COMMANDS: dict[str, dict[str, Any]] = {

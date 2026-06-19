@@ -265,11 +265,13 @@ agent:
       backoff_factor: 2.0
       initial_delay: 1.0
 
+    # IG-501: Enable by default with moderate settings for Chinese providers
+    # (Dashscope/Zhipu typically have lower limits than OpenAI)
     llm_rate_limit:
-      enabled: false
-      rpm_limit: 120
-      concurrent_limit: 10
-      call_timeout_seconds: 120
+      enabled: true
+      rpm_limit: 60  # Moderate default for Dashscope/Zhipu (free tier ~30, paid ~60-100)
+      concurrent_limit: 8  # Parallelism without overwhelming provider
+      call_timeout_seconds: 150  # Extra margin for slower response times
       call_timeout_max_seconds: 300
       retry_on_timeout: true
       max_timeout_retries: 2

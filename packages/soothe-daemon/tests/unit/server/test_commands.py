@@ -1,4 +1,4 @@
-"""Tests for ``command_request`` routing through MessageRouter (RFC-404)."""
+"""Tests for ``command_request`` routing through MessageRouter (RFC-454)."""
 
 from __future__ import annotations
 

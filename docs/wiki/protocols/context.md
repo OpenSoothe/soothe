@@ -1,9 +1,10 @@
 # ContextProtocol
 
-**RFC**: 400  
-**Status**: Draft (Not Yet Implemented)  
-**Location**: Planned implementation  
-**Supersedes**: RFC-300 (Context and Memory Architecture)  
+**RFC**: 302 (Protocol Specifications series)
+**Status**: Draft (Not Yet Implemented)
+**Location**: Planned implementation
+**Supersedes**: RFC-300 (Context and Memory Architecture, archived)
+**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics  
 
 ## Overview
 

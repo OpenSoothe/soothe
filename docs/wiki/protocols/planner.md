@@ -1,10 +1,11 @@
 # PlannerProtocol & LoopPlannerProtocol
 
-**RFC**: 404 (Planner), 604 (LoopPlanner)  
-**Modules**: RFC-000 Module 3  
+**RFC**: 304 (Protocol Specifications series), 604 (LoopPlanner)
+**Modules**: RFC-000 Module 3
 **Locations**:
 - `packages/soothe/src/soothe/protocols/planner.py`
 - `packages/soothe/src/soothe/protocols/loop_planner.py`
+**Note**: RFC-304 reclassified from 4xx to 3xx per RFC-900 series semantics
 
 **Status**: Implemented  
 

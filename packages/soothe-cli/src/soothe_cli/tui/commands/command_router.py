@@ -1,4 +1,4 @@
-"""Command routing logic for CLI/TUI (RFC-404).
+"""Command routing logic for CLI/TUI (RFC-454).
 
 Routes slash commands based on registry metadata:
 - CLI-only commands: handled locally
@@ -116,7 +116,7 @@ async def route_slash_command(
     *,
     loop_id: str | None = None,
 ) -> bool:
-    """Route slash command based on registry metadata (RFC-404).
+    """Route slash command based on registry metadata (RFC-454).
 
     Args:
         cmd_input: Full command input (e.g., "/memory", "/research topic")
@@ -177,7 +177,7 @@ async def handle_rpc_command(
     *,
     loop_id: str | None = None,
 ) -> None:
-    """Handle daemon RPC command with structured request/response (RFC-404).
+    """Handle daemon RPC command with structured request/response (RFC-454).
 
     Args:
         entry: Command registry entry
@@ -241,7 +241,7 @@ async def handle_routing_command(
     *,
     loop_id: str | None = None,
 ) -> None:
-    """Handle daemon routing command by sending input with optional subagent (RFC-404).
+    """Handle daemon routing command by sending input with optional subagent (RFC-454).
 
     For routing commands that map to a configured subagent id (e.g. ``/research``, ``/explore``),
     sets the WebSocket ``preferred_subagent`` field so the daemon merges a subagent hint into

@@ -387,7 +387,7 @@ class EventProcessor:
             self._handle_clear_event(event)
 
     def _handle_command_response(self, event: dict[str, Any]) -> None:
-        """Handle command response from daemon (RFC-404)."""
+        """Handle command response from daemon (RFC-454)."""
         command = event.get("command")
         data = event.get("data")
         error = event.get("error")

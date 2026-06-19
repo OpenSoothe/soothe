@@ -70,26 +70,35 @@ class RateLimiter:
         Args:
             operation: Operation type to check.
             max_count: Maximum allowed operations in window.
-            path: Optional specific path to check.
+            path: Optional specific path to check for per-path limiting.
 
         Returns:
             Tuple of (allowed, current_count).
+
+        Note:
+            When path is provided, this implements per-path rate limiting -
+            each path has its own bucket with max_count limit.
+            When path is None, this implements global operation-level limiting.
         """
         now = time.time()
         cutoff = now - self.window_seconds
 
-        # Clean old entries
+        # Clean old entries for the operation type
         self.operations[operation] = [t for t in self.operations[operation] if t > cutoff]
 
-        count = len(self.operations[operation])
-        if count >= max_count:
-            return False, count
-
+        # If path-specific check requested, check per-path rate limit only
+        # (per-path limiting is independent of global operation count)
         if path:
             self.path_operations[path] = [t for t in self.path_operations[path] if t > cutoff]
             path_count = len(self.path_operations[path])
             if path_count >= max_count:
                 return False, path_count
+            return True, path_count
+
+        # No specific path - check global operation-level rate
+        count = len(self.operations[operation])
+        if count >= max_count:
+            return False, count
 
         return True, count
 
@@ -225,6 +234,14 @@ class SecurityEnforcer:
                 violations=[violation],
             )
             self._log_operation(path, operation, decision)
+
+            # Call violation callback for validation failures
+            if self.violation_callback:
+                try:
+                    self.violation_callback(violation)
+                except Exception as e:
+                    logger.error("Violation callback failed: %s", e)
+
             return decision
 
         # Step 2: Policy evaluation
@@ -232,10 +249,11 @@ class SecurityEnforcer:
 
         # Step 3: Rate limiting
         if self.enable_rate_limiting and self.rate_limiter:
+            # Check global rate limit (without path)
             allowed, count = self.rate_limiter.check_rate(
                 operation,
                 self.policy.max_operations_per_minute,
-                path,
+                path=None,  # Global check first
             )
             if not allowed:
                 violation = PolicyViolation(
@@ -253,7 +271,47 @@ class SecurityEnforcer:
                     violations=[violation],
                 )
                 self._log_operation(path, operation, decision)
+
+                # Call violation callback for rate limit violations
+                if self.violation_callback:
+                    try:
+                        self.violation_callback(violation)
+                    except Exception as e:
+                        logger.error("Violation callback failed: %s", e)
+
                 return decision
+
+            # Also check per-path rate limit if path is provided
+            if path and self.policy.per_path_rate_limit:
+                path_allowed, path_count = self.rate_limiter.check_rate(
+                    operation,
+                    self.policy.per_path_rate_limit,
+                    path,
+                )
+                if not path_allowed:
+                    violation = PolicyViolation(
+                        policy_name=self.policy.name,
+                        violation_type="per_path_rate_limit_exceeded",
+                        message=f"Per-path rate limit exceeded: {path_count} operations on {path}",
+                        path=path,
+                        operation=operation,
+                        severity="high",
+                    )
+                    decision = PolicyDecision(
+                        allowed=False,
+                        action=PolicyAction.DENY,
+                        reason="Per-path rate limit exceeded",
+                        violations=[violation],
+                    )
+                    self._log_operation(path, operation, decision)
+
+                    if self.violation_callback:
+                        try:
+                            self.violation_callback(violation)
+                        except Exception as e:
+                            logger.error("Violation callback failed: %s", e)
+
+                    return decision
 
             self.rate_limiter.record(operation, path)
 

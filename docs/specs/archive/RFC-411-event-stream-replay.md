@@ -9,7 +9,7 @@
 **Archive Date**: 2026-09-14
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-215 (Persistence Backend)
+**Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-803 (StrangeLoop Checkpoint Backend)
 **Author**: Claude Sonnet 4.6
 
 ---

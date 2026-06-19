@@ -475,7 +475,7 @@ Related modules should be linked:
 | core/workspace | RFC-103 | RFC-102 |
 | core/context | RFC-104, RFC-217 | RFC-300 |
 | core/scheduling | RFC-216 | RFC-221 |
-| core/persistence | RFC-802 | RFC-215 |
+| core/persistence | RFC-802 | RFC-803 (formerly RFC-215) |
 
 ### Protocols → RFCs
 

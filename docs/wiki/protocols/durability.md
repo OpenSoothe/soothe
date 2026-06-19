@@ -1,9 +1,10 @@
 # DurabilityProtocol
 
-**RFC**: 408  
-**Module**: RFC-000 Module 5  
-**Location**: `packages/soothe/src/soothe/protocols/durability.py`  
-**Status**: Implemented  
+**RFC**: 306 (Protocol Specifications series)
+**Module**: RFC-000 Module 5
+**Location**: `packages/soothe/src/soothe/protocols/durability.py`
+**Status**: Implemented
+**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics  
 
 ## Overview
 

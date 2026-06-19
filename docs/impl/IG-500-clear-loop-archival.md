@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Implementation Guide
 **Created**: 2026-06-19
-**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-454 (Slash Commands), RFC-215 (Persistence)
+**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-454 (Slash Commands), RFC-803 (Persistence Backend — formerly RFC-215)
 **Related**: RFC-207 (Thread Context Lifecycle), IG-055 (Backend Selection)
 
 ---
@@ -645,6 +645,6 @@ agentic:
 
 - RFC-216: StrangeLoop Multi-Thread Lifecycle
 - RFC-454: Slash Command Architecture
-- RFC-215: Persistence Backend
+- RFC-803: StrangeLoop Checkpoint Backend (formerly RFC-215, moved to 8xx per RFC-900)
 - RFC-207: Thread Context Lifecycle
 - IG-055: Backend Selection Pattern

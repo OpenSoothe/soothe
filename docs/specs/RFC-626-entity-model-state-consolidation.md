@@ -7,7 +7,7 @@
 **Created**: 2026-06-16
 **Updated**: 2026-06-16
 **Dependencies**: RFC-624 (Context Engine), RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-203 (StrangeLoop State & Memory), RFC-201 (StrangeLoop Plan-Execute Loop)
-**Related**: RFC-228 (Autopilot Job IPC), RFC-222 (Autopilot Architecture), RFC-216 (Checkpoint Tree)
+**Related**: RFC-228 (Autopilot Job IPC), RFC-222 (Autopilot Architecture), RFC-207 (Thread Lifecycle & Goal Context)
 **Extends**: RFC-625 — entity model consolidation, LoopState elimination, job abstraction refinement
 
 ---
@@ -284,7 +284,7 @@ class ExecutionCheckpoint(BaseModel):
 
 **Checkpoint size reduction**:
 
-| Field | RFC-216 Checkpoint | RFC-626 ExecutionCheckpoint | Reduction |
+| Field | RFC-207 Checkpoint | RFC-626 ExecutionCheckpoint | Reduction |
 |-------|--------------------|-----------------------------|-----------|
 | Goal description | ✓ | ✗ (CE) | ~200 chars |
 | Step DAG nodes | ✓ (full) | ✗ (CE) | ~5KB |
@@ -469,7 +469,7 @@ class ExecutionCheckpoint(BaseModel):
 
 1. **CE property access latency**: O(1) dict lookup, < 1ms per property.
 
-2. **Checkpoint size reduction**: 70-80% smaller than RFC-216 checkpoint.
+2. **Checkpoint size reduction**: 70-80% smaller than RFC-207 checkpoint.
 
 3. **Recovery time**: CE.load() + ExecutionCheckpoint < 500ms.
 
@@ -492,7 +492,7 @@ class ExecutionCheckpoint(BaseModel):
 | RFC-624 | ContextEngine base design |
 | RFC-625 | GoalEngine deletion, Goal field migration |
 | RFC-203 | LoopState origin (replaced by ExecutionState) |
-| RFC-216 | Checkpoint tree origin (trimmed to ExecutionCheckpoint) |
+| RFC-207 | Checkpoint tree origin (trimmed to ExecutionCheckpoint) |
 | RFC-228 | Job IPC commands (operate on CE GoalNode) |
 | RFC-222 | Autopilot architecture (Job = root GoalNode) |
 | RFC-221 | LoopRunner protocol (checkpoint recovery) |

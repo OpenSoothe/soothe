@@ -171,6 +171,7 @@ class SecurityPolicy:
     max_operations_per_minute: int = 1000
     max_file_reads_per_minute: int = 100
     max_file_writes_per_minute: int = 50
+    per_path_rate_limit: int | None = None  # If set, per-path rate limit
 
     # Actions
     on_violation: PolicyAction = PolicyAction.DENY
