@@ -83,6 +83,35 @@ class ThreadStateRegistry:
         """Return StrangeLoop id bound to *thread_id*, if any."""
         return self._thread_loop.get(thread_id)
 
+    def bind_loop(self, thread_id: str, loop_id: str) -> None:
+        """Bind thread to loop (create or update mapping) (IG-500).
+
+        Used by /clear command to update thread binding after creating new loop.
+
+        Args:
+            thread_id: Thread identifier.
+            loop_id: Loop identifier to bind.
+        """
+        if loop_id and str(loop_id).strip():
+            self._thread_loop[thread_id] = str(loop_id).strip()
+
+    def unbind_loop(self, thread_id: str, loop_id: str) -> None:
+        """Remove thread → loop binding (IG-500).
+
+        Used by /clear command to remove old loop binding before creating new loop.
+
+        Args:
+            thread_id: Thread identifier.
+            loop_id: Loop identifier to unbind.
+
+        Note:
+            Only removes binding if it matches the provided loop_id.
+            Does not remove thread state or other associations.
+        """
+        current_binding = self._thread_loop.get(thread_id)
+        if current_binding == loop_id:
+            self._thread_loop.pop(thread_id, None)
+
     def set_client_thread(self, client_id: str, thread_id: str) -> None:
         """Record the checkpoint id last associated with *client_id* (legacy helpers)."""
         self._client_active_thread[client_id] = thread_id

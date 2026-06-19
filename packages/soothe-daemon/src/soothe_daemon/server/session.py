@@ -391,7 +391,7 @@ class ClientSessionManager:
     async def release_loop_ownership(self, client_id: str) -> str | None:
         """Release loop ownership; returns the loop_id if any.
 
-        IG-XXX: Wait for queue drain when sender is alive to prevent race condition
+        IG-490: Wait for queue drain when sender is alive to prevent race condition
         where events arrive after await_loop_delivery_drained() but before ownership
         release (e.g., "idle" status broadcast after goal completion).
         """
@@ -408,7 +408,7 @@ class ClientSessionManager:
                 backlog = session.event_queue.qsize()
                 sender_alive = session.sender_task is not None and not session.sender_task.done()
                 if backlog > 0 and sender_alive:
-                    # IG-XXX: Wait for sender to drain events before releasing
+                    # IG-490: Wait for sender to drain events before releasing
                     # This prevents race where idle status arrives after drain check
                     logger.debug(
                         "Client %s has %d undelivered event(s) with sender alive, "

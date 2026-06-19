@@ -3,7 +3,7 @@
 Utility functions for formatting paths, errors, and other display-related
 operations used by both daemon and CLI.
 
-Module renamed from display.py to formatting.py in IG-XXX (SDK refactoring)
+Module renamed from display.py to formatting.py in IG-461 (SDK refactoring)
 for clearer purpose indication.
 """
 

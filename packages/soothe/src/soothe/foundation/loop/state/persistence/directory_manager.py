@@ -20,6 +20,9 @@ THREADS_DATA_DIR = "data/threads"
 LOOPS_DATA_DIR = "data/loops"
 """Directory for StrangeLoop checkpoint data (Layer 2)."""
 
+ARCHIVED_LOOPS_DATA_DIR = "data/archived_loops"
+"""Directory for archived StrangeLoop checkpoints (IG-500)."""
+
 
 class PersistenceDirectoryManager:
     """Manager for isolated persistence directories."""
@@ -93,6 +96,17 @@ class PersistenceDirectoryManager:
         from soothe.config import SOOTHE_HOME
 
         return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id
+
+    @staticmethod
+    def get_archived_loops_directory() -> Path:
+        """Get archived StrangeLoop loops base directory path (IG-500).
+
+        Returns:
+            Path to data/archived_loops/ directory.
+        """
+        from soothe.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / ARCHIVED_LOOPS_DATA_DIR
 
     @staticmethod
     def get_goal_directory(loop_id: str, goal_id: str) -> Path:
