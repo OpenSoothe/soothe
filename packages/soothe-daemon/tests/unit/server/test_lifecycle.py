@@ -40,7 +40,7 @@ async def test_daemon_persists_after_client_disconnect() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Simulate client disconnect via RPC detach command (RFC-404)
+    # Simulate client disconnect via RPC detach command (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "detach", "loop_id": "loop-1", "params": {}}
     )
@@ -63,7 +63,7 @@ async def test_daemon_persists_after_exit_command() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Send /exit RPC command (RFC-404)
+    # Send /exit RPC command (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
@@ -86,7 +86,7 @@ async def test_daemon_persists_after_quit_command() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Send /quit RPC command (RFC-404)
+    # Send /quit RPC command (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
     )
@@ -109,13 +109,13 @@ async def test_multiple_clients_connect_disconnect_daemon_persists() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Simulate first client connecting and disconnecting (RFC-404)
+    # Simulate first client connecting and disconnecting (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
-    # Simulate second client connecting and disconnecting (RFC-404)
+    # Simulate second client connecting and disconnecting (RFC-454)
     sent.clear()
     await daemon._handle_command_request(
         {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
@@ -137,7 +137,7 @@ async def test_only_explicit_stop_shutdowns_daemon() -> None:
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
 
-    # Multiple clients disconnect via RPC (RFC-404)
+    # Multiple clients disconnect via RPC (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
@@ -160,7 +160,7 @@ async def test_cancel_command_does_not_stop_daemon() -> None:
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
 
-    # Send /cancel RPC command (RFC-404)
+    # Send /cancel RPC command (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "cancel", "loop_id": "loop-1", "params": {}}
     )
@@ -203,13 +203,13 @@ async def test_daemon_lifecycle_comprehensive_scenario() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Scenario: Client A connects, sends query, disconnects (RFC-404)
+    # Scenario: Client A connects, sends query, disconnects (RFC-454)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
-    # Scenario: Client B connects and cancels (RFC-404)
+    # Scenario: Client B connects and cancels (RFC-454)
     sent.clear()
     await daemon._handle_command_request(
         {"type": "command_request", "command": "cancel", "loop_id": "loop-1", "params": {}}
@@ -222,7 +222,7 @@ async def test_daemon_lifecycle_comprehensive_scenario() -> None:
     )
     assert daemon._running is True
 
-    # Scenario: Client C connects and quits (RFC-404)
+    # Scenario: Client C connects and quits (RFC-454)
     sent.clear()
     await daemon._handle_command_request(
         {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}

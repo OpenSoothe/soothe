@@ -1,9 +1,10 @@
 # PolicyProtocol
 
-**RFC**: 406  
-**Module**: RFC-000 Module 4  
-**Location**: `packages/soothe-sdk/src/soothe_sdk/protocols/policy.py` (SDK)  
-**Re-exported**: `packages/soothe/src/soothe/protocols/policy.py`  
+**RFC**: 305 (Protocol Specifications series)
+**Module**: RFC-000 Module 4
+**Location**: `packages/soothe-sdk/src/soothe_sdk/protocols/policy.py` (SDK)
+**Re-exported**: `packages/soothe/src/soothe/protocols/policy.py`
+**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics
 **Status**: Implemented  
 
 ## Overview

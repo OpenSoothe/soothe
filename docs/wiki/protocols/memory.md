@@ -1,9 +1,10 @@
 # MemoryProtocol
 
-**RFC**: 402  
-**Module**: RFC-000 Module 2  
-**Location**: `packages/soothe/src/soothe/protocols/memory.py`  
-**Status**: Implemented  
+**RFC**: 303 (Protocol Specifications series)
+**Module**: RFC-000 Module 2
+**Location**: `packages/soothe/src/soothe/protocols/memory.py`
+**Status**: Implemented
+**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics  
 
 ## Overview
 

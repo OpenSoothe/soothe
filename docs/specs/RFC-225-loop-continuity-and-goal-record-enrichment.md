@@ -7,7 +7,7 @@
 **Authors**: xiaming
 **Created**: 2026-05-29
 **Last Updated**: 2026-05-29
-**Depends on**: RFC-201, RFC-214, RFC-216, RFC-218, RFC-220
+**Depends on**: RFC-201, RFC-214, RFC-207, RFC-218, RFC-220
 **Supersedes**: ---
 **Related**: RFC-217 (Goal Context Management), RFC-223 (Thread Inheritance with Checkpoint Forking), RFC-224 (Automatic Context Window Management)
 
@@ -357,7 +357,7 @@ StrangeLoop.run_with_progress(loop_id=L1):
 
 - **RFC-201 (Agentic Goal Execution Loop)** — This RFC tightens the runtime model of intent and continuation; the plan / execute control flow defined by RFC-201 is unchanged.
 - **RFC-214 (StrangeLoop Loop-Message Surface)** — `loop_messages` semantics in `GoalExecutionRecord` are preserved; this RFC adds adjacent fields (plan, step_results, evidence_ledger).
-- **RFC-216 (StrangeLoop Multi-Thread Lifecycle)** — Status vocabulary inherited from RFC-216 is updated (`ready_for_next_goal` → `idle`). The `loop_id`-centric continuity contract is reaffirmed.
+- **RFC-207 (StrangeLoop Thread Lifecycle & Goal Context)** — Status vocabulary inherited from RFC-207 is updated (`ready_for_next_goal` → `idle`). The `loop_id`-centric continuity contract is reaffirmed.
 - **RFC-217 (Goal Context Management)** — Unchanged. `thread_switch_pending` and `GoalContextManager` continue to operate as specified.
 - **RFC-218 (StrangeLoop Checkpoint Tree Architecture)** — Schema layout follows RFC-218 conventions; the schema bump to `3.2` is recorded here.
 - **RFC-220 (LangGraph StrangeLoop Orchestrator)** — The Plan / Execute orchestration nodes consume the new `continue_loop_mode` state key; node graph topology is unchanged.

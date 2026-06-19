@@ -1,4 +1,4 @@
-"""Tests for ThreadContextManager (RFC-402)."""
+"""Tests for ThreadContextManager (RFC-452)."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch

@@ -5,9 +5,9 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-05-05
-**Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-215, RFC-218, RFC-219
+**Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-803, RFC-218, RFC-219
 **Supersedes**: RFC-201 §loop driver (imperative Plan → Execute driver)
-**Related**: RFC-203, RFC-207, RFC-211, RFC-213, RFC-214, RFC-216, RFC-217  
+**Related**: RFC-203, RFC-207, RFC-211, RFC-213, RFC-214, RFC-217  
 
 ---
 
@@ -47,7 +47,7 @@ When RFC-220 is **Implemented**:
 - Code paths that expose “StrangeLoop as a hand-written async generator loop” are **deleted**, not deprecated.
 - Documentation that describes Layer 2 as a Python `while` loop **must** be updated to the Loop Graph model.
 
-Downstream specs (RFC-203, RFC-214, RFC-216, RFC-217) **must** be reconciled in the same implementation batch so they do not assume the removed driver.
+Downstream specs (RFC-203, RFC-214, RFC-207, RFC-217) **must** be reconciled in the same implementation batch so they do not assume the removed driver.
 
 ---
 
@@ -75,7 +75,7 @@ Layer 1 (RFC-100) → tools / subagents
 2. The **`thread_id`** field on **`LoopState`** is **only** the CoreAgent conversation identifier passed into Execute; it **must not** be used as the Loop Graph’s checkpoint key.
 3. Implementations **must** document the pair `(loop_id, thread_id)` on each run for debugging; tests **must** fail if a developer wires CoreAgent’s checkpoint key to `loop_id` or the Loop Graph’s key to `thread_id`.
 
-Files on disk remain aligned with existing layout: loop runtime under **`$SOOTHE_HOME/data/loops/{loop_id}/`**, thread runtime under **`data/threads/{thread_id}/`** (RFC-215).
+Files on disk remain aligned with existing layout: loop runtime under **`$SOOTHE_HOME/data/loops/{loop_id}/`**, thread runtime under **`data/threads/{thread_id}/`** (RFC-803).
 
 ---
 

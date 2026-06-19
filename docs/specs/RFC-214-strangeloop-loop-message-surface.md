@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-05-03
 **Updated**: 2026-05-13
-**Dependencies**: RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-104 (Dynamic System Context), RFC-207 (Thread & Goal Context), RFC-203 (StrangeLoop State & Memory), RFC-215 (StrangeLoop Persistence), RFC-218 (Checkpoint Tree), RFC-216 (Multi-Thread Lifecycle), RFC-217 (Goal Context Management)
+**Dependencies**: RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-104 (Dynamic System Context), RFC-207 (Thread Lifecycle & Goal Context), RFC-203 (StrangeLoop State & Memory), RFC-803 (StrangeLoop Checkpoint Backend), RFC-218 (Checkpoint Tree), RFC-217 (Goal Context Management)
 **Related**: RFC-211 (Tool Result Shaping), RFC-213 (StrangeLoop Reasoning Quality), RFC-220 (LangGraph Agent Loop Orchestrator), RFC-614 (Streaming Messaging)
 
 ---
@@ -363,7 +363,7 @@ This preserves both stores (no data loss, no architectural upheaval) while elimi
 
 ### 7. Checkpoint Persistence
 
-**StrangeLoop checkpoints** (SQLite / PostgreSQL per RFC-215) persist:
+**StrangeLoop checkpoints** (SQLite / PostgreSQL per RFC-803) persist:
 
 **Metadata Fields:**
 - Loop status, thread health metrics

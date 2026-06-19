@@ -273,7 +273,7 @@ This document maps all RFCs in the Soothe project to their corresponding impleme
 #### RFC-220: LangGraph Agent Loop Orchestrator 🔴 HIGH
 **Status**: Draft  
 **Created**: 2026-05-05  
-**Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-215, RFC-218, RFC-219  
+**Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-803 (formerly RFC-215), RFC-218, RFC-219  
 **Supersedes**: RFC-201 §loop driver
 
 **Relevance**: Critical architectural shift from imperative loop to LangGraph StateGraph. Required for reliable checkpointing, interrupt handling, and state management.
@@ -289,7 +289,7 @@ This document maps all RFCs in the Soothe project to their corresponding impleme
 #### RFC-624: Context Engine 🟠 HIGH
 **Status**: Draft  
 **Created**: 2026-06-12  
-**Dependencies**: RFC-000, RFC-200, RFC-201, RFC-214, RFC-215  
+**Dependencies**: RFC-000, RFC-200, RFC-201, RFC-214, RFC-803 (formerly RFC-215)  
 
 **Relevance**: Core consolidation effort. Phase 1 complete, Phase 2-4 in progress.
 
@@ -360,9 +360,10 @@ This document maps all RFCs in the Soothe project to their corresponding impleme
 
 ---
 
-#### RFC-215: StrangeLoop Persistence Backend 🟡 MEDIUM
+#### RFC-803: StrangeLoop Checkpoint Backend 🟡 MEDIUM
 **Status**: Draft  
 **Created**: 2026-04-22  
+**Note**: Migrated from RFC-215 to 8xx persistence series per RFC-900 reclassification
 
 **Relevance**: Persistence strategy for StrangeLoop state.
 
@@ -484,7 +485,7 @@ This document maps all RFCs in the Soothe project to their corresponding impleme
    - Prompt pipeline exists but lacks volatility tiering
    - Bounding strategies are ad-hoc
 
-3. **RFC-215 (Persistence Backend)**
+3. **RFC-803 (Persistence Backend — formerly RFC-215)**
    - Basic persistence exists
    - Full checkpointing strategy not implemented
 
@@ -610,7 +611,7 @@ RFC-000 (Conceptual Design) ─────────────────�
 | Events | `packages/soothe/src/soothe/foundation/events/` | RFC-401, RFC-403 |
 | Autopilot | `packages/soothe/src/soothe/foundation/autopilot/` | RFC-200, RFC-204, RFC-222 |
 | Loop | `packages/soothe/src/soothe/foundation/loop/` | RFC-201, RFC-203, RFC-220 |
-| Persistence | `packages/soothe/src/soothe/foundation/persistence/` | RFC-215, RFC-801 |
+| Persistence | `packages/soothe/src/soothe/foundation/persistence/` | RFC-801, RFC-803 (formerly RFC-215) |
 
 ### Protocol Modules
 

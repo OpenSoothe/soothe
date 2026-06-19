@@ -93,9 +93,9 @@ class PathValidator:
         (r"\n", "newline", ValidationSeverity.HIGH),
         (r"\r", "carriage_return", ValidationSeverity.HIGH),
         (r"\t", "tab", ValidationSeverity.LOW),
-        (r"\x00-\x1f", "control_chars", ValidationSeverity.HIGH),
+        (r"[\x00-\x1f]", "control_chars", ValidationSeverity.HIGH),
         (r"\x7f", "delete_char", ValidationSeverity.MEDIUM),
-        (r"\ufff0-\uffff", "unicode_special", ValidationSeverity.MEDIUM),
+        (r"[\ufff0-\uffff]", "unicode_special", ValidationSeverity.MEDIUM),
     )
 
     # Path components that should be blocked
@@ -474,8 +474,8 @@ class PathValidator:
         sanitized = path.replace("\x00", "")
 
         # Replace traversal patterns
-        for pattern, name in self.TRAVERSAL_PATTERNS:
-            sanitized = pattern.sub("_", sanitized)
+        for compiled_pattern, name in self._traversal_regex:
+            sanitized = compiled_pattern.sub("_", sanitized)
 
         # Normalize
         sanitized = os.path.normpath(sanitized)

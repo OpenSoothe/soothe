@@ -21,7 +21,7 @@ from soothe_daemon.protocol.router import (
     _queue_options_from_daemon_message,
 )
 
-# Import RPC command handlers (RFC-404)
+# Import RPC command handlers (RFC-454)
 from soothe_daemon.server.commands import (
     _cmd_autopilot_dashboard,
     _cmd_autopilot_toggle,
@@ -52,7 +52,7 @@ class DaemonHandlersMixin:
     on the concrete class.
     """
 
-    # Attach RPC handlers to mixin (RFC-404)
+    # Attach RPC handlers to mixin (RFC-454)
     _handle_command_request = _handle_command_request
     _send_command_response = _send_command_response
     _cmd_clear = _cmd_clear

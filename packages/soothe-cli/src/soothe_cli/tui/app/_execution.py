@@ -461,7 +461,7 @@ class _ExecutionMixin:
         )
         from soothe_cli.tui.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
 
-        # RFC-404 daemon *routing* commands (/research, /explore, /plan, optional /«id»):
+        # RFC-454 daemon *routing* commands (/research, /explore, /plan, optional /«id»):
         # send the full line as a normal user turn so ``parse_subagent_from_input``
         # runs in the daemon adapter (same as headless CLI). Without this branch,
         # ``cmd == "/research …"`` never matches the bare single-token handlers below.

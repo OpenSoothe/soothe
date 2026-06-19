@@ -1,7 +1,7 @@
 # IG-466: Empty-loop purge
 
-**RFC**: [RFC-215](../specs/RFC-215-strangeloop-persistence-backend.md) (schema + reclamation section amended 2026-06-04)
-**Lineage**: First implementation of the empty-loop reclamation amendment in RFC-215. The ephemeral-loop GC path (`_periodic_ephemeral_loop_gc`, `list_expired_ephemeral_loops`, `purge_loop_execution_data`) already exists and is reused — this guide extends it with a second pass and renames the entry point.
+**RFC**: [RFC-803](../specs/RFC-803-strangeloop-checkpoint-backend.md) (schema + reclamation section amended 2026-06-04; migrated from RFC-215 per RFC-900)
+**Lineage**: First implementation of the empty-loop reclamation amendment in RFC-215 (now RFC-803). The ephemeral-loop GC path (`_periodic_ephemeral_loop_gc`, `list_expired_ephemeral_loops`, `purge_loop_execution_data`) already exists and is reused — this guide extends it with a second pass and renames the entry point.
 **Status**: Draft
 
 ---

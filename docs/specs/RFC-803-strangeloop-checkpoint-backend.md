@@ -1,13 +1,14 @@
-# RFC-215: StrangeLoop Persistence Backend Architecture
+# RFC-803: StrangeLoop Checkpoint Backend Architecture
 
-**RFC**: 215
-**Title**: StrangeLoop Persistence Backend Architecture
+**RFC**: 803
+**Title**: StrangeLoop Checkpoint Backend Architecture
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Last Updated**: 2026-06-04
-**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
+**Last Updated**: 2026-06-19
+**Dependencies**: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
 **Author**: Claude Sonnet 4.6
+**Note**: Moved from 2xx (RFC-215) to 8xx persistence series per RFC-900 reclassification
 
 ---
 
@@ -564,11 +565,11 @@ Per-row purge failures are isolated (try/except) so a single failure does not ab
 ## Related Specifications
 
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
-- RFC-216: StrangeLoop Multi-Thread Lifecycle
+- RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-503: Loop-First User Experience
 - RFC-411: Event Stream Replay
 - RFC-801: SQLite Backend (existing)
 
 ---
 
-**End of RFC-215 Draft**
+**End of RFC-803 Draft**

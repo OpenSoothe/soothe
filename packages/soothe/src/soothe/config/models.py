@@ -957,12 +957,12 @@ class LLMRateLimitConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=False,
+        default=True,
         description="Enable LLM rate-limit middleware (RPM, concurrency, timeouts, retries)",
     )
-    rpm_limit: int = Field(default=120, ge=1, le=10_000)
-    concurrent_limit: int = Field(default=10, ge=1, le=500)
-    call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
+    rpm_limit: int = Field(default=60, ge=1, le=10_000)
+    concurrent_limit: int = Field(default=8, ge=1, le=500)
+    call_timeout_seconds: int = Field(default=150, ge=5, le=3600)
     call_timeout_max_seconds: int = Field(default=300, ge=30, le=3600)
     retry_on_timeout: bool = True
     max_timeout_retries: int = Field(default=2, ge=0, le=5)

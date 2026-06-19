@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage
 from soothe.middleware.llm_rate_limit import (
     EnhancedTimeoutError,
     LLMRateLimitMiddleware,
+    _extract_rate_limit_info,
     _extract_retry_after_seconds,
     _is_api_rate_limit_error,
 )
@@ -867,3 +868,219 @@ def test_calculate_rate_limit_backoff_retry_after_capped() -> None:
 
     backoff = middleware._calculate_rate_limit_backoff(attempt=0, exc=exc)
     assert backoff == 60.0  # Capped at backoff_max
+
+
+# ==============================================================================
+# IG-501: Dynamic Rate Limit Adjustment Tests
+# ==============================================================================
+# IG-501: Dynamic Rate Limit Adjustment Tests
+# ==============================================================================
+
+
+class MockRateLimitErrorWithBodyError(Exception):
+    """Mock 429 error with JSON body for testing extraction."""
+
+    def __init__(
+        self,
+        body: dict | None = None,
+        retry_after_header: float | None = None,
+    ) -> None:
+        super().__init__("Rate limit error")
+        self.response = MagicMock()
+        self.response.status_code = 429
+        self.response.headers = {}
+        if retry_after_header is not None:
+            self.response.headers["retry-after"] = str(retry_after_header)
+        if body is not None:
+            self.response.json = MagicMock(return_value=body)
+
+
+def test_extract_rate_limit_info_dashscope_format() -> None:
+    """Test extraction from Dashscope-style 429 response."""
+    exc = MockRateLimitErrorWithBodyError(
+        body={
+            "error": {
+                "code": "Throttling",
+                "message": "dashscope rate limit exceeded, please retry later",
+                "retry_after": 30.0,
+            }
+        }
+    )
+
+    result = _extract_rate_limit_info(exc)
+    assert result["retry_after_seconds"] == 30.0
+    assert result["provider_name"] == "dashscope"
+
+
+def test_extract_rate_limit_info_zhipu_format() -> None:
+    """Test extraction from Zhipu-style 429 response."""
+    exc = MockRateLimitErrorWithBodyError(
+        body={
+            "error": {
+                "code": "RateLimitError",
+                "message": "zhipu glm model rate limit",
+                "wait_seconds": 20.0,
+                "rate_limit": {"limit": 50},
+            }
+        }
+    )
+
+    result = _extract_rate_limit_info(exc)
+    assert result["retry_after_seconds"] == 20.0
+    assert result["rpm_limit_hint"] == 50
+    assert result["provider_name"] == "zhipu"
+
+
+def test_extract_rate_limit_info_header_priority() -> None:
+    """Test retry-after header takes priority over body."""
+    exc = MockRateLimitErrorWithBodyError(
+        retry_after_header=10.0,
+        body={
+            "error": {
+                "retry_after": 30.0,  # Should be ignored
+            }
+        },
+    )
+
+    result = _extract_rate_limit_info(exc)
+    assert result["retry_after_seconds"] == 10.0  # Header value
+
+
+def test_extract_rate_limit_info_no_response() -> None:
+    """Test returns empty dict when no response attribute."""
+    exc = Exception("No response")
+    result = _extract_rate_limit_info(exc)
+    assert result["retry_after_seconds"] is None
+    assert result["rpm_limit_hint"] is None
+    assert result["provider_name"] is None
+
+
+def test_extract_rate_limit_info_kimi_provider() -> None:
+    """Test provider detection for Kimi/Moonshot."""
+    exc = MockRateLimitErrorWithBodyError(
+        body={
+            "error": {
+                "message": "kimi API rate limit exceeded",
+            }
+        }
+    )
+
+    result = _extract_rate_limit_info(exc)
+    assert result["provider_name"] == "kimi"
+
+
+@pytest.mark.asyncio
+async def test_adjust_rpm_limit_bounds() -> None:
+    """Test RPM limit adjustment validates bounds (min 5, max 10000)."""
+    middleware = LLMRateLimitMiddleware(
+        requests_per_minute=60,
+        max_concurrent_requests_per_thread=8,
+        call_timeout_seconds=150,
+        thread_local=True,
+    )
+
+    # Test lower bound
+    middleware.adjust_rpm_limit(2, reason="test lower bound")
+    assert middleware._rpm_limit_global == 5  # Clamped to min
+
+    # Test upper bound
+    middleware.adjust_rpm_limit(15000, reason="test upper bound")
+    assert middleware._rpm_limit_global == 10000  # Clamped to max
+
+
+@pytest.mark.asyncio
+async def test_adjust_rpm_limit_no_change() -> None:
+    """Test adjustment skipped when new value equals current."""
+    middleware = LLMRateLimitMiddleware(
+        requests_per_minute=60,
+        max_concurrent_requests_per_thread=8,
+        call_timeout_seconds=150,
+        thread_local=True,
+    )
+
+    # Should not log/change if same value
+    middleware.adjust_rpm_limit(60, reason="no change test")
+    assert middleware._rpm_limit_global == 60
+
+
+@pytest.mark.asyncio
+async def test_consecutive_timeout_proactive_throttling(
+    mock_request: ModelRequest,
+) -> None:
+    """Test RPM progressively reduced after consecutive timeouts."""
+    middleware = LLMRateLimitMiddleware(
+        requests_per_minute=60,
+        max_concurrent_requests_per_thread=8,
+        call_timeout_seconds=60,
+        call_timeout_max_seconds=240,
+        thread_local=True,
+        retry_on_timeout=True,
+        max_timeout_retries=3,  # 4 attempts total (0,1,2,3)
+        timeout_retry_multiplier=2.0,
+    )
+
+    original_rpm = middleware._rpm_limit_global
+
+    async def timeout_handler(req: ModelRequest) -> ModelResponse:
+        raise TimeoutError("Timeout")
+
+    async def mock_wait_for(coro, timeout):
+        raise TimeoutError("Simulated timeout")
+
+    with patch("asyncio.wait_for", side_effect=mock_wait_for):
+        with patch("asyncio.sleep"):
+            with pytest.raises(EnhancedTimeoutError):
+                await middleware.awrap_model_call(mock_request, timeout_handler)
+
+    # After consecutive timeouts, RPM should be progressively reduced
+    # Each timeout after attempt 2 triggers 20% reduction
+    # Expected: 60 → 48 (attempt 2) → 38 (attempt 3) → 30 (attempt 4)
+    assert middleware._rpm_limit_global < original_rpm
+    # Final value after 3 reductions (attempts 2, 3, 4)
+    assert middleware._rpm_limit_global == 30
+
+
+@pytest.mark.asyncio
+async def test_429_error_adjusts_rpm_with_hint(mock_request: ModelRequest) -> None:
+    """Test RPM adjusted when provider gives RPM limit hint in 429 response."""
+    middleware = LLMRateLimitMiddleware(
+        requests_per_minute=60,
+        max_concurrent_requests_per_thread=8,
+        call_timeout_seconds=60,
+        call_timeout_max_seconds=240,
+        thread_local=True,
+        retry_on_rate_limit=True,
+        max_rate_limit_retries=3,
+    )
+
+    original_rpm = middleware._rpm_limit_global
+
+    exc = MockRateLimitErrorWithBodyError(
+        body={
+            "error": {
+                "message": "zhipu rate limit",
+                "rate_limit": {"limit": 30},
+            }
+        }
+    )
+
+    call_count = 0
+
+    async def rate_limit_handler(req: ModelRequest) -> ModelResponse:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise exc
+        return ModelResponse(result=[AIMessage(content="success")])
+
+    async def mock_wait_for(coro, timeout):
+        return await coro
+
+    with patch("asyncio.wait_for", side_effect=mock_wait_for):
+        with patch("asyncio.sleep"):
+            response = await middleware.awrap_model_call(mock_request, rate_limit_handler)
+            assert response is not None
+
+    # RPM should be adjusted to provider's hint
+    assert middleware._rpm_limit_global == 30
+    assert middleware._rpm_limit_global < original_rpm

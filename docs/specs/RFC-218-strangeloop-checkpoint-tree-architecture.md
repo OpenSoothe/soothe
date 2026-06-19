@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-215 (Persistence Backend)
+**Dependencies**: RFC-207 (Thread Lifecycle & Goal Context), RFC-803 (StrangeLoop Checkpoint Backend)
 **Author**: Soothe contributors
 
 ---
@@ -172,7 +172,7 @@ class CoreAgentCheckpointTreeRef(BaseModel):
 class StrangeLoopCheckpoint(BaseModel):
     """Complete StrangeLoop state with checkpoint tree reference (v3.1)."""
     
-    # Identity (RFC-216)
+    # Identity (RFC-207)
     loop_id: str  # UUID
     thread_ids: list[str] = Field(default_factory=list)
     current_thread_id: str
@@ -185,17 +185,17 @@ class StrangeLoopCheckpoint(BaseModel):
     coreagent_checkpoint_refs: dict[str, CoreAgentCheckpointRef] = Field(default_factory=dict)
     """Mapping: thread_id → CoreAgent checkpoint metadata (IG-238 linkage)."""
     
-    # Status (RFC-216)
+    # Status (RFC-207)
     status: Literal["running", "ready_for_next_goal", "finalized", "cancelled"]
     
-    # Goal execution history (RFC-216)
+    # Goal execution history (RFC-207)
     goal_history: list[GoalExecutionRecord] = Field(default_factory=list)
     current_goal_index: int = -1
     
-    # Working memory (RFC-216)
+    # Working memory (RFC-207)
     working_memory_state: WorkingMemoryState = Field(default_factory=WorkingMemoryState)
     
-    # Thread health (RFC-216)
+    # Thread health (RFC-207)
     thread_health_metrics: ThreadHealthMetrics
     
     # RFC-217: Goal context injection
@@ -544,8 +544,8 @@ async def prune_old_branches(loop_id: str, policy: BranchPruningPolicy):
 
 ## Related Specifications
 
-- RFC-216: StrangeLoop Multi-Thread Lifecycle
-- RFC-215: StrangeLoop Persistence Backend
+- RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
+- RFC-803: StrangeLoop Checkpoint Backend
 - RFC-411: Event Stream Replay & History Reconstruction
 - IG-238: StrangeLoop Checkpoint Unified Integration
 
