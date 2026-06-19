@@ -1,8 +1,21 @@
 # RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle
 
+> **⚠️ SUPERSEDED**
+>
+> This RFC has been consolidated into **RFC-207: StrangeLoop Thread Lifecycle & Goal Context Management**.
+>
+> All content from this specification has been merged into RFC-207 as of 2026-06-19.
+> Please refer to RFC-207 for the current authoritative specification.
+>
+> **Superseded by**: RFC-207
+> **Superseded on**: 2026-06-19
+> **Reason**: Domain consolidation - thread lifecycle management unified with goal context management
+
+---
+
 **RFC**: 216
 **Title**: StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
-**Status**: Draft
+**Status**: Superseded
 **Kind**: Architecture Design
 **Created**: 2026-04-16
 **Dependencies**: RFC-203 (Layer 2 Unified State Model), RFC-201 (Agentic Goal Execution)

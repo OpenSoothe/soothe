@@ -53,7 +53,7 @@ class _FakeRunner:
         self.touched_thread_ids.append(thread_id)
 
     async def memory_stats(self) -> dict[str, Any]:
-        """Stub for memory_stats RPC command (RFC-404)."""
+        """Stub for memory_stats RPC command (RFC-454)."""
         return {"backend": "test", "entries": 5}
 
 
@@ -415,7 +415,7 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_daemon_handles_slash_commands() -> None:
-    """Test that daemon executes RPC commands via command_request (RFC-404)."""
+    """Test that daemon executes RPC commands via command_request (RFC-454)."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
 
@@ -459,7 +459,7 @@ async def test_daemon_command_exit_does_not_stop_daemon() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Test /exit RPC command (RFC-404 protocol)
+    # Test /exit RPC command (RFC-454 protocol)
     await daemon._handle_command_request(
         {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )

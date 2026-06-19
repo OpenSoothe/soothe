@@ -706,7 +706,7 @@ loop_app.command("status")(show_loop_status)
 
 - RFC-802: Loop-First User Experience
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
-- RFC-215: StrangeLoop Persistence Backend
+- RFC-803: StrangeLoop Persistence Backend
 - RFC-454: Slash Command Architecture
 
 ---

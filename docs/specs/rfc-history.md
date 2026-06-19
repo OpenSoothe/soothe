@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-06-05
-**Total RFCs**: 73
+**Last Updated**: 2026-06-19
+**Total RFCs**: 78
 
 ## Summary Statistics
 
@@ -11,32 +11,117 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 51 | 69.9% |
-| Implemented | 16 | 21.9% |
-| Proposed | 2 | 2.7% |
-| Superseded | 2 | 2.7% |
-| Deprecated. Superseded by RFC-413. | 1 | 1.4% |
-| Accepted | 1 | 1.4% |
+| Draft | 49 | 62.8% |
+| Implemented | 14 | 17.9% |
+| Archived | 6 | 7.7% |
+| Proposed | 3 | 3.8% |
+| Accepted | 1 | 1.3% |
+| Implemented (Partially Superseded) | 1 | 1.3% |
 
 ### By Kind
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 50 |
-| Implementation Interface Design | 14 |
-| Unknown | 2 |
+| Architecture Design | 48 |
+| Implementation Interface Design | 13 |
 | Architecture Design + Implementation Interface Design | 2 |
-| Conceptual Design | 1 |
 | Architecture Design / Impl Interface | 1 |
-| Protocol Specification | 1 |
+| Conceptual Design | 1 |
+| Protocol Specification | 2 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
+| Process Specification | 1 |
 
 ## Chronological Timeline
 
+### Major Changes - 2026-06-19
+
+**RFC-900 Implementation**: Formalized deprecation and reclassification scheme
+
+1. **Archived RFCs** (6):
+   - RFC-200: Autonomous Goal Management Loop → Superseded by RFC-222, RFC-625
+   - RFC-203: StrangeLoop State & Memory Architecture → Superseded by RFC-626
+   - RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle → Superseded by RFC-207
+   - RFC-300: Context and Memory Architecture Design → Superseded by RFC-302, RFC-303
+   - RFC-411: Event Stream Replay & History Reconstruction → Superseded by RFC-413
+   - RFC-605: Explore Subagent and Parallel Spawning → Superseded by RFC-613
+
+2. **Series Reclassification** (per RFC-900 series semantics):
+   - **3xx Protocol Specifications**: RFC-302, RFC-303, RFC-304, RFC-305, RFC-306 (moved from 4xx)
+   - **8xx Persistence & Backends**: RFC-801 (moved from 6xx)
+   - **9xx Security & Policy**: RFC-901 (moved from 6xx)
+
+3. **Process Documentation**:
+   - Added RFC-900: Deprecation and Reclassification Scheme
+   - Updated archive/README.md with archival policy
+   - Established 90-day deprecation → archival timeline
+
+---
+
 ### 2026-06
 
-- **2026-06-04**: RFC-215 - StrangeLoop Persistence Backend Architecture
+- **2026-06-19**: RFC-200 - Autonomous Goal Management Loop
+  - Status: Archived
+  - Kind: Architecture Design
+  - Superseded By: RFC-222, RFC-625
+  - Archive Reason: Control flow replaced by autopilot push model, GoalEngine deleted
+
+- **2026-06-19**: RFC-203 - StrangeLoop State & Memory Architecture
+  - Status: Archived
+  - Kind: Architecture Design / Impl Interface
+  - Superseded By: RFC-626
+  - Archive Reason: LoopState eliminated, consolidated into ExecutionState
+
+- **2026-06-19**: RFC-300 - Context and Memory Architecture Design
+  - Status: Archived
+  - Kind: Architecture Design
+  - Superseded By: RFC-302, RFC-303
+  - Archive Reason: Combined spec split into separate ContextProtocol and MemoryProtocol specs
+
+- **2026-06-19**: RFC-411 - Event Stream Replay & History Reconstruction
+  - Status: Archived
+  - Kind: Architecture Design
+  - Superseded By: RFC-413
+  - Archive Reason: Event stream replay replaced by server-owned display card ledger
+
+- **2026-06-19**: RFC-605 - Explore Subagent and Parallel Spawning
+  - Status: Archived
+  - Kind: Architecture Design
+  - Superseded By: RFC-613
+  - Archive Reason: Fixed wave-based search replaced by LLM-orchestrated iterative search
+
+- **2026-06-19**: RFC-216 - StrangeLoop Multi-Thread Infinite Lifecycle
+  - Status: Archived
+  - Kind: Architecture Design
+  - Superseded By: RFC-207
+  - Archive Reason: Thread lifecycle and automatic switching incorporated into RFC-207
+
+- **2026-06-19**: RFC-900 - RFC Deprecation List and Number Segment Reclassification Scheme
+  - Status: Proposed
+  - Kind: Process Specification
+  - Authors: Soothe Team
+
+- **2026-06-19**: Series Reclassification
+  - RFC-302, RFC-303, RFC-304, RFC-305, RFC-306: Reclassified from 4xx to 3xx (Protocol Specifications)
+  - RFC-801: Reclassified from 6xx to 8xx (Persistence & Backends)
+  - RFC-901: Reclassified from 6xx to 9xx (Security & Policy)
+
+- **2026-06-16**: RFC-626 - Entity Model and State Management Consolidation
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-06-15**: RFC-625 - AutopilotMonitor as ContextEngine Monitor Submodule
+  - Status: Implemented
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-06-12**: RFC-624 - Context Engine — Unified Context Management
+  - Status: Draft
+  - Kind: Architecture Design
+  - Authors: Soothe Team
+
+- **2026-06-04**: RFC-803 - StrangeLoop Checkpoint Backend Architecture
   - Status: Draft
   - Kind: Architecture Design
 
@@ -106,8 +191,9 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Kind: Architecture Design
 
 - **2026-05-28**: RFC-200 - Autonomous Goal Management Loop
-  - Status: Implemented
+  - Status: Implemented → Archived (2026-06-19)
   - Kind: Architecture Design
+  - Note: Superseded by RFC-222 (control flow) and RFC-625 (GoalEngine deletion)
 
 - **2026-05-28**: RFC-204 - Autopilot Mode (Layer 3 Extension)
   - Status: Implemented
@@ -200,6 +286,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **2026-04-30**: RFC-901 - OperationSecurityProtocol: Unified Workspace and Tool Operation Security
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Reclassified from 6xx to 9xx per RFC-900
 
 - **2026-04-29**: RFC-201 - StrangeLoop Plan-Execute Loop Architecture (Consolidated Layer 2)
   - Status: Implemented
@@ -238,7 +325,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Kind: Architecture Design
 
 - **2026-04-22**: RFC-411 - Event Stream Replay & History Reconstruction
-  - Status: Deprecated. Superseded by RFC-413.
+  - Status: Deprecated → Archived (2026-06-19)
   - Kind: Architecture Design
   - Superseded by: RFC-413 (Server-Owned Display Card Ledger)
 
@@ -259,8 +346,9 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Implemented
 
 - **2026-04-17**: RFC-203 - StrangeLoop State & Memory Architecture
-  - Status: Draft
+  - Status: Draft → Archived (2026-06-19)
   - Kind: Architecture Design / Impl Interface
+  - Superseded by: RFC-626
 
 - **2026-04-17**: RFC-207 - StrangeLoop Thread Management & Goal Context
   - Status: Draft
@@ -273,22 +361,27 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **2026-04-17**: RFC-302 - ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Reclassified from 4xx to 3xx per RFC-900
 
 - **2026-04-17**: RFC-303 - MemoryProtocol: Cross-Thread Memory & Context Separation
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Reclassified from 4xx to 3xx per RFC-900
 
 - **2026-04-17**: RFC-304 - PlannerProtocol: Plan Creation & Two-Phase Implementation Pattern
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Reclassified from 4xx to 3xx per RFC-900
 
 - **2026-04-17**: RFC-305 - PolicyProtocol: Permission Checking & Scope Matching
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Reclassified from 4xx to 3xx per RFC-900
 
 - **2026-04-17**: RFC-306 - DurabilityProtocol: Thread Lifecycle & Metadata Management
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Reclassified from 4xx to 3xx per RFC-900
 
 - **2026-04-17**: RFC-610 - SDK Module Structure Refactoring
   - Status: Draft
@@ -297,6 +390,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **2026-04-16**: RFC-216 - StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
   - Status: Draft
   - Kind: Architecture Design
+  - Note: Superseded by RFC-207 on 2026-06-19
 
 - **2026-04-16**: RFC-454 - Slash Command Architecture
   - Status: Draft
@@ -312,8 +406,9 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Authors: Claude Code, Xiaming Chen
 
 - **2026-04-13**: RFC-605 - Explore Subagent and Parallel Spawning
-  - Status: Superseded
+  - Status: Superseded → Archived (2026-06-19)
   - Kind: Architecture Design
+  - Superseded by: RFC-613
 
 - **2026-04-13**: RFC-606 - DeepAgents CLI TUI Migration
   - Status: Draft
@@ -341,6 +436,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **2026-04-04**: RFC-801 - SQLite Backend for Persistence, Durability, and Vector Store
   - Status: Draft
   - Kind: Architecture Design + Implementation Interface Design
+  - Note: Reclassified from 6xx to 8xx per RFC-900
 
 - **2026-04-02**: RFC-502 - Unified Presentation Engine
   - Status: Draft
@@ -372,7 +468,8 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 - **2026-03-31**: RFC-101 supersedes RFC-0025
 
 - **2026-03-27**: RFC-300 - Context and Memory Architecture Design
-  - Status: Superseded
+  - Status: Superseded → Archived (2026-06-19)
+  - Superseded by: RFC-302, RFC-303
 
 - **2026-03-27**: RFC-600 - Plugin Extension Specification
   - Status: Implemented
@@ -458,8 +555,8 @@ RFCs are organized into numbered series by category:
 - RFC-211: Layer 2 Tool Result Optimization
 - RFC-213: StrangeLoop Reasoning Quality & Robustness
 - RFC-214: Volatility-Tiered Prompt Architecture & Unified Message Ledger
-- RFC-215: StrangeLoop Persistence Backend Architecture
-- RFC-216: StrangeLoop Multi-Thread Infinite Lifecycle with Automatic Thread Switching
+- RFC-803: StrangeLoop Checkpoint Backend Architecture
+- RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-217: Goal Context Management for StrangeLoop
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-219: Goal Completion Module Architecture

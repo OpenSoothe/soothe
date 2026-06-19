@@ -20,7 +20,9 @@ fast enough after receiving `loop_input`.
 
 ### 2. RFC Filename Renames (8 files)
 Renamed from `RFC-XXX-agentloop-*.md` to `RFC-XXX-strangeloop-*.md`:
-- RFC-201, RFC-203, RFC-207, RFC-213, RFC-214, RFC-215, RFC-216, RFC-218
+- RFC-201, RFC-203, RFC-207, RFC-213, RFC-214, RFC-215 (now RFC-803), RFC-216, RFC-218
+
+**Note**: RFC-215 was later renamed to RFC-803 and moved to the 8xx persistence series per RFC-900 reclassification.
 
 ### 3. IG Filename Renames (9 files)
 Renamed from `IG-XXX-agentloop-*.md` to `IG-XXX-strangeloop-*.md`:

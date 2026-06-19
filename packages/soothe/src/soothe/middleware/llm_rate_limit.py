@@ -10,6 +10,7 @@ IG-499: HTTP 429 rate limit error retry with exponential backoff.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -90,6 +91,91 @@ def _extract_retry_after_seconds(exc: Exception) -> float | None:
     except ValueError:
         # Some APIs use date format; fall back to None
         return None
+
+
+# IG-501: Extended rate limit info extraction for Chinese providers
+
+
+def _extract_rate_limit_info(exc: Exception) -> dict[str, Any]:
+    """Extract rate limit info from provider error response.
+
+    Dashscope/Zhipu use OpenAI-compatible format:
+    - HTTP 429 status
+    - JSON body with error details
+    - May include retry_after or wait_seconds in body
+    - May communicate actual RPM limit
+
+    Args:
+        exc: Exception with response attribute.
+
+    Returns:
+        dict with:
+            - retry_after_seconds: float | None
+            - rpm_limit_hint: int | None (if provider specifies actual limit)
+            - provider_name: str | None (dashscope/zhipu/etc)
+    """
+    result: dict[str, Any] = {
+        "retry_after_seconds": None,
+        "rpm_limit_hint": None,
+        "provider_name": None,
+    }
+
+    response = getattr(exc, "response", None)
+    if response is None:
+        return result
+
+    # 1. Standard retry-after header
+    headers = getattr(response, "headers", {})
+    if headers:
+        retry_after = headers.get("retry-after")
+        if retry_after:
+            try:
+                result["retry_after_seconds"] = float(retry_after)
+            except ValueError:
+                pass
+
+    # 2. Response body parsing (Dashscope/Zhipu specific)
+    try:
+        body = response.json()
+        error_obj = body.get("error", {})
+
+        # Dashscope/Zhipu may include retry info in body
+        # Only use body value if header didn't provide one (header takes priority)
+        if result["retry_after_seconds"] is None:
+            if "retry_after" in error_obj:
+                try:
+                    result["retry_after_seconds"] = float(error_obj["retry_after"])
+                except (TypeError, ValueError):
+                    pass
+            elif "wait_seconds" in error_obj:
+                try:
+                    result["retry_after_seconds"] = float(error_obj["wait_seconds"])
+                except (TypeError, ValueError):
+                    pass
+
+        # Provider may communicate their actual limit
+        rate_limit_obj = error_obj.get("rate_limit", {})
+        if rate_limit_obj and "limit" in rate_limit_obj:
+            try:
+                result["rpm_limit_hint"] = int(rate_limit_obj["limit"])
+            except (TypeError, ValueError):
+                pass
+
+        # Detect provider from error code/message
+        message = error_obj.get("message", "") or str(body)
+        message_lower = message.lower()
+        if "dashscope" in message_lower or "qwen" in message_lower:
+            result["provider_name"] = "dashscope"
+        elif "zhipu" in message_lower or "glm" in message_lower:
+            result["provider_name"] = "zhipu"
+        elif "kimi" in message_lower or "moonshot" in message_lower:
+            result["provider_name"] = "kimi"
+
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        # Body parsing failed, use header values only
+        pass
+
+    return result
 
 
 def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
@@ -477,6 +563,44 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             # Schedule redistribution (async)
             asyncio.create_task(self._redistribute_budgets())
 
+    # IG-501: Runtime RPM adjustment based on provider feedback
+
+    def adjust_rpm_limit(self, new_limit: int, reason: str) -> None:
+        """Dynamically adjust global RPM limit based on provider feedback.
+
+        Logs the change, validates bounds, and redistributes budgets across
+        active threads immediately.
+
+        Args:
+            new_limit: New RPM limit to apply (validated: min 5, max 10000).
+            reason: Reason for adjustment (e.g., "429 from dashscope").
+
+        Note:
+            This is a runtime adjustment only; does not modify config files.
+        """
+        # Validate bounds
+        new_limit = max(5, min(new_limit, 10000))
+
+        old_limit = self._rpm_limit_global
+        if new_limit == old_limit:
+            return  # No change needed
+
+        self._rpm_limit_global = new_limit
+
+        # Log the adjustment
+        active_threads = len(self._thread_budgets) if self._thread_local_enabled else 1
+        logger.warning(
+            "RPM limit adjusted: %d → %d (reason: %s) active_threads=%d",
+            old_limit,
+            new_limit,
+            reason,
+            active_threads,
+        )
+
+        # Redistribute to thread budgets (if thread-local mode)
+        if self._thread_local_enabled:
+            asyncio.create_task(self._redistribute_budgets())
+
     def wrap_model_call(
         self,
         request: ModelRequest[Any],
@@ -578,8 +702,18 @@ class LLMRateLimitMiddleware(AgentMiddleware):
 
                     except TimeoutError:
                         # IG-295: Timeout retry handling
-                        if timeout_attempts < max_timeout_attempts - 1:
-                            timeout_attempts += 1
+                        timeout_attempts += 1
+
+                        # IG-501: Proactive throttling after consecutive timeouts
+                        # (suggests provider overload, reduce RPM before hitting 429)
+                        if timeout_attempts >= 2:
+                            proactive_limit = int(self._rpm_limit_global * 0.8)  # Reduce by 20%
+                            self.adjust_rpm_limit(
+                                proactive_limit,
+                                reason=f"consecutive timeouts ({timeout_attempts}) suggesting provider overload",
+                            )
+
+                        if timeout_attempts < max_timeout_attempts:
                             backoff = 1.0 * timeout_attempts
                             logger.debug(
                                 "LLM call timeout (attempt %d/%d, %ds) - retrying with backoff=%.1fs (thread_id=%s)",
@@ -609,6 +743,25 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                     except Exception as exc:
                         # IG-499: Check for 429 rate limit error
                         if _is_api_rate_limit_error(exc):
+                            # IG-501: Extract full rate limit info from provider response
+                            rate_limit_info = _extract_rate_limit_info(exc)
+
+                            # Log detection
+                            logger.warning(
+                                "Rate limit detected: retry_after=%ss rpm_hint=%s provider=%s (thread_id=%s)",
+                                rate_limit_info["retry_after_seconds"] or "none",
+                                rate_limit_info["rpm_limit_hint"] or "none",
+                                rate_limit_info["provider_name"] or "unknown",
+                                thread_id,
+                            )
+
+                            # IG-501: Adjust global RPM if provider gave us a hint
+                            if rate_limit_info["rpm_limit_hint"] is not None:
+                                self.adjust_rpm_limit(
+                                    rate_limit_info["rpm_limit_hint"],
+                                    reason=f"429 from {rate_limit_info['provider_name'] or 'provider'}",
+                                )
+
                             if rate_limit_attempts < max_rate_limit_attempts - 1:
                                 rate_limit_attempts += 1
                                 backoff = self._calculate_rate_limit_backoff(
@@ -655,8 +808,17 @@ class LLMRateLimitMiddleware(AgentMiddleware):
 
                     except TimeoutError:
                         # IG-295: Timeout retry handling
-                        if timeout_attempts < max_timeout_attempts - 1:
-                            timeout_attempts += 1
+                        timeout_attempts += 1
+
+                        # IG-501: Proactive throttling after consecutive timeouts
+                        if timeout_attempts >= 2:
+                            proactive_limit = int(self._rpm_limit_global * 0.8)
+                            self.adjust_rpm_limit(
+                                proactive_limit,
+                                reason=f"consecutive timeouts ({timeout_attempts}) suggesting provider overload",
+                            )
+
+                        if timeout_attempts < max_timeout_attempts:
                             backoff = 1.0 * timeout_attempts
                             logger.debug(
                                 "LLM call timeout (attempt %d/%d, %ds) - retrying with backoff=%.1fs",
@@ -683,6 +845,24 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                     except Exception as exc:
                         # IG-499: Check for 429 rate limit error
                         if _is_api_rate_limit_error(exc):
+                            # IG-501: Extract full rate limit info from provider response
+                            rate_limit_info = _extract_rate_limit_info(exc)
+
+                            # Log detection
+                            logger.warning(
+                                "Rate limit detected: retry_after=%ss rpm_hint=%s provider=%s",
+                                rate_limit_info["retry_after_seconds"] or "none",
+                                rate_limit_info["rpm_limit_hint"] or "none",
+                                rate_limit_info["provider_name"] or "unknown",
+                            )
+
+                            # IG-501: Adjust global RPM if provider gave us a hint
+                            if rate_limit_info["rpm_limit_hint"] is not None:
+                                self.adjust_rpm_limit(
+                                    rate_limit_info["rpm_limit_hint"],
+                                    reason=f"429 from {rate_limit_info['provider_name'] or 'provider'}",
+                                )
+
                             if rate_limit_attempts < max_rate_limit_attempts - 1:
                                 rate_limit_attempts += 1
                                 backoff = self._calculate_rate_limit_backoff(

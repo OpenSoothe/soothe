@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-05-27
 **Dependencies**: RFC-223, RFC-201, RFC-214
-**Related**: RFC-216 (Multithread Lifecycle), RFC-218 (Checkpoint Tree)
+**Related**: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree)
 
 ---
 

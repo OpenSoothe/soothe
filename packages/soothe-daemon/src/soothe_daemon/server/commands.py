@@ -1,4 +1,4 @@
-"""Daemon RPC command handlers (RFC-404).
+"""Daemon RPC command handlers (RFC-454).
 
 Structured command request/response handlers for slash commands.
 Each handler executes a specific command and returns structured data.
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _handle_command_request(self, msg: dict[str, Any]) -> None:
-    """Handle structured RPC command requests (RFC-404).
+    """Handle structured RPC command requests (RFC-454).
 
     Args:
         msg: Command request with ``command``, optional ``params``, and ``loop_id``
@@ -116,7 +116,7 @@ async def _send_command_response(
     request_id: str | None = None,
     loop_id: str | None = None,
 ) -> None:
-    """Send structured command response (RFC-404).
+    """Send structured command response (RFC-454).
 
     Args:
         command: Command name

@@ -1,4 +1,4 @@
-"""Loop recovery integration tests (RFC-402 / RFC-503).
+"""Loop recovery integration tests (RFC-452 / RFC-503).
 
 Validates loop persistence across daemon restart, concurrent loops, cancellation,
 and basic isolation using ``loop_*`` WebSocket RPC—no legacy thread_* wire types.
