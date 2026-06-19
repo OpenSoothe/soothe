@@ -32,9 +32,9 @@ PACKAGES = soothe-sdk soothe-cli soothe soothe-daemon soothe-plugins
 ROOT_LINT_DIRS = examples scripts
 
 ifdef UV_PYPI_MIRROR
-UV_SYNC = uv sync --all-packages --all-extras --reinstall --default-index $(UV_PYPI_MIRROR)
+UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 else
-UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --reinstall
+UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras 
 endif
 
 # ============================================================================
