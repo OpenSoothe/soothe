@@ -28,6 +28,7 @@ from soothe_daemon.server.commands import (
     _cmd_cancel,
     _cmd_clear,
     _cmd_config,
+    _cmd_cron_add,
     _cmd_detach,
     _cmd_exit,
     _cmd_history,
@@ -70,6 +71,7 @@ class DaemonHandlersMixin:
     _cmd_resume = _cmd_resume
     _cmd_autopilot_dashboard = _cmd_autopilot_dashboard
     _cmd_autopilot_toggle = _cmd_autopilot_toggle
+    _cmd_cron_add = _cmd_cron_add
 
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Send a direct response to a specific client when possible.

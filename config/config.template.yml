@@ -149,6 +149,18 @@ agent:
       enabled: true
       strict_overlap: true
 
+  # === CRON SERVICE (RFC-229) ===
+  # Natural language scheduled job submission and execution.
+  # Users submit jobs via /cron commands; daemon extracts schedule via LLM,
+  # persists to database, monitors for due jobs, and executes through Autopilot.
+  cron:
+    enabled: true              # Enable cron service (default: true)
+    max_jobs: 100              # Maximum scheduled jobs per user
+    poll_interval: 60          # Seconds between due-job monitoring ticks
+    extraction_model: fast     # LLM role for NL extraction (fast|think)
+    extraction_timeout: 30     # Timeout for LLM extraction calls
+    default_priority: 50       # Default job priority when not specified
+
   # === LOOP (StrangeLoop Internal Tuning) ===
   # Rarely edited. Defaults optimized for most use cases.
   loop:

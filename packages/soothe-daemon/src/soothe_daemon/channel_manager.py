@@ -46,6 +46,7 @@ class ChannelManager:
         soothe_config: Optional SootheConfig for HTTP REST transport.
         session_manager: Optional ClientSessionManager for WebSocket sessions.
         autopilot_service: Optional AutopilotService for HTTP REST endpoints.
+        cron_service: Optional CronService for scheduled job endpoints (RFC-229).
     """
 
     def __init__(
@@ -56,6 +57,7 @@ class ChannelManager:
         soothe_config: Any | None = None,
         session_manager: Any | None = None,
         autopilot_service: Any | None = None,
+        cron_service: Any | None = None,
         memory_profiler: Any | None = None,
     ) -> None:
         """Initialize channel manager.
@@ -67,6 +69,7 @@ class ChannelManager:
             soothe_config: Optional SootheConfig for HTTP REST transport.
             session_manager: Optional ClientSessionManager for session management.
             autopilot_service: Optional daemon-owned AutopilotService.
+            cron_service: Optional daemon-owned CronService (RFC-229).
             memory_profiler: Optional MemoryProfiler for memory REST endpoints.
         """
         self._config = config
@@ -75,6 +78,7 @@ class ChannelManager:
         self._soothe_config = soothe_config
         self._session_manager = session_manager
         self._autopilot_service = autopilot_service
+        self._cron_service = cron_service
         self._memory_profiler = memory_profiler
 
         # Channel instances
@@ -261,6 +265,7 @@ class ChannelManager:
                 session_manager=self._session_manager,
                 unified_app=self._unified_app,
                 autopilot_service=self._autopilot_service,
+                cron_service=self._cron_service,
                 memory_profiler=self._memory_profiler,
             )
             self._channels["http_rest"] = http_channel

@@ -49,7 +49,7 @@ router:
 # ============================================================
 agent:
   autonomous:
-    enabled: false
+    enabled: true
     max_parallel_goals: 6    # Increased from default 3 for better goal concurrency
     max_loops: 8             # Increased from default 4 for more worker loops
   loop:
