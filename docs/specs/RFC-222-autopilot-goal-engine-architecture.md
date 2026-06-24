@@ -7,7 +7,7 @@
 **Created**: 2026-05-27
 **Revised**: 2026-05-28 — daemon-ownership pivot; StrangeLoop reframed as pure execution unit; bounded summarization via `GoalDispatchContextBundle` replaces in-memory lineage; `WorkspaceReservation` replaces per-path file-lock coordination. `GoalDispatchContext*` naming chosen to avoid collision with `GoalContext` already defined in RFC-217 (thread ecosystem) and RFC-200 (DAG snapshot for backoff).
 **Dependencies**: RFC-000, RFC-201, RFC-204, RFC-221 (Loop Runner Protocol)
-**Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events)
+**Related**: RFC-200 (Goal Lifecycle), RFC-220 (Loop Orchestrator), RFC-403 (Events), RFC-229 (Cron Service for Autopilot)
 **Supersedes (in part)**:
 - Earlier RFC-222 §"Loop Pool Management", §"Lineage-Aware Loop Assignment", §"File Lock Conflict Resolution" — replaced by the design herein.
 - RFC-200 §"Pull-Based Architecture" / §"StrangeLoop ↔ GoalEngine Integration": the inverted control flow ("StrangeLoop pulls from GoalEngine, GoalEngine never invokes StrangeLoop") is replaced by **autopilot push**: daemon's `AutopilotService` dispatches goals to StrangeLoop workers via the job contract. StrangeLoop never sees `GoalEngine`. RFC-200's backoff reasoning, evidence schema, and goal-directives sections remain authoritative.

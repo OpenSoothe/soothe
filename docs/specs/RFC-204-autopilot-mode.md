@@ -7,6 +7,7 @@
 **Created**: 2026-04-03
 **Updated**: 2026-05-28
 **Dependencies**: RFC-200, RFC-201, RFC-203, RFC-222, RFC-450, RFC-500
+**Related**: RFC-229 (Cron Service for Autopilot — natural language scheduled jobs)
 
 > **Compatibility note (2026-05-28)**: This RFC defines autopilot's **user-facing surface** — file layout (`SOOTHE_HOME/autopilot/`), CLI commands (`soothe autopilot ...`), HTTP endpoints (`/autopilot/*`), and consensus/dreaming semantics. The **runtime implementation** — daemon-owned `AutopilotService`, subprocess worker dispatch, `GoalDispatchContextBundle`, `WorkspaceReservation`, sticky-affinity `WorkerPool` — is specified in RFC-222 (revised). The two are complementary: RFC-204 owns "what users see and submit," RFC-222 owns "how the daemon executes it."
 >
@@ -284,6 +285,8 @@ class ChannelMessage:
 **Removed**: File-based inbox/outbox directories (`autopilot/inbox/`, `autopilot/outbox/`).
 
 ## 4. Scheduler Service
+
+> **Extension**: RFC-229 (Cron Service for Autopilot) extends this scheduler with natural language job submission, database persistence, and TUI command `/cron` (plus CLI commands `soothe cron list/show/cancel`). The CronService wraps SchedulerService for schedule math and dispatches due jobs through the same AutopilotService goal workflow.
 
 ### 4.1 Location
 

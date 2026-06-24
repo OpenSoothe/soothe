@@ -13,6 +13,7 @@ from soothe.config.env import _resolve_env, _resolve_provider_env
 from soothe.config.models import (
     AgentConfig,
     ConsoleLoggingConfig,
+    CronConfig,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
     MCPServerConfig,
@@ -342,6 +343,9 @@ class SootheConfig(BaseSettings):
 
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     """Unified observability configuration for debugging and monitoring."""
+
+    cron: CronConfig = Field(default_factory=CronConfig)
+    """RFC-229: Cron service configuration for natural language scheduled jobs."""
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""

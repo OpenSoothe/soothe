@@ -80,6 +80,7 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
             "resume": self._cmd_resume,
             "autopilot_dashboard": self._cmd_autopilot_dashboard,
             "autopilot_toggle": self._cmd_autopilot_toggle,
+            "cron_add": self._cmd_cron_add,
         }
 
         handler = handler_map.get(command)
@@ -540,6 +541,60 @@ async def _cmd_autopilot_toggle(
     }
 
 
+# Cron command handlers (RFC-229)
+
+
+async def _cmd_cron_add(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Add a scheduled cron job via natural language.
+
+    Args:
+        checkpoint_thread_id: LangGraph checkpoint thread_id (unused for cron).
+        params: Command parameters with 'text' (natural language) and optional 'priority'.
+        loop_id: Current StrangeLoop subscription scope (unused for cron).
+
+    Returns:
+        Dict with created job details: id, description, next_run, status.
+    """
+    from soothe.foundation.cron import CronService, ExtractionError
+
+    text = params.get("text", "")
+    priority = params.get("priority")
+
+    if not text:
+        raise ValueError("Natural language text required (params.text)")
+
+    # Get user_id from client context (use loop_id as proxy for now)
+    user_id = str(loop_id or "default")
+
+    # Get or create CronService
+    cron_service = getattr(self, "_cron_service", None)
+    if cron_service is None:
+        # Create CronService with existing config and autopilot
+        cron_service = CronService(
+            config=self._config,
+            autopilot=self._autopilot_service,
+        )
+        self._cron_service = cron_service
+
+    try:
+        job = await cron_service.add_job(text, user_id, priority=priority)
+
+        return {
+            "cron_add": {
+                "id": job.id,
+                "description": job.description,
+                "schedule_kind": job.schedule_kind.value,
+                "next_run": job.next_run.isoformat(),
+                "status": job.status.value,
+                "priority": job.priority,
+            }
+        }
+    except ExtractionError as e:
+        raise ValueError(e.message) from e
+
+
 # Export handlers for mixin
 __all__ = [
     "_handle_command_request",
@@ -559,4 +614,5 @@ __all__ = [
     "_cmd_resume",
     "_cmd_autopilot_dashboard",
     "_cmd_autopilot_toggle",
+    "_cmd_cron_add",
 ]

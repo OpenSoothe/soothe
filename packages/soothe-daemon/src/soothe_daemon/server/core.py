@@ -130,6 +130,7 @@ class SootheDaemon(DaemonHandlersMixin):
         # Constructed in start() with subscribe_to_bus=False to coexist with
         # the per-runner AutopilotService until Phase D retires that one.
         self._autopilot_service: Any = None  # AutopilotService | None
+        self._cron_service: Any = None  # CronService | None (RFC-229)
         self._running = False
         self._query_running = False  # Deprecated: use _active_threads instead
         self._current_query_task: asyncio.Task | None = None
@@ -367,6 +368,23 @@ class SootheDaemon(DaemonHandlersMixin):
                     "(real dispatch enabled; scheduling loop will start)"
                 )
 
+                # RFC-229: Create daemon-owned CronService for scheduled jobs
+                try:
+                    from soothe.foundation.cron import CronService
+
+                    if self._config.cron.enabled:
+                        self._cron_service = CronService(
+                            config=self._config,
+                            autopilot=self._autopilot_service,
+                        )
+                        logger.info(
+                            "[Cron] daemon-owned CronService constructed "
+                            "(enabled=true; monitoring loop will start)"
+                        )
+                except Exception:
+                    logger.exception("[Cron] failed to construct daemon-owned CronService")
+                    self._cron_service = None
+
                 # RFC-228: Bridge internal autopilot events to client-visible events
                 # for desktop clients with autopilot_subscribed=True
                 from soothe.foundation.events.internal_events import internal_to_client_event
@@ -466,6 +484,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 soothe_config=self._config,
                 session_manager=self._session_manager,
                 autopilot_service=self._autopilot_service,
+                cron_service=self._cron_service,
                 memory_profiler=self._memory_profiler,
             )
             self._channel_manager.set_message_handler(self._handle_transport_message)
@@ -528,6 +547,14 @@ class SootheDaemon(DaemonHandlersMixin):
                     "[Autopilot] service constructed but scheduling loop NOT started "
                     "(config.agent.autonomous.enabled=false)"
                 )
+
+            # RFC-229: Start CronService monitoring loop for scheduled jobs
+            if self._cron_service is not None:
+                try:
+                    await self._cron_service.start()
+                    logger.info("[Cron] monitoring loop started (enabled=true)")
+                except Exception:
+                    logger.exception("[Cron] failed to start monitoring loop")
 
             self._readiness_state = "ready"
             self._readiness_message = None
@@ -1120,6 +1147,13 @@ class SootheDaemon(DaemonHandlersMixin):
         # IG-475: Stop memory profiler if running
         if self._memory_profiler is not None:
             self._memory_profiler.stop()
+
+        # RFC-229: Stop CronService monitoring loop
+        if self._cron_service is not None:
+            try:
+                await self._cron_service.stop()
+            except Exception:
+                logger.warning("[Cron] stop raised during shutdown", exc_info=True)
 
         # RFC-222 revised (Phase C): stop the autopilot scheduling loop early
         # so it doesn't dispatch new goals while the rest of the daemon shuts down.
