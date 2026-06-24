@@ -2075,6 +2075,34 @@ class VeritasConfig(BaseModel):
     """How many recent step outputs to include in the veritas user prompt."""
 
 
+class CronConfig(BaseModel):
+    """RFC-229: configuration for the cron service.
+
+    Natural language scheduled job submission for Autopilot.
+
+    Args:
+        enabled: Enable cron service (default: true).
+        max_jobs: Maximum scheduled jobs per user.
+        poll_interval: Seconds between due-job monitoring ticks.
+        extraction_model: LLM role for natural language extraction.
+        extraction_timeout: Timeout for LLM extraction calls.
+        default_priority: Default job priority when not specified.
+    """
+
+    enabled: bool = Field(default=True, description="Enable cron service")
+    max_jobs: int = Field(default=100, ge=1, le=1000, description="Max scheduled jobs per user")
+    poll_interval: int = Field(
+        default=60, ge=10, le=3600, description="Monitoring tick interval in seconds"
+    )
+    extraction_model: Literal["default", "fast", "think", "image", "embedding"] = Field(
+        default="fast", description="LLM role for NL extraction"
+    )
+    extraction_timeout: int = Field(
+        default=30, ge=5, le=120, description="Extraction timeout in seconds"
+    )
+    default_priority: int = Field(default=50, ge=1, le=100, description="Default job priority")
+
+
 class SecurityConfig(BaseModel):
     """Security policy configuration for filesystem access control.
 

@@ -73,9 +73,9 @@ class TestSootheConfig:
         assert cfg.agent.loop.max_iterations == 42
         assert cfg.agent.loop.concurrency.max_parallel_steps == 7
 
-    def test_llm_rate_limit_disabled_by_default(self) -> None:
+    def test_llm_rate_limit_enabled_by_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.loop.llm_rate_limit.enabled is False
+        assert cfg.agent.loop.llm_rate_limit.enabled is True
 
     def test_checkpoint_defaults(self) -> None:
         cfg = SootheConfig()

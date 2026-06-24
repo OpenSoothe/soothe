@@ -68,6 +68,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="goals status workers",
     ),
     SlashCommand(
+        name="/cron",
+        description="Add scheduled job (usage: /cron <natural language>)",
+        bypass_tier=BypassTier.QUEUED,
+        hidden_keywords="schedule timer reminder",
+    ),
+    SlashCommand(
         name="/clear",
         description="Clear chat and start a new loop",
         bypass_tier=BypassTier.QUEUED,

@@ -1,6 +1,6 @@
 """HTTP REST channel implementation (RFC-620).
 
-HTTP REST channel for health checks, status, autopilot, and auxiliary endpoints.
+HTTP REST channel for health checks, status, autopilot, cron, and auxiliary endpoints.
 Note: This channel only supports inbound (supports_outbound=False).
 """
 
@@ -69,6 +69,7 @@ class HttpRestChannel(Channel):
         session_manager: Any | None = None,
         unified_app: FastAPI | None = None,
         autopilot_service: Any | None = None,
+        cron_service: Any | None = None,
         memory_profiler: Any | None = None,
     ) -> None:
         """Initialize HTTP REST channel.
@@ -81,6 +82,7 @@ class HttpRestChannel(Channel):
             session_manager: Optional ClientSessionManager.
             unified_app: Optional shared FastAPI app.
             autopilot_service: Optional AutopilotService.
+            cron_service: Optional CronService for scheduled job endpoints.
             memory_profiler: Optional MemoryProfiler for memory diagnostics.
         """
         super().__init__(config, manager)
@@ -89,6 +91,7 @@ class HttpRestChannel(Channel):
         self._soothe_config = soothe_config
         self._session_manager = session_manager
         self._autopilot_service = autopilot_service
+        self._cron_service = cron_service
         self._memory_profiler = memory_profiler
         self._unified_mode = unified_app is not None
 
@@ -126,6 +129,15 @@ class HttpRestChannel(Channel):
             )
         return self._autopilot_service
 
+    def _require_cron_service(self) -> Any:
+        """Return the daemon-owned CronService or raise HTTP 503."""
+        if self._cron_service is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Cron service unavailable; ensure cron.enabled is true and the daemon started cleanly",
+            )
+        return self._cron_service
+
     def _setup_routes(self) -> None:
         """Setup all REST API routes."""
         self._setup_health_routes()
@@ -133,6 +145,7 @@ class HttpRestChannel(Channel):
         self._setup_file_routes()
         self._setup_system_routes()
         self._setup_autopilot_routes()
+        self._setup_cron_routes()
         self._setup_memory_routes()
 
     def _setup_health_routes(self) -> None:
@@ -383,6 +396,45 @@ class HttpRestChannel(Channel):
             service = self._require_autopilot_service()
             await service.force_dream()
             return {"status": "dream_sent"}
+
+    def _setup_cron_routes(self) -> None:
+        """Setup cron REST API routes (RFC-229)."""
+
+        @self._app.get("/api/v1/cron/jobs")
+        async def cron_list_jobs(status: str | None = None) -> dict[str, Any]:
+            """List scheduled cron jobs.
+
+            Args:
+                status: Optional status filter (pending, running, completed, failed, cancelled).
+            """
+            service = self._require_cron_service()
+            # Default user_id for HTTP API (no per-user isolation in basic mode)
+            user_id = "http_api"
+            jobs = await service.list_jobs(user_id, status=status)
+            return {
+                "jobs": [j.to_dict() for j in jobs],
+                "source": "cron_service",
+            }
+
+        @self._app.get("/api/v1/cron/jobs/{job_id}")
+        async def cron_get_job(job_id: str) -> dict[str, Any]:
+            """Get details for a specific cron job."""
+            service = self._require_cron_service()
+            user_id = "http_api"
+            job = await service.show_job(job_id, user_id)
+            if job:
+                return {"job": job.to_dict(), "source": "cron_service"}
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        @self._app.delete("/api/v1/cron/jobs/{job_id}")
+        async def cron_cancel_job(job_id: str) -> dict[str, Any]:
+            """Cancel a scheduled cron job."""
+            service = self._require_cron_service()
+            user_id = "http_api"
+            cancelled = await service.cancel_job(job_id, user_id)
+            if cancelled:
+                return {"cancelled": True, "job_id": job_id}
+            raise HTTPException(status_code=404, detail="Job not found or cannot be cancelled")
 
     def _setup_file_routes(self) -> None:
         """Setup file operation routes."""

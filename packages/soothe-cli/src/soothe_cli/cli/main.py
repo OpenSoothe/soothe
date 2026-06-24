@@ -201,6 +201,7 @@ def main(
 # ---------------------------------------------------------------------------
 
 from soothe_cli.cli.commands.autopilot_cmd import app as _autopilot_app  # noqa: E402
+from soothe_cli.cli.commands.cron_cmd import app as _cron_app  # noqa: E402
 from soothe_cli.cli.commands.loop_cmd import loop_app as _loop_app  # noqa: E402
 from soothe_cli.cli.commands.status_cmd import status_app as _status_app  # noqa: E402
 
@@ -208,6 +209,7 @@ from soothe_cli.cli.commands.status_cmd import status_app as _status_app  # noqa
 for _sub_app, _name in (
     (_loop_app, "loop"),
     (_autopilot_app, "autopilot"),
+    (_cron_app, "cron"),
 ):
     add_help_alias(_sub_app)
     app.add_typer(_sub_app, name=_name)
