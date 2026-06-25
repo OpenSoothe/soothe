@@ -177,6 +177,27 @@ class WsCommandClient:
         """Get job status with DAG snapshot."""
         return await self._send_command("autopilot_get_job", {"job_id": job_id})
 
+    async def job_pause(self, job_id: str) -> dict[str, Any]:
+        """Pause a running autopilot job."""
+        return await self._send_command("autopilot_pause", {"job_id": job_id})
+
+    async def job_guidance(
+        self, job_id: str, text: str, *, goal_id: str | None = None
+    ) -> dict[str, Any]:
+        """Send guidance to an autopilot job or specific goal."""
+        payload = {"job_id": job_id, "text": text}
+        if goal_id:
+            payload["goal_id"] = goal_id
+        return await self._send_command("autopilot_guidance", payload)
+
+    async def autopilot_subscribe(self) -> dict[str, Any]:
+        """Subscribe to autopilot worker events."""
+        return await self._send_command("autopilot_subscribe")
+
+    async def autopilot_unsubscribe(self) -> dict[str, Any]:
+        """Unsubscribe from autopilot worker events."""
+        return await self._send_command("autopilot_unsubscribe")
+
     # Cron commands
 
     async def cron_add(self, text: str, *, priority: int | None = None) -> dict[str, Any]:
@@ -287,6 +308,22 @@ class SyncWsCommandClient:
     def autopilot_get_job(self, job_id: str) -> dict[str, Any]:
         """Get job status with DAG snapshot (sync)."""
         return self._run_async(self._client.autopilot_get_job(job_id))
+
+    def job_pause(self, job_id: str) -> dict[str, Any]:
+        """Pause a running autopilot job (sync)."""
+        return self._run_async(self._client.job_pause(job_id))
+
+    def job_guidance(self, job_id: str, text: str, *, goal_id: str | None = None) -> dict[str, Any]:
+        """Send guidance to an autopilot job or specific goal (sync)."""
+        return self._run_async(self._client.job_guidance(job_id, text, goal_id=goal_id))
+
+    def autopilot_subscribe(self) -> dict[str, Any]:
+        """Subscribe to autopilot worker events (sync)."""
+        return self._run_async(self._client.autopilot_subscribe())
+
+    def autopilot_unsubscribe(self) -> dict[str, Any]:
+        """Unsubscribe from autopilot worker events (sync)."""
+        return self._run_async(self._client.autopilot_unsubscribe())
 
     def cron_add(self, text: str, *, priority: int | None = None) -> dict[str, Any]:
         """Submit a natural-language scheduled job (sync)."""
