@@ -233,7 +233,6 @@ def requires_llm_api():
 def build_daemon_config(
     tmp_path: Path,
     websocket_port: int | None = None,
-    http_port: int | None = None,
     cors_origins: list[str] | None = None,
 ) -> tuple[SootheConfig, SootheDaemonConfig]:
     """Build isolated agent and daemon server configs (RFC-450).
@@ -245,9 +244,6 @@ def build_daemon_config(
     Args:
         tmp_path: Temporary path for test isolation
         websocket_port: WebSocket port (primary transport for bidirectional streaming)
-        http_port: When not None, enables HTTP REST on the **same** TCP listener as
-            WebSocket (unified ASGI). If both ``websocket_port`` and ``http_port`` are
-            set, the WebSocket port is used for the shared listener.
         cors_origins: Optional CORS origins for WebSocket
 
     Returns:
@@ -256,12 +252,6 @@ def build_daemon_config(
     base_config = get_base_config()
 
     ws_p = websocket_port if websocket_port is not None else alloc_ephemeral_port()
-    if http_port is not None:
-        if websocket_port is not None:
-            listen = websocket_port
-        else:
-            listen = http_port
-        ws_p = listen
 
     daemon_config = {
         "transports": {
@@ -273,13 +263,6 @@ def build_daemon_config(
             },
         },
     }
-
-    if http_port is not None:
-        daemon_config["transports"]["http_rest"] = {
-            "enabled": True,
-            "host": "127.0.0.1",
-            "port": ws_p,
-        }
 
     fs_middleware = base_config.filesystem_middleware.model_copy(
         update={"workspace_root": str(tmp_path / "workspace")}

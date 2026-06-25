@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
@@ -335,16 +336,13 @@ class _ModelMixin:
             await self._mount_message(ErrorMessage(f"Failed to toggle autopilot: {exc}"))
 
     async def _submit_autopilot_job(self, task: str) -> None:
-        """Submit an autopilot job via HTTP REST (like CLI `soothe autopilot run`).
+        """Submit an autopilot job via WebSocket (like CLI `soothe autopilot run`).
 
         Args:
             task: Task description for autonomous execution.
         """
-        import os
-
         from soothe_sdk.client import (
-            AutopilotHttpClient,
-            http_rest_url_from_config,
+            async_ws_command_client_from_config,
             is_daemon_live,
             websocket_url_from_config,
         )
@@ -364,12 +362,11 @@ class _ModelMixin:
             )
             return
 
-        base_url = http_rest_url_from_config(cfg)
         workspace = self._cwd if hasattr(self, "_cwd") else os.getcwd()
 
         try:
-            client = AutopilotHttpClient(base_url)
-            result = client.submit(task, workspace=workspace)
+            client = async_ws_command_client_from_config(cfg)
+            result = await client.autopilot_submit(task, workspace=workspace)
         except RuntimeError as exc:
             await self._mount_message(ErrorMessage(str(exc)))
             return
@@ -386,21 +383,19 @@ class _ModelMixin:
             await self._mount_message(ErrorMessage("No goal_id returned from daemon"))
 
     async def _submit_cron_job(self, text: str, *, slash_input: str | None = None) -> None:
-        """Submit a cron job via HTTP REST (like CLI ``soothe cron add``).
+        """Submit a cron job via WebSocket (like CLI ``soothe cron add``).
 
         Args:
             text: Natural language schedule and task description.
             slash_input: Original slash command for chat display.
         """
         from soothe_sdk.client import (
-            ensure_http_rest_available,
-            http_rest_url_from_config,
+            async_ws_command_client_from_config,
             is_daemon_live,
             websocket_url_from_config,
         )
 
         from soothe_cli.runtime import load_config
-        from soothe_cli.runtime.cron_http import CronHttpClient
         from soothe_cli.tui.widgets.messages import AppMessage, ErrorMessage, UserMessage
 
         display = slash_input or f"/cron {text}"
@@ -414,11 +409,9 @@ class _ModelMixin:
             )
             return
 
-        base_url = http_rest_url_from_config(cfg)
         try:
-            ensure_http_rest_available(base_url)
-            client = CronHttpClient(base_url)
-            result = client.add(text)
+            client = async_ws_command_client_from_config(cfg)
+            result = await client.cron_add(text)
         except RuntimeError as exc:
             await self._mount_message(ErrorMessage(str(exc)))
             return

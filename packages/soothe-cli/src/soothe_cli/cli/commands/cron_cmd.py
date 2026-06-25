@@ -1,6 +1,6 @@
 """Cron CLI subcommands for RFC-229.
 
-Daemon-backed control surface: manage scheduled jobs via HTTP REST.
+Daemon-backed control surface: manage scheduled jobs via WebSocket.
 Requires ``soothed start``.
 
 Commands:
@@ -22,22 +22,20 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from soothe_sdk.client import (
-    ensure_http_rest_available,
-    http_rest_url_from_config,
     is_daemon_live,
     websocket_url_from_config,
+    ws_command_client_from_config,
 )
 
 from soothe_cli.runtime import load_config
-from soothe_cli.runtime.cron_http import CronHttpClient
 
 console = Console()
 
 app = typer.Typer(help="Manage scheduled cron jobs — natural language scheduled tasks.")
 
 
-def _require_cron_client() -> CronHttpClient:
-    """Return a live cron HTTP client or exit."""
+def _require_cron_client():
+    """Return a live WebSocket command client or exit."""
     cfg = load_config()
     ws_url = websocket_url_from_config(cfg)
     if not asyncio.run(is_daemon_live(ws_url, timeout=5.0)):
@@ -46,13 +44,7 @@ def _require_cron_client() -> CronHttpClient:
             err=True,
         )
         sys.exit(1)
-    base_url = http_rest_url_from_config(cfg)
-    try:
-        ensure_http_rest_available(base_url)
-    except RuntimeError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
-    return CronHttpClient(base_url)
+    return ws_command_client_from_config(cfg)
 
 
 def _format_next_run(next_run: str) -> str:
@@ -91,7 +83,7 @@ def add_job(
     """
     client = _require_cron_client()
     try:
-        result = client.add(text, priority=priority)
+        result = client.cron_add(text, priority=priority)
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)
@@ -136,7 +128,7 @@ def list_jobs(
     """
     client = _require_cron_client()
     try:
-        result = client.list_jobs(status=status)
+        result = client.cron_list_jobs(status=status)
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)
@@ -182,7 +174,7 @@ def show_job(
     """
     client = _require_cron_client()
     try:
-        result = client.show(job_id)
+        result = client.cron_show(job_id)
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)
@@ -228,7 +220,7 @@ def cancel_job(
     """
     client = _require_cron_client()
     try:
-        result = client.cancel(job_id)
+        result = client.cron_cancel(job_id)
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)

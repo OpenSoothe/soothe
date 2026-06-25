@@ -3,7 +3,7 @@
 This comprehensive test suite validates:
 - Event bus architecture and topic-based routing
 - Multi-client isolation and session management
-- Cross-transport event delivery
+- WebSocket transport event delivery
 - Stress testing and edge cases
 - Performance characteristics
 - Recovery and failure scenarios
@@ -74,7 +74,7 @@ async def _assert_client_receives_no_events_for_loop(
 
 @pytest.fixture
 async def isolated_daemon(tmp_path: Path):
-    """Start an isolated daemon with WebSocket and HTTP REST transports for E2E testing."""
+    """Start an isolated daemon with WebSocket transport for E2E testing."""
     force_isolated_home(tmp_path / "soothe-home")
 
     port = alloc_ephemeral_port()
@@ -82,18 +82,16 @@ async def isolated_daemon(tmp_path: Path):
     config, daemon_cfg = build_daemon_config(
         tmp_path=tmp_path,
         websocket_port=port,
-        http_port=port,
     )
 
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
-    await asyncio.sleep(0.3)  # Allow transports to initialize
+    await asyncio.sleep(0.3)  # Allow transport to initialize
 
     try:
         yield {
             "daemon": daemon,
             "ws_port": port,
-            "http_port": port,
             "config": config,
         }
     finally:
