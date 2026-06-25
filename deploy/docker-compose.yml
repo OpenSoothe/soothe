@@ -50,7 +50,7 @@ services:
         max-file: "3"
 
   soothed:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.12
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.13
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
@@ -60,6 +60,8 @@ services:
       - soothe-app
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL}
+      SOOTHE_WORKSPACE_HOST_ROOT: ${SOOTHE_WORKSPACE_HOST_ROOT}
       SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
       SOOTHE_POSTGRES_BASE_DSN: postgresql://postgres:postgres@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
