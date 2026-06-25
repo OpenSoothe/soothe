@@ -325,8 +325,7 @@ services:
       - soothe_daemon_data:/var/lib/soothe
       - ${SOOTHE_CONFIG_PATH:-./config/config.docker-dev.yml}:/app/config.yml:ro
       - ./deploy/logs:/var/lib/soothe/logs
-      # RFC-621: Workspace host convention — mount host workspace root.
-      - ${SOOTHE_WORKSPACE_HOST_ROOT:-${SOOTHE_HOST_WORKSPACE:-/Users/chenxm/Workspace}}:/var/lib/soothe/workspaces
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-/tmp/soothe-workspaces}:/var/lib/soothe/workspaces
     deploy:
       resources:
         limits:
