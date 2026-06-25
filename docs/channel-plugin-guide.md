@@ -134,7 +134,7 @@ In your `pyproject.toml`:
 my_channel = "soothe_my_channel:MyChannel"
 ```
 
-### Step 4: Configure in daemon_config.yml
+### Step 4: Configure in daemon.yml
 
 ```yaml
 channels:

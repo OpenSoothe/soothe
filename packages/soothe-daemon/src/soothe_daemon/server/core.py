@@ -83,7 +83,7 @@ class SootheDaemon(DaemonHandlersMixin):
     Args:
         config: Agent ``SootheConfig`` (in-proc agent core, ``config.yml``).
         daemon_config: Daemon-server ``SootheDaemonConfig`` (transports,
-            worker pool, distributed runner, ``daemon_config.yml``).
+            worker pool, distributed runner, ``daemon.yml``).
         handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
     """
 
