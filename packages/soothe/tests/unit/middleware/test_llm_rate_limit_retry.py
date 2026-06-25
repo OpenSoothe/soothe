@@ -348,6 +348,41 @@ def test_error_format_generic_timeout() -> None:
     assert "retrying automatically" in msg or "timed out" in msg
 
 
+def test_executor_timeout_not_misclassified_as_rate_limit() -> None:
+    """IG-504: TimeoutError with 'llm_rate_limit middleware' text must NOT be classified as rate limit.
+
+    The TimeoutError message from graph_interrupt.py includes a suggestion to enable
+    llm_rate_limit middleware. This 'rate_limit' substring was incorrectly triggering
+    rate limit detection, causing timeouts to be counted towards the rate limit
+    circuit breaker threshold, stopping the loop prematurely.
+    """
+    from soothe.foundation.core.agent import CoreAgent
+    from soothe.foundation.loop.engine.executor import Executor
+
+    # This is the exact TimeoutError message from graph_interrupt.py
+    exc = TimeoutError(
+        "LLM stream chunk timeout after 120s - no response received. "
+        "Check LLM API connectivity or enable llm_rate_limit middleware for configurable timeouts."
+    )
+
+    core_agent = MagicMock(spec=CoreAgent)
+    executor = Executor(
+        core_agent=core_agent,
+        max_parallel_steps=16,
+    )
+
+    # The extracted message should be "Request timed out", NOT "Rate limited"
+    msg = executor._extract_error_message(exc, "fallback")
+    assert msg == "Request timed out", f"Expected 'Request timed out' but got '{msg}'"
+
+    # Verify the orchestrator's _is_rate_limit_error does NOT match this message
+    from soothe.foundation.loop.orchestrator.nodes.execute_steps import _is_rate_limit_error
+
+    assert _is_rate_limit_error(msg) is False, (
+        "Timeout should not be classified as rate limit error"
+    )
+
+
 def test_error_format_worker_subprocess_lost() -> None:
     """Pool worker exit should map to actionable daemon copy."""
     from soothe.utils.error_format import format_cli_error

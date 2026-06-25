@@ -962,10 +962,12 @@ class LLMRateLimitConfig(BaseModel):
     )
     rpm_limit: int = Field(default=60, ge=1, le=10_000)
     concurrent_limit: int = Field(default=8, ge=1, le=500)
-    call_timeout_seconds: int = Field(default=150, ge=5, le=3600)
-    call_timeout_max_seconds: int = Field(default=300, ge=30, le=3600)
+    # IG-504: Increased timeouts for robust step execution (600s default)
+    call_timeout_seconds: int = Field(default=600, ge=30, le=3600)
+    call_timeout_max_seconds: int = Field(default=900, ge=60, le=3600)
     retry_on_timeout: bool = True
-    max_timeout_retries: int = Field(default=2, ge=0, le=5)
+    # IG-504: Increased retries for robust step execution (10 default)
+    max_timeout_retries: int = Field(default=10, ge=0, le=15)
     timeout_retry_multiplier: float = Field(default=1.2, ge=1.0, le=5.0)
 
     # IG-499: HTTP 429 rate limit retry configuration
@@ -974,9 +976,9 @@ class LLMRateLimitConfig(BaseModel):
         description="Retry LLM calls on HTTP 429 rate limit errors",
     )
     max_rate_limit_retries: int = Field(
-        default=3,
+        default=10,
         ge=0,
-        le=10,
+        le=20,
         description="Max retry attempts after 429 error",
     )
     rate_limit_backoff_base: float = Field(
