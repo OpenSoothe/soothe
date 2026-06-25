@@ -23,6 +23,9 @@ _AG_COMMON_PATHS: tuple[str, ...] = (
     "/usr/local/bin/ag",  # macOS Intel Homebrew / manual install
     "/usr/bin/ag",  # Linux distro packages
 )
+# Safe threshold for file count before hitting typical ulimit (256 on macOS).
+# When directory exceeds this, skip ag proactively to avoid FD exhaustion.
+_MAX_FD_SAFE_FILE_COUNT = 200
 _ag_bin_cache: str | None = None
 _ag_bin_resolved: bool = False
 
@@ -80,6 +83,50 @@ def _normalize_ag_executable(path: str) -> str | None:
     return None
 
 
+def _should_skip_ag_due_to_fd_limit(search_path: Path) -> bool:
+    """Check if directory size might exceed system FD limit.
+
+    Quick estimate of files in top 2 directory levels.
+    When count exceeds safe threshold, skip ag proactively.
+
+    Args:
+        search_path: Directory to search.
+
+    Returns:
+        True if directory is too large for safe ag execution.
+    """
+    if not search_path.is_dir():
+        return False
+
+    try:
+        count = 0
+        # Quick estimate: count files in top 2 levels
+        for item in search_path.iterdir():
+            if item.is_file():
+                count += 1
+            elif item.is_dir():
+                # Skip common ignore directories
+                if item.name in {".git", "__pycache__", "node_modules", ".venv", "venv"}:
+                    continue
+                try:
+                    for sub in item.iterdir():
+                        if sub.is_file():
+                            count += 1
+                except OSError:
+                    pass  # Can't read subdir, ignore
+            if count > _MAX_FD_SAFE_FILE_COUNT:
+                logger.debug(
+                    "Directory %s has >%d files, skipping ag to avoid FD exhaustion",
+                    search_path,
+                    _MAX_FD_SAFE_FILE_COUNT,
+                )
+                return True
+        return False
+    except OSError:
+        # Can't read directory, be conservative and skip ag
+        return True
+
+
 def grep_with_ag(
     *,
     workspace: Path,
@@ -97,6 +144,10 @@ def grep_with_ag(
     ag_bin = get_ag_bin()
     if not ag_bin:
         return None
+
+    # Pre-flight check: skip ag if directory is too large (FD exhaustion risk)
+    if search_path.is_dir() and _should_skip_ag_due_to_fd_limit(search_path):
+        return None  # Fallback to Python walk
 
     if output_mode == "files_with_matches":
         return _grep_with_ag_files(
@@ -261,32 +312,95 @@ def _grep_with_ag_content_paths(
 def _run_ag_subprocess(
     cmd: list[str], *, timeout_s: float
 ) -> subprocess.CompletedProcess[str] | None:
-    """Run ``ag`` and capture stdout via a temp file (more reliable than PIPE)."""
+    """Run ``ag`` with explicit FD management and graceful error handling.
+
+    Uses Popen for explicit control over file descriptor lifecycle.
+    On FD exhaustion (errno 24), logs actionable guidance before fallback.
+    """
     stdout_path: str | None = None
+    stdout_fh: object | None = None
+    stderr_fh: object | None = None
+    proc: subprocess.Popen | None = None
+
     try:
         with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".agout") as tmp:
             stdout_path = tmp.name
-        with open(stdout_path, "w", encoding="utf-8") as stdout_file:
-            completed = subprocess.run(
-                cmd,
-                stdout=stdout_file,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=timeout_s,
-                check=False,
-            )
-        with open(stdout_path, encoding="utf-8") as stdout_file:
-            stdout = stdout_file.read()
+
+        # Open output file explicitly for Popen
+        stdout_fh = open(stdout_path, "w", encoding="utf-8")
+        proc = subprocess.Popen(
+            cmd,
+            stdout=stdout_fh,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stderr_fh = proc.stderr
+
+        # Wait with timeout
+        try:
+            proc.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass  # Process killed, move on
+            logger.warning("ag grep timed out after %ss; falling back to Python walk", timeout_s)
+            return None
+
+        # Read captured output
+        with open(stdout_path, encoding="utf-8") as f:
+            stdout_content = f.read()
+
+        stderr_content = ""
+        if stderr_fh is not None:
+            try:
+                stderr_content = stderr_fh.read()
+            except OSError:
+                pass
+
         return subprocess.CompletedProcess(
             args=cmd,
-            returncode=completed.returncode,
-            stdout=stdout,
-            stderr=completed.stderr,
+            returncode=proc.returncode,
+            stdout=stdout_content,
+            stderr=stderr_content,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("ag grep failed (%s); falling back to Python walk", exc)
+
+    except OSError as exc:
+        # EMFILE (errno 24) = too many open files
+        if exc.errno == 24:
+            logger.warning(
+                "ag grep hit system FD limit (errno 24); falling back to Python walk. "
+                "Consider increasing: ulimit -n 1024"
+            )
+        else:
+            logger.warning("ag grep failed (%s); falling back to Python walk", exc)
         return None
+
+    except subprocess.TimeoutExpired:
+        logger.warning("ag grep timed out after %ss; falling back to Python walk", timeout_s)
+        return None
+
     finally:
+        # Explicit cleanup order: stderr -> stdout -> process -> temp file
+        if stderr_fh is not None:
+            try:
+                stderr_fh.close()
+            except OSError:
+                pass
+        if stdout_fh is not None:
+            try:
+                stdout_fh.close()
+            except OSError:
+                pass
+        if proc is not None:
+            # Ensure process is terminated
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
         if stdout_path is not None:
             try:
                 os.unlink(stdout_path)

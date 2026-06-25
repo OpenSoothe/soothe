@@ -46,6 +46,7 @@ from soothe.protocols.planner import (
     StepResult,
 )
 from soothe.utils.llm.structured import invoke_structured_chat_typed
+from soothe.utils.network_errors import calculate_network_backoff, is_transient_network_error
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
 from soothe.utils.token_counting import estimate_content_chars
@@ -56,6 +57,9 @@ if TYPE_CHECKING:
 # IG-454: Stuck detection thresholds
 _STUCK_ACTION_REPEAT_THRESHOLD = 3  # Same action repeated N times = stuck
 _STUCK_ERROR_STEP_THRESHOLD = 3  # N consecutive error steps = stuck
+
+# IG-503: Network resilience retry configuration
+_NETWORK_RETRY_MAX_ATTEMPTS = 3
 
 logger = logging.getLogger(__name__)
 
@@ -683,63 +687,93 @@ class LLMPlanner:
         model = _plan_phase_chat_model(self._model)
         lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
 
-        try:
-            assessment = await _invoke_plan_structured_output(
-                model, messages, StatusAssessment, config=lf_cfg
-            )
+        # IG-503: Retry loop for transient network errors
+        network_attempts = 0
+        last_error: Exception | None = None
 
-            if assessment is None:
-                raise ValueError("StatusAssessment returned None")
-
-            logger.debug(
-                "[Assess] status=%s prog=%s",
-                assessment.status,
-                assessment.goal_progress,
-            )
-
-            return assessment, assessment
-
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
+        while network_attempts < _NETWORK_RETRY_MAX_ATTEMPTS:
             try:
-                raw = await model.ainvoke(messages, config=lf_cfg)
-                # Debug: log raw response content structure
-                content_preview = ""
-                if hasattr(raw, "content"):
-                    content_preview = str(raw.content)[:200] if raw.content else "empty"
-                reasoning_preview = ""
-                if (
-                    hasattr(raw, "additional_kwargs")
-                    and "reasoning_content" in raw.additional_kwargs
-                ):
-                    reasoning_preview = str(raw.additional_kwargs.get("reasoning_content", ""))[
-                        :200
-                    ]
-                logger.debug(
-                    "[Assess] Raw fallback response: content=%s, reasoning_content=%s, type=%s",
-                    content_preview,
-                    reasoning_preview,
-                    type(raw).__name__,
+                assessment = await _invoke_plan_structured_output(
+                    model, messages, StatusAssessment, config=lf_cfg
                 )
-                assessment = _parse_status_assessment_from_raw_message(raw)
-                logger.info(
-                    "[Assess] Recovered status=%s prog=%s from raw message after structured failure",
+
+                if assessment is None:
+                    raise ValueError("StatusAssessment returned None")
+
+                logger.debug(
+                    "[Assess] status=%s prog=%s",
                     assessment.status,
                     assessment.goal_progress,
                 )
+
                 return assessment, assessment
-            except Exception as fallback_exc:
-                logger.warning(
-                    "[LLMPlanner] StatusAssessment raw fallback failed: %s",
-                    str(fallback_exc)[:200],
-                )
-            return StatusAssessment(
-                status="replan",
-                goal_progress="none",
-                require_goal_completion=False,
-            ), None
+
+            except asyncio.CancelledError:
+                raise
+
+            except Exception as e:
+                # Check for transient network error (IG-503)
+                if is_transient_network_error(e):
+                    network_attempts += 1
+                    last_error = e
+                    backoff = calculate_network_backoff(network_attempts - 1)
+                    logger.warning(
+                        "[LLMPlanner] StatusAssessment network error (attempt %d/%d): %s - "
+                        "retrying in %.1fs",
+                        network_attempts,
+                        _NETWORK_RETRY_MAX_ATTEMPTS,
+                        str(e)[:100],
+                        backoff,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+
+                # Non-transient error: log and fall through to fallback
+                logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
+                last_error = e
+                break
+
+        # All network retries exhausted or non-transient error
+        if network_attempts >= _NETWORK_RETRY_MAX_ATTEMPTS and last_error:
+            logger.error(
+                "[LLMPlanner] StatusAssessment network error after %d retries: %s",
+                _NETWORK_RETRY_MAX_ATTEMPTS,
+                str(last_error)[:100],
+            )
+
+        # Fallback: try raw message parsing
+        try:
+            raw = await model.ainvoke(messages, config=lf_cfg)
+            # Debug: log raw response content structure
+            content_preview = ""
+            if hasattr(raw, "content"):
+                content_preview = str(raw.content)[:200] if raw.content else "empty"
+            reasoning_preview = ""
+            if hasattr(raw, "additional_kwargs") and "reasoning_content" in raw.additional_kwargs:
+                reasoning_preview = str(raw.additional_kwargs.get("reasoning_content", ""))[:200]
+            logger.debug(
+                "[Assess] Raw fallback response: content=%s, reasoning_content=%s, type=%s",
+                content_preview,
+                reasoning_preview,
+                type(raw).__name__,
+            )
+            assessment = _parse_status_assessment_from_raw_message(raw)
+            logger.info(
+                "[Assess] Recovered status=%s prog=%s from raw message after structured failure",
+                assessment.status,
+                assessment.goal_progress,
+            )
+            return assessment, assessment
+        except Exception as fallback_exc:
+            logger.warning(
+                "[LLMPlanner] StatusAssessment raw fallback failed: %s",
+                str(fallback_exc)[:200],
+            )
+        return StatusAssessment(
+            status="replan",
+            goal_progress="none",
+            require_goal_completion=False,
+        ), None
 
     async def _assess_status(
         self,
@@ -966,6 +1000,58 @@ class LLMPlanner:
                     )
                     continue
             except Exception as e:
+                # IG-503: Check for transient network error first
+                if is_transient_network_error(e):
+                    # Retry with exponential backoff (separate counter)
+                    network_attempts = 0
+                    while network_attempts < _NETWORK_RETRY_MAX_ATTEMPTS:
+                        network_attempts += 1
+                        backoff = calculate_network_backoff(network_attempts - 1)
+                        logger.warning(
+                            "[LLMPlanner] PlanGeneration network error (attempt %d/%d): %s - "
+                            "retrying in %.1fs",
+                            network_attempts,
+                            _NETWORK_RETRY_MAX_ATTEMPTS,
+                            str(e)[:100],
+                            backoff,
+                        )
+                        await asyncio.sleep(backoff)
+                        try:
+                            lf_cfg_retry = self._planner_langfuse_run_config(
+                                thread_id=thread_id, phase="plan-generate-retry"
+                            )
+                            plan_result = await _invoke_plan_structured_output(
+                                model, plan_messages, plan_schema, config=lf_cfg_retry
+                            )
+                            if plan_result is not None:
+                                logger.debug(
+                                    "[Plan] action=%s steps=%d next=%s (after network retry)",
+                                    plan_result.plan_action,
+                                    len(plan_result.steps)
+                                    if plan_result.plan_action == "new"
+                                    and isinstance(plan_result.steps, list)
+                                    else 0,
+                                    preview_first(plan_result.next_action, chars=80),
+                                )
+                                return plan_result, plan_result
+                        except Exception as retry_exc:
+                            if is_transient_network_error(retry_exc):
+                                e = retry_exc
+                                continue
+                            # Non-transient error on retry: break and fall through
+                            break
+
+                    # All network retries exhausted
+                    logger.error(
+                        "[LLMPlanner] PlanGeneration network error after %d retries: %s",
+                        _NETWORK_RETRY_MAX_ATTEMPTS,
+                        str(e)[:100],
+                    )
+                    last_error = e
+                    # Fall through to fallback
+                    break
+
+                # Non-transient error: standard retry handling
                 logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
                 last_error = e
                 if attempt < max_retries:

@@ -20,6 +20,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
 
+from soothe.utils.network_errors import is_transient_network_error
 from soothe.utils.token_counting import estimate_content_chars
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,86 @@ def _is_api_rate_limit_error(exc: Exception) -> bool:
     # Fallback: keyword matching
     error_str = str(exc).lower()
     return "429" in error_str or "rate limit" in error_str or "throttling" in error_str
+
+
+# IG-503: Helper function for transient connection error detection
+
+
+def _is_transient_connection_error(exc: Exception) -> bool:
+    """Check if exception is a transient connection/network error that warrants retry.
+
+    Covers connection errors, timeouts, and SSL/TLS errors from various providers
+    (httpx, OpenAI SDK, Anthropic SDK, aiohttp, etc.).
+
+    Args:
+        exc: Exception to check.
+
+    Returns:
+        True if this is a transient connection error that should be retried.
+    """
+    # Check by exception class name
+    exc_type_name = type(exc).__name__
+    transient_types = {
+        "ConnectionError",
+        "ConnectError",
+        "NetworkError",
+        "ReadTimeout",
+        "WriteTimeout",
+        "ConnectTimeout",
+        "RemoteProtocolError",
+        "LocalProtocolError",
+        "StreamError",
+    }
+    if exc_type_name in transient_types:
+        return True
+
+    # Check module name for httpx exceptions
+    exc_module = str(type(exc).__module__)
+    if "httpx" in exc_module:
+        if exc_type_name in (
+            "ConnectError",
+            "ReadTimeout",
+            "WriteTimeout",
+            "ConnectTimeout",
+            "StreamConsumed",
+            "RemoteProtocolError",
+        ):
+            return True
+
+    # Check for aiohttp exceptions
+    if "aiohttp" in exc_module:
+        if exc_type_name in (
+            "ClientConnectionError",
+            "ClientConnectorError",
+            "ClientOSError",
+            "ClientPayloadError",
+            "ClientResponseError",
+            "ServerTimeoutError",
+            "ClientTimeout",
+        ):
+            return True
+
+    # Fallback: keyword matching in error string
+    error_str = str(exc).lower()
+    transient_keywords = [
+        "connection error",
+        "connection refused",
+        "connection reset",
+        "connection closed",
+        "network unreachable",
+        "network error",
+        "timeout",
+        "timed out",
+        "socket error",
+        "ssl error",
+        "tls error",
+        "certificate error",
+        "eof occurred in violation of protocol",
+        "protocol error",
+        "stream error",
+        "temporary failure",
+    ]
+    return any(kw in error_str for kw in transient_keywords)
 
 
 def _extract_retry_after_seconds(exc: Exception) -> float | None:
@@ -785,8 +866,46 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                                     thread_id,
                                 )
                                 raise
+
+                        # IG-503: Check for transient connection error
+                        elif _is_transient_connection_error(exc):
+                            connection_attempts = 0
+                            max_connection_attempts = 3
+                            while connection_attempts < max_connection_attempts:
+                                connection_attempts += 1
+                                backoff = 2.0 * connection_attempts  # Linear backoff: 2s, 4s, 6s
+                                logger.warning(
+                                    "LLM connection error (attempt %d/%d) - retrying with backoff=%.1fs (thread_id=%s): %s",
+                                    connection_attempts,
+                                    max_connection_attempts,
+                                    backoff,
+                                    thread_id,
+                                    str(exc)[:100],
+                                )
+                                await asyncio.sleep(backoff)
+                                try:
+                                    response = await asyncio.wait_for(
+                                        handler(request), timeout=eff_timeout
+                                    )
+                                    budget.record_request()
+                                    return response
+                                except Exception as retry_exc:
+                                    if not _is_transient_connection_error(retry_exc):
+                                        raise  # Non-transient, propagate
+                                    exc = retry_exc
+                                    continue
+
+                            # All connection retries exhausted
+                            logger.error(
+                                "LLM connection error after %d retries (thread_id=%s): %s",
+                                max_connection_attempts,
+                                thread_id,
+                                str(exc)[:100],
+                            )
+                            raise
+
                         else:
-                            # Non-rate-limit, non-timeout error: propagate immediately
+                            # Non-rate-limit, non-timeout, non-connection error: propagate immediately
                             raise
 
         else:
@@ -883,8 +1002,44 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                                     max_rate_limit_attempts,
                                 )
                                 raise
+
+                        # IG-503: Check for transient connection error
+                        elif is_transient_network_error(exc):
+                            connection_attempts = 0
+                            max_connection_attempts = 3
+                            while connection_attempts < max_connection_attempts:
+                                connection_attempts += 1
+                                backoff = 2.0 * connection_attempts  # Linear backoff: 2s, 4s, 6s
+                                logger.warning(
+                                    "LLM connection error (attempt %d/%d) - retrying with backoff=%.1fs: %s",
+                                    connection_attempts,
+                                    max_connection_attempts,
+                                    backoff,
+                                    str(exc)[:100],
+                                )
+                                await asyncio.sleep(backoff)
+                                try:
+                                    response = await asyncio.wait_for(
+                                        handler(request), timeout=eff_timeout
+                                    )
+                                    await self._record_request_time_global()
+                                    return response
+                                except Exception as retry_exc:
+                                    if not is_transient_network_error(retry_exc):
+                                        raise  # Non-transient, propagate
+                                    exc = retry_exc
+                                    continue
+
+                            # All connection retries exhausted
+                            logger.error(
+                                "LLM connection error after %d retries: %s",
+                                max_connection_attempts,
+                                str(exc)[:100],
+                            )
+                            raise
+
                         else:
-                            # Non-rate-limit, non-timeout error: propagate immediately
+                            # Non-rate-limit, non-timeout, non-connection error: propagate immediately
                             raise
 
     async def _enforce_rpm_limit_global(self) -> None:
