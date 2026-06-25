@@ -149,7 +149,7 @@ async def main() -> None:
     # config = SootheConfig()
 
     # Option 2: Load from YAML file
-    config_path = Path(__file__).parent.parent / "config" / "config.dev.yml"
+    config_path = Path(__file__).parent.parent / "config" / "develop" / "config.yml"
     if config_path.exists():
         config = SootheConfig.from_yaml_file(str(config_path))
         print(f"[Config] Loaded from: {config_path}")

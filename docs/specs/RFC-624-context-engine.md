@@ -326,7 +326,7 @@ The following gaps were identified between the Phase 1 ContextEngine and what th
 | `packages/soothe/src/soothe/context/models.py` | Add `chain_depth` property to `StepDAG` |
 | `packages/soothe/src/soothe/config/models.py` | Add `ContextEngineConfig` to `StrangeLoopConfig` |
 | `config/config.template.yml` | Add `context_engine` section |
-| `config/config.dev.yml` | Add matching section |
+| `config/develop/config.yml` | Add matching section |
 
 **Not modified (by design):**
 

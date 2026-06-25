@@ -75,7 +75,7 @@ Add import for `WorkspaceMountConfig` in the import block.
 
 Add `workspace_mount` section with `host_root: null` and `container_root: null`.
 
-**File**: `config/config.dev.yml`
+**File**: `config/develop/config.yml`
 
 Add the same section with both fields as `null` (disabled by default).
 

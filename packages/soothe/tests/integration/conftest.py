@@ -80,8 +80,8 @@ def get_base_config() -> SootheConfig:
     """Get base config, loading from file once and caching the result.
 
     Resolution order:
-        1. ``SOOTHE_INTEGRATION_BASE_CONFIG`` — explicit path (e.g. explore-only YAML).
-        2. Repo ``config/config.dev.yml`` (monorepo root = parents[4] of this file).
+        1. ``SOOTHE_INTEGRATION_BASE_CONFIG`` — explicit path to a custom YAML file.
+        2. Repo ``config/develop/config.yml`` (monorepo root = parents[4] of this file).
         3. Empty :class:`SootheConfig` if no file exists.
     """
     global _CACHED_BASE_CONFIG
@@ -94,7 +94,7 @@ def get_base_config() -> SootheConfig:
             )
         else:
             repo_root = Path(__file__).resolve().parents[4]
-            config_path = repo_root / "config" / "config.dev.yml"
+            config_path = repo_root / "config" / "develop" / "config.yml"
             _CACHED_BASE_CONFIG = (
                 SootheConfig.from_yaml_file(str(config_path))
                 if config_path.is_file()
@@ -179,7 +179,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     """Default config for integration tests with reduced limits.
 
     Args:
-        test_config: Base config loaded from config.dev.yml
+        test_config: Base config loaded from config/develop/config.yml
 
     Returns:
         SootheConfig with test-specific overrides
@@ -191,7 +191,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.agent.autonomous.max_iterations = 5
 
     # Override router if Anthropic credentials available but default provider lacks credentials
-    # This handles the case where config.dev.yml has coding-plan provider but Dashscope keys missing
+    # This handles the case where develop config has coding-plan provider but Dashscope keys missing
     if os.getenv("ANTHROPIC_API_KEY") and not (
         os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL")
     ):
@@ -244,7 +244,7 @@ def web_enabled_config(test_config: SootheConfig) -> SootheConfig:
     """Config with web tools enabled.
 
     Args:
-        test_config: Base config loaded from config.dev.yml
+        test_config: Base config loaded from config/develop/config.yml
 
     Returns:
         SootheConfig with web tools enabled

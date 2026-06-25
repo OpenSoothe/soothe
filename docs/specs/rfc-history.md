@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-06-19
-**Total RFCs**: 78
+**Last Updated**: 2026-06-25
+**Total RFCs**: 79
 
 ## Summary Statistics
 
@@ -11,7 +11,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 49 | 62.8% |
+| Draft | 50 | 63.3% |
 | Implemented | 14 | 17.9% |
 | Archived | 6 | 7.7% |
 | Proposed | 3 | 3.8% |
@@ -59,6 +59,12 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 ---
 
 ### 2026-06
+
+- **2026-06-25**: RFC-307 - IdentityProtocol: AKSK Authentication & JWT Token Management
+  - Status: Draft
+  - Kind: Architecture Design
+  - Dependencies: RFC-000, RFC-001, RFC-305
+  - Authors: Platonic brainstorming session
 
 - **2026-06-19**: RFC-200 - Autonomous Goal Management Loop
   - Status: Archived

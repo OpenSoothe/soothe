@@ -11,7 +11,7 @@
 - **Minor changes**: No verbose IG—use commit/PR context, or minimal stub only
 
 ### 2. Config Sync
-When editing `config/config.template.yml`, MUST also update `config/config.dev.yml` with matching structure.
+When editing `config/config.template.yml`, MUST also update `config/develop/config.yml` with matching structure.
 
 ### 3. Ecosystem First
 Check `langchain-core`, `langchain-community`, `deepagents` before implementing anything:

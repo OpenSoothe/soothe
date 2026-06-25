@@ -51,7 +51,7 @@ The `agentloop_loops` schema has no signal that distinguishes loops with convers
 |------|--------|
 | `packages/soothe/src/soothe/config.py` | Rename Pydantic config block `EphemeralLoopGcConfig` → `LoopGcConfig`. Rename field `idle_hours` → `ephemeral_idle_hours` (no alias — clean cut). Add field `empty_idle_hours: int = 24`. Rename the parent attribute on the daemon-config block from `ephemeral_loop_gc` → `loop_gc`. |
 | `config/config.template.yml` | Rename the `daemon.ephemeral_loop_gc:` block to `daemon.loop_gc:`. Inside it, rename `idle_hours` to `ephemeral_idle_hours` and add `empty_idle_hours: 24`. Update the inline comment to describe both passes. |
-| `config/config.dev.yml` | Mirror the template (CLAUDE.md config-sync rule). Same key renames; `empty_idle_hours` MAY be lower (e.g. `1`) for fast local iteration — decide during PR review. |
+| `config/develop/config.yml` | Mirror the template (CLAUDE.md config-sync rule). Same key renames; `empty_idle_hours` MAY be lower (e.g. `1`) for fast local iteration — decide during PR review. |
 
 ### Slice E — tests
 
@@ -95,6 +95,6 @@ The `agentloop_loops` schema has no signal that distinguishes loops with convers
 3. Human counter increments on accepted `loop_input`; AI counter increments on assistant-output commit; both wrapped in try/except + WARNING.
 4. `_handle_loop_new` no longer sets `last_message_at`.
 5. `_periodic_loop_gc` runs both passes per tick with de-duplication and per-row error isolation.
-6. Config block renamed (`loop_gc` with `ephemeral_idle_hours` + `empty_idle_hours: int = 24`). `config.template.yml` and `config.dev.yml` updated together.
+6. Config block renamed (`loop_gc` with `ephemeral_idle_hours` + `empty_idle_hours: int = 24`). `config/config.template.yml` and `config/develop/config.yml` updated together.
 7. Unit + integration tests in Slice E pass.
 8. `./scripts/verify_finally.sh` is clean.

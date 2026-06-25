@@ -43,7 +43,7 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 - `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` — call `await ce.load()` after creating CE, before `create_goal()`
 - `packages/soothe/src/soothe/config/models.py` — add `"sqlite"` option, change default
 - `config/config.template.yml` — `persistence_backend: "sqlite"`
-- `config/config.dev.yml` — matching change
+- `config/develop/config.yml` — matching change
 
 **Verification:**
 - ce.load() returns prior DAG when loop_id has prior goals

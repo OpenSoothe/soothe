@@ -197,7 +197,7 @@ Also add `await persistence.close()` (or equivalent) in the `finally` block alon
 
 ## Config Sync
 
-Both `config/config.template.yml` and `config/config.dev.yml` update to:
+Both `config/config.template.yml` and `config/develop/config.yml` update to:
 
 ```yaml
 context_engine:
@@ -227,5 +227,5 @@ No `db_path` or `dsn` fields. SQLite and PostgreSQL backends derive their connec
 | `soothe/foundation/loop/orchestrator/nodes/execute_steps.py` | Add `ce.save()` after step execution (G3) |
 | `soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Drop `await` from step method calls (G2) |
 | `config/config.template.yml` | Update context_engine section |
-| `config/config.dev.yml` | Update context_engine section |
+| `config/develop/config.yml` | Update context_engine section |
 | `packages/soothe/tests/unit/context/` | New test files for DB persistence |

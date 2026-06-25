@@ -74,7 +74,7 @@ Soothe looks for configuration in this order:
 1. `--config PATH` - Explicit command-line path
 2. `SOOTHE_CONFIG_FILE` - Environment variable path
 3. `~/.soothe/config.yml` - User directory
-4. `config/config.dev.yml` - Repository default (development)
+4. `config/develop/config.yml` - Repository default (development)
 5. Built-in defaults (from `SootheConfig` Pydantic model)
 
 ## Configuration Methods Comparison

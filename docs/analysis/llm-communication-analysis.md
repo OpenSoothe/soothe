@@ -1148,8 +1148,8 @@ Translation scenario (contamination risk):
 
 **System Configuration**:
 - `config/config.yml`: Template configuration
-- `config/config.dev.yml`: Development defaults
-- `config/config.template.yml` and `config/config.dev.yml`: configuration and `${ENV}` placeholders
+- `config/develop/config.yml`: Development defaults
+- `config/config.template.yml` and `config/develop/config.yml`: configuration and `${ENV}` placeholders
 
 **Protocol Settings**:
 - `protocols.context.enabled`: Context protocol activation
