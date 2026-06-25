@@ -49,9 +49,11 @@ if TYPE_CHECKING:
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
+    "AKSKConfig",
     "CodeInterpreterMiddleware",
     "ExecutionHintsMiddleware",
     "FileLockMiddleware",
+    "IdentityConfig",
     "IdentityMiddleware",
     "InnerModelCallProfilerMiddleware",
     "LLMCallProfilerMiddleware",
@@ -62,6 +64,7 @@ __all__ = [
     "SoothePolicyMiddleware",
     "SystemPromptMiddleware",
     "PerTurnModelMiddleware",
+    "TokenConfig",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
     "create_llm_call_metadata",
@@ -70,6 +73,7 @@ __all__ = [
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "AKSKConfig": ("soothe.middleware.identity", "AKSKConfig"),
     "build_soothe_middleware_stack": (
         "soothe.middleware._builder",
         "build_soothe_middleware_stack",
@@ -82,6 +86,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ExecutionHintsMiddleware": ("soothe.middleware.execution_hints", "ExecutionHintsMiddleware"),
     "FileLockMiddleware": ("soothe.middleware.file_lock", "FileLockMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
+    "IdentityConfig": ("soothe.middleware.identity", "IdentityConfig"),
     "IdentityMiddleware": ("soothe.middleware.identity", "IdentityMiddleware"),
     "LLMRateLimitMiddleware": ("soothe.middleware.llm_rate_limit", "LLMRateLimitMiddleware"),
     "MCPToolSearchMiddleware": ("soothe.middleware.mcp_tool_search", "MCPToolSearchMiddleware"),
@@ -91,6 +96,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "soothe.middleware.system_prompt",
         "SystemPromptMiddleware",
     ),
+    "TokenConfig": ("soothe.middleware.identity", "TokenConfig"),
     "WorkspaceContextMiddleware": (
         "soothe.middleware.workspace_context",
         "WorkspaceContextMiddleware",
