@@ -18,57 +18,41 @@ logger = logging.getLogger(__name__)
 _STREAM_POLL_INTERVAL_S = 0.5
 _MAX_INTERRUPT_ITERATIONS = 50
 
-# Default timeout for waiting on a single stream chunk when no LLM rate limit middleware.
-# Prevents indefinite hangs on unresponsive LLM API calls.
-# IG-504: Increased to 600s for robust step execution.
-_DEFAULT_CHUNK_TIMEOUT_S = 600.0
 
+async def await_next_graph_stream_chunk(chunk_iter: AsyncIterator[Any]) -> Any:
+    """Wait for the next graph chunk with cooperative cancellation checks.
 
-async def await_next_graph_stream_chunk(
-    chunk_iter: AsyncIterator[Any],
-    chunk_timeout_s: float = _DEFAULT_CHUNK_TIMEOUT_S,
-) -> Any:
-    """Wait for the next graph chunk with timeout and cooperative cancellation checks.
+    IG-506: Timeout removed - LLMRateLimitMiddleware handles all LLM timeouts.
 
-    Matches runner ``_await_next_astream_chunk`` so long gaps between tokens do
-    not corrupt the iterator (IG-193).
+    This function only ensures:
+    - Cooperative cancellation propagation (polls every 0.5s)
+    - Clean iterator cleanup on cancellation
+
+    LLM API timeout/retry is handled by LLMRateLimitMiddleware which wraps
+    each individual LLM call. There is no chunk-level timeout here because:
+    - Middleware already has configurable timeout + retry with escalation
+    - A chunk timeout would race against middleware and cut off retries mid-way
+    - Long gaps between LLM tokens do not corrupt the iterator (IG-193)
 
     Args:
         chunk_iter: Async iterator yielding graph stream chunks.
-        chunk_timeout_s: Maximum seconds to wait for a chunk before raising TimeoutError.
-            Defaults to 120s (fallback when LLM rate limit middleware is disabled).
 
     Raises:
-        TimeoutError: When no chunk received within chunk_timeout_s.
         asyncio.CancelledError: When the parent task is cancelled.
+        StopAsyncIteration: When the iterator is exhausted.
+
+    Note:
+        The poll interval (0.5s) is for cooperative cancellation checks only.
+        There is NO deadline-based timeout - middleware handles LLM stalls.
     """
     anext_task = asyncio.create_task(chunk_iter.__anext__())
-    deadline = asyncio.get_event_loop().time() + chunk_timeout_s
     try:
         while not anext_task.done():
-            # Check remaining time before wait
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining <= 0:
-                logger.warning(
-                    "CoreAgent stream chunk timeout (%ds) - no response from LLM",
-                    int(chunk_timeout_s),
-                )
-                anext_task.cancel()
-                try:
-                    await anext_task
-                except (asyncio.CancelledError, StopAsyncIteration):
-                    pass
-                raise TimeoutError(
-                    f"LLM stream chunk timeout after {int(chunk_timeout_s)}s - "
-                    "no response received. Check LLM API connectivity or enable "
-                    "llm_rate_limit middleware for configurable timeouts."
-                )
-
-            # Wait for either task completion or poll interval
-            wait_time = min(_STREAM_POLL_INTERVAL_S, remaining)
-            await asyncio.wait({anext_task}, timeout=wait_time)
+            await asyncio.wait({anext_task}, timeout=_STREAM_POLL_INTERVAL_S)
             if anext_task.done():
                 break
+
+            # Cooperative cancellation check
             current_task = asyncio.current_task()
             if current_task and current_task.cancelling():
                 logger.info("CoreAgent stream: cancellation request, stopping graph read")
@@ -78,6 +62,7 @@ async def await_next_graph_stream_chunk(
                 except asyncio.CancelledError:
                     pass
                 raise asyncio.CancelledError
+
         return anext_task.result()
     finally:
         if not anext_task.done():
