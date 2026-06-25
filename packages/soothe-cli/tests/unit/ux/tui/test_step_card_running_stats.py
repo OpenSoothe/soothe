@@ -307,3 +307,68 @@ def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
     orphan_preview = card._orphan_subgraph_tool_rows_for_preview()
     assert len(orphan_preview) == 1
     assert orphan_preview[0].tool_call_id == "MAIN_01:t0:glob:1"
+
+
+def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
+    """Tool count shows in status line immediately even when widget is not yet visible.
+
+    This tests the fix for real-time tool count display: when tool calls arrive
+    during a running step, `_sync_running_status_line` should update the status
+    line immediately (bypassing the visibility check) so users see the count
+    in real-time, not only when the step finishes.
+    """
+    card = CognitionStepMessage("INVIS-01", "Invisible widget step", id="step-invis")
+
+    # Set up running state BEFORE any visibility check would pass
+    card._status = "running"
+    card._start_time = 0.0
+    mock_status_widget = MagicMock()
+    card._status_widget = mock_status_widget
+
+    # Add tool calls while widget is NOT visible (visibility returns False)
+    with (
+        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=False),
+        patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
+    ):
+        # Adding tool calls should trigger immediate status update via _sync_running_status_line
+        card.add_tool_call("INVIS_01:s:grep:0", "grep", {"pattern": "test"})
+        card.add_tool_call("INVIS_01:s:glob:1", "glob", {"pattern": "*.py"})
+
+        # Verify the status widget was updated (showing real-time stats)
+        assert mock_status_widget.update.called
+        call_arg = mock_status_widget.update.call_args[0][0]
+        text = _extract_content_text(call_arg)
+
+        # Should show 2 tools immediately, even though widget is "not visible"
+        assert "2 tools" in text, f"Status line should show '2 tools' immediately, got: {text!r}"
+        assert "Running..." in text
+
+    # The animation timer callback should NOT update when not visible
+    mock_status_widget.update.reset_mock()
+    card._update_running_animation()
+    # Should NOT have called update because visibility check returned False
+    assert not mock_status_widget.update.called, "Animation should skip when not visible"
+
+
+def test_sync_running_status_text_bypasses_visibility_check() -> None:
+    """_sync_running_status_text updates status immediately regardless of visibility."""
+    card = CognitionStepMessage("BYPASS-01", "Bypass visibility", id="step-bypass")
+
+    card._status = "running"
+    card._start_time = 0.0
+    mock_status_widget = MagicMock()
+    card._status_widget = mock_status_widget
+
+    card.add_tool_call("BYPASS_01:s:read_file:0", "read_file", {"path": "a.py"})
+    card.add_tool_call("BYPASS_01:s:read_file:1", "read_file", {"path": "b.py"})
+
+    # Directly call _sync_running_status_text - should always update
+    with (
+        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=False),
+        patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
+    ):
+        card._sync_running_status_text()
+
+    assert mock_status_widget.update.called
+    text = _extract_content_text(mock_status_widget.update.call_args[0][0])
+    assert "2 tools" in text, f"Should show 2 tools even with visibility=False, got: {text!r}"
