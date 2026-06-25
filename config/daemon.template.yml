@@ -100,6 +100,35 @@ memory_profiling:
   log_growth_interval_seconds: 0     # Interval for growth logging (0 = disabled)
 
 # ============================================================================
+# IDENTITY SERVICE - AKSK authentication & JWT token management (RFC-307)
+#   Provides credential-based authentication for WebSocket clients and
+#   external channel identity mapping for workspace isolation.
+#
+#   When enabled:
+#   - WebSocket clients must authenticate with AKSK → receive JWT tokens
+#   - External channels (Telegram, Feishu, etc.) resolve sender_id → user_id
+#   - IdentityMiddleware populates ThreadState.user_id for workspace isolation
+#
+#   Disabled by default for backward compatibility (no auth required).
+# ============================================================================
+identity:
+  enabled: false                     # Enable identity service (default: disabled)
+
+  tokens:
+    access_token_expiry_hours: 1     # Access token lifetime (1-24 hours)
+    refresh_token_expiry_days: 7     # Refresh token lifetime (1-365 days)
+    jwt_signing_key: null            # Use SOOTHE_JWT_KEY env var, or auto-generate
+
+  aksk:
+    default_expiry_days: 90          # Default AKSK expiry (null = never expires)
+    max_expiry_days: 365             # Maximum allowed expiry
+
+  unmapped_sender_policy: anonymous  # Policy for unmapped external senders:
+                                    #   anonymous - fall back to anonymous workspace
+                                    #   reject    - reject message with error
+                                    #   use_sender_id - use channel:sender_id as user_id
+
+# ============================================================================
 # RUNNER MODES - Execution backend (enable exactly ONE)
 # Options: thread_pool (default), worker_pool, distributed
 #

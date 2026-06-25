@@ -477,14 +477,104 @@ class MemoryProfilingConfig(BaseModel):
     )
 
 
+class TokenConfig(BaseModel):
+    """JWT token configuration for identity service (RFC-307).
+
+    Args:
+        access_token_expiry_hours: Access token lifetime in hours (1-24).
+        refresh_token_expiry_days: Refresh token lifetime in days (1-365).
+        jwt_signing_key: JWT signing key (from env, config, or auto-generated).
+    """
+
+    access_token_expiry_hours: int = Field(
+        default=1,
+        ge=1,
+        le=24,
+        description="Access token expiry in hours",
+    )
+    refresh_token_expiry_days: int = Field(
+        default=7,
+        ge=1,
+        le=365,
+        description="Refresh token expiry in days",
+    )
+    jwt_signing_key: str | None = Field(
+        default=None,
+        description="JWT signing key (256-bit). Use SOOTHE_JWT_KEY env var or auto-generate.",
+    )
+
+
+class AKSKConfig(BaseModel):
+    """AKSK configuration for identity service (RFC-307).
+
+    Args:
+        default_expiry_days: Default AKSK expiry days (None = never expires).
+        max_expiry_days: Maximum allowed AKSK expiry days.
+    """
+
+    default_expiry_days: int | None = Field(
+        default=90,
+        description="Default AKSK expiry days (None = never)",
+    )
+    max_expiry_days: int = Field(
+        default=365,
+        ge=1,
+        description="Maximum allowed AKSK expiry days",
+    )
+
+
+class IdentityConfig(BaseModel):
+    """Identity service configuration (RFC-307).
+
+    Provides AKSK-based authentication and JWT token management for
+    soothe-daemon. Disabled by default for backward compatibility.
+
+    When enabled:
+    - WebSocket clients must authenticate with AKSK → receive JWT tokens
+    - External channels resolve sender_id → user_id via mapping table
+    - IdentityMiddleware populates ThreadState.user_id for workspace isolation
+
+    Args:
+        enabled: Enable identity service (default: False for backward compat).
+        tokens: Token configuration (expiry settings).
+        aksk: AKSK configuration (expiry defaults).
+        unmapped_sender_policy: Policy for unmapped external senders.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable identity service. Disabled by default for backward compatibility.",
+    )
+    tokens: TokenConfig = Field(
+        default_factory=TokenConfig,
+        description="JWT token configuration",
+    )
+    aksk: AKSKConfig = Field(
+        default_factory=AKSKConfig,
+        description="AKSK configuration",
+    )
+    unmapped_sender_policy: str = Field(
+        default="anonymous",
+        description=(
+            "Policy for unmapped external channel senders: "
+            "'anonymous' (fall back to anonymous), "
+            "'reject' (reject message), "
+            "'use_sender_id' (use channel:sender_id as user_id)"
+        ),
+    )
+
+
 __all__ = [
+    "AKSKConfig",
     "DistributedConfig",
+    "IdentityConfig",
     "LoopGcConfig",
     "LoopStatusReconciliationConfig",
     "MemoryProfilingConfig",
     "StaleWorkerReapConfig",
     "RayClusterConfig",
     "ThreadPoolConfig",
+    "TokenConfig",
     "TransportConfig",
     "WebSocketConfig",
     "WorkerPoolConfig",

@@ -46,6 +46,19 @@ from soothe.protocols.strange_loop import StrangeLoopProtocol
 from soothe.protocols.toolkit import ToolkitProtocol
 from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
+# Identity protocol (RFC-307) - re-exported from soothe-sdk
+from soothe_sdk.protocols.identity import (
+    User,
+    AKSKPair,
+    TokenClaims,
+    ExternalIdentityMapping,
+    AuthResult,
+    TokenRefreshResult,
+    TokenInfo,
+    IdentityStatus,
+    IdentityProtocol,
+)
+
 __all__ = [
     "ActionRequest",
     "AsyncPersistStore",
@@ -87,4 +100,14 @@ __all__ = [
     "ToolkitProtocol",
     "VectorRecord",
     "VectorStoreProtocol",
+    # Identity (RFC-307)
+    "User",
+    "AKSKPair",
+    "TokenClaims",
+    "ExternalIdentityMapping",
+    "AuthResult",
+    "TokenRefreshResult",
+    "TokenInfo",
+    "IdentityStatus",
+    "IdentityProtocol",
 ]
