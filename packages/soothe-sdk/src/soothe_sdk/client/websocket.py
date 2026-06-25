@@ -623,6 +623,103 @@ class WebSocketClient:
             payload["request_id"] = request_id
         await self.send(payload)
 
+    async def send_loop_messages(
+        self,
+        loop_id: str,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        include_events: bool = False,
+        request_id: str | None = None,
+    ) -> None:
+        """Request persisted conversation/activity rows (RFC-503 ``loop_messages``).
+
+        Args:
+            loop_id: Loop identifier.
+            limit: Maximum number of messages to return.
+            offset: Offset for pagination.
+            include_events: Include event records alongside messages.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_messages",
+            "loop_id": loop_id,
+            "limit": limit,
+            "offset": offset,
+        }
+        if include_events:
+            payload["include_events"] = True
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_state_get(
+        self,
+        loop_id: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Request LangGraph checkpoint channel values (RFC-503 ``loop_state_get``).
+
+        Args:
+            loop_id: Loop identifier.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_state_get",
+            "loop_id": loop_id,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_state_update(
+        self,
+        loop_id: str,
+        values: dict[str, Any],
+        *,
+        as_node: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Apply partial checkpoint values (RFC-503 ``loop_state_update``).
+
+        Args:
+            loop_id: Loop identifier.
+            values: Values to update in checkpoint state.
+            as_node: Optional node name for the update.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_state_update",
+            "loop_id": loop_id,
+            "values": values,
+        }
+        if as_node is not None:
+            payload["as_node"] = as_node
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_cards_fetch(
+        self,
+        loop_id: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Request display card ledger snapshot (RFC-413 ``loop_cards_fetch``).
+
+        Args:
+            loop_id: Loop identifier.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_cards_fetch",
+            "loop_id": loop_id,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
     async def request_response(
         self,
         payload: dict[str, Any],
