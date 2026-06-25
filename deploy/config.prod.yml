@@ -19,9 +19,9 @@ providers:
     api_base_url: "${DASHSCOPE_BASE_URL}"
     api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - glm-5.2               # Zhipu AI GLM model
-      - kimi-k2.5             # Moonshot AI model
-      - MiniMax-M2.5          # Alternative reasoning
+      - glm-5.2                  # Zhipu AI GLM model
+      - kimi-k2.5                # Moonshot AI model
+      - MiniMax-M2.5             # Alternative reasoning
       - multimodal-embedding-v1  # Embedding model
 
 # =============================================================================
@@ -58,5 +58,5 @@ vector_store_router:
 # Maps host paths to container paths so daemon can access client workspaces.
 # Set SOOTHE_WORKSPACE_HOST_ROOT in .env to match your host directory.
 workspace_mount:
-  host_root: /Users/xiamingchen/Workspace
+  host_root: ${SOOTHE_WORKSPACE_HOST_ROOT}
   container_root: /var/lib/soothe/workspaces
