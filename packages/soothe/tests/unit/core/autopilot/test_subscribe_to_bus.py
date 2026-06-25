@@ -14,6 +14,7 @@ from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
+    INTERNAL_GOAL_UNBLOCKED,
     INTERNAL_GOALS_READY,
 )
 
@@ -30,6 +31,7 @@ class TestSubscribeToBusFlag:
         assert svc._subscribed is True
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
         assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
 
     def test_explicit_true_subscribes(self) -> None:
         bus = InternalEventBus()
@@ -37,6 +39,7 @@ class TestSubscribeToBusFlag:
         svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus, subscribe_to_bus=True)
         assert svc._subscribed is True
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
 
     def test_false_does_not_subscribe(self) -> None:
         bus = InternalEventBus()
@@ -45,6 +48,7 @@ class TestSubscribeToBusFlag:
         assert svc._subscribed is False
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 0
         assert bus.subscriber_count(INTERNAL_GOALS_READY) == 0
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 0
 
     def test_coexistence_only_one_subscriber_fires(self) -> None:
         """Two AutopilotService instances sharing a bus: only the
@@ -62,6 +66,7 @@ class TestSubscribeToBusFlag:
         # Bus sees exactly one handler per relevant topic.
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
         assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
+        assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
 
     def test_dormant_service_still_callable(self) -> None:
         """Dormant service must still be a usable object (just not subscribed)."""
