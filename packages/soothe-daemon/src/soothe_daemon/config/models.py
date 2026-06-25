@@ -1,6 +1,6 @@
 """Nested config schemas for ``SootheDaemonConfig``.
 
-Holds ``WebSocketConfig`` / ``HttpRestConfig`` / ``TransportConfig`` (RFC-0013)
+Holds ``WebSocketConfig`` / ``TransportConfig`` (RFC-0013)
 plus ``ChannelsConfig`` (RFC-620) for unified channel architecture.
 """
 
@@ -39,66 +39,23 @@ class WebSocketConfig(BaseModel):
     )
 
 
-class HttpRestConfig(BaseModel):
-    """HTTP REST API configuration.
-
-    HTTP REST provides stateless CRUD operations and health checks.
-
-    When both WebSocket and HTTP REST are enabled, the daemon serves REST on the
-    same TCP port and ASGI app as WebSocket; ``host`` / ``port`` here are ignored
-    for binding (the WebSocket transport settings are authoritative).
-
-    Args:
-        enabled: Enable HTTP REST server (default ``True``).
-        host: Bind address (standalone HTTP-only; ignored when unified with WebSocket).
-        port: Listen port (standalone; ignored when unified with WebSocket).
-        tls_enabled: Enable TLS encryption.
-        tls_cert: TLS certificate path.
-        tls_key: TLS key path.
-        cors_origins: Allowed CORS origins.
-    """
-
-    enabled: bool = True
-    host: str = "127.0.0.1"
-    port: int = 8765
-    tls_enabled: bool = False
-    tls_cert: str | None = None
-    tls_key: str | None = None
-    cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:*", "http://127.0.0.1:*"]
-    )
-
-
 class TransportConfig(BaseModel):
     """Transport layer configuration.
 
     WebSocket is required for bidirectional streaming.
-    HTTP REST is enabled by default for health checks, autopilot CLI, and CRUD.
 
     Args:
         websocket: WebSocket configuration (required).
-        http_rest: HTTP REST configuration.
     """
 
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
-    http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
-
-    def effective_http_rest_listen(self) -> tuple[str, int]:
-        """Return ``(host, port)`` for reaching HTTP REST over TCP.
-
-        When WebSocket and HTTP REST are both enabled, REST is exposed on the
-        WebSocket listener (single ASGI application).
-        """
-        if self.http_rest.enabled and self.websocket.enabled:
-            return (self.websocket.host, self.websocket.port)
-        return (self.http_rest.host, self.http_rest.port)
 
 
 class ChannelsConfig(BaseModel):
     """Unified channel configuration (RFC-620).
 
     Replaces TransportConfig with extensible channel architecture.
-    Built-in channels (websocket, http_rest) plus external plugins.
+    Built-in WebSocket channel plus external plugins.
 
     Global settings apply to all channels:
     - transcription_provider: Audio transcription backend ("groq" or "openai")
@@ -109,7 +66,6 @@ class ChannelsConfig(BaseModel):
 
     Args:
         websocket: WebSocket channel configuration (required).
-        http_rest: HTTP REST channel configuration.
         transcription_provider: Transcription backend.
         transcription_language: Optional transcription language.
         send_progress: Show progress indicators.
@@ -120,9 +76,8 @@ class ChannelsConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")  # Allow per-channel plugin configs
 
-    # Built-in channel configs (WebSocket + HTTP REST)
+    # Built-in WebSocket channel config
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
-    http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
 
     # Global channel settings
     transcription_provider: str = Field(default="groq", description="Audio transcription provider")
@@ -528,7 +483,6 @@ __all__ = [
     "LoopStatusReconciliationConfig",
     "MemoryProfilingConfig",
     "StaleWorkerReapConfig",
-    "HttpRestConfig",
     "RayClusterConfig",
     "ThreadPoolConfig",
     "TransportConfig",

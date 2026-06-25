@@ -25,7 +25,7 @@ def _job_payload(job_id: str = "abc123def456") -> dict:
 
 def test_cron_add_success(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.add.return_value = {"job": _job_payload()}
+    mock_client.cron_add.return_value = {"job": _job_payload()}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -35,12 +35,12 @@ def test_cron_add_success(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "abc123def456" in result.output
     assert "Check deploy" in result.output
-    mock_client.add.assert_called_once_with("in 1 hour check deploy", priority=None)
+    mock_client.cron_add.assert_called_once_with("in 1 hour check deploy", priority=None)
 
 
 def test_cron_add_with_priority(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.add.return_value = {"job": _job_payload()}
+    mock_client.cron_add.return_value = {"job": _job_payload()}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -51,12 +51,12 @@ def test_cron_add_with_priority(monkeypatch) -> None:
         ["cron", "add", "every day at 9am standup", "--priority", "80"],
     )
     assert result.exit_code == 0
-    mock_client.add.assert_called_once_with("every day at 9am standup", priority=80)
+    mock_client.cron_add.assert_called_once_with("every day at 9am standup", priority=80)
 
 
 def test_cron_list_empty(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.list_jobs.return_value = {"jobs": []}
+    mock_client.cron_list_jobs.return_value = {"jobs": []}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -69,7 +69,7 @@ def test_cron_list_empty(monkeypatch) -> None:
 
 def test_cron_list_with_jobs(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.list_jobs.return_value = {"jobs": [_job_payload()]}
+    mock_client.cron_list_jobs.return_value = {"jobs": [_job_payload()]}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -78,12 +78,12 @@ def test_cron_list_with_jobs(monkeypatch) -> None:
     result = CliRunner().invoke(app, ["cron", "list", "--status", "pending"])
     assert result.exit_code == 0
     assert "abc123" in result.output
-    mock_client.list_jobs.assert_called_once_with(status="pending")
+    mock_client.cron_list_jobs.assert_called_once_with(status="pending")
 
 
 def test_cron_show_job(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.show.return_value = {"job": _job_payload()}
+    mock_client.cron_show.return_value = {"job": _job_payload()}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -92,12 +92,12 @@ def test_cron_show_job(monkeypatch) -> None:
     result = CliRunner().invoke(app, ["cron", "show", "abc123def456"])
     assert result.exit_code == 0
     assert "Check deploy" in result.output
-    mock_client.show.assert_called_once_with("abc123def456")
+    mock_client.cron_show.assert_called_once_with("abc123def456")
 
 
 def test_cron_show_missing_job(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.show.return_value = {"job": None}
+    mock_client.cron_show.return_value = {"job": None}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -110,7 +110,7 @@ def test_cron_show_missing_job(monkeypatch) -> None:
 
 def test_cron_cancel_job(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.cancel.return_value = {"cancelled": True, "job_id": "abc123def456"}
+    mock_client.cron_cancel.return_value = {"cancelled": True, "job_id": "abc123def456"}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -119,12 +119,12 @@ def test_cron_cancel_job(monkeypatch) -> None:
     result = CliRunner().invoke(app, ["cron", "cancel", "abc123def456"])
     assert result.exit_code == 0
     assert "Cancelled job" in result.output
-    mock_client.cancel.assert_called_once_with("abc123def456")
+    mock_client.cron_cancel.assert_called_once_with("abc123def456")
 
 
-def test_cron_http_error(monkeypatch) -> None:
+def test_cron_command_error(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.add.side_effect = RuntimeError("HTTP 400 for /api/v1/cron/jobs: bad schedule")
+    mock_client.cron_add.side_effect = RuntimeError("Command failed: bad schedule")
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -132,4 +132,4 @@ def test_cron_http_error(monkeypatch) -> None:
 
     result = CliRunner().invoke(app, ["cron", "add", "not a schedule"])
     assert result.exit_code == 1
-    assert "HTTP 400" in result.output
+    assert "Command failed" in result.output

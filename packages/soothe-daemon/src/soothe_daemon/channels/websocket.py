@@ -35,12 +35,16 @@ class WebSocketChannel(Channel):
     - Bidirectional messaging (supports_inbound=True, supports_outbound=True)
     - Real-time streaming (supports_streaming=True)
     - Multiple concurrent clients
+    - Command handlers for autopilot, cron, and memory profiling
 
     Args:
         config: WebSocket configuration.
         manager: ChannelManager for inbound routing.
         unified_app: Optional shared FastAPI app for unified listener.
         session_manager: Optional ClientSessionManager for session management.
+        autopilot_service: Optional AutopilotService for command handling.
+        cron_service: Optional CronService for command handling.
+        memory_profiler: Optional MemoryProfiler for command handling.
     """
 
     name = "websocket"
@@ -56,6 +60,9 @@ class WebSocketChannel(Channel):
         *,
         unified_app: FastAPI | None = None,
         session_manager: Any | None = None,
+        autopilot_service: Any | None = None,
+        cron_service: Any | None = None,
+        memory_profiler: Any | None = None,
     ) -> None:
         """Initialize WebSocket channel.
 
@@ -64,11 +71,17 @@ class WebSocketChannel(Channel):
             manager: ChannelManager for inbound routing.
             unified_app: Optional shared FastAPI app.
             session_manager: Optional ClientSessionManager.
+            autopilot_service: Optional AutopilotService for WebSocket command handlers.
+            cron_service: Optional CronService for WebSocket command handlers.
+            memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
         """
         super().__init__(config, manager)
         self._ws_config = config
         self._unified_parent_app = unified_app
         self._session_manager = session_manager
+        self._autopilot_service = autopilot_service
+        self._cron_service = cron_service
+        self._memory_profiler = memory_profiler
         self._app: FastAPI | None = None
         self._server: uvicorn.Server | None = None
         self._serve_task: asyncio.Task[None] | None = None
@@ -455,6 +468,10 @@ class WebSocketChannel(Channel):
                         except Exception:
                             logger.exception("Error handling WebSocket message")
 
+                    # Handle command messages (WebSocket command client)
+                    if msg_dict.get("type") == "command":
+                        await self._handle_command_message(websocket, msg_dict, client_id)
+
                 except Exception:
                     logger.exception("Error processing WebSocket message")
                     continue
@@ -477,3 +494,290 @@ class WebSocketChannel(Channel):
     def client_count(self) -> int:
         """Return number of connected clients."""
         return len(self._clients)
+
+    async def _handle_command_message(
+        self,
+        websocket: WebSocket,
+        msg_dict: dict[str, Any],
+        client_id: str,
+    ) -> None:
+        """Handle WebSocket command messages for autopilot, cron, and memory.
+
+        Args:
+            websocket: WebSocket connection.
+            msg_dict: Command message dict.
+            client_id: Client identifier.
+        """
+        command = msg_dict.get("command", "")
+        request_id = msg_dict.get("request_id", "")
+        payload = msg_dict.get("payload", {})
+
+        try:
+            result = await self._dispatch_command(command, payload)
+            response = {
+                "type": "command_response",
+                "request_id": request_id,
+                "result": result,
+                "error": None,
+            }
+        except Exception as exc:
+            logger.exception("Command %s failed", command)
+            response = {
+                "type": "command_response",
+                "request_id": request_id,
+                "result": None,
+                "error": str(exc),
+            }
+
+        await websocket.send_text(encode_websocket_text(response))
+
+    async def _dispatch_command(self, command: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Dispatch command to appropriate service.
+
+        Args:
+            command: Command name.
+            payload: Command payload.
+
+        Returns:
+            Command result dict.
+
+        Raises:
+            RuntimeError: If service unavailable or command fails.
+        """
+        # Autopilot commands
+        if command.startswith("autopilot_"):
+            if self._autopilot_service is None:
+                raise RuntimeError("Autopilot service unavailable")
+
+            action = command[len("autopilot_") :]
+            return await self._handle_autopilot_command(action, payload)
+
+        # Cron commands
+        if command.startswith("cron_"):
+            if self._cron_service is None:
+                raise RuntimeError("Cron service unavailable")
+
+            action = command[len("cron_") :]
+            return await self._handle_cron_command(action, payload)
+
+        # Memory commands
+        if command.startswith("memory_"):
+            if self._memory_profiler is None:
+                raise RuntimeError("Memory profiling not enabled")
+
+            action = command[len("memory_") :]
+            return await self._handle_memory_command(action, payload)
+
+        raise RuntimeError(f"Unknown command: {command}")
+
+    async def _handle_autopilot_command(
+        self, action: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Handle autopilot command.
+
+        Args:
+            action: Autopilot action name.
+            payload: Command payload.
+
+        Returns:
+            Result dict.
+        """
+        service = self._autopilot_service
+
+        if action == "status":
+            status = service.status()
+            return {
+                "state": "dreaming" if status.get("dreaming") else "active",
+                "running": status.get("running", False),
+                "dreaming": status.get("dreaming", False),
+                "loop_pool": status.get("loop_pool", {}),
+            }
+
+        if action == "submit":
+            description = payload.get("description", "")
+            priority = payload.get("priority", 50)
+            workspace = payload.get("workspace")
+            if not description:
+                raise RuntimeError("description is required")
+            goal = await service.submit_task(description, priority=priority, workspace=workspace)
+            return {"status": "submitted", "goal_id": goal.id}
+
+        if action == "list_goals":
+            goals = await service.list_goals()
+            return {
+                "goals": [g.model_dump(mode="json") for g in goals],
+                "source": "autopilot_service",
+            }
+
+        if action == "get_goal":
+            goal_id = payload.get("goal_id")
+            goal = await service.get_goal(goal_id)
+            if goal:
+                return {"goal": goal.model_dump(mode="json"), "source": "autopilot_service"}
+            raise RuntimeError("Goal not found")
+
+        if action == "cancel_goal":
+            goal_id = payload.get("goal_id")
+            cancelled = await service.cancel_goal(goal_id, reason="ws_command")
+            if cancelled is None:
+                raise RuntimeError("Goal not found")
+            return {"status": "cancelled", "goal_id": cancelled.id, "new_status": cancelled.status}
+
+        if action == "approve":
+            confirmation_id = payload.get("confirmation_id")
+            approved = await service.approve_confirmation(confirmation_id)
+            if approved:
+                return {"status": "approved", "goal_id": confirmation_id}
+            raise RuntimeError("Confirmation not found")
+
+        if action == "reject":
+            confirmation_id = payload.get("confirmation_id")
+            rejected = await service.reject_confirmation(confirmation_id)
+            if rejected:
+                return {"status": "rejected", "goal_id": confirmation_id}
+            raise RuntimeError("Confirmation not found")
+
+        if action == "resume":
+            goal_id = payload.get("goal_id")
+            goal_engine = service._ce
+            goal = await goal_engine.get_goal(goal_id)
+            if goal is None:
+                raise RuntimeError("Goal not found")
+            if goal.status not in ("suspended", "blocked"):
+                raise RuntimeError(f"Goal is not paused (status: {goal.status})")
+            reactivated = await goal_engine.reactivate_goal(goal_id)
+            return {"status": "reactivated", "goal_id": goal_id, "new_status": reactivated.status}
+
+        if action == "wake":
+            await service.wake_from_dreaming(trigger="ws_command")
+            return {"status": "wake_sent"}
+
+        if action == "dream":
+            await service.force_dream()
+            return {"status": "dream_sent"}
+
+        if action == "list_jobs":
+            goals = await service.list_goals()
+            jobs = [g for g in goals if g.parent_id is None]
+            return {
+                "jobs": [j.model_dump(mode="json") for j in jobs],
+                "source": "autopilot_service",
+            }
+
+        if action == "get_job":
+            job_id = payload.get("job_id")
+            job = await service.get_goal(job_id)
+            if not job:
+                raise RuntimeError("Job not found")
+            if job.parent_id is not None:
+                raise RuntimeError("Not a root goal (job)")
+            dag = await service.dag_snapshot(job_id)
+            nodes = dag.get("nodes", [])
+            active = sum(1 for n in nodes if n.get("status") == "active")
+            completed = sum(1 for n in nodes if n.get("status") in ("completed", "validated"))
+            return {
+                "job": job.model_dump(mode="json"),
+                "dag": dag,
+                "active_goals": active,
+                "completed_goals": completed,
+                "total_goals": len(nodes),
+                "source": "autopilot_service",
+            }
+
+        raise RuntimeError(f"Unknown autopilot action: {action}")
+
+    async def _handle_cron_command(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Handle cron command.
+
+        Args:
+            action: Cron action name.
+            payload: Command payload.
+
+        Returns:
+            Result dict.
+        """
+
+        from soothe.foundation.cron import ExtractionError
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+
+        service = self._cron_service
+
+        if action == "add":
+            text = payload.get("text", "")
+            priority = payload.get("priority")
+            if not text:
+                raise RuntimeError("text is required")
+            try:
+                job = await service.add_job(text, DEFAULT_CRON_USER_ID, priority=priority)
+            except ExtractionError as exc:
+                raise RuntimeError(exc.message) from exc
+            return {"job": job.to_dict(), "source": "cron_service"}
+
+        if action == "list_jobs":
+            status = payload.get("status")
+            jobs = await service.list_jobs(DEFAULT_CRON_USER_ID, status=status)
+            return {"jobs": [j.to_dict() for j in jobs], "source": "cron_service"}
+
+        if action == "show":
+            job_id = payload.get("job_id")
+            job = await service.show_job(job_id, DEFAULT_CRON_USER_ID)
+            if job:
+                return {"job": job.to_dict(), "source": "cron_service"}
+            raise RuntimeError("Job not found")
+
+        if action == "cancel":
+            job_id = payload.get("job_id")
+            cancelled = await service.cancel_job(job_id, DEFAULT_CRON_USER_ID)
+            if cancelled:
+                return {"cancelled": True, "job_id": job_id}
+            raise RuntimeError("Job not found or cannot be cancelled")
+
+        raise RuntimeError(f"Unknown cron action: {action}")
+
+    async def _handle_memory_command(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Handle memory profiling command.
+
+        Args:
+            action: Memory action name.
+            payload: Command payload.
+
+        Returns:
+            Result dict.
+        """
+        loop = asyncio.get_running_loop()
+        profiler = self._memory_profiler
+        mode = payload.get("mode", "daemon")
+
+        if mode == "daemon":
+            stats = await loop.run_in_executor(None, profiler.get_current_stats)
+            return {"memory_stats": stats}
+
+        if mode == "gc":
+            stats = await loop.run_in_executor(None, profiler.force_gc_and_report)
+            return {"memory_stats": stats}
+
+        if mode == "snapshot":
+            await loop.run_in_executor(None, profiler.update_last_snapshot)
+            stats = await loop.run_in_executor(None, profiler.get_current_stats)
+            return {"memory_stats": stats}
+
+        if mode == "objects":
+            counts = await loop.run_in_executor(None, profiler.get_object_counts)
+            return {"memory_stats": {"object_counts": counts}}
+
+        if mode == "compare":
+            try:
+                stats = await loop.run_in_executor(None, profiler.compare_snapshots)
+                return {"memory_stats": stats}
+            except ValueError as e:
+                raise RuntimeError(str(e)) from e
+
+        if mode == "queues":
+            metrics = await loop.run_in_executor(None, profiler.get_queue_metrics)
+            return {"memory_stats": {"queue_metrics": metrics}}
+
+        if mode == "large":
+            large = await loop.run_in_executor(None, profiler.get_large_allocations)
+            return {"memory_stats": {"large_allocations": large}}
+
+        raise RuntimeError(f"Unknown memory mode: {mode}")

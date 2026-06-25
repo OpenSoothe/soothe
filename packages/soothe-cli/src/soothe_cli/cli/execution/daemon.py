@@ -15,6 +15,7 @@ from typing import Any
 import typer
 from soothe_sdk.client import (
     WebSocketClient,
+    async_ws_command_client_from_config,
     bootstrap_loop_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
@@ -59,6 +60,22 @@ async def _send_cancel_to_daemon(client: WebSocketClient) -> None:
         logger.warning("Failed to send /cancel to daemon", exc_info=True)
 
 
+def _parse_cron_slash_prompt(prompt: str) -> str | None:
+    """Return natural-language cron text if ``prompt`` is a ``/cron`` slash command.
+
+    Args:
+        prompt: User input (e.g. ``/cron in 1 hour remind me to deploy``).
+
+    Returns:
+        Text after ``/cron``, or ``None`` if not a cron slash command.
+    """
+    stripped = prompt.strip()
+    if not stripped.lower().startswith("/cron"):
+        return None
+    rest = stripped[len("/cron") :].strip()
+    return rest
+
+
 async def _run_headless_session_once(
     cfg: Any,
     prompt: str,
@@ -79,18 +96,14 @@ async def _run_headless_session_once(
     sigint_count = 0
     original_sigint: Any = None
 
-    from soothe_sdk.client import ensure_http_rest_available, http_rest_url_from_config
-
-    from soothe_cli.runtime.cron_http import cron_client_from_config, parse_cron_slash_prompt
-
-    cron_text = parse_cron_slash_prompt(prompt)
+    cron_text = _parse_cron_slash_prompt(prompt)
     if cron_text is not None:
         if not cron_text.strip():
             _emit_headless_error("Usage: /cron <natural language schedule>")
             return 1, False
         try:
-            ensure_http_rest_available(http_rest_url_from_config(cfg))
-            result = cron_client_from_config(cfg).add(cron_text)
+            ws_client = async_ws_command_client_from_config(cfg)
+            result = await ws_client.cron_add(cron_text)
         except RuntimeError as exc:
             _emit_headless_error(str(exc))
             return 1, False

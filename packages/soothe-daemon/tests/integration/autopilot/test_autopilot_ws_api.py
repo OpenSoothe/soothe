@@ -62,7 +62,6 @@ async def ws_daemon(tmp_path: Path):
     config, daemon_cfg = build_daemon_config(
         tmp_path=tmp_path,
         websocket_port=port,
-        http_port=port + 1,
     )
     config.agent.autonomous = config.agent.autonomous.model_copy(update={"poll_interval": 2})
 
@@ -739,7 +738,6 @@ async def ws_daemon_no_autopilot(tmp_path: Path):
     config, daemon_cfg = build_daemon_config(
         tmp_path=tmp_path,
         websocket_port=port,
-        http_port=port + 1,
     )
     config.agent.autonomous = config.agent.autonomous.model_copy(update={"poll_interval": 2})
 

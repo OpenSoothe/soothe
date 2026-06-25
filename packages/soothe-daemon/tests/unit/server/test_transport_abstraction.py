@@ -9,7 +9,7 @@ import pytest
 from soothe_daemon.channel_manager import ChannelManager
 from soothe_daemon.channels.websocket import WebSocketChannel
 from soothe_daemon.config import SootheDaemonConfig
-from soothe_daemon.config.models import HttpRestConfig, TransportConfig, WebSocketConfig
+from soothe_daemon.config.models import TransportConfig, WebSocketConfig
 from soothe_daemon.protocol import (
     ERROR_INVALID_MESSAGE,
     create_error_response,
@@ -91,27 +91,11 @@ class TestProtocolV2:
 class TestTransportConfig:
     """Transport configuration helpers."""
 
-    def test_http_rest_enabled_by_default(self) -> None:
-        """Fresh daemon config enables HTTP REST without explicit YAML."""
-        assert HttpRestConfig().enabled is True
-        assert TransportConfig().http_rest.enabled is True
-        assert SootheDaemonConfig().transports.http_rest.enabled is True
-
-    def test_effective_http_rest_listen_when_unified(self) -> None:
-        """HTTP REST reaches the WebSocket bind address when both transports are on."""
-        cfg = TransportConfig(
-            websocket=WebSocketConfig(enabled=True, host="10.0.0.2", port=9001),
-            http_rest=HttpRestConfig(enabled=True, host="127.0.0.1", port=9002),
-        )
-        assert cfg.effective_http_rest_listen() == ("10.0.0.2", 9001)
-
-    def test_effective_http_rest_listen_http_only_config(self) -> None:
-        """When HTTP is disabled, helper still returns http_rest host/port (unused)."""
-        cfg = TransportConfig(
-            websocket=WebSocketConfig(enabled=True, host="127.0.0.1", port=8765),
-            http_rest=HttpRestConfig(enabled=False, host="127.0.0.1", port=9999),
-        )
-        assert cfg.effective_http_rest_listen() == ("127.0.0.1", 9999)
+    def test_websocket_enabled_by_default(self) -> None:
+        """Fresh daemon config enables WebSocket without explicit YAML."""
+        assert WebSocketConfig().enabled is True
+        assert TransportConfig().websocket.enabled is True
+        assert SootheDaemonConfig().transports.websocket.enabled is True
 
 
 class TestWebSocketChannel:

@@ -1,7 +1,7 @@
 """Channel manager for coordinating all communication channels (RFC-620).
 
 Coordinates inbound routing, outbound dispatch, streaming, and retry policy
-for WebSocket, HTTP REST, and plugin channels.
+for WebSocket and plugin channels.
 """
 
 from __future__ import annotations
@@ -36,17 +36,15 @@ class ChannelManager:
     4. Handles streaming: coalesces deltas, buffers for non-streaming
     5. Applies retry policy on send failures
 
-    When HTTP REST and WebSocket are both enabled, a single FastAPI ASGI app
-    and one uvicorn listener are used (WebSocket bind host/port authoritative).
-
     Args:
         config: Daemon configuration.
         event_bus: EventBus for routing events.
-        runner: Optional SootheRunner for HTTP REST transport.
-        soothe_config: Optional SootheConfig for HTTP REST transport.
+        runner: Optional SootheRunner (for command handlers).
+        soothe_config: Optional SootheConfig (for command handlers).
         session_manager: Optional ClientSessionManager for WebSocket sessions.
-        autopilot_service: Optional AutopilotService for HTTP REST endpoints.
-        cron_service: Optional CronService for scheduled job endpoints (RFC-229).
+        autopilot_service: Optional AutopilotService for WebSocket command handlers.
+        cron_service: Optional CronService for WebSocket command handlers (RFC-229).
+        memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
     """
 
     def __init__(
@@ -65,12 +63,12 @@ class ChannelManager:
         Args:
             config: Daemon configuration.
             event_bus: EventBus for routing events.
-            runner: Optional SootheRunner for HTTP REST transport.
-            soothe_config: Optional SootheConfig for HTTP REST transport.
+            runner: Optional SootheRunner (for command handlers).
+            soothe_config: Optional SootheConfig (for command handlers).
             session_manager: Optional ClientSessionManager for session management.
             autopilot_service: Optional daemon-owned AutopilotService.
             cron_service: Optional daemon-owned CronService (RFC-229).
-            memory_profiler: Optional MemoryProfiler for memory REST endpoints.
+            memory_profiler: Optional MemoryProfiler for memory command handlers.
         """
         self._config = config
         self._event_bus = event_bus
@@ -213,37 +211,30 @@ class ChannelManager:
 
     def _build_channels(self) -> None:
         """Build channel instances based on configuration (RFC-620 §7)."""
-        self._unified_app = None
-
         # Use new Channel implementations
-        from soothe_daemon.channels.http_rest import HttpRestChannel
         from soothe_daemon.channels.websocket import WebSocketChannel
 
         # Check WebSocket config
         if not self._config.transports.websocket.enabled:
             raise RuntimeError("WebSocket channel is required - enable it in configuration")
 
-        # Check HTTP REST config
-        http_enabled = self._config.transports.http_rest.enabled
-        if http_enabled:
-            self._unified_app = FastAPI(
-                title="Soothe Daemon",
-                description="Unified WebSocket and REST API for Soothe",
-                version="1.0.0",
-                docs_url="/docs",
-                redoc_url="/redoc",
-            )
+        # Create unified FastAPI app for WebSocket
+        self._unified_app = FastAPI(
+            title="Soothe Daemon",
+            description="WebSocket API for Soothe",
+            version="1.0.0",
+        )
 
-            # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
-            # Returns HTTP 200 with {"status": "ok"} immediately - no dependencies
-            @self._unified_app.get("/healthz")
-            async def docker_healthcheck() -> dict[str, str]:
-                """Simple health check for Docker healthcheck.
+        # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
+        # Returns HTTP 200 with {"status": "ok"} immediately - no dependencies
+        @self._unified_app.get("/healthz")
+        async def docker_healthcheck() -> dict[str, str]:
+            """Simple health check for Docker healthcheck.
 
-                Returns immediately without checking any dependencies.
-                Used by Docker to verify the server is listening.
-                """
-                return {"status": "ok"}
+            Returns immediately without checking any dependencies.
+            Used by Docker to verify the server is listening.
+            """
+            return {"status": "ok"}
 
         # Create WebSocket channel
         ws_channel = WebSocketChannel(
@@ -251,25 +242,12 @@ class ChannelManager:
             manager=self,
             unified_app=self._unified_app,
             session_manager=self._session_manager,
+            autopilot_service=self._autopilot_service,
+            cron_service=self._cron_service,
+            memory_profiler=self._memory_profiler,
         )
         self._channels["websocket"] = ws_channel
         logger.debug("Configured WebSocket channel")
-
-        # Create HTTP REST channel if enabled
-        if http_enabled:
-            http_channel = HttpRestChannel(
-                self._config.transports.http_rest,
-                manager=self,
-                runner=self._runner,
-                soothe_config=self._soothe_config,
-                session_manager=self._session_manager,
-                unified_app=self._unified_app,
-                autopilot_service=self._autopilot_service,
-                cron_service=self._cron_service,
-                memory_profiler=self._memory_profiler,
-            )
-            self._channels["http_rest"] = http_channel
-            logger.debug("Configured HTTP REST channel (unified ASGI listener)")
 
         # Apply global channel settings to all channels
         for channel in self._channels.values():
@@ -278,12 +256,11 @@ class ChannelManager:
             channel.show_reasoning = getattr(self._config.channels, "show_reasoning", True)
 
     async def _start_unified_listener(self) -> None:
-        """Bind one uvicorn server for the shared FastAPI app (WS + HTTP)."""
+        """Bind one uvicorn server for the FastAPI WebSocket app."""
         if self._unified_app is None:
             return
 
         ws = self._config.transports.websocket
-        # Note: http_rest shares WebSocket listener when both enabled
 
         ssl_keyfile = None
         ssl_certfile = None
@@ -309,7 +286,7 @@ class ChannelManager:
 
         protocol = "wss" if ws.tls_enabled else "ws"
         logger.info(
-            "Unified channels listening on %s://%s:%d (WebSocket / + REST /api)",
+            "WebSocket channel listening on %s://%s:%d",
             protocol,
             ws.host,
             ws.port,
