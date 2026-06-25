@@ -1,5 +1,18 @@
 """Soothe protocol definitions -- runtime-agnostic interfaces."""
 
+# Identity protocol (RFC-307) - re-exported from soothe-sdk
+from soothe_sdk.protocols.identity import (
+    AKSKPair,
+    AuthResult,
+    ExternalIdentityMapping,
+    IdentityProtocol,
+    IdentityStatus,
+    TokenClaims,
+    TokenInfo,
+    TokenRefreshResult,
+    User,
+)
+
 from soothe.protocols.autopilot import AutopilotProtocol
 from soothe.protocols.concurrency import ConcurrencyPolicy
 from soothe.protocols.core_agent import CoreAgentProtocol
@@ -45,19 +58,6 @@ from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 from soothe.protocols.strange_loop import StrangeLoopProtocol
 from soothe.protocols.toolkit import ToolkitProtocol
 from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
-
-# Identity protocol (RFC-307) - re-exported from soothe-sdk
-from soothe_sdk.protocols.identity import (
-    User,
-    AKSKPair,
-    TokenClaims,
-    ExternalIdentityMapping,
-    AuthResult,
-    TokenRefreshResult,
-    TokenInfo,
-    IdentityStatus,
-    IdentityProtocol,
-)
 
 __all__ = [
     "ActionRequest",
