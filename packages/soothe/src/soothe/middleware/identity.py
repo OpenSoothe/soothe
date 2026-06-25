@@ -3,30 +3,116 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
+from pydantic import BaseModel, Field
 
 from soothe.core.security.errors import (
-    IdentityDisabledError,
-    TokenError,
-    TokenExpiredError,
-    TokenRevokedError,
     MissingTokenError,
+    TokenError,
     UnmappedIdentityError,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from langgraph.types import Command
 
+    from langgraph.types import Command
     from soothe_sdk.protocols.identity import IdentityProtocol
-    from soothe_daemon.config.models import IdentityConfig
-    from soothe_daemon.runtime.thread_state import ThreadStateRegistry
 
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Identity Config (defined here to avoid soothe → soothe-daemon dependency)
+# ---------------------------------------------------------------------------
+
+
+class TokenConfig(BaseModel):
+    """JWT token configuration for identity service (RFC-307).
+
+    Args:
+        access_token_expiry_hours: Access token lifetime in hours (1-24).
+        refresh_token_expiry_days: Refresh token lifetime in days (1-365).
+        jwt_signing_key: JWT signing key (from env, config, or auto-generated).
+    """
+
+    access_token_expiry_hours: int = Field(
+        default=1,
+        ge=1,
+        le=24,
+        description="Access token expiry in hours",
+    )
+    refresh_token_expiry_days: int = Field(
+        default=7,
+        ge=1,
+        le=365,
+        description="Refresh token expiry in days",
+    )
+    jwt_signing_key: str | None = Field(
+        default=None,
+        description="JWT signing key (256-bit). Use SOOTHE_JWT_KEY env var or auto-generate.",
+    )
+
+
+class AKSKConfig(BaseModel):
+    """AKSK configuration for identity service (RFC-307).
+
+    Args:
+        default_expiry_days: Default AKSK expiry days (None = never expires).
+        max_expiry_days: Maximum allowed AKSK expiry days.
+    """
+
+    default_expiry_days: int | None = Field(
+        default=90,
+        description="Default AKSK expiry days (None = never)",
+    )
+    max_expiry_days: int = Field(
+        default=365,
+        ge=1,
+        description="Maximum allowed AKSK expiry days",
+    )
+
+
+class IdentityConfig(BaseModel):
+    """Identity service configuration (RFC-307).
+
+    Provides AKSK-based authentication and JWT token management.
+    Disabled by default for backward compatibility.
+
+    Note: This config is defined in soothe core (not soothe-daemon) to avoid
+    circular dependency. soothe-daemon re-exports it for YAML config loading.
+
+    Args:
+        enabled: Enable identity service (default: False for backward compat).
+        tokens: Token configuration (expiry settings).
+        aksk: AKSK configuration (expiry defaults).
+        unmapped_sender_policy: Policy for unmapped external senders.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable identity service. Disabled by default for backward compatibility.",
+    )
+    tokens: TokenConfig = Field(
+        default_factory=TokenConfig,
+        description="JWT token configuration",
+    )
+    aksk: AKSKConfig = Field(
+        default_factory=AKSKConfig,
+        description="AKSK configuration",
+    )
+    unmapped_sender_policy: Literal["anonymous", "reject", "use_sender_id"] = Field(
+        default="anonymous",
+        description=(
+            "Policy for unmapped external channel senders: "
+            "'anonymous' (fall back to anonymous workspace), "
+            "'reject' (reject message), "
+            "'use_sender_id' (use channel:sender_id as user_id)"
+        ),
+    )
 
 
 class IdentityMiddleware(AgentMiddleware):
@@ -46,18 +132,20 @@ class IdentityMiddleware(AgentMiddleware):
         self,
         identity: IdentityProtocol,
         config: IdentityConfig,
-        thread_registry: ThreadStateRegistry | None = None,
+        set_user_id_callback: Callable[[str, str | None, str | None], None] | None = None,
     ) -> None:
         """Initialize IdentityMiddleware.
 
         Args:
             identity: IdentityProtocol implementation for token validation.
             config: Identity configuration (enabled, unmapped_sender_policy).
-            thread_registry: ThreadStateRegistry for populating user context.
+            set_user_id_callback: Optional callback to set user context in thread state.
+                Signature: (thread_id, user_id, aksk_id) -> None.
+                Passed from daemon to avoid core → daemon dependency.
         """
         self._identity = identity
         self._config = config
-        self._thread_registry = thread_registry
+        self._set_user_id_callback = set_user_id_callback
 
     async def awrap_tool_call(
         self,
@@ -96,9 +184,9 @@ class IdentityMiddleware(AgentMiddleware):
             else:
                 user_id, aksk_id = self._resolve_external_identity(channel_type, configurable)
 
-            # Populate ThreadState with user context
-            if thread_id and self._thread_registry:
-                self._thread_registry.set_user_id(thread_id, user_id, aksk_id)
+            # Populate ThreadState with user context via callback
+            if thread_id and self._set_user_id_callback:
+                self._set_user_id_callback(thread_id, user_id, aksk_id)
                 logger.debug(
                     "Identity context set: thread=%s user=%s aksk=%s",
                     thread_id,
