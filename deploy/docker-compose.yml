@@ -8,7 +8,6 @@
 #
 # Required environment variables (set in deploy/.env):
 #   DASHSCOPE_API_KEY=...                   # DashScope provider key
-#   DASHSCOPE_CP_API_KEY=...                # Coding-Plan provider key
 #   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory to mount
 
 services:
@@ -51,7 +50,7 @@ services:
         max-file: "3"
 
   soothed:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.8
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:0.6.12
     restart: unless-stopped
     depends_on:
       soothe-pgvector:
@@ -61,7 +60,6 @@ services:
       - soothe-app
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
-      DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY}
       SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
       SOOTHE_POSTGRES_BASE_DSN: postgresql://postgres:postgres@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
