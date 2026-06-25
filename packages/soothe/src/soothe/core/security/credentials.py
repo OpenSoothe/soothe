@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import secrets
 
-
 # AKSK format constants
 ACCESS_KEY_PREFIX = "AK"
 """Access key prefix."""

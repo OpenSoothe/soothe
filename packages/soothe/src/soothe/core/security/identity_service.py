@@ -17,43 +17,34 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeVar
 
-import aiosqlite
-
 from soothe_sdk.protocols.identity import (
-    User,
     AKSKPair,
-    TokenClaims,
-    ExternalIdentityMapping,
     AuthResult,
-    TokenRefreshResult,
-    TokenInfo,
-    IdentityStatus,
+    ExternalIdentityMapping,
     IdentityProtocol,
+    IdentityStatus,
+    TokenClaims,
+    TokenInfo,
+    TokenRefreshResult,
+    User,
 )
+
 from soothe.core.security.credentials import (
     generate_access_key,
-    generate_secret_key,
     generate_aksk_id,
+    generate_secret_key,
     hash_secret_key,
-    verify_secret_key,
     is_valid_access_key_format,
+    verify_secret_key,
+)
+from soothe.core.security.errors import (
+    AKSKNotFoundError,
+    MappingConflictError,
+    MappingNotFoundError,
+    UserNotFoundError,
 )
 from soothe.core.security.tokens import (
     JWTManager,
-    resolve_jwt_key,
-    generate_jwt_key,
-    save_jwt_key,
-)
-from soothe.core.security.errors import (
-    IdentityError,
-    IdentityDisabledError,
-    InvalidCredentialsError,
-    AKSKExpiredError,
-    AKSKRevokedError,
-    UserNotFoundError,
-    AKSKNotFoundError,
-    MappingNotFoundError,
-    MappingConflictError,
 )
 
 logger = logging.getLogger(__name__)
@@ -529,7 +520,6 @@ class IdentityService(IdentityProtocol):
         refresh_token, refresh_claims = self._jwt_manager.generate_refresh_token(user_id, aksk_id)
 
         # Store JTIs
-        now = datetime.now(UTC)
         await self._writer_to_thread(
             self._store_tokens_sync,
             access_claims.jti,

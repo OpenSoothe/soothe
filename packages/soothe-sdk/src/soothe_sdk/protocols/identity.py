@@ -7,7 +7,6 @@ from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-
 # ============================================================================
 # Data Models (RFC-307 §Data Models)
 # ============================================================================
