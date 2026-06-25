@@ -1303,6 +1303,10 @@ class CognitionStepMessage(Vertical):
         self._last_tool_call_count: int = 0
         self._last_summary: str = ""
         self._input_tokens: int = 0
+        # IG-504: Retry tracking for running status display
+        self._retry_attempt: int = 0
+        self._max_retry_attempts: int = 0
+        self._retry_error_type: str | None = None
         self._output_tokens: int = 0
         self._interrupt_message: str | None = None
         self._deferred_interrupted: str | None = None
@@ -2930,6 +2934,21 @@ class CognitionStepMessage(Vertical):
             self._animation_timer.stop()
             self._animation_timer = None
 
+    def set_retry_status(self, attempt: int, max_attempts: int, error_type: str) -> None:
+        """IG-504: Update retry status for running animation display.
+
+        Args:
+            attempt: Current attempt number (1-indexed).
+            max_attempts: Maximum attempts allowed.
+            error_type: "timeout" or "rate_limit".
+        """
+        self._retry_attempt = attempt
+        self._max_retry_attempts = max_attempts
+        self._retry_error_type = error_type
+        # Trigger immediate refresh of running animation
+        if self._status == "running":
+            self._update_running_animation()
+
     def _update_running_animation(self) -> None:
         if self._status != "running" or self._status_widget is None:
             return
@@ -2946,7 +2965,11 @@ class CognitionStepMessage(Vertical):
         gutter = f"{get_glyphs().output_prefix} "
         stats_suffix = self._stats_title_suffix()
         token_suffix = self._token_budget_suffix()
-        head = f"{gutter}{frame} Running...{elapsed}"
+        # IG-504: Show retry count in running status when retries are happening
+        retry_suffix = ""
+        if self._retry_attempt > 0 and self._max_retry_attempts > 0:
+            retry_suffix = f" ({self._retry_attempt}/{self._max_retry_attempts} attempts)"
+        head = f"{gutter}{frame} Running{retry_suffix}...{elapsed}"
         tail = f"{stats_suffix}{token_suffix}"
         clear_widget_text_selection(self._status_widget)
         parts: list[object] = [Content.styled(head, colors.warning)]

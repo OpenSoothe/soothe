@@ -2267,17 +2267,24 @@ class Executor:
         if "invalid_parameter_error" in error_str or "Range of input length should be" in error_str:
             return "Input exceeded model context limit (too large)"
 
-        # Check for rate limiting
-        if "rate_limit" in error_str.lower() or "429" in error_str:
+        # Check for timeout BEFORE rate_limit check to avoid false positives.
+        # TimeoutError messages may contain "llm_rate_limit middleware" suggestion text
+        # which would incorrectly trigger the rate_limit detection below.
+        if "timeout" in error_str.lower():
+            return "Request timed out"
+
+        # Check for rate limiting (specific patterns, not middleware names)
+        # Use "rate limit" (with space) or "429" to avoid matching "llm_rate_limit"
+        if (
+            "rate limit" in error_str.lower()
+            or "429" in error_str
+            or "throttling" in error_str.lower()
+        ):
             return "Rate limited - too many requests"
 
         # Check for authentication/permission errors
         if "401" in error_str or "403" in error_str or "permission" in error_str.lower():
             return "Permission/authentication error"
-
-        # Check for timeout (generic TimeoutError)
-        if "timeout" in error_str.lower():
-            return "Request timed out"
 
         # Check for connection errors
         if "connection" in error_str.lower() or "network" in error_str.lower():

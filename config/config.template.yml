@@ -279,18 +279,19 @@ agent:
 
     # IG-501: Enable by default with moderate settings for Chinese providers
     # (Dashscope/Zhipu typically have lower limits than OpenAI)
+    # IG-504: Increased timeouts and retries for robust step execution
     llm_rate_limit:
       enabled: true
       rpm_limit: 60  # Moderate default for Dashscope/Zhipu (free tier ~30, paid ~60-100)
       concurrent_limit: 8  # Parallelism without overwhelming provider
-      call_timeout_seconds: 150  # Extra margin for slower response times
-      call_timeout_max_seconds: 300
+      call_timeout_seconds: 600  # IG-504: Increased timeout for robust execution
+      call_timeout_max_seconds: 900  # IG-504: Increased cap
       retry_on_timeout: true
-      max_timeout_retries: 2
+      max_timeout_retries: 10  # IG-504: Increased retries
       timeout_retry_multiplier: 1.2
       # IG-499: HTTP 429 rate limit retry configuration
       retry_on_rate_limit: true
-      max_rate_limit_retries: 3
+      max_rate_limit_retries: 10  # IG-504: Increased 429 retries
       rate_limit_backoff_base: 2.0
       rate_limit_backoff_max: 60.0
       respect_retry_after_header: true
