@@ -5,6 +5,10 @@
 **Created**: 2026-06-24
 **Related RFCs**: RFC-229 (Cron Service for Autopilot), RFC-204 (Autopilot Mode), RFC-222 (Autopilot and Goal Engine Architecture), RFC-802 (Persistence Architecture)
 **Scope**: Full RFC-229 implementation in 5 phases as specified.
+**Superseded**: HTTP REST references (`channels/http_rest.py`, `HttpRestChannel`,
+"via HTTP REST" CLI commands) below are superseded by IG-504 (Remove HTTP REST
+Channel). Cron CLI commands now use WebSocket via `WsCommandClient`. These
+HTTP REST references are retained for historical context only.
 
 ---
 

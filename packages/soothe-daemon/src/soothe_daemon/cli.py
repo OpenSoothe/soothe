@@ -146,7 +146,7 @@ def _fast_find_pid() -> int | None:
 
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context) -> None:
-    """Soothe daemon server - agent runtime with WebSocket/HTTP transport."""
+    """Soothe daemon server - agent runtime with WebSocket transport."""
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
 
@@ -469,8 +469,6 @@ def memory_trace(
 ) -> None:
     """Display daemon memory profiling stats (tracemalloc)."""
     import json
-    import urllib.error
-    import urllib.request
 
     running, _ = _fast_is_running()
     if not running:
@@ -478,22 +476,16 @@ def memory_trace(
         raise typer.Exit(code=1)
 
     host, port = _get_ws_address()
-    url = f"http://{host}:{port}/api/v1/memory?mode={mode}"
+    ws_url = f"ws://{host}:{port}"
 
     try:
+        from soothe_sdk.client.ws_command_client import SyncWsCommandClient
+
         timeout = 30 if mode == "objects" else 10
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
-            data = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        try:
-            detail = json.loads(body).get("detail", body)
-        except Exception:
-            detail = body
-        typer.echo(f"Error ({e.code}): {detail}", err=True)
-        raise typer.Exit(code=1) from e
-    except (urllib.error.URLError, OSError) as e:
-        typer.echo(f"Failed to connect to daemon REST API: {e}", err=True)
+        client = SyncWsCommandClient(ws_url, timeout=timeout)
+        data = client.memory_stats(mode)
+    except Exception as e:
+        typer.echo(f"Failed to query daemon memory stats: {e}", err=True)
         raise typer.Exit(code=1) from e
 
     if json_output:

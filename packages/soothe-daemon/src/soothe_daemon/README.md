@@ -12,13 +12,13 @@ not re-implement orchestration logic.
 ┌──────────────────────────────────────────┐
 │  TUI / CLI client                        │
 └───────────────┬──────────────────────────┘
-                │ WebSocket / HTTP REST
+                │ WebSocket
 ┌───────────────▼──────────────────────────┐
 │  soothe.daemon                           │
 │                                          │
 │  SootheDaemon          process lifecycle │
 │  ChannelManager        multi-channel     │
-│  channels/             WebSocket, HTTP, …│
+│  channels/             WebSocket, …      │
 │  MessageRouter         JSON → runner API │
 │  QueryEngine           streaming + cancel│
 │  ThreadStateRegistry   per-thread state  │
@@ -42,9 +42,8 @@ daemon **never** duplicates protocol, memory, or planning logic.
 |----------------|----------------|
 | `server.py` | `SootheDaemon` — process lifecycle, WebSocket server |
 | `entrypoint.py` | `run_daemon()` — CLI entry point, signal handling |
-| `channel_manager.py` | Manages all channels (WebSocket, HTTP REST, plugins) |
-| `channels/` | RFC-620 channel implementations (`WebSocketChannel`, `HttpRestChannel`, …) |
-| `transports/` | Low-level transport helpers still used for HTTP autopilot route setup |
+| `channel_manager.py` | Manages all channels (WebSocket, plugins) |
+| `channels/` | RFC-620 channel implementations (`WebSocketChannel`, …) |
 | `message_router.py` | Routes incoming JSON messages to runner public APIs |
 | `query_engine.py` | `QueryEngine` — streams a single query, owns cancel / ownership |
 | `thread_state.py` | `ThreadStateRegistry` — per-thread draft, history, logger |

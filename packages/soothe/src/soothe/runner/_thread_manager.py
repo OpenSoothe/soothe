@@ -73,7 +73,7 @@ class ArtifactEntry(BaseModel):
     size_bytes: int
     created_at: datetime
     artifact_type: Literal["file", "report", "checkpoint", "other"]
-    download_url: str
+    download_url: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -548,7 +548,6 @@ class ThreadContextManager:
                         size_bytes=stat.st_size,
                         created_at=datetime.fromtimestamp(stat.st_ctime, tz=UTC),
                         artifact_type="file",  # Could be enhanced to detect type
-                        download_url=f"/api/v1/files/{file_path.name}",
                     )
                 )
 
