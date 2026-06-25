@@ -1,6 +1,6 @@
 """Autopilot CLI subcommands for RFC-204.
 
-Daemon-backed control surface: submit tasks and manage goals via HTTP REST.
+Daemon-backed control surface: submit tasks and manage goals via WebSocket.
 Requires ``soothed start``. Real-time monitoring is via TUI ``/autopilot``.
 """
 
@@ -15,11 +15,9 @@ from pathlib import Path
 
 import typer
 from soothe_sdk.client import (
-    AutopilotHttpClient,
-    ensure_http_rest_available,
-    http_rest_url_from_config,
     is_daemon_live,
     websocket_url_from_config,
+    ws_command_client_from_config,
 )
 from soothe_sdk.client.protocol import preview_first
 
@@ -36,8 +34,8 @@ def _resolve_submit_workspace(explicit: str | None) -> str:
     return str(Path(raw).expanduser().resolve())
 
 
-def _require_daemon_http() -> AutopilotHttpClient:
-    """Return a live HTTP client or exit."""
+def _require_daemon_ws():
+    """Return a live WebSocket command client or exit."""
     from soothe_cli.runtime import load_config
 
     cfg = load_config()
@@ -48,13 +46,7 @@ def _require_daemon_http() -> AutopilotHttpClient:
             err=True,
         )
         sys.exit(1)
-    base_url = http_rest_url_from_config(cfg)
-    try:
-        ensure_http_rest_available(base_url)
-    except RuntimeError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
-    return AutopilotHttpClient(base_url)
+    return ws_command_client_from_config(cfg)
 
 
 @app.command("run")
@@ -79,9 +71,9 @@ def run(
     path — distinct from a one-shot agentic query via ``soothe -p``.
     """
     del max_iterations  # daemon owns config for autopilot dispatch
-    client = _require_daemon_http()
+    client = _require_daemon_ws()
     submit_workspace = _resolve_submit_workspace(workspace)
-    result = client.submit(prompt, workspace=submit_workspace)
+    result = client.autopilot_submit(prompt, workspace=submit_workspace)
     goal_id = result.get("goal_id", "")
     typer.echo(f"Submitted goal: {goal_id}")
     if not wait or not goal_id:
@@ -89,7 +81,7 @@ def run(
 
     deadline = time.time() + 600
     while time.time() < deadline:
-        detail = client.get_goal(goal_id)
+        detail = client.autopilot_get_goal(goal_id)
         goal = detail.get("goal") or {}
         status = goal.get("status", "unknown")
         if status in ("completed", "failed", "cancelled", "suspended"):
@@ -114,9 +106,9 @@ def submit(
     ),
 ) -> None:
     """Submit a new task to the daemon autopilot."""
-    client = _require_daemon_http()
+    client = _require_daemon_ws()
     submit_workspace = _resolve_submit_workspace(workspace)
-    result = client.submit(task, priority=priority, workspace=submit_workspace)
+    result = client.autopilot_submit(task, priority=priority, workspace=submit_workspace)
     goal_id = result.get("goal_id", "?")
     typer.echo(f"Task submitted (goal_id={goal_id})")
     typer.echo(f"  Priority: {priority}")
@@ -126,8 +118,8 @@ def submit(
 @app.command("status")
 def status() -> None:
     """Show overall autopilot state and goal DAG summary."""
-    client = _require_daemon_http()
-    data = client.status()
+    client = _require_daemon_ws()
+    data = client.autopilot_status()
     state = data.get("state", data.get("status", "unknown"))
     running = data.get("running", False)
     dreaming = data.get("dreaming", False)
@@ -139,8 +131,8 @@ def status() -> None:
     if isinstance(loop_pool, dict) and loop_pool:
         typer.echo(f"Worker pool: {loop_pool}")
 
-    jobs = client.list_jobs().get("jobs") or []
-    goals = client.list_goals().get("goals") or []
+    jobs = client.autopilot_list_jobs().get("jobs") or []
+    goals = client.autopilot_list_goals().get("goals") or []
     typer.echo(f"\nJobs (root goals): {len(jobs)}")
     if goals:
         counts = Counter(str(g.get("status", "pending")) for g in goals)
@@ -182,8 +174,8 @@ def list_jobs_alias(
 
 
 def _list_jobs_impl(status_filter: str) -> None:
-    client = _require_daemon_http()
-    payload = client.list_jobs()
+    client = _require_daemon_ws()
+    payload = client.autopilot_list_jobs()
     jobs = payload.get("jobs") or []
     if not jobs:
         typer.echo("No jobs found.")
@@ -204,8 +196,8 @@ def list_goals(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
     """List all goals in the daemon autopilot DAG (including subgoals)."""
-    client = _require_daemon_http()
-    payload = client.list_goals()
+    client = _require_daemon_ws()
+    payload = client.autopilot_list_goals()
     goals = payload.get("goals") or []
     if not goals:
         typer.echo("No goals found.")
@@ -270,9 +262,9 @@ def show_job(
     A job is a root goal submitted by the user. This command shows
     the job's details and the complete goal DAG under it.
     """
-    client = _require_daemon_http()
+    client = _require_daemon_ws()
     try:
-        payload = client.get_job(job_id)
+        payload = client.autopilot_get_job(job_id)
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
@@ -314,8 +306,8 @@ def show_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to show details for."),
 ) -> None:
     """Show details for a specific goal."""
-    client = _require_daemon_http()
-    payload = client.get_goal(goal_id)
+    client = _require_daemon_ws()
+    payload = client.autopilot_get_goal(goal_id)
     found = payload.get("goal")
     if not found:
         typer.echo(f"Goal '{goal_id}' not found.")
@@ -336,8 +328,8 @@ def cancel_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to cancel."),
 ) -> None:
     """Cancel a goal via the daemon."""
-    client = _require_daemon_http()
-    result = client.cancel_goal(goal_id)
+    client = _require_daemon_ws()
+    result = client.autopilot_cancel_goal(goal_id)
     typer.echo(f"Cancel result: {result.get('status', result)}")
 
 
@@ -348,9 +340,9 @@ def approve_goal(
     ),
 ) -> None:
     """Approve a MUST-confirmation goal."""
-    client = _require_daemon_http()
+    client = _require_daemon_ws()
     try:
-        result = client.approve(goal_id)
+        result = client.autopilot_approve(goal_id)
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
@@ -362,9 +354,9 @@ def reject_goal(
     goal_id: str = typer.Argument(..., help="Confirmation ID to reject."),
 ) -> None:
     """Reject a proposed goal."""
-    client = _require_daemon_http()
+    client = _require_daemon_ws()
     try:
-        result = client.reject(goal_id)
+        result = client.autopilot_reject(goal_id)
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
@@ -380,9 +372,9 @@ def resume_goal(
     Reactivates a paused goal back to pending status so the scheduler
     can pick it up for execution. Use 'jobs' to list goals and their status.
     """
-    client = _require_daemon_http()
+    client = _require_daemon_ws()
     try:
-        result = client.resume(goal_id)
+        result = client.autopilot_resume(goal_id)
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
@@ -394,16 +386,16 @@ def resume_goal(
 @app.command("wake")
 def wake() -> None:
     """Exit dreaming mode — resume active execution."""
-    client = _require_daemon_http()
-    client.wake()
+    client = _require_daemon_ws()
+    client.autopilot_wake()
     typer.echo("Wake signal sent.")
 
 
 @app.command("dream")
 def dream() -> None:
     """Force enter dreaming mode."""
-    client = _require_daemon_http()
-    client.dream()
+    client = _require_daemon_ws()
+    client.autopilot_dream()
     typer.echo("Dream signal sent.")
 
 

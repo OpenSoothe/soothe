@@ -2,14 +2,12 @@
 
 Provides unified Channel abstraction for all communication endpoints:
 - WebSocket (built-in, supports streaming)
-- HTTP REST (built-in, supports_inbound only)
 - External plugins (Telegram, Discord, Slack, etc.) via entry_points
 
 Key exports:
 - Channel: Abstract base class for all channels
 - ChannelMessage: Channel-layer message for platform routing
 - WebSocketChannel: WebSocket implementation with streaming
-- HttpRestChannel: HTTP REST implementation (inbound only)
 - TelegramChannel: Telegram bot implementation (migrated from nanoBot)
 - DiscordChannel: Discord bot implementation (migrated from nanoBot)
 - SlackChannel: Slack bot implementation (migrated from nanoBot)
@@ -38,7 +36,6 @@ from soothe_daemon.channels.events import (
     TextEndEvent,
     TextEvent,
 )
-from soothe_daemon.channels.http_rest import HttpRestChannel
 from soothe_daemon.channels.message import ChannelMessage
 from soothe_daemon.channels.registry import (
     discover_all,
@@ -137,7 +134,6 @@ __all__ = [
     "TextEvent",
     # Channel implementations
     "WebSocketChannel",
-    "HttpRestChannel",
     "TelegramChannel",
     "DiscordChannel",
     "SlackChannel",

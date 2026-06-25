@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -11,11 +11,11 @@ from soothe_cli.cli.execution.daemon import _run_headless_session_once
 
 
 @pytest.mark.asyncio
-async def test_headless_cron_slash_uses_http_without_websocket(monkeypatch) -> None:
-    """Headless /cron submits via HTTP and skips the agent loop."""
+async def test_headless_cron_slash_uses_ws_command_client(monkeypatch) -> None:
+    """Headless /cron submits via WebSocket command client and skips the agent loop."""
     cfg = MagicMock()
-    mock_client = MagicMock()
-    mock_client.add.return_value = {
+    mock_client = AsyncMock()
+    mock_client.cron_add.return_value = {
         "job": {
             "id": "cron001",
             "description": "verify headless path",
@@ -24,11 +24,7 @@ async def test_headless_cron_slash_uses_http_without_websocket(monkeypatch) -> N
     }
 
     monkeypatch.setattr(
-        "soothe_sdk.client.ensure_http_rest_available",
-        lambda _url: None,
-    )
-    monkeypatch.setattr(
-        "soothe_cli.runtime.cron_http.cron_client_from_config",
+        "soothe_cli.cli.execution.daemon.async_ws_command_client_from_config",
         lambda _cfg: mock_client,
     )
     connect = MagicMock()
@@ -45,7 +41,7 @@ async def test_headless_cron_slash_uses_http_without_websocket(monkeypatch) -> N
     assert exit_code == 0
     assert retry is False
     connect.assert_not_called()
-    mock_client.add.assert_called_once_with("in 1 hour verify headless path")
+    mock_client.cron_add.assert_called_once_with("in 1 hour verify headless path")
 
 
 @pytest.mark.asyncio
@@ -64,15 +60,11 @@ async def test_headless_cron_slash_requires_text(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_headless_cron_http_failure(monkeypatch) -> None:
+async def test_headless_cron_ws_failure(monkeypatch) -> None:
+    mock_client = AsyncMock()
+    mock_client.cron_add.side_effect = RuntimeError("WebSocket command failed")
     monkeypatch.setattr(
-        "soothe_sdk.client.ensure_http_rest_available",
-        lambda _url: None,
-    )
-    mock_client = MagicMock()
-    mock_client.add.side_effect = RuntimeError("HTTP 503")
-    monkeypatch.setattr(
-        "soothe_cli.runtime.cron_http.cron_client_from_config",
+        "soothe_cli.cli.execution.daemon.async_ws_command_client_from_config",
         lambda _cfg: mock_client,
     )
 

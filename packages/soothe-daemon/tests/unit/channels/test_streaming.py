@@ -53,7 +53,6 @@ class MockDaemonConfig:
                     "max_frame_size": 10485760,
                 },
             )(),
-            "http_rest": type("HTTPConfig", (), {"enabled": False})(),
         },
     )()
 

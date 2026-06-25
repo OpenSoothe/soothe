@@ -98,106 +98,6 @@ def _check_websocket_connectivity(config: SootheDaemonConfig | None) -> CheckRes
     )
 
 
-def _check_http_rest_connectivity(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check HTTP REST transport connectivity (RFC-450)."""
-    import requests
-
-    # Check if HTTP REST enabled
-    if not config or not config.transports.http_rest.enabled:
-        return CheckResult(
-            name="http_rest_connectivity",
-            status=CheckStatus.SKIPPED,
-            message="HTTP REST transport disabled",
-        )
-
-    http_host, http_port = config.transports.effective_http_rest_listen()
-    health_url = f"http://{http_host}:{http_port}/api/v1/health"
-
-    try:
-        response = requests.get(health_url, timeout=2.0)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "healthy":
-                return CheckResult(
-                    name="http_rest_connectivity",
-                    status=CheckStatus.OK,
-                    message=f"HTTP REST healthy at {http_host}:{http_port}",
-                    details={"host": http_host, "port": http_port, "response": data},
-                )
-    except requests.ConnectionError:
-        return CheckResult(
-            name="http_rest_connectivity",
-            status=CheckStatus.INFO,
-            message="HTTP REST not responsive (daemon not running)",
-        )
-    except requests.Timeout:
-        return CheckResult(
-            name="http_rest_connectivity",
-            status=CheckStatus.WARNING,
-            message="HTTP REST timeout (daemon may be overloaded)",
-        )
-    except Exception as e:
-        return CheckResult(
-            name="http_rest_connectivity",
-            status=CheckStatus.WARNING,
-            message=f"HTTP REST error: {e}",
-        )
-
-    return CheckResult(
-        name="http_rest_connectivity",
-        status=CheckStatus.WARNING,
-        message="HTTP REST returned unhealthy status",
-    )
-
-
-def _check_http_rest_status(config: SootheDaemonConfig | None) -> CheckResult:
-    """Fetch daemon status via HTTP REST /api/v1/status endpoint."""
-    import requests
-
-    # Check if HTTP REST enabled
-    if not config or not config.transports.http_rest.enabled:
-        return CheckResult(
-            name="http_rest_status",
-            status=CheckStatus.SKIPPED,
-            message="HTTP REST transport disabled",
-        )
-
-    http_host, http_port = config.transports.effective_http_rest_listen()
-    status_url = f"http://{http_host}:{http_port}/api/v1/status"
-
-    try:
-        response = requests.get(status_url, timeout=2.0)
-        if response.status_code == 200:
-            data = response.json()
-            status = data.get("status", "unknown")
-            client_count = data.get("client_count", 0)
-
-            return CheckResult(
-                name="http_rest_status",
-                status=CheckStatus.OK,
-                message=f"Daemon status: {status}, clients: {client_count}",
-                details={"status": status, "client_count": client_count, "response": data},
-            )
-    except requests.ConnectionError:
-        return CheckResult(
-            name="http_rest_status",
-            status=CheckStatus.INFO,
-            message="HTTP REST not responsive (daemon not running)",
-        )
-    except Exception as e:
-        return CheckResult(
-            name="http_rest_status",
-            status=CheckStatus.WARNING,
-            message=f"HTTP REST status error: {e}",
-        )
-
-    return CheckResult(
-        name="http_rest_status",
-        status=CheckStatus.WARNING,
-        message="HTTP REST status check failed",
-    )
-
-
 def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
     """Check daemon readiness state via WebSocket handshake (RFC-450)."""
     import asyncio
@@ -296,157 +196,6 @@ def _check_daemon_uptime(pid: int | None) -> CheckResult:
         )
 
 
-def _check_client_sessions(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check connected client sessions count."""
-    import requests
-
-    # Check if HTTP REST enabled
-    if not config or not config.transports.http_rest.enabled:
-        return CheckResult(
-            name="client_sessions",
-            status=CheckStatus.SKIPPED,
-            message="HTTP REST transport disabled",
-        )
-
-    http_host, http_port = config.transports.effective_http_rest_listen()
-    status_url = f"http://{http_host}:{http_port}/api/v1/status"
-
-    try:
-        response = requests.get(status_url, timeout=2.0)
-        if response.status_code == 200:
-            data = response.json()
-            client_count = data.get("client_count", 0)
-
-            return CheckResult(
-                name="client_sessions",
-                status=CheckStatus.INFO,
-                message=f"Connected clients: {client_count}",
-                details={"client_count": client_count},
-            )
-    except Exception as e:
-        return CheckResult(
-            name="client_sessions",
-            status=CheckStatus.INFO,
-            message=f"Client sessions check failed: {e}",
-        )
-
-    return CheckResult(
-        name="client_sessions",
-        status=CheckStatus.INFO,
-        message="Client sessions check skipped",
-    )
-
-
-def _check_active_threads(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check active thread count."""
-    import requests
-
-    # Check if HTTP REST enabled
-    if not config or not config.transports.http_rest.enabled:
-        return CheckResult(
-            name="active_threads",
-            status=CheckStatus.SKIPPED,
-            message="HTTP REST transport disabled",
-        )
-
-    http_host, http_port = config.transports.effective_http_rest_listen()
-    threads_url = f"http://{http_host}:{http_port}/api/v1/threads"
-
-    try:
-        response = requests.get(threads_url, params={"status": "running"}, timeout=2.0)
-        if response.status_code == 200:
-            data = response.json()
-            total_threads = data.get("total", 0)
-            max_concurrent = config.max_concurrent_threads if config else 100
-
-            # Check if near limit
-            percent = (total_threads / max_concurrent * 100) if max_concurrent > 0 else 0
-            if percent > 80:
-                return CheckResult(
-                    name="active_threads",
-                    status=CheckStatus.WARNING,
-                    message=f"Active threads near limit: {total_threads}/{max_concurrent}",
-                    details={"active_count": total_threads, "max_concurrent": max_concurrent},
-                )
-
-            return CheckResult(
-                name="active_threads",
-                status=CheckStatus.OK,
-                message=f"Active threads: {total_threads}/{max_concurrent}",
-                details={"active_count": total_threads, "max_concurrent": max_concurrent},
-            )
-    except Exception as e:
-        return CheckResult(
-            name="active_threads",
-            status=CheckStatus.INFO,
-            message=f"Active threads check failed: {e}",
-        )
-
-    return CheckResult(
-        name="active_threads",
-        status=CheckStatus.INFO,
-        message="Active threads check skipped",
-    )
-
-
-def _check_queue_depth(config: SootheDaemonConfig | None) -> CheckResult:
-    """Monitor queue depths for backpressure detection (IG-258)."""
-    import requests
-
-    # Check if HTTP REST enabled
-    if not config or not config.transports.http_rest.enabled:
-        return CheckResult(
-            name="queue_depth",
-            status=CheckStatus.SKIPPED,
-            message="HTTP REST transport disabled",
-        )
-
-    http_host, http_port = config.transports.effective_http_rest_listen()
-    health_url = f"http://{http_host}:{http_port}/api/v1/health"
-
-    try:
-        response = requests.get(health_url, timeout=2.0)
-        if response.status_code == 200:
-            data = response.json()
-            queues = data.get("queues", {})
-
-            # Check input queue
-            input_queue = queues.get("input_queue", {})
-            input_percent = input_queue.get("percent", 0)
-
-            # Check event queues
-            event_queues = queues.get("event_queues", {})
-            clients_near_capacity = event_queues.get("clients_near_capacity", 0)
-
-            # Determine status based on queue depths
-            if input_percent > 80 or clients_near_capacity > 0:
-                return CheckResult(
-                    name="queue_depth",
-                    status=CheckStatus.WARNING,
-                    message=f"Queues near capacity (input: {input_percent}% full, {clients_near_capacity} clients near limit)",
-                    details={"input_queue": input_queue, "event_queues": event_queues},
-                )
-
-            return CheckResult(
-                name="queue_depth",
-                status=CheckStatus.OK,
-                message="Queue depths healthy",
-                details={"input_queue": input_queue, "event_queues": event_queues},
-            )
-    except Exception as e:
-        return CheckResult(
-            name="queue_depth",
-            status=CheckStatus.INFO,
-            message=f"Queue depth check failed: {e}",
-        )
-
-    return CheckResult(
-        name="queue_depth",
-        status=CheckStatus.INFO,
-        message="Queue depth check skipped",
-    )
-
-
 def _check_stale_locks(config: SootheDaemonConfig | None) -> CheckResult:
     """Check for stale PID files and zombie daemon."""
     from soothe_daemon.bootstrap.paths import pid_path
@@ -498,7 +247,7 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
     """Check daemon health with WebSocket-first priority (RFC-450).
 
     Uses WebSocket-first logic to prioritize actual daemon responsiveness
-    over PID file checks. Falls back to HTTP REST and PID checks if WebSocket fails.
+    over PID file checks.
 
     Args:
         config: ``SootheDaemonConfig`` instance for transport configuration
@@ -514,11 +263,6 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
 
     if ws_result.status == CheckStatus.OK:
         # WebSocket healthy - run informational checks
-        http_result = _check_http_rest_connectivity(config)
-        checks.append(http_result)
-
-        http_status_result = _check_http_rest_status(config)
-        checks.append(http_status_result)
 
         # Readiness state check (WebSocket handshake)
         readiness_result = _check_daemon_readiness(config)
@@ -552,17 +296,6 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
                 )
             )
 
-        # Client sessions and active threads
-        client_sessions_result = _check_client_sessions(config)
-        checks.append(client_sessions_result)
-
-        active_threads_result = _check_active_threads(config)
-        checks.append(active_threads_result)
-
-        # Queue depth check (IG-258)
-        queue_depth_result = _check_queue_depth(config)
-        checks.append(queue_depth_result)
-
         # Check for stale locks
         stale_result = _check_stale_locks(config)
         checks.append(stale_result)
@@ -577,41 +310,7 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
             message="Daemon healthy (WebSocket responsive)",
         )
 
-    # WebSocket failed - try HTTP REST (secondary transport)
-    http_result = _check_http_rest_connectivity(config)
-    checks.append(http_result)
-
-    if http_result.status == CheckStatus.OK:
-        # HTTP REST healthy but WebSocket failed - degraded
-        http_status_result = _check_http_rest_status(config)
-        checks.append(http_status_result)
-
-        pid_result = _check_pid_file()
-        checks.append(pid_result)
-
-        if pid_result.details.get("pid"):
-            pid = pid_result.details["pid"]
-            process_result = _check_process_alive(pid)
-            checks.append(process_result)
-        else:
-            checks.append(
-                CheckResult(
-                    name="process_alive",
-                    status=CheckStatus.SKIPPED,
-                    message="Skipped (no valid PID)",
-                )
-            )
-
-        checks.append(_check_stale_locks(config))
-
-        return CategoryResult(
-            category="daemon",
-            status=CheckStatus.WARNING,
-            checks=checks,
-            message="Daemon degraded (WebSocket failed, HTTP REST responsive)",
-        )
-
-    # Both transports failed - fallback to PID checks
+    # WebSocket failed - fallback to PID checks
     pid_result = _check_pid_file()
     checks.append(pid_result)
 
@@ -628,7 +327,7 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
                 category="daemon",
                 status=CheckStatus.ERROR,
                 checks=checks,
-                message="Zombie daemon (process alive but transports dead)",
+                message="Zombie daemon (process alive but WebSocket dead)",
             )
 
         # Stale PID - process dead

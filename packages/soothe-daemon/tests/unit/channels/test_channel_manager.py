@@ -64,9 +64,6 @@ class MockDaemonConfig:
     transports.websocket.tls_enabled = False
     transports.websocket.max_frame_size = 10485760
 
-    transports.http_rest = MagicMock()
-    transports.http_rest.enabled = False
-
 
 class TestChannelManagerInit:
     """Tests for ChannelManager initialization."""
@@ -383,9 +380,9 @@ class TestChannelManagerProperties:
         manager = ChannelManager(config, event_bus)
 
         manager._channels["websocket"] = MockChannel({})
-        manager._channels["http_rest"] = MockChannel({})
+        manager._channels["telegram"] = MockChannel({})
 
-        assert manager.enabled_channels == ["websocket", "http_rest"]
+        assert manager.enabled_channels == ["websocket", "telegram"]
 
     def test_get_channel_info(self):
         """Test get_channel_info returns list of dicts."""
