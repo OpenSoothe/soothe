@@ -1,9 +1,10 @@
 """JWT token generation and validation. RFC-307 §TokenClaims."""
 
-import jwt
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Literal
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import jwt
 
 from soothe.core.security.models import TokenClaims
 
@@ -59,7 +60,7 @@ class JWTManager:
 
         RFC-307 §JWT payload structure.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expiry = now + timedelta(hours=self.access_expiry_hours)
         jti = str(uuid.uuid4())
 
@@ -103,7 +104,7 @@ class JWTManager:
 
         RFC-307 §JWT payload structure.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expiry = now + timedelta(days=self.refresh_expiry_days)
         jti = str(uuid.uuid4())
 
@@ -154,8 +155,8 @@ class JWTManager:
                 user_id=payload["sub"],
                 aksk_id=payload["aksk_id"],
                 token_type=payload["typ"],
-                issued_at=datetime.fromtimestamp(payload["iat"], tz=timezone.utc),
-                expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+                issued_at=datetime.fromtimestamp(payload["iat"], tz=UTC),
+                expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
             )
         except jwt.ExpiredSignatureError:
             return None
@@ -245,9 +246,6 @@ def save_jwt_key(key: str, soothe_home: str) -> Path:
 
     RFC-307 §JWT key auto-generation.
     """
-    from pathlib import Path
-    import os
-
     key_file = Path(soothe_home) / ".jwt_key"
     key_file.parent.mkdir(parents=True, exist_ok=True)
     key_file.write_text(key)

@@ -4,6 +4,17 @@ These runtime-agnostic protocols define the stable interfaces that
 community plugins can depend on without requiring the full daemon runtime.
 """
 
+from soothe_sdk.protocols.identity import (
+    AKSKPair,
+    AuthResult,
+    ExternalIdentityMapping,
+    IdentityProtocol,
+    IdentityStatus,
+    TokenClaims,
+    TokenInfo,
+    TokenRefreshResult,
+    User,
+)
 from soothe_sdk.protocols.persistence import AsyncPersistStore
 from soothe_sdk.protocols.policy import (
     ActionRequest,
@@ -13,17 +24,6 @@ from soothe_sdk.protocols.policy import (
     PolicyDecision,
     PolicyProfile,
     PolicyProtocol,
-)
-from soothe_sdk.protocols.identity import (
-    User,
-    AKSKPair,
-    TokenClaims,
-    ExternalIdentityMapping,
-    AuthResult,
-    TokenRefreshResult,
-    TokenInfo,
-    IdentityStatus,
-    IdentityProtocol,
 )
 from soothe_sdk.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
