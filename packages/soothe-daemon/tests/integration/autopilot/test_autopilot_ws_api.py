@@ -87,7 +87,7 @@ async def ws_daemon(tmp_path: Path):
         }
     )
 
-    ge = svc._goal_engine
+    ge = svc._ce
     ge.get_goal = AsyncMock(return_value=test_goal)
     ge.suspend_goal = AsyncMock(return_value=_FakeGoal(status="suspended"))
     ge.reactivate_goal = AsyncMock(return_value=_FakeGoal(status="pending"))
@@ -235,7 +235,7 @@ async def test_job_status_not_found(ws_daemon) -> None:
 async def test_job_pause_not_found(ws_daemon) -> None:
     """job_pause for nonexistent job returns JOB_NOT_FOUND."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(return_value=None)
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=None)
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -256,9 +256,7 @@ async def test_job_pause_not_found(ws_daemon) -> None:
 async def test_job_pause_already_suspended(ws_daemon) -> None:
     """job_pause on already-suspended goal returns JOB_ALREADY_PAUSED."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(
-        return_value=_FakeGoal(status="suspended")
-    )
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=_FakeGoal(status="suspended"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -279,9 +277,7 @@ async def test_job_pause_already_suspended(ws_daemon) -> None:
 async def test_job_pause_completed(ws_daemon) -> None:
     """job_pause on completed goal returns JOB_COMPLETED."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(
-        return_value=_FakeGoal(status="completed")
-    )
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=_FakeGoal(status="completed"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -302,9 +298,7 @@ async def test_job_pause_completed(ws_daemon) -> None:
 async def test_job_pause_failed_goal(ws_daemon) -> None:
     """job_pause on failed goal returns JOB_COMPLETED."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(
-        return_value=_FakeGoal(status="failed")
-    )
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=_FakeGoal(status="failed"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -325,7 +319,7 @@ async def test_job_pause_failed_goal(ws_daemon) -> None:
 async def test_job_pause_suspend_exception(ws_daemon) -> None:
     """job_pause returns JOB_PAUSE_FAILED when suspend_goal raises."""
     daemon = ws_daemon["daemon"]
-    ge = daemon._autopilot_service._goal_engine
+    ge = daemon._autopilot_service._ce
     ge.get_goal = AsyncMock(return_value=_FakeGoal(status="active"))
     ge.suspend_goal = AsyncMock(side_effect=RuntimeError("suspend error"))
 
@@ -371,7 +365,7 @@ async def test_job_pause_missing_job_id(ws_daemon) -> None:
 async def test_job_resume_not_found(ws_daemon) -> None:
     """job_resume for nonexistent job returns JOB_NOT_FOUND."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(return_value=None)
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=None)
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -392,9 +386,7 @@ async def test_job_resume_not_found(ws_daemon) -> None:
 async def test_job_resume_not_paused(ws_daemon) -> None:
     """job_resume on active (non-suspended) goal returns JOB_NOT_PAUSED."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(
-        return_value=_FakeGoal(status="active")
-    )
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=_FakeGoal(status="active"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -415,9 +407,7 @@ async def test_job_resume_not_paused(ws_daemon) -> None:
 async def test_job_resume_pending_not_paused(ws_daemon) -> None:
     """job_resume on pending goal returns JOB_NOT_PAUSED."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(
-        return_value=_FakeGoal(status="pending")
-    )
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=_FakeGoal(status="pending"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -438,7 +428,7 @@ async def test_job_resume_pending_not_paused(ws_daemon) -> None:
 async def test_job_resume_reactivate_exception(ws_daemon) -> None:
     """job_resume returns JOB_RESUME_FAILED when reactivate_goal raises."""
     daemon = ws_daemon["daemon"]
-    ge = daemon._autopilot_service._goal_engine
+    ge = daemon._autopilot_service._ce
     ge.get_goal = AsyncMock(return_value=_FakeGoal(status="suspended"))
     ge.reactivate_goal = AsyncMock(side_effect=RuntimeError("reactivate error"))
 
@@ -479,7 +469,7 @@ async def test_job_resume_missing_job_id(ws_daemon) -> None:
 async def test_job_resume_blocked_goal(ws_daemon) -> None:
     """job_resume on blocked goal succeeds (blocked is resumable)."""
     daemon = ws_daemon["daemon"]
-    ge = daemon._autopilot_service._goal_engine
+    ge = daemon._autopilot_service._ce
     ge.get_goal = AsyncMock(return_value=_FakeGoal(status="blocked"))
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
@@ -670,7 +660,7 @@ async def test_job_guidance_missing_job_id(ws_daemon) -> None:
 async def test_job_guidance_goal_not_found(ws_daemon) -> None:
     """job_guidance for nonexistent target goal returns GOAL_NOT_FOUND."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(return_value=None)
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=None)
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -692,7 +682,7 @@ async def test_job_guidance_goal_not_found(ws_daemon) -> None:
 async def test_job_guidance_with_specific_goal_id(ws_daemon) -> None:
     """job_guidance with explicit goal_id targets that goal (scope=goal)."""
     daemon = ws_daemon["daemon"]
-    ge = daemon._autopilot_service._goal_engine
+    ge = daemon._autopilot_service._ce
     child_goal = _FakeGoal(goal_id="child-1", status="active")
     ge.get_goal = AsyncMock(return_value=child_goal)
 
@@ -719,7 +709,7 @@ async def test_job_guidance_with_specific_goal_id(ws_daemon) -> None:
 async def test_job_guidance_rejected(ws_daemon) -> None:
     """job_guidance with absorbed=False when engine rejects guidance."""
     daemon = ws_daemon["daemon"]
-    daemon._autopilot_service._goal_engine.absorb_guidance = AsyncMock(return_value=False)
+    daemon._autopilot_service._ce.absorb_guidance = AsyncMock(return_value=False)
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)
@@ -914,7 +904,7 @@ async def test_concurrent_subscribe_isolation(ws_daemon) -> None:
 async def test_error_path_lifecycle(ws_daemon) -> None:
     """Exercise multiple error paths in a single connection."""
     daemon = ws_daemon["daemon"]
-    ge = daemon._autopilot_service._goal_engine
+    ge = daemon._autopilot_service._ce
 
     async with websockets.connect(f"ws://127.0.0.1:{ws_daemon['port']}") as ws:
         await _drain_handshake(ws)

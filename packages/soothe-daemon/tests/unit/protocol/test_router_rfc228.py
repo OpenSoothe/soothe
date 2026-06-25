@@ -37,11 +37,11 @@ def _make_fake_autopilot_service() -> MagicMock:
     service.cancel_goal = AsyncMock()
     service.list_goals = AsyncMock(return_value=[])
     service.dag_snapshot = AsyncMock(return_value={"nodes": [], "edges": []})
-    service._goal_engine = MagicMock()
-    service._goal_engine.suspend_goal = AsyncMock()
-    service._goal_engine.reactivate_goal = AsyncMock()
-    service._goal_engine.absorb_guidance = AsyncMock(return_value=True)
-    service._goal_engine.get_goal = AsyncMock()
+    service._ce = MagicMock()
+    service._ce.suspend_goal = AsyncMock()
+    service._ce.reactivate_goal = AsyncMock()
+    service._ce.absorb_guidance = AsyncMock(return_value=True)
+    service._ce.get_goal = AsyncMock()
     return service
 
 
@@ -275,10 +275,10 @@ class TestJobPause:
         router = MessageRouter(daemon)
 
         root_goal = _make_fake_goal(goal_id="job-p1", status="pending")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = root_goal
+        daemon._autopilot_service._ce.get_goal.return_value = root_goal
 
         suspended_goal = _make_fake_goal(goal_id="job-p1", status="suspended")
-        daemon._autopilot_service._goal_engine.suspend_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.suspend_goal.return_value = suspended_goal
 
         await router.dispatch(
             "client-1",
@@ -291,7 +291,7 @@ class TestJobPause:
         assert msg["job_id"] == "job-p1"
         assert msg["status"] == "suspended"
 
-        daemon._autopilot_service._goal_engine.suspend_goal.assert_awaited_once_with(
+        daemon._autopilot_service._ce.suspend_goal.assert_awaited_once_with(
             "job-p1", reason="user_pause"
         )
 
@@ -302,7 +302,7 @@ class TestJobPause:
         router = MessageRouter(daemon)
 
         suspended_goal = _make_fake_goal(goal_id="job-p2", status="suspended")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
 
         await router.dispatch(
             "client-1",
@@ -315,7 +315,7 @@ class TestJobPause:
         assert msg["code"] == "JOB_ALREADY_PAUSED"
         assert msg["code"] == "JOB_ALREADY_PAUSED"
 
-        daemon._autopilot_service._goal_engine.suspend_goal.assert_not_awaited()
+        daemon._autopilot_service._ce.suspend_goal.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_job_pause_completed_job(self) -> None:
@@ -324,7 +324,7 @@ class TestJobPause:
         router = MessageRouter(daemon)
 
         completed_goal = _make_fake_goal(goal_id="job-p3", status="completed")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = completed_goal
+        daemon._autopilot_service._ce.get_goal.return_value = completed_goal
 
         await router.dispatch(
             "client-1",
@@ -348,10 +348,10 @@ class TestJobResume:
         router = MessageRouter(daemon)
 
         suspended_goal = _make_fake_goal(goal_id="job-r1", status="suspended")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
 
         reactivated_goal = _make_fake_goal(goal_id="job-r1", status="pending")
-        daemon._autopilot_service._goal_engine.reactivate_goal.return_value = reactivated_goal
+        daemon._autopilot_service._ce.reactivate_goal.return_value = reactivated_goal
 
         await router.dispatch(
             "client-1",
@@ -364,9 +364,9 @@ class TestJobResume:
         assert msg["job_id"] == "job-r1"
         assert msg["status"] == "pending"
 
-        daemon._autopilot_service._goal_engine.reactivate_goal.assert_awaited_once_with("job-r1")
+        daemon._autopilot_service._ce.reactivate_goal.assert_awaited_once_with("job-r1")
 
-        daemon._autopilot_service._goal_engine.reactivate_goal.assert_awaited_once_with("job-r1")
+        daemon._autopilot_service._ce.reactivate_goal.assert_awaited_once_with("job-r1")
 
     @pytest.mark.asyncio
     async def test_job_resume_not_suspended(self) -> None:
@@ -495,7 +495,7 @@ class TestJobGuidance:
         router = MessageRouter(daemon)
 
         target_goal = _make_fake_goal(goal_id="job-g1")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = target_goal
+        daemon._autopilot_service._ce.get_goal.return_value = target_goal
 
         await router.dispatch(
             "client-1",
@@ -514,7 +514,7 @@ class TestJobGuidance:
         assert msg["goal_id"] == "job-g1"  # Defaults to job_id when goal_id not specified
         assert msg["absorbed"] is True
 
-        daemon._autopilot_service._goal_engine.absorb_guidance.assert_awaited_once_with(
+        daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once_with(
             "job-g1", "Focus on testing first", scope="job"
         )
 
@@ -525,7 +525,7 @@ class TestJobGuidance:
         router = MessageRouter(daemon)
 
         child_goal = _make_fake_goal(goal_id="child-g2")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = child_goal
+        daemon._autopilot_service._ce.get_goal.return_value = child_goal
 
         await router.dispatch(
             "client-1",
@@ -543,7 +543,7 @@ class TestJobGuidance:
         assert msg["type"] == "job_guidance_response"
         assert msg["goal_id"] == "child-g2"
 
-        daemon._autopilot_service._goal_engine.absorb_guidance.assert_awaited_once_with(
+        daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once_with(
             "child-g2", "Complete this subtask", scope="goal"
         )
 
@@ -569,7 +569,7 @@ class TestJobGuidance:
         daemon, sent = _make_fake_daemon_with_autopilot()
         router = MessageRouter(daemon)
 
-        daemon._autopilot_service._goal_engine.get_goal.return_value = None
+        daemon._autopilot_service._ce.get_goal.return_value = None
 
         await router.dispatch(
             "client-1",
@@ -883,7 +883,7 @@ class TestJobGuidanceEdgeCases:
         router = MessageRouter(daemon)
 
         # GoalEngine rejects guidance
-        daemon._autopilot_service._goal_engine.absorb_guidance.return_value = False
+        daemon._autopilot_service._ce.absorb_guidance.return_value = False
 
         await router.dispatch(
             "client-1",
@@ -908,7 +908,7 @@ class TestJobGuidanceEdgeCases:
         daemon, sent = _make_fake_daemon_with_autopilot()
         router = MessageRouter(daemon)
 
-        daemon._autopilot_service._goal_engine.absorb_guidance.return_value = True
+        daemon._autopilot_service._ce.absorb_guidance.return_value = True
 
         guidance_text = (
             "Focus on error handling.\n\nSpecific areas:\n- Token refresh\n- Rate limiting"
@@ -925,7 +925,7 @@ class TestJobGuidanceEdgeCases:
         )
 
         # Verify guidance was sent with goal_id target
-        daemon._autopilot_service._goal_engine.absorb_guidance.assert_awaited_once()
+        daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once()
         assert sent[0][1]["type"] == "job_guidance_response"
         assert sent[0][1]["absorbed"] is True
         assert sent[0][1]["goal_id"] == "sub-goal-1"
@@ -1033,9 +1033,9 @@ class TestJobLifecycleIntegration:
 
         # Step 4: Resume suspended job
         suspended_goal = _make_fake_goal(goal_id="lifecycle-test", status="suspended")
-        daemon._autopilot_service._goal_engine.get_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
         reactivated_goal = _make_fake_goal(goal_id="lifecycle-test", status="pending")
-        daemon._autopilot_service._goal_engine.reactivate_goal.return_value = reactivated_goal
+        daemon._autopilot_service._ce.reactivate_goal.return_value = reactivated_goal
 
         await router.dispatch("client-1", {"type": "job_resume", "job_id": "lifecycle-test"})
         assert sent[0][1]["type"] == "job_resume_response"

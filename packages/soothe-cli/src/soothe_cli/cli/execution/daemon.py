@@ -79,6 +79,28 @@ async def _run_headless_session_once(
     sigint_count = 0
     original_sigint: Any = None
 
+    from soothe_sdk.client import ensure_http_rest_available, http_rest_url_from_config
+
+    from soothe_cli.runtime.cron_http import cron_client_from_config, parse_cron_slash_prompt
+
+    cron_text = parse_cron_slash_prompt(prompt)
+    if cron_text is not None:
+        if not cron_text.strip():
+            _emit_headless_error("Usage: /cron <natural language schedule>")
+            return 1, False
+        try:
+            ensure_http_rest_available(http_rest_url_from_config(cfg))
+            result = cron_client_from_config(cfg).add(cron_text)
+        except RuntimeError as exc:
+            _emit_headless_error(str(exc))
+            return 1, False
+        job = result.get("job") or {}
+        job_id = job.get("id", "?")
+        typer.echo(f"Scheduled cron job: {job_id}")
+        typer.echo(f"  Description: {job.get('description', cron_text)}")
+        typer.echo(f"  Next run: {str(job.get('next_run', ''))[:19]}")
+        return 0, False
+
     try:
         await connect_websocket_with_retries(client)
         cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()

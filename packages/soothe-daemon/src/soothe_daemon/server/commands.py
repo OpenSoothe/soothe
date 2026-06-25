@@ -565,8 +565,9 @@ async def _cmd_cron_add(
     if not text:
         raise ValueError("Natural language text required (params.text)")
 
-    # Get user_id from client context (use loop_id as proxy for now)
-    user_id = str(loop_id or "default")
+    from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+
+    user_id = DEFAULT_CRON_USER_ID
 
     # Get or create CronService
     cron_service = getattr(self, "_cron_service", None)

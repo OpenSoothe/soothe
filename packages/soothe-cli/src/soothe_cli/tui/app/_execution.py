@@ -493,7 +493,8 @@ class _ExecutionMixin:
         elif cmd == "/help":
             await self._mount_message(UserMessage(command))
             help_body = (
-                "Commands: /quit, /clear, /editor, /autopilot <task>, /autopilot-dashboard, /mcp, "
+                "Commands: /quit, /clear, /editor, /autopilot <task>, /cron <schedule>, "
+                "/autopilot-dashboard, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /theme, "
                 "/tokens, /resume, "
@@ -649,6 +650,18 @@ class _ExecutionMixin:
                 )
                 return
             await self._submit_autopilot_job(args)
+        elif cmd == "/cron" or cmd.startswith("/cron "):
+            args = command.strip()[len("/cron") :].strip()
+            if not args:
+                await self._mount_message(UserMessage(command))
+                await self._mount_message(
+                    AppMessage(
+                        "Usage: /cron <natural language schedule>\n"
+                        "Example: /cron in 1 hour remind me to check the deploy"
+                    )
+                )
+                return
+            await self._submit_cron_job(args, slash_input=command)
         elif cmd == "/autopilot-dashboard":
             await self._show_autopilot_dashboard()
         elif cmd == "/autopilot-toggle":

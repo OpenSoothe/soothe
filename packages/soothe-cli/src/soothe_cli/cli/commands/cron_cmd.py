@@ -4,6 +4,7 @@ Daemon-backed control surface: manage scheduled jobs via HTTP REST.
 Requires ``soothed start``.
 
 Commands:
+    soothe cron add <text>        # Add scheduled job (natural language)
     soothe cron list              # List scheduled jobs
     soothe cron show <job_id>     # Show job details
     soothe cron cancel <job_id>   # Cancel a job
@@ -21,19 +22,22 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from soothe_sdk.client import (
+    ensure_http_rest_available,
+    http_rest_url_from_config,
     is_daemon_live,
     websocket_url_from_config,
 )
 
 from soothe_cli.runtime import load_config
+from soothe_cli.runtime.cron_http import CronHttpClient
 
 console = Console()
 
 app = typer.Typer(help="Manage scheduled cron jobs — natural language scheduled tasks.")
 
 
-def _require_daemon_http() -> tuple[str, str]:
-    """Return WebSocket URL and HTTP base URL, or exit if daemon not running."""
+def _require_cron_client() -> CronHttpClient:
+    """Return a live cron HTTP client or exit."""
     cfg = load_config()
     ws_url = websocket_url_from_config(cfg)
     if not asyncio.run(is_daemon_live(ws_url, timeout=5.0)):
@@ -42,49 +46,73 @@ def _require_daemon_http() -> tuple[str, str]:
             err=True,
         )
         sys.exit(1)
-
-    # Derive HTTP URL from WebSocket URL
-    if ws_url.startswith("wss://"):
-        http_url = "https://" + ws_url[len("wss://") :]
-    elif ws_url.startswith("ws://"):
-        http_url = "http://" + ws_url[len("ws://") :]
-    else:
-        http_url = ws_url
-
-    return ws_url, http_url
-
-
-def _http_request(
-    base_url: str,
-    method: str,
-    path: str,
-    body: dict | None = None,
-    timeout: float = 30.0,
-) -> dict:
-    """Make HTTP request to daemon REST API."""
-    import json
-    import urllib.error
-    import urllib.request
-
-    url = f"{base_url.rstrip('/')}{path}"
-    data = None
-    headers = {"Accept": "application/json"}
-    if body is not None:
-        data = json.dumps(body).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    base_url = http_rest_url_from_config(cfg)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        typer.echo(f"Error: HTTP {exc.code} - {detail}", err=True)
+        ensure_http_rest_available(base_url)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)
-    except urllib.error.URLError as exc:
-        typer.echo(f"Error: Cannot reach daemon - {exc.reason}", err=True)
+    return CronHttpClient(base_url)
+
+
+def _format_next_run(next_run: str) -> str:
+    if not next_run:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(next_run.replace("Z", "+00:00"))
+        now = datetime.now(dt.tzinfo)
+        delta = dt - now
+        if delta.total_seconds() < 0:
+            return "due now"
+        if delta.total_seconds() < 3600:
+            return f"in {int(delta.total_seconds() / 60)}m"
+        if delta.total_seconds() < 86400:
+            return f"in {int(delta.total_seconds() / 3600)}h"
+        return f"in {int(delta.total_seconds() / 86400)}d"
+    except ValueError:
+        return next_run[:19]
+
+
+@app.command("add")
+def add_job(
+    text: Annotated[str, typer.Argument(help="Natural language schedule and task.")],
+    priority: Annotated[
+        int | None,
+        typer.Option("--priority", "-p", help="Job priority (0-100)."),
+    ] = None,
+) -> None:
+    """Add a scheduled cron job via natural language.
+
+    The daemon extracts schedule semantics via LLM and persists the job.
+
+    Example:
+        soothe cron add "in 1 hour remind me to check the deploy"
+        soothe cron add "every weekday at 9am send status report" --priority 70
+    """
+    client = _require_cron_client()
+    try:
+        result = client.add(text, priority=priority)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)
+
+    job = result.get("job") or {}
+    job_id = job.get("id", "?")
+    console.print(
+        Panel(
+            "\n".join(
+                [
+                    f"[bold]ID:[/bold] {job_id}",
+                    f"[bold]Description:[/bold] {job.get('description', '-')}",
+                    f"[bold]Schedule:[/bold] {job.get('schedule_kind', '?')} = {job.get('schedule_value', '?')}",
+                    f"[bold]Next Run:[/bold] [yellow]{str(job.get('next_run', ''))[:19]}[/yellow]",
+                    f"[bold]Status:[/bold] [green]{job.get('status', 'pending')}[/green]",
+                ]
+            ),
+            title="Scheduled Job Created",
+            border_style="green",
+        )
+    )
 
 
 @app.command("list")
@@ -106,18 +134,14 @@ def list_jobs(
         soothe cron list
         soothe cron list --status pending
     """
-    ws_url, http_url = _require_daemon_http()
+    client = _require_cron_client()
+    try:
+        result = client.list_jobs(status=status)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
-    params = {}
-    if status:
-        params["status"] = status
-
-    query = "&".join(f"{k}={v}" for k, v in params.items())
-    path = f"/api/v1/cron/jobs?{query}" if query else "/api/v1/cron/jobs"
-
-    result = _http_request(http_url, "GET", path)
     jobs = result.get("jobs", [])
-
     if not jobs:
         console.print("[info]No scheduled jobs found.[/info]")
         return
@@ -133,35 +157,11 @@ def list_jobs(
         desc = job.get("description", "")
         if len(desc) > 40:
             desc = desc[:37] + "..."
-
-        next_run = job.get("next_run", "")
-        if next_run:
-            # Parse ISO datetime and format relative
-            try:
-                dt = datetime.fromisoformat(next_run.replace("Z", "+00:00"))
-                now = datetime.now(dt.tzinfo)
-                delta = dt - now
-                if delta.total_seconds() < 0:
-                    next_run_str = "due now"
-                elif delta.total_seconds() < 3600:
-                    mins = int(delta.total_seconds() / 60)
-                    next_run_str = f"in {mins}m"
-                elif delta.total_seconds() < 86400:
-                    hrs = int(delta.total_seconds() / 3600)
-                    next_run_str = f"in {hrs}h"
-                else:
-                    days = int(delta.total_seconds() / 86400)
-                    next_run_str = f"in {days}d"
-            except ValueError:
-                next_run_str = next_run[:19]
-        else:
-            next_run_str = "-"
-
         table.add_row(
             job.get("id", "?")[:12],
             desc,
             job.get("status", "pending"),
-            next_run_str,
+            _format_next_run(job.get("next_run", "")),
             str(job.get("run_count", 0)),
         )
 
@@ -180,42 +180,34 @@ def show_job(
     Example:
         soothe cron show abc123def456
     """
-    ws_url, http_url = _require_daemon_http()
+    client = _require_cron_client()
+    try:
+        result = client.show(job_id)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
-    result = _http_request(http_url, "GET", f"/api/v1/cron/jobs/{job_id}")
     job = result.get("job")
-
     if not job:
         typer.echo(f"Error: Job '{job_id}' not found.", err=True)
         sys.exit(1)
 
-    # Build details panel
-    details = []
-    details.append(f"[bold]ID:[/bold] {job.get('id', '?')}")
-    details.append(f"[bold]Description:[/bold] {job.get('description', '-')}")
-    details.append(f"[bold]Status:[/bold] [green]{job.get('status', 'pending')}[/green]")
-    details.append(f"[bold]Priority:[/bold] {job.get('priority', 50)}")
-
-    # Schedule info
-    schedule_kind = job.get("schedule_kind", "once")
-    schedule_value = job.get("schedule_value", "")
-    details.append(f"[bold]Schedule:[/bold] {schedule_kind} = {schedule_value}")
-
+    details = [
+        f"[bold]ID:[/bold] {job.get('id', '?')}",
+        f"[bold]Description:[/bold] {job.get('description', '-')}",
+        f"[bold]Status:[/bold] [green]{job.get('status', 'pending')}[/green]",
+        f"[bold]Priority:[/bold] {job.get('priority', 50)}",
+        f"[bold]Schedule:[/bold] {job.get('schedule_kind', 'once')} = {job.get('schedule_value', '')}",
+    ]
     if job.get("end_condition"):
         details.append(f"[bold]End Condition:[/bold] {job['end_condition']}")
-
-    # Timestamps
     next_run = job.get("next_run", "")
     if next_run:
         details.append(f"[bold]Next Run:[/bold] [yellow]{next_run[:19]}[/yellow]")
-
     last_run = job.get("last_run")
     if last_run:
         details.append(f"[bold]Last Run:[/bold] {last_run[:19]}")
-
     details.append(f"[bold]Run Count:[/bold] {job.get('run_count', 0)}")
-
-    # Created/Updated
     created = job.get("created_at", "")
     if created:
         details.append(f"[bold]Created:[/bold] [dim]{created[:19]}[/dim]")
@@ -234,9 +226,12 @@ def cancel_job(
     Example:
         soothe cron cancel abc123def456
     """
-    ws_url, http_url = _require_daemon_http()
-
-    result = _http_request(http_url, "DELETE", f"/api/v1/cron/jobs/{job_id}")
+    client = _require_cron_client()
+    try:
+        result = client.cancel(job_id)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     if result.get("cancelled"):
         console.print(f"[success]Cancelled job: {job_id[:12]}[/success]")
@@ -247,6 +242,7 @@ def cancel_job(
 
 __all__ = [
     "app",
+    "add_job",
     "list_jobs",
     "show_job",
     "cancel_job",

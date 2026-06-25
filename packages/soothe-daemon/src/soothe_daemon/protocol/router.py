@@ -2131,7 +2131,7 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._goal_engine
+        goal_engine = service._ce
 
         # Check goal exists and is not already suspended
         goal = await goal_engine.get_goal(job_id)
@@ -2227,7 +2227,7 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._goal_engine
+        goal_engine = service._ce
 
         # Check goal exists and is suspended
         goal = await goal_engine.get_goal(job_id)
@@ -2449,7 +2449,7 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._goal_engine
+        goal_engine = service._ce
 
         # Determine target goal
         target_id = goal_id if goal_id else job_id

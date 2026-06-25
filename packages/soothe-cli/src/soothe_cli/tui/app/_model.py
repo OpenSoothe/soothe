@@ -385,6 +385,64 @@ class _ModelMixin:
         else:
             await self._mount_message(ErrorMessage("No goal_id returned from daemon"))
 
+    async def _submit_cron_job(self, text: str, *, slash_input: str | None = None) -> None:
+        """Submit a cron job via HTTP REST (like CLI ``soothe cron add``).
+
+        Args:
+            text: Natural language schedule and task description.
+            slash_input: Original slash command for chat display.
+        """
+        from soothe_sdk.client import (
+            ensure_http_rest_available,
+            http_rest_url_from_config,
+            is_daemon_live,
+            websocket_url_from_config,
+        )
+
+        from soothe_cli.runtime import load_config
+        from soothe_cli.runtime.cron_http import CronHttpClient
+        from soothe_cli.tui.widgets.messages import AppMessage, ErrorMessage, UserMessage
+
+        display = slash_input or f"/cron {text}"
+        await self._mount_message(UserMessage(display))
+
+        cfg = load_config()
+        ws_url = websocket_url_from_config(cfg)
+        if not await is_daemon_live(ws_url, timeout=5.0):
+            await self._mount_message(
+                ErrorMessage("Daemon not running. Start with 'soothed start'.")
+            )
+            return
+
+        base_url = http_rest_url_from_config(cfg)
+        try:
+            ensure_http_rest_available(base_url)
+            client = CronHttpClient(base_url)
+            result = client.add(text)
+        except RuntimeError as exc:
+            await self._mount_message(ErrorMessage(str(exc)))
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Cron submit failed")
+            await self._mount_message(ErrorMessage(f"Failed to submit cron job: {exc}"))
+            return
+
+        job = result.get("job") or {}
+        job_id = job.get("id", "")
+        if not job_id:
+            await self._mount_message(ErrorMessage("No job id returned from daemon"))
+            return
+
+        next_run = str(job.get("next_run", ""))[:19]
+        self.notify(f"Cron job scheduled: {job_id[:8]}", timeout=5)
+        await self._mount_message(
+            AppMessage(
+                f"Scheduled job {job_id[:12]}: {job.get('description', text)}\n"
+                f"Next run: {next_run or 'unknown'}"
+            )
+        )
+        logger.info("Submitted cron job %s: %s", job_id, text[:50])
+
     async def _show_loop_selector(self) -> None:
         """Show interactive loop selector as a modal screen."""
         from functools import partial

@@ -354,7 +354,7 @@ class HttpRestChannel(Channel):
             so the scheduler can pick it up for execution.
             """
             service = self._require_autopilot_service()
-            goal_engine = service._goal_engine
+            goal_engine = service._ce
 
             # Check goal exists
             goal = await goal_engine.get_goal(goal_id)
@@ -399,6 +399,8 @@ class HttpRestChannel(Channel):
 
     def _setup_cron_routes(self) -> None:
         """Setup cron REST API routes (RFC-229)."""
+        from soothe.foundation.cron import ExtractionError
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
 
         @self._app.get("/api/v1/cron/jobs")
         async def cron_list_jobs(status: str | None = None) -> dict[str, Any]:
@@ -408,20 +410,37 @@ class HttpRestChannel(Channel):
                 status: Optional status filter (pending, running, completed, failed, cancelled).
             """
             service = self._require_cron_service()
-            # Default user_id for HTTP API (no per-user isolation in basic mode)
-            user_id = "http_api"
-            jobs = await service.list_jobs(user_id, status=status)
+            jobs = await service.list_jobs(DEFAULT_CRON_USER_ID, status=status)
             return {
                 "jobs": [j.to_dict() for j in jobs],
                 "source": "cron_service",
             }
 
+        @self._app.post("/api/v1/cron/jobs")
+        async def cron_create_job(request: Request) -> dict[str, Any]:
+            """Submit a scheduled cron job via natural language."""
+            body = await request.json()
+            text = str(body.get("text", "")).strip()
+            priority_raw = body.get("priority")
+            if not text:
+                raise HTTPException(status_code=400, detail="text is required")
+
+            service = self._require_cron_service()
+            priority = int(priority_raw) if priority_raw is not None else None
+            try:
+                job = await service.add_job(text, DEFAULT_CRON_USER_ID, priority=priority)
+            except ExtractionError as exc:
+                raise HTTPException(status_code=400, detail=exc.message) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+            return {"job": job.to_dict(), "source": "cron_service"}
+
         @self._app.get("/api/v1/cron/jobs/{job_id}")
         async def cron_get_job(job_id: str) -> dict[str, Any]:
             """Get details for a specific cron job."""
             service = self._require_cron_service()
-            user_id = "http_api"
-            job = await service.show_job(job_id, user_id)
+            job = await service.show_job(job_id, DEFAULT_CRON_USER_ID)
             if job:
                 return {"job": job.to_dict(), "source": "cron_service"}
             raise HTTPException(status_code=404, detail="Job not found")
@@ -430,8 +449,7 @@ class HttpRestChannel(Channel):
         async def cron_cancel_job(job_id: str) -> dict[str, Any]:
             """Cancel a scheduled cron job."""
             service = self._require_cron_service()
-            user_id = "http_api"
-            cancelled = await service.cancel_job(job_id, user_id)
+            cancelled = await service.cancel_job(job_id, DEFAULT_CRON_USER_ID)
             if cancelled:
                 return {"cancelled": True, "job_id": job_id}
             raise HTTPException(status_code=404, detail="Job not found or cannot be cancelled")
