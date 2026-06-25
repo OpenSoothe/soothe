@@ -2860,13 +2860,52 @@ class CognitionStepMessage(Vertical):
         self._refresh_tools_display()
 
     def _sync_running_status_line(self) -> None:
-        """Refresh status text when tool stats change without repainting tool rows."""
+        """Refresh status text when tool stats change without repainting tool rows.
+
+        This method is called when tool calls arrive during a running step,
+        so it updates the status line immediately (without visibility check)
+        to show the tool count in real-time.
+        """
         if self._status == "running":
-            self._update_running_animation()
+            self._sync_running_status_text()
         elif self._status == "queued":
             self._refresh_queued_display()
         elif self._status == "pending":
             self._refresh_pending_display()
+
+    def _sync_running_status_text(self) -> None:
+        """Update running status line text immediately (no visibility check).
+
+        Called when tool stats change during running state to show tool count
+        in real-time, bypassing the animation visibility check that would
+        prevent updates for newly-mounted or off-screen widgets.
+        """
+        if self._status != "running" or self._status_widget is None:
+            return
+        frames = get_glyphs().spinner_frames
+        frame = frames[self._spinner_position]
+        elapsed = ""
+        if self._start_time is not None:
+            elapsed_secs = int(time() - self._start_time)
+            elapsed = f" ({format_duration(float(elapsed_secs))})"
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        gutter = f"{get_glyphs().output_prefix} "
+        stats_suffix = self._stats_title_suffix()
+        token_suffix = self._token_budget_suffix()
+        # IG-504: Show retry count in running status when retries are happening
+        retry_suffix = ""
+        if self._retry_attempt > 0 and self._max_retry_attempts > 0:
+            retry_suffix = f" ({self._retry_attempt}/{self._max_retry_attempts} attempts)"
+        head = f"{gutter}{frame} Running{retry_suffix}...{elapsed}"
+        tail = f"{stats_suffix}{token_suffix}"
+        clear_widget_text_selection(self._status_widget)
+        parts: list[object] = [Content.styled(head, colors.warning)]
+        if tail:
+            parts.append(Content.styled(tail, colors.cognition))
+        self._status_widget.update(Content.assemble(*parts))
 
     def _refresh_pending_display(self) -> None:
         """Show waiting state for planned steps that are not executing yet."""
@@ -2945,37 +2984,27 @@ class CognitionStepMessage(Vertical):
         self._retry_attempt = attempt
         self._max_retry_attempts = max_attempts
         self._retry_error_type = error_type
-        # Trigger immediate refresh of running animation
+        # Trigger immediate refresh of running status (bypass visibility check)
         if self._status == "running":
-            self._update_running_animation()
+            self._sync_running_status_text()
 
     def _update_running_animation(self) -> None:
+        """Animation timer callback: advance spinner and update status line.
+
+        The visibility check here is for efficiency - skipping expensive
+        re-renders when the widget is off-screen. For immediate tool-stats
+        updates (called when tool calls arrive), use `_sync_running_status_text`
+        which bypasses this check.
+        """
         if self._status != "running" or self._status_widget is None:
             return
         if not _is_widget_animation_visible(self):
             return
+        # Advance spinner position for animation effect
         frames = get_glyphs().spinner_frames
-        frame = frames[self._spinner_position]
         self._spinner_position = (self._spinner_position + 1) % len(frames)
-        elapsed = ""
-        if self._start_time is not None:
-            elapsed_secs = int(time() - self._start_time)
-            elapsed = f" ({format_duration(float(elapsed_secs))})"
-        colors = theme.get_theme_colors(self)
-        gutter = f"{get_glyphs().output_prefix} "
-        stats_suffix = self._stats_title_suffix()
-        token_suffix = self._token_budget_suffix()
-        # IG-504: Show retry count in running status when retries are happening
-        retry_suffix = ""
-        if self._retry_attempt > 0 and self._max_retry_attempts > 0:
-            retry_suffix = f" ({self._retry_attempt}/{self._max_retry_attempts} attempts)"
-        head = f"{gutter}{frame} Running{retry_suffix}...{elapsed}"
-        tail = f"{stats_suffix}{token_suffix}"
-        clear_widget_text_selection(self._status_widget)
-        parts: list[object] = [Content.styled(head, colors.warning)]
-        if tail:
-            parts.append(Content.styled(tail, colors.cognition))
-        self._status_widget.update(Content.assemble(*parts))
+        # Update status line with current stats
+        self._sync_running_status_text()
         if self._has_active_task_branch_animation():
             self._refresh_task_activity_display()
 
