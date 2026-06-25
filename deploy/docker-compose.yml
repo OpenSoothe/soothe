@@ -71,7 +71,7 @@ services:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.prod.yml:/app/config.yml:ro
       - ./logs:/var/lib/soothe/logs
-      - ${SOOTHE_WORKSPACE_HOST_ROOT:-./workspaces}:/var/lib/soothe/workspaces
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-/tmp/soothe-workspaces}:/var/lib/soothe/workspaces
     deploy:
       resources:
         limits:
