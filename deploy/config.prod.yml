@@ -6,9 +6,7 @@
 #
 # Required env vars (set in .env):
 #   DASHSCOPE_API_KEY        - DashScope provider credential
-#   DASHSCOPE_CP_API_KEY     - Coding-Plan provider credential
 #   DASHSCOPE_BASE_URL       - DashScope API base URL
-#   DASHSCOPE_CP_BASE_URL    - Coding-Plan API base URL
 
 # =============================================================================
 # LLM Providers
@@ -21,27 +19,19 @@ providers:
     api_base_url: "${DASHSCOPE_BASE_URL}"
     api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - multimodal-embedding-v1  # Embedding model
-
-  # Coding-Plan - Alibaba's coding-focused endpoint
-  # Models: GLM, DeepSeek, Qwen coding variants
-  - name: coding-plan
-    provider_type: openai
-    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
-    api_key: "${DASHSCOPE_CP_API_KEY}"
-    models:
-      - glm-5                 # Zhipu AI GLM model
+      - glm-5.2               # Zhipu AI GLM model
       - kimi-k2.5             # Moonshot AI model
       - MiniMax-M2.5          # Alternative reasoning
+      - multimodal-embedding-v1  # Embedding model
 
 # =============================================================================
 # Model Router
 # =============================================================================
 router:
-  default: "coding-plan:glm-5"
-  fast: "coding-plan:kimi-k2.5"
-  think: "coding-plan:glm-5"
-  image: "coding-plan:kimi-k2.5"
+  default: "dashscope:glm-5.2"
+  fast: "dashscope:kimi-k2.5"
+  think: "dashscope:glm-5.2"
+  image: "dashscope:kimi-k2.5"
   embedding: "dashscope:multimodal-embedding-v1"
 
 # =============================================================================
