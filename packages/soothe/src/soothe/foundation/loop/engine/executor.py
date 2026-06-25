@@ -444,6 +444,8 @@ class Executor:
                 subgraphs=True,
                 durability="exit",
             )
+            # IG-506: LLM timeout handled by LLMRateLimitMiddleware, not chunk timeout.
+            # await_next_graph_stream_chunk only does cooperative cancellation checks.
             try:
                 while True:
                     try:
@@ -2267,6 +2269,7 @@ class Executor:
         if "invalid_parameter_error" in error_str or "Range of input length should be" in error_str:
             return "Input exceeded model context limit (too large)"
 
+        # IG-506: Check for plain TimeoutError from graph_interrupt (middleware disabled case).
         # Check for timeout BEFORE rate_limit check to avoid false positives.
         # TimeoutError messages may contain "llm_rate_limit middleware" suggestion text
         # which would incorrectly trigger the rate_limit detection below.
