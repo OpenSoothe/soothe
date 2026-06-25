@@ -5,11 +5,19 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from soothe.foundation.cron.models import (
+    DEFAULT_CRON_USER_ID,
     CronJob,
     ExtractionResult,
     JobStatus,
     ScheduleKind,
 )
+
+
+class TestDefaultCronUserId:
+    """Basic-mode owner id shared by HTTP REST and RPC."""
+
+    def test_default_user_id(self) -> None:
+        assert DEFAULT_CRON_USER_ID == "http_api"
 
 
 class TestScheduleKind:

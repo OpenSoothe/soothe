@@ -10,6 +10,9 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+# Single-owner id for basic mode (no per-user isolation). Used by HTTP REST and RPC.
+DEFAULT_CRON_USER_ID = "http_api"
+
 
 class ScheduleKind(StrEnum):
     """Schedule kind extracted from natural language.

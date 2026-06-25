@@ -77,14 +77,14 @@ async def daemon_with_autopilot_ws(tmp_path: Path):
     )
 
     # Mock GoalEngine methods
-    daemon._autopilot_service._goal_engine.suspend_goal = AsyncMock(
+    daemon._autopilot_service._ce.suspend_goal = AsyncMock(
         return_value=_FakeGoal(goal_id="abc12345", status="suspended")
     )
-    daemon._autopilot_service._goal_engine.reactivate_goal = AsyncMock(
+    daemon._autopilot_service._ce.reactivate_goal = AsyncMock(
         return_value=_FakeGoal(goal_id="abc12345", status="pending")
     )
-    daemon._autopilot_service._goal_engine.absorb_guidance = AsyncMock(return_value=True)
-    daemon._autopilot_service._goal_engine.get_goal = AsyncMock(return_value=test_goal)
+    daemon._autopilot_service._ce.absorb_guidance = AsyncMock(return_value=True)
+    daemon._autopilot_service._ce.get_goal = AsyncMock(return_value=test_goal)
 
     await asyncio.sleep(0.5)
 
@@ -187,7 +187,7 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         # Update goal status to active for pause test (handler uses goal_engine.get_goal)
         active_goal = _FakeGoal(goal_id="abc12345", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
-        daemon._autopilot_service._goal_engine.get_goal.return_value = active_goal
+        daemon._autopilot_service._ce.get_goal.return_value = active_goal
 
         # Send job_pause
         await ws.send(
@@ -210,7 +210,7 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         # Update goal status to suspended for resume test (handler uses goal_engine.get_goal)
         suspended_goal = _FakeGoal(goal_id="abc12345", status="suspended")
         daemon._autopilot_service.get_goal.return_value = suspended_goal
-        daemon._autopilot_service._goal_engine.get_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
 
         # Send job_resume
         await ws.send(
@@ -231,8 +231,8 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         assert msg["status"] == "pending"
 
         # Verify GoalEngine methods called
-        daemon._autopilot_service._goal_engine.suspend_goal.assert_awaited()
-        daemon._autopilot_service._goal_engine.reactivate_goal.assert_awaited()
+        daemon._autopilot_service._ce.suspend_goal.assert_awaited()
+        daemon._autopilot_service._ce.reactivate_goal.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -338,7 +338,7 @@ async def test_job_guidance_via_websocket(daemon_with_autopilot_ws) -> None:
         assert msg["absorbed"] is True
 
         # Verify GoalEngine.absorb_guidance was called
-        daemon._autopilot_service._goal_engine.absorb_guidance.assert_awaited()
+        daemon._autopilot_service._ce.absorb_guidance.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -513,7 +513,7 @@ async def test_job_sequence_via_websocket(daemon_with_autopilot_ws) -> None:
         # 3. Pause job (update status to active first)
         active_goal = _FakeGoal(goal_id=job_id, status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
-        daemon._autopilot_service._goal_engine.get_goal.return_value = active_goal
+        daemon._autopilot_service._ce.get_goal.return_value = active_goal
 
         await ws.send(
             json.dumps(
@@ -532,7 +532,7 @@ async def test_job_sequence_via_websocket(daemon_with_autopilot_ws) -> None:
         # 4. Resume job (update status to suspended)
         suspended_goal = _FakeGoal(goal_id=job_id, status="suspended")
         daemon._autopilot_service.get_goal.return_value = suspended_goal
-        daemon._autopilot_service._goal_engine.get_goal.return_value = suspended_goal
+        daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
 
         await ws.send(
             json.dumps(
@@ -565,6 +565,6 @@ async def test_job_sequence_via_websocket(daemon_with_autopilot_ws) -> None:
 
         # Verify all operations completed
         daemon._autopilot_service.submit_task.assert_awaited()
-        daemon._autopilot_service._goal_engine.suspend_goal.assert_awaited()
-        daemon._autopilot_service._goal_engine.reactivate_goal.assert_awaited()
+        daemon._autopilot_service._ce.suspend_goal.assert_awaited()
+        daemon._autopilot_service._ce.reactivate_goal.assert_awaited()
         daemon._autopilot_service.cancel_goal.assert_awaited()
