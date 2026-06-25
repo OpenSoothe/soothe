@@ -77,8 +77,7 @@ def test_task_activity_tree_shows_name_desc_and_child_stats() -> None:
 
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan the repository)" in text
-    assert "Grep(2)" in text
-    assert "Glob(1)" in text
+    assert "· 3 tools" in text
     assert "○ ○" not in text
 
 
@@ -94,7 +93,7 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
 
     text = _plain(card._step_task_activity_content())
     assert "Tacitus(find docs)" in text
-    assert "ReadFile(1)" in text
+    assert "· 1 tool" in text
 
 
 def test_append_subagent_activity_attaches_to_task_branch() -> None:
@@ -138,7 +137,7 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
     text = _plain(card._step_task_activity_content())
     assert "Grep(x)" in text
     assert text.index("Grep(x)") < text.index("Running...")
-    assert "· Grep(1)" in text
+    assert "· 1 tool" in text
 
 
 def test_task_branch_child_line_with_empty_args_has_no_empty_parentheses() -> None:
@@ -305,7 +304,7 @@ def test_child_stats_link_via_normalized_parent_id() -> None:
         parent_tool_call_id="JIY_01:s:task:0",
     )
     text = _plain(card._step_task_activity_content())
-    assert "Glob(1)" in text
+    assert "· 1 tool" in text
 
 
 def test_successful_step_marks_unfinished_task_tools_done() -> None:
@@ -336,7 +335,7 @@ def test_successful_step_marks_unfinished_task_tools_done() -> None:
     assert "Skipped" not in text
     assert "Pending" not in text
     assert "Done" in text
-    assert "ReadFile(1)" in text
+    assert "· 2 tools" in text
 
 
 def test_failed_step_still_marks_unfinished_task_tools_skipped() -> None:
@@ -377,7 +376,7 @@ def test_status_line_still_excludes_nested_task_tools() -> None:
         parent_tool_call_id="ABC_01:s:task:0",
     )
     suffix = card._stats_title_suffix()
-    assert "Grep(1)" in suffix
+    assert suffix == " · 1 tool, 1 task"
     assert "Glob" not in suffix
 
 
@@ -463,4 +462,4 @@ def test_combined_task_and_main_tools() -> None:
     assert "Glob(t0)" not in text
     assert "ReadFile" in text
     assert text.index("Explore(scan repo)") < text.index("ReadFile")
-    assert "Glob(1)" in text or "Glob(6)" in text or "Glob(5)" in text
+    assert "· 6 tools" in text

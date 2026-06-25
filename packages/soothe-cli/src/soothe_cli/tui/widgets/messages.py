@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.ux.task_namespace import (
     _step_id_from_unified_fragment,
     is_inner_subgraph_task_tool_id,
@@ -29,7 +28,6 @@ from textual.selection import Selection
 from textual.strip import Strip
 from textual.widgets import Input, Static
 
-from soothe_cli.runtime.parse.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.runtime.presentation.duration_format import format_duration, format_duration_ms
 from soothe_cli.tui import theme
 from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
@@ -113,9 +111,7 @@ def _code_theme_for_app(widget_or_app: object | None = None) -> str:
 _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 """Collapsed step/task activity preview shows this many rows (IG-402)."""
 
-_MAX_STEP_STAT_TOOL_KINDS = 4
 _MAX_TASK_DELEGATION_DESC_CHARS = 80
-"""Max distinct tool display names in the running-line stats suffix before ``+N more``."""
 
 # IG-420: TUI refresh throttling - minimum interval between widget refreshes
 _DEFAULT_TUI_REFRESH_INTERVAL_MS = 800
@@ -1191,9 +1187,10 @@ class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
     Header is the step description only. Task delegations render in a branch panel
-    (``Name(desc)`` plus the latest tool activity lines and nested stats). Per-tool-kind
-    counts of direct main-agent tools appear on the footer status line via
-    :meth:`_stats_title_suffix` (e.g. ``Glob(10)``). The status line is always the last
+    (``Name(desc)`` plus the latest tool activity lines and nested stats). Footer and
+    task-branch status lines show total tool-call counts via :meth:`_stats_title_suffix`
+    (e.g. `` · 3 tools, 1 task`` on the step; `` · 6 tools`` under a delegation). The
+    status line is always the last
     body line (running, pending, completed, failed). Optional full tool lists use
     ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. When full tool rows are enabled and exceed
     ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the tool list; otherwise
@@ -1311,8 +1308,6 @@ class CognitionStepMessage(Vertical):
         self._deferred_interrupted: str | None = None
         self._rows: list[_StepToolRow] = []
         self._row_index: dict[str, _StepToolRow] = {}
-        self._stats_order: list[str] = []
-        self._stats_counts: dict[str, int] = {}
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
         self._subagent_notes_by_task: dict[str, list[str]] = {}
@@ -1607,10 +1602,14 @@ class CognitionStepMessage(Vertical):
         Keep these rows visible on the step card so users still see tool activity.
         """
         task_parent_ids: set[str] = set()
+        task_indices: set[int] = set()
         for task_row in self._iter_task_delegation_rows():
             key = self._task_delegation_dedupe_key(task_row)
             if key:
                 task_parent_ids.add(key)
+            task_idx = self._task_idx_from_delegation_row(task_row)
+            if task_idx is not None:
+                task_indices.add(task_idx)
 
         out: list[_StepToolRow] = []
         for row in self._rows:
@@ -1625,7 +1624,7 @@ class CognitionStepMessage(Vertical):
                 continue
             if is_step_level_task_tool_id(tcid) or is_inner_subgraph_task_tool_id(tcid):
                 continue
-            parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
+            parsed_sid, type_code, idx, _ = parse_unified_tool_call_id(tcid)
             if parsed_sid and parsed_sid != self._step_id:
                 continue
 
@@ -1634,8 +1633,14 @@ class CognitionStepMessage(Vertical):
                 parent_id = normalize_step_task_tool_call_id(self._step_id, parent_id)
             has_visible_parent = bool(parent_id and parent_id in task_parent_ids)
 
-            # Keep unresolved/unparented task-subgraph tool rows visible.
-            if type_code == "t" and not has_visible_parent:
+            # Check if tool would be matched by _child_rows_for_task via unified ID task_idx.
+            # Tools with {step}:t{n}:... are matched by task delegation with index n,
+            # even without an explicit parent_tool_call_id.
+            matched_by_task_idx = type_code == "t" and idx is not None and idx in task_indices
+
+            # Keep unresolved/unparented task-subgraph tool rows visible,
+            # but exclude those matched by task_idx (to avoid duplication with child_rows).
+            if type_code == "t" and not has_visible_parent and not matched_by_task_idx:
                 out.append(row)
         return out
 
@@ -1947,38 +1952,39 @@ class CognitionStepMessage(Vertical):
         self._status_widget.update(Content.assemble(*parts))
         self._status_widget.display = True
 
-    def _tool_stats_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
-        """Per-tool-kind counts for a set of tool rows (e.g. nested task children).
+    @staticmethod
+    def _format_tool_count_label(count: int, *, singular: str, plural: str) -> str:
+        if count <= 0:
+            return ""
+        word = singular if count == 1 else plural
+        return f"{count} {word}"
 
-        Sorted by call count descending (most calls first). Shows ``+N more`` for
-        additional tool kinds beyond the display limit.
-        """
-        ids_by_display: dict[str, set[str]] = {}
+    @staticmethod
+    def _count_distinct_tool_call_ids(rows: list[_StepToolRow]) -> int:
+        ids: set[str] = set()
         for row in rows:
             tcid = str(row.tool_call_id).strip()
-            if not tcid:
-                continue
-            display = get_tool_display_name(_normalize_tool_name_for_arg_map(row.tool_name or ""))
-            if display not in ids_by_display:
-                ids_by_display[display] = set()
-            ids_by_display[display].add(tcid)
-        if not ids_by_display:
-            return ""
-        # Sort by count descending (most calls first)
-        sorted_kinds = sorted(
-            ids_by_display.keys(), key=lambda k: len(ids_by_display[k]), reverse=True
+            if tcid:
+                ids.add(tcid)
+        return len(ids)
+
+    def _step_main_tool_count(self) -> int:
+        """Distinct main-agent tool calls on this step (excludes task delegations and subgraph)."""
+        return self._count_distinct_tool_call_ids(
+            [row for row in self._rows if self._row_counts_for_step_status_line(row)]
         )
-        parts: list[str] = []
-        for name in sorted_kinds[:_MAX_STEP_STAT_TOOL_KINDS]:
-            parts.append(f"{name}({len(ids_by_display[name])})")
-        text = ", ".join(parts)
-        extra = len(sorted_kinds) - _MAX_STEP_STAT_TOOL_KINDS
-        if extra > 0:
-            text += f" +{extra} more"
-        return text
+
+    def _step_task_delegation_count(self) -> int:
+        """Step-level task delegation rows (``{step}:s:task:…``)."""
+        return len(self._iter_task_delegation_rows())
+
+    def _tool_stats_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
+        """Total tool-call count for a set of rows (e.g. nested task children)."""
+        count = self._count_distinct_tool_call_ids(rows)
+        return self._format_tool_count_label(count, singular="tool", plural="tools")
 
     def _tool_stats_title_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
-        """`` · Name(n), …`` suffix for task branches (matches step footer running line)."""
+        """`` · N tools`` suffix for task branches (matches step footer running line)."""
         bare = self._tool_stats_suffix_for_rows(rows)
         return f" · {bare}" if bare else ""
 
@@ -2203,8 +2209,8 @@ class CognitionStepMessage(Vertical):
         return True
 
     def _row_counts_for_step_status_line(self, row: _StepToolRow) -> bool:
-        """True for main-agent tools on this step (excludes task rows and nested subgraph tools)."""
-        if row.is_task_row or row.parent_tool_call_id:
+        """True for main-agent tools on this step (excludes task rows and all subgraph tools)."""
+        if row.is_task_row:
             return False
         if not self._row_belongs_to_step(row):
             return False
@@ -2213,48 +2219,36 @@ class CognitionStepMessage(Vertical):
             return False
         if is_step_level_task_tool_id(tcid):
             return False
+        # Exclude all subgraph tools (type_code "t") from main-agent stats.
+        # Orphan subgraph tools are handled separately in _orphan_subgraph_tool_rows_for_preview
+        # to avoid duplication between main_preview and orphan_preview.
         _, type_code, _, _ = parse_unified_tool_call_id(tcid)
         if type_code == "t":
+            return False
+        # Exclude tools with a known parent delegation (nested subgraph tools).
+        if row.parent_tool_call_id:
             return False
         return True
 
     def _rebuild_tool_stats(self) -> None:
-        """Recompute per-tool display counts for the step status line (direct tools only).
-
-        Sorted by count descending (most calls first).
-        """
-        ids_by_display: dict[str, set[str]] = {}
-        for row in self._rows:
-            if not self._row_counts_for_step_status_line(row):
-                continue
-            tcid = str(row.tool_call_id).strip()
-            if not tcid:
-                continue
-            display = get_tool_display_name(_normalize_tool_name_for_arg_map(row.tool_name or ""))
-            if display not in ids_by_display:
-                ids_by_display[display] = set()
-            ids_by_display[display].add(tcid)
-        # Sort by count descending (most calls first)
-        self._stats_order = sorted(
-            ids_by_display.keys(), key=lambda k: len(ids_by_display[k]), reverse=True
-        )
-        self._stats_counts = {name: len(ids_by_display[name]) for name in self._stats_order}
+        """Refresh status lines after tool row changes."""
         self._refresh_task_activity_display()
 
     def _stats_title_suffix(self) -> str:
-        if not self._stats_order:
-            return ""
+        """Step status suffix: main-agent tool totals plus task delegation totals."""
         parts: list[str] = []
-        for name in self._stats_order[:_MAX_STEP_STAT_TOOL_KINDS]:
-            parts.append(f"{name}({self._stats_counts.get(name, 0)})")
-        text = ", ".join(parts)
-        extra = len(self._stats_order) - _MAX_STEP_STAT_TOOL_KINDS
-        if extra > 0:
-            text += f" +{extra} more"
-        return f" · {text}"
+        main_count = self._step_main_tool_count()
+        task_count = self._step_task_delegation_count()
+        if main_count:
+            parts.append(self._format_tool_count_label(main_count, singular="tool", plural="tools"))
+        if task_count:
+            parts.append(self._format_tool_count_label(task_count, singular="task", plural="tasks"))
+        if not parts:
+            return ""
+        return f" · {', '.join(parts)}"
 
     def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
-        """Per-tool breakdown for status lines; total-only when rows were not tracked."""
+        """Tracked main/task totals for status lines; server total when rows were not tracked."""
         suffix = self._stats_title_suffix()
         if suffix:
             return suffix
@@ -2832,8 +2826,6 @@ class CognitionStepMessage(Vertical):
         """Restore tool rows from :meth:`snapshot_tool_rows` output."""
         self._rows = []
         self._row_index = {}
-        self._stats_order = []
-        self._stats_counts = {}
         for raw in rows or []:
             tcid = str(raw.get("id", "")).strip()
             if not tcid:

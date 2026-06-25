@@ -91,7 +91,7 @@ async def test_wire_update_registers_main_step_tool_with_empty_args() -> None:
     )
     assert handled is True
     assert card.has_tool_call_row("BCO_01:s:read_file:0")
-    assert "ReadFile(1)" in card._stats_title_suffix()
+    assert card._stats_title_suffix() == " · 1 tool"
 
 
 @pytest.mark.asyncio
