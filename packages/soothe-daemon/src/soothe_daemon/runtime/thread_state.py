@@ -3,6 +3,8 @@
 Registry keys are LangGraph / durability **checkpoint ids** (historically called
 ``thread_id`` in code). **Client routing** uses **``loop_id``**; this module maps
 checkpoint ↔ loop via ``set_thread_loop`` / ``get_thread_loop``.
+
+RFC-307: Identity context (user_id, aksk_id) is stored here for workspace isolation.
 """
 
 from __future__ import annotations
@@ -16,7 +18,11 @@ from typing import Any
 
 @dataclass
 class ThreadState:
-    """Mutable state for a single LangGraph checkpoint row (or draft)."""
+    """Mutable state for a single LangGraph checkpoint row (or draft).
+
+    RFC-307: user_id and aksk_id populated by IdentityMiddleware for
+    workspace isolation based on authenticated identity.
+    """
 
     thread_id: str
     workspace: Path | None = None
@@ -25,6 +31,11 @@ class ThreadState:
     query_running: bool = False
     query_task: asyncio.Task | None = None
     last_activity: datetime | None = None
+    # Identity context (RFC-307)
+    user_id: str | None = None
+    """Authenticated user_id from JWT token or external identity mapping."""
+    aksk_id: str | None = None
+    """AKSK ID that issued the token (for audit tracking)."""
 
 
 class ThreadStateRegistry:
@@ -152,3 +163,54 @@ class ThreadStateRegistry:
             if tid in removed:
                 self._client_active_thread.pop(cid, None)
         return removed
+
+    # -----------------------------------------------------------------------
+    # Identity Context (RFC-307)
+    # -----------------------------------------------------------------------
+
+    def set_user_id(
+        self,
+        thread_id: str,
+        user_id: str | None,
+        aksk_id: str | None = None,
+    ) -> None:
+        """Set user context from IdentityMiddleware.
+
+        RFC-307 §Middleware Integration: user_id populated for workspace isolation.
+
+        Args:
+            thread_id: Thread identifier.
+            user_id: Authenticated user_id (from JWT or external mapping).
+            aksk_id: Optional AKSK ID for audit tracking.
+        """
+        st = self.ensure(thread_id)
+        st.user_id = user_id
+        st.aksk_id = aksk_id
+
+    def get_user_id(self, thread_id: str) -> str | None:
+        """Return user_id for *thread_id*.
+
+        RFC-307 §Middleware Integration.
+
+        Args:
+            thread_id: Thread identifier.
+
+        Returns:
+            user_id if set, None otherwise.
+        """
+        st = self.get(thread_id)
+        return st.user_id if st else None
+
+    def get_aksk_id(self, thread_id: str) -> str | None:
+        """Return aksk_id for *thread_id*.
+
+        RFC-307 §Middleware Integration.
+
+        Args:
+            thread_id: Thread identifier.
+
+        Returns:
+            aksk_id if set, None otherwise.
+        """
+        st = self.get(thread_id)
+        return st.aksk_id if st else None

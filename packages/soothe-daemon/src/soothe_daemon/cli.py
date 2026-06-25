@@ -36,6 +36,11 @@ app = typer.Typer(
     help="Soothe daemon management - start/stop/status/doctor/warmup",
 )
 
+# Register identity sub-app (RFC-307)
+from soothe_daemon.identity_cli import app as identity_app
+
+app.add_typer(identity_app, name="identity")
+
 
 # Fast status check helpers - avoid importing SootheDaemon (5+ second import chain)
 # Port comes from daemon.yml (SootheDaemonConfig), not env vars.

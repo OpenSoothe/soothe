@@ -1,6 +1,7 @@
 """Soothe middleware modules.
 
 This package provides middleware implementations:
+- IdentityMiddleware: JWT token validation / external identity resolution (RFC-307)
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
 - SystemPromptMiddleware: Dynamic prompt adjustment based on classification
 - LLMRateLimitMiddleware: Rate limiting at LLM level, not thread level
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from soothe.middleware.execution_hints import ExecutionHintsMiddleware
     from soothe.middleware.file_lock import FileLockMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
+    from soothe.middleware.identity import IdentityMiddleware
     from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
     from soothe.middleware.mcp_tool_search import MCPToolSearchMiddleware
     from soothe.middleware.model_call_profiler import (
@@ -50,6 +52,7 @@ __all__ = [
     "CodeInterpreterMiddleware",
     "ExecutionHintsMiddleware",
     "FileLockMiddleware",
+    "IdentityMiddleware",
     "InnerModelCallProfilerMiddleware",
     "LLMCallProfilerMiddleware",
     "LLMRateLimitMiddleware",
@@ -79,6 +82,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ExecutionHintsMiddleware": ("soothe.middleware.execution_hints", "ExecutionHintsMiddleware"),
     "FileLockMiddleware": ("soothe.middleware.file_lock", "FileLockMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
+    "IdentityMiddleware": ("soothe.middleware.identity", "IdentityMiddleware"),
     "LLMRateLimitMiddleware": ("soothe.middleware.llm_rate_limit", "LLMRateLimitMiddleware"),
     "MCPToolSearchMiddleware": ("soothe.middleware.mcp_tool_search", "MCPToolSearchMiddleware"),
     "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
