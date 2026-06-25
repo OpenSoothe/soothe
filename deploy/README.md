@@ -16,7 +16,6 @@ Verify: `docker compose ps` — should show soothe-pgvector and soothed running.
 
 Required (`.env`):
 - `DASHSCOPE_API_KEY` — DashScope provider key
-- `DASHSCOPE_CP_API_KEY` — Coding-Plan provider key
 - `SOOTHE_WORKSPACE_HOST_ROOT` — Host workspace path
 
 ## Architecture
