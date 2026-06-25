@@ -48,6 +48,7 @@ dependencies = [
     "langchain-experimental>=0.0.50,<1.0.0",
     "langchain-core>=1.2.18,<2.0.0",
     "langchain-mcp-adapters>=0.2.0,<1.0.0",
+    "pyjwt>=2.8.0,<3.0.0",  # JWT token generation/validation for IdentityProtocol (RFC-307)
     "langchain-openai>=0.3.0,<1.0.0",
     "langchain-quickjs>=0.1.0",
     "langgraph>=1.1.1,<2.0.0",

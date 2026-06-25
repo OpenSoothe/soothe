@@ -14,6 +14,17 @@ from soothe_sdk.protocols.policy import (
     PolicyProfile,
     PolicyProtocol,
 )
+from soothe_sdk.protocols.identity import (
+    User,
+    AKSKPair,
+    TokenClaims,
+    ExternalIdentityMapping,
+    AuthResult,
+    TokenRefreshResult,
+    TokenInfo,
+    IdentityStatus,
+    IdentityProtocol,
+)
 from soothe_sdk.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
@@ -27,6 +38,16 @@ __all__ = [
     "PolicyDecision",
     "PolicyProfile",
     "PolicyProtocol",
+    # Identity (RFC-307)
+    "User",
+    "AKSKPair",
+    "TokenClaims",
+    "ExternalIdentityMapping",
+    "AuthResult",
+    "TokenRefreshResult",
+    "TokenInfo",
+    "IdentityStatus",
+    "IdentityProtocol",
     # Vector store
     "VectorRecord",
     "VectorStoreProtocol",
