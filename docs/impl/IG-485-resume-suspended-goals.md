@@ -83,3 +83,8 @@ soothe autopilot resume 8b59e5f4
 
 ## Status
 ✅ Completed
+
+> **Note (IG-504)**: The HTTP REST endpoint, `channels/http_rest.py`, and
+> `autopilot_http.py` references below are superseded by IG-504 (Remove HTTP REST
+> Channel). The resume command now uses WebSocket via `WsCommandClient`. These
+> HTTP REST references are retained for historical context only.

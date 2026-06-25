@@ -5,6 +5,9 @@
 > **Created**: 2026-06-04
 > **Updated**: 2026-06-05
 > **Dependencies**: RFC-222, RFC-450
+> **Superseded**: HTTP REST references (`channels/http_rest.py`) below are
+> superseded by IG-504 (Remove HTTP REST Channel). Autopilot commands now use
+> WebSocket RPC handlers exclusively.
 
 ## Progress
 
