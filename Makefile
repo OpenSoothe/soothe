@@ -109,7 +109,7 @@ sync-verify:
 #   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
 #
 # Config files:
-#   - Dev:        config/config.docker-dev.yml (default)
+#   - Dev:        config/develop/config.docker.yml (default)
 #
 # Quick reference:
 #   Dev stack (deps + Langfuse): make docker-dev-up
@@ -153,7 +153,7 @@ docker-daemon-build-pypi:
 		-t soothed:$(SOOTHE_VERSION)-local .
 	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local"
 
-# --- Daemon Dev Stack (daemon profile, config.dev.yml) ---------------------
+# --- Daemon Dev Stack (daemon profile, config/develop/config.yml) ---------------------
 
 docker-daemon-up:
 	@echo "Starting full dev stack: deps + langfuse + daemon..."

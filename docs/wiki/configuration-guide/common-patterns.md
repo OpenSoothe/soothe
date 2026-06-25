@@ -878,7 +878,7 @@ See `config/config.template.yml` for the complete production-ready configuration
 
 ### Development Config
 
-See `config/config.dev.yml` for development defaults with DashScope/OpenAI examples.
+See `config/develop/config.yml` for development defaults with DashScope/OpenAI examples.
 
 ---
 

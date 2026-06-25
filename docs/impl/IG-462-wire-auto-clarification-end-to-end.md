@@ -43,7 +43,7 @@ the answer instead of generating "Propose 2-3 approaches…" cold.
 | `core/runner/_runner_autopilot_worker.py` | Always builds the policy with `mode="auto"` — autopilot is headless. |
 | `core/runner/__init__.py` (`astream`) | `clarification_mode` kwarg passes through to `_run_strange_loop`. |
 | `config/models.py` (`ClarificationConfig`) | New `default_mode: Literal["auto","manual"] = "auto"` field. |
-| `config/config.template.yml` | Added `default_mode` to the documented template. (`config.dev.yml` follows the convention of omitting keys that match defaults.) |
+| `config/config.template.yml` | Added `default_mode` to the documented template. (`config/develop/config.yml` follows the convention of omitting keys that match defaults.) |
 
 ### Slice B — wire payload plumbing
 

@@ -372,7 +372,7 @@ vector_stores:
 - `config/models.py` - Add mode field, validation logic
 - `core/resolver/_resolver_infra.py` - Backend validation
 - `config/config.yml` - Add mode section
-- `config/config.dev.yml` - Development mode template
+- `config/develop/config.yml` - Development mode template
 
 **Validation logic**:
 ```python

@@ -226,7 +226,7 @@ class ProgressiveSkillsConfig(BaseModel):
     min_listing_chars_per_entry: int = 20        # below this, fall back to names-only mode
 ```
 
-Referenced from `SootheConfig.progressive_skills`. Mirrored in `config/config.template.yml` and `config/config.dev.yml` per CLAUDE.md Rule #2.
+Referenced from `SootheConfig.progressive_skills`. Mirrored in `config/config.template.yml` and `config/develop/config.yml` per CLAUDE.md Rule #2.
 
 ## API Contracts
 
@@ -445,7 +445,7 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | `core/agent/_builder.py:199-211` | Pass `skills=None` to `create_deep_agent` |
 | `core/events/catalog.py:567` | Register `SkillActivatedEvent` and `SkillBodyLoadedEvent` |
 | `config/models.py` | Add `ProgressiveSkillsConfig`; expose as `SootheConfig.progressive_skills` |
-| `config/config.template.yml`, `config/config.dev.yml` | Mirror new `progressive_skills` section |
+| `config/config.template.yml`, `config/develop/config.yml` | Mirror new `progressive_skills` section |
 | `packages/soothe/pyproject.toml` | Add `pathspec` runtime dependency |
 
 ### Removed behavior

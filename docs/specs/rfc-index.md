@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-19
-**Total RFCs**: 78 (6 archived, 7 reclassified, 1 process specification)
+**Last Updated**: 2026-06-25
+**Total RFCs**: 79 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -9,7 +9,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 49 |
+| Draft | 50 |
 | Implemented | 15 |
 | Implemented (Partially Superseded) | 1 |
 | Implemented — runtime architecture refined | 1 |
@@ -21,7 +21,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 52 |
+| Architecture Design | 53 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
@@ -273,6 +273,13 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Dependencies: RFC-000, RFC-001
   - Related: RFC-203 (Checkpoint), RFC-303 (Memory)
   - Note: Reclassified from 4xx per RFC-900 series semantics
+
+- **RFC-307**: [IdentityProtocol: AKSK Authentication & JWT Token Management](RFC-307-identity-protocol-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-25
+  - Dependencies: RFC-000, RFC-001, RFC-305
+  - Related: RFC-620 (Channel Architecture), RFC-621 (Workspace Isolation)
 
 ---
 
@@ -662,7 +669,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | 0xx | Foundation | 2 |
 | 1xx | Core Agent | 6 |
 | 2xx | StrangeLoop & Cognition | 22 |
-| 3xx | Protocols | 7 |
+| 3xx | Protocols | 8 |
 | 4xx | Daemon & Transport | 8 |
 | 5xx | CLI & TUI | 6 |
 | 6xx | Plugin System & Extensions | 20 |

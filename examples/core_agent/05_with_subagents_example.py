@@ -1,7 +1,7 @@
 """CoreAgent with subagents example -- CoreAgent runtime with delegation capabilities.
 
 This example demonstrates CoreAgent with configured subagents:
-- Subagent configuration from config/config.dev.yml
+- Subagent configuration from config/develop/config.yml
 - Delegation to first-party subagents such as explore, plan, and research when enabled
 - Optional community plugins when installed and configured
 
@@ -33,7 +33,7 @@ async def main() -> None:
     print("Example 05: CoreAgent with Subagents")
     print("=" * 60)
 
-    # Load configuration from config/config.dev.yml
+    # Load configuration from config/develop/config.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
 

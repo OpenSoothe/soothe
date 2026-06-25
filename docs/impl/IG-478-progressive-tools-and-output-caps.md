@@ -15,7 +15,7 @@ Reduce Langfuse `model` span latency (pre-HTTP `bind_tools` gap + oversized prom
 - `packages/soothe/src/soothe/middleware/tool_output_cap.py`
 - `packages/soothe/src/soothe/middleware/progressive_tools.py`
 - `packages/soothe/src/soothe/toolkits/progressive/`
-- `config/config.template.yml`, `config/config.dev.yml`
+- `config/config.template.yml`, `config/develop/config.yml`
 
 ## Status
 

@@ -303,7 +303,7 @@ CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run
 
 ## Configuration
 
-**Location**: `config/config.template.yml` and `config/config.dev.yml`
+**Location**: `config/config.template.yml` and `config/develop/config.yml`
 
 ```yaml
 agent:

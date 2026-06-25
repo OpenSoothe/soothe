@@ -167,7 +167,7 @@ async def awrap_model_call(self, request, handler) -> ModelResponse:
 
 Update both config files:
 - `config/config.template.yml`
-- `config/config.dev.yml`
+- `config/develop/config.yml`
 
 Add under `agent.loop.llm_rate_limit`:
 
