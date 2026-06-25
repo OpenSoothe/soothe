@@ -20,10 +20,18 @@ from soothe.foundation.loop.orchestrator.nodes.await_clarification import (
 
 
 @dataclass
+class _StubStateManager:
+    """Stub state manager with loop_id for goal_unblocked event emission."""
+
+    loop_id: str = "test-loop-123"
+
+
+@dataclass
 class _StubCtx:
     policy: Any = None
     emitted: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     status_marks: list[tuple[str, str]] = field(default_factory=list)
+    state_manager: _StubStateManager = field(default_factory=_StubStateManager)
 
     @property
     def clarification_policy(self) -> Any:
@@ -94,6 +102,14 @@ async def test_success_writes_answer_and_clears_pending() -> None:
     assert "clarification_requested" in names
     assert "clarification_answered" in names
     assert ctx.status_marks == []
+    # RFC-622 / RFC-625: Verify goal_unblocked event is emitted when clarification resolves
+    unblocked_payloads = [p for n, p in ctx.emitted if n == "goal_unblocked"]
+    assert len(unblocked_payloads) == 1
+    assert unblocked_payloads[0]["goal_id"] == "g"
+    assert unblocked_payloads[0]["old_status"] == "awaiting_clarification"
+    assert unblocked_payloads[0]["new_status"] == "pending"
+    assert unblocked_payloads[0]["reason"] == "clarification resolved"
+    assert unblocked_payloads[0]["loop_id"] == "test-loop-123"
 
 
 async def test_deferred_marks_status_and_terminates() -> None:
