@@ -251,13 +251,7 @@ async def request_daemon_shutdown(client: WebSocketClient, timeout: float = 10.0
         if response.get("status") != "acknowledged":
             raise RuntimeError(f"Shutdown failed: {response}")
     except Exception as e:
-        # Fallback: HTTP REST shutdown endpoint
-        import aiohttp
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post("http://127.0.0.1:8765/api/v1/system/shutdown") as resp:
-                if resp.status != 200:
-                    raise RuntimeError(f"Shutdown failed: {e}")
+        raise RuntimeError(f"Shutdown failed: {e}") from e
 
 
 async def fetch_skills_catalog(client: WebSocketClient, timeout: float = 15.0) -> list[dict]:
