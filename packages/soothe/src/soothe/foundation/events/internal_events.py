@@ -98,6 +98,28 @@ class InternalGoalsReadyEvent(SootheEvent):
     type: str = "soothe.internal.goal.ready"
     goal_ids: list[str]
     count: int
+
+
+class InternalGoalUnblockedEvent(SootheEvent):
+    """Goal unblocked and ready for scheduling.
+
+    Emitted by AL when clarification resolves and goal transitions from
+    awaiting_clarification back to pending. Received by AP to immediately
+    trigger scheduling re-evaluation instead of waiting for next poll cycle.
+
+    This is critical for responsive autopilot mode: when a user answers a
+    clarification question, the scheduling loop should immediately wake up
+    and assign the goal to a loop, rather than waiting up to poll_interval
+    seconds.
+    """
+
+    type: str = "soothe.internal.goal.unblocked"
+    goal_id: str
+    old_status: str = "awaiting_clarification"
+    new_status: str = "pending"
+    reason: str | None = None
+    loop_id: str | None = None  # Loop that was blocked
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -284,6 +306,7 @@ INTERNAL_GOAL_FAILED = "soothe.internal.goal.failed"
 INTERNAL_GOAL_PROGRESS = "soothe.internal.goal.progress"
 INTERNAL_GOAL_STATE_CHANGED = "soothe.internal.goal.state_changed"
 INTERNAL_GOALS_READY = "soothe.internal.goal.ready"
+INTERNAL_GOAL_UNBLOCKED = "soothe.internal.goal.unblocked"
 
 INTERNAL_LOOP_ASSIGNED = "soothe.internal.loop.assigned"
 INTERNAL_LOOP_IDLE = "soothe.internal.loop.idle"
@@ -309,6 +332,7 @@ INTERNAL_EVENT_TYPES: frozenset[str] = frozenset(
         INTERNAL_GOAL_PROGRESS,
         INTERNAL_GOAL_STATE_CHANGED,
         INTERNAL_GOALS_READY,
+        INTERNAL_GOAL_UNBLOCKED,
         INTERNAL_LOOP_ASSIGNED,
         INTERNAL_LOOP_IDLE,
         INTERNAL_LOOP_RELEASED,

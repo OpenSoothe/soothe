@@ -35,6 +35,9 @@ _EVT_CLARIFICATION_DEFERRED = "clarification_deferred"
 
 _QUESTION_SUMMARY_CHARS = 240
 
+# Internal event type for goal unblocked notification (RFC-622, RFC-625)
+_EVT_GOAL_UNBLOCKED = "goal_unblocked"
+
 
 async def node_await_clarification(
     ctx: LoopRuntimeContext, state: dict[str, Any]
@@ -113,6 +116,30 @@ async def node_await_clarification(
             "defer": answer.defer,
         },
     )
+
+    # RFC-622 / RFC-625: Emit goal_unblocked event when clarification resolves
+    # so AutopilotService can immediately trigger scheduling instead of waiting
+    # for the next poll cycle. This is critical for responsive autopilot mode.
+    # The goal was in awaiting_clarification (BLOCKED_STATES) and now transitions
+    # back to pending (ready for scheduling).
+    goal_id = getattr(request.loop_state, "goal_id", None)
+    loop_id = getattr(ctx.state_manager, "loop_id", None)
+    if goal_id:
+        await ctx.emit(
+            _EVT_GOAL_UNBLOCKED,
+            {
+                "goal_id": goal_id,
+                "old_status": "awaiting_clarification",
+                "new_status": "pending",
+                "reason": "clarification resolved",
+                "loop_id": loop_id,
+            },
+        )
+        logger.info(
+            "[await_clarification] clarification resolved, goal %s unblocked (loop=%s)",
+            goal_id,
+            loop_id,
+        )
 
     # IG-462: keep ``pending_clarification`` alive alongside the answer so the
     # originating node (``execute`` / ``plan_*``) can pair them on re-entry

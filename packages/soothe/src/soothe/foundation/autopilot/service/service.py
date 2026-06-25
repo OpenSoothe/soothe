@@ -29,6 +29,7 @@ from soothe.foundation.context.models import GoalNode
 from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
+    INTERNAL_GOAL_UNBLOCKED,
     INTERNAL_GOALS_READY,
     InternalAutopilotAwakeEvent,
     InternalAutopilotDreamingEvent,
@@ -36,6 +37,7 @@ from soothe.foundation.events.internal_events import (
     InternalAutopilotStoppedEvent,
     InternalGoalsReadyEvent,
     InternalGoalStateChangedEvent,
+    InternalGoalUnblockedEvent,
     InternalLoopAssignedEvent,
     InternalLoopIdleEvent,
     InternalLoopPoolChangedEvent,
@@ -184,6 +186,10 @@ class AutopilotService:
             INTERNAL_GOALS_READY,
             self._handle_goals_ready,
         )
+        self._internal_bus.subscribe(
+            INTERNAL_GOAL_UNBLOCKED,
+            self._handle_goal_unblocked,
+        )
 
     async def _handle_goal_state_changed(self, event: InternalGoalStateChangedEvent) -> None:
         """Handle goal state change from ContextEngine.
@@ -219,6 +225,26 @@ class AutopilotService:
         if self._running and not self._dreaming:
             for goal_id in event.goal_ids:
                 await self._schedule_goal(goal_id)
+
+    async def _handle_goal_unblocked(self, event: InternalGoalUnblockedEvent) -> None:
+        """Handle goal unblocked event (e.g., clarification resolved).
+
+        Immediately triggers scheduling for the unblocked goal to avoid
+        waiting for the next poll cycle. This ensures responsive autopilot
+        when clarification questions are answered by the user.
+
+        Args:
+            event: Goal unblocked event with goal_id and optional loop_id.
+        """
+        logger.info(
+            "Goal %s unblocked (%s → %s), triggering scheduling",
+            event.goal_id,
+            event.old_status,
+            event.new_status,
+        )
+
+        if self._running and not self._dreaming:
+            await self._schedule_goal(event.goal_id)
 
     async def _mark_loop_idle(self, loop_id: str, goal_id: str) -> None:
         """Mark loop as idle after goal completion.
