@@ -140,7 +140,7 @@ Check that the agent's response reflects the routed delegate’s behavior.
 uv run soothed status
 
 # If not running, start it
-uv run soothed start --config config/config.dev.yml
+uv run soothed start --config config/develop/config.yml
 ```
 
 ### Run Command Format

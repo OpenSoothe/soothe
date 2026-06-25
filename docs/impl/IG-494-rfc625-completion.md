@@ -66,7 +66,7 @@ class AutonomousConfig(BaseModel):
     dreaming_modes: DreamingModesConfig = Field(default_factory=DreamingModesConfig)
 ```
 
-**Files**: `config/config.template.yml`, `config/config.dev.yml`
+**Files**: `config/config.template.yml`, `config/develop/config.yml`
 
 Add corresponding YAML structure:
 

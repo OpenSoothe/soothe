@@ -24,7 +24,7 @@
 # Production deployment: See deploy/docker-compose.yml and deploy/README.md
 #
 # Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) requires --profile langfuse.
-# UI (browser): http://localhost:3300 — config/config.docker-dev.yml uses http://langfuse-web:3000 for the daemon container.
+# UI (browser): http://localhost:3300 — config/develop/config.docker.yml uses http://langfuse-web:3000 for the daemon container.
 # Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector.
 # Internal Langfuse backends use langfuse-internal (no host routes). langfuse-web also joins
 # langfuse-edge so Docker can publish port 3300 to the host.
@@ -40,7 +40,7 @@
 #   DASHSCOPE_BASE_URL=...           # DashScope API base URL
 #   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
 #   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
-#   SOOTHE_CONFIG_PATH=./config/config.docker-dev.yml   # Dev daemon config (default)
+#   SOOTHE_CONFIG_PATH=./config/develop/config.docker.yml   # Dev daemon config (default)
 
 services:
   # ===========================================================================
@@ -323,7 +323,7 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - soothe_daemon_data:/var/lib/soothe
-      - ${SOOTHE_CONFIG_PATH:-./config/config.docker-dev.yml}:/app/config.yml:ro
+      - ${SOOTHE_CONFIG_PATH:-./config/develop/config.docker.yml}:/app/config.yml:ro
       - ./deploy/logs:/var/lib/soothe/logs
       - ${SOOTHE_WORKSPACE_HOST_ROOT:-/tmp/soothe-workspaces}:/var/lib/soothe/workspaces
     deploy:

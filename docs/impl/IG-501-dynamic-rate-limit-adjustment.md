@@ -33,7 +33,7 @@ Enable LLM rate limiting by default with runtime RPM adjustment based on provide
 ### Step 1: Configuration Defaults
 - [ ] Update `LLMRateLimitConfig` in `models.py`: `enabled=True`, `rpm_limit=60`, `concurrent_limit=8`, `call_timeout_seconds=150`
 - [ ] Update `config/config.template.yml` with new defaults and rationale comment
-- [ ] Update `config/config.dev.yml` with matching structure
+- [ ] Update `config/develop/config.yml` with matching structure
 
 ### Step 2: Rate Limit Info Extraction
 - [ ] Add `_extract_rate_limit_info()` function in `llm_rate_limit.py`
@@ -68,7 +68,7 @@ Enable LLM rate limiting by default with runtime RPM adjustment based on provide
 |------|--------|
 | `packages/soothe/src/soothe/config/models.py` | Update `LLMRateLimitConfig` defaults |
 | `config/config.template.yml` | Sync defaults with rationale |
-| `config/config.dev.yml` | Sync with template |
+| `config/develop/config.yml` | Sync with template |
 | `packages/soothe/src/soothe/middleware/llm_rate_limit.py` | New function, new method, integration |
 | `packages/soothe/tests/unit/middleware/test_llm_rate_limit.py` | New unit tests (extend existing) |
 

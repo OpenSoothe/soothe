@@ -65,7 +65,7 @@ packages/soothe/src/soothe/core/loop/orchestrator/nodes/
 | `cli/tui/app/_app.py` | Mode badge in status line. |
 | `cli/tui/widgets/clarification_modal.py` | **new** modal that displays the question(s) and dispatches `Command(resume=…)` back to the loop. |
 | `cli/runtime/transport/session.py` | New `clarification_response` outbound message + handler. |
-| `config/config.template.yml`, `config/config.dev.yml` | New `agent.clarification.*` and `agent.veritas.*` sections (both files updated, per project rule). |
+| `config/config.template.yml`, `config/develop/config.yml` | New `agent.clarification.*` and `agent.veritas.*` sections (both files updated, per project rule). |
 
 ### 2.4 Tests
 
@@ -521,7 +521,7 @@ Equivalent pattern under `subagents/veritas/events.py` for `soothe.subagent.veri
 ### 3.14 Config additions
 
 ```yaml
-# config/config.template.yml (and matching defaults in config.dev.yml)
+# config/config.template.yml (and matching defaults in config/develop/config.yml)
 agent:
   clarification:
     auto_policy: veritas
@@ -554,7 +554,7 @@ Veritas reuses the existing ``"think"`` ``ModelRole`` — no new role is introdu
 14. **CLI flag** (`cli/main.py`). `--mode {manual,auto}`.
 15. **TUI** (`cli/tui/...`). Modal, mode badge, `ctrl+m` binding, response transport.
 16. **`soothe goal answer` CLI** (`cli/commands/...`). Out-of-band answer for deferred goals.
-17. **Config files** (`config/config.template.yml`, `config/config.dev.yml`). Both updated.
+17. **Config files** (`config/config.template.yml`, `config/develop/config.yml`). Both updated.
 18. **Tests** alongside each step.
 19. **Verification**: `./scripts/verify_finally.sh`.
 

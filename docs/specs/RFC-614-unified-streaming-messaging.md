@@ -255,13 +255,13 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 1. `packages/soothe/src/soothe/config/models.py` - Add `OutputStreamingConfig` model
 2. `packages/soothe/src/soothe/config/settings.py` - Add `output_streaming` field to `SootheConfig`
 3. `config/config.template.yml` - Add streaming section
-4. `config/config.dev.yml` - Add streaming defaults (synchronized)
+4. `config/develop/config.yml` - Add streaming defaults (synchronized)
 5. `packages/soothe-cli/src/soothe_cli/config/cli_config.py` - Add override fields
 6. `packages/soothe-cli/src/soothe_cli/cli/main.py` - Add CLI flags
 
 **Config Pattern**: Follow `StrangeLoopConfig` structure (RFC-001 lines 563-646).
 
-**CRITICAL**: Both `config.yml` and `config.dev.yml` must be updated synchronously per CLAUDE.md rule.
+**CRITICAL**: Both `config/config.template.yml` and `config/develop/config.yml` must be updated synchronously per CLAUDE.md rule.
 
 ### Phase 2: Runner Layer (Stream Generation)
 

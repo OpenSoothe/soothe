@@ -516,7 +516,7 @@ Note: `workspace_mapping` in metadata is retained for debugging and SDK use, but
 | File | Change |
 |------|--------|
 | `config/config.template.yml` | Add `workspace_mount` section with `host_root` and `container_root` |
-| `config/config.dev.yml` | Add `workspace_mount` (disabled by default, both null) |
+| `config/develop/config.yml` | Add `workspace_mount` (disabled by default, both null) |
 | `soothe/config/models.py` | Add `WorkspaceMountConfig` model |
 | `soothe/core/workspace/resolution.py` | Add translation functions; update `cleanup_anonymous_workspaces` to use `data/workspaces` |
 | `soothe/core/workspace/loop_workspace.py` | Change path to `data/workspaces`; thin wrapper for core resolution |

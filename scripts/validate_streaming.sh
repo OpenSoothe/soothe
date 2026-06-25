@@ -13,7 +13,7 @@ python3 << 'PYEOF'
 from soothe.config import SootheConfig
 
 try:
-    c = SootheConfig.from_yaml_file("config/config.dev.yml")
+    c = SootheConfig.from_yaml_file("config/develop/config.yml")
     m = c.create_chat_model("default")
 
     if m.streaming == True:

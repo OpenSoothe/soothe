@@ -57,7 +57,7 @@ packages/soothe/src/soothe/foundation/cron/
    - Location: `packages/soothe/src/soothe/config/settings.py`
    - Add `CronConfig` Pydantic model per RFC-229 spec
    - Add `cron: CronConfig` field to main config class
-   - Update `config/config.template.yml` and `config/config.dev.yml`
+   - Update `config/config.template.yml` and `config/develop/config.yml`
 
 2. **Create models.py**
    - Location: `packages/soothe/src/soothe/foundation/cron/models.py`
@@ -247,7 +247,7 @@ packages/soothe/src/soothe/foundation/cron/
    - Daemon restart → jobs survive
 
 3. **Config sync verification**
-   - `config/config.template.yml` and `config/config.dev.yml` match
+   - `config/config.template.yml` and `config/develop/config.yml` match
    - CronConfig defaults sensible
 
 4. **Run verification**
@@ -305,7 +305,7 @@ packages/soothe/src/soothe/foundation/cron/
 | `packages/soothe-cli/src/soothe_cli/cli/main.py` | Modify (register cron app) |
 | `packages/soothe-cli/src/soothe_cli/cli/commands/cron_cmd.py` | Create (CLI subcommands) |
 | `config/config.template.yml` | Modify (add cron section) |
-| `config/config.dev.yml` | Modify (add cron section) |
+| `config/develop/config.yml` | Modify (add cron section) |
 | `packages/soothe/tests/unit/cron/*.py` | Create (unit tests) |
 | `packages/soothe/tests/integration/test_cron*.py` | Create (integration tests) |
 

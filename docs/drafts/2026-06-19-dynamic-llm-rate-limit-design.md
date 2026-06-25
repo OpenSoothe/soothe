@@ -46,7 +46,7 @@ Chinese providers typically have lower rate limits and may communicate limits di
 |-----------|--------|
 | `LLMRateLimitConfig` | Enable by default, moderate values |
 | `config/config.template.yml` | Update defaults with rationale |
-| `config/config.dev.yml` | Sync with template |
+| `config/develop/config.yml` | Sync with template |
 | `llm_rate_limit.py` | New extraction function, adjustment method, integration |
 
 ### Data Flow
@@ -305,7 +305,7 @@ except TimeoutError:
 ## Implementation Order
 
 1. Update `LLMRateLimitConfig` defaults in `models.py`
-2. Update `config/config.template.yml` and `config/config.dev.yml`
+2. Update `config/config.template.yml` and `config/develop/config.yml`
 3. Add `_extract_rate_limit_info()` function in `llm_rate_limit.py`
 4. Add `adjust_rpm_limit()` method in `LLMRateLimitMiddleware`
 5. Integrate into `awrap_model_call()` 429 and timeout handling

@@ -121,7 +121,7 @@ async def main() -> None:
     print("Example 04: CoreAgent with Memory Protocol")
     print("=" * 60)
 
-    # Load configuration from config/config.dev.yml
+    # Load configuration from config/develop/config.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")

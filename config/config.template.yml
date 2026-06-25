@@ -5,7 +5,7 @@
 # examples: OpenAI ``providers`` sample, ``sqlite_vec`` store + router.
 #
 # Usage: soothe --config /path/to/this-file.yaml
-# Local dev: start from config/config.dev.yml and adjust providers.
+# Local dev: start from config/develop/config.yml and adjust providers.
 # Secrets: use ``${ENV_VAR}`` under providers; export OPENAI_API_KEY, etc.
 # Optional tool env: TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, GITHUB_TOKEN.
 

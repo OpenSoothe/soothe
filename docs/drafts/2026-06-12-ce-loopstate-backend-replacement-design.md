@@ -438,7 +438,7 @@ The `enabled` field is removed. CE is always active. The `persistence_backend` d
 7. Remove `PlanManager`, `PlanDAG`, `GoalContextManager` (depends on #4, #5)
 8. Remove adapters and lifecycle (depends on #5, #6)
 9. Remove `ContextEngineConfig.enabled` (depends on #3)
-10. Update `config/config.template.yml` and `config/config.dev.yml`
+10. Update `config/config.template.yml` and `config/develop/config.yml`
 11. Add migration logic in `StrangeLoopStateManager.load()` (depends on #2)
 12. Tests (depends on all)
 

@@ -2,7 +2,7 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-06-16
+**Last Updated**: 2026-06-25
 
 ## Core Terminology
 
@@ -54,6 +54,11 @@ This document defines the terminology and naming conventions used in this projec
 | `PolicyMiddleware` | deepagents `AgentMiddleware` that enforces `PolicyProtocol`. | RFC-001 |
 | `ContextMiddleware` | deepagents `AgentMiddleware` that manages `ContextProtocol` integration. | RFC-001 |
 | `DurabilityProtocol` | Protocol for thread lifecycle management and state persistence. | RFC-001 |
+| `IdentityProtocol` | Protocol for AKSK-based authentication and JWT token management. Provides user creation, AKSK provisioning, token issuance/validation, and external channel identity mapping. | RFC-307 |
+| `IdentityMiddleware` | First middleware in stack, validates JWT tokens or resolves external sender_id to user_id before PolicyMiddleware. | RFC-307 |
+| `AKSKPair` | Access Key / Secret Key credential pair for authentication. Access key format: `AK-{16 chars}`, Secret key format: `SK-{32 chars}`. | RFC-307 |
+| `TokenClaims` | JWT payload structure containing jti, user_id, aksk_id, token_type, issued_at, expires_at. | RFC-307 |
+| `ExternalIdentityMapping` | Mapping from external channel sender_id to soothe user_id for workspace isolation on external channels. | RFC-307 |
 | `ThreadInfo` | Data model for thread state (id, status, timestamps, metadata). | RFC-001 |
 | `ConcurrencyPolicy` | Data model controlling parallel execution of steps, subagents, and tools. | RFC-001 |
 | `StepResult` | Data model for a completed plan step's output and status. | RFC-001 |
