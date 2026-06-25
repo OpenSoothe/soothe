@@ -4,3 +4,4 @@ DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
 
 SOOTHE_VERSION=0.6.12
+SOOTHE_WORKSPACE_HOST_ROOT=/tmp/soothe-workspaces
