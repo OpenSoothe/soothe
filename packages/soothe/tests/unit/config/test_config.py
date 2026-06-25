@@ -13,6 +13,7 @@ from soothe.config import (
     SubagentConfig,
     ToolsConfig,
     WebSearchConfig,
+    _expand_env_in_config,
     _resolve_env,
     _resolve_provider_env,
 )
@@ -349,6 +350,28 @@ class TestResolveEnv:
         monkeypatch.delenv("MISSING_KEY", raising=False)
         assert _resolve_env("${MISSING_KEY}") == "${MISSING_KEY}"
 
+    def test_embedded_env_var(self, monkeypatch) -> None:
+        """Env var can be embedded within a larger string."""
+        monkeypatch.setenv("HOME", "/Users/alice")
+        assert _resolve_env("${HOME}/workspaces") == "/Users/alice/workspaces"
+
+    def test_multiple_env_vars(self, monkeypatch) -> None:
+        """Multiple env vars in one string are all resolved."""
+        monkeypatch.setenv("VAR1", "foo")
+        monkeypatch.setenv("VAR2", "bar")
+        assert _resolve_env("${VAR1}/${VAR2}/path") == "foo/bar/path"
+
+    def test_embedded_with_missing_var(self, monkeypatch) -> None:
+        """Missing embedded var is left as placeholder."""
+        monkeypatch.setenv("VAR1", "foo")
+        monkeypatch.delenv("MISSING", raising=False)
+        assert _resolve_env("${VAR1}/${MISSING}/path") == "foo/${MISSING}/path"
+
+    def test_env_var_in_path_middle(self, monkeypatch) -> None:
+        """Env var can appear anywhere in the path."""
+        monkeypatch.setenv("USER", "alice")
+        assert _resolve_env("/home/${USER}/.config") == "/home/alice/.config"
+
     def test_resolve_provider_env_success(self, monkeypatch) -> None:
         monkeypatch.setenv("MY_BASE_URL", "https://example.test/v1")
         assert (
@@ -374,6 +397,143 @@ class TestResolveEnv:
         assert "dashscope" in caplog.text
         assert "MISSING_PROVIDER_KEY" in caplog.text
         assert "providers[].api_key" in caplog.text
+
+
+class TestExpandEnvInConfig:
+    """Tests for recursive env var expansion throughout config tree."""
+
+    def test_expand_simple_dict(self, monkeypatch) -> None:
+        """Env vars in dict values are resolved."""
+        monkeypatch.setenv("MY_KEY", "resolved")
+        config = {"key": "${MY_KEY}", "other": "literal"}
+        result = _expand_env_in_config(config)
+        assert result["key"] == "resolved"
+        assert result["other"] == "literal"
+
+    def test_expand_nested_dict(self, monkeypatch) -> None:
+        """Env vars in nested dict values are resolved."""
+        monkeypatch.setenv("HOST_ROOT", "/host/workspaces")
+        config = {"workspace_mount": {"host_root": "${HOST_ROOT}", "container_root": "/container"}}
+        result = _expand_env_in_config(config)
+        assert result["workspace_mount"]["host_root"] == "/host/workspaces"
+
+    def test_expand_list_of_dicts(self, monkeypatch) -> None:
+        """Env vars in list items are resolved."""
+        monkeypatch.setenv("API_KEY", "secret123")
+        config = {"providers": [{"name": "openai", "api_key": "${API_KEY}"}]}
+        result = _expand_env_in_config(config)
+        assert result["providers"][0]["api_key"] == "secret123"
+
+    def test_expand_embedded_in_nested_path(self, monkeypatch) -> None:
+        """Env vars embedded in path strings throughout config are resolved."""
+        monkeypatch.setenv("HOME", "/Users/alice")
+        monkeypatch.setenv("PROJECT", "myproject")
+        config = {
+            "workspace_mount": {
+                "host_root": "${HOME}/workspaces/${PROJECT}",
+                "container_root": "/workspaces",
+            },
+            "filesystem_middleware": {"workspace_root": "${HOME}/projects"},
+        }
+        result = _expand_env_in_config(config)
+        assert result["workspace_mount"]["host_root"] == "/Users/alice/workspaces/myproject"
+        assert result["filesystem_middleware"]["workspace_root"] == "/Users/alice/projects"
+
+    def test_expand_preserves_scalars(self) -> None:
+        """Int, bool, None pass through unchanged."""
+        config = {"count": 42, "enabled": True, "name": None}
+        result = _expand_env_in_config(config)
+        assert result["count"] == 42
+        assert result["enabled"] is True
+        assert result["name"] is None
+
+    def test_expand_mixed_list(self, monkeypatch) -> None:
+        """List with mixed types resolves strings only."""
+        monkeypatch.setenv("VAR", "resolved")
+        config = ["${VAR}", 42, True, None, "literal"]
+        result = _expand_env_in_config(config)
+        assert result[0] == "resolved"
+        assert result[1] == 42
+        assert result[2] is True
+        assert result[3] is None
+        assert result[4] == "literal"
+
+
+class TestYamlEnvExpansion:
+    """Tests for env var expansion when loading from YAML files."""
+
+    def test_yaml_embedded_env_var(self, tmp_path: Path, monkeypatch) -> None:
+        """Env vars embedded in YAML path strings are resolved."""
+        monkeypatch.setenv("HOST_ROOT", "/host/workspaces")
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "workspace_mount:\n  host_root: ${HOST_ROOT}/subdir\n  container_root: /workspaces\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert cfg.workspace_mount.host_root == "/host/workspaces/subdir"
+        assert cfg.workspace_mount.container_root == "/workspaces"
+
+    def test_yaml_multiple_env_vars(self, tmp_path: Path, monkeypatch) -> None:
+        """Multiple env vars in one YAML value are resolved."""
+        monkeypatch.setenv("VAR1", "foo")
+        monkeypatch.setenv("VAR2", "bar")
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "filesystem_middleware:\n  workspace_root: ${VAR1}/${VAR2}/workspace\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert cfg.filesystem_middleware.workspace_root == "foo/bar/workspace"
+
+    def test_yaml_env_in_nested_mcp_auth(self, tmp_path: Path, monkeypatch) -> None:
+        """Env vars in deeply nested MCP auth headers are resolved."""
+        monkeypatch.setenv("LINEAR_TOKEN", "secret-token-123")
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "mcp_servers:\n"
+            "  - name: linear\n"
+            "    transport: streamable_http\n"
+            "    url: https://mcp.linear.app/sse\n"
+            "    auth:\n"
+            "      headers:\n"
+            "        Authorization: Bearer ${LINEAR_TOKEN}\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert len(cfg.mcp_servers) == 1
+        assert cfg.mcp_servers[0].auth.headers["Authorization"] == "Bearer secret-token-123"
+
+    def test_yaml_missing_env_var_left_as_placeholder(self, tmp_path: Path, monkeypatch) -> None:
+        """Missing env vars are left as placeholders and fail validation or produce warnings."""
+        monkeypatch.delenv("MISSING_VAR", raising=False)
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "workspace_mount:\n  host_root: ${MISSING_VAR}\n  container_root: /workspaces\n",
+            encoding="utf-8",
+        )
+        # Should still load, but with placeholder
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert cfg.workspace_mount.host_root == "${MISSING_VAR}"
+
+    def test_yaml_env_in_provider_config(self, tmp_path: Path, monkeypatch) -> None:
+        """Env vars in provider config are expanded before Pydantic validation."""
+        monkeypatch.setenv("OPENAI_KEY", "sk-test-123")
+        monkeypatch.setenv("OPENAI_BASE", "https://proxy.example.com/v1")
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "providers:\n"
+            "  - name: openai\n"
+            "    provider_type: openai\n"
+            "    api_key: ${OPENAI_KEY}\n"
+            "    api_base_url: ${OPENAI_BASE}\n"
+            "    models: [gpt-4o]\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert len(cfg.providers) == 1
+        assert cfg.providers[0].api_key == "sk-test-123"
+        assert cfg.providers[0].api_base_url == "https://proxy.example.com/v1"
 
 
 class TestPropagateEnv:
