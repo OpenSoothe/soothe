@@ -31,7 +31,7 @@ def run_daemon(
     Args:
         config: Agent ``SootheConfig`` (in-proc agent core, ``config.yml``).
         daemon_config: Daemon-server ``SootheDaemonConfig`` (transports,
-            worker pool, distributed runner, ``daemon_config.yml``).
+            worker pool, distributed runner, ``daemon.yml``).
         detached: Whether daemon is running as a detached background process.
             In detached mode, SIGINT shutdown handling is disabled.
     """
@@ -71,7 +71,7 @@ def main() -> None:
         "--config",
         type=str,
         default=None,
-        help="Path to daemon_config.yml (SootheDaemonConfig)",
+        help="Path to daemon.yml (SootheDaemonConfig)",
     )
     parser.add_argument(
         "--soothe-config",

@@ -275,7 +275,7 @@ grep -i "langfuse\|observability" ~/.soothe/logs/soothed.log | tail -100
 
 **Stale worker_pool subprocesses** (orphaned `multiprocessing.spawn` children after crashes or old daemon runs):
 
-- **Automatic** (long-running daemon): enable `worker_pool` and `stale_worker_reap` in `daemon_config.yml` (`interval_seconds`, default 1800). The daemon reaps on start/stop and periodically while running; live pool workers are skipped.
+- **Automatic** (long-running daemon): enable `worker_pool` and `stale_worker_reap` in `daemon.yml` (`interval_seconds`, default 1800). The daemon reaps on start/stop and periodically while running; live pool workers are skipped.
 - **Manual** (daemon stopped or one-off cleanup): `uv run python -m soothe_daemon.persistence` (add `--dry-run` to preview).
 - **thread_pool mode**: periodic reap is not started (no spawn workers); startup/shutdown reap and the CLI remain harmless.
 
@@ -302,8 +302,8 @@ tail -f ~/.soothe/logs/soothe-cli.log | grep -i "websocket\|connection\|retry\|t
 
 4. Verify configuration:
 ```bash
-# Check daemon WebSocket config (daemon_config.yml)
-cat ~/.soothe/config/daemon_config.yml | grep -A 10 "websocket:"
+# Check daemon WebSocket config (daemon.yml)
+cat ~/.soothe/config/daemon.yml | grep -A 10 "websocket:"
 
 # CLI connection uses --daemon-host / --daemon-port (defaults: 127.0.0.1:8765)
 soothe --help | grep daemon

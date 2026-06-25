@@ -38,7 +38,7 @@ app = typer.Typer(
 
 
 # Fast status check helpers - avoid importing SootheDaemon (5+ second import chain)
-# Port comes from daemon_config.yml (SootheDaemonConfig), not env vars.
+# Port comes from daemon.yml (SootheDaemonConfig), not env vars.
 _DEFAULT_WS_HOST = "127.0.0.1"
 _DEFAULT_WS_PORT = 8765
 
@@ -603,7 +603,7 @@ def _load_daemon_config(config_path: str | None, daemon_config_cls, default_conf
     """Load ``SootheDaemonConfig`` from explicit path or default location.
 
     Args:
-        config_path: Optional path passed from CLI (``daemon_config.yml``).
+        config_path: Optional path passed from CLI (``daemon.yml``).
         daemon_config_cls: SootheDaemonConfig class (passed to avoid import).
         default_config_path_func: Function to get default config path.
 

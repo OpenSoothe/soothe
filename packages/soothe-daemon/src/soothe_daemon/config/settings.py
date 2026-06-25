@@ -1,6 +1,6 @@
 """SootheDaemonConfig -- top-level configuration for the Soothe daemon server.
 
-Parsed from ``~/.soothe/config/daemon_config.yml`` (or an explicit ``--config``
+Parsed from ``~/.soothe/config/daemon.yml`` (or an explicit ``--config``
 path). Distinct from ``soothe.config.SootheConfig`` (the in-proc agent config),
 which the daemon loads separately via ``load_soothe_config()``.
 """
@@ -47,8 +47,8 @@ def default_soothe_config_path() -> Path:
 
 
 def default_daemon_config_path() -> Path:
-    """Default path of ``daemon_config.yml``."""
-    return _ensure_default_config_dir() / "daemon_config.yml"
+    """Default path of ``daemon.yml``."""
+    return _ensure_default_config_dir() / "daemon.yml"
 
 
 class SootheDaemonConfig(BaseSettings):
@@ -208,7 +208,7 @@ class SootheDaemonConfig(BaseSettings):
 
     @classmethod
     def from_default_yaml(cls) -> SootheDaemonConfig:
-        """Load daemon configuration from ``~/.soothe/config/daemon_config.yml``.
+        """Load daemon configuration from ``~/.soothe/config/daemon.yml``.
 
         Falls back to defaults if the file is absent.
         """
