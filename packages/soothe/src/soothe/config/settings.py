@@ -191,7 +191,7 @@ class SootheConfig(BaseSettings):
     def _strip_daemon_top_level(cls, data: Any) -> Any:
         """Drop ``daemon:`` from agent YAML or kwargs.
 
-        Daemon transport and server limits live in ``daemon_config.yml`` (``SootheDaemonConfig``).
+        Daemon transport and server limits live in ``daemon.yml`` (``SootheDaemonConfig``).
         Older unified configs sometimes nested those keys under ``daemon`` here; they are ignored
         for ``SootheConfig`` so startup does not fail with extra_forbidden.
         """

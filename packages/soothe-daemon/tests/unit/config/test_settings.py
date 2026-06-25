@@ -20,7 +20,7 @@ def test_default_paths_create_config_dir(monkeypatch, tmp_path: Path) -> None:
     soothe_path = default_soothe_config_path()
 
     assert config_dir.is_dir()
-    assert daemon_path == config_dir / "daemon_config.yml"
+    assert daemon_path == config_dir / "daemon.yml"
     assert soothe_path == config_dir / "config.yml"
 
 

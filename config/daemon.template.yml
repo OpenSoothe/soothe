@@ -1,6 +1,6 @@
 # Soothe daemon server configuration (SootheDaemonConfig).
 #
-# Install: ~/.soothe/config/daemon_config.yml
+# Install: ~/.soothe/config/daemon.yml
 # CLI:     soothed --config <path>
 #
 # Environment overrides: prefix SOOTHE_DAEMON_, nested keys use __

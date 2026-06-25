@@ -297,7 +297,7 @@ Not implemented as of this document; listed for traceability.
 | File | Purpose |
 |------|---------|
 | `deploy/docker-compose.yml` | Profiling env vars, memory limit comments |
-| `config/daemon_config.template.yml` | `memory_profiling`, `loop_gc`, queue limits |
+| `config/daemon.template.yml` | `memory_profiling`, `loop_gc`, queue limits |
 | `docs/howto_debug.md` | General logging and trace locations |
 | `packages/soothe-daemon/src/soothe_daemon/services/memory_profiler.py` | Profiler implementation |
 

@@ -305,7 +305,7 @@ async def _cmd_memory(
         if self._memory_profiler is None:
             return {
                 "memory_stats": {"error": "Memory profiling not enabled"},
-                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+                "hint": "Set memory_profiling.enabled=true in daemon.yml",
             }
         return {"memory_stats": self._memory_profiler.get_current_stats()}
 
@@ -313,7 +313,7 @@ async def _cmd_memory(
         if self._memory_profiler is None:
             return {
                 "memory_stats": {"error": "Memory profiling not enabled"},
-                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+                "hint": "Set memory_profiling.enabled=true in daemon.yml",
             }
         return {"memory_stats": self._memory_profiler.force_gc_and_report()}
 
@@ -321,7 +321,7 @@ async def _cmd_memory(
         if self._memory_profiler is None:
             return {
                 "memory_stats": {"error": "Memory profiling not enabled"},
-                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+                "hint": "Set memory_profiling.enabled=true in daemon.yml",
             }
         self._memory_profiler.update_last_snapshot()
         return {"memory_stats": self._memory_profiler.get_current_stats()}
@@ -330,7 +330,7 @@ async def _cmd_memory(
         if self._memory_profiler is None:
             return {
                 "memory_stats": {"error": "Memory profiling not enabled"},
-                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+                "hint": "Set memory_profiling.enabled=true in daemon.yml",
             }
         return {"memory_stats": {"object_counts": self._memory_profiler.get_object_counts()}}
 
@@ -338,7 +338,7 @@ async def _cmd_memory(
         if self._memory_profiler is None:
             return {
                 "memory_stats": {"error": "Memory profiling not enabled"},
-                "hint": "Set memory_profiling.enabled=true in daemon_config.yml",
+                "hint": "Set memory_profiling.enabled=true in daemon.yml",
             }
         try:
             return {"memory_stats": self._memory_profiler.compare_snapshots()}

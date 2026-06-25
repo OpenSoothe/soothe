@@ -352,18 +352,18 @@ See [Multi-Transport Guide](multi-transport.md).
 
 **Configure transports**:
 ```yaml
-# In daemon_config.yml
+# In daemon.yml
 daemon:
   transports:
     unix_socket:
       enabled: true
       path: "~/.soothe/soothe.sock"
-    
+
     websocket:
       enabled: true
       host: "0.0.0.0"
       port: 8765
-    
+
     http_rest:
       enabled: true
       host: "0.0.0.0"
@@ -372,7 +372,7 @@ daemon:
 
 **Start daemon**:
 ```bash
-soothed --config daemon_config.yml start
+soothed --config daemon.yml start
 ```
 
 See [Multi-Transport Guide](multi-transport.md).

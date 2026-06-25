@@ -63,7 +63,7 @@ Subcommands inherit flags, e.g. `soothe --daemon-port 9000 loop list`.
 
 ## Not in scope
 
-- Daemon config (`daemon_config.yml`) and agent config (`config.yml`) — unchanged
+- Daemon config (`daemon.yml`) and agent config (`config.yml`) — unchanged
 - TUI theme prefs in `config.yml` (`ui.theme`) — unchanged
 - `SOOTHE_LOG_LEVEL` env precedence — unchanged
 
