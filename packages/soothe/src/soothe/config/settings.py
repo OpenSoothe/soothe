@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
-from soothe.config.env import _resolve_env, _resolve_provider_env
+from soothe.config.env import _expand_env_in_config, _resolve_env, _resolve_provider_env
 from soothe.config.models import (
     AgentConfig,
     ConsoleLoggingConfig,
@@ -135,6 +135,17 @@ class SootheConfig(BaseSettings):
     def from_yaml_file(cls, path: str) -> SootheConfig:
         """Load configuration from a YAML file.
 
+        Environment variable placeholders (``${ENV_VAR}``) are recursively
+        expanded throughout the entire config tree before Pydantic validation.
+        This allows env vars in any string field, including nested paths:
+
+        - ``workspace_mount.host_root: ${SOOTHE_WORKSPACE_HOST_ROOT}/subdir``
+        - ``providers[].api_key: ${OPENAI_API_KEY}``
+        - ``mcp_servers[].auth.headers.Authorization: Bearer ${TOKEN}``
+
+        Unresolved env vars (not found in environment) are left as-is and
+        typically fail Pydantic validation or produce warnings at runtime.
+
         Args:
             path: Path to the YAML configuration file.
 
@@ -145,6 +156,8 @@ class SootheConfig(BaseSettings):
 
         with Path(path).open() as f:
             config_data = yaml.safe_load(f) or {}
+        # Recursively expand ${ENV_VAR} placeholders throughout the config tree
+        config_data = _expand_env_in_config(config_data)
         return cls(**config_data)
 
     # --- Multi-provider model config ---
