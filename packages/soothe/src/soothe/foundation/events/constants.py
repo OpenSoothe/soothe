@@ -125,6 +125,9 @@ AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 # Error
 ERROR = "soothe.error.general.failed"
 
+# LLM retry events (IG-504)
+LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
+
 # Deprecated alias (use REPLAY_COMPLETE wire envelope)
 HISTORY_REPLAY_COMPLETE = REPLAY_COMPLETE
 
@@ -167,6 +170,7 @@ __all__ = [
     "HISTORY_REPLAY_COMPLETE",
     "ITERATION_COMPLETED",
     "ITERATION_STARTED",
+    "LLM_RETRY_ATTEMPT",
     "LOOP_COMPLETED",
     "LOOP_CREATED",
     "LOOP_DETACHED",

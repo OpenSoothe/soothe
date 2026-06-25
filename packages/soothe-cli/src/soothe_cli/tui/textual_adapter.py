@@ -119,6 +119,9 @@ from soothe_cli.tui.widgets.messages import (
 
 logger = logging.getLogger(__name__)
 
+# IG-504: LLM retry event type for step card status display
+LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
+
 # ---------------------------------------------------------------------------
 # Adapter core
 # ---------------------------------------------------------------------------
@@ -2792,6 +2795,26 @@ async def execute_task_textual(
                                                 widget.last_completed_execute_prose
                                             )
                                     continue
+
+                            # IG-504: Handle LLM retry events for step card status display
+                            if event_type == LLM_RETRY_ATTEMPT:
+                                # Find the running step card for this thread and update retry status
+                                attempt = int(data.get("attempt", 0))
+                                max_attempts = int(data.get("max_attempts", 0))
+                                error_type = str(data.get("error_type", "timeout"))
+                                # Try to find a running step card via namespace or active steps
+                                widget = None
+                                if ns_key:
+                                    widget = adapter._step_by_namespace.get(ns_key)
+                                if widget is None:
+                                    # Fallback: find any running step in current step messages
+                                    for step_widget in adapter._current_step_messages.values():
+                                        if step_widget._status == "running":  # noqa: SLF001
+                                            widget = step_widget
+                                            break
+                                if widget is not None:
+                                    widget.set_retry_status(attempt, max_attempts, error_type)
+                                continue
 
                             if event_type == LOOP_REASON_EVENT_TYPE:
                                 assessment_reasoning = str(

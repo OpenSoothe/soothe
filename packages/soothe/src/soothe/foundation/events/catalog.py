@@ -104,6 +104,9 @@ from .constants import (
     STRANGE_LOOP_STEP_STARTED,
 )
 
+# IG-504: LLM retry event constant (used by middleware and TUI)
+LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
+
 # ---------------------------------------------------------------------------
 # Type aliases and helpers
 # ---------------------------------------------------------------------------
@@ -278,6 +281,20 @@ class StrangeLoopStepCompletedEvent(LifecycleEvent):
     duration_ms: int
     tool_call_count: int = 0
     clarification: dict[str, Any] | None = None
+
+
+class LLMRetryAttemptEvent(LifecycleEvent):
+    """LLM retry attempt event for step status display (IG-504).
+
+    Emitted when LLM call fails due to timeout or 429 rate limit and middleware
+    initiates a retry. Provides visibility for TUI to display retry count.
+    """
+
+    type: Literal["soothe.cognition.llm.retry.attempt"] = "soothe.cognition.llm.retry.attempt"
+    attempt: int
+    max_attempts: int
+    error_type: str  # "timeout" or "rate_limit"
+    thread_id: str | None = None
 
 
 class StrangeLoopContextCompactionEvent(LifecycleEvent):

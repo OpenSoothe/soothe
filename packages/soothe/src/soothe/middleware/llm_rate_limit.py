@@ -413,14 +413,14 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         middleware = LLMRateLimitMiddleware(
             requests_per_minute=120,
             max_concurrent_requests_per_thread=10,
-            call_timeout_seconds=120,
-            call_timeout_max_seconds=300,
+            call_timeout_seconds=600,  # IG-504: Increased timeout
+            call_timeout_max_seconds=900,  # IG-504: Increased cap
             thread_local=True,  # IG-258 Phase 2
             retry_on_timeout=True,  # IG-295
-            max_timeout_retries=2,  # IG-295
+            max_timeout_retries=10,  # IG-504: Increased retries
             timeout_retry_multiplier=1.2,  # IG-295
             retry_on_rate_limit=True,  # IG-499
-            max_rate_limit_retries=3,  # IG-499
+            max_rate_limit_retries=10,  # IG-504: Increased 429 retries
             rate_limit_backoff_base=2.0,  # IG-499
             rate_limit_backoff_max=60.0,  # IG-499
             respect_retry_after_header=True,  # IG-499
@@ -449,14 +449,14 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         self,
         requests_per_minute: int = 120,
         max_concurrent_requests_per_thread: int = 10,
-        call_timeout_seconds: int = 120,
-        call_timeout_max_seconds: int = 300,
+        call_timeout_seconds: int = 600,  # IG-504: Increased timeout
+        call_timeout_max_seconds: int = 900,  # IG-504: Increased cap
         thread_local: bool = True,  # IG-258 Phase 2
         retry_on_timeout: bool = True,  # IG-295
-        max_timeout_retries: int = 2,  # IG-295
+        max_timeout_retries: int = 10,  # IG-504: Increased retries
         timeout_retry_multiplier: float = 1.2,  # IG-295
         retry_on_rate_limit: bool = True,  # IG-499
-        max_rate_limit_retries: int = 3,  # IG-499
+        max_rate_limit_retries: int = 10,  # IG-504: Increased 429 retries
         rate_limit_backoff_base: float = 2.0,  # IG-499
         rate_limit_backoff_max: float = 60.0,  # IG-499
         respect_retry_after_header: bool = True,  # IG-499
@@ -466,14 +466,14 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         Args:
             requests_per_minute: Global RPM limit (default: 120).
             max_concurrent_requests_per_thread: Max concurrent per thread (Phase 2, default: 10).
-            call_timeout_seconds: Base max duration per LLM call (default: 120s).
-            call_timeout_max_seconds: Retry timeout ceiling (default: 300s).
+            call_timeout_seconds: Base max duration per LLM call (IG-504: default 600s).
+            call_timeout_max_seconds: Retry timeout ceiling (IG-504: default 900s).
             thread_local: Enable thread-local budgets (Phase 2, default True).
             retry_on_timeout: Enable retry with timeout escalation (IG-295, default True).
-            max_timeout_retries: Max retry attempts after timeout (IG-295, default 2).
+            max_timeout_retries: Max retry attempts after timeout (IG-504: default 10).
             timeout_retry_multiplier: Timeout multiplier on retry (IG-295, default 1.2).
             retry_on_rate_limit: Enable retry on HTTP 429 errors (IG-499, default True).
-            max_rate_limit_retries: Max retry attempts after 429 (IG-499, default 3).
+            max_rate_limit_retries: Max retry attempts after 429 (IG-504: default 10).
             rate_limit_backoff_base: Exponential backoff base in seconds (IG-499, default 2.0).
             rate_limit_backoff_max: Maximum backoff wait in seconds (IG-499, default 60.0).
             respect_retry_after_header: Use retry-after header when present (IG-499, default True).
@@ -560,6 +560,37 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         if isinstance(legacy, str) and legacy:
             return legacy
         return "default"
+
+    @staticmethod
+    def _emit_retry_event(
+        attempt: int,
+        max_attempts: int,
+        error_type: str,
+        thread_id: str | None,
+        logger: logging.Logger,
+    ) -> None:
+        """IG-504: Emit retry attempt event for TUI step status display.
+
+        Args:
+            attempt: Current attempt number (1-indexed after failure).
+            max_attempts: Maximum attempts allowed.
+            error_type: "timeout" or "rate_limit".
+            thread_id: Thread ID for context.
+            logger: Logger for fallback if emit fails.
+        """
+        try:
+            from soothe.foundation.events.catalog import LLMRetryAttemptEvent
+            from soothe.utils.progress import emit_progress
+
+            event = LLMRetryAttemptEvent(
+                attempt=attempt,
+                max_attempts=max_attempts,
+                error_type=error_type,
+                thread_id=thread_id,
+            )
+            emit_progress(event.to_dict(), logger)
+        except Exception:
+            logger.debug("Failed to emit LLM retry event", exc_info=True)
 
     async def _get_thread_budget(self, thread_id: str) -> ThreadBudget:
         """Get or create thread-local budget with fair distribution (Phase 2).
@@ -804,6 +835,14 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                                 backoff,
                                 thread_id,
                             )
+                            # IG-504: Emit retry event for TUI display
+                            self._emit_retry_event(
+                                attempt=timeout_attempts,
+                                max_attempts=max_timeout_attempts,
+                                error_type="timeout",
+                                thread_id=thread_id,
+                                logger=logger,
+                            )
                             await asyncio.sleep(backoff)
                             continue
                         else:
@@ -855,6 +894,14 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                                     max_rate_limit_attempts,
                                     backoff,
                                     thread_id,
+                                )
+                                # IG-504: Emit retry event for TUI display
+                                self._emit_retry_event(
+                                    attempt=rate_limit_attempts,
+                                    max_attempts=max_rate_limit_attempts,
+                                    error_type="rate_limit",
+                                    thread_id=thread_id,
+                                    logger=logger,
                                 )
                                 await asyncio.sleep(backoff)
                                 continue

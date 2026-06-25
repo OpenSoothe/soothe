@@ -20,7 +20,8 @@ _MAX_INTERRUPT_ITERATIONS = 50
 
 # Default timeout for waiting on a single stream chunk when no LLM rate limit middleware.
 # Prevents indefinite hangs on unresponsive LLM API calls.
-_DEFAULT_CHUNK_TIMEOUT_S = 120.0
+# IG-504: Increased to 600s for robust step execution.
+_DEFAULT_CHUNK_TIMEOUT_S = 600.0
 
 
 async def await_next_graph_stream_chunk(
