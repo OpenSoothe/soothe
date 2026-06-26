@@ -7,64 +7,10 @@ with a simplified lifecycle and 🎯 header glyph.
 
 from __future__ import annotations
 
-import logging
 from time import time
-from typing import TYPE_CHECKING, Any
-
-from textual.content import Content
+from typing import Any
 
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
-
-if TYPE_CHECKING:
-    pass
-
-logger = logging.getLogger(__name__)
-
-
-class SubAgentMessageMixin:
-    """Mixin providing SubAgent-specific header glyph and status sync.
-
-    Applied to CognitionStepMessage instances created as SubAgent cards.
-    The parent class handles all activity rendering and lifecycle;
-    this mixin overrides only the header and adds step-sync callback.
-    """
-
-    _subagent_type: str = ""
-    _parent_step_id: str = ""
-    _parent_task_key: str = ""
-
-    def _init_subagent_fields(
-        self,
-        subagent_type: str,
-        parent_step_id: str,
-        parent_task_key: str,
-    ) -> None:
-        """Initialize SubAgent-specific fields (call from subclass __init__)."""
-        self._subagent_type = str(subagent_type or "?").strip() or "?"
-        self._parent_step_id = str(parent_step_id or "").strip()
-        self._parent_task_key = str(parent_task_key or "").strip()
-        # SubAgent cards are born running (created when task call streams in)
-        self._status = "running"
-        self._start_time = time()
-
-    def _subagent_header_content(self) -> Content:
-        """Header with 🎯 glyph and subagent type prefix."""
-        desc = getattr(self, "_description", "") or "(task)"
-        label = f"{self._subagent_type}({desc})"
-        return _assemble_card_header(self, "🎯 ", label)
-
-    def sync_status_to_step(self, step_widget: Any, success: bool) -> None:
-        """Update parent step's task row icon when SubAgent completes.
-
-        Args:
-            step_widget: Parent CognitionStepMessage instance.
-            success: True for success, False for error.
-        """
-        if not self._parent_task_key:
-            return
-        sync_fn = getattr(step_widget, "_sync_task_row_status_from_subagent", None)
-        if callable(sync_fn):
-            sync_fn(self._parent_task_key, success)
 
 
 def create_subagent_card(
@@ -172,6 +118,5 @@ def create_subagent_card(
 
 
 __all__ = [
-    "SubAgentMessageMixin",
     "create_subagent_card",
 ]

@@ -77,7 +77,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Kind: Implementation Interface Design
   - Depends on: RFC-500, RFC-501, RFC-607
   - Extends: RFC-500 (step card rendering), RFC-501 (TUI step card body)
-  - Implemented by: IG-512, IG-513
+  - Implemented by: IG-512, IG-513, IG-514, IG-515
 
 - **2026-06-25**: RFC-307 - IdentityProtocol: AKSK Authentication & JWT Token Management
   - Status: Draft
