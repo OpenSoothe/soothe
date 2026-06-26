@@ -53,12 +53,14 @@ class StepToolRow:
 
 @dataclass
 class StepRowIndex:
-    """Single-pass classification of tool rows for one step card."""
+    """Single-pass classification of tool rows for one step card (IG-629).
+
+    Simplified for flattened display: step cards show flat tool rows and
+    task delegation markers only. SubAgent cards own their own tool rows.
+    """
 
     task_delegations: list[StepToolRow] = field(default_factory=list)
     main_tools: list[StepToolRow] = field(default_factory=list)
-    orphan_tools: list[StepToolRow] = field(default_factory=list)
-    children_by_task: dict[str, list[StepToolRow]] = field(default_factory=dict)
     total_tool_count: int = 0
     main_tool_count: int = 0
     task_delegation_count: int = 0
@@ -127,12 +129,10 @@ def has_task_activity_body(
     subagent_notes: list[str],
     subagent_notes_by_task: dict[str, list[str]],
 ) -> bool:
-    """True when the step card should show the task-activity tree panel."""
+    """True when the step card should show the task-activity tree panel (IG-629)."""
     if subagent_notes or subagent_notes_by_task:
         return True
     if index.task_delegations:
-        return True
-    if index.orphan_tools:
         return True
     return bool(index.main_tools)
 
@@ -295,21 +295,17 @@ def normalized_task_note_key(step_id: str, task_tool_call_id: str) -> str:
 
 
 class StepRowClassifier:
-    """Builds a :class:`StepRowIndex` from raw tool rows."""
+    """Builds a :class:`StepRowIndex` from raw tool rows (IG-629 simplified)."""
 
     @staticmethod
     def build(step_id: str, rows: list[StepToolRow]) -> StepRowIndex:
-        """Classify rows into task delegations, main tools, orphans, and children."""
+        """Classify rows into task delegations and main tools (flat display).
+
+        IG-629: Removed children_by_task and orphan_tools — subgraph tools
+        route to SubAgent cards, not nested under step card task rows.
+        """
         task_delegations = StepRowClassifier._iter_task_delegation_rows(step_id, rows)
         main_tools = [r for r in rows if row_counts_for_main_tools(r, step_id)]
-        children_by_task: dict[str, list[StepToolRow]] = {}
-        for task_row in task_delegations:
-            key = task_delegation_dedupe_key(task_row, step_id)
-            if key:
-                children_by_task[key] = StepRowClassifier._child_rows_for_task(
-                    step_id, rows, task_row
-                )
-        orphan_tools = StepRowClassifier._orphan_subgraph_tool_rows(step_id, rows, task_delegations)
         countable = [
             r
             for r in rows
@@ -320,8 +316,6 @@ class StepRowClassifier:
         return StepRowIndex(
             task_delegations=task_delegations,
             main_tools=main_tools,
-            orphan_tools=orphan_tools,
-            children_by_task=children_by_task,
             total_tool_count=count_distinct_tool_call_ids(countable),
             main_tool_count=count_distinct_tool_call_ids(main_tools),
             task_delegation_count=len(task_delegations),
@@ -345,92 +339,6 @@ class StepRowClassifier:
             if prev is None or prefer_task_delegation_row(row, prev):
                 by_key[key] = row
         return sorted(by_key.values(), key=lambda r: r.tool_call_id)
-
-    @staticmethod
-    def _child_rows_for_task(
-        step_id: str,
-        rows: list[StepToolRow],
-        task_row: StepToolRow,
-    ) -> list[StepToolRow]:
-        """Subgraph tool rows for one task (``parent_tool_call_id`` or ``{step}:t{n}:…``)."""
-        raw_parent = str(task_row.tool_call_id).strip()
-        parsed_sid, _, _, _ = parse_unified_tool_call_id(raw_parent)
-        canonical_step_id = _step_id_from_unified_fragment(step_id)
-        if parsed_sid and parsed_sid == canonical_step_id:
-            parent_id = normalize_step_task_tool_call_id(step_id, raw_parent)
-        else:
-            parent_id = raw_parent
-        task_idx = task_idx_from_delegation_row(task_row)
-        by_id: dict[str, StepToolRow] = {}
-        for row in rows:
-            if (
-                row.is_task_row
-                or is_step_level_task_tool_id(row.tool_call_id)
-                or is_task_metadata_only_tool_row(row)
-            ):
-                continue
-            tcid = str(row.tool_call_id).strip()
-            if not tcid:
-                continue
-            row_parent = str(row.parent_tool_call_id or "").strip()
-            if task_parent_ids_match(step_id, parent_id, row_parent):
-                by_id[tcid] = row
-                continue
-            if task_idx is not None:
-                sid, type_code, idx, _ = parse_unified_tool_call_id(tcid)
-                if (
-                    sid == canonical_step_id
-                    and type_code == "t"
-                    and idx is not None
-                    and idx == task_idx
-                ):
-                    by_id[tcid] = row
-        return sorted(by_id.values(), key=lambda r: r.tool_call_id)
-
-    @staticmethod
-    def _orphan_subgraph_tool_rows(
-        step_id: str,
-        rows: list[StepToolRow],
-        task_delegations: list[StepToolRow],
-    ) -> list[StepToolRow]:
-        """Subgraph tool rows whose parent task delegation row is missing."""
-        task_parent_ids: set[str] = set()
-        task_indices: set[int] = set()
-        for task_row in task_delegations:
-            key = task_delegation_dedupe_key(task_row, step_id)
-            if key:
-                task_parent_ids.add(key)
-            task_idx = task_idx_from_delegation_row(task_row)
-            if task_idx is not None:
-                task_indices.add(task_idx)
-
-        canonical_step_id = _step_id_from_unified_fragment(step_id)
-        out: list[StepToolRow] = []
-        for row in rows:
-            if row.is_task_row:
-                continue
-            if is_task_metadata_only_tool_row(row):
-                continue
-            if not row_belongs_to_step(row, step_id):
-                continue
-            tcid = str(row.tool_call_id).strip()
-            if not tcid:
-                continue
-            if is_step_level_task_tool_id(tcid) or is_inner_subgraph_task_tool_id(tcid):
-                continue
-            parsed_sid, type_code, idx, _ = parse_unified_tool_call_id(tcid)
-            if parsed_sid and parsed_sid != canonical_step_id:
-                continue
-
-            parent_id = str(row.parent_tool_call_id or "").strip()
-            if parent_id and is_step_level_task_tool_id(parent_id):
-                parent_id = normalize_step_task_tool_call_id(step_id, parent_id)
-            has_visible_parent = bool(parent_id and parent_id in task_parent_ids)
-            matched_by_task_idx = type_code == "t" and idx is not None and idx in task_indices
-
-            if type_code == "t" and not has_visible_parent and not matched_by_task_idx:
-                out.append(row)
-        return out
 
 
 # ---------------------------------------------------------------------------
@@ -472,54 +380,6 @@ def task_tool_row_tone_for_phase(phase: str, colors: Any) -> str:
 def task_tool_row_tone(row: StepToolRow, colors: Any) -> str:
     """Textual style for a tool row from its lifecycle phase."""
     return task_tool_row_tone_for_phase(row.phase or "pending", colors)
-
-
-def task_children_stats_tone(phase: str, colors: Any) -> str:
-    """Tone for task branch status head when not success/error."""
-    p = (phase or "pending").strip().lower()
-    if p == "running":
-        return colors.cognition
-    if p in ("failed", "error", "rejected"):
-        return colors.error
-    if p == "success":
-        return colors.cognition
-    return colors.muted
-
-
-def task_children_aggregate_phase(rows: list[StepToolRow]) -> str:
-    """Aggregate lifecycle phase for nested tools under one task delegation."""
-    if not rows:
-        return "pending"
-    phases = {(r.phase or "pending").strip().lower() for r in rows}
-    if "running" in phases:
-        return "running"
-    if "error" in phases or "rejected" in phases:
-        return "failed"
-    if phases <= {"success"}:
-        return "success"
-    if phases <= {"skipped"}:
-        return "skipped"
-    if "pending" in phases:
-        return "pending"
-    return "pending"
-
-
-def effective_task_delegation_phase(
-    task_row: StepToolRow,
-    child_rows: list[StepToolRow],
-    *,
-    step_status: str,
-) -> str:
-    """Derived phase for a task delegation from its subgraph tool rows."""
-    if child_rows:
-        phase = task_children_aggregate_phase(child_rows)
-    else:
-        phase = (task_row.phase or "pending").strip().lower()
-    if step_status == "running" and child_rows and phase == "success":
-        return "running"
-    if step_status == "success" and phase in ("pending", "running", "skipped"):
-        return "success"
-    return phase
 
 
 def task_delegation_label(task_row: StepToolRow) -> str:
@@ -679,93 +539,19 @@ class StepCardStatusLine:
             segs.append(Content.styled(stats_suffix, colors.cognition))
         return Content.assemble(*segs)
 
-    @staticmethod
-    def orphan_branch_running(
-        *,
-        orphan_rows: list[StepToolRow],
-        branch_gutter: str,
-        g: Any,
-        colors: Any,
-        spinner_position: int,
-        step_start_time: float | None,
-    ) -> Content:
-        """Running status + tool totals for orphan subgraph tools."""
-        stats_suffix = tool_stats_title_suffix_for_rows(orphan_rows)
-        elapsed = ""
-        if step_start_time is not None:
-            elapsed_secs = int(time() - step_start_time)
-            elapsed = f" ({format_duration(float(elapsed_secs))})"
-        frame = phase_icon(
-            "running",
-            g,
-            spinner_position=spinner_position,
-            animate_running=True,
-        )
-        head = f"{branch_gutter}{frame} Running...{elapsed}"
-        segs: list[object] = [Content.styled(head, colors.warning)]
-        if stats_suffix:
-            segs.append(Content.styled(stats_suffix, colors.cognition))
-        return Content.assemble(*segs)
-
-    @staticmethod
-    def task_branch(
-        *,
-        phase: str,
-        child_rows: list[StepToolRow],
-        task_key: str,
-        child_gutter: str,
-        g: Any,
-        colors: Any,
-        spinner_position: int,
-        task_activity_start_times: dict[str, float],
-    ) -> Content:
-        """Build one status line for a task delegation branch."""
-        stats_suffix = tool_stats_title_suffix_for_rows(child_rows)
-        p = (phase or "pending").strip().lower()
-        if p == "running":
-            elapsed = task_delegation_elapsed_suffix(task_activity_start_times, task_key)
-            frame = phase_icon(
-                "running",
-                g,
-                spinner_position=spinner_position,
-                animate_running=True,
-            )
-            head = f"{child_gutter}{frame} Running...{elapsed}"
-            segs: list[object] = [Content.styled(head, colors.warning)]
-            if stats_suffix:
-                segs.append(Content.styled(stats_suffix, colors.cognition))
-            return Content.assemble(*segs)
-        icon = phase_icon(p, g, animate_running=False)
-        status_word = {
-            "success": "Done",
-            "done": "Done",
-            "failed": "Failed",
-            "error": "Failed",
-            "rejected": "Failed",
-            "skipped": "Skipped",
-            "pending": "Pending",
-        }.get(p, "Pending")
-        head_tone = {
-            "success": colors.card_success,
-            "done": colors.card_success,
-            "failed": colors.card_error,
-            "error": colors.card_error,
-            "rejected": colors.card_error,
-        }.get(p, task_children_stats_tone(p, colors))
-        head = f"{child_gutter}{icon} {status_word}"
-        segs = [Content.styled(head, head_tone)]
-        if stats_suffix:
-            segs.append(Content.styled(stats_suffix, colors.cognition))
-        return Content.assemble(*segs)
+    # ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
 # Activity tree renderer
 # ---------------------------------------------------------------------------
 
 
 class StepActivityTree:
-    """Pure render: task delegations, tool previews, and subagent notes."""
+    """Pure render: task delegation markers and main tool preview (IG-629 simplified).
+
+    IG-629: Removed nested child rendering — subgraph tools route to SubAgent cards.
+    Step cards show flat list: task delegation markers + main-agent tools.
+    """
 
     @staticmethod
     def render(
@@ -782,98 +568,47 @@ class StepActivityTree:
         g: Any,
         preview_limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
     ) -> Content:
-        """Task delegations, latest tool activity lines, and notes under the step title."""
+        """Task delegation markers and main tool preview under the step title."""
         branch_gutter = f"{g.output_prefix} "
-        child_gutter = f"{g.output_prefix}   "
         parts: list[object] = []
         first_block = True
 
         main_preview = latest_preview_rows(index.main_tools, preview_limit)
-        orphan_preview = latest_preview_rows(index.orphan_tools, preview_limit)
         if (
             not index.task_delegations
             and not main_preview
-            and not orphan_preview
             and not subagent_notes
             and not subagent_notes_by_task
         ):
             return Content("")
 
+        # IG-629: Task delegations shown as flat markers (no nested children)
         for task_row in index.task_delegations:
             if not first_block:
                 parts.append("\n")
             first_block = False
             task_key = task_delegation_dedupe_key(task_row, step_id)
-            child_rows = index.children_by_task.get(task_key, [])
-            eff_phase = effective_task_delegation_phase(
-                task_row, child_rows, step_status=step_status
-            )
-            if eff_phase == "running" and task_key:
-                touch_task_activity_start(task_activity_start_times, task_key)
-
-            task_icon = phase_icon(eff_phase, g, animate_running=False)
+            task_phase = (task_row.phase or "pending").strip().lower()
+            # Phase icon for task marker (syncs from SubAgent card on completion)
+            task_icon = phase_icon(task_phase, g, animate_running=False)
             label = task_delegation_label(task_row)
-            task_tone = task_tool_row_tone_for_phase(eff_phase, colors)
+            task_tone = task_tool_row_tone_for_phase(task_phase, colors)
             parts.append(
                 Content.styled(
                     f"{branch_gutter}{task_icon} {label}",
-                    task_tone if eff_phase != "pending" else colors.foreground,
+                    task_tone if task_phase != "pending" else colors.foreground,
                 )
             )
 
-            child_preview = latest_preview_rows(child_rows, preview_limit)
-            if child_preview:
-                append_tool_activity_lines(
-                    parts,
-                    child_preview,
-                    gutter=child_gutter,
-                    g=g,
-                    colors=colors,
-                    spinner_position=spinner_position,
-                    animate_running=eff_phase == "running",
-                )
-
-            if child_rows:
-                status_line = StepCardStatusLine.task_branch(
-                    phase=eff_phase,
-                    child_rows=child_rows,
-                    task_key=task_key,
-                    child_gutter=child_gutter,
-                    g=g,
-                    colors=colors,
-                    spinner_position=spinner_position,
-                    task_activity_start_times=task_activity_start_times,
-                )
-                parts.append("\n")
-                parts.append(status_line)
-            elif eff_phase == "running":
-                elapsed = task_delegation_elapsed_suffix(task_activity_start_times, task_key)
-                frame = phase_icon(
-                    "running",
-                    g,
-                    spinner_position=spinner_position,
-                    animate_running=True,
-                )
-                head = f"{child_gutter}{frame} Running...{elapsed}"
-                parts.append("\n")
-                parts.append(Content.styled(head, colors.warning))
-            elif step_status in ("pending", "queued"):
-                wait_word = "Queued..." if step_status == "queued" else "Pending..."
-                parts.append("\n")
-                parts.append(
-                    Content.styled(
-                        f"{child_gutter}{g.circle_empty} {wait_word}",
-                        colors.muted,
-                    )
-                )
-
+            # Per-task subagent notes (from SubAgent card)
             for note in subagent_notes_by_task.get(task_key, []):
                 text = (note or "").strip()
                 if not text:
                     continue
                 parts.append("\n")
-                parts.append(Content.styled(f"{child_gutter}{text}", colors.muted))
+                parts.append(Content.styled(f"{branch_gutter}{text}", colors.muted))
 
+        # Main-agent tool preview
         if main_preview:
             first_block = False
             append_tool_activity_lines(
@@ -886,55 +621,7 @@ class StepActivityTree:
                 animate_running=step_status == "running",
             )
 
-        if index.main_tools and step_status == "running" and index.task_delegations:
-            # Main-only steps use the footer Running line; branch status here only when
-            # task delegations also exist (mixed layout — footer shows total, branch main count).
-            if not first_block:
-                parts.append("\n")
-            first_block = False
-            parts.append(
-                StepCardStatusLine.main_branch_running(
-                    main_rows=index.main_tools,
-                    branch_gutter=branch_gutter,
-                    g=g,
-                    colors=colors,
-                    spinner_position=spinner_position,
-                    step_start_time=step_start_time,
-                )
-            )
-
-        if orphan_preview:
-            first_block = False
-            append_tool_activity_lines(
-                parts,
-                orphan_preview,
-                gutter=branch_gutter,
-                g=g,
-                colors=colors,
-                spinner_position=spinner_position,
-                animate_running=step_status == "running",
-            )
-
-        if (
-            index.orphan_tools
-            and step_status == "running"
-            and (index.task_delegations or index.main_tools)
-        ):
-            # Orphan-only steps use footer Running; branch status when other scopes exist.
-            if not first_block:
-                parts.append("\n")
-            first_block = False
-            parts.append(
-                StepCardStatusLine.orphan_branch_running(
-                    orphan_rows=index.orphan_tools,
-                    branch_gutter=branch_gutter,
-                    g=g,
-                    colors=colors,
-                    spinner_position=spinner_position,
-                    step_start_time=step_start_time,
-                )
-            )
-
+        # Global subagent notes
         for note in subagent_notes:
             t = (note or "").strip()
             if not t:
