@@ -130,6 +130,22 @@ class LocalFilesystem(UnifiedFilesystem):
         shutil.copy2(path, backup_path)
         return backup_path
 
+    def _result_path(self, resolved: Path) -> str:
+        """Compute result path string for WriteResult/EditResult.
+
+        Returns workspace-relative path if within workspace,
+        otherwise absolute path (for virtual_mode=False case).
+
+        Args:
+            resolved: Resolved absolute path.
+
+        Returns:
+            Path string for result object.
+        """
+        if self._is_within_workspace(resolved):
+            return str(resolved.relative_to(self.workspace))
+        return str(resolved)
+
     def _compute_hash(self, content: str | bytes) -> str:
         """Compute MD5 hash of content."""
         if isinstance(content, str):
@@ -282,11 +298,15 @@ class LocalFilesystem(UnifiedFilesystem):
         except OSError as e:
             raise FilesystemError(f"Write error: {e}", path=path) from e
 
+        # Compute result path: use relative path if within workspace, else absolute
+        result_path = self._result_path(resolved)
+        result_backup = self._result_path(backup_path) if backup_path else None
+
         return WriteResult(
-            path=str(resolved.relative_to(self.workspace)),
+            path=result_path,
             bytes_written=bytes_written,
             created=created,
-            backup_path=str(backup_path.relative_to(self.workspace)) if backup_path else None,
+            backup_path=result_backup,
         )
 
     async def awrite(
@@ -354,11 +374,11 @@ class LocalFilesystem(UnifiedFilesystem):
             f.write(new_content)
 
         return EditResult(
-            path=str(resolved.relative_to(self.workspace)),
+            path=self._result_path(resolved),
             old_hash=old_hash,
             new_hash=new_hash,
             lines_changed=lines_changed,
-            backup_path=str(backup_path.relative_to(self.workspace)) if backup_path else None,
+            backup_path=self._result_path(backup_path) if backup_path else None,
         )
 
     async def aedit(
@@ -430,11 +450,11 @@ class LocalFilesystem(UnifiedFilesystem):
             f.writelines(result_lines)
 
         return EditResult(
-            path=str(resolved.relative_to(self.workspace)),
+            path=self._result_path(resolved),
             old_hash=old_hash,
             new_hash=new_hash,
             lines_changed=lines_changed,
-            backup_path=str(backup_path.relative_to(self.workspace)) if backup_path else None,
+            backup_path=self._result_path(backup_path) if backup_path else None,
         )
 
     async def aedit_lines(
@@ -533,8 +553,8 @@ class LocalFilesystem(UnifiedFilesystem):
             )
 
         return EditResult(
-            path=str(resolved.relative_to(self.workspace)),
-            backup_path=str(backup_path.relative_to(self.workspace)) if backup_path else None,
+            path=self._result_path(resolved),
+            backup_path=self._result_path(backup_path) if backup_path else None,
         )
 
     async def aapply_diff(
@@ -595,7 +615,7 @@ class LocalFilesystem(UnifiedFilesystem):
         permissions = oct(stat.st_mode)[-3:]
 
         return FileInfo(
-            path=str(path.relative_to(self.workspace)),
+            path=self._result_path(path),
             is_dir=path.is_dir(),
             size=stat.st_size,
             modified_at=modified_at,
@@ -666,9 +686,9 @@ class LocalFilesystem(UnifiedFilesystem):
             raise PermissionDeniedError(f"Permission denied: {path}", path=path) from e
 
         return DeleteResult(
-            path=str(resolved.relative_to(self.workspace)),
+            path=self._result_path(resolved),
             was_directory=True,
-            backup_path=str(backup_path.relative_to(self.workspace)) if backup_path else None,
+            backup_path=self._result_path(backup_path) if backup_path else None,
         )
 
     async def armdir(
@@ -710,9 +730,9 @@ class LocalFilesystem(UnifiedFilesystem):
             raise PermissionDeniedError(f"Permission denied: {path}", path=path) from e
 
         return DeleteResult(
-            path=str(resolved.relative_to(self.workspace)),
+            path=self._result_path(resolved),
             was_directory=False,
-            backup_path=str(backup_path.relative_to(self.workspace)) if backup_path else None,
+            backup_path=self._result_path(backup_path) if backup_path else None,
         )
 
     async def adelete(
@@ -901,7 +921,7 @@ class LocalFilesystem(UnifiedFilesystem):
                     continue
 
                 file_path = Path(root) / name
-                rel_path = str(file_path.relative_to(self.workspace))
+                rel_path = self._result_path(file_path)
 
                 try:
                     with open(file_path, encoding="utf-8", errors="ignore") as f:
