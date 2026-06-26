@@ -128,6 +128,12 @@ jobs:
           echo "version=${v}" >> "${GITHUB_OUTPUT}"
           echo "Resolved SOOTHE_VERSION=${v}"
 
+      - name: Wait 5 minutes for PyPI propagation
+        if: ${{ github.event_name == 'workflow_run' }}
+        run: |
+          echo "Waiting 5 minutes for PyPI packages to propagate after release..."
+          sleep 300
+
       - name: Wait for PyPI wheels
         if: ${{ github.event_name == 'workflow_run' }}
         env:
@@ -137,12 +143,12 @@ jobs:
           wait_pkg() {
             local pkg="$1"
             echo "Waiting for ${pkg}==${SOOTHE_VERSION} on PyPI..."
-            for attempt in $(seq 1 36); do
+            for attempt in $(seq 1 12); do
               if python -m pip index versions "${pkg}" 2>/dev/null | grep -qF "${SOOTHE_VERSION}"; then
                 echo "✓ ${pkg} ${SOOTHE_VERSION} is on PyPI"
                 return 0
               fi
-              echo "  attempt ${attempt}/36: not yet available, sleeping 10s"
+              echo "  attempt ${attempt}/12: not yet available, sleeping 10s"
               sleep 10
             done
             echo "::error::Timed out waiting for ${pkg}==${SOOTHE_VERSION} on PyPI"
