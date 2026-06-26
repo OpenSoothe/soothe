@@ -284,6 +284,24 @@ def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
     return True
 
 
+def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
+    """True for rows that belong in the step-card footer tool total (RFC-628).
+
+    Subgraph tools (type ``t``) belong on SubAgent cards only and are excluded.
+    """
+    if row.is_task_row:
+        return False
+    if is_task_metadata_only_tool_row(row):
+        return False
+    if not row_belongs_to_step(row, step_id):
+        return False
+    tcid = str(row.tool_call_id).strip()
+    if not tcid:
+        return False
+    _, type_code, _, _ = parse_unified_tool_call_id(tcid)
+    return type_code != "t"
+
+
 def normalized_task_note_key(step_id: str, task_tool_call_id: str) -> str:
     """Normalize task tool_call_id for subagent note lookup."""
     tcid = str(task_tool_call_id).strip()
@@ -306,13 +324,7 @@ class StepRowClassifier:
         """
         task_delegations = StepRowClassifier._iter_task_delegation_rows(step_id, rows)
         main_tools = [r for r in rows if row_counts_for_main_tools(r, step_id)]
-        countable = [
-            r
-            for r in rows
-            if not r.is_task_row
-            and not is_task_metadata_only_tool_row(r)
-            and row_belongs_to_step(r, step_id)
-        ]
+        countable = [r for r in rows if row_counts_for_step_tool_total(r, step_id)]
         return StepRowIndex(
             task_delegations=task_delegations,
             main_tools=main_tools,

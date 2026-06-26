@@ -516,11 +516,39 @@ class CognitionStepMessage(Vertical):
         return stats_title_suffix(self._build_row_index())
 
     def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
-        """Tracked main/task totals for status lines; server total when rows were not tracked."""
-        suffix = self._stats_title_suffix()
-        if suffix:
-            return suffix
-        if fallback_count > 0:
+        """Tracked scope-local totals for status lines.
+
+        Server ``tool_call_count`` on step completion aggregates main + subgraph
+        tools (RFC-628). Use it only for main-only steps with no local rows yet.
+        SubAgent cards always use their own row index.
+        """
+        index = self._build_row_index()
+        tool_count = index.total_tool_count
+        is_subagent = bool(getattr(self, "_parent_step_id", ""))
+        if is_subagent or index.task_delegation_count > 0:
+            pass
+        elif fallback_count > tool_count:
+            tool_count = fallback_count
+        parts: list[str] = []
+        if tool_count:
+            from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+                format_tool_count_label,
+            )
+
+            parts.append(format_tool_count_label(tool_count, singular="tool", plural="tools"))
+        if index.task_delegation_count:
+            from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+                format_tool_count_label,
+            )
+
+            parts.append(
+                format_tool_count_label(
+                    index.task_delegation_count, singular="task", plural="tasks"
+                )
+            )
+        if parts:
+            return f" · {', '.join(parts)}"
+        if not is_subagent and index.task_delegation_count == 0 and fallback_count > 0:
             return f" · {fallback_count} tools"
         return ""
 
@@ -1043,6 +1071,15 @@ class CognitionStepMessage(Vertical):
         ``success`` so task branches show Done instead of Skipped/Pending when
         the subagent finished without per-tool ToolMessage events.
         """
+        from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+        # RFC-628: subgraph rows belong on SubAgent cards; strip from step cards only.
+        if not getattr(self, "_parent_step_id", ""):
+            self._rows = [
+                row
+                for row in self._rows
+                if parse_unified_tool_call_id(str(row.tool_call_id).strip())[1] != "t"
+            ]
         finalize_tool_rows_on_step_end(
             self._rows,
             self._iter_task_delegation_rows(),
