@@ -115,6 +115,16 @@ def create_subagent_card(
         card, "🎯 ", f"{card._subagent_type}({description})"
     )
 
+    def sync_status_to_step(step_widget: Any, success: bool) -> None:
+        """Update parent step's task row icon when this SubAgent completes."""
+        if not card._parent_task_key:
+            return
+        sync_fn = getattr(step_widget, "_sync_task_row_status_from_subagent", None)
+        if callable(sync_fn):
+            sync_fn(card._parent_task_key, success)
+
+    card.sync_status_to_step = sync_status_to_step  # type: ignore[attr-defined]
+
     # Override _build_row_index to filter by task_idx
     from soothe_cli.tui.widgets.messages.cognition_step_activity import (
         StepRowIndex,
@@ -129,11 +139,17 @@ def create_subagent_card(
         """
         from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
+        from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+            is_task_metadata_only_tool_row,
+        )
+
         # Filter rows to only include subgraph tools for this task
         filtered_rows = []
         for row in self._rows:
             tcid = str(row.tool_call_id).strip()
             if not tcid:
+                continue
+            if is_task_metadata_only_tool_row(row):
                 continue
             _, type_code, idx, _ = parse_unified_tool_call_id(tcid)
             # Only include type=t rows with matching task_idx
