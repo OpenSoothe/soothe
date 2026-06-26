@@ -267,6 +267,14 @@ class MessageRouter:
             await d._send_client_message(client_id, d.daemon_ready_message())
             return
 
+        # RFC-307: Auth message handling (auth, auth_refresh)
+        if msg_type == "auth":
+            await self._handle_auth(client_id, msg)
+            return
+        if msg_type == "auth_refresh":
+            await self._handle_auth_refresh(client_id, msg)
+            return
+
         # Loop RPC handlers (RFC-504 Loop Management CLI Commands)
         if msg_type == "loop_list":
             await self._handle_loop_list(client_id, msg)
@@ -404,6 +412,66 @@ class MessageRouter:
             return
 
         logger.debug("Unknown client message type: %s", msg_type)
+
+    async def _handle_auth(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle ``auth`` WebSocket message (RFC-307 §WebSocket AKSK Flow).
+
+        Args:
+            client_id: Client identifier.
+            msg: Message dict with ``access_key`` and ``secret_key``.
+        """
+        d = self._daemon
+        from soothe_daemon.server.auth_handler import build_auth_response_error
+
+        auth_handler = getattr(d, "_auth_handler", None)
+        if auth_handler is None:
+            await d._send_client_message(
+                client_id,
+                build_auth_response_error("identity_disabled"),
+            )
+            return
+
+        access_key = msg.get("access_key", "")
+        secret_key = msg.get("secret_key", "")
+
+        if not access_key or not secret_key:
+            await d._send_client_message(
+                client_id,
+                build_auth_response_error("missing_credentials"),
+            )
+            return
+
+        response = auth_handler.handle_auth(access_key, secret_key)
+        await d._send_client_message(client_id, response)
+
+    async def _handle_auth_refresh(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle ``auth_refresh`` WebSocket message (RFC-307 §Token Refresh Flow).
+
+        Args:
+            client_id: Client identifier.
+            msg: Message dict with ``refresh_token``.
+        """
+        d = self._daemon
+        from soothe_daemon.server.auth_handler import build_refresh_response_error
+
+        auth_handler = getattr(d, "_auth_handler", None)
+        if auth_handler is None:
+            await d._send_client_message(
+                client_id,
+                build_refresh_response_error("identity_disabled"),
+            )
+            return
+
+        refresh_token = msg.get("refresh_token", "")
+        if not refresh_token:
+            await d._send_client_message(
+                client_id,
+                build_refresh_response_error("missing_refresh_token"),
+            )
+            return
+
+        response = auth_handler.handle_refresh(refresh_token)
+        await d._send_client_message(client_id, response)
 
     async def _handle_skills_list(self, client_id: str, msg: dict[str, Any]) -> None:
         """Return wire-safe skill metadata for the daemon's agent config."""

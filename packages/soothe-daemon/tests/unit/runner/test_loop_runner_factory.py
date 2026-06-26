@@ -142,6 +142,27 @@ class TestLoopRunnerFactoryDefaultConfig:
         assert isinstance(runner, PoolLoopRunner)
 
 
+class TestLoopRunnerFactoryIdentityValidation:
+    """Identity + worker_pool mode is rejected at factory construction."""
+
+    def test_raises_when_identity_enabled_with_worker_pool(self) -> None:
+        from soothe.middleware.identity import IdentityConfig, IdentityRuntime
+
+        daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=False)
+        daemon_cfg.identity = IdentityConfig(enabled=True)
+        agent_cfg = SootheConfig()
+
+        identity_runtime = IdentityRuntime(
+            service=MagicMock(),
+            config=daemon_cfg.identity,
+        )
+
+        with pytest.raises(ValueError, match="Identity service requires thread_pool mode"):
+            LoopRunnerFactory(daemon_cfg, agent_cfg, identity_runtime=identity_runtime)
+
+
 class TestLoopRunnerFactoryModeValidation:
     """Tests for validate_runner_mode() ensuring exactly one mode enabled."""
 

@@ -250,16 +250,9 @@ class IdentityService(IdentityProtocol):
 
     def _delete_user_sync(self, conn: sqlite3.Connection, user_id: str) -> None:
         """Sync: delete user and cascade."""
-        # Mark all tokens as revoked
-        conn.execute(
-            """
-            UPDATE identity_tokens SET revoked = 1, revoked_at = ?
-            WHERE user_id = ? AND revoked = 0
-            """,
-            (datetime.now(UTC).isoformat(), user_id),
-        )
+        now_iso = datetime.now(UTC).isoformat()
 
-        # Add all JTIs to revoked_jtis
+        # Collect all JTIs for revocation tracking before deletion
         cursor = conn.execute(
             "SELECT jti FROM identity_tokens WHERE user_id = ?",
             (user_id,),
@@ -270,16 +263,19 @@ class IdentityService(IdentityProtocol):
                 INSERT OR IGNORE INTO identity_revoked_jtis (jti, revoked_at, reason)
                 VALUES (?, ?, 'user_deleted')
                 """,
-                (row[0], datetime.now(UTC).isoformat()),
+                (row[0], now_iso),
             )
 
-        # Mark all AKSK as revoked
+        # Delete tokens (child of aksk_pairs, must delete before aksk)
         conn.execute(
-            """
-            UPDATE identity_aksk_pairs SET revoked = 1, revoked_at = ?
-            WHERE user_id = ? AND revoked = 0
-            """,
-            (datetime.now(UTC).isoformat(), user_id),
+            "DELETE FROM identity_tokens WHERE user_id = ?",
+            (user_id,),
+        )
+
+        # Delete AKSK pairs (child of users, must delete before user)
+        conn.execute(
+            "DELETE FROM identity_aksk_pairs WHERE user_id = ?",
+            (user_id,),
         )
 
         # Delete external mappings
@@ -584,7 +580,7 @@ class IdentityService(IdentityProtocol):
             (jti, user_id, aksk_id, token_type, issued_at, expires_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("refresh", user_id, aksk_id, refresh_jti, refresh_issued, refresh_expires),
+            (refresh_jti, user_id, aksk_id, "refresh", refresh_issued, refresh_expires),
         )
         conn.commit()
 

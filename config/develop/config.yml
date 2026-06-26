@@ -57,11 +57,14 @@ agent:
   # Embedded QuickJS interpreter for programmatic tool calling (PTC).
   # Dependency note: langchain-quickjs is included in soothe base dependencies.
   code_interpreter:
-    enabled: false
+    enabled: true
 
 # SQLite reader pool for concurrent database access
 persistence:
   sqlite_reader_pool_size: 12  # Increased from default 8 for better DB concurrency
+
+security:
+  allow_paths_outside_workspace: true
 
 # ============================================================
 # OBSERVABILITY

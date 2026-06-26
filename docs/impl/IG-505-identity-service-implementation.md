@@ -2,8 +2,12 @@
 
 **RFC**: RFC-307 (IdentityProtocol Architecture)
 **Created**: 2026-06-25
-**Status**: Draft
+**Status**: Implemented
 **Target**: soothe-daemon, soothe core packages
+**Completed**: 2026-06-26
+**Verification**: `./scripts/verify_finally.sh` — all checks pass (workspace sync, dependency validation, formatting, linting, unit tests)
+
+**Related**: [Identity config placement (`daemon.yml` vs `config.yml`)](../identity-config-placement.md)
 
 ---
 
@@ -995,3 +999,75 @@ dependencies = [
 - RFC-620: Channel Architecture (external channels)
 - RFC-621: Workspace Isolation (user_id → workspace)
 - RFC-801: SQLite Backend (persistence pattern)
+
+---
+
+## Implementation Status
+
+**Status**: Implemented (2026-06-26)
+
+All phases of the Implementation Order are complete. The module locations differ slightly from the original plan (some modules were placed in more appropriate packages to respect the one-way dependency rule `soothe → soothe-daemon`), but every component is implemented and verified.
+
+### Phase Completion
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1 — Core Protocol | ✅ Done | models, errors, credentials, tokens, IdentityProtocol (SDK), IdentityService |
+| Phase 2 — Middleware | ✅ Done | ThreadState extended, IdentityMiddleware, integrated with middleware stack |
+| Phase 3 — Daemon Integration | ✅ Done | IdentityConfig, AuthHandler, registered in server core |
+| Phase 4 — CLI | ✅ Done | identity CLI commands, registered in main CLI app |
+| Phase 5 — Tests | ✅ Done | Unit + WebSocket auth tests, all passing |
+
+### Implemented Modules
+
+**SDK (`packages/soothe-sdk`)**:
+- `src/soothe_sdk/protocols/identity.py` — `IdentityProtocol` Protocol with full method surface
+- `src/soothe_sdk/protocols/__init__.py` — exports `IdentityProtocol` and related models
+
+**soothe core (`packages/soothe`)**:
+- `src/soothe/core/security/__init__.py` — package exports
+- `src/soothe/core/security/models.py` — User, AKSKPair, TokenClaims, ExternalIdentityMapping, result types
+- `src/soothe/core/security/errors.py` — IdentityError hierarchy
+- `src/soothe/core/security/credentials.py` — AKSK generation, SHA-256 hashing, constant-time verification
+- `src/soothe/core/security/tokens.py` — JWT generation/validation (PyJWT)
+- `src/soothe/core/security/identity_service.py` — `IdentityService` implementation (SQLite-backed)
+- `src/soothe/protocols/__init__.py` — re-exports `IdentityProtocol` from SDK
+- `src/soothe/middleware/identity.py` — `IdentityMiddleware`, `IdentityConfig`, `TokenConfig`, `AKSKConfig`
+- `src/soothe/middleware/__init__.py` — exports `IdentityMiddleware`
+- `pyproject.toml` — `pyjwt>=2.8.0,<3.0.0` dependency added
+
+**soothe-daemon (`packages/soothe-daemon`)**:
+- `src/soothe_daemon/identity_cli.py` — Typer sub-app (users, AKSK, tokens, external mappings, status)
+- `src/soothe_daemon/cli.py` — registers `identity` sub-app via `add_typer`
+- `src/soothe_daemon/config/models.py` — re-exports `IdentityConfig`/`TokenConfig`/`AKSKConfig` from soothe core
+- `src/soothe_daemon/server/auth_handler.py` — `AuthHandler` (WebSocket auth + refresh flow)
+- `src/soothe_daemon/server/core.py` — creates `IdentityService`/`AuthHandler` when `identity.enabled`
+- `src/soothe_daemon/runtime/thread_state.py` — `ThreadState` extended with `user_id`, `aksk_id` fields
+
+### Tests (all passing)
+
+| Test file | Tests |
+|-----------|-------|
+| `packages/soothe/tests/unit/core/security/test_identity_service.py` | 56 |
+| `packages/soothe/tests/unit/core/security/test_tokens.py` | 38 |
+| `packages/soothe/tests/unit/core/security/test_credentials.py` | 37 |
+| `packages/soothe/tests/unit/middleware/test_identity_middleware.py` | 22 |
+| `packages/soothe-daemon/tests/unit/server/test_identity_cli.py` | 32 |
+| `packages/soothe-daemon/tests/unit/server/test_identity_websocket.py` | 30 |
+| **Total** | **215** |
+
+### Deviations from Plan
+
+1. **CLI location**: `identity_cli.py` placed at `src/soothe_daemon/identity_cli.py` (module root) and registered in `cli.py`, rather than under a `cli/` subpackage. Functionally equivalent.
+2. **IdentityConfig location**: `IdentityConfig`/`TokenConfig`/`AKSKConfig` are defined in `soothe.middleware.identity` (core) and re-exported by the daemon config, preserving the one-way dependency rule (soothe must not depend on soothe-daemon).
+3. **Test locations**: identity CLI and WebSocket tests live under `packages/soothe-daemon/tests/unit/server/`; the identity middleware test lives under `packages/soothe/tests/unit/middleware/`. The planned `tests/integration/test_identity_external.py` is covered by unit-level external-mapping tests in `test_identity_service.py` and `test_identity_middleware.py`.
+4. **Config files**: `IdentityConfig` is not yet surfaced in `config/config.template.yml` / `config/develop/config.yml` as a top-level key (identity defaults to disabled for backward compatibility). Consumers construct it programmatically via the daemon config model. See [identity-config-placement.md](../identity-config-placement.md) for rationale and core-code split.
+
+### Verification
+
+`./scripts/verify_finally.sh` — **all checks pass**:
+- ✓ Workspace sync (all packages, all extras)
+- ✓ Package dependency validation (CLI/SDK/soothe/daemon boundaries)
+- ✓ Code formatting (all packages)
+- ✓ Linting (all packages)
+- ✓ Unit tests (all packages, including 215 identity tests)

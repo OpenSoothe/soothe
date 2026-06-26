@@ -4,6 +4,7 @@ from soothe_daemon.config.env import apply_env_overrides
 from soothe_daemon.config.models import (
     ChannelsConfig,
     DistributedConfig,
+    IdentityConfig,
     RayClusterConfig,
     ThreadPoolConfig,
     TransportConfig,
@@ -19,6 +20,7 @@ from soothe_daemon.config.settings import (
 __all__ = [
     "ChannelsConfig",
     "DistributedConfig",
+    "IdentityConfig",
     "RayClusterConfig",
     "SootheDaemonConfig",
     "ThreadPoolConfig",
