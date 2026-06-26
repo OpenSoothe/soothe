@@ -2821,7 +2821,12 @@ async def execute_task_textual(
                                     data.get("assessment_reasoning", "")
                                 ).strip()
                                 plan_reasoning = str(data.get("plan_reasoning", "")).strip()
-                                if not assessment_reasoning and not plan_reasoning:
+                                next_action = str(data.get("next_action", "")).strip()
+                                if (
+                                    not assessment_reasoning
+                                    and not plan_reasoning
+                                    and not next_action
+                                ):
                                     continue
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
@@ -2837,7 +2842,7 @@ async def execute_task_textual(
                                 pa_raw = data.get("plan_action", "")
                                 plan_action = pa_raw if pa_raw in ("keep", "new") else ""
                                 plan_widget = CognitionReasonMessage(
-                                    next_action="",
+                                    next_action=next_action,
                                     status=str(data.get("status", "")),
                                     iteration=int(data.get("iteration", 0)),
                                     plan_action=str(plan_action),
