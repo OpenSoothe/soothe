@@ -447,8 +447,16 @@ def test_main_only_step_activity_has_no_running_line() -> None:
 
 def test_deferred_running_set_running_refreshes_task_activity_panel() -> None:
     """Tools added before mount must paint branch status + footer on set_running()."""
+    from soothe_cli.runtime.state.step_router import StepTaskRouter
+
     card = CognitionStepMessage("DEF-01", "Deferred mount", id="step-deferred")
+    router = StepTaskRouter()
     card.add_tool_call("DEF_01:s:grep:0", "grep", {"pattern": "x"})
+    router.maybe_promote_step_to_running(
+        card,
+        "DEF_01:s:grep:0",
+        step_cards={"DEF-01": card},
+    )
     assert card._deferred_running is True
     assert card._status == "running"
 

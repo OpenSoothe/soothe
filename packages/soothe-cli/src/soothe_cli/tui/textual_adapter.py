@@ -819,11 +819,15 @@ def _ingest_main_task_tool_on_step_card(
     )
     subagent_card_to_mount = None
     if step_w is not None:
-        if step_w.has_tool_call_row(norm_tcid):
-            step_w.update_tool_args(norm_tcid, display_args)
-        else:
-            step_w.add_tool_call(norm_tcid, "task", display_args, is_task_row=True)
-        adapter._tool_to_step[norm_tcid] = step_w
+        _register_main_tool_on_step_card(
+            adapter,
+            router,
+            step_w,
+            norm_tcid,
+            "task",
+            display_args,
+            is_task_row=True,
+        )
         adapter._tool_display_by_call_id[norm_tcid] = step_w
 
         # IG-513: Create SubAgent card for this task delegation
@@ -853,6 +857,39 @@ def _ingest_main_task_tool_on_step_card(
 
     _route_pending_subgraph_tools(adapter, router)
     return subagent_card_to_mount
+
+
+def _register_main_tool_on_step_card(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    step_w: CognitionStepMessage,
+    tool_call_id: str,
+    tool_name: str,
+    args: dict[str, Any],
+    *,
+    raw_args: str = "",
+    is_task_row: bool = False,
+    parent_tool_call_id: str | None = None,
+) -> None:
+    """Register a main-graph tool row and promote the step card when authorized (RFC-628)."""
+    tcid = str(tool_call_id).strip()
+    if step_w.has_tool_call_row(tcid):
+        step_w.update_tool_args(tcid, args)
+    else:
+        step_w.add_tool_call(
+            tcid,
+            tool_name,
+            args,
+            raw_args=raw_args,
+            is_task_row=is_task_row,
+            parent_tool_call_id=parent_tool_call_id,
+        )
+    router.maybe_promote_step_to_running(
+        step_w,
+        tcid,
+        step_cards=adapter._current_step_messages,
+    )
+    adapter._tool_to_step[tcid] = step_w
 
 
 def _resolve_step_widget_for_tool(
@@ -918,11 +955,15 @@ def _fallback_ingest_subgraph_tool_on_step_card(
         parsed = extract_tool_args_dict({"_raw": raw_args})
         if parsed:
             resolved_args = parsed
-    if step_w.has_tool_call_row(row_id):
-        step_w.update_tool_args(row_id, resolved_args)
-    else:
-        step_w.add_tool_call(row_id, tool_name, resolved_args, raw_args=raw_args)
-    adapter._tool_to_step[row_id] = step_w
+    _register_main_tool_on_step_card(
+        adapter,
+        router,
+        step_w,
+        row_id,
+        tool_name,
+        resolved_args,
+        raw_args=raw_args,
+    )
     adapter._tool_display_by_call_id[row_id] = step_w
     return True
 
@@ -931,7 +972,6 @@ async def sync_pending_step_cards_from_plan(
     adapter: TextualUIAdapter,
     *,
     steps: list[dict[str, Any]],
-    execution_mode: str = "",
 ) -> None:
     """Mount step cards in ``pending`` state for planned steps not yet executing."""
     planned_ids = {
@@ -1288,11 +1328,15 @@ async def apply_tool_call_wire_update(
             update_payload = dict(display_args or {})
             if not update_payload and raw_args_stream:
                 update_payload = {"_raw": raw_args_stream}
-            if step_w.has_tool_call_row(tcid):
-                step_w.update_tool_args(tcid, update_payload)
-            else:
-                step_w.add_tool_call(tcid, name, update_payload, raw_args=raw_args_stream)
-            adapter._tool_to_step[tcid] = step_w
+            _register_main_tool_on_step_card(
+                adapter,
+                router,
+                step_w,
+                tcid,
+                name,
+                update_payload,
+                raw_args=raw_args_stream,
+            )
         elif name != "task":
             update_payload = dict(display_args or {})
             if not update_payload and raw_args_stream:
@@ -1358,16 +1402,17 @@ def _ensure_step_card_running_ui(widget: Any) -> None:
     """Apply deferred running UI before completing a step card."""
     if getattr(widget, "_deferred_running", False):
         widget._deferred_running = False  # noqa: SLF001
-    promote = getattr(widget, "_promote_pending_to_running_if_needed", None)
-    if callable(promote):
-        promote()
-    elif getattr(widget, "_status", "") == "pending":  # noqa: SLF001
+    if getattr(widget, "_status", "") == "pending":  # noqa: SLF001
         if getattr(widget, "is_mounted", False):
             widget.set_running()  # noqa: SLF001
         else:
             widget._status = "running"  # noqa: SLF001
             widget._start_time = time.time()  # noqa: SLF001
             widget._deferred_running = True  # noqa: SLF001
+    elif getattr(widget, "_status", "") == "running":  # noqa: SLF001
+        ensure = getattr(widget, "_ensure_running_ui", None)
+        if callable(ensure):
+            ensure()
 
 
 def _detach_step_card_from_adapter(
@@ -2770,13 +2815,15 @@ async def execute_task_textual(
                                                         lookup_id, parsed_args
                                                     )
                                             else:
-                                                active_step.add_tool_call(
-                                                    lookup_id,
+                                                _register_main_tool_on_step_card(
+                                                    adapter,
+                                                    router,
+                                                    active_step,
+                                                    str(lookup_id),
                                                     buffer_name,
                                                     parsed_args,
                                                     raw_args=raw_args_stream,
                                                 )
-                                            adapter._tool_to_step[lookup_id] = active_step
                                         else:
                                             router.buffer_main_tool(
                                                 str(lookup_id),
@@ -2945,7 +2992,6 @@ async def execute_task_textual(
                                     await sync_pending_step_cards_from_plan(
                                         adapter,
                                         steps=raw_steps,
-                                        execution_mode=execution_mode,
                                     )
                                     if execution_mode == "parallel":
                                         ui_coalesce.execute_wave_active = True

@@ -165,6 +165,47 @@ class StepTaskRouter:
         if sid:
             self.active_step_ids.add(sid)
 
+    def maybe_promote_step_to_running(
+        self,
+        step_w: StepWidget,
+        tool_call_id: str,
+        *,
+        step_cards: dict[str, StepWidget],
+    ) -> None:
+        """Promote a pending step card to running only when it is executing (RFC-628).
+
+        Pre-mounted future steps must stay ``pending`` until ``step.started`` even when
+        tools are stamped with their unified step id. The pre-``step.started`` race for
+        the active step is allowed only while no sibling step card is already running.
+        """
+        if getattr(step_w, "_status", "") != "pending":
+            return
+        step_id = str(getattr(step_w, "_step_id", "") or "").strip()
+        if not step_id:
+            return
+
+        tcid = str(tool_call_id or "").strip()
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        if parsed_sid and parsed_sid != step_id:
+            return
+
+        if step_id in self.active_step_ids:
+            allowed = True
+        elif self.active_step_ids:
+            allowed = False
+        else:
+            allowed = not any(
+                getattr(w, "_status", "") == "running"
+                and str(getattr(w, "_step_id", "") or "").strip() != step_id
+                for w in step_cards.values()
+            )
+
+        if not allowed:
+            return
+        promote = getattr(step_w, "promote_to_running_if_pending", None)
+        if callable(promote):
+            promote()
+
     def on_step_completed(self, step_id: str) -> None:
         """Drop step from the active set and spawn registry."""
         sid = step_id.strip()
@@ -353,6 +394,11 @@ class StepTaskRouter:
                     item.args,
                     raw_args=item.raw_args,
                 )
+                self.maybe_promote_step_to_running(
+                    step_w,
+                    item.tool_call_id,
+                    step_cards=step_cards,
+                )
             tool_to_step[item.tool_call_id] = step_w
             existing = tool_display_by_call_id.get(item.tool_call_id)
             if existing is None:
@@ -394,6 +440,8 @@ class StepTaskRouter:
         parent: ParentWidget,
         scope: TaskScope,
         tool_to_step: dict[str, ParentWidget],
+        *,
+        step_cards: dict[str, StepWidget] | None = None,
     ) -> bool:
         """Register one subgraph tool row on an already-resolved parent step card."""
         if _is_task_metadata_subgraph_tool(item):
@@ -449,6 +497,8 @@ class StepTaskRouter:
                 parent_tool_call_id=parent_task_id or None,
             )
         tool_to_step[row_id] = parent
+        if step_cards is not None:
+            self.maybe_promote_step_to_running(parent, row_id, step_cards=step_cards)
         return True
 
     def try_route_subgraph_tool(
@@ -522,7 +572,13 @@ class StepTaskRouter:
             return False
         pending_key = _subgraph_pending_key(ns_key, item.lookup_id)
         self._pending_subgraph_tools.pop(pending_key, None)
-        return self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step)
+        return self._ingest_subgraph_tool_on_parent(
+            item,
+            parent,
+            scope,
+            tool_to_step,
+            step_cards=step_cards,
+        )
 
     def route_pending_subgraph_tools(
         self,
@@ -575,7 +631,13 @@ class StepTaskRouter:
             if parent is None:
                 still[key] = item
                 continue
-            if self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step):
+            if self._ingest_subgraph_tool_on_parent(
+                item,
+                parent,
+                scope,
+                tool_to_step,
+                step_cards=step_cards,
+            ):
                 routed += 1
             else:
                 still[key] = item
