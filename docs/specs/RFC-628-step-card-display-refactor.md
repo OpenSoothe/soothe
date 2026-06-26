@@ -9,7 +9,7 @@
 **Authors**: Xiaming Chen
 **Depends on**: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements)
 **Extends**: RFC-500 § Event Rendering (step card), RFC-501 § 7.3 (TUI step card body)
-**Implemented by**: IG-512-step-card-display-refactor.md, IG-513-subagent-card.md
+**Implemented by**: IG-512-step-card-display-refactor.md, IG-513-subagent-card.md, IG-514-execute-namespace-tool-stamping-fix.md, IG-515-step-subagent-card-footer-and-lifecycle-fixes.md
 **Design draft**: `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
 
 ---
@@ -268,6 +268,8 @@ Run `./scripts/verify_finally.sh` before merge.
 - RFC-607 — progressive display refinements
 - IG-512 (step card) — `docs/impl/IG-512-step-card-display-refactor.md`
 - IG-513 (SubAgent) — `docs/impl/IG-513-subagent-card.md`
+- IG-514 (execute namespace stamping) — `docs/impl/IG-514-execute-namespace-tool-stamping-fix.md`
+- IG-515 (footer & lifecycle fixes) — `docs/impl/IG-515-step-subagent-card-footer-and-lifecycle-fixes.md`
 - Design draft — `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
 
 ---

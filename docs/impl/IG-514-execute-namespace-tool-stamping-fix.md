@@ -1,4 +1,4 @@
-# IG-630: Execute Namespace Tool Stamping Fix
+# IG-514: Execute Namespace Tool Stamping Fix
 
 **Status**: Completed
 **RFC**: [RFC-628](../specs/RFC-628-step-card-display-refactor.md) — step card tool activity display
@@ -30,7 +30,7 @@ As a result:
 Added check in `_act_stream_collector` to skip `task_idx` assignment for `execute:{run_id}` namespace:
 
 ```python
-# IG-630: execute:{run_id} namespace is step-level, not subgraph.
+# IG-514: execute:{run_id} namespace is step-level, not subgraph.
 # Only assign task_idx for true subgraph namespaces (tools:...).
 if _ns_chunk and not (
     len(_ns_chunk) == 1

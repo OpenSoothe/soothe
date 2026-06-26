@@ -195,6 +195,8 @@ Technical documentation for developers and system architects.
 | [IG-511](impl/IG-511-tool-timeout-analysis.md) | Tool Timeout Architecture Analysis |
 | [IG-512](impl/IG-512-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
 | [IG-513](impl/IG-513-subagent-card.md) | SubAgent Card — Flattened Display (RFC-628 Part II) |
+| [IG-514](impl/IG-514-execute-namespace-tool-stamping-fix.md) | Execute Namespace Tool Stamping Fix |
+| [IG-515](impl/IG-515-step-subagent-card-footer-and-lifecycle-fixes.md) | Step / SubAgent Card Footer & Lifecycle Fixes (RFC-628) |
 
 ---
 
