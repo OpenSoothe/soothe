@@ -37,3 +37,21 @@ def test_filter_keeps_incomplete_args_updates() -> None:
         }
     ]
     assert filter_redundant_stream_tool_updates(updates) == updates
+
+
+def test_wire_updates_emits_unified_main_tool_without_args() -> None:
+    msg = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "read_file",
+                "args": {},
+                "id": "BCO_01:s:read_file:0",
+                "type": "tool_call",
+            }
+        ],
+    )
+    updates = wire_updates_from_ai_message(msg)
+    assert len(updates) == 1
+    assert updates[0]["tool_call_id"] == "BCO_01:s:read_file:0"
+    assert updates[0]["name"] == "read_file"

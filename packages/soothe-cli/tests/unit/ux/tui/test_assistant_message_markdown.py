@@ -61,7 +61,7 @@ async def test_stop_stream_renders_content_to_body() -> None:
     msg._body = body
 
     with patch(
-        "soothe_cli.tui.widgets.messages._code_theme_for_app",
+        "soothe_cli.tui.widgets.messages.assistant._code_theme_for_app",
         return_value="monokai",
     ):
         await msg.stop_stream()
@@ -117,7 +117,7 @@ async def test_flush_renders_rich_markdown_to_body() -> None:
     msg._body = body
 
     with patch(
-        "soothe_cli.tui.widgets.messages._code_theme_for_app",
+        "soothe_cli.tui.widgets.messages.assistant._code_theme_for_app",
         return_value="monokai",
     ):
         await msg._flush_pending_content()
@@ -140,7 +140,7 @@ async def test_set_content_hydration_uses_rich_markdown() -> None:
     msg._body = body
 
     with patch(
-        "soothe_cli.tui.widgets.messages._code_theme_for_app",
+        "soothe_cli.tui.widgets.messages.assistant._code_theme_for_app",
         return_value="monokai",
     ):
         await msg.set_content("# Hydrated\n\nContent here")

@@ -124,12 +124,33 @@ def test_tool_invocation_batches_and_strips_ai() -> None:
         },
         {},
     )
-    assert coalescer.ingest((), "messages", wire) == []
-    flushed = coalescer.flush()
-    batches = [item for item in flushed if item[1] == "custom"]
+    out = coalescer.ingest((), "messages", wire)
+    batches = [item for item in out if item[1] == "custom"]
     assert len(batches) == 1
     assert batches[0][2]["type"] == "tool_call_updates_batch"
     assert batches[0][2]["count"] == 1
+    assert coalescer.flush() == []
+
+
+def test_tool_batch_flushes_immediately_without_waiting_for_tool_result() -> None:
+    """New tool invocations must reach the client before a long-running tool returns."""
+    coalescer = StreamDeliveryCoalescer("adaptive", tool_batch_interval_ms=10_000)
+    wire = (
+        {
+            "type": "ai",
+            "content": "",
+            "tool_calls": [
+                {"id": "tc-1", "name": "read_file", "args": {"path": "/x"}},
+            ],
+        },
+        {},
+    )
+    out = coalescer.ingest((), "messages", wire)
+    assert any(
+        item[1] == "custom" and item[2].get("type") == "tool_call_updates_batch" for item in out
+    )
+    # Simulate a long tool run with no further stream chunks until the result.
+    assert coalescer.ingest(*_tool_chunk()) == [((), "messages", _tool_chunk()[2])]
 
 
 def test_strip_tool_metadata_for_batch() -> None:

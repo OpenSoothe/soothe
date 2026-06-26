@@ -369,9 +369,12 @@ class StreamDeliveryCoalescer:
             if isinstance(msg_wire, dict):
                 tool_updates = list(extract_tool_call_updates_from_wire_message(msg_wire))
                 if tool_updates and self._tool_batch_enabled:
-                    self._accumulate_tool_batch(ns, tool_updates, now)
+                    added_new = self._accumulate_tool_batch(ns, tool_updates, now)
                     wire_data = self.strip_tool_metadata_for_batch(wire_data)
-                    out.extend(self._maybe_flush_tool_batch(ns, now, force=False))
+                    # Flush immediately when new tool invocations arrive so the TUI
+                    # can show step-card tool counts in real time. Debouncing only
+                    # applies to later chunks on the same turn (interval flush).
+                    out.extend(self._maybe_flush_tool_batch(ns, now, force=added_new))
                     body = wire_data[0] if wire_data else None
                     if isinstance(body, dict):
                         from soothe_sdk.client.wire import flatten_enveloped_message_dict
@@ -435,11 +438,13 @@ class StreamDeliveryCoalescer:
         namespace: tuple[str, ...],
         updates: list[dict[str, Any]],
         now: float,
-    ) -> None:
+    ) -> bool:
+        """Buffer tool wire updates; return True when at least one new row was added."""
         buf = self._tool_batches.get(namespace)
         if buf is None:
             buf = _ToolBatchBuffer(namespace=namespace)
             self._tool_batches[namespace] = buf
+        added_new = False
         for upd in updates:
             if not isinstance(upd, dict):
                 continue
@@ -449,7 +454,10 @@ class StreamDeliveryCoalescer:
             if tid:
                 buf.seen_ids.add(tid)
             buf.updates.append(upd)
-        buf.last_activity_monotonic = now
+            added_new = True
+        if added_new:
+            buf.last_activity_monotonic = now
+        return added_new
 
     def _should_suppress_stream_tool_update(
         self,

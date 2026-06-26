@@ -53,6 +53,36 @@ def test_extract_skips_incomplete_args() -> None:
     assert extract_tool_call_updates_from_wire_message(wire) == []
 
 
+def test_extract_unified_main_tool_without_args() -> None:
+    """Daemon batch must surface main-graph tools before kwargs finish streaming."""
+    wire = {
+        "type": "ai",
+        "content": "",
+        "tool_calls": [
+            {"name": "read_file", "id": "ABC_01:s:read_file:0", "args": {}},
+        ],
+    }
+    updates = extract_tool_call_updates_from_wire_message(wire)
+    assert len(updates) == 1
+    assert updates[0]["tool_call_id"] == "ABC_01:s:read_file:0"
+    assert updates[0]["name"] == "read_file"
+
+
+def test_extract_unified_main_tool_chunk_without_args() -> None:
+    """Streaming chunks with unified ids must batch before kwargs arrive."""
+    wire = {
+        "type": "ai",
+        "content": "",
+        "tool_call_chunks": [
+            {"name": "grep", "id": "ABC_01:s:grep:0", "args": ""},
+        ],
+    }
+    updates = extract_tool_call_updates_from_wire_message(wire)
+    assert len(updates) == 1
+    assert updates[0]["tool_call_id"] == "ABC_01:s:grep:0"
+    assert updates[0]["name"] == "grep"
+
+
 def test_extract_dedupes_tool_calls_and_chunks() -> None:
     wire = {
         "type": "ai",

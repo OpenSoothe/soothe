@@ -743,8 +743,3 @@ class _MessagesMixin:
     # =========================================================================
     # Model Switching
     # =========================================================================
-    # SOOTHE: Slash command actions
-
-    def action_detach(self) -> None:
-        """Exit TUI but leave daemon running."""
-        self._detach_or_exit()

@@ -49,10 +49,6 @@ from soothe_cli.tui.widgets.welcome import WelcomeBanner
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
 
-InputMode = (
-    "normal"  # Literal type alias — actual value used in _module_init; here for isinstance guards
-)
-
 
 class SootheApp(
     App,
