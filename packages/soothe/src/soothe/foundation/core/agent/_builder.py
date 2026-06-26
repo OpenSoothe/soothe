@@ -311,7 +311,7 @@ class AgentBuilder:
         )
 
         total_ms = (time.perf_counter() - create_start) * 1000
-        logger.info("[Init] ✓ CoreAgent ready (%.1fms total)", total_ms)
+        logger.info("[Init] CoreAgent ready (%.1fms total)", total_ms)
 
         return agent
 
@@ -456,7 +456,7 @@ class AgentBuilder:
         )
 
         total_ms = (time.perf_counter() - create_start) * 1000
-        logger.info("[Init] ✓ ClaudeCoreAgent ready (%.1fms total)", total_ms)
+        logger.info("[Init] ClaudeCoreAgent ready (%.1fms total)", total_ms)
 
         return agent
 
