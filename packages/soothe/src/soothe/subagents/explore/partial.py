@@ -24,7 +24,7 @@ def build_explore_result_from_findings(
     findings: list[dict[str, Any]],
     *,
     search_target: str,
-    thoroughness: str,
+    thoroughness: str = "medium",
     max_matches: int,
     status: ExploreCompletionStatus,
     failure_reason: str = "",
@@ -34,7 +34,7 @@ def build_explore_result_from_findings(
     Args:
         findings: Rows collected by ``ExploreFindingsMiddleware``.
         search_target: Resolved search target for the run.
-        thoroughness: Configured thoroughness label.
+        thoroughness: Configured thoroughness label (defaults to "medium" if omitted).
         max_matches: Cap on returned matches.
         status: ``partial`` when findings exist but synthesis failed; ``failed`` when empty.
         failure_reason: Short operator-facing reason (logged and surfaced in coverage).

@@ -66,4 +66,6 @@ Structured output: ExploreResult with:
 - summary: concise direct answer to the search target (no filler)
 - suggested_next_actions: markdown bullet lines starting with "- " for the parent agent (e.g. read_file on specific paths, grep patterns). Use empty string if nothing to recommend.
 - coverage_gaps: short paragraph on what was not searched, tool limits, or assumptions. Use empty string if none.
-- architecture_notes: optional markdown bullets for broad architecture-style targets only; empty string if not applicable."""
+- architecture_notes: optional markdown bullets for broad architecture-style targets only; empty string if not applicable.
+
+Note: thoroughness is optional and defaults to "medium" if omitted."""

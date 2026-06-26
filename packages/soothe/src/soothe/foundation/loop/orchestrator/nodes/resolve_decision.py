@@ -88,6 +88,12 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         except Exception:
             logger.warning("[resolve_decision] CE save failed", exc_info=True)
 
+    # Calculate cumulative step counts for TUI display
+    # done_steps: steps that completed successfully across all iterations
+    done_count = sum(1 for r in state.step_results if r.success)
+    # total_steps: all steps that have completed (success or fail) + pending new steps
+    total_count = len(state.step_results) + len(decision.steps)
+
     await ctx.emit(
         "plan_decision",
         {
@@ -100,6 +106,8 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
                 for s in decision.steps
             ],
             "execution_mode": decision.execution_mode,
+            "total_steps": total_count,
+            "done_steps": done_count,
         },
     )
 
