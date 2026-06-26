@@ -2,7 +2,7 @@
 
 **RFC**: 628
 **Title**: Cognition Step Card & SubAgent Card Display
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Implementation Interface Design
 **Created**: 2026-06-26
 **Updated**: 2026-06-26
