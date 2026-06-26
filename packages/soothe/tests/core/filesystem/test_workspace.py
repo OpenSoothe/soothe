@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from soothe.foundation.core.filesystem import (
+    EditResult,
     FileInfo,
     GrepResult,
     LocalFilesystem,
@@ -149,3 +150,90 @@ class TestWorkspaceFilesystem:
         assert workspace_fs.is_file("subdir") is False
         assert workspace_fs.is_dir("subdir") is True
         assert workspace_fs.is_dir("file.txt") is False
+
+
+class TestLocalFilesystemOutsideWorkspace:
+    """Test LocalFilesystem with virtual_mode=False (allow paths outside workspace).
+
+    Regression: IG-510 fix for ValueError when writing/editing files outside workspace.
+
+    Previously, LocalFilesystem.write/edit/delete/etc. would fail with:
+        ValueError: '/path/to/file' is not in the subpath of '/workspace/root'
+
+    when virtual_mode=False and writing to absolute paths outside the workspace.
+    """
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory for workspace."""
+        with tempfile.TemporaryDirectory() as tmp:
+            yield Path(tmp)
+
+    @pytest.fixture
+    def outside_dir(self):
+        """Create a temporary directory outside workspace."""
+        with tempfile.TemporaryDirectory() as tmp:
+            yield Path(tmp)
+
+    @pytest.fixture
+    def non_virtual_fs(self, temp_dir: Path) -> LocalFilesystem:
+        """Create LocalFilesystem with virtual_mode=False (allows outside paths)."""
+        return LocalFilesystem(temp_dir, virtual_mode=False)
+
+    def test_write_outside_workspace(self, non_virtual_fs: LocalFilesystem, outside_dir: Path):
+        """Test write to absolute path outside workspace returns absolute path."""
+        # Write to a file outside workspace using absolute path
+        outside_file = outside_dir / "outside_test.txt"
+        result = non_virtual_fs.write(str(outside_file), "content outside")
+
+        # Should succeed and return absolute path (not relative_to which would fail)
+        assert isinstance(result, WriteResult)
+        # Compare resolved paths (macOS /var is symlink to /private/var)
+        assert Path(result.path).resolve() == outside_file.resolve()
+        assert outside_file.exists()
+        assert outside_file.read_text() == "content outside"
+
+    def test_edit_outside_workspace(self, non_virtual_fs: LocalFilesystem, outside_dir: Path):
+        """Test edit file outside workspace returns absolute path."""
+        # Create file outside workspace
+        outside_file = outside_dir / "edit_test.txt"
+        outside_file.write_text("original content")
+
+        result = non_virtual_fs.edit(str(outside_file), "original", "modified")
+
+        assert isinstance(result, EditResult)
+        # Compare resolved paths (macOS /var is symlink to /private/var)
+        assert Path(result.path).resolve() == outside_file.resolve()
+        assert outside_file.read_text() == "modified content"
+
+    def test_delete_outside_workspace(self, non_virtual_fs: LocalFilesystem, outside_dir: Path):
+        """Test delete file outside workspace returns absolute path."""
+        outside_file = outside_dir / "delete_test.txt"
+        outside_file.write_text("to delete")
+
+        result = non_virtual_fs.delete(str(outside_file))
+
+        # Compare resolved paths (macOS /var is symlink to /private/var)
+        assert Path(result.path).resolve() == outside_file.resolve()
+        assert not outside_file.exists()
+
+    def test_info_outside_workspace(self, non_virtual_fs: LocalFilesystem, outside_dir: Path):
+        """Test info for file outside workspace returns absolute path."""
+        outside_file = outside_dir / "info_test.txt"
+        outside_file.write_text("info content")
+
+        info = non_virtual_fs.info(str(outside_file))
+
+        assert isinstance(info, FileInfo)
+        # Compare resolved paths (macOS /var is symlink to /private/var)
+        assert Path(info.path).resolve() == outside_file.resolve()
+
+    def test_write_within_workspace_still_relative(
+        self, non_virtual_fs: LocalFilesystem, temp_dir: Path
+    ):
+        """Test write to path within workspace returns relative path."""
+        result = non_virtual_fs.write("inside_test.txt", "content inside")
+
+        # Paths inside workspace should still return relative path
+        assert result.path == "inside_test.txt"
+        assert (temp_dir / "inside_test.txt").exists()
