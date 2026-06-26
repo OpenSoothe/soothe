@@ -2961,7 +2961,9 @@ class CognitionStepMessage(Vertical):
             self._status_widget.remove_class("pending")
             self._status_widget.remove_class("queued")
             self._status_widget.display = True
-        self._update_running_animation()
+        # Immediate status line update (bypasses visibility check) so tool count
+        # appears in real-time when tools arrive before the animation timer fires.
+        self._sync_running_status_text()
         self._refresh_task_activity_display()
         self._animation_timer = self.set_interval(
             _RUNNING_SPINNER_INTERVAL_SECONDS,
