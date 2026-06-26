@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-25
-**Total RFCs**: 79 (6 archived, 7 reclassified, 1 process specification)
+**Last Updated**: 2026-06-26
+**Total RFCs**: 80 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -10,7 +10,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 | Status | Count |
 |--------|-------|
 | Draft | 50 |
-| Implemented | 15 |
+| Implemented | 16 |
 | Implemented (Partially Superseded) | 1 |
 | Implemented — runtime architecture refined | 1 |
 | Archived | 6 |
@@ -343,6 +343,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-03-12
+  - Related: RFC-628 (step card display spec)
 
 - **RFC-501**: [Display & Verbosity](RFC-501-display-verbosity.md)
   - Kind: Implementation Interface Design
@@ -350,6 +351,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-03-31
   - Supersedes: RFC-0020, RFC-0024
   - Depends on: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing)
+  - Related: RFC-628 (TUI step card body)
   - Authors: Soothe Team
 
 - **RFC-502**: [Unified Presentation Engine](RFC-502-unified-presentation-engine.md)
@@ -512,6 +514,15 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-624, RFC-625, RFC-203, RFC-201
   - Extends: RFC-625 — entity model consolidation, LoopState elimination, job abstraction refinement
   - Authors: Soothe Team
+
+- **RFC-628**: [Cognition Step Card Display](RFC-628-step-card-display-refactor.md)
+  - Kind: Implementation Interface Design
+  - Status: Implemented
+  - Created: 2026-06-26
+  - Depends on: RFC-500, RFC-501, RFC-607
+  - Extends: RFC-500 § Event Rendering, RFC-501 § 7.3
+  - Implemented by: IG-628
+  - Authors: Xiaming Chen
 
 ---
 
@@ -681,6 +692,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)
 - **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
 - **RFC-625**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion (2026-06-15)
 - **RFC-624**: Context Engine — Unified Context Management for Goals, Steps, and Projection (2026-06-12)

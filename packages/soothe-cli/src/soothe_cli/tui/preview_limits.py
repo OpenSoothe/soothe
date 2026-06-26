@@ -17,7 +17,7 @@ STEP_CARD_SHOW_TOOL_ROW_DETAILS: Final[bool] = False
 # Latest per-tool invocation lines shown per scope (task branch vs main-agent branch).
 STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT: Final[int] = 3
 
-# When estimated body lines exceed this count, the card auto-collapses (strict `>`).
+# Optional manual full tool-list folding threshold (not auto-collapse).
 STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
 
 # --- Skill invocation cards (`SkillMessage` collapsed SKILL.md body) ---

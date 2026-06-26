@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-06-25
-**Total RFCs**: 79
+**Last Updated**: 2026-06-26
+**Total RFCs**: 80
 
 ## Summary Statistics
 
@@ -11,8 +11,8 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 50 | 63.3% |
-| Implemented | 14 | 17.9% |
+| Draft | 50 | 62.5% |
+| Implemented | 16 | 20.0% |
 | Archived | 6 | 7.7% |
 | Proposed | 3 | 3.8% |
 | Accepted | 1 | 1.3% |
@@ -23,7 +23,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Kind | Count |
 |------|-------|
 | Architecture Design | 48 |
-| Implementation Interface Design | 13 |
+| Implementation Interface Design | 14 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Architecture Design / Impl Interface | 1 |
 | Conceptual Design | 1 |
@@ -33,6 +33,18 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Process Specification | 1 |
 
 ## Chronological Timeline
+
+### Major Changes - 2026-06-26
+
+**RFC-628**: Cognition Step Card Display — canonical TUI step card spec
+
+- Extracted `cognition_step_activity.py` (classification, activity tree, status lines)
+- Unified `_sync_step_card_surface()` refresh pipeline
+- Footer and branch Running lines show total tool counts (main + subgraph + orphan)
+- Removed obsolete step-card auto-collapse; manual click-to-collapse retained
+- Extends RFC-500 § Event Rendering and RFC-501 § 7.3 (supersedes IG-402-centric descriptions for normative design)
+
+---
 
 ### Major Changes - 2026-06-19
 
@@ -59,6 +71,13 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 ---
 
 ### 2026-06
+
+- **2026-06-26**: RFC-628 - Cognition Step Card Display
+  - Status: Implemented
+  - Kind: Implementation Interface Design
+  - Depends on: RFC-500, RFC-501, RFC-607
+  - Extends: RFC-500 (step card rendering), RFC-501 (TUI step card body)
+  - Implemented by: IG-628
 
 - **2026-06-25**: RFC-307 - IdentityProtocol: AKSK Authentication & JWT Token Management
   - Status: Draft

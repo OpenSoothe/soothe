@@ -181,6 +181,7 @@ Technical documentation for developers and system architects.
 | [IG-426](impl/IG-426-tui-streaming-event-reduction.md) | TUI Streaming Event Reduction |
 | [IG-427](impl/IG-427-stream-event-volume-fifo-latency.md) | Stream Event Volume FIFO Latency |
 | [IG-428](impl/IG-428-step-card-tool-activity-preview.md) | Step Card Tool Activity Preview |
+| [IG-628](impl/IG-628-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
 | [IG-437](impl/IG-437-deepxiv-integration.md) | DeepXiv Integration |
 
 ---
