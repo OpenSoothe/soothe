@@ -294,11 +294,11 @@ def test_no_duplicate_tool_rows_in_activity_preview() -> None:
     task_rows = card._iter_task_delegation_rows()
     assert len(task_rows) == 1
 
-    # IG-629: No more children_by_task - subgraph tools route to SubAgent cards
+    # IG-513: No more children_by_task - subgraph tools route to SubAgent cards
 
 
 def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
-    """IG-629: Subgraph tools (type_code 't') never appear in main_preview stats."""
+    """IG-513: Subgraph tools (type_code 't') never appear in main_preview stats."""
     card = CognitionStepMessage("MAIN-01", "Test main preview", id="step-main")
 
     card.add_tool_call("MAIN_01:s:grep:0", "grep", {"pattern": "x"})
@@ -308,7 +308,7 @@ def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
     assert len(main_preview) == 1
     assert main_preview[0].tool_call_id == "MAIN_01:s:grep:0"
 
-    # IG-629: Subgraph tools route to SubAgent cards, not step main_preview
+    # IG-513: Subgraph tools route to SubAgent cards, not step main_preview
 
 
 def test_tool_stats_show_immediately_when_widget_not_visible() -> None:

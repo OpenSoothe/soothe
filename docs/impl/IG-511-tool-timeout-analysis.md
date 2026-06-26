@@ -1,4 +1,4 @@
-# IG-512 Appendix: Tool Timeout Architecture Analysis
+# IG-511 Appendix: Tool Timeout Architecture Analysis
 
 **Purpose**: Analyze existing timeout mechanisms in CoreAgent, deepagents, and soothe to identify gaps and propose general solution.
 
@@ -34,7 +34,7 @@
 │  run_command: subprocess.run(timeout=60s)                        │
 │  execute (deepagents): timeout parameter (max 3600s)            │
 │  MCP tools: tool_timeout_seconds = 600s                         │
-│  grep: NO timeout (was unbounded) ← IG-512 fixed                │
+│  grep: NO timeout (was unbounded) ← IG-510 fixed                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -98,14 +98,14 @@
 
 | Tool | Risk | Current State |
 |------|------|---------------|
-| `grep` | High (IG-511) | **Fixed by IG-512**: incremental batching |
+| `grep` | High (IG-509) | **Fixed by IG-510**: incremental batching |
 | `read_file` (large files) | Medium | Backend may have limits, but no wrapper |
 | `list_directory` (deep trees) | Medium | No timeout, could hang on network mounts |
 | `glob` (local) | Low | deepagents has 20s timeout |
 | Explore subagent | High | Could launch long-running searches |
 | Custom plugin tools | Unknown | No standard timeout interface |
 
-### Root Cause of IG-511 Hang
+### Root Cause of IG-509 Hang
 
 The grep Python fallback had **no timeout guard at ANY level**:
 - Tool level: No timeout in `_grep_python_walk()`
@@ -210,7 +210,7 @@ class ToolTimeoutMiddleware:
 
 ## Recommended Approach
 
-**Phase 1 (Implemented)**: Fix grep specifically with incremental batching (IG-512)
+**Phase 1 (Implemented)**: Fix grep specifically with incremental batching (IG-510)
 
 **Phase 2 (Future)**: Add `ToolTimeoutMiddleware` to CoreAgent middleware stack:
 - Position after tool resolution, before execution

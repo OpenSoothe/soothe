@@ -236,7 +236,7 @@ async def test_wire_update_registers_subgraph_tool_with_placeholder_args() -> No
 
 @pytest.mark.asyncio
 async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
-    """IG-629: Subgraph tool args hydrate on SubAgent card (not step card)."""
+    """IG-513: Subgraph tool args hydrate on SubAgent card (not step card)."""
     adapter = TextualUIAdapter(
         mount_message=lambda _w: None,
         update_status=lambda _s: None,
@@ -277,7 +277,7 @@ async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
     )
     assert handled_placeholder is True
 
-    # IG-629: Later stream update routes to SubAgent card
+    # IG-513: Later stream update routes to SubAgent card
     handled_hydrate = await apply_tool_call_wire_update(
         adapter,
         router,
@@ -292,7 +292,7 @@ async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
     )
     assert handled_hydrate is True
 
-    # IG-629: Check SubAgent card (not step card)
+    # IG-513: Check SubAgent card (not step card)
     subagent_key = "ZCH-01:t0"
     subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
     assert subagent_card is not None, "SubAgent card should exist"
@@ -358,7 +358,7 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
     )
     assert handled_glob is True
 
-    # IG-629: Subgraph tools now route to SubAgent cards, not step card
+    # IG-513: Subgraph tools now route to SubAgent cards, not step card
     subagent_key = "ZCH-01:t0"
     subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
     assert subagent_card is not None, "SubAgent card should be created for task delegation"

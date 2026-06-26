@@ -1,4 +1,4 @@
-# IG-XXX: File Descriptor Leak and Network Resilience Fixes
+# IG-503: File Descriptor Leak and Network Resilience Fixes
 
 > Status: **Implemented**
 > Created: 2025-06-25

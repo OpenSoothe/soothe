@@ -299,7 +299,7 @@ def build_soothe_middleware_stack(
         stack.append(LLMCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] LLM call profiler enabled (innermost wrapper)")
 
-    # 8. Tool timeout wrapper (IG-512: prevent indefinite hangs from slow tools)
+    # 8. Tool timeout wrapper (IG-511: prevent indefinite hangs from slow tools)
     # Positioned after other tool-related middleware, innermost around actual execution
     tool_timeout_config = config.agent.loop.tool_timeout
     if tool_timeout_config.enabled:

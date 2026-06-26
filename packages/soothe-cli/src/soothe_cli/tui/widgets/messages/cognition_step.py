@@ -1457,7 +1457,7 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.display = False
 
     def _sync_task_row_status_from_subagent(self, task_key: str, success: bool) -> None:
-        """Update task row icon when SubAgent card completes (IG-629).
+        """Update task row icon when SubAgent card completes (IG-513).
 
         Args:
             task_key: Dedupe key for the task delegation row.

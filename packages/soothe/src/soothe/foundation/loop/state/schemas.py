@@ -41,7 +41,7 @@ into the clarification relay (RFC-622, IG-462)."""
 
 
 class PlanGenerateStep(BaseModel):
-    """Single step in plan-generate structured output (RFC-604, IG-329, IG-510).
+    """Single step in plan-generate structured output (RFC-604, IG-329, IG-508).
 
     Separate from ``StepAction`` so the LLM schema omits executor-only fields
     (``subagent``, ``evidence_refs``). Converted to ``StepAction`` when building
@@ -56,7 +56,7 @@ class PlanGenerateStep(BaseModel):
         id: Step identifier (auto-generated if omitted).
         description: Brief summary for TUI display and logging (under 20 words).
         full_description: Detailed execution prompt with key inputs, file paths,
-            identifiers, and context needed to execute independently (IG-510).
+            identifiers, and context needed to execute independently (IG-508).
         expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
         kind: ``action`` (normal) or ``ask_user`` (clarification relay).
@@ -121,7 +121,7 @@ class StepAction(BaseModel):
     """Single step in execution strategy.
 
     IG-264: Keep execution-critical fields (used by executor).
-    IG-510: ``full_description`` carries detailed execution context.
+    IG-508: ``full_description`` carries detailed execution context.
     RFC-622 / IG-462: ``kind`` and ``questions`` carry planner-emitted
     ``ask_user`` steps through to the clarification relay.
 
@@ -129,7 +129,7 @@ class StepAction(BaseModel):
         id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
         description: Brief summary for TUI display and logging (under 20 words).
         full_description: Detailed execution prompt with key inputs, file paths,
-            identifiers, and context needed to execute independently (IG-510).
+            identifiers, and context needed to execute independently (IG-508).
         expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
         kind: ``action`` (normal CoreAgent execution) or ``ask_user``

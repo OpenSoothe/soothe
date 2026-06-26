@@ -39,7 +39,7 @@ from .unified import UnifiedFilesystem
 
 logger = logging.getLogger(__name__)
 
-# Incremental grep batching constants (IG-512)
+# Incremental grep batching constants (IG-510)
 _GREP_BATCH_SIZE: int = 100  # files per batch
 _GREP_MAX_BATCHES: int = 10  # stop after this many batches
 _GREP_BATCH_TIMEOUT_S: float = 5.0  # timeout per batch
@@ -1022,7 +1022,7 @@ class LocalFilesystem(UnifiedFilesystem):
     ) -> GrepResult | list[str] | str:
         """Incremental grep: process files in bounded batches with timeout.
 
-        IG-512: Prevents indefinite hangs by:
+        IG-510: Prevents indefinite hangs by:
         - Processing files in batches of _GREP_BATCH_SIZE
         - Stopping after _GREP_MAX_BATCHES batches
         - Timing out each batch at _GREP_BATCH_TIMEOUT_S

@@ -292,11 +292,11 @@ class UserMessageBuilder:
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
     ) -> str:
-        """Build user message for an execute-step (IG-510: simplified, no INTENT/TASK).
+        """Build user message for an execute-step (IG-508: simplified, no INTENT/TASK).
 
         Args:
             step_description: The step's description or full_description (what to execute).
-            execution_hints: Hints text with merged task instructions (IG-510).
+            execution_hints: Hints text with merged task instructions (IG-508).
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
@@ -308,7 +308,7 @@ class UserMessageBuilder:
             ("GOAL", _goal_text(step_description)),
         ]
 
-        # IG-510: EXECUTION HINTS now contains merged task instructions
+        # IG-508: EXECUTION HINTS now contains merged task instructions
         if execution_hints:
             sections.append(("EXECUTION HINTS", execution_hints))
 

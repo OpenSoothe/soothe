@@ -181,8 +181,20 @@ Technical documentation for developers and system architects.
 | [IG-426](impl/IG-426-tui-streaming-event-reduction.md) | TUI Streaming Event Reduction |
 | [IG-427](impl/IG-427-stream-event-volume-fifo-latency.md) | Stream Event Volume FIFO Latency |
 | [IG-428](impl/IG-428-step-card-tool-activity-preview.md) | Step Card Tool Activity Preview |
-| [IG-628](impl/IG-628-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
 | [IG-437](impl/IG-437-deepxiv-integration.md) | DeepXiv Integration |
+| [IG-501](impl/IG-501-dynamic-rate-limit-adjustment.md) | Dynamic LLM Rate Limit Adjustment |
+| [IG-502](impl/IG-502-cron-service-implementation.md) | Cron Service Implementation |
+| [IG-503](impl/IG-503-file-descriptor-leak-and-network-resilience-fixes.md) | File Descriptor Leak and Network Resilience Fixes |
+| [IG-504](impl/IG-504-remove-http-rest-channel.md) | Remove HTTP REST Channel |
+| [IG-505](impl/IG-505-identity-service-implementation.md) | Identity Service Implementation |
+| [IG-506](impl/IG-506-coreagent-cold-start-and-code-interpreter-prep.md) | CoreAgent Cold Start and Code Interpreter Prep |
+| [IG-507](impl/IG-507-loop-3328-log-analysis-fixes.md) | Loop 3328 Log Analysis Fixes |
+| [IG-508](impl/IG-508-step-full-description.md) | Step Full Description for Enhanced Execution Context |
+| [IG-509](impl/IG-509-loop-7cba-hang-analysis.md) | Loop 7cba Hang Analysis |
+| [IG-510](impl/IG-510-grep-fallback-hang-recovery.md) | Grep Fallback Hang Recovery |
+| [IG-511](impl/IG-511-tool-timeout-analysis.md) | Tool Timeout Architecture Analysis |
+| [IG-512](impl/IG-512-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
+| [IG-513](impl/IG-513-subagent-card.md) | SubAgent Card — Flattened Display (RFC-628 Part II) |
 
 ---
 

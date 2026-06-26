@@ -597,7 +597,7 @@ def test_grep_with_ag_real_directory_content_two_phase(tmp_path: Path) -> None:
 
 
 # =============================================================================
-# IG-512: Incremental Batching Tests
+# IG-510: Incremental Batching Tests
 # =============================================================================
 
 

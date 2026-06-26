@@ -1,4 +1,4 @@
-"""SubAgent/Task delegation card widget (IG-629, RFC-628 Part II).
+"""SubAgent/Task delegation card widget (IG-513, RFC-628 Part II).
 
 Subagent cards appear immediately after their parent step card, showing
 tool activity for delegated tasks. They subclass CognitionStepMessage
@@ -124,7 +124,7 @@ def create_subagent_card(
     def _subagent_build_row_index(self: Any) -> StepRowIndex:
         """Build row index filtered to only include rows for this task_idx.
 
-        IG-629: For SubAgent cards, type 't' subgraph tools are treated as
+        IG-513: For SubAgent cards, type 't' subgraph tools are treated as
         main_tools for display purposes (they're the primary activity).
         """
         from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
@@ -140,7 +140,7 @@ def create_subagent_card(
             if type_code == "t" and idx == self._subagent_task_idx:
                 filtered_rows.append(row)
 
-        # IG-629: For SubAgent cards, filtered subgraph tools become main_tools
+        # IG-513: For SubAgent cards, filtered subgraph tools become main_tools
         # (they're the primary activity, not nested children)
         return StepRowIndex(
             task_delegations=[],  # No task delegations inside SubAgent

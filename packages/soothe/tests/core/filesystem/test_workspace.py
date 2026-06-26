@@ -155,7 +155,7 @@ class TestWorkspaceFilesystem:
 class TestLocalFilesystemOutsideWorkspace:
     """Test LocalFilesystem with virtual_mode=False (allow paths outside workspace).
 
-    Regression: IG-510 fix for ValueError when writing/editing files outside workspace.
+    Regression: IG-508 fix for ValueError when writing/editing files outside workspace.
 
     Previously, LocalFilesystem.write/edit/delete/etc. would fail with:
         ValueError: '/path/to/file' is not in the subpath of '/workspace/root'

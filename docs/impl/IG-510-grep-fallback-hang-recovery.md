@@ -1,9 +1,9 @@
-# IG-512: Grep Fallback Hang Recovery
+# IG-510: Grep Fallback Hang Recovery
 
-**RFC**: N/A (follows IG-511 incident analysis)
+**RFC**: N/A (follows IG-509 incident analysis)
 **Created**: 2026-06-26
 **Status**: Implemented — Phase 1 (P0) and Phase 2 (P1) complete
-**Related**: [IG-511](IG-511-loop-7cba-hang-analysis.md) (root cause analysis), [IG-503](IG-503-file-descriptor-leak-and-network-resilience-fixes.md) (FD pre-flight check)
+**Related**: [IG-509](IG-509-loop-7cba-hang-analysis.md) (root cause analysis), [IG-503](IG-503-file-descriptor-leak-and-network-resilience-fixes.md) (FD pre-flight check)
 
 ---
 
@@ -191,7 +191,7 @@ assert result.continuation_token is not None  # Can request more
 
 ## References
 
-- [IG-511](IG-511-loop-7cba-hang-analysis.md) — Original hang analysis
+- [IG-509](IG-509-loop-7cba-hang-analysis.md) — Original hang analysis
 - `packages/soothe/src/soothe/foundation/core/filesystem/local.py` — Incremental batching implementation
 - `packages/soothe/src/soothe/foundation/core/filesystem/protocol.py` — Extended GrepResult
 - `packages/soothe/tests/core/filesystem/test_grep_search.py` — New tests

@@ -1,4 +1,4 @@
-"""Tool timeout middleware for CoreAgent (IG-512).
+"""Tool timeout middleware for CoreAgent (IG-511).
 
 Wraps tool invocations with configurable timeouts, preventing indefinite hangs
 from tools that lack internal timeout guards. This middleware complements
@@ -95,7 +95,7 @@ class ToolTimeoutState(AgentState[Any]):
 class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
     """Wrap tool invocations with configurable timeouts.
 
-    IG-512: Prevents indefinite hangs from tools lacking internal timeout guards.
+    IG-511: Prevents indefinite hangs from tools lacking internal timeout guards.
     Returns ToolMessage with error status on timeout, allowing agent to adapt.
 
     Args:

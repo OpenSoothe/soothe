@@ -1277,7 +1277,7 @@ class ContextEngineConfig(BaseModel):
 
 
 class ToolTimeoutConfig(BaseModel):
-    """Tool timeout middleware configuration (IG-512).
+    """Tool timeout middleware configuration (IG-511).
 
     Wraps tool invocations with configurable timeouts, preventing indefinite hangs
     from tools that lack internal timeout guards.
@@ -1291,7 +1291,7 @@ class ToolTimeoutConfig(BaseModel):
 
     enabled: bool = Field(
         default=True,
-        description="Enable tool timeout middleware (IG-512)",
+        description="Enable tool timeout middleware (IG-511)",
     )
     default_seconds: float = Field(
         default=60.0,
@@ -1341,7 +1341,7 @@ class StrangeLoopConfig(BaseModel):
         tool_call_limit: Tool call count limits per thread/run.
         tool_retry: Tool failure retry policy.
         llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
-        tool_timeout: Tool timeout middleware configuration (IG-512).
+        tool_timeout: Tool timeout middleware configuration (IG-511).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1499,7 +1499,7 @@ class StrangeLoopConfig(BaseModel):
 
     tool_timeout: ToolTimeoutConfig = Field(
         default_factory=ToolTimeoutConfig,
-        description="Tool timeout middleware configuration (IG-512)",
+        description="Tool timeout middleware configuration (IG-511)",
     )
     """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
 
