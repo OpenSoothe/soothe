@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field
+from soothe_sdk.protocols.identity import IdentityProtocol
 
 from soothe.core.security.errors import (
     MissingTokenError,
@@ -19,7 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from langgraph.types import Command
-    from soothe_sdk.protocols.identity import IdentityProtocol
 
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,39 @@ class IdentityConfig(BaseModel):
     )
 
 
+class ThreadContextProvider(Protocol):
+    """Daemon-side hook for persisting authenticated user context per thread."""
+
+    def set_user_id(
+        self,
+        thread_id: str,
+        user_id: str | None,
+        aksk_id: str | None = None,
+    ) -> None:
+        """Record authenticated identity for workspace isolation."""
+        ...
+
+
+@dataclass
+class IdentityRuntime:
+    """Bundle of identity dependencies injected from soothe-daemon into core.
+
+    Args:
+        service: IdentityProtocol implementation (JWT validation, external mapping).
+        config: Identity configuration (enabled flag, token/AKSK settings).
+        thread_context: Optional provider to persist user context per thread.
+    """
+
+    service: IdentityProtocol
+    config: IdentityConfig
+    thread_context: ThreadContextProvider | None = None
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether identity validation is active."""
+        return self.config.enabled
+
+
 class IdentityMiddleware(AgentMiddleware):
     """First middleware in stack for identity validation.
 
@@ -128,24 +162,16 @@ class IdentityMiddleware(AgentMiddleware):
     (backward compatibility).
     """
 
-    def __init__(
-        self,
-        identity: IdentityProtocol,
-        config: IdentityConfig,
-        set_user_id_callback: Callable[[str, str | None, str | None], None] | None = None,
-    ) -> None:
+    def __init__(self, runtime: IdentityRuntime) -> None:
         """Initialize IdentityMiddleware.
 
         Args:
-            identity: IdentityProtocol implementation for token validation.
-            config: Identity configuration (enabled, unmapped_sender_policy).
-            set_user_id_callback: Optional callback to set user context in thread state.
-                Signature: (thread_id, user_id, aksk_id) -> None.
-                Passed from daemon to avoid core → daemon dependency.
+            runtime: Identity service, config, and optional thread context provider.
         """
-        self._identity = identity
-        self._config = config
-        self._set_user_id_callback = set_user_id_callback
+        self._runtime = runtime
+        self._identity = runtime.service
+        self._config = runtime.config
+        self._thread_context = runtime.thread_context
 
     async def awrap_tool_call(
         self,
@@ -185,8 +211,8 @@ class IdentityMiddleware(AgentMiddleware):
                 user_id, aksk_id = self._resolve_external_identity(channel_type, configurable)
 
             # Populate ThreadState with user context via callback
-            if thread_id and self._set_user_id_callback:
-                self._set_user_id_callback(thread_id, user_id, aksk_id)
+            if thread_id and self._thread_context is not None:
+                self._thread_context.set_user_id(thread_id, user_id, aksk_id)
                 logger.debug(
                     "Identity context set: thread=%s user=%s aksk=%s",
                     thread_id,

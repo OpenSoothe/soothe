@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from soothe.config import SootheConfig
     from soothe.middleware._tool_context import ToolContextRegistry, ToolTriggerRegistry
+    from soothe.middleware.identity import IdentityRuntime
     from soothe.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
@@ -58,10 +59,16 @@ def build_soothe_middleware_stack(
     config: SootheConfig,
     policy: PolicyProtocol | None,
     mcp_registry: Any | None = None,
+    identity_runtime: IdentityRuntime | None = None,
 ) -> tuple[AgentMiddleware, ...]:
     """Build Soothe middleware stack in correct order.
 
     The middleware order is intentional and follows dependency requirements:
+
+    0. **IdentityMiddleware** (optional, RFC-307) - Validates JWT auth_token or
+       resolves external channel identity BEFORE any other middleware. Must run
+       before PolicyMiddleware to establish user context for permission checks.
+       Only installed when ``identity_runtime.enabled`` is True.
 
     1. **SoothePolicyMiddleware** - Blocks unsafe actions FIRST before any
        other middleware processes them. Uses PolicyProtocol.check() on every
@@ -99,6 +106,9 @@ def build_soothe_middleware_stack(
     Args:
         config: SootheConfig with performance settings.
         policy: PolicyProtocol instance for safety enforcement.
+        mcp_registry: Optional MCPRegistry for MCP tool integration (RFC-412).
+        identity_runtime: Optional identity bundle (service, config, thread context).
+            When ``enabled`` is True, IdentityMiddleware is prepended to the stack.
 
     Returns:
         Tuple of middleware instances in execution order.
@@ -116,7 +126,14 @@ def build_soothe_middleware_stack(
     stack: list[AgentMiddleware] = []
     profile_model_calls = is_profiler_enabled(config)
 
-    # 0. Model call profiler (optional, for latency debugging)
+    # 0. Identity validation (RFC-307: must run before PolicyMiddleware)
+    if identity_runtime is not None and identity_runtime.enabled:
+        from .identity import IdentityMiddleware
+
+        stack.append(IdentityMiddleware(identity_runtime))
+        logger.info("[Middleware] Identity validation enabled (RFC-307)")
+
+    # 0b. Model call profiler (optional, for latency debugging)
     # Insert at the very start to capture full middleware chain timing
     if profile_model_calls:
         from .model_call_profiler import ModelCallProfilerMiddleware

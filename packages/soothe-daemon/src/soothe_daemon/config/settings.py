@@ -17,6 +17,7 @@ from soothe.config import SOOTHE_HOME
 from soothe_daemon.config.models import (
     ChannelsConfig,
     DistributedConfig,
+    IdentityConfig,
     LoopGcConfig,
     LoopStatusReconciliationConfig,
     MemoryProfilingConfig,
@@ -70,6 +71,16 @@ class SootheDaemonConfig(BaseSettings):
     # --- Channels (RFC-620) --------------------------------------------------
 
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
+
+    # --- Identity service (RFC-307) -----------------------------------------
+
+    identity: IdentityConfig = Field(
+        default_factory=IdentityConfig,
+        description=(
+            "Identity service configuration (AKSK auth, JWT tokens, external mapping). "
+            "Disabled by default for backward compatibility."
+        ),
+    )
 
     # --- Concurrency / safety (IG-138, IG-258) ------------------------------
 

@@ -9,6 +9,7 @@ from soothe.protocols.runner import LoopRunnerProtocol
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
+    from soothe.middleware.identity import IdentityRuntime
 
     from soothe_daemon.config import SootheDaemonConfig
 
@@ -27,14 +28,28 @@ class LoopRunnerFactory:
     Validation ensures exactly one mode is enabled at startup.
     """
 
-    def __init__(self, daemon_config: SootheDaemonConfig, agent_config: SootheConfig) -> None:
+    def __init__(
+        self,
+        daemon_config: SootheDaemonConfig,
+        agent_config: SootheConfig,
+        *,
+        identity_runtime: IdentityRuntime | None = None,
+    ) -> None:
         self._daemon_config = daemon_config
         self._agent_config = agent_config
+        self._identity_runtime = identity_runtime
         self._pool_initialized = False
 
         # Validate exactly one runner mode is enabled
         mode = daemon_config.validate_runner_mode()
         self._mode = mode
+
+        if identity_runtime is not None and identity_runtime.enabled and mode == "worker_pool":
+            raise ValueError(
+                "Identity service requires thread_pool mode: worker_pool uses "
+                "multiprocessing spawn and cannot propagate IdentityService to "
+                "subprocess workers (RFC-307)."
+            )
 
         if mode == "worker_pool":
             logger.info(
@@ -76,7 +91,11 @@ class LoopRunnerFactory:
         elif self._mode == "thread_pool":
             from soothe_daemon.runner.thread_runner import ThreadPool
 
-            await ThreadPool.get_shared_instance(self._agent_config, self._daemon_config)
+            await ThreadPool.get_shared_instance(
+                self._agent_config,
+                self._daemon_config,
+                identity_runtime=self._identity_runtime,
+            )
             self._pool_initialized = True
             logger.info("LoopRunnerFactory: thread pool pre-warmed")
 
@@ -114,7 +133,12 @@ class LoopRunnerFactory:
         if self._mode == "thread_pool":
             from soothe_daemon.runner.thread_runner import ThreadLoopRunner
 
-            return ThreadLoopRunner(loop_id, self._agent_config, self._daemon_config)
+            return ThreadLoopRunner(
+                loop_id,
+                self._agent_config,
+                self._daemon_config,
+                identity_runtime=self._identity_runtime,
+            )
         # mode == "distributed"
         from soothe_daemon.runner.ray_runner import RayLoopRunner
 

@@ -35,6 +35,7 @@ from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.runner.response_bridge import ResponsePusher
 
 if TYPE_CHECKING:
+    from soothe.middleware.identity import IdentityRuntime
     from soothe.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,8 @@ def _thread_worker_body(
     idle_timeout_seconds: int,
     max_requests: int,
     default_timeout_seconds: int,
+    *,
+    identity_runtime: IdentityRuntime | None = None,
 ) -> None:
     """Thread worker body: maintains event loop, executes requests.
 
@@ -173,7 +176,7 @@ def _thread_worker_body(
             runner: SootheRunner | None = None
 
             try:
-                runner = SootheRunner(config)
+                runner = SootheRunner(config, identity_runtime=identity_runtime)
 
                 timeout_ctx = asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
@@ -395,8 +398,11 @@ class ThreadPool:
         max_requests_per_thread: int = 100,
         request_timeout_seconds: int = 0,
         thread_startup_timeout_seconds: int = 10,
+        *,
+        identity_runtime: IdentityRuntime | None = None,
     ) -> None:
         self._config = config  # Shared memory, no spawn-safe copy needed
+        self._identity_runtime = identity_runtime
         self._min_pool_size = min_pool_size
         self._max_pool_size = max(min_pool_size, max_pool_size)
         self._idle_timeout_seconds = idle_timeout_seconds
@@ -421,7 +427,11 @@ class ThreadPool:
 
     @classmethod
     async def get_shared_instance(
-        cls, config: SootheConfig, daemon_config: SootheDaemonConfig
+        cls,
+        config: SootheConfig,
+        daemon_config: SootheDaemonConfig,
+        *,
+        identity_runtime: IdentityRuntime | None = None,
     ) -> ThreadPool:
         """Get or create the singleton pool instance."""
         if cls._shared_pool is not None:
@@ -443,6 +453,7 @@ class ThreadPool:
                 max_requests_per_thread=pool_config.max_requests_per_thread,
                 request_timeout_seconds=pool_config.request_timeout_seconds,
                 thread_startup_timeout_seconds=pool_config.thread_startup_timeout_seconds,
+                identity_runtime=identity_runtime,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -509,6 +520,7 @@ class ThreadPool:
                 self._max_requests_per_thread,
                 self._request_timeout_seconds,
             ),
+            kwargs={"identity_runtime": self._identity_runtime},
             daemon=True,
             name=worker_id,
         )
@@ -978,15 +990,22 @@ class ThreadLoopRunner:
         loop_id: str,
         config: SootheConfig,
         daemon_config: SootheDaemonConfig,
+        *,
+        identity_runtime: IdentityRuntime | None = None,
     ) -> None:
         self._loop_id = loop_id
         self._config = config
         self._daemon_config = daemon_config
+        self._identity_runtime = identity_runtime
         self._pool: ThreadPool | None = None
 
     async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
         """Delegate to shared pool, stream results."""
-        pool = await ThreadPool.get_shared_instance(self._config, self._daemon_config)
+        pool = await ThreadPool.get_shared_instance(
+            self._config,
+            self._daemon_config,
+            identity_runtime=self._identity_runtime,
+        )
         self._pool = pool
 
         async for chunk in pool.submit(request):
