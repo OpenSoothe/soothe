@@ -8,7 +8,6 @@ colors and glyphs; builders return ``Content``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from time import time
 from typing import Any
 
 from soothe_sdk.ux.task_namespace import (
@@ -115,13 +114,6 @@ def stats_title_suffix(index: StepRowIndex) -> str:
     if not parts:
         return ""
     return f" · {', '.join(parts)}"
-
-
-def tool_stats_title_suffix_for_rows(rows: list[StepToolRow]) -> str:
-    """`` · N tools`` suffix for task/main/orphan branches."""
-    count = count_distinct_tool_call_ids(rows)
-    bare = format_tool_count_label(count, singular="tool", plural="tools")
-    return f" · {bare}" if bare else ""
 
 
 def has_task_activity_body(
@@ -232,37 +224,6 @@ def prefer_task_delegation_row(candidate: StepToolRow, incumbent: StepToolRow) -
     if incumbent.is_task_row and not candidate.is_task_row:
         return False
     return len(candidate.args or {}) >= len(incumbent.args or {})
-
-
-def task_idx_from_delegation_row(task_row: StepToolRow) -> int | None:
-    """Task index encoded in a step-level ``task`` unified id (``task:0`` → 0)."""
-    _, type_code, _, tool_info = parse_unified_tool_call_id(task_row.tool_call_id)
-    if type_code != "s":
-        return None
-    head = (tool_info or "").split(":")[0]
-    if head != "task":
-        return None
-    tail = (tool_info or "").split(":")[-1]
-    if tail.isdigit():
-        return int(tail)
-    return 0
-
-
-def task_parent_ids_match(step_id: str, parent_id: str, row_parent_id: str) -> bool:
-    """True when two tool_call_ids refer to the same step-level task delegation."""
-    if not row_parent_id:
-        return False
-    if row_parent_id == parent_id:
-        return True
-    if is_step_level_task_tool_id(parent_id) or is_step_level_task_tool_id(row_parent_id):
-        p_sid, _, _, _ = parse_unified_tool_call_id(parent_id)
-        r_sid, _, _, _ = parse_unified_tool_call_id(row_parent_id)
-        if p_sid != step_id or r_sid != step_id:
-            return parent_id == row_parent_id
-        return normalize_step_task_tool_call_id(
-            step_id, row_parent_id
-        ) == normalize_step_task_tool_call_id(step_id, parent_id)
-    return False
 
 
 def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
@@ -415,28 +376,6 @@ def task_delegation_label(task_row: StepToolRow) -> str:
     return name
 
 
-def touch_task_activity_start(
-    task_activity_start_times: dict[str, float],
-    task_key: str,
-) -> None:
-    """Record when subgraph activity began for elapsed-time display."""
-    key = str(task_key or "").strip()
-    if key and key not in task_activity_start_times:
-        task_activity_start_times[key] = time()
-
-
-def task_delegation_elapsed_suffix(
-    task_activity_start_times: dict[str, float],
-    task_key: str,
-) -> str:
-    """Elapsed suffix for a running task branch."""
-    start = task_activity_start_times.get(str(task_key or "").strip())
-    if start is None:
-        return ""
-    elapsed_secs = int(time() - start)
-    return f" ({format_duration(float(elapsed_secs))})"
-
-
 def append_tool_activity_lines(
     parts: list[object],
     rows: list[StepToolRow],
@@ -523,36 +462,6 @@ class StepCardStatusLine:
         line = f"{gutter}{circle_empty} Queued...{stats_suffix}{token_suffix}"
         return Content.styled(line, colors.cognition)
 
-    @staticmethod
-    def main_branch_running(
-        *,
-        main_rows: list[StepToolRow],
-        branch_gutter: str,
-        g: Any,
-        colors: Any,
-        spinner_position: int,
-        step_start_time: float | None,
-    ) -> Content:
-        """Running status + tool totals for direct main-agent tools."""
-        stats_suffix = tool_stats_title_suffix_for_rows(main_rows)
-        elapsed = ""
-        if step_start_time is not None:
-            elapsed_secs = int(time() - step_start_time)
-            elapsed = f" ({format_duration(float(elapsed_secs))})"
-        frame = phase_icon(
-            "running",
-            g,
-            spinner_position=spinner_position,
-            animate_running=True,
-        )
-        head = f"{branch_gutter}{frame} Running...{elapsed}"
-        segs: list[object] = [Content.styled(head, colors.warning)]
-        if stats_suffix:
-            segs.append(Content.styled(stats_suffix, colors.cognition))
-        return Content.assemble(*segs)
-
-    # ---------------------------------------------------------------------------
-
 
 # Activity tree renderer
 # ---------------------------------------------------------------------------
@@ -573,8 +482,6 @@ class StepActivityTree:
         index: StepRowIndex,
         subagent_notes: list[str],
         subagent_notes_by_task: dict[str, list[str]],
-        task_activity_start_times: dict[str, float],
-        step_start_time: float | None,
         spinner_position: int,
         colors: Any,
         g: Any,

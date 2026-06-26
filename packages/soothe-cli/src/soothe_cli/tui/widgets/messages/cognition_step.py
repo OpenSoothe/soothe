@@ -46,12 +46,9 @@ from soothe_cli.tui.widgets.messages.cognition_step_activity import (
     latest_preview_rows,
     normalized_task_note_key,
     phase_icon,
-    row_counts_for_main_tools,
     stats_title_suffix,
     task_delegation_dedupe_key,
-    task_idx_from_delegation_row,
     task_tool_row_tone,
-    touch_task_activity_start,
 )
 from soothe_cli.tui.widgets.messages.cognition_step_activity import (
     StepToolRow as _StepToolRow,
@@ -188,8 +185,6 @@ class CognitionStepMessage(Vertical):
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
         self._subagent_notes_by_task: dict[str, list[str]] = {}
-        self._task_activity_start_times: dict[str, float] = {}
-        """Per task-delegation key: monotonic time when subgraph activity began."""
         self._execute_assistant_buffer: str = ""
         self._last_completed_execute_prose: str = ""
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
@@ -417,10 +412,6 @@ class CognitionStepMessage(Vertical):
         """Task delegation rows on this step (unified ``{step}:s:task:…`` ids)."""
         return self._build_row_index().task_delegations
 
-    def _task_idx_from_delegation_row(self, task_row: _StepToolRow) -> int | None:
-        """Task index encoded in a step-level ``task`` unified id (``task:0`` → 0)."""
-        return task_idx_from_delegation_row(task_row)
-
     def _phase_icon(self, phase: str, g: Any, *, animate_running: bool = False) -> str:
         """Lifecycle glyph for a task branch or tool row."""
         return phase_icon(
@@ -447,8 +438,6 @@ class CognitionStepMessage(Vertical):
             index=index,
             subagent_notes=self._subagent_notes,
             subagent_notes_by_task=self._subagent_notes_by_task,
-            task_activity_start_times=self._task_activity_start_times,
-            step_start_time=self._start_time,
             spinner_position=self._spinner_position,
             colors=colors,
             g=g,
@@ -506,10 +495,6 @@ class CognitionStepMessage(Vertical):
         else:
             self._subagent_notes.append(text)
         self._sync_step_card_surface()
-
-    def _row_counts_for_step_status_line(self, row: _StepToolRow) -> bool:
-        """True for main-agent tools on this step (excludes task rows and all subgraph tools)."""
-        return row_counts_for_main_tools(row, self._step_id)
 
     def _stats_title_suffix(self) -> str:
         """Step status suffix: total tool count plus task delegation count."""
@@ -688,35 +673,10 @@ class CognitionStepMessage(Vertical):
                 parts.append(Content.styled(f"{sub}{ln}", colors.error))
         return Content.assemble(*parts)
 
-    def _build_nested_row_order(self) -> list[_StepToolRow]:
-        """Build ordered list: task rows followed by their nested children (IG-419).
-
-        Inner subagent tools (with parent_tool_call_id) appear indented under
-        their parent task delegation row. Non-task, non-child rows appear at end.
-        """
-        task_rows = [r for r in self._rows if r.is_task_row]
-        child_by_parent: dict[str, list[_StepToolRow]] = {}
-        other_rows: list[_StepToolRow] = []
-
-        for r in self._rows:
-            if r.is_task_row:
-                continue
-            if r.parent_tool_call_id:
-                child_by_parent.setdefault(r.parent_tool_call_id, []).append(r)
-            else:
-                other_rows.append(r)
-
-        result: list[_StepToolRow] = []
-        for task_row in task_rows:
-            result.append(task_row)
-            children = child_by_parent.get(task_row.tool_call_id, [])
-            # Sort children by tool_call_id to maintain order
-            children.sort(key=lambda x: x.tool_call_id)
-            result.extend(children)
-
-        # Append remaining non-task rows at the end
-        result.extend(other_rows)
-        return result
+    def _build_tools_panel_row_order(self) -> list[_StepToolRow]:
+        """Flat row order for the optional full tools panel (RFC-628)."""
+        index = self._build_row_index()
+        return list(index.task_delegations) + list(index.main_tools)
 
     def request_tools_display_refresh(self, *, immediate: bool = False) -> None:
         """Queue or run a card surface repaint (batched across cards during streaming)."""
@@ -772,7 +732,7 @@ class CognitionStepMessage(Vertical):
             return
         self._maybe_auto_fold_step_tool_list()
         self._tools_widget.display = True
-        ordered_rows = self._build_nested_row_order()
+        ordered_rows = self._build_tools_panel_row_order()
         show_all = len(ordered_rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
         visible = ordered_rows if show_all else ordered_rows[:_STEP_TOOL_PREVIEW_ROWS]
         panel_key: tuple[Any, ...] = (
@@ -869,21 +829,10 @@ class CognitionStepMessage(Vertical):
             is_task_row=is_task_row,
         )
         if not is_task_row:
-            _, type_code, task_idx, _ = parse_unified_tool_call_id(tcid)
-            is_subgraph_tool = type_code == "t" or bool(parent_tool_call_id)
-            if is_subgraph_tool:
+            _, type_code, _, _ = parse_unified_tool_call_id(tcid)
+            if type_code == "t" or parent_tool_call_id:
                 row.phase = "running"
                 row.started_at = time()
-                parent_key = ""
-                if parent_tool_call_id:
-                    parent_key = self._normalized_task_note_key(parent_tool_call_id)
-                elif task_idx is not None:
-                    for task_row in self._iter_task_delegation_rows():
-                        if self._task_idx_from_delegation_row(task_row) == task_idx:
-                            parent_key = self._task_delegation_dedupe_key(task_row)
-                            break
-                if parent_key:
-                    touch_task_activity_start(self._task_activity_start_times, parent_key)
         self._rows.append(row)
         self._row_index[tcid] = row
         self._promote_pending_to_running_if_needed()

@@ -1858,7 +1858,7 @@ class Executor:
                 ):
                     msg0 = data_chunk[0]
                     task_idx: int | None = None
-                    # IG-630: execute:{run_id} namespace is step-level, not subgraph.
+                    # IG-514: execute:{run_id} namespace is step-level, not subgraph.
                     # Only assign task_idx for true subgraph namespaces (tools:...).
                     if _ns_chunk and not (
                         len(_ns_chunk) == 1 and str(_ns_chunk[0] or "").startswith("execute:")
