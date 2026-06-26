@@ -1,4 +1,4 @@
-"""Tests for ToolTimeoutMiddleware (IG-512)."""
+"""Tests for ToolTimeoutMiddleware (IG-511)."""
 
 from __future__ import annotations
 

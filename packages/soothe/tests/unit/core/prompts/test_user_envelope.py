@@ -1,4 +1,4 @@
-"""Tests for RFC-214 user message envelopes (scenario-based format, IG-510)."""
+"""Tests for RFC-214 user message envelopes (scenario-based format, IG-508)."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def test_execute_message_skill_context_after_goal() -> None:
 
 
 def test_execute_message_no_intent_section() -> None:
-    """IG-510: INTENT section removed from execute-step message."""
+    """IG-508: INTENT section removed from execute-step message."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
@@ -66,7 +66,7 @@ def test_execute_message_no_intent_section() -> None:
 
 
 def test_execute_message_no_task_section() -> None:
-    """IG-510: TASK section removed, merged into EXECUTION HINTS."""
+    """IG-508: TASK section removed, merged into EXECUTION HINTS."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
@@ -76,7 +76,7 @@ def test_execute_message_no_task_section() -> None:
 
 
 def test_execute_message_hints_contains_task_instructions() -> None:
-    """IG-510: Task instructions are merged into EXECUTION HINTS as list items."""
+    """IG-508: Task instructions are merged into EXECUTION HINTS as list items."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",

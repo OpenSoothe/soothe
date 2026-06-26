@@ -198,7 +198,7 @@ class TextualUIAdapter:
         self._file_preview_assistant_id: str | None = None
         """Agent id for the active turn (path resolution in file previews)."""
 
-        # IG-629: SubAgent card registry for routing inner subgraph tools
+        # IG-513: SubAgent card registry for routing inner subgraph tools
         self._subagent_cards_by_key: dict[str, Any] = {}
         """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
 
@@ -518,7 +518,7 @@ def _ingest_main_task_tool_on_step_card(
 ) -> Any | None:
     """Register a main-graph ``task`` delegation on the step card and prepare SubAgent card.
 
-    IG-629: Creates a SubAgent card for each task delegation. The caller must mount
+    IG-513: Creates a SubAgent card for each task delegation. The caller must mount
     the returned card asynchronously. Inner subgraph tools route to the SubAgent card
     via `_subagent_cards_by_key`.
 
@@ -557,7 +557,7 @@ def _ingest_main_task_tool_on_step_card(
         adapter._tool_to_step[norm_tcid] = step_w
         adapter._tool_display_by_call_id[norm_tcid] = step_w
 
-        # IG-629: Create SubAgent card for this task delegation
+        # IG-513: Create SubAgent card for this task delegation
         # Parse task index from unified ID for the key
         _, _, _, tool_info = parse_unified_tool_call_id(norm_tcid)
         task_idx = 0
@@ -1005,7 +1005,7 @@ async def apply_tool_call_wire_update(
             display_args,
             bound_step_id=bound_step_id,
         )
-        # IG-629: Mount SubAgent card if newly created
+        # IG-513: Mount SubAgent card if newly created
         if subagent_card is not None:
             mount_result = adapter._mount_message(subagent_card)
             if mount_result is not None:
@@ -1044,7 +1044,7 @@ async def apply_tool_call_wire_update(
 
     _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     if display_key:
-        # IG-629: Try direct routing to SubAgent card first
+        # IG-513: Try direct routing to SubAgent card first
         parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(display_key)
         if parsed_sid and type_code == "t" and task_idx is not None:
             subagent_key = f"{parsed_sid}:t{task_idx}"

@@ -1,4 +1,4 @@
-# IG-511: Loop 7cba Hang Analysis
+# IG-509: Loop 7cba Hang Analysis
 
 **RFC**: N/A (Incident analysis from log forensics)
 **Created**: 2026-06-26
@@ -189,7 +189,7 @@ Either action frees `thread-worker-0`. The loop checkpoint may remain `running` 
 
 - [IG-503](IG-503-file-descriptor-leak-and-network-resilience-fixes.md) — FD pre-flight for `ag` (introduced the skip that triggers this fallback)
 - [IG-507](IG-507-loop-3328-log-analysis-fixes.md) — Original loop 3328 issues this meta-loop was investigating
-- [IG-510](IG-510-step-full-description.md) — Step description context loss (relevant to why agent re-grepped instead of using step-01 output)
+- [IG-508](IG-508-step-full-description.md) — Step description context loss (relevant to why agent re-grepped instead of using step-01 output)
 
 ## Verification (when fixes land)
 

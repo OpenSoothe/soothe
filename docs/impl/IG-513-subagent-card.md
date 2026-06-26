@@ -1,4 +1,4 @@
-# IG-629: SubAgent Card — Flattened Step/Task Display
+# IG-513: SubAgent Card — Flattened Step/Task Display
 
 **Status**: Completed
 **RFC**: [RFC-628](../specs/RFC-628-step-card-display-refactor.md) — Part II: SubAgent Card
@@ -64,4 +64,4 @@ packages/soothe-cli/tests/unit/runtime/
 - Step card displays flat task delegation markers with phase icons synced from SubAgent completion
 - Removed dead code: `orphan_branch_running`, `task_branch`, `task_children_stats_tone`,
   `task_children_aggregate_phase`, `effective_task_delegation_phase` — these were for the old
-  nested-child display model that IG-629 replaces with flattened SubAgent cards.
+  nested-child display model that this IG replaces with flattened SubAgent cards.

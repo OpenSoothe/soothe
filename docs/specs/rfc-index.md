@@ -521,7 +521,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-06-26
   - Depends on: RFC-500, RFC-501, RFC-607
   - Extends: RFC-500 § Event Rendering, RFC-501 § 7.3
-  - Implemented by: IG-628
+  - Implemented by: IG-512, IG-513
   - Authors: Xiaming Chen
 
 ---

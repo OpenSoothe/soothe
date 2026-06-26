@@ -417,4 +417,4 @@ All steps ship together per Option C:
 | 2026-06-26 | **Approved:** stats invariant + remove auto-collapse; keep manual collapse |
 | 2026-06-26 | Full step card review: unify classifiers, status builders, dead code removal |
 | 2026-06-26 | **Approved Option C:** full extraction to `cognition_step_activity.py` before ship |
-| 2026-06-26 | **Implemented:** RFC-628 / IG-628; verify_finally.sh green |
+| 2026-06-26 | **Implemented:** RFC-628 / IG-512; verify_finally.sh green |

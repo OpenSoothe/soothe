@@ -1,7 +1,7 @@
 # SubAgent Card — Flattened Step/Task Display
 
 **Date:** 2026-06-26
-**Status:** Draft — approved design for RFC-628 update and IG-629
+**Status:** Draft — approved design for RFC-628 update and IG-513
 **Scope:** TUI step card + new SubAgent card (`SubAgentMessage`) — flatten nested tool display, route inner tools to separate cards
 
 ---

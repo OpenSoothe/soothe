@@ -1,4 +1,4 @@
-# IG-510: Step Full Description for Enhanced Execution Context
+# IG-508: Step Full Description for Enhanced Execution Context
 
 **Status**: Implemented (2026-06-26)
 
