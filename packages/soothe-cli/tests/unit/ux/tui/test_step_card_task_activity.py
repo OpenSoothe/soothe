@@ -1,6 +1,6 @@
-"""Task delegation markers under step cards (IG-629 flattened display).
+"""Task delegation markers under step cards (IG-513 flattened display).
 
-IG-629: Step cards show flat task delegation markers (no nested child tools).
+IG-513: Step cards show flat task delegation markers (no nested child tools).
 Subgraph tools route to SubAgent cards. Tests updated for flattened design.
 """
 
@@ -53,7 +53,7 @@ def test_task_delegation_label_collapses_multiline_description() -> None:
 
 
 def test_task_activity_tree_shows_name_desc_flat_marker() -> None:
-    """IG-629: Task delegation shown as flat marker (no nested child stats)."""
+    """IG-513: Task delegation shown as flat marker (no nested child stats)."""
     card = CognitionStepMessage("ABC-01", "Scan workspace", id="stp-task-tree")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -61,16 +61,16 @@ def test_task_activity_tree_shows_name_desc_flat_marker() -> None:
         {"subagent_type": "explore", "description": "scan the repository"},
         is_task_row=True,
     )
-    # IG-629: Subgraph tools no longer appear nested under step card
+    # IG-513: Subgraph tools no longer appear nested under step card
 
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan the repository)" in text
-    # IG-629: No nested tool count under task marker on step card
+    # IG-513: No nested tool count under task marker on step card
     # (SubAgent card shows tool count)
 
 
 def test_task_activity_links_children_by_unified_task_index() -> None:
-    """IG-629: Task marker shown, child tools route to SubAgent card."""
+    """IG-513: Task marker shown, child tools route to SubAgent card."""
     card = CognitionStepMessage("YKF-01", "Delegate", id="stp-task-idx")
     card.add_tool_call(
         "YKF_01:s:task:0",
@@ -78,7 +78,7 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
         {"subagent_type": "tacitus", "description": "find docs"},
         is_task_row=True,
     )
-    # IG-629: read_file tool would route to SubAgent card, not nested here
+    # IG-513: read_file tool would route to SubAgent card, not nested here
 
     text = _plain(card._step_task_activity_content())
     assert "Tacitus(find docs)" in text
@@ -109,7 +109,7 @@ def test_step_compose_places_status_after_task_activity() -> None:
 
 
 def test_task_branch_child_line_shows_flat_marker_only() -> None:
-    """IG-629: Task delegation shown as flat marker, no nested child tools."""
+    """IG-513: Task delegation shown as flat marker, no nested child tools."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-phase")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -117,13 +117,13 @@ def test_task_branch_child_line_shows_flat_marker_only() -> None:
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    # IG-629: Subgraph tools route to SubAgent card, not nested here
+    # IG-513: Subgraph tools route to SubAgent card, not nested here
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan)" in text
 
 
 def test_task_branch_with_empty_args_shows_marker() -> None:
-    """IG-629: Task marker shown regardless of args."""
+    """IG-513: Task marker shown regardless of args."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-empty-args")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -136,7 +136,7 @@ def test_task_branch_with_empty_args_shows_marker() -> None:
 
 
 def test_pending_step_shows_no_activity_without_rows() -> None:
-    """IG-629: Empty step shows no task activity content."""
+    """IG-513: Empty step shows no task activity content."""
     card = CognitionStepMessage("WAA-02", "Blocked step", id="stp-wait")
     text = _plain(card._step_task_activity_content())
     assert text == ""
@@ -144,7 +144,7 @@ def test_pending_step_shows_no_activity_without_rows() -> None:
 
 
 def test_pending_step_with_task_delegation_shows_marker() -> None:
-    """IG-629: Task marker shown even in pending state."""
+    """IG-513: Task marker shown even in pending state."""
     card = CognitionStepMessage("WAA-03", "Future explore", id="stp-wait-task")
     card.add_tool_call(
         "WAA_03:s:task:0",
@@ -158,7 +158,7 @@ def test_pending_step_with_task_delegation_shows_marker() -> None:
 
 
 def test_duplicate_task_rows_dedupe_to_one_marker() -> None:
-    """IG-629: Duplicate task rows dedupe to one marker."""
+    """IG-513: Duplicate task rows dedupe to one marker."""
     card = CognitionStepMessage("JIY-01", "Explore root", id="stp-dedupe")
     card.add_tool_call(
         "JIY_01:s:task:0",
@@ -201,7 +201,7 @@ def test_subgraph_task_level_id_does_not_overwrite_main_delegation() -> None:
 
 
 def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
-    """IG-629: Opaque task metadata row not shown on step card."""
+    """IG-513: Opaque task metadata row not shown on step card."""
     card = CognitionStepMessage("FHG-01", "Explore soothe-sdk", id="stp-hide-opaque-task")
     card.add_tool_call(
         "FHG_01:s:task:0",
@@ -224,7 +224,7 @@ def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
 
 
 def test_step_shows_main_tools_after_task_marker() -> None:
-    """IG-629: Main-agent tools shown after task marker (flat layout)."""
+    """IG-513: Main-agent tools shown after task marker (flat layout)."""
     card = CognitionStepMessage("JIY-01", "Explore", id="stp-parent-norm")
     card.add_tool_call(
         "JIY_01:s:task:0",
@@ -239,7 +239,7 @@ def test_step_shows_main_tools_after_task_marker() -> None:
 
 
 def test_successful_step_shows_task_marker() -> None:
-    """IG-629: Completed step shows task marker (status syncs from SubAgent)."""
+    """IG-513: Completed step shows task marker (status syncs from SubAgent)."""
     card = CognitionStepMessage("ABC-01", "Explore codebase", id="stp-done-task")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -255,7 +255,7 @@ def test_successful_step_shows_task_marker() -> None:
 
 
 def test_failed_step_shows_task_marker() -> None:
-    """IG-629: Failed step shows task marker (status syncs from SubAgent)."""
+    """IG-513: Failed step shows task marker (status syncs from SubAgent)."""
     card = CognitionStepMessage("ABC-02", "Broken explore", id="stp-fail-task")
     card.add_tool_call(
         "ABC_02:s:task:0",
@@ -271,7 +271,7 @@ def test_failed_step_shows_task_marker() -> None:
 
 
 def test_footer_stats_include_all_step_tools() -> None:
-    """IG-629: Footer stats show main tools + task count."""
+    """IG-513: Footer stats show main tools + task count."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-task-status")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
     card.add_tool_call(
@@ -285,7 +285,7 @@ def test_footer_stats_include_all_step_tools() -> None:
 
 
 def test_step_shows_latest_three_main_tools() -> None:
-    """IG-629: Step card shows latest 3 main-agent tool rows."""
+    """IG-513: Step card shows latest 3 main-agent tool rows."""
     card = CognitionStepMessage("ABC-01", "Scan only", id="stp-main-preview")
     for i in range(7):
         card.add_tool_call(f"ABC_01:s:grep:{i}", "grep", {"pattern": f"m{i}"})
@@ -300,7 +300,7 @@ def test_step_shows_latest_three_main_tools() -> None:
 
 
 def test_step_without_task_rows_still_shows_main_tools() -> None:
-    """IG-629: Step without task delegations shows main tools."""
+    """IG-513: Step without task delegations shows main tools."""
     card = CognitionStepMessage("ABC-01", "Scan only", id="stp-no-task")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {"pattern": "x"})
     assert card._has_task_activity_body()
@@ -309,7 +309,7 @@ def test_step_without_task_rows_still_shows_main_tools() -> None:
 
 
 def test_combined_task_and_main_tools() -> None:
-    """IG-629: Task marker + main tools shown in flat layout."""
+    """IG-513: Task marker + main tools shown in flat layout."""
     card = CognitionStepMessage("ABC-01", "Mixed", id="stp-mixed-preview")
     card.add_tool_call(
         "ABC_01:s:task:0",

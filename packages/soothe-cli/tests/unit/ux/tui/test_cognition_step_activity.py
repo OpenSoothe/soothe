@@ -1,4 +1,4 @@
-"""Pure step-card activity module: row classification and stats (RFC-628, IG-629)."""
+"""Pure step-card activity module: row classification and stats (RFC-628, IG-513)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _row(
 
 
 def test_classifier_splits_main_and_task_delegations() -> None:
-    """IG-629: Simplified classifier - main tools and task delegations only.
+    """IG-513: Simplified classifier - main tools and task delegations only.
 
     Subgraph tools (type 't') route to SubAgent cards, not nested under step.
     """
@@ -52,7 +52,7 @@ def test_classifier_splits_main_and_task_delegations() -> None:
     # Task delegations: step-level task rows
     assert len(index.task_delegations) == 1
     key = task_delegation_dedupe_key(index.task_delegations[0], "ABC-01")
-    assert key  # Key exists but children_by_task removed (IG-629)
+    assert key  # Key exists but children_by_task removed (IG-513)
 
 
 def test_stats_title_suffix_uses_total_tool_count() -> None:

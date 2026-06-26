@@ -9,7 +9,7 @@
 **Authors**: Xiaming Chen
 **Depends on**: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements)
 **Extends**: RFC-500 § Event Rendering (step card), RFC-501 § 7.3 (TUI step card body)
-**Implemented by**: IG-628 (original), IG-629 (SubAgent card)
+**Implemented by**: IG-512-step-card-display-refactor.md, IG-513-subagent-card.md
 **Design draft**: `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
 
 ---
@@ -266,8 +266,8 @@ Run `./scripts/verify_finally.sh` before merge.
 - RFC-500 — CLI/TUI architecture and `LoopAIMessage` routing
 - RFC-501 — display verbosity (ActivityInfo vs ConversationPanel)
 - RFC-607 — progressive display refinements
-- IG-628 — `docs/impl/IG-628-step-card-display-refactor.md`
-- IG-629 — `docs/impl/IG-629-subagent-card-display.md`
+- IG-512 (step card) — `docs/impl/IG-512-step-card-display-refactor.md`
+- IG-513 (SubAgent) — `docs/impl/IG-513-subagent-card.md`
 - Design draft — `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
 
 ---

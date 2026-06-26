@@ -53,7 +53,7 @@ class StepToolRow:
 
 @dataclass
 class StepRowIndex:
-    """Single-pass classification of tool rows for one step card (IG-629).
+    """Single-pass classification of tool rows for one step card (IG-513).
 
     Simplified for flattened display: step cards show flat tool rows and
     task delegation markers only. SubAgent cards own their own tool rows.
@@ -129,7 +129,7 @@ def has_task_activity_body(
     subagent_notes: list[str],
     subagent_notes_by_task: dict[str, list[str]],
 ) -> bool:
-    """True when the step card should show the task-activity tree panel (IG-629)."""
+    """True when the step card should show the task-activity tree panel (IG-513)."""
     if subagent_notes or subagent_notes_by_task:
         return True
     if index.task_delegations:
@@ -295,13 +295,13 @@ def normalized_task_note_key(step_id: str, task_tool_call_id: str) -> str:
 
 
 class StepRowClassifier:
-    """Builds a :class:`StepRowIndex` from raw tool rows (IG-629 simplified)."""
+    """Builds a :class:`StepRowIndex` from raw tool rows (IG-513 simplified)."""
 
     @staticmethod
     def build(step_id: str, rows: list[StepToolRow]) -> StepRowIndex:
         """Classify rows into task delegations and main tools (flat display).
 
-        IG-629: Removed children_by_task and orphan_tools — subgraph tools
+        IG-513: Removed children_by_task and orphan_tools — subgraph tools
         route to SubAgent cards, not nested under step card task rows.
         """
         task_delegations = StepRowClassifier._iter_task_delegation_rows(step_id, rows)
@@ -547,9 +547,9 @@ class StepCardStatusLine:
 
 
 class StepActivityTree:
-    """Pure render: task delegation markers and main tool preview (IG-629 simplified).
+    """Pure render: task delegation markers and main tool preview (IG-513 simplified).
 
-    IG-629: Removed nested child rendering — subgraph tools route to SubAgent cards.
+    IG-513: Removed nested child rendering — subgraph tools route to SubAgent cards.
     Step cards show flat list: task delegation markers + main-agent tools.
     """
 
@@ -582,7 +582,7 @@ class StepActivityTree:
         ):
             return Content("")
 
-        # IG-629: Task delegations shown as flat markers (no nested children)
+        # IG-513: Task delegations shown as flat markers (no nested children)
         for task_row in index.task_delegations:
             if not first_block:
                 parts.append("\n")

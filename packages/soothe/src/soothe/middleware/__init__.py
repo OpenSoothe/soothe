@@ -12,7 +12,7 @@ This package provides middleware implementations:
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
 - FileLockMiddleware: File lock conflict resolution for autopilot mode (RFC-222)
 - MCPToolSearchMiddleware: MCP progressive disclosure telemetry (RFC-412)
-- ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-512)
+- ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-511)
 
 Utility functions:
 - create_llm_call_metadata: Create standardized metadata for LLM calls

@@ -1,4 +1,4 @@
-# IG-628: Step Card Display Refactor
+# IG-512: Step Card Display Refactor
 
 **Status**: Implemented (2026-06-26)  
 **RFC**: [RFC-628](../specs/RFC-628-step-card-display-refactor.md) — **canonical step card design spec**  
