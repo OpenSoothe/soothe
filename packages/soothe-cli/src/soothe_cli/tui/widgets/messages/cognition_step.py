@@ -835,12 +835,11 @@ class CognitionStepMessage(Vertical):
                 row.started_at = time()
         self._rows.append(row)
         self._row_index[tcid] = row
-        self._promote_pending_to_running_if_needed()
         self._refresh_header_title()
         self._sync_step_card_surface()
 
-    def _promote_pending_to_running_if_needed(self) -> None:
-        """Show running UI when tools arrive before ``step.started`` (mounted cards)."""
+    def promote_to_running_if_pending(self) -> None:
+        """Transition ``pending`` → ``running`` (RFC-628 authorized promotion only)."""
         if self._status != "pending":
             return
         if getattr(self, "is_mounted", False):
@@ -896,33 +895,6 @@ class CognitionStepMessage(Vertical):
         cache_key = self._row_cache_key_by_id.pop(old, None)
         if cache_key is not None:
             self._row_cache_key_by_id[new] = cache_key
-
-    def pop_tool_row(self, tool_call_id: str) -> _StepToolRow | None:
-        """Remove and return a tool row so another step card can adopt it (parallel routing)."""
-        tcid = str(tool_call_id).strip()
-        if not tcid:
-            return None
-        row = self._row_index.pop(tcid, None)
-        if row is None:
-            return None
-        self._rows = [r for r in self._rows if r.tool_call_id != tcid]
-        self._refresh_header_title()
-        self._sync_step_card_surface()
-        return row
-
-    def ingest_tool_row(self, row: _StepToolRow) -> None:
-        """Attach a tool row moved from another step card."""
-        tcid = str(row.tool_call_id).strip()
-        if not tcid:
-            return
-        if tcid in self._row_index:
-            self.update_tool_args(tcid, row.args)
-            return
-        self._rows.append(row)
-        self._row_index[tcid] = row
-        self._promote_pending_to_running_if_needed()
-        self._refresh_header_title()
-        self._sync_step_card_surface()
 
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state (for result lines)."""
