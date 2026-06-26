@@ -76,14 +76,14 @@ def test_execute_message_no_task_section() -> None:
 
 
 def test_execute_message_hints_contains_task_instructions() -> None:
-    """IG-510: Task instructions are merged into EXECUTION HINTS."""
+    """IG-510: Task instructions are merged into EXECUTION HINTS as list items."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
-        execution_hints="Expected output: error list. Execute the step described in GOAL above.",
+        execution_hints="Expected output:\n- error list\n\nInstructions:\n- Execute the step",
     )
     assert "EXECUTION HINTS:" in msg
-    assert "Execute the step" in msg
+    assert "- Execute the step" in msg
 
 
 def test_plan_assess_message_uses_goal_label() -> None:
