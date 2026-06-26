@@ -1,16 +1,10 @@
 # Soothe Configuration Template
-# ------------------------------------------------------------------------------
-# Full YAML aligned with Pydantic defaults in ``packages/soothe/src/soothe/config/``
-# (``models.py``, ``settings.py``). Values match those defaults except documented
-# examples: OpenAI ``providers`` sample, ``sqlite_vec`` store + router.
-#
+# See packages/soothe/src/soothe/config/ for Pydantic defaults.
 # Usage: soothe --config /path/to/this-file.yaml
-# Local dev: start from config/develop/config.yml and adjust providers.
-# Secrets: use ``${ENV_VAR}`` under providers; export OPENAI_API_KEY, etc.
-# Optional tool env: TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, GITHUB_TOKEN.
+# Secrets: use ${ENV_VAR} syntax; export OPENAI_API_KEY, TAVILY_API_KEY, etc.
 
 # ============================================================
-# PROVIDERS (LLM & Embedding Models)
+# PROVIDERS
 # ============================================================
 providers:
   - name: openai
@@ -52,63 +46,41 @@ router:
 embedding_dims: 1536
 
 # ============================================================
-# AGENT (Identity, Behavior, Self-Driving, Loop, Protocols)
+# AGENT
 # ============================================================
-# All agent-related settings consolidated in one section (IG-434).
-# Progressive disclosure: basic → autonomous → loop → protocols.
 
 agent:
-  # === BASIC (User Identity) ===
+  # --- Identity ---
   name: Soothe
   system_prompt: null
   workspace_instructions_max_chars: 8000
 
-  # === CORE AGENT BACKEND ===
-  # Core agent runtime backend.
-  # - 'langgraph' (default): Uses LangGraph with langchain ecosystem
-  # - 'claude': Uses claude-agent-sdk (Claude Code CLI) for full tool capabilities
+  # --- Core Agent Backend ---
+  # langgraph (default): LangGraph with langchain ecosystem
+  # claude: claude-agent-sdk (Claude Code CLI) for full tool capabilities
   core_agent_backend: langgraph
+  claude_permission_mode: bypassPermissions
+  claude_max_turns: 25
+  claude_model: null
 
-  # Claude-specific configuration (only used when core_agent_backend='claude')
-  claude_permission_mode: bypassPermissions # Claude Code permission mode
-  claude_max_turns: 25 # Maximum turns per execution
-  claude_model: null # Claude model (e.g., 'sonnet', 'opus'). null = SDK default
-
-  # === AUTONOMOUS (Self-Driving - Unified) ===
-  # Merged former 'autonomous' + 'autopilot' sections (IG-434).
-  # Controls 24/7 self-running behavior for both goal-level and daemon-level.
+  # --- Autonomous (Self-Driving) ---
+  # Controls 24/7 self-running behavior for goal-level and daemon-level.
   autonomous:
-    # Enable the AutopilotService scheduling loop. When true, the daemon
-    # starts the scheduling loop on startup for 24/7 autonomous operation.
-    # When false (default), goals won't be dispatched automatically via HTTP
-    # /autopilot/submit — manual dispatch required.
-    enabled: false
-
-    # Goal execution limits
+    enabled: false  # Enable scheduling loop for 24/7 autonomous operation
     max_iterations: 10
     max_retries: 2
     max_total_goals: 50
     max_goal_depth: 5
     max_parallel_goals: 3
     enable_dynamic_goals: true
-
-    # Orchestration
     max_send_backs: 3
     checkpoint_interval: 10
-
-    # Dreaming (background consolidation)
     dreaming_enabled: true
     dreaming_consolidation_interval: 300
     dreaming_health_check_interval: 60
-
-    # RFC-625: AutopilotMonitor settings
-    # Background verification loop for DAG health checks.
-    verify_interval: 30 # seconds between verification cycles
-    # Time-triggered dreaming (in addition to DAG completion trigger).
-    dreaming_interval: 300 # seconds between time-based dreaming entries
-    # Cross-loop dreaming scope for memory distillation.
-    dreaming_scope: workspace # loop | workspace | topic
-    # Per-mode dreaming configuration.
+    verify_interval: 30  # Seconds between DAG verification cycles
+    dreaming_interval: 300  # Seconds between time-based dreaming entries
+    dreaming_scope: workspace  # loop | workspace | topic
     dreaming_modes:
       episodic:
         enabled: true
@@ -120,126 +92,88 @@ agent:
         enabled: true
       profile:
         enabled: true
-
-    # Scheduled tasks
     scheduler_enabled: true
     max_scheduled_tasks: 100
     webhooks: {}
-
-    # Loop pool (RFC-222) — AutopilotService worker management.
-    # `max_loops` caps the worker pool (loops can be reused for parent→child
-    # lineage); `max_parallel_goals` (above) caps active goals at once.
-    max_loops: 4
+    max_loops: 4  # Worker pool cap; loops reused for parent→child lineage
     loop_idle_timeout: 300
     poll_interval: 5
     dreaming_poll_interval: 60
-
-    # Context projection (RFC-222 revised) — bounds for the
-    # GoalDispatchContextBundle that the daemon's ContextProjector ships to
-    # each worker. Keeps cross-process IPC bounded.
-    context_projection:
+    context_projection:  # Bounds for GoalDispatchContextBundle IPC
       max_findings: 20
       max_files: 50
       max_plan_steps: 30
-      context_retention_hours: 168 # evict after root goal terminal + 1 week
-
-    # Workspace reservation (RFC-222 revised) — scheduling-time conflict gate.
-    # Refuses to dispatch two goals on overlapping workspace prefixes.
-    workspace_reservation:
+      context_retention_hours: 168  # Evict after root goal terminal + 1 week
+    workspace_reservation:  # Scheduling-time conflict gate for overlapping workspaces
       enabled: true
       strict_overlap: true
 
-  # === CRON SERVICE (RFC-229) ===
-  # Natural language scheduled job submission and execution.
-  # Users submit jobs via /cron commands; daemon extracts schedule via LLM,
-  # persists to database, monitors for due jobs, and executes through Autopilot.
+  # --- Cron Service ---
+  # Natural language scheduled job submission and execution via /cron commands.
   cron:
-    enabled: true              # Enable cron service (default: true)
-    max_jobs: 100              # Maximum scheduled jobs per user
-    poll_interval: 60          # Seconds between due-job monitoring ticks
-    extraction_model: fast     # LLM role for NL extraction (fast|think)
-    extraction_timeout: 30     # Timeout for LLM extraction calls
-    default_priority: 50       # Default job priority when not specified
+    enabled: true
+    max_jobs: 100
+    poll_interval: 60
+    extraction_model: fast  # fast | think
+    extraction_timeout: 30
+    default_priority: 50
 
-  # === LOOP (StrangeLoop Internal Tuning) ===
-  # Rarely edited. Defaults optimized for most use cases.
+  # --- Loop (StrangeLoop Internal Tuning) ---
+  # Defaults optimized for most use cases; rarely edited.
   loop:
     enabled: true
     max_iterations: 99
     max_subagent_tasks_per_wave: 4
-    strange_loop_output_contract_enabled: true # Suppress full tool output re-paste during Execute
+    strange_loop_output_contract_enabled: true  # Suppress full tool output re-paste
     prior_conversation_limit: 10
     context_window_limit: 200000
-
-    # Response shape (IG-298 / IG-199). Canonical reads live here, not at agent.*.
-    goal_completion_mode: llm_only # llm_only | heuristic_only | hybrid
-    final_response: adaptive # adaptive | always_synthesize
-
-    # RFC-224: Automatic context window management
-    context_overflow_threshold_pct: 0.80 # Trigger compaction at 80% (160k tokens)
-    context_compaction_target_pct: 0.60 # Compact to 60% (120k tokens)
-    step_context_check_enabled: false # Step threads usually short-lived
-
-    # RFC-220 loop orchestrator
-    loop_orchestrator_evidence_validate: true # Run plan evidence validation node (currently a no-op)
-
-    # Output streaming (RFC-614, IG-441)
+    goal_completion_mode: llm_only  # llm_only | heuristic_only | hybrid
+    final_response: adaptive  # adaptive | always_synthesize
+    context_overflow_threshold_pct: 0.80  # Trigger compaction at 80% (160k tokens)
+    context_compaction_target_pct: 0.60  # Compact to 60% (120k tokens)
+    step_context_check_enabled: false  # Step threads usually short-lived
+    loop_orchestrator_evidence_validate: true  # Plan evidence validation node
     output_streaming:
-      mode: adaptive # batch | adaptive | streaming
+      mode: adaptive  # batch | adaptive | streaming
       streaming_interval_ms: 300
-      adaptive_threshold_chars: 500 # phase-1 → phase-2 cutover (adaptive)
-      adaptive_block_chars: 500 # phase-2 block size (adaptive)
-      adaptive_block_interval_ms: 250 # phase-2 max ms between blocks (adaptive)
-      file_output_threshold_chars: 0 # 0 = never write goal_completion to file
-      file_output_preview_chars: 500 # Preview chars in TUI when output saved to file
-      file_output_dir: null # null = <workspace>/.soothe/output
+      adaptive_threshold_chars: 500
+      adaptive_block_chars: 500
+      adaptive_block_interval_ms: 250
+      file_output_threshold_chars: 0  # 0 = never write goal_completion to file
+      file_output_preview_chars: 500
+      file_output_dir: null  # null = <workspace>/.soothe/output
       message_coalesce_enabled: true
       tool_batch_enabled: true
       tool_batch_interval_ms: 200
       suppress_redundant_stream_tool_updates: true
       skip_redundant_tool_message_wire: false
       tui_flush_interval_ms: 200
-
-    # Working memory
     working_memory:
       enabled: true
       max_inline_chars: 4000
       max_entry_chars_before_spill: 1500
-
-    # Goal context
     goal_context:
       plan_limit: 10
       execute_limit: 10
       enabled: true
-
-    # Report output
     report_output:
       display_threshold: 20000
       preview_chars: 500
       synthesis_max_chars: 0
-
-    # Plan-phase ledger projection caps (IG-380). 0 = unlimited (full passthrough).
-    plan_prompt_ledger:
+    plan_prompt_ledger:  # 0 = unlimited (full passthrough)
       plan_ledger_max_messages: 0
       plan_ledger_max_total_chars: 0
       plan_ledger_max_message_chars: 0
-
-    # Context Engine integration (RFC-624 Phase 4). Always active.
-    # CE uses the same persistence backend as the rest of Soothe
-    # (persistence.default_backend). Projection limits control how much
-    # context the CE injects into prompt templates.
-    context_engine:
+    context_engine:  # Projection limits for prompt template context injection
       projection_max_goals: 5
       projection_max_steps_per_goal: 10
       projection_max_ledger_chars: 4000
       projection_max_ledger_messages: 20
       projection_max_lineage_chars: 2000
       projection_max_project_instructions_chars: 8000
-
     checkpoint:
       progressive: true
       auto_resume_on_start: false
-
     concurrency:
       max_parallel_goals: 4
       max_parallel_steps: 4
@@ -248,21 +182,18 @@ agent:
       global_max_llm_calls: 10
       step_parallelism: dependency
 
-    # IG-501: Enable by default with moderate settings for Chinese providers
-    # (Dashscope/Zhipu typically have lower limits than OpenAI)
-    # IG-504: Increased timeouts and retries for robust step execution
+    # LLM rate limiting (moderate defaults for Dashscope/Zhipu)
     llm_rate_limit:
       enabled: true
-      rpm_limit: 60  # Moderate default for Dashscope/Zhipu (free tier ~30, paid ~60-100)
-      concurrent_limit: 8  # Parallelism without overwhelming provider
-      call_timeout_seconds: 600  # IG-504: Increased timeout for robust execution
-      call_timeout_max_seconds: 900  # IG-504: Increased cap
+      rpm_limit: 60
+      concurrent_limit: 8
+      call_timeout_seconds: 600
+      call_timeout_max_seconds: 900
       retry_on_timeout: true
-      max_timeout_retries: 10  # IG-504: Increased retries
+      max_timeout_retries: 10
       timeout_retry_multiplier: 1.2
-      # IG-499: HTTP 429 rate limit retry configuration
       retry_on_rate_limit: true
-      max_rate_limit_retries: 10  # IG-504: Increased 429 retries
+      max_rate_limit_retries: 10
       rate_limit_backoff_base: 2.0
       rate_limit_backoff_max: 60.0
       respect_retry_after_header: true
@@ -296,20 +227,19 @@ agent:
       backoff_factor: 2.0
       initial_delay: 1.0
 
-    # === TOOL TIMEOUT (IG-512) ===
-    # Wrap tool calls with configurable timeout to prevent indefinite hangs.
+    # Tool timeout middleware (prevent indefinite hangs)
     tool_timeout:
-      enabled: true # Enable tool timeout middleware
-      default_seconds: 60.0 # Default timeout for tools without override
+      enabled: true
+      default_seconds: 60.0
       per_tool:
-        grep: 30.0 # Filesystem searches
-        glob: 20.0 # File pattern matching
-        read_file: 30.0 # File reads
-        explore: 600.0 # Subagent exploration (can take several minutes)
-        browser_use: 600.0 # Browser automation (can take several minutes)
-      skip_tools_with_internal_timeout: true # Skip run_command (already has timeout)
+        grep: 30.0
+        glob: 20.0
+        read_file: 30.0
+        explore: 600.0  # Subagent exploration
+        browser_use: 600.0  # Browser automation
+      skip_tools_with_internal_timeout: true
 
-  # === PROTOCOLS (Backend Selection) ===
+  # --- Protocols ---
   protocols:
     memory:
       enabled: true
@@ -331,7 +261,7 @@ agent:
         - name: goals
           description: Goals and objectives
     planner:
-      model: think # Use "think" for complex reasoning, "fast" for speed
+      model: think  # think for complex reasoning, fast for speed
       routing: auto
     policy:
       profile: standard
@@ -341,18 +271,16 @@ agent:
       persist_dir: null
       thread_inactivity_timeout_hours: 72
 
-  # === CODE INTERPRETER (IG-423) ===
+  # --- Code Interpreter ---
   # Embedded QuickJS interpreter for programmatic tool calling (PTC).
-  # Opt-in feature — disabled by default. When enabled, agents can write
-  # JavaScript code that calls tools directly via tools.* namespace.
-  # Dependency note: langchain-quickjs is included in soothe base dependencies.
+  # Opt-in; when enabled, agents can call tools via tools.* namespace.
   code_interpreter:
-    enabled: false # opt-in; set to true to enable
-    ptc_allowlist: [] # tools exposed via tools.* namespace (empty = no PTC)
+    enabled: false
+    ptc_allowlist: []  # Tools exposed via tools.* namespace
 
-  # === RUNTIME PERFORMANCE (IG-506) ===
+  # --- Runtime Performance ---
   runtime:
-    lazy_core_agent: true # defer create_deep_agent until first execute/quiz access
+    lazy_core_agent: true
     memory_limit_mb: 128
     timeout_seconds: 30
     max_ptc_calls: 50
@@ -360,28 +288,22 @@ agent:
     console_capture: true
     snapshot_between_turns: false
 
-  # === CLARIFICATION RELAY (RFC-622) ===
-  # When CoreAgent emits a structured ``ask_user`` interrupt, the loop bubbles
-  # it up through a ClarificationPolicy. Manual mode relays to the human via
-  # the TUI; auto mode delegates to the veritas subagent. Plain-text questions
-  # in assistant messages are NOT detected — emit a structured ``ask_user`` to
-  # engage the relay.
+  # --- Clarification Relay ---
+  # Manual mode: TUI relay; auto mode: veritas subagent.
+  # Triggers on structured `ask_user` interrupts only.
   clarification:
-    auto_policy: veritas # only built-in for now
-    auto_min_confidence: 0.4 # below this, veritas answer is treated as defer
-    max_defer_age_hours: 168 # autopilot: scrub stale awaiting_clarification goals
-    default_mode:
-      auto # used when a request omits clarification_mode
-      # (auto = veritas; manual = TUI relay).
-      # Autopilot always forces auto.
+    auto_policy: veritas
+    auto_min_confidence: 0.4
+    max_defer_age_hours: 168
+    default_mode: auto  # auto = veritas; manual = TUI relay
 
-  # === VERITAS (Clarification auto-answerer, RFC-622) ===
+  # --- Veritas (Clarification auto-answerer) ---
   veritas:
-    model_role: think # reuses the existing "think" ModelRole
-    max_context_steps: 8 # how many recent step outputs to include
+    model_role: think
+    max_context_steps: 8
 
 # ============================================================
-# TOOLS (Capabilities Available to Agent)
+# TOOLS
 # ============================================================
 tools:
   execution:
@@ -403,16 +325,15 @@ tools:
     allow_dangerous_requests: true
     headers: {}
     verify_ssl: true
-  # DeepXiv: Academic paper search and progressive reading (opt-in)
-  # Token: set DEEPXIV_API_KEY or DEEPXIV_TOKEN, or override token below
-  # Register at https://data.rag.ac.cn (10,000 req/day); omit token for anonymous tier
+  # DeepXIV: Academic paper search (opt-in). Set DEEPXIV_API_KEY or token below.
   deepxiv:
     enabled: false
     token: null
     timeout: 60
     max_retries: 3
+
 # ============================================================
-# SUBAGENTS (Specialized Helper Agents)
+# SUBAGENTS
 # ============================================================
 subagents:
   explore:
@@ -435,14 +356,12 @@ subagents:
       enable_semantic_similarity: true
       semantic_similarity_timeout_seconds: 10
       synthesis_timeout_seconds: 120
-    runtime_dir: ""
   plan:
     enabled: true
     model: null
     transport: local
     url: null
     config: {}
-    runtime_dir: ""
   tacitus:
     enabled: true
     model: null
@@ -452,51 +371,38 @@ subagents:
       llm_role: fast
       synthesis_role: fast # set to ``think`` for higher-quality synthesis at higher latency
       effort: normal
-    runtime_dir: ""
   browser_use:
     enabled: true
     model: null
     transport: local
     url: null
     config: {}
-    runtime_dir: ""
 
 # ============================================================
-# MCP SERVERS, PLUGINS, SKILLS, MEMORY
+# MCP SERVERS, PLUGINS, SKILLS
 # ============================================================
-
-# MCP server configurations (RFC-412). Each server requires a unique name.
-# Supports four transports: stdio, sse, streamable_http, websocket.
-# Example stdio server:
+# Supports: stdio, sse, streamable_http, websocket transports.
+# Example:
 #   mcp_servers:
 #     - name: filesystem
 #       transport: stdio
 #       command: npx
 #       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-#       defer: true              # progressive disclosure (default)
-# Example remote server with auth:
-#   mcp_servers:
-#     - name: linear
-#       transport: streamable_http
-#       url: https://mcp.linear.app/sse
-#       auth:
-#         headers:
-#           Authorization: "Bearer ${LINEAR_MCP_TOKEN}"
 #       defer: true
 mcp_servers: []
 progressive_mcp:
-  budget_pct: 0.01 # fraction of context_window_limit for <AVAILABLE_MCP_TOOLS> listing
-  max_listing_chars_per_entry: 250 # hard per-entry tool description cap
-  min_listing_chars_per_entry: 20 # below this, non-essential entries become names-only
+  budget_pct: 0.01  # Fraction of context_window_limit for tool listing
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
 
 plugins: []
 skills: []
 progressive_skills:
-  budget_pct: 0.01 # fraction of context_window_limit for <AVAILABLE_SKILLS> listing
-  max_listing_chars_per_entry: 250 # hard per-entry description cap
-  min_listing_chars_per_entry: 20 # below this, non-builtin entries become names-only
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
 progressive_tools:
-  enabled: true # bind core tools only; list deferred in prompt
+  enabled: true  # Bind core tools only; list deferred in prompt
   budget_pct: 0.01
   max_listing_chars_per_entry: 120
   min_listing_chars_per_entry: 20
@@ -549,22 +455,14 @@ update:
   auto_update: true
 
 # ============================================================
-# PERSISTENCE & STORAGE
+# PERSISTENCE
 # ============================================================
-# SQLite backend is the default (no external database required).
-# PostgreSQL is optional for production deployments with high concurrency.
+# SQLite (default) or PostgreSQL for production with high concurrency.
 persistence:
-  # Backend selection: 'sqlite' (default) or 'postgresql'
   default_backend: sqlite
-
-  # SQLite paths (default to $SOOTHE_DATA_DIR if null)
   metadata_sqlite_path: null  # $SOOTHE_DATA_DIR/metadata.db
   checkpoint_sqlite_path: null  # $SOOTHE_DATA_DIR/soothe_checkpoints.db
-
-  # SQLite concurrency settings for multiple loop support
-  sqlite_reader_pool_size: 8  # Reader connections for concurrent reads (1-32)
-
-  # PostgreSQL options (only used when default_backend='postgresql')
+  sqlite_reader_pool_size: 8
   postgres_base_dsn: null  # e.g., "postgresql://user:pass@host:port"
   postgres_databases:
     checkpoints: soothe_checkpoints
@@ -578,19 +476,17 @@ persistence:
   postgres_pool_max_idle_seconds: 120
   postgres_pool_max_lifetime_seconds: 1800
   postgres_pool_acquire_timeout_seconds: 30
-
-  # Loop archival configuration (IG-500: /clear enhancement)
   archive_enabled: true
-  archive_retention_days: 90  # Days to keep archived loops before cleanup
-  archive_max_count: 1000  # Maximum archived loops to retain
+  archive_retention_days: 90
+  archive_max_count: 1000
 
-# Vector store configuration
-# sqlite_vec is the default (uses sqlite-vec extension for vector search)
+# ============================================================
+# VECTOR STORES
+# ============================================================
+# sqlite_vec uses sqlite-vec extension for vector search (default).
 vector_stores:
   - name: sqlite_vec_default
     provider_type: sqlite_vec
-    # db_path defaults to $SOOTHE_HOME/vector.db if not specified
-    # reader_pool_size: 8  # Concurrent readers for multi-loop support
 
 vector_store_router:
   default: sqlite_vec_default:soothe_default
@@ -635,13 +531,11 @@ filesystem_middleware:
   workspace_root: null
   max_file_size_mb: 10
   tool_token_limit_before_evict: 20000
-  # Path sandboxing is controlled by security.allow_paths_outside_workspace.
 
 # ============================================================
-# OPTIMIZATION (Semantic Heuristics)
+# OPTIMIZATION
 # ============================================================
-# IG-433: Replaces fragile keyword/regex matching with LLM-based approaches.
-# All features have graceful fallback to legacy heuristics when LLM unavailable.
+# LLM-based semantic heuristics with fallback to legacy when LLM unavailable.
 optimization:
   semantic_risk:
     enabled: true
@@ -661,22 +555,11 @@ optimization:
     enabled: true
 
 # ============================================================
-# WORKSPACE CONFIGURATION
+# WORKSPACE
 # ============================================================
-# Daemon fallback workspace defaults to a temp directory (override with SOOTHE_WORKSPACE).
-# When loop_new sets client_workspace (RPC field: workspace), the runner uses that path directly.
-# When client_workspace is unset, persisted sandboxes live under:
-#   $SOOTHE_HOME/workspaces/<user>/ws_<hash>/
-#   - Empty user_id → directory segment "anonymous"; hash uses "" as the user part.
-#   - hash = SHA256(user_id, client_workspace_id or loop_id)[:16]
-# The anonymous workspace tree is removed on daemon shutdown.
-#
-# loop_new RPC fields: client_workspace (or legacy workspace), user_id, client_workspace_id.
-
-# Workspace mount mapping for container deployments (RFC-621).
-# When the daemon runs inside a Docker container, client paths must be translated
-# to container paths. Set both fields to enable; leave both unset for local runs.
-# The Docker volume mount must match: -v <host_root>:<container_root>
+# Daemon fallback: temp directory (override with SOOTHE_WORKSPACE).
+# Persisted sandboxes: $SOOTHE_HOME/workspaces/<user>/ws_<hash>/
+# Container deployment: set both mount fields to translate client→container paths.
 workspace_mount:
-  host_root: null # e.g. /var/run/soothe/workspaces
-  container_root: null # e.g. /workspaces
+  host_root: null  # e.g. /var/run/soothe/workspaces
+  container_root: null  # e.g. /workspaces

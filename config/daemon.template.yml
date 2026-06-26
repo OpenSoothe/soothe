@@ -1,16 +1,13 @@
-# Soothe daemon server configuration (SootheDaemonConfig).
-#
+# Soothe daemon server configuration (SootheDaemonConfig)
 # Install: ~/.soothe/config/daemon.yml
-# CLI:     soothed --config <path>
-#
-# Environment overrides: prefix SOOTHE_DAEMON_, nested keys use __
-# Example: SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT=9000
+# CLI: soothed --config <path>
+# Env overrides: SOOTHE_DAEMON_<KEY> or nested SOOTHE_DAEMON_<SECTION>__<KEY>
 
 # ============================================================================
-# TRANSPORTS - Network listeners for daemon communication
+# TRANSPORTS
 # ============================================================================
 transports:
-  websocket:  # Primary transport for CLI/TUI clients
+  websocket:
     enabled: true
     host: 127.0.0.1
     port: 8765
@@ -20,180 +17,133 @@ transports:
     cors_origins:
       - http://localhost:*
       - http://127.0.0.1:*
-    max_frame_size: 10485760  # 10MB WebSocket frame limit
+    max_frame_size: 10485760  # 10MB
 
 # ============================================================================
-# CONCURRENCY - Limits for parallel execution and resource protection
+# CONCURRENCY
 # ============================================================================
-max_concurrent_threads: 100          # Global thread limit across all runners
-max_concurrent_dispatches: 50        # Parallel goal dispatches
-max_concurrent_vision_preflight: 8   # Parallel vision tool preflight checks (0 = unlimited)
-max_input_queue_size: 1000           # Pending requests before rejection
+max_concurrent_threads: 100
+max_concurrent_dispatches: 50
+max_concurrent_vision_preflight: 8  # 0 = unlimited
+max_input_queue_size: 1000
 
 # ============================================================================
-# TIMEOUTS & CANCELLATION - Query lifecycle and graceful shutdown
+# TIMEOUTS & CANCELLATION
 # ============================================================================
-max_query_duration_minutes: 0        # 0 = unlimited; set e.g. 4320 for a 3-day cap
-thread_max_age_hours: 24             # Thread recycling age
-cancel_grace_seconds: 30             # Initial grace period before cancel sequence
-cancel_retry_count: 3                # Cooperative cancel attempts before force kill
-cancel_retry_interval_seconds: 2.0   # Retry backoff interval
-cancel_force_kill_timeout_seconds: 10.0  # Final timeout before force kill
-query_timeout_action: cancel         # Action on timeout: 'cancel' or 'terminate'
-auto_cancel_on_startup: true         # Cancel stale queries from previous session
+max_query_duration_minutes: 0  # 0 = unlimited
+thread_max_age_hours: 24
+cancel_grace_seconds: 30
+cancel_retry_count: 3
+cancel_retry_interval_seconds: 2.0
+cancel_force_kill_timeout_seconds: 10.0
+query_timeout_action: cancel  # cancel | terminate
+auto_cancel_on_startup: true
 
 # ============================================================================
-# LOOP GC - Single periodic sweeper, two passes per tick (IG-466)
-#   * ephemeral pass: is_ephemeral=true loops idle past ephemeral_idle_hours
-#   * empty pass: any loop with zero human + zero AI messages idle past
-#                 empty_idle_hours (bootstrap sessions that never produced
-#                 a real exchange)
+# LOOP GC
 # ============================================================================
+# Two passes per tick: ephemeral (is_ephemeral=true) and empty (zero messages)
 loop_gc:
   enabled: true
-  interval_seconds: 3600             # Scan every hour
-  ephemeral_idle_hours: 24           # is_ephemeral=true, idle 24h → purge
-  empty_idle_hours: 24               # zero human/AI messages, idle 24h → purge
-  batch_size: 50                     # Cap per pass per tick
+  interval_seconds: 3600  # Scan every hour
+  ephemeral_idle_hours: 24
+  empty_idle_hours: 24
+  batch_size: 50
 
 # ============================================================================
-# LOOP STATUS RECONCILIATION - Demote stale status=running loops
-#   A row with status=running, updated_at older than stale_running_seconds,
-#   and NOT in this daemon's active set is demoted to idle. The runner
-#   heartbeat (every ~30s) keeps live loops fresh; missing multiple windows
-#   indicates an orphaned row (daemon crash, runner subprocess crash, etc.)
+# LOOP STATUS RECONCILIATION
 # ============================================================================
+# Demote stale status=running loops missing heartbeat (~30s intervals)
 loop_status_reconciliation:
   enabled: true
-  interval_seconds: 300              # Scan every 5 minutes
-  stale_running_seconds: 180         # 3min without heartbeat → demote (≈ 6 heartbeat windows)
+  interval_seconds: 300  # Scan every 5 minutes
+  stale_running_seconds: 180  # ~6 heartbeat windows
   batch_size: 100
 
 # ============================================================================
-# STALE WORKER REAP - Orphaned multiprocessing.spawn processes (worker_pool)
+# STALE WORKER REAP
 # ============================================================================
 stale_worker_reap:
-  enabled: true                      # Server also requires worker_pool.enabled
-  interval_seconds: 1800             # Every 30 minutes
+  enabled: true  # Also requires worker_pool.enabled
+  interval_seconds: 1800  # Every 30 minutes
 
 # ============================================================================
-# OBSERVABILITY - Diagnostic metrics and logging
+# OBSERVABILITY
 # ============================================================================
-event_size_stats_enabled: true       # Track JSON wire-size distribution
+event_size_stats_enabled: true
 event_size_stats_interval_seconds: 60
 event_size_stats_idle_pause_seconds: 120
 
 # ============================================================================
-# MEMORY PROFILING - tracemalloc-based leak detection (IG-475)
-#   Uses Python's built-in tracemalloc to track allocations and identify
-#   memory growth sources. Has ~5-10% runtime overhead when enabled.
-#
-#   Access via RPC: /memory mode=daemon|gc|snapshot|objects|compare
-#   Useful for diagnosing leaks in production Docker deployments.
+# MEMORY PROFILING
 # ============================================================================
+# tracemalloc-based leak detection (~5-10% overhead when enabled)
+# Access via RPC: /memory mode=daemon|gc|snapshot|objects|compare
 memory_profiling:
-  enabled: false                     # Enable tracemalloc tracing
-  trace_depth: 25                    # Maximum traceback depth for allocations
-  snapshot_interval_seconds: 0       # Auto-snapshot interval (0 = disabled, manual via RPC)
-  top_allocations_limit: 20          # Number of top allocations to report
-  log_growth_threshold_mb: 100       # Log warning when RSS grows by this amount
-  log_growth_interval_seconds: 0     # Interval for growth logging (0 = disabled)
+  enabled: false
+  trace_depth: 25
+  snapshot_interval_seconds: 0  # 0 = manual via RPC
+  top_allocations_limit: 20
+  log_growth_threshold_mb: 100
+  log_growth_interval_seconds: 0  # 0 = disabled
 
 # ============================================================================
-# IDENTITY SERVICE - AKSK authentication & JWT token management (RFC-307)
-#   Provides credential-based authentication for WebSocket clients and
-#   external channel identity mapping for workspace isolation.
-#
-#   When enabled:
-#   - WebSocket clients must authenticate with AKSK → receive JWT tokens
-#   - External channels (Telegram, Feishu, etc.) resolve sender_id → user_id
-#   - IdentityMiddleware populates ThreadState.user_id for workspace isolation
-#
-#   Disabled by default for backward compatibility (no auth required).
+# IDENTITY SERVICE
 # ============================================================================
+# AKSK authentication & JWT tokens. Disabled by default (no auth required).
 identity:
-  enabled: false                     # Enable identity service (default: disabled)
-
+  enabled: false
   tokens:
-    access_token_expiry_hours: 1     # Access token lifetime (1-24 hours)
-    refresh_token_expiry_days: 7     # Refresh token lifetime (1-365 days)
-    jwt_signing_key: null            # Use SOOTHE_JWT_KEY env var, or auto-generate
-
+    access_token_expiry_hours: 1
+    refresh_token_expiry_days: 7
+    jwt_signing_key: null  # Use SOOTHE_JWT_KEY or auto-generate
   aksk:
-    default_expiry_days: 90          # Default AKSK expiry (null = never expires)
-    max_expiry_days: 365             # Maximum allowed expiry
-
-  unmapped_sender_policy: anonymous  # Policy for unmapped external senders:
-                                    #   anonymous - fall back to anonymous workspace
-                                    #   reject    - reject message with error
-                                    #   use_sender_id - use channel:sender_id as user_id
+    default_expiry_days: 90  # null = never expires
+    max_expiry_days: 365
+  unmapped_sender_policy: anonymous  # anonymous | reject | use_sender_id
 
 # ============================================================================
-# RUNNER MODES - Execution backend (enable exactly ONE)
-# Options: thread_pool (default), worker_pool, distributed
-#
-# PostgreSQL Pool Sharing (IG-406):
-# - thread_pool: Daemon-level singleton shared by ALL threads → efficient pool reuse
-# - worker_pool: Each subprocess has its OWN pool (N × pool_size connections)
-#   Due to multiprocessing spawn isolation, pools cannot be cross-process shared.
-#
-# Pool Size Recommendations (config persistence: postgres_pool_min_size, *pool_size max):
-# - thread_pool mode: Defaults min 4 / max 24 per shared checkpointer and sloop pool
-# - worker_pool mode: Lower *pool_size per process to avoid N×connection bloat
-#   Total connections = (min_pool_size + scale) × pool_size per worker
+# RUNNER MODES (enable exactly ONE)
 # ============================================================================
+# thread_pool: Daemon-level singleton PG pool shared by all threads
+# worker_pool: Each subprocess has its OWN pool (N × connections)
+# distributed: Ray cluster for horizontal scaling
 
-# Thread pool - Lightweight async execution (DEFAULT)
-# Uses threads with dedicated event loops; fast startup (~ms vs ~8s subprocess spawn)
-# Best for: Dev/testing, I/O-bound async workloads
-#
-# PostgreSQL connection sharing: Daemon-level singleton pools (IG-406) are shared by
-# ALL threads. Defaults: postgres_pool_min_size 4, checkpointer/sloop max 24 each
-# since threads benefit from shared pool capacity without multiplying connections.
+# Thread pool (DEFAULT) - Lightweight async, fast startup
 thread_pool:
   enabled: true
   min_pool_size: 2
   max_pool_size: 6
   idle_timeout_seconds: 120
   max_requests_per_thread: 50
-  # With thread_pool, tune config persistence pool sizes if thread_pool.max_pool_size is raised.
-  request_timeout_seconds: 0         # 0 = no per-request timeout
+  request_timeout_seconds: 0  # 0 = no timeout
   thread_startup_timeout_seconds: 10
-  reuse_runner: true                 # IG-506: one SootheRunner per worker thread
-  warmup_runner: true                  # IG-506: build runner at worker startup
+  reuse_runner: true
+  warmup_runner: true
 
 # Worker pool - Process-based isolation
-# Subprocess workers with memory isolation; pre-warmed at startup
-# Best for: Production, user data isolation, CPU-bound workloads
-#
-# PostgreSQL connection sizing: Each worker process has its OWN connection pool.
-# Total PG connections = (active workers) × (checkpointer_pool_size + sloop_pool_size)
-# Use small persistence pool sizes (2-4) to avoid connection exhaustion.
-# For high-concurrency worker_pool: consider PGBouncer as external connection proxy.
 worker_pool:
   enabled: false
   min_pool_size: 2
   max_pool_size: 4
   idle_timeout_seconds: 300
   max_requests_per_worker: 100
-  request_timeout_seconds: 0         # 0 = no per-request timeout
+  request_timeout_seconds: 0
   heartbeat_interval_seconds: 30
   stuck_worker_timeout_seconds: 180
-  reuse_runner: true                 # IG-506: one SootheRunner per worker process
-  warmup_runner: true                  # IG-506: build runner at worker startup
+  reuse_runner: true
+  warmup_runner: true
   dispatch_wait_stats_enabled: true
   dispatch_wait_stats_interval_seconds: 60
   dispatch_wait_stats_idle_pause_seconds: 120
 
-# Distributed - Ray cluster execution
-# Remote actors for horizontal scaling; requires Ray cluster
-# Best for: Large-scale distributed workloads
+# Distributed - Ray cluster
 distributed:
   enabled: false
   ray:
-    address: null                    # Ray cluster address (null = auto-detect)
-    num_cpus: 0.0                    # CPU allocation (0 = auto)
-    object_store_memory: 0           # Memory allocation (0 = auto)
+    address: null  # null = auto-detect
+    num_cpus: 0.0  # 0 = auto
+    object_store_memory: 0  # 0 = auto
     max_concurrent_actors: 10
     actor_lifetime: detached
     log_to_driver: true

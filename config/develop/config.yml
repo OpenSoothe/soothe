@@ -1,9 +1,8 @@
-# Local development defaults.
-# Unlisted keys use Soothe Pydantic defaults. Full reference: config/config.template.yml.
-#
-# Persistence: SQLite by default (no external database required).
-# Langfuse (optional): docker compose --profile langfuse up -d  → UI on :3300
-# Keys: pk-lf-soothe-local / sk-lf-soothe-local (see docker-compose LANGFUSE_INIT_*). Export DASHSCOPE_*.
+# Local development defaults (overrides Pydantic defaults)
+# Full reference: config/config.template.yml
+# Persistence: SQLite by default
+# Langfuse: docker compose --profile langfuse up -d (UI on :3300)
+# Keys: pk-lf-soothe-local / sk-lf-soothe-local; export DASHSCOPE_*
 
 # ============================================================
 # PROVIDERS
@@ -38,7 +37,7 @@ router:
   embedding: "dashscope:multimodal-embedding-v1"
 
 # ============================================================
-# AGENT (Unified)
+# AGENT
 # ============================================================
 agent:
   autonomous:
@@ -54,11 +53,9 @@ agent:
       global_max_llm_calls: 16    # Increased from 10 for more concurrent LLM calls
       step_parallelism: max       # Changed from 'dependency' for maximum parallelism
     max_subagent_tasks_per_wave: 8  # Increased from 4 for larger subagent batches
-    # Tool timeout middleware (IG-512) - prevent indefinite hangs
     tool_timeout:
       enabled: true
-  # Embedded QuickJS interpreter for programmatic tool calling (PTC).
-  # Dependency note: langchain-quickjs is included in soothe base dependencies.
+  # QuickJS interpreter for programmatic tool calling (PTC)
   code_interpreter:
     enabled: false
   runtime:
@@ -86,12 +83,9 @@ observability:
       - soothe
 
 # ============================================================
-# PERSISTENCE & STORAGE (SQLite default)
+# PERSISTENCE
 # ============================================================
-# SQLite is the default backend - no configuration needed.
-# Data stored in $SOOTHE_HOME/data/ (metadata.db, checkpoints.db, vector.db).
-# Supports multiple concurrent loops via WAL mode and reader pool.
-
+# SQLite default: $SOOTHE_HOME/data/ (metadata.db, checkpoints.db, vector.db)
 # PostgreSQL alternative (uncomment to use):
 # persistence:
 #   default_backend: postgresql
