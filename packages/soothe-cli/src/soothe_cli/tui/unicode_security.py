@@ -489,14 +489,3 @@ def _iter_string_values_from_list(
         if isinstance(value, list):
             entries.extend(_iter_string_values_from_list(value, prefix=key_path))
     return entries
-
-
-def looks_like_url_key(arg_path: str) -> bool:
-    """Return whether a key path suggests URL-like content.
-
-    Returns:
-        `True` for URL-like key names, otherwise `False`.
-    """
-    key = arg_path.rsplit(".", maxsplit=1)[-1]
-    key = key.split("[", maxsplit=1)[0].lower()
-    return key in URL_ARG_KEYS
