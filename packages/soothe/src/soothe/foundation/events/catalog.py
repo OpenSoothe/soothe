@@ -233,7 +233,10 @@ class StrangeLoopCompletedEvent(LifecycleEvent):
 
 
 class StrangeLoopPlanDecisionEvent(LifecycleEvent):
-    """Planned act steps for this iteration (includes not-yet-ready steps)."""
+    """Planned act steps for this iteration (includes not-yet-ready steps).
+
+    Includes cumulative step counts across all iterations for TUI display.
+    """
 
     type: Literal["soothe.cognition.strange_loop.plan.decision"] = (
         "soothe.cognition.strange_loop.plan.decision"
@@ -241,6 +244,8 @@ class StrangeLoopPlanDecisionEvent(LifecycleEvent):
     iteration: int = 0
     steps: list[dict[str, Any]] = []  # noqa: RUF012
     execution_mode: str = ""
+    total_steps: int = 0  # Cumulative total steps across all iterations
+    done_steps: int = 0  # Cumulative completed steps across all iterations
 
 
 class StrangeLoopStepStartedEvent(LifecycleEvent):

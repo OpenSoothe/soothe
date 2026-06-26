@@ -45,7 +45,7 @@ class ExploreResult(BaseModel):
     """Final output of the explore agent."""
 
     target: str
-    thoroughness: str
+    thoroughness: str = "medium"  # Optional; defaults when LLM omits
     matches: list[MatchEntry]  # Top matches, sorted by relevance
     summary: str  # Brief answer to the search target
     suggested_next_actions: str = Field(
@@ -67,7 +67,7 @@ class ExploreAgentState(AgentState[ExploreResult]):
 
     workspace: NotRequired[Annotated[str, _last_wins]]
     search_target: NotRequired[str]
-    thoroughness: NotRequired[str]
+    thoroughness: NotRequired[str]  # Optional; defaults to "medium" in ExploreResult
     findings: NotRequired[Annotated[list[dict[str, Any]], operator.add]]
     explore_wire_started: NotRequired[bool]
     explore_model_invocations: NotRequired[int]
@@ -99,7 +99,6 @@ def format_explore_result_markdown(result: ExploreResult) -> str:
         "# Explore results",
         "",
         f"**Search target:** {_md_single_line(result.target, 400)}",
-        f"**Thoroughness:** {result.thoroughness}",
         "",
         "## Summary",
         "",
