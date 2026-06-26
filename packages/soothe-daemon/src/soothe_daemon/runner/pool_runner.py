@@ -372,6 +372,8 @@ def _pool_worker(
     max_requests: int,
     default_timeout_seconds: int,
     heartbeat_interval_seconds: int,
+    reuse_runner: bool = True,
+    warmup_runner: bool = True,
 ) -> None:
     """Multiprocessing entry: delegate to body and record fatal errors on disk."""
     try:
@@ -385,6 +387,8 @@ def _pool_worker(
             max_requests,
             default_timeout_seconds,
             heartbeat_interval_seconds,
+            reuse_runner,
+            warmup_runner,
         )
     except BaseException as exc:
         if type(exc) is GeneratorExit:
@@ -405,6 +409,8 @@ def _pool_worker_body(
     max_requests: int,
     default_timeout_seconds: int,
     heartbeat_interval_seconds: int,
+    reuse_runner: bool = True,
+    warmup_runner: bool = True,
 ) -> None:
     """Worker subprocess body: wait for requests and execute loop runs.
 
@@ -412,7 +418,7 @@ def _pool_worker_body(
 
     Behavior:
         - Wait for requests on request_queue (with idle timeout)
-        - Create fresh SootheRunner per request (no user data leakage)
+        - Reuse one SootheRunner per worker when ``reuse_runner`` (IG-506)
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
         - Send heartbeat messages on a background thread (independent of chunk cadence
@@ -432,16 +438,27 @@ def _pool_worker_body(
     """
     import asyncio as _asyncio
 
-    from soothe.runner import SootheRunner
     from soothe.runner.worker_logging import configure_loop_runner_worker_logging
+
+    from soothe_daemon.runner._worker_runner import acquire_worker_runner
 
     loop = _asyncio.new_event_loop()
     _asyncio.set_event_loop(loop)
 
     requests_completed = 0
+    cached_runner = None
+
+    if reuse_runner and warmup_runner:
+        cached_runner, _ = acquire_worker_runner(
+            config=config,
+            cached_runner=None,
+            reuse_runner=reuse_runner,
+            warmup_runner=warmup_runner,
+        )
 
     def _run_single(req: LoopRunRequest, request_id: str) -> None:
-        """Execute one request with fresh SootheRunner."""
+        """Execute one request, reusing worker runner when configured."""
+        nonlocal cached_runner
         configure_loop_runner_worker_logging(config, req.loop_id)
 
         # Clear cancel event at start of new request
@@ -456,12 +473,16 @@ def _pool_worker_body(
         timeout_enabled = timeout_seconds > 0
 
         async def _execute() -> None:
-            # SootheRunner inside try so constructor failures surface as protocol errors,
-            # not a silent worker process exit (BaseException would bypass except Exception).
-            runner: SootheRunner | None = None
+            nonlocal cached_runner
+            runner = None
 
             try:
-                runner = SootheRunner(config)
+                runner, cached_runner = acquire_worker_runner(
+                    config=config,
+                    cached_runner=cached_runner,
+                    reuse_runner=reuse_runner,
+                    warmup_runner=False,
+                )
 
                 # Use asyncio.timeout for overall request timeout if enabled
                 timeout_ctx = _asyncio.timeout(timeout_seconds) if timeout_enabled else None
@@ -728,6 +749,8 @@ class WorkerPool:
         dispatch_wait_stats_enabled: bool = False,
         dispatch_wait_stats_interval_seconds: int = 60,
         dispatch_wait_stats_idle_pause_seconds: int = 120,
+        reuse_runner: bool = True,
+        warmup_runner: bool = True,
     ) -> None:
         self._config = config
         self._min_pool_size = min_pool_size
@@ -740,6 +763,8 @@ class WorkerPool:
         self._dispatch_wait_stats_enabled = dispatch_wait_stats_enabled
         self._dispatch_wait_stats_interval_seconds = dispatch_wait_stats_interval_seconds
         self._dispatch_wait_stats_idle_pause_seconds = dispatch_wait_stats_idle_pause_seconds
+        self._reuse_runner = reuse_runner
+        self._warmup_runner = warmup_runner
 
         self._ctx = multiprocessing.get_context("spawn")
         self._workers: dict[str, WorkerProcess] = {}
@@ -793,6 +818,8 @@ class WorkerPool:
                 dispatch_wait_stats_enabled=pool_config.dispatch_wait_stats_enabled,
                 dispatch_wait_stats_interval_seconds=pool_config.dispatch_wait_stats_interval_seconds,
                 dispatch_wait_stats_idle_pause_seconds=pool_config.dispatch_wait_stats_idle_pause_seconds,
+                reuse_runner=pool_config.reuse_runner,
+                warmup_runner=pool_config.warmup_runner,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -861,6 +888,8 @@ class WorkerPool:
                 self._max_requests_per_worker,
                 self._request_timeout_seconds,
                 self._heartbeat_interval_seconds,
+                self._reuse_runner,
+                self._warmup_runner,
             ),
             daemon=True,
             name=worker_id,
