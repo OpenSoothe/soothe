@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.ux.task_namespace import (
-    _step_id_from_unified_fragment,
-    is_inner_subgraph_task_tool_id,
     is_step_level_task_tool_id,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
@@ -20,27 +17,16 @@ from textual.content import Content
 from textual.events import Click
 from textual.widgets import Static
 
-from soothe_cli.runtime.presentation.duration_format import format_duration, format_duration_ms
+from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 from soothe_cli.tui import theme
-from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
 from soothe_cli.tui.config import get_glyphs, is_ascii_mode
-from soothe_cli.tui.preview_limits import (
-    STEP_CARD_SHOW_TOOL_ROW_DETAILS,
-    STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
-    STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD,
-)
-from soothe_cli.tui.tool_display import (
-    compact_arg_text,
-    format_step_tool_activity_command,
-    format_step_tool_activity_line,
-    format_step_tool_activity_status_tail,
-)
+from soothe_cli.tui.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
+from soothe_cli.tui.tool_display import format_step_tool_activity_line
 from soothe_cli.tui.widgets.clipboard import (
     clear_widget_text_selection,
     screen_has_text_selection,
 )
 from soothe_cli.tui.widgets.messages._helpers import (
-    _MAX_TASK_DELEGATION_DESC_CHARS,
     _RUNNING_SPINNER_INTERVAL_SECONDS,
     _STEP_TOOL_PREVIEW_ROWS,
     _assemble_card_header,
@@ -48,6 +34,27 @@ from soothe_cli.tui.widgets.messages._helpers import (
     _should_refresh_now,
     _strip_success_exit_line,
     request_deferred_tools_refresh,
+)
+from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+    StepActivityTree,
+    StepCardStatusLine,
+    StepRowClassifier,
+    StepRowIndex,
+    branched_prose_body,
+    finalize_tool_rows_on_step_end,
+    has_task_activity_body,
+    latest_preview_rows,
+    normalized_task_note_key,
+    phase_icon,
+    row_counts_for_main_tools,
+    stats_title_suffix,
+    task_delegation_dedupe_key,
+    task_idx_from_delegation_row,
+    task_tool_row_tone,
+    touch_task_activity_start,
+)
+from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+    StepToolRow as _StepToolRow,
 )
 
 if TYPE_CHECKING:
@@ -57,41 +64,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class _StepToolRow:
-    """One tool invocation row on the step card (IG-402, IG-419).
-
-    IG-419: Supports nesting via parent_tool_call_id for inner subagent tools.
-    Task delegation rows (is_task_row=True) are parent headers; inner tools
-    nest underneath with indentation.
-    """
-
-    tool_call_id: str
-    tool_name: str
-    args: dict[str, Any]
-    phase: str  # pending | running | success | error | rejected | skipped
-    output: str = ""
-    duration_ms: int = 0
-    started_at: float | None = None
-    parent_tool_call_id: str | None = None  # IG-419: Link to parent task row for nesting
-    is_task_row: bool = False  # IG-419: Mark as task delegation parent row
-
-
 class CognitionStepMessage(Vertical):
-    """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
+    """Agent-loop act step card (RFC-628).
 
     Header is the step description only. Task delegations render in a branch panel
     (``Name(desc)`` plus the latest tool activity lines and nested stats). Footer and
-    task-branch status lines show total tool-call counts via :meth:`_stats_title_suffix`
-    (e.g. `` · 3 tools, 1 task`` on the step; `` · 6 tools`` under a delegation). The
-    status line is always the last
-    body line (running, pending, completed, failed). Optional full tool lists use
-    ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. When full tool rows are enabled and exceed
-    ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the tool list; otherwise
-    click toggles whole-card collapse. Subagent notes and execute prose can
-    auto-collapse the card body until the user expands it (a new ``set_running`` clears
-    that preference).
+    branch Running lines show tool totals via ``stats_title_suffix`` on ``StepRowIndex``
+    (e.g. `` · 12 tools, 1 task`` on the footer; `` · 6 tools`` under a delegation branch).
+    The status line is always the last body line (running, pending, completed, failed).
+    Optional full tool lists use ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. Click toggles
+    manual whole-card collapse; cards do not auto-collapse.
 
+    Pure rendering and classification live in ``cognition_step_activity.py``.
     Tool rows use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
     Prose / notes keep ``⎿ ○`` continuation lines.
     """
@@ -146,13 +130,6 @@ class CognitionStepMessage(Vertical):
         height: auto;
     }
 
-    CognitionStepMessage .step-collapse-hint {
-        margin-left: 0;
-        color: $text-muted;
-        background: transparent;
-        height: auto;
-    }
-
     CognitionStepMessage.-collapsed .step-tools,
     CognitionStepMessage.-collapsed .step-status,
     CognitionStepMessage.-collapsed .step-subagent-notes,
@@ -190,8 +167,10 @@ class CognitionStepMessage(Vertical):
         self._header_widget: Static | None = None
         self._tools_widget: Static | None = None
         self._detail_widget: Static | None = None
+        self._activity_widget: Static | None = None
         self._deferred_complete: tuple[bool, int, int, str] | None = None
         self._deferred_running: bool = False
+        self._deferred_surface_sync: bool = False
         self._last_success: bool | None = None
         self._last_duration_ms: int = 0
         self._last_tool_call_count: int = 0
@@ -216,48 +195,14 @@ class CognitionStepMessage(Vertical):
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
         self._card_collapsed: bool = False
         """Whether the entire card body is collapsed (header remains visible)."""
-        self._collapse_hint_widget: Static | None = None
-        """Widget showing expand/collapse hint text."""
         self._step_card_user_expanded: bool = False
-        """If True, skip auto-collapse (user expanded the card body)."""
+        """If True, user manually expanded the collapsed card body."""
         self._step_tool_list_user_expanded: bool = False
         """If True, skip auto-folding the tool-row preview (user expanded the list)."""
 
-    def _step_body_line_estimate(self) -> int:
-        """Approximate expanded-body line count for auto-collapse."""
-        n = len(self._subagent_notes)
-        for notes in self._subagent_notes_by_task.values():
-            n += len(notes)
-        for task_row in self._iter_task_delegation_rows():
-            n += 1
-            child_rows = self._child_rows_for_task(task_row)
-            if child_rows:
-                n += 1
-                if self._effective_task_delegation_phase(task_row, child_rows) == "running":
-                    n += 1
-            elif self._status in ("pending", "queued"):
-                n += 1
-            n += len(self._subagent_notes_by_task.get(str(task_row.tool_call_id).strip(), []))
-        if self._status in ("pending", "queued") and not self._iter_task_delegation_rows():
-            n += 1
-        if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
-            n += len(self._rows)
-        else:
-            for task_row in self._iter_task_delegation_rows():
-                child_rows = self._child_rows_for_task(task_row)
-                n += min(STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT, len(child_rows))
-            main_rows = self._main_agent_tool_rows_for_preview()
-            n += min(STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT, len(main_rows))
-        buf = (self._execute_assistant_buffer or "").strip()
-        if buf:
-            n += len(buf.splitlines())
-        elif (self._last_completed_execute_prose or "").strip():
-            n += len(self._last_completed_execute_prose.splitlines())
-        if self._status in ("success", "error"):
-            n += 1
-        elif self._status == "running":
-            n += 1
-        return n
+    def _build_row_index(self) -> StepRowIndex:
+        """Classify tool rows once for stats, previews, and activity rendering."""
+        return StepRowClassifier.build(self._step_id, self._rows)
 
     def _maybe_auto_fold_step_tool_list(self) -> None:
         """Fold long tool lists to the preview cap while the step runs (not only after complete)."""
@@ -270,16 +215,6 @@ class CognitionStepMessage(Vertical):
         if self._tools_body_collapsed:
             return
         self._tools_body_collapsed = True
-
-    def _maybe_auto_collapse_step_card(self) -> None:
-        if self._step_card_user_expanded:
-            return
-        if self._step_body_line_estimate() <= STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD:
-            return
-        if self._card_collapsed:
-            return
-        self._card_collapsed = True
-        self._refresh_collapse_state()
 
     @property
     def last_completed_execute_prose(self) -> str:
@@ -332,7 +267,33 @@ class CognitionStepMessage(Vertical):
         )
         yield Static("", classes="step-detail", id="step-cognition-detail")
         yield Static("", classes="step-status", id="step-cognition-status")
-        yield Static("", classes="step-collapse-hint", id="step-collapse-hint")
+
+    def _flush_deferred_state_on_mount(self) -> None:
+        """Apply deferred lifecycle state in a stable order after mount."""
+        if self._deferred_interrupted is not None:
+            msg = self._deferred_interrupted
+            self._deferred_interrupted = None
+            self.set_interrupted(msg)
+            return
+        if self._deferred_complete is not None:
+            success, duration_ms, tool_call_count, summary = self._deferred_complete
+            self._deferred_complete = None
+            self.set_complete(success, duration_ms, tool_call_count, summary)
+            return
+        if self._deferred_running:
+            self._deferred_running = False
+            self.set_running()
+            return
+        if self._deferred_surface_sync:
+            self._deferred_surface_sync = False
+            self._sync_step_card_surface()
+            return
+        if self._status == "running":
+            self._ensure_running_ui()
+        elif self._status == "queued":
+            self._sync_step_card_surface()
+        elif self._status == "pending":
+            self._sync_step_card_surface()
 
     def on_mount(self) -> None:
         if is_ascii_mode():
@@ -342,35 +303,15 @@ class CognitionStepMessage(Vertical):
         self._status_widget = self.query_one("#step-cognition-status", Static)
         self._tools_widget = self.query_one("#step-cognition-tools", Static)
         self._detail_widget = self.query_one("#step-cognition-detail", Static)
-        self._collapse_hint_widget = self.query_one("#step-collapse-hint", Static)
-        notes = self.query_one("#step-cognition-subagent-notes", Static)
-        notes.display = False
+        self._activity_widget = self.query_one("#step-cognition-subagent-notes", Static)
+        self._activity_widget.display = False
         self._status_widget.display = False
         self._tools_widget.display = False
         self._detail_widget.display = False
-        self._collapse_hint_widget.display = False
         self._refresh_header_title()
-        self._refresh_tools_display()
-        self._refresh_collapse_state()
         if self._execute_assistant_buffer.strip() and self._status == "running":
             self._refresh_execute_assistant_running_display()
-        if self._deferred_interrupted is not None:
-            msg = self._deferred_interrupted
-            self._deferred_interrupted = None
-            self.set_interrupted(msg)
-        elif self._deferred_complete is not None:
-            success, duration_ms, tool_call_count, summary = self._deferred_complete
-            self._deferred_complete = None
-            self.set_complete(success, duration_ms, tool_call_count, summary)
-        elif self._deferred_running:
-            self._deferred_running = False
-            self.set_running()
-        elif self._status == "queued":
-            self._refresh_queued_display()
-        elif self._status == "pending":
-            self._refresh_pending_display()
-
-        self._maybe_auto_collapse_step_card()
+        self._flush_deferred_state_on_mount()
 
     def on_click(self, event: Click) -> None:  # noqa: ARG002
         """Toggle tool-row folding or card collapse."""
@@ -406,31 +347,12 @@ class CognitionStepMessage(Vertical):
         self._refresh_collapse_state()
 
     def _refresh_collapse_state(self) -> None:
-        """Update CSS classes and footer hint based on collapse state."""
+        """Update CSS classes and completion footer when manual collapse toggles."""
         if self._card_collapsed:
             self.add_class("-collapsed")
         else:
             self.remove_class("-collapsed")
-        self._sync_step_footer_hint()
-
-    def _sync_step_footer_hint(self) -> None:
-        """Single footer line after status: expand card or tool-list affordances.
-
-        Note: The expand/collapse icon is now shown inline in the status line,
-        so this widget is hidden for a cleaner design.
-        """
-        w = self._collapse_hint_widget
-        if w is None:
-            return
-        # Hide the separate hint widget - icon is shown inline in status line
-        w.display = False
-        # Refresh status line to update the inline expand/collapse icon
-        if self._status == "running":
-            # Bypass visibility check so tool counts refresh immediately when tool
-            # rows repaint (same fix as set_running — do not use _update_running_animation).
-            self._sync_running_status_text()
-        elif self._status in ("success", "error") and self._detail_widget:
-            # Re-apply completion detail with updated icon
+        if self._status in ("success", "error") and self._detail_widget:
             dur_str = format_duration_ms(self._last_duration_ms)
             tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
             if self._last_success:
@@ -440,10 +362,10 @@ class CognitionStepMessage(Vertical):
                     suffix=tool_part,
                 )
                 prose = (self._last_completed_execute_prose or "").strip()
-                if prose and self._detail_widget:
+                if prose:
                     self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
                     self._detail_widget.display = True
-                elif self._detail_widget:
+                else:
                     self._detail_widget.display = False
             else:
                 err_text = self._last_summary.strip() or "Step failed"
@@ -460,7 +382,6 @@ class CognitionStepMessage(Vertical):
         self._execute_assistant_buffer += delta
         if self._status == "running":
             self._refresh_execute_assistant_running_display()
-        self._maybe_auto_collapse_step_card()
 
     def _refresh_execute_assistant_running_display(self) -> None:
         body = self._execute_assistant_buffer.strip()
@@ -471,353 +392,146 @@ class CognitionStepMessage(Vertical):
 
     def _has_task_activity_body(self) -> bool:
         """True when the step card should show the task-activity tree panel."""
-        if self._subagent_notes or self._subagent_notes_by_task:
-            return True
-        if self._iter_task_delegation_rows():
-            return True
-        if self._orphan_subgraph_tool_rows_for_preview():
-            return True
-        return bool(self._main_agent_tool_rows_for_preview())
+        index = self._build_row_index()
+        return has_task_activity_body(index, self._subagent_notes, self._subagent_notes_by_task)
 
     @staticmethod
     def _latest_preview_rows(
         rows: list[_StepToolRow],
-        limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
+        limit: int | None = None,
     ) -> list[_StepToolRow]:
         """Return the most recently appended rows, capped at ``limit``."""
-        if not rows:
-            return []
-        if len(rows) <= limit:
-            return list(rows)
-        return rows[-limit:]
+        if limit is None:
+            return latest_preview_rows(rows)
+        return latest_preview_rows(rows, limit)
 
     def _main_agent_tool_rows_for_preview(self) -> list[_StepToolRow]:
         """Direct main-agent tool rows (excludes task delegations and subgraph tools)."""
-        return [r for r in self._rows if self._row_counts_for_step_status_line(r)]
+        return self._build_row_index().main_tools
 
     def _orphan_subgraph_tool_rows_for_preview(self) -> list[_StepToolRow]:
-        """Subgraph tool rows whose parent task delegation row is missing.
-
-        Some streams deliver ``t`` tool rows before/without a visible ``s:task`` row.
-        Keep these rows visible on the step card so users still see tool activity.
-        """
-        task_parent_ids: set[str] = set()
-        task_indices: set[int] = set()
-        for task_row in self._iter_task_delegation_rows():
-            key = self._task_delegation_dedupe_key(task_row)
-            if key:
-                task_parent_ids.add(key)
-            task_idx = self._task_idx_from_delegation_row(task_row)
-            if task_idx is not None:
-                task_indices.add(task_idx)
-
-        out: list[_StepToolRow] = []
-        for row in self._rows:
-            if row.is_task_row:
-                continue
-            if self._is_task_metadata_only_tool_row(row):
-                continue
-            if not self._row_belongs_to_step(row):
-                continue
-            tcid = str(row.tool_call_id or "").strip()
-            if not tcid:
-                continue
-            if is_step_level_task_tool_id(tcid) or is_inner_subgraph_task_tool_id(tcid):
-                continue
-            parsed_sid, type_code, idx, _ = parse_unified_tool_call_id(tcid)
-            if parsed_sid and parsed_sid != self._step_id:
-                continue
-
-            parent_id = str(row.parent_tool_call_id or "").strip()
-            if parent_id and is_step_level_task_tool_id(parent_id):
-                parent_id = normalize_step_task_tool_call_id(self._step_id, parent_id)
-            has_visible_parent = bool(parent_id and parent_id in task_parent_ids)
-
-            # Check if tool would be matched by _child_rows_for_task via unified ID task_idx.
-            # Tools with {step}:t{n}:... are matched by task delegation with index n,
-            # even without an explicit parent_tool_call_id.
-            matched_by_task_idx = type_code == "t" and idx is not None and idx in task_indices
-
-            # Keep unresolved/unparented task-subgraph tool rows visible,
-            # but exclude those matched by task_idx (to avoid duplication with child_rows).
-            if type_code == "t" and not has_visible_parent and not matched_by_task_idx:
-                out.append(row)
-        return out
-
-    def _append_tool_activity_lines(
-        self,
-        parts: list[object],
-        rows: list[_StepToolRow],
-        *,
-        gutter: str,
-        g: Any,
-        colors: Any,
-        animate_running: bool,
-    ) -> None:
-        """Append capped per-tool activity lines under a task or step branch."""
-        for row in rows:
-            if parts:
-                parts.append("\n")
-            phase = (row.phase or "pending").strip().lower()
-            icon = self._phase_icon(
-                row.phase or "pending",
-                g,
-                animate_running=animate_running and phase == "running",
-            )
-            command = format_step_tool_activity_command(row.tool_name, row.args or {})
-            tail = format_step_tool_activity_status_tail(
-                row.phase or "pending",
-                duration_ms=row.duration_ms,
-            )
-            tone = self._task_tool_row_tone(row, colors)
-            parts.append(Content.styled(f"{gutter}{icon} {command}{tail}", tone))
+        """Subgraph tool rows whose parent task delegation row is missing."""
+        return self._build_row_index().orphan_tools
 
     def _task_delegation_dedupe_key(self, row: _StepToolRow) -> str:
         """Stable key for one main-graph task delegation (aliases share one branch)."""
-        tcid = str(row.tool_call_id).strip()
-        if not tcid:
-            return ""
-        if row.is_task_row or is_step_level_task_tool_id(tcid):
-            parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
-            if parsed_sid and parsed_sid != self._step_id:
-                return tcid
-            return normalize_step_task_tool_call_id(self._step_id, tcid)
-        return tcid
-
-    @staticmethod
-    def _prefer_task_delegation_row(candidate: _StepToolRow, incumbent: _StepToolRow) -> bool:
-        """True when ``candidate`` should replace ``incumbent`` for the same task key."""
-        if candidate.is_task_row and not incumbent.is_task_row:
-            return True
-        if incumbent.is_task_row and not candidate.is_task_row:
-            return False
-        return len(candidate.args or {}) >= len(incumbent.args or {})
+        return task_delegation_dedupe_key(row, self._step_id)
 
     def _iter_task_delegation_rows(self) -> list[_StepToolRow]:
         """Task delegation rows on this step (unified ``{step}:s:task:…`` ids)."""
-        by_key: dict[str, _StepToolRow] = {}
-        for row in self._rows:
-            if not row.is_task_row and not is_step_level_task_tool_id(row.tool_call_id):
-                continue
-            # Skip rows that belong to OTHER steps (parsed step_id != this card's step_id).
-            parsed_sid, _, _, _ = parse_unified_tool_call_id(str(row.tool_call_id or ""))
-            canonical_step_id = _step_id_from_unified_fragment(self._step_id)
-            if parsed_sid and parsed_sid != canonical_step_id:
-                continue
-            key = self._task_delegation_dedupe_key(row)
-            if not key:
-                continue
-            prev = by_key.get(key)
-            if prev is None or self._prefer_task_delegation_row(row, prev):
-                by_key[key] = row
-        return sorted(by_key.values(), key=lambda r: r.tool_call_id)
+        return self._build_row_index().task_delegations
 
     def _task_idx_from_delegation_row(self, task_row: _StepToolRow) -> int | None:
         """Task index encoded in a step-level ``task`` unified id (``task:0`` → 0)."""
-        _, type_code, _, tool_info = parse_unified_tool_call_id(task_row.tool_call_id)
-        if type_code != "s":
-            return None
-        head = (tool_info or "").split(":")[0]
-        if head != "task":
-            return None
-        tail = (tool_info or "").split(":")[-1]
-        if tail.isdigit():
-            return int(tail)
-        return 0
-
-    def _task_parent_ids_match(self, parent_id: str, row_parent_id: str) -> bool:
-        """True when two tool_call_ids refer to the same step-level task delegation."""
-        if not row_parent_id:
-            return False
-        if row_parent_id == parent_id:
-            return True
-        if is_step_level_task_tool_id(parent_id) or is_step_level_task_tool_id(row_parent_id):
-            p_sid, _, _, _ = parse_unified_tool_call_id(parent_id)
-            r_sid, _, _, _ = parse_unified_tool_call_id(row_parent_id)
-            if p_sid != self._step_id or r_sid != self._step_id:
-                return parent_id == row_parent_id
-            return normalize_step_task_tool_call_id(
-                self._step_id, row_parent_id
-            ) == normalize_step_task_tool_call_id(self._step_id, parent_id)
-        return False
-
-    def _is_task_metadata_only_tool_row(self, row: _StepToolRow) -> bool:
-        """True when a nested row is task metadata and should stay hidden in branch activity."""
-        if is_inner_subgraph_task_tool_id(row.tool_call_id):
-            return True
-        if (row.tool_name or "").strip() == "task":
-            return True
-        args = row.args if isinstance(row.args, dict) else {}
-        subagent_type = str(args.get("subagent_type") or "").strip()
-        desc = str(args.get("description") or args.get("prompt") or "").strip()
-        # Some streams emit opaque names/ids (e.g. ``tool-<id>``) for task chunks.
-        return bool(subagent_type and desc)
+        return task_idx_from_delegation_row(task_row)
 
     def _child_rows_for_task(self, task_row: _StepToolRow) -> list[_StepToolRow]:
         """Subgraph tool rows for one task (``parent_tool_call_id`` or ``{step}:t{n}:…``)."""
-        raw_parent = str(task_row.tool_call_id).strip()
-        parsed_sid, _, _, _ = parse_unified_tool_call_id(raw_parent)
-        canonical_step_id = _step_id_from_unified_fragment(self._step_id)
-        if parsed_sid and parsed_sid == canonical_step_id:
-            parent_id = normalize_step_task_tool_call_id(self._step_id, raw_parent)
-        else:
-            parent_id = raw_parent
-        task_idx = self._task_idx_from_delegation_row(task_row)
-        by_id: dict[str, _StepToolRow] = {}
-        for row in self._rows:
-            if (
-                row.is_task_row
-                or is_step_level_task_tool_id(row.tool_call_id)
-                or self._is_task_metadata_only_tool_row(row)
-            ):
-                continue
-            tcid = str(row.tool_call_id).strip()
-            if not tcid:
-                continue
-            row_parent = str(row.parent_tool_call_id or "").strip()
-            if self._task_parent_ids_match(parent_id, row_parent):
-                by_id[tcid] = row
-                continue
-            if task_idx is not None:
-                sid, type_code, idx, _ = parse_unified_tool_call_id(tcid)
-                if (
-                    sid == canonical_step_id
-                    and type_code == "t"
-                    and idx is not None
-                    and idx == task_idx
-                ):
-                    by_id[tcid] = row
-        return sorted(by_id.values(), key=lambda r: r.tool_call_id)
-
-    def _task_delegation_label(self, task_row: _StepToolRow) -> str:
-        """Display label ``SubAgentName(description)`` for a task delegation row."""
-        args = dict(task_row.args or {})
-        raw_type = args.get("subagent_type", "")
-        if isinstance(raw_type, str):
-            st = raw_type.strip()
-        else:
-            st = str(raw_type or "").strip()
-        name = get_subagent_display_name(st) if st else "Task"
-        desc = args.get("description") or args.get("prompt") or ""
-        if isinstance(desc, str):
-            desc_text = compact_arg_text(desc.strip())
-        else:
-            desc_text = compact_arg_text(str(desc or "").strip())
-        if len(desc_text) > _MAX_TASK_DELEGATION_DESC_CHARS:
-            desc_text = desc_text[: _MAX_TASK_DELEGATION_DESC_CHARS - 3].rstrip() + "..."
-        if desc_text:
-            return f"{name}({desc_text})"
-        return name
+        key = task_delegation_dedupe_key(task_row, self._step_id)
+        return self._build_row_index().children_by_task.get(key, [])
 
     def _phase_icon(self, phase: str, g: Any, *, animate_running: bool = False) -> str:
         """Lifecycle glyph for a task branch or tool row."""
-        p = (phase or "pending").strip().lower()
-        if p in ("success", "done"):
-            return g.checkmark
-        if p in ("error", "rejected", "failed"):
-            return g.error
-        if p == "running" and animate_running:
-            frames = g.spinner_frames
-            return frames[self._spinner_position % len(frames)]
-        return g.circle_empty
+        return phase_icon(
+            phase,
+            g,
+            spinner_position=self._spinner_position,
+            animate_running=animate_running,
+        )
 
-    def _task_tool_phase_icon(self, row: _StepToolRow, g: Any) -> str:
-        """Glyph for a task-branch tool row from its lifecycle phase."""
-        return self._phase_icon(row.phase or "pending", g)
+    def _normalized_task_note_key(self, task_tool_call_id: str) -> str:
+        return normalized_task_note_key(self._step_id, task_tool_call_id)
 
-    def _task_tool_status_tail(self, row: _StepToolRow) -> str:
-        """Trailing status text for a task-branch tool row (duration, failure, etc.)."""
-        phase = (row.phase or "pending").strip().lower()
-        if phase == "success" and row.duration_ms > 0:
-            return f" ({format_duration_ms(row.duration_ms)})"
-        if phase == "error":
-            return " · failed"
-        if phase == "rejected":
-            return " · rejected"
-        if phase == "skipped":
-            return " · skipped"
-        if phase == "running":
-            return " · running"
-        return ""
+    def _step_task_activity_content(self) -> Content:
+        """Task delegations, latest tool activity lines, and notes under the step title."""
+        g = get_glyphs()
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        index = self._build_row_index()
+        return StepActivityTree.render(
+            step_id=self._step_id,
+            step_status=self._status,
+            index=index,
+            subagent_notes=self._subagent_notes,
+            subagent_notes_by_task=self._subagent_notes_by_task,
+            task_activity_start_times=self._task_activity_start_times,
+            step_start_time=self._start_time,
+            spinner_position=self._spinner_position,
+            colors=colors,
+            g=g,
+        )
 
-    def _task_tool_row_tone(self, row: _StepToolRow, colors: Any) -> str:
-        return self._task_tool_row_tone_for_phase(row.phase or "pending", colors)
+    def _sync_step_card_surface(self) -> None:
+        """Repaint activity panel, footer status, optional tools list, and timer."""
+        mounted = getattr(self, "is_mounted", False)
+        has_cached_widgets = self._status_widget is not None or self._activity_widget is not None
+        if not mounted and not has_cached_widgets:
+            self._deferred_surface_sync = True
+            return
+        self._deferred_surface_sync = False
+        index = self._build_row_index()
+        activity_widget = self._activity_widget
+        if activity_widget is None:
+            try:
+                activity_widget = self.query_one("#step-cognition-subagent-notes", Static)
+                self._activity_widget = activity_widget
+            except Exception:  # noqa: BLE001
+                activity_widget = None
+        if activity_widget is not None:
+            show = has_task_activity_body(index, self._subagent_notes, self._subagent_notes_by_task)
+            if show:
+                activity_widget.update(self._step_task_activity_content())
+                activity_widget.display = True
+            else:
+                activity_widget.display = False
 
-    def _task_tool_row_tone_for_phase(self, phase: str, colors: Any) -> str:
-        p = (phase or "pending").strip().lower()
-        if p in ("success", "done"):
-            return colors.cognition
-        if p in ("error", "rejected", "failed"):
-            return colors.error
-        if p == "running":
-            return colors.cognition
-        return colors.muted
+        if self._status == "running":
+            self._sync_running_status_text(index)
+        elif self._status == "pending":
+            self._refresh_pending_display(index)
+        elif self._status == "queued":
+            self._refresh_queued_display(index)
 
-    def _task_children_aggregate_phase(self, rows: list[_StepToolRow]) -> str:
-        """Aggregate lifecycle phase for nested tools under one task delegation."""
-        if not rows:
-            return "pending"
-        phases = {(r.phase or "pending").strip().lower() for r in rows}
-        if "running" in phases:
-            return "running"
-        if "error" in phases or "rejected" in phases:
-            return "failed"
-        if phases <= {"success"}:
-            return "success"
-        if phases <= {"skipped"}:
-            return "skipped"
-        if "pending" in phases:
-            return "pending"
-        return "pending"
+        if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
+            self._refresh_tools_display()
 
-    def _effective_task_delegation_phase(
+        self._maybe_start_running_timer()
+
+    def append_subagent_activity(
         self,
-        task_row: _StepToolRow,
-        child_rows: list[_StepToolRow],
-    ) -> str:
-        """Derived phase for a task delegation from its subgraph tool rows."""
-        if child_rows:
-            phase = self._task_children_aggregate_phase(child_rows)
+        line: str,
+        *,
+        task_tool_call_id: str | None = None,
+    ) -> None:
+        """Append prose or metadata for a delegated task (optional unified parent id)."""
+        text = (line or "").strip()
+        if not text:
+            return
+        task_key = self._normalized_task_note_key(task_tool_call_id or "")
+        if task_key:
+            self._subagent_notes_by_task.setdefault(task_key, []).append(text)
         else:
-            phase = (task_row.phase or "pending").strip().lower()
-        # While step is executing with child rows, prevent transient "Done" (success)
-        # flashes between tool waves. Only override "success" → "running" (IG-492).
-        if self._status == "running" and child_rows and phase == "success":
-            return "running"
-        if self._status == "success" and phase in ("pending", "running", "skipped"):
-            return "success"
-        return phase
+            self._subagent_notes.append(text)
+        self._sync_step_card_surface()
 
-    def _touch_task_activity_start(self, task_key: str) -> None:
-        """Record when subgraph activity began for elapsed-time display."""
-        key = str(task_key or "").strip()
-        if key and key not in self._task_activity_start_times:
-            self._task_activity_start_times[key] = time()
+    def _row_counts_for_step_status_line(self, row: _StepToolRow) -> bool:
+        """True for main-agent tools on this step (excludes task rows and all subgraph tools)."""
+        return row_counts_for_main_tools(row, self._step_id)
 
-    def _task_delegation_elapsed_suffix(self, task_key: str) -> str:
-        start = self._task_activity_start_times.get(str(task_key or "").strip())
-        if start is None:
-            return ""
-        elapsed_secs = int(time() - start)
-        return f" ({format_duration(float(elapsed_secs))})"
+    def _stats_title_suffix(self) -> str:
+        """Step status suffix: total tool count plus task delegation count."""
+        return stats_title_suffix(self._build_row_index())
 
-    def _has_active_task_branch_animation(self) -> bool:
-        """True when any task delegation branch needs live spinner/elapsed updates."""
-        for task_row in self._iter_task_delegation_rows():
-            child_rows = self._child_rows_for_task(task_row)
-            if self._effective_task_delegation_phase(task_row, child_rows) == "running":
-                return True
-        return False
-
-    def _task_children_stats_tone(self, phase: str, colors: Any) -> str:
-        p = (phase or "pending").strip().lower()
-        if p == "running":
-            return colors.cognition
-        if p in ("failed", "error", "rejected"):
-            return colors.error
-        if p == "success":
-            return colors.cognition
-        return colors.muted
+    def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
+        """Tracked main/task totals for status lines; server total when rows were not tracked."""
+        suffix = self._stats_title_suffix()
+        if suffix:
+            return suffix
+        if fallback_count > 0:
+            return f" · {fallback_count} tools"
+        return ""
 
     def _update_step_footer_status_line(
         self,
@@ -854,345 +568,6 @@ class CognitionStepMessage(Vertical):
         self._status_widget.update(Content.assemble(*parts))
         self._status_widget.display = True
 
-    @staticmethod
-    def _format_tool_count_label(count: int, *, singular: str, plural: str) -> str:
-        if count <= 0:
-            return ""
-        word = singular if count == 1 else plural
-        return f"{count} {word}"
-
-    @staticmethod
-    def _count_distinct_tool_call_ids(rows: list[_StepToolRow]) -> int:
-        ids: set[str] = set()
-        for row in rows:
-            tcid = str(row.tool_call_id).strip()
-            if tcid:
-                ids.add(tcid)
-        return len(ids)
-
-    def _step_main_tool_count(self) -> int:
-        """Distinct main-agent tool calls on this step (excludes task delegations and subgraph)."""
-        return self._count_distinct_tool_call_ids(
-            [row for row in self._rows if self._row_counts_for_step_status_line(row)]
-        )
-
-    def _step_task_delegation_count(self) -> int:
-        """Step-level task delegation rows (``{step}:s:task:…``)."""
-        return len(self._iter_task_delegation_rows())
-
-    def _tool_stats_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
-        """Total tool-call count for a set of rows (e.g. nested task children)."""
-        count = self._count_distinct_tool_call_ids(rows)
-        return self._format_tool_count_label(count, singular="tool", plural="tools")
-
-    def _tool_stats_title_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
-        """`` · N tools`` suffix for task/main branches (matches step footer running line)."""
-        bare = self._tool_stats_suffix_for_rows(rows)
-        return f" · {bare}" if bare else ""
-
-    def _main_branch_status_line(
-        self,
-        *,
-        main_rows: list[_StepToolRow],
-        branch_gutter: str,
-        g: Any,
-        colors: Any,
-    ) -> Content:
-        """Running status + tool totals for direct main-agent tools (no task delegation)."""
-        stats_suffix = self._tool_stats_title_suffix_for_rows(main_rows)
-        elapsed = ""
-        if self._start_time is not None:
-            elapsed_secs = int(time() - self._start_time)
-            elapsed = f" ({format_duration(float(elapsed_secs))})"
-        frame = self._phase_icon("running", g, animate_running=True)
-        head = f"{branch_gutter}{frame} Running...{elapsed}"
-        segs: list[object] = [Content.styled(head, colors.warning)]
-        if stats_suffix:
-            segs.append(Content.styled(stats_suffix, colors.cognition))
-        return Content.assemble(*segs)
-
-    def _task_branch_status_line(
-        self,
-        *,
-        phase: str,
-        child_rows: list[_StepToolRow],
-        task_key: str,
-        child_gutter: str,
-        g: Any,
-        colors: Any,
-    ) -> Content:
-        """Build one status line for a task delegation branch (footer-aligned format).
-
-        Head (status word + elapsed) gets a phase-specific tone (amber for
-        running, green for done, red for failed); the stats suffix stays in the
-        subdued ``colors.cognition`` tone so it does not drown out the head.
-        """
-        stats_suffix = self._tool_stats_title_suffix_for_rows(child_rows)
-        p = (phase or "pending").strip().lower()
-        if p == "running":
-            elapsed = self._task_delegation_elapsed_suffix(task_key)
-            frame = self._phase_icon("running", g, animate_running=True)
-            head = f"{child_gutter}{frame} Running...{elapsed}"
-            segs: list[object] = [Content.styled(head, colors.warning)]
-            if stats_suffix:
-                segs.append(Content.styled(stats_suffix, colors.cognition))
-            return Content.assemble(*segs)
-        icon = self._phase_icon(p, g, animate_running=False)
-        status_word = {
-            "success": "Done",
-            "done": "Done",
-            "failed": "Failed",
-            "error": "Failed",
-            "rejected": "Failed",
-            "skipped": "Skipped",
-            "pending": "Pending",
-        }.get(p, "Pending")
-        head_tone = {
-            "success": colors.card_success,
-            "done": colors.card_success,
-            "failed": colors.card_error,
-            "error": colors.card_error,
-            "rejected": colors.card_error,
-        }.get(p, self._task_children_stats_tone(p, colors))
-        head = f"{child_gutter}{icon} {status_word}"
-        segs = [Content.styled(head, head_tone)]
-        if stats_suffix:
-            segs.append(Content.styled(stats_suffix, colors.cognition))
-        return Content.assemble(*segs)
-
-    def _normalized_task_note_key(self, task_tool_call_id: str) -> str:
-        tcid = str(task_tool_call_id).strip()
-        if not tcid:
-            return ""
-        if is_step_level_task_tool_id(tcid):
-            return normalize_step_task_tool_call_id(self._step_id, tcid)
-        return tcid
-
-    def _step_task_activity_content(self) -> Content:
-        """Task delegations, latest tool activity lines, and notes under the step title."""
-        g = get_glyphs()
-        branch_gutter = f"{g.output_prefix} "
-        child_gutter = f"{g.output_prefix}   "
-        try:
-            colors = theme.get_theme_colors(self)
-        except Exception:  # noqa: BLE001
-            colors = theme.DARK_COLORS
-        parts: list[object] = []
-        first_block = True
-
-        task_rows = self._iter_task_delegation_rows()
-        main_rows_all = [r for r in self._rows if self._row_counts_for_step_status_line(r)]
-        main_preview = self._latest_preview_rows(self._main_agent_tool_rows_for_preview())
-        orphan_preview = self._latest_preview_rows(self._orphan_subgraph_tool_rows_for_preview())
-        if not task_rows and not main_preview and not orphan_preview and not self._subagent_notes:
-            if not self._subagent_notes_by_task:
-                return Content("")
-
-        for task_row in task_rows:
-            if not first_block:
-                parts.append("\n")
-            first_block = False
-            task_key = self._task_delegation_dedupe_key(task_row)
-            child_rows = self._child_rows_for_task(task_row)
-            eff_phase = self._effective_task_delegation_phase(task_row, child_rows)
-            if eff_phase == "running" and task_key:
-                self._touch_task_activity_start(task_key)
-
-            task_icon = self._phase_icon(eff_phase, g, animate_running=False)
-            label = self._task_delegation_label(task_row)
-            task_tone = self._task_tool_row_tone_for_phase(eff_phase, colors)
-            parts.append(
-                Content.styled(
-                    f"{branch_gutter}{task_icon} {label}",
-                    task_tone if eff_phase != "pending" else colors.foreground,
-                )
-            )
-
-            child_preview = self._latest_preview_rows(child_rows)
-            if child_preview:
-                self._append_tool_activity_lines(
-                    parts,
-                    child_preview,
-                    gutter=child_gutter,
-                    g=g,
-                    colors=colors,
-                    animate_running=eff_phase == "running",
-                )
-
-            if child_rows:
-                status_line = self._task_branch_status_line(
-                    phase=eff_phase,
-                    child_rows=child_rows,
-                    task_key=task_key,
-                    child_gutter=child_gutter,
-                    g=g,
-                    colors=colors,
-                )
-                parts.append("\n")
-                parts.append(status_line)
-            elif eff_phase == "running":
-                elapsed = self._task_delegation_elapsed_suffix(task_key)
-                frame = self._phase_icon("running", g, animate_running=True)
-                head = f"{child_gutter}{frame} Running...{elapsed}"
-                parts.append("\n")
-                parts.append(Content.styled(head, colors.warning))
-            elif self._status in ("pending", "queued"):
-                wait_word = "Queued..." if self._status == "queued" else "Pending..."
-                parts.append("\n")
-                parts.append(
-                    Content.styled(
-                        f"{child_gutter}{g.circle_empty} {wait_word}",
-                        colors.muted,
-                    )
-                )
-
-            for note in self._subagent_notes_by_task.get(task_key, []):
-                text = (note or "").strip()
-                if not text:
-                    continue
-                parts.append("\n")
-                parts.append(Content.styled(f"{child_gutter}{text}", colors.muted))
-
-        if main_preview:
-            # ``_append_tool_activity_lines`` already inserts a leading ``\\n`` when
-            # ``parts`` is non-empty; do not add a second separator (blank line).
-            first_block = False
-            self._append_tool_activity_lines(
-                parts,
-                main_preview,
-                gutter=branch_gutter,
-                g=g,
-                colors=colors,
-                animate_running=self._status == "running",
-            )
-
-        if main_rows_all and not task_rows and self._status == "running":
-            if not first_block:
-                parts.append("\n")
-            first_block = False
-            parts.append(
-                self._main_branch_status_line(
-                    main_rows=main_rows_all,
-                    branch_gutter=branch_gutter,
-                    g=g,
-                    colors=colors,
-                )
-            )
-
-        if orphan_preview:
-            first_block = False
-            self._append_tool_activity_lines(
-                parts,
-                orphan_preview,
-                gutter=branch_gutter,
-                g=g,
-                colors=colors,
-                animate_running=self._status == "running",
-            )
-
-        for note in self._subagent_notes:
-            t = (note or "").strip()
-            if not t:
-                continue
-            if not first_block:
-                parts.append("\n")
-            first_block = False
-            parts.append(Content.styled(f"{branch_gutter}{t}", colors.muted))
-
-        return Content.assemble(*parts) if parts else Content("")
-
-    def _refresh_task_activity_display(self) -> None:
-        """Repaint the task-activity tree under the step header."""
-        show = self._has_task_activity_body()
-        try:
-            w = self.query_one("#step-cognition-subagent-notes", Static)
-        except Exception:  # noqa: BLE001
-            if show:
-                self._maybe_auto_collapse_step_card()
-            return
-        if show:
-            w.update(self._step_task_activity_content())
-            w.display = True
-        else:
-            w.display = False
-        self._maybe_auto_collapse_step_card()
-
-    def append_subagent_activity(
-        self,
-        line: str,
-        *,
-        task_tool_call_id: str | None = None,
-    ) -> None:
-        """Append prose or metadata for a delegated task (optional unified parent id)."""
-        text = (line or "").strip()
-        if not text:
-            return
-        task_key = self._normalized_task_note_key(task_tool_call_id or "")
-        if task_key:
-            self._subagent_notes_by_task.setdefault(task_key, []).append(text)
-        else:
-            self._subagent_notes.append(text)
-        self._refresh_task_activity_display()
-
-    def _row_belongs_to_step(self, row: _StepToolRow) -> bool:
-        """True when ``row`` belongs to this step card (unified id encodes step)."""
-        parsed_sid, _, _, _ = parse_unified_tool_call_id(row.tool_call_id)
-        if parsed_sid:
-            # Normalize both step IDs to canonical format (hyphen) for comparison
-            # parsed_sid is already canonical from parse_unified_tool_call_id
-            # self._step_id may be in wire format (underscore) or canonical (hyphen)
-            canonical_step_id = _step_id_from_unified_fragment(self._step_id)
-            return parsed_sid == canonical_step_id
-        return True
-
-    def _row_counts_for_step_status_line(self, row: _StepToolRow) -> bool:
-        """True for main-agent tools on this step (excludes task rows and all subgraph tools)."""
-        if row.is_task_row:
-            return False
-        if not self._row_belongs_to_step(row):
-            return False
-        tcid = str(row.tool_call_id).strip()
-        if not tcid:
-            return False
-        if is_step_level_task_tool_id(tcid):
-            return False
-        # Exclude all subgraph tools (type_code "t") from main-agent stats.
-        # Orphan subgraph tools are handled separately in _orphan_subgraph_tool_rows_for_preview
-        # to avoid duplication between main_preview and orphan_preview.
-        _, type_code, _, _ = parse_unified_tool_call_id(tcid)
-        if type_code == "t":
-            return False
-        # Exclude tools with a known parent delegation (nested subgraph tools).
-        if row.parent_tool_call_id:
-            return False
-        return True
-
-    def _rebuild_tool_stats(self) -> None:
-        """Refresh status lines after tool row changes."""
-        self._refresh_task_activity_display()
-
-    def _stats_title_suffix(self) -> str:
-        """Step status suffix: main-agent tool totals plus task delegation totals."""
-        parts: list[str] = []
-        main_count = self._step_main_tool_count()
-        task_count = self._step_task_delegation_count()
-        if main_count:
-            parts.append(self._format_tool_count_label(main_count, singular="tool", plural="tools"))
-        if task_count:
-            parts.append(self._format_tool_count_label(task_count, singular="task", plural="tasks"))
-        if not parts:
-            return ""
-        return f" · {', '.join(parts)}"
-
-    def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
-        """Tracked main/task totals for status lines; server total when rows were not tracked."""
-        suffix = self._stats_title_suffix()
-        if suffix:
-            return suffix
-        if fallback_count > 0:
-            return f" · {fallback_count} tools"
-        return ""
-
     def _refresh_header_title(self) -> None:
         if self._header_widget is None:
             return
@@ -1222,27 +597,23 @@ class CognitionStepMessage(Vertical):
             row.phase or "pending",
             duration_ms=row.duration_ms,
         )
-        tone = self._task_tool_row_tone(row, colors)
+        tone = task_tool_row_tone(row, colors)
         return Content.styled(f"{gutter}{icon} {body}", tone)
 
     def _step_branched_execute_body(self, body: str, *, muted: bool = True) -> Content:
         """Streamed execute-phase prose: tree gutter per line."""
         g = get_glyphs()
-        gutter = f"{g.output_prefix} {g.circle_empty} "
-        text = (body or "").rstrip()
-        if not text:
-            return Content("")
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         style = colors.muted if muted else colors.success
-        parts: list[object] = []
-        for i, ln in enumerate(text.splitlines()):
-            if i:
-                parts.append("\n")
-            parts.append(Content.styled(f"{gutter}{ln}", style))
-        return Content.assemble(*parts)
+        return branched_prose_body(
+            body,
+            gutter=f"{g.output_prefix} ",
+            circle_empty=g.circle_empty,
+            style=style,
+        )
 
     def _step_branched_completion_detail(
         self,
@@ -1329,10 +700,10 @@ class CognitionStepMessage(Vertical):
         return result
 
     def request_tools_display_refresh(self, *, immediate: bool = False) -> None:
-        """Queue or run a tool-list repaint (batched across cards during streaming)."""
+        """Queue or run a card surface repaint (batched across cards during streaming)."""
         if immediate:
             self._tools_refresh_pending = False
-            self._refresh_tools_display(force=True)
+            self._sync_step_card_surface()
             return
         self._tools_refresh_pending = True
         request_deferred_tools_refresh(self)
@@ -1341,7 +712,7 @@ class CognitionStepMessage(Vertical):
         if not self._tools_refresh_pending:
             return
         self._tools_refresh_pending = False
-        self._refresh_tools_display(force=False)
+        self._sync_step_card_surface()
 
     def _row_content_cache_key(self, row: _StepToolRow) -> tuple[Any, ...]:
         args_key: tuple[tuple[str, Any], ...] = ()
@@ -1362,22 +733,15 @@ class CognitionStepMessage(Vertical):
         )
 
     def _refresh_tools_display(self, *, force: bool = False) -> None:
-        # IG-420: When widget not mounted, always run auto-collapse checks (no throttling)
+        """Repaint the optional full nested tool list panel."""
         if self._tools_widget is None:
-            self._maybe_auto_fold_step_tool_list()
-            self._maybe_auto_collapse_step_card()
-            self._sync_running_status_line()
             return
         if not STEP_CARD_SHOW_TOOL_ROW_DETAILS:
             self._tools_widget.display = False
             self._row_cache_key_by_id.clear()
             self._row_content_by_id.clear()
             self._tools_panel_cache_key = None
-            self._maybe_auto_collapse_step_card()
-            self._sync_step_footer_hint()
-            self._sync_running_status_line()
             return
-        # IG-420: Throttle refreshes to prevent UI lag during streaming (only when mounted)
         if not force and not _should_refresh_now(self._last_tools_refresh):
             return
         self._last_tools_refresh = monotonic()
@@ -1386,8 +750,6 @@ class CognitionStepMessage(Vertical):
             self._row_cache_key_by_id.clear()
             self._row_content_by_id.clear()
             self._tools_panel_cache_key = None
-            self._maybe_auto_collapse_step_card()
-            self._sync_step_footer_hint()
             return
         self._maybe_auto_fold_step_tool_list()
         self._tools_widget.display = True
@@ -1400,8 +762,6 @@ class CognitionStepMessage(Vertical):
             self._tools_body_collapsed,
         )
         if not force and panel_key == self._tools_panel_cache_key:
-            self._maybe_auto_collapse_step_card()
-            self._sync_step_footer_hint()
             return
         lines: list[Content] = []
         for row in visible:
@@ -1413,9 +773,6 @@ class CognitionStepMessage(Vertical):
             lines.append(self._row_content_by_id[row.tool_call_id])
         self._tools_panel_cache_key = panel_key
         self._tools_widget.update(Content("\n").join(lines))
-
-        self._maybe_auto_collapse_step_card()
-        self._sync_step_footer_hint()
 
     def add_tool_call(
         self,
@@ -1507,16 +864,12 @@ class CognitionStepMessage(Vertical):
                             parent_key = self._task_delegation_dedupe_key(task_row)
                             break
                 if parent_key:
-                    self._touch_task_activity_start(parent_key)
+                    touch_task_activity_start(self._task_activity_start_times, parent_key)
         self._rows.append(row)
         self._row_index[tcid] = row
-        self._rebuild_tool_stats()
         self._promote_pending_to_running_if_needed()
-        # Paint footer stats before heavier tool-list / activity repaints.
-        self._sync_running_status_line()
         self._refresh_header_title()
-        self.request_tools_display_refresh(immediate=True)
-        self._refresh_task_activity_display()
+        self._sync_step_card_surface()
 
     def _promote_pending_to_running_if_needed(self) -> None:
         """Show running UI when tools arrive before ``step.started`` (mounted cards)."""
@@ -1585,9 +938,9 @@ class CognitionStepMessage(Vertical):
         if row is None:
             return None
         self._rows = [r for r in self._rows if r.tool_call_id != tcid]
-        self._rebuild_tool_stats()
         self._refresh_header_title()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
+        return row
 
     def ingest_tool_row(self, row: _StepToolRow) -> None:
         """Attach a tool row moved from another step card."""
@@ -1599,11 +952,9 @@ class CognitionStepMessage(Vertical):
             return
         self._rows.append(row)
         self._row_index[tcid] = row
-        self._rebuild_tool_stats()
         self._promote_pending_to_running_if_needed()
-        self._sync_running_status_line()
         self._refresh_header_title()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
 
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state (for result lines)."""
@@ -1639,10 +990,7 @@ class CognitionStepMessage(Vertical):
         if merged == row.args:
             return
         row.args = merged
-        self._rebuild_tool_stats()
-        self._refresh_task_activity_display()
-        self._sync_running_status_line()
-        self.request_tools_display_refresh()
+        self._sync_step_card_surface()
 
     def set_tool_running(self, tool_call_id: str) -> None:
         """Mark a tool row as executing (after approval)."""
@@ -1651,8 +999,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "running"
         row.started_at = time()
-        self._refresh_task_activity_display()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
 
     def set_tool_success(self, tool_call_id: str, result: str, *, duration_ms: int = 0) -> None:
         """Finalize a tool row as success."""
@@ -1663,8 +1010,7 @@ class CognitionStepMessage(Vertical):
         row.output = _strip_success_exit_line(result)
         row.duration_ms = duration_ms
         row.started_at = None
-        self._refresh_task_activity_display()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
 
     def set_tool_error(self, tool_call_id: str, error: str, *, duration_ms: int = 0) -> None:
         """Finalize a tool row as error."""
@@ -1675,8 +1021,7 @@ class CognitionStepMessage(Vertical):
         row.output = error
         row.duration_ms = duration_ms
         row.started_at = None
-        self._refresh_task_activity_display()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
 
     def set_tool_rejected(self, tool_call_id: str) -> None:
         """Mark a tool row as rejected."""
@@ -1685,8 +1030,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "rejected"
         row.started_at = None
-        self._refresh_task_activity_display()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
 
     def set_tool_skipped(self, tool_call_id: str) -> None:
         """Mark a tool row skipped (batch reject / incomplete)."""
@@ -1695,8 +1039,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "skipped"
         row.started_at = None
-        self._refresh_task_activity_display()
-        self.request_tools_display_refresh(immediate=True)
+        self._sync_step_card_surface()
 
     def mark_unfinished_tools_skipped(self) -> None:
         """Mark pending/running rows skipped when the step ends without results."""
@@ -1709,23 +1052,12 @@ class CognitionStepMessage(Vertical):
         ``success`` so task branches show Done instead of Skipped/Pending when
         the subagent finished without per-tool ToolMessage events.
         """
-        terminal = "success" if success else "skipped"
-        open_phases = ("pending", "running") if not success else ("pending", "running", "skipped")
-        for row in self._rows:
-            if row.phase in open_phases:
-                row.phase = terminal
-                row.started_at = None
-        if success:
-            for task_row in self._iter_task_delegation_rows():
-                if (task_row.phase or "pending").strip().lower() in (
-                    "pending",
-                    "running",
-                    "skipped",
-                ):
-                    task_row.phase = "success"
-                    task_row.started_at = None
-        self._refresh_task_activity_display()
-        self._refresh_tools_display()
+        finalize_tool_rows_on_step_end(
+            self._rows,
+            self._iter_task_delegation_rows(),
+            success=success,
+        )
+        self._sync_step_card_surface()
 
     def iter_open_tool_calls_for_interrupt(self) -> list[dict[str, Any]]:
         """Tool call dicts for interrupted AIMessage state (non-task rows only)."""
@@ -1787,122 +1119,139 @@ class CognitionStepMessage(Vertical):
             )
             self._rows.append(row)
             self._row_index[tcid] = row
-        self._rebuild_tool_stats()
         self._refresh_header_title()
-        self._refresh_tools_display()
-        self._sync_running_status_line()
+        self._sync_step_card_surface()
 
     def _sync_running_status_line(self) -> None:
-        """Refresh status text when tool stats change without repainting tool rows.
+        """Refresh status text when tool stats change without repainting tool rows."""
+        self._sync_step_card_surface()
 
-        This method is called when tool calls arrive during a running step,
-        so it updates the status line immediately (without visibility check)
-        to show the tool count in real-time.
-        """
-        if self._status == "running":
-            self._sync_running_status_text()
-        elif self._status == "queued":
-            self._refresh_queued_display()
-        elif self._status == "pending":
-            self._refresh_pending_display()
-
-    def _sync_running_status_text(self) -> None:
-        """Update running status line text immediately (no visibility check).
-
-        Called when tool stats change during running state to show tool count
-        in real-time, bypassing the animation visibility check that would
-        prevent updates for newly-mounted or off-screen widgets.
-        """
+    def _sync_running_status_text(self, index: StepRowIndex | None = None) -> None:
+        """Update running status line text immediately (no visibility check)."""
         if self._status != "running" or self._status_widget is None:
             return
-        frames = get_glyphs().spinner_frames
+        if index is None:
+            index = self._build_row_index()
+        g = get_glyphs()
+        frames = g.spinner_frames
         frame = frames[self._spinner_position]
-        elapsed = ""
+        elapsed_secs: int | None = None
         if self._start_time is not None:
             elapsed_secs = int(time() - self._start_time)
-            elapsed = f" ({format_duration(float(elapsed_secs))})"
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
-        gutter = f"{get_glyphs().output_prefix} "
-        stats_suffix = self._stats_title_suffix()
+        gutter = f"{g.output_prefix} "
+        stats_suffix = stats_title_suffix(index)
         token_suffix = self._token_budget_suffix()
-        # IG-504: Show retry count in running status when retries are happening
         retry_suffix = ""
         if self._retry_attempt > 0 and self._max_retry_attempts > 0:
             retry_suffix = f" ({self._retry_attempt}/{self._max_retry_attempts} attempts)"
-        head = f"{gutter}{frame} Running{retry_suffix}...{elapsed}"
-        tail = f"{stats_suffix}{token_suffix}"
         clear_widget_text_selection(self._status_widget)
-        parts: list[object] = [Content.styled(head, colors.warning)]
-        if tail:
-            parts.append(Content.styled(tail, colors.cognition))
         self._status_widget.display = True
-        self._status_widget.update(Content.assemble(*parts))
+        self._status_widget.update(
+            StepCardStatusLine.footer_running(
+                gutter=gutter,
+                spinner_frame=frame,
+                elapsed_secs=elapsed_secs,
+                stats_suffix=stats_suffix,
+                token_suffix=token_suffix,
+                retry_suffix=retry_suffix,
+                colors=colors,
+            )
+        )
 
-    def _refresh_pending_display(self) -> None:
+    def _refresh_pending_display(self, index: StepRowIndex | None = None) -> None:
         """Show waiting state for planned steps that are not executing yet."""
         if self._status != "pending" or self._status_widget is None:
             return
+        if index is None:
+            index = self._build_row_index()
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        line = f"{gutter}{g.circle_empty} Pending...{self._stats_title_suffix()}{self._token_budget_suffix()}"
         self._status_widget.remove_class("queued")
         self._status_widget.add_class("pending")
-        self._status_widget.update(Content.styled(line, colors.cognition))
+        self._status_widget.update(
+            StepCardStatusLine.footer_pending(
+                gutter=gutter,
+                circle_empty=g.circle_empty,
+                stats_suffix=stats_title_suffix(index),
+                token_suffix=self._token_budget_suffix(),
+                colors=colors,
+            )
+        )
         self._status_widget.display = True
-        self._refresh_task_activity_display()
 
-    def _refresh_queued_display(self) -> None:
+    def _refresh_queued_display(self, index: StepRowIndex | None = None) -> None:
         """Show ready steps waiting for a concurrency slot (``max_parallel_steps``)."""
         if self._status != "queued" or self._status_widget is None:
             return
+        if index is None:
+            index = self._build_row_index()
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        line = f"{gutter}{g.circle_empty} Queued...{self._stats_title_suffix()}{self._token_budget_suffix()}"
         self._status_widget.remove_class("pending")
         self._status_widget.add_class("queued")
-        self._status_widget.update(Content.styled(line, colors.cognition))
+        self._status_widget.update(
+            StepCardStatusLine.footer_queued(
+                gutter=gutter,
+                circle_empty=g.circle_empty,
+                stats_suffix=stats_title_suffix(index),
+                token_suffix=self._token_budget_suffix(),
+                colors=colors,
+            )
+        )
         self._status_widget.display = True
-        self._refresh_task_activity_display()
 
     def set_queued(self) -> None:
         """Mark a ready step as waiting for an execute batch slot."""
         if self._status in ("running", "success", "error"):
             return
         self._status = "queued"
-        self._refresh_queued_display()
+        self._sync_step_card_surface()
+
+    def _maybe_start_running_timer(self) -> None:
+        """Start the spinner timer when the step is running and mounted."""
+        if self._status != "running":
+            return
+        if self._start_time is None:
+            self._start_time = time()
+        if self._status_widget:
+            self._status_widget.remove_class("pending")
+            self._status_widget.remove_class("queued")
+            self._status_widget.display = True
+        if self._animation_timer is None and getattr(self, "is_mounted", False):
+            self._animation_timer = self.set_interval(
+                _RUNNING_SPINNER_INTERVAL_SECONDS,
+                self._update_running_animation,
+            )
+
+    def _ensure_running_ui(self) -> None:
+        """Paint running footer/branch status and start the spinner timer if needed."""
+        if self._status != "running":
+            return
+        self._sync_step_card_surface()
 
     def set_running(self) -> None:
         """Show animated running state (call after mount)."""
         if self._status == "running":
+            self._ensure_running_ui()
             return
         self._status = "running"
         self._step_card_user_expanded = False
         self._step_tool_list_user_expanded = False
         self._start_time = time()
         self._tools_body_collapsed = False
-        if self._status_widget:
-            self._status_widget.remove_class("pending")
-            self._status_widget.remove_class("queued")
-            self._status_widget.display = True
-        # Immediate status line update (bypasses visibility check) so tool count
-        # appears in real-time when tools arrive before the animation timer fires.
-        self._sync_running_status_text()
-        self._refresh_task_activity_display()
-        self._animation_timer = self.set_interval(
-            _RUNNING_SPINNER_INTERVAL_SECONDS,
-            self._update_running_animation,
-        )
+        self._ensure_running_ui()
 
     def _stop_animation(self) -> None:
         if self._animation_timer is not None:
@@ -1922,27 +1271,17 @@ class CognitionStepMessage(Vertical):
         self._retry_error_type = error_type
         # Trigger immediate refresh of running status (bypass visibility check)
         if self._status == "running":
-            self._sync_running_status_text()
+            self._sync_step_card_surface()
 
     def _update_running_animation(self) -> None:
-        """Animation timer callback: advance spinner and update status line.
-
-        The visibility check here is for efficiency - skipping expensive
-        re-renders when the widget is off-screen. For immediate tool-stats
-        updates (called when tool calls arrive), use `_sync_running_status_text`
-        which bypasses this check.
-        """
+        """Animation timer callback: advance spinner and repaint the card surface."""
         if self._status != "running" or self._status_widget is None:
             return
         if not _is_widget_animation_visible(self):
             return
-        # Advance spinner position for animation effect
         frames = get_glyphs().spinner_frames
         self._spinner_position = (self._spinner_position + 1) % len(frames)
-        # Update status line with current stats
-        self._sync_running_status_text()
-        if self._has_active_task_branch_animation():
-            self._refresh_task_activity_display()
+        self._sync_step_card_surface()
 
     def set_complete(
         self,
@@ -1964,7 +1303,8 @@ class CognitionStepMessage(Vertical):
 
         self.mark_unfinished_tools_on_step_complete(success=success)
         self._tools_body_collapsed = True
-        self._refresh_tools_display(force=True)
+        if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
+            self._refresh_tools_display(force=True)
 
         dur_str = format_duration_ms(duration_ms)
         tool_part = self._status_tool_stats_suffix(tool_call_count)
@@ -1980,13 +1320,12 @@ class CognitionStepMessage(Vertical):
                 success=True,
                 suffix=f"{tool_part}{token_suffix}",
             )
-            self._refresh_task_activity_display()
+            self._sync_step_card_surface()
             if prose:
                 self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
                 self._detail_widget.display = True
             else:
                 self._detail_widget.display = False
-            self._maybe_auto_collapse_step_card()
             return
 
         err_text = summary.strip() or "Step failed"
@@ -1995,7 +1334,7 @@ class CognitionStepMessage(Vertical):
             err_text = f"{err_text}\n\n{prose}"
         self._detail_widget.update(self._step_branched_error_detail(err_text))
         self._detail_widget.display = True
-        self._maybe_auto_collapse_step_card()
+        self._sync_step_card_surface()
 
     def set_clarification_details(
         self,
@@ -2113,7 +1452,7 @@ class CognitionStepMessage(Vertical):
             if row.phase in ("pending", "running"):
                 row.phase = "skipped"
                 row.started_at = None
-        self._refresh_tools_display()
+        self._sync_step_card_surface()
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001  # Unmounted widget (tests / no Textual app)

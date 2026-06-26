@@ -109,7 +109,7 @@ def test_stats_include_main_tools_and_task_delegations() -> None:
         parent_tool_call_id="ABC_01:s:task:0",
     )
     suffix = card._stats_title_suffix()
-    assert suffix == " · 1 tool, 1 task"
+    assert suffix == " · 2 tools, 1 task"
 
 
 def test_route_pending_main_tools_single_active_step_without_unified_id() -> None:
@@ -393,7 +393,7 @@ def test_sync_running_status_text_bypasses_visibility_check() -> None:
 
 
 def test_refresh_tools_display_syncs_status_when_animation_not_visible() -> None:
-    """Tool-list repaint must refresh running status even off-screen (footer hint path)."""
+    """Surface sync must refresh running status even off-screen."""
     card = CognitionStepMessage("REFRESH-01", "Tools refresh", id="step-refresh")
 
     card._status = "running"
@@ -401,6 +401,7 @@ def test_refresh_tools_display_syncs_status_when_animation_not_visible() -> None
     mock_status_widget = MagicMock()
     card._status_widget = mock_status_widget
     card._tools_widget = MagicMock()
+    card._activity_widget = MagicMock()
 
     card.add_tool_call("REFRESH_01:s:grep:0", "grep", {"pattern": "foo"})
     mock_status_widget.update.reset_mock()
@@ -412,22 +413,58 @@ def test_refresh_tools_display_syncs_status_when_animation_not_visible() -> None
         ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
-        card._refresh_tools_display(force=True)
+        card._sync_step_card_surface()
 
     assert mock_status_widget.update.called
     text = _extract_content_text(mock_status_widget.update.call_args[0][0])
-    assert "1 tool" in text, f"Footer status should show 1 tool after tools refresh, got: {text!r}"
+    assert "1 tool" in text, f"Footer status should show 1 tool after surface sync, got: {text!r}"
     assert "Running..." in text
 
 
-def test_main_branch_status_line_shows_tool_count_without_task() -> None:
-    """Direct main-agent tools get a branch status line (parity with task delegations)."""
+def test_main_only_step_activity_has_no_running_line() -> None:
+    """Main-agent-only steps show Running on footer only, not duplicated in activity tree."""
     card = CognitionStepMessage("MAIN-01", "Direct tools", id="step-main-branch")
     card.add_tool_call("MAIN_01:s:grep:0", "grep", {"pattern": "foo"})
     card.add_tool_call("MAIN_01:s:glob:1", "glob", {"pattern": "**/*"})
     card._status = "running"
     card._start_time = 0.0
     content = str(card._step_task_activity_content())
-    assert "2 tools" in content
-    assert "Running..." in content
+    assert "Grep" in content
+    assert "Glob" in content
+    assert "Running..." not in content
     assert card._stats_title_suffix() == " · 2 tools"
+
+
+def test_deferred_running_set_running_refreshes_task_activity_panel() -> None:
+    """Tools added before mount must paint branch status + footer on set_running()."""
+    card = CognitionStepMessage("DEF-01", "Deferred mount", id="step-deferred")
+    card.add_tool_call("DEF_01:s:grep:0", "grep", {"pattern": "x"})
+    assert card._deferred_running is True
+    assert card._status == "running"
+
+    mock_status = MagicMock()
+    mock_notes = MagicMock()
+    card._status_widget = mock_status
+    card._start_time = 0.0
+
+    def fake_query(sel: str, _cls: type) -> MagicMock:
+        if "subagent-notes" in sel:
+            return mock_notes
+        if "status" in sel:
+            return mock_status
+        return MagicMock()
+
+    card.query_one = fake_query  # type: ignore[method-assign]
+
+    with patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()):
+        card.set_running()
+
+    assert mock_notes.update.called, "Task activity panel should refresh after deferred mount"
+    notes_text = _extract_content_text(mock_notes.update.call_args[0][0])
+    assert "Grep" in notes_text or "grep" in notes_text.lower()
+    assert "Running..." not in notes_text, (
+        "Main-only activity tree must not duplicate footer Running"
+    )
+    assert mock_status.update.called
+    status_text = _extract_content_text(mock_status.update.call_args[0][0])
+    assert "1 tool" in status_text, f"Footer should show tool count, got: {status_text!r}"

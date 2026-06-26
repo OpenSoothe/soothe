@@ -5,8 +5,8 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-12
-**Updated**: 2026-04-29
-**Related**: RFC-000, RFC-001, RFC-302, RFC-303
+**Updated**: 2026-06-26  
+**Related**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-628 (step card display)
 
 ## Abstract
 
@@ -92,7 +92,15 @@ After `completed`, the runner emits **one** phased `goal_completion` chunk when 
 
 For detailed rendering (two-level tool call trees, special tool behaviors, plan visualization), see **IG-053: CLI/TUI Event Progress Clarity**. Rendering is implementation-level, documented in IGs.
 
-When the agent loop emits `soothe.cognition.strange_loop.step.started` / `step.completed` for the **main** stream (and no goal-tree aggregate card is active), the TUI folds main-agent tool calls into a single **step card** (`CognitionStepMessage`): the header summarizes counts by tool display name (e.g. `Grep(2), List(4)`), and each invocation is one CLI-style row (`format_tool_cli_style_command` → result status). The `task` tool still mounts the existing subagent tool card for internal activity; a matching `task` row appears on the step card with the same row format. See **IG-402**.
+When the agent loop emits `soothe.cognition.strange_loop.step.started` / `step.completed` for the **main** stream (and no goal-tree aggregate card is active), the TUI mounts one **step card** per plan step (`CognitionStepMessage`). Main-agent tool calls fold into that card; `task` delegations render as nested branches with subgraph tool previews. **Normative step-card layout, stats semantics, activity tree, and refresh pipeline are defined in RFC-628** (implemented 2026-06-26).
+
+**Summary (see RFC-628 for full spec):**
+
+- Header: step description only (no per-tool-kind breakdown in header).
+- Activity tree: latest three tool lines per scope (main, task branch, orphan); branch and footer Running lines include `· N tools` totals.
+- Footer: `Running... (elapsed) · {total} tools[, {M} tasks]` where `{total}` includes main + subgraph tools.
+- Optional full tool list panel when `STEP_CARD_SHOW_TOOL_ROW_DETAILS = True` (default off).
+- Manual click-to-collapse; no automatic card collapse.
 
 ### Three-Phase Execution
 

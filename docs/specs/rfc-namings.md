@@ -2,7 +2,7 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-06-25
+**Last Updated**: 2026-06-26
 
 ## Core Terminology
 
@@ -62,6 +62,17 @@ This document defines the terminology and naming conventions used in this projec
 | `ThreadInfo` | Data model for thread state (id, status, timestamps, metadata). | RFC-001 |
 | `ConcurrencyPolicy` | Data model controlling parallel execution of steps, subagents, and tools. | RFC-001 |
 | `StepResult` | Data model for a completed plan step's output and status. | RFC-001 |
+
+### TUI Step Card Terms (RFC-628)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Step card | Textual widget `CognitionStepMessage` aggregating one plan step's main-agent tools, task delegations, execute prose, and footer status. | RFC-500, RFC-628 |
+| Activity tree | `#step-cognition-subagent-notes` body: capped tool previews, task branches, branch Running lines. Rendered by `StepActivityTree`. | RFC-628 |
+| `StepToolRow` | Dataclass for one tool invocation on a step card (phase, args, parent, `is_task_row`). | RFC-628 |
+| `StepRowIndex` | Single-pass classification of all `StepToolRow` entries (main, orphan, task children, totals). Built by `StepRowClassifier`. | RFC-628 |
+| Surface sync | `_sync_step_card_surface()` — unified repaint of activity tree, footer, optional tools panel, and running timer. | RFC-628 |
+| Total tool count | Footer stat: distinct non-task tool rows on the step (main + subgraph + orphan). Not main-agent-only. | RFC-628 |
 
 ### Progress Event Terms
 
