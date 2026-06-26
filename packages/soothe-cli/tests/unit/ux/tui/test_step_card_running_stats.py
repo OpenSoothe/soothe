@@ -294,19 +294,11 @@ def test_no_duplicate_tool_rows_in_activity_preview() -> None:
     task_rows = card._iter_task_delegation_rows()
     assert len(task_rows) == 1
 
-    child_rows = card._child_rows_for_task(task_rows[0])
-    assert len(child_rows) == 1
-    assert child_rows[0].tool_call_id == "DUP_01:t0:glob:1"
-
-    orphan_preview = card._orphan_subgraph_tool_rows_for_preview()
-    assert len(orphan_preview) == 0, (
-        f"Orphan preview should be empty when tool is matched via task_idx, "
-        f"but got: {[r.tool_call_id for r in orphan_preview]}"
-    )
+    # IG-629: No more children_by_task - subgraph tools route to SubAgent cards
 
 
 def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
-    """Subgraph tools (type_code 't') never appear in main_preview stats."""
+    """IG-629: Subgraph tools (type_code 't') never appear in main_preview stats."""
     card = CognitionStepMessage("MAIN-01", "Test main preview", id="step-main")
 
     card.add_tool_call("MAIN_01:s:grep:0", "grep", {"pattern": "x"})
@@ -316,9 +308,7 @@ def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
     assert len(main_preview) == 1
     assert main_preview[0].tool_call_id == "MAIN_01:s:grep:0"
 
-    orphan_preview = card._orphan_subgraph_tool_rows_for_preview()
-    assert len(orphan_preview) == 1
-    assert orphan_preview[0].tool_call_id == "MAIN_01:t0:glob:1"
+    # IG-629: Subgraph tools route to SubAgent cards, not step main_preview
 
 
 def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
