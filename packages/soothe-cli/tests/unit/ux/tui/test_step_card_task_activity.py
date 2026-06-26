@@ -360,7 +360,7 @@ def test_failed_step_still_marks_unfinished_task_tools_skipped() -> None:
     assert "Skipped" in text
 
 
-def test_status_line_still_excludes_nested_task_tools() -> None:
+def test_footer_stats_include_all_step_tools() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-task-status")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
     card.add_tool_call(
@@ -376,7 +376,7 @@ def test_status_line_still_excludes_nested_task_tools() -> None:
         parent_tool_call_id="ABC_01:s:task:0",
     )
     suffix = card._stats_title_suffix()
-    assert suffix == " · 1 tool, 1 task"
+    assert suffix == " · 2 tools, 1 task"
     assert "Glob" not in suffix
 
 
@@ -463,3 +463,5 @@ def test_combined_task_and_main_tools() -> None:
     assert "ReadFile" in text
     assert text.index("Explore(scan repo)") < text.index("ReadFile")
     assert "· 6 tools" in text
+    # Mixed layout: main branch Running in activity (footer shows aggregate separately).
+    assert text.count("Running...") >= 1

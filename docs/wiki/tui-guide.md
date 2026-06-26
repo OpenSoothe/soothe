@@ -124,27 +124,55 @@ The TUI shows real-time progress through:
 
 ## Step Cards
 
-Step cards display progress for each step in the plan, including tool activity and file changes.
+Step cards (`CognitionStepMessage`) show progress for each plan step during StrangeLoop execution. **Normative spec: [RFC-628](../specs/RFC-628-step-card-display-refactor.md).**
 
-### Tool Activity Preview
+### Layout
 
-Step cards show the latest tool invocations to help you track what's happening:
+Each step card has five zones (header always visible; others hide when manually collapsed):
 
-- **Location**: Each step card displays up to 3 recent tool activity lines
-- **Content**: Shows tool name with arguments and execution phase
-- **Nested Tasks**: Inner subagent tool calls appear under their parent task branch
-- **Format**: `ToolName(args)` with status indicator
+| Zone | Content |
+|------|---------|
+| **Header** | Step description only (`🚀 …`) |
+| **Activity tree** | Task branches, tool previews, branch status lines |
+| **Detail** | Streaming execute prose, clarification Q&A, or errors |
+| **Footer** | Pending / Queued / Running / Completed status |
+| **Tools panel** | Optional full nested list (off by default) |
 
-**Example**:
+Click the card to manually collapse or expand the body. Cards do **not** auto-collapse.
+
+### Tool activity preview
+
+- **Cap**: Latest **3** tool invocation lines **per scope** (main-agent, each task branch, orphan subgraph)
+- **Format**: Goal-tree gutter (`⎿`), phase icon, `ToolName(args)`, optional status tail
+- **Task branches**: `Explore(description)` header with nested child tools indented underneath
+
+**Example** (running step with one task delegation and main tools):
+
 ```
-[Step Card: Update documentation]
-├── Grep(pattern="tacitus") - Searching...
-├── ReadFile(path="docs/wiki/subagents.md") - Reading...
-├── EditFile(path="docs/wiki/subagents.md") - Complete
-└── Status: Running (3 tools)
+🚀 Survey RFCs and update wiki
+⎿ ✓ Explore(enumerate docs)
+⎿   ○ ReadFile(docs/specs/RFC-628…)
+⎿   ○ Glob(**/*.md)
+⎿   ⠋ Running... (8s) · 2 tools
+⎿ ○ Grep(pattern="step card")
+⎿ ⠋ Running... (45s) · 3 tools
+⎿ ⠋ Running... (45s) · 3 tools, 1 task
 ```
 
-### File Change Preview
+The last line is the **footer**; lines above are the **activity tree**. Running lines include `· N tools` for their scope; the footer shows **total** tools (main + subgraph) plus task count.
+
+### Stats on running lines
+
+| Line | Tool count scope |
+|------|------------------|
+| Task branch Running | Child tools under that delegation |
+| Main branch Running | Direct main-agent tools |
+| Orphan branch Running | Subgraph tools without visible task parent |
+| Footer Running | **Total** tools on step + `, M tasks` when delegations exist |
+
+Token usage (`in:… out:…`) and retry counts append on the footer when available.
+
+### File change preview
 
 When files are modified, the TUI displays a diff preview widget:
 

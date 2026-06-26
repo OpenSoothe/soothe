@@ -5,9 +5,10 @@
 **Status**: Draft
 **Kind**: Implementation Interface Design
 **Created**: 2026-03-31
-**Updated**: 2026-05-01
-**Authors**: Soothe Team
-**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing)
+**Updated**: 2026-06-26  
+**Authors**: Soothe Team  
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing)  
+**Related**: RFC-628 (TUI step card display)  
 **Supersedes**: RFC-0020, RFC-0024
 
 ---
@@ -233,7 +234,7 @@ class EventMeta:
 {assistant_final_response}
 ```
 
-For the Textual TUI, when a **step card** is shown for the main agent (see RFC-500 Event Rendering / IG-402), tool traffic for that step is **not** a separate card per tool: the step card header includes the same kind of summary as `[2 tools]` but broken down by tool kind (e.g. `Grep(2), List(4)`), and the body lists one line per tool call (invocation → result). Subagent internals still use the existing `task` tool card.
+For the Textual TUI, when a **step card** is shown for the main agent (see RFC-500 Event Rendering), tool traffic for that step is **not** a separate card per tool. **Normative layout and stats are RFC-628.** In summary: the activity tree shows up to three recent tool lines per scope (main-agent, task branch, orphan subgraph); footer and branch Running lines show `· N tools` (total includes subgraph tools) and `· M tasks` when task delegations exist; the optional full nested tool list is gated by `STEP_CARD_SHOW_TOOL_ROW_DETAILS` (default off). Subagent internals still use the existing `task` tool card where mounted separately.
 
 Subagent tool calls that cannot resolve a parent task card are **suppressed** (IG-404) — they do not produce standalone `ToolCallMessage` widgets. Only main-agent tools may fall back to standalone cards (edge case: no `step_started` event arrives before stream end).
 

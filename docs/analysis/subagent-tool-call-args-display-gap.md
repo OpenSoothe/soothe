@@ -157,6 +157,7 @@ tool_update_events = task_updates + other_updates
 
 ## References
 
-- IG-402: Step-card tool aggregation
+- RFC-628: Step-card display (canonical spec, 2026-06-26)
+- IG-402: Step-card tool aggregation (historical)
 - IG-419: Task delegation nesting
 - executor.py: `_enrich_execute_step_task_kwargs_on_message()` docstring explains why enrichment happens
