@@ -12,6 +12,7 @@ This package provides middleware implementations:
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
 - FileLockMiddleware: File lock conflict resolution for autopilot mode (RFC-222)
 - MCPToolSearchMiddleware: MCP progressive disclosure telemetry (RFC-412)
+- ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-512)
 
 Utility functions:
 - create_llm_call_metadata: Create standardized metadata for LLM calls
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
     from soothe.middleware.policy import SoothePolicyMiddleware
     from soothe.middleware.system_prompt import SystemPromptMiddleware
+    from soothe.middleware.tool_timeout import ToolTimeoutMiddleware
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
@@ -67,6 +69,7 @@ __all__ = [
     "PerTurnModelMiddleware",
     "TokenConfig",
     "ThreadContextProvider",
+    "ToolTimeoutMiddleware",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
     "create_llm_call_metadata",
@@ -101,6 +104,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "TokenConfig": ("soothe.middleware.identity", "TokenConfig"),
     "ThreadContextProvider": ("soothe.middleware.identity", "ThreadContextProvider"),
+    "ToolTimeoutMiddleware": ("soothe.middleware.tool_timeout", "ToolTimeoutMiddleware"),
     "WorkspaceContextMiddleware": (
         "soothe.middleware.workspace_context",
         "WorkspaceContextMiddleware",

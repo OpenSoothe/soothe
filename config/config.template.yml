@@ -248,6 +248,25 @@ agent:
       global_max_llm_calls: 10
       step_parallelism: dependency
 
+    # IG-501: Enable by default with moderate settings for Chinese providers
+    # (Dashscope/Zhipu typically have lower limits than OpenAI)
+    # IG-504: Increased timeouts and retries for robust step execution
+    llm_rate_limit:
+      enabled: true
+      rpm_limit: 60  # Moderate default for Dashscope/Zhipu (free tier ~30, paid ~60-100)
+      concurrent_limit: 8  # Parallelism without overwhelming provider
+      call_timeout_seconds: 600  # IG-504: Increased timeout for robust execution
+      call_timeout_max_seconds: 900  # IG-504: Increased cap
+      retry_on_timeout: true
+      max_timeout_retries: 10  # IG-504: Increased retries
+      timeout_retry_multiplier: 1.2
+      # IG-499: HTTP 429 rate limit retry configuration
+      retry_on_rate_limit: true
+      max_rate_limit_retries: 10  # IG-504: Increased 429 retries
+      rate_limit_backoff_base: 2.0
+      rate_limit_backoff_max: 60.0
+      respect_retry_after_header: true
+
     tool_output:
       code_exec_max_output_chars: 32000
       tool_output_max_chars: 10000
@@ -277,24 +296,18 @@ agent:
       backoff_factor: 2.0
       initial_delay: 1.0
 
-    # IG-501: Enable by default with moderate settings for Chinese providers
-    # (Dashscope/Zhipu typically have lower limits than OpenAI)
-    # IG-504: Increased timeouts and retries for robust step execution
-    llm_rate_limit:
-      enabled: true
-      rpm_limit: 60  # Moderate default for Dashscope/Zhipu (free tier ~30, paid ~60-100)
-      concurrent_limit: 8  # Parallelism without overwhelming provider
-      call_timeout_seconds: 600  # IG-504: Increased timeout for robust execution
-      call_timeout_max_seconds: 900  # IG-504: Increased cap
-      retry_on_timeout: true
-      max_timeout_retries: 10  # IG-504: Increased retries
-      timeout_retry_multiplier: 1.2
-      # IG-499: HTTP 429 rate limit retry configuration
-      retry_on_rate_limit: true
-      max_rate_limit_retries: 10  # IG-504: Increased 429 retries
-      rate_limit_backoff_base: 2.0
-      rate_limit_backoff_max: 60.0
-      respect_retry_after_header: true
+    # === TOOL TIMEOUT (IG-512) ===
+    # Wrap tool calls with configurable timeout to prevent indefinite hangs.
+    tool_timeout:
+      enabled: true # Enable tool timeout middleware
+      default_seconds: 60.0 # Default timeout for tools without override
+      per_tool:
+        grep: 30.0 # Filesystem searches
+        glob: 20.0 # File pattern matching
+        read_file: 30.0 # File reads
+        explore: 600.0 # Subagent exploration (can take several minutes)
+        browser_use: 600.0 # Browser automation (can take several minutes)
+      skip_tools_with_internal_timeout: true # Skip run_command (already has timeout)
 
   # === PROTOCOLS (Backend Selection) ===
   protocols:

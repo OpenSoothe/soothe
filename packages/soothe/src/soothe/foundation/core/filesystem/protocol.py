@@ -233,21 +233,37 @@ class GrepResult:
         files_searched: Number of files searched.
         total_matches: Total number of matches found.
         truncated: Whether results were truncated.
+        is_partial: Whether results are partial (incremental batching stopped early).
+        continuation_token: Token for requesting more results via incremental continuation.
+        total_files: Total number of files in search scope (for progress tracking).
+        error: Error message if grep encountered issues.
     """
 
     matches: list[GrepMatch]
     files_searched: int = 0
     total_matches: int = 0
     truncated: bool = False
+    is_partial: bool = False
+    continuation_token: dict[str, Any] | None = None
+    total_files: int | None = None
+    error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result: dict[str, Any] = {
             "matches": [m.to_dict() for m in self.matches],
             "files_searched": self.files_searched,
             "total_matches": self.total_matches,
             "truncated": self.truncated,
+            "is_partial": self.is_partial,
         }
+        if self.continuation_token is not None:
+            result["continuation_token"] = self.continuation_token
+        if self.total_files is not None:
+            result["total_files"] = self.total_files
+        if self.error:
+            result["error"] = self.error
+        return result
 
 
 @dataclass(frozen=True)

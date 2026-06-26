@@ -5,9 +5,14 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import hashlib
+import logging
+import os
+import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
+from typing import Any
 
 from .exceptions import (
     DirectoryNotEmptyError,
@@ -31,6 +36,43 @@ from .protocol import (
     WriteResult,
 )
 from .unified import UnifiedFilesystem
+
+logger = logging.getLogger(__name__)
+
+# Incremental grep batching constants (IG-512)
+_GREP_BATCH_SIZE: int = 100  # files per batch
+_GREP_MAX_BATCHES: int = 10  # stop after this many batches
+_GREP_BATCH_TIMEOUT_S: float = 5.0  # timeout per batch
+_GREP_MAX_FILE_SIZE_BYTES: int = 1_000_000  # 1 MB per file limit
+_GREP_TOTAL_TIMEOUT_S: float = 60.0  # overall grep timeout
+_GREP_MAX_TOTAL_BYTES: int = 10 * 1024 * 1024  # 10 MB total read limit
+_GREP_IGNORE_DIRS: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".svn",
+        ".hg",  # VCS
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",  # Python caches
+        "node_modules",
+        "bower_components",  # JS deps
+        ".venv",
+        "venv",
+        "env",
+        ".env",  # Python virtualenvs
+        "dist",
+        "build",
+        ".tox",
+        "*.egg-info",  # Build artifacts
+        ".idea",
+        ".vscode",
+        ".pytest_cache",  # IDE/tool dirs
+        "target",
+        "out",
+        "bin",
+        "obj",  # Build outputs (Java, .NET, etc.)
+    }
+)
 
 
 class LocalFilesystem(UnifiedFilesystem):
@@ -873,13 +915,35 @@ class LocalFilesystem(UnifiedFilesystem):
         path: str = ".",
         glob: str | None = None,
         output_mode: str = "files_with_matches",
+        continuation_token: dict[str, Any] | None = None,
     ) -> GrepResult | list[str] | str:
-        """Search for pattern in files."""
+        """Search for pattern in files with incremental batching.
+
+        Uses bounded batch processing to prevent indefinite hangs on large
+        directories. Returns partial results with continuation token when
+        search is incomplete, allowing caller to request more.
+
+        Args:
+            pattern: Regex pattern to search for.
+            path: Directory or file to search.
+            glob: Optional glob pattern for file filtering.
+            output_mode: "files_with_matches", "count", or "content".
+            continuation_token: Token from previous partial result to continue.
+
+        Returns:
+            GrepResult (with is_partial=True if incomplete), or simplified
+            list[str] / str for files_with_matches / count modes.
+        """
         resolved = self._resolve_path(path)
 
         if not resolved.is_dir() and not resolved.is_file():
             return GrepResult(matches=[])
 
+        # Single file: process directly (no batching needed)
+        if resolved.is_file():
+            return self._grep_single_file(pattern, resolved=resolved, output_mode=output_mode)
+
+        # Directory: use incremental batching
         if is_ag_available():
             ag_result = grep_with_ag(
                 workspace=self.workspace,
@@ -889,64 +953,244 @@ class LocalFilesystem(UnifiedFilesystem):
                 output_mode=output_mode,
             )
             if ag_result is not None:
+                # ag succeeded, return result (may need to wrap in GrepResult)
                 return ag_result
 
-        return self._grep_python_walk(
+        return self._grep_python_walk_incremental(
             pattern,
             resolved=resolved,
             glob=glob,
             output_mode=output_mode,
+            continuation_token=continuation_token,
         )
 
-    def _grep_python_walk(
+    def _grep_single_file(
+        self,
+        pattern: str,
+        *,
+        resolved: Path,
+        output_mode: str,
+    ) -> GrepResult | list[str] | str:
+        """Grep a single file (no batching needed)."""
+        rel_path = self._result_path(resolved)
+        matches: list[GrepMatch] = []
+
+        try:
+            # Check file size before reading
+            stat = resolved.stat()
+            if stat.st_size > _GREP_MAX_FILE_SIZE_BYTES:
+                return GrepResult(
+                    matches=[],
+                    files_searched=0,
+                    error=f"File too large: {stat.st_size} bytes (max: {_GREP_MAX_FILE_SIZE_BYTES})",
+                )
+
+            with open(resolved, encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            for line_num, line in enumerate(content.split("\n"), 1):
+                for match in re.finditer(pattern, line):
+                    matches.append(
+                        GrepMatch(
+                            path=rel_path,
+                            line_number=line_num,
+                            line_content=line,
+                            match_start=match.start(),
+                            match_end=match.end(),
+                        )
+                    )
+
+            result = GrepResult(matches=matches, files_searched=1, total_matches=len(matches))
+
+            if output_mode == "files_with_matches":
+                return [rel_path] if matches else []
+            if output_mode == "count":
+                return str(len(matches))
+            return result
+
+        except OSError as e:
+            return GrepResult(matches=[], files_searched=0, error=str(e))
+
+    def _grep_python_walk_incremental(
         self,
         pattern: str,
         *,
         resolved: Path,
         glob: str | None,
         output_mode: str,
+        continuation_token: dict[str, Any] | None = None,
     ) -> GrepResult | list[str] | str:
-        """Fallback grep: walk the tree and scan file contents in Python."""
-        import re
+        """Incremental grep: process files in bounded batches with timeout.
 
+        IG-512: Prevents indefinite hangs by:
+        - Processing files in batches of _GREP_BATCH_SIZE
+        - Stopping after _GREP_MAX_BATCHES batches
+        - Timing out each batch at _GREP_BATCH_TIMEOUT_S
+        - Skipping large files and ignored directories
+        - Limiting total bytes read to _GREP_MAX_TOTAL_BYTES
+
+        Returns partial results with continuation token when incomplete.
+        """
         if not resolved.is_dir():
             return GrepResult(matches=[])
 
+        # Compile pattern regex
+        try:
+            regex = re.compile(pattern)
+        except re.error as e:
+            return GrepResult(matches=[], error=f"Invalid regex: {e}")
+
+        # Collect file list (with continuation support)
+        all_files: list[Path] = []
+        start_index = 0
+
+        if continuation_token is not None:
+            # Resume from previous partial search
+            cached_files = continuation_token.get("cached_files")
+            start_index = continuation_token.get("next_file_index", 0)
+            if cached_files:
+                all_files = [Path(f) for f in cached_files]
+            else:
+                # No cached files, need to re-collect (shouldn't happen normally)
+                logger.warning("Continuation token missing cached_files, re-collecting")
+                all_files = self._collect_grep_files(resolved, glob)
+
+        if not all_files:
+            # First run: collect files with ignore filter
+            all_files = self._collect_grep_files(resolved, glob)
+            start_index = 0
+
+        total_files = len(all_files)
+        if total_files == 0:
+            return GrepResult(matches=[], files_searched=0, total_files=0)
+
+        # Process batches
         matches: list[GrepMatch] = []
         files_searched = 0
+        bytes_read = 0
+        batches_completed = 0
+        start_time = time.monotonic()
+        stop_reason: str | None = None
 
-        for root, _dirs, files in __import__("os").walk(resolved):
-            for name in files:
-                if glob and not fnmatch.fnmatch(name, glob):
-                    continue
+        for batch_num in range(_GREP_MAX_BATCHES):
+            batch_start_index = start_index + batch_num * _GREP_BATCH_SIZE
+            batch_end_index = min(batch_start_index + _GREP_BATCH_SIZE, total_files)
 
-                file_path = Path(root) / name
-                rel_path = self._result_path(file_path)
+            if batch_start_index >= total_files:
+                # All files processed
+                break
+
+            batch_files = all_files[batch_start_index:batch_end_index]
+            batch_start_time = time.monotonic()
+            batch_files_searched = 0
+
+            for file_path in batch_files:
+                # Check batch timeout
+                elapsed_batch = time.monotonic() - batch_start_time
+                if elapsed_batch > _GREP_BATCH_TIMEOUT_S:
+                    stop_reason = "batch_timeout"
+                    logger.warning(
+                        "Grep batch %d timed out after %.1fs (files searched: %d/%d)",
+                        batch_num + 1,
+                        elapsed_batch,
+                        batch_files_searched,
+                        len(batch_files),
+                    )
+                    break
+
+                # Check total timeout
+                elapsed_total = time.monotonic() - start_time
+                if elapsed_total > _GREP_TOTAL_TIMEOUT_S:
+                    stop_reason = "total_timeout"
+                    logger.warning(
+                        "Grep total timeout %.1fs reached after %d files",
+                        elapsed_total,
+                        files_searched,
+                    )
+                    break
+
+                # Check total bytes limit
+                if bytes_read >= _GREP_MAX_TOTAL_BYTES:
+                    stop_reason = "bytes_limit"
+                    logger.warning(
+                        "Grep bytes limit %d reached after %d files",
+                        _GREP_MAX_TOTAL_BYTES,
+                        files_searched,
+                    )
+                    break
 
                 try:
+                    stat = file_path.stat()
+                    file_size = stat.st_size
+
+                    # Skip large files
+                    if file_size > _GREP_MAX_FILE_SIZE_BYTES:
+                        continue
+
+                    # Check if adding this file exceeds bytes limit
+                    if bytes_read + file_size > _GREP_MAX_TOTAL_BYTES:
+                        stop_reason = "bytes_limit"
+                        logger.warning(
+                            "Grep bytes limit approaching, stopping before file %s (%d bytes)",
+                            file_path.name,
+                            file_size,
+                        )
+                        break
+
+                    rel_path = self._result_path(file_path)
+
                     with open(file_path, encoding="utf-8", errors="ignore") as f:
                         content = f.read()
-                except (OSError, UnicodeDecodeError):
+
+                    bytes_read += file_size
+                    files_searched += 1
+                    batch_files_searched += 1
+
+                    # Search for pattern in content
+                    for line_num, line in enumerate(content.split("\n"), 1):
+                        for match in regex.finditer(line):
+                            matches.append(
+                                GrepMatch(
+                                    path=rel_path,
+                                    line_number=line_num,
+                                    line_content=line,
+                                    match_start=match.start(),
+                                    match_end=match.end(),
+                                )
+                            )
+
+                except OSError:
+                    # Skip files we can't read
                     continue
 
-                files_searched += 1
+            batches_completed += 1
 
-                for line_num, line in enumerate(content.split("\n"), 1):
-                    for match in re.finditer(pattern, line):
-                        matches.append(
-                            GrepMatch(
-                                path=rel_path,
-                                line_number=line_num,
-                                line_content=line,
-                                match_start=match.start(),
-                                match_end=match.end(),
-                            )
-                        )
+            # Check if we stopped mid-batch
+            if stop_reason:
+                break
+
+        # Determine if search is complete
+        next_file_index = start_index + batches_completed * _GREP_BATCH_SIZE
+        # Partial if: not all files processed AND (stopped early OR hit batch limit)
+        is_partial = next_file_index < total_files
+
+        # Build continuation token if partial
+        continuation: dict[str, Any] | None = None
+        if is_partial:
+            continuation = {
+                "next_file_index": next_file_index,
+                "cached_files": [str(f) for f in all_files],  # Cache for resume
+                "stop_reason": stop_reason or "batch_limit",  # Track why we stopped
+            }
 
         result = GrepResult(
             matches=matches,
             files_searched=files_searched,
             total_matches=len(matches),
+            is_partial=is_partial,
+            continuation_token=continuation,
+            total_files=total_files,
+            error=None if not stop_reason or is_partial else f"Search stopped: {stop_reason}",
         )
 
         if output_mode == "files_with_matches":
@@ -955,6 +1199,37 @@ class LocalFilesystem(UnifiedFilesystem):
             return str(len(matches))
         return result
 
+    def _collect_grep_files(self, resolved: Path, glob: str | None) -> list[Path]:
+        """Collect all files for grep with ignore filter applied.
+
+        Pre-collects files to support incremental batching and continuation.
+        Applies ignore directory filter to skip .venv, node_modules, etc.
+        """
+        all_files: list[Path] = []
+
+        for root, dirs, files in os.walk(resolved):
+            # Filter out ignored directories (in-place prevents descent)
+            dirs[:] = [d for d in dirs if not self._should_ignore_dir_for_grep(d)]
+
+            for name in files:
+                # Apply glob filter if specified
+                if glob and not fnmatch.fnmatch(name, glob):
+                    continue
+                all_files.append(Path(root) / name)
+
+        return all_files
+
+    def _should_ignore_dir_for_grep(self, name: str) -> bool:
+        """Check if directory should be skipped during grep walk."""
+        # Exact match against known ignore dirs
+        if name in _GREP_IGNORE_DIRS:
+            return True
+        # Pattern match for dynamic dirs (e.g., *.egg-info)
+        for pattern in _GREP_IGNORE_DIRS:
+            if "*" in pattern and fnmatch.fnmatch(name, pattern):
+                return True
+        return False
+
     async def agrep(
         self,
         pattern: str,
@@ -962,12 +1237,14 @@ class LocalFilesystem(UnifiedFilesystem):
         path: str = ".",
         glob: str | None = None,
         output_mode: str = "files_with_matches",
+        continuation_token: dict[str, Any] | None = None,
     ) -> GrepResult | list[str] | str:
-        """Async search for pattern in files."""
+        """Async search for pattern in files with incremental batching."""
         return await asyncio.to_thread(
             self.grep,
             pattern,
             path=path,
             glob=glob,
             output_mode=output_mode,
+            continuation_token=continuation_token,
         )
