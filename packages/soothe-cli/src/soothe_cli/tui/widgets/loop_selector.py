@@ -957,8 +957,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         self._apply_sort()
         self._sync_selected_index()
         self._update_help_widgets()
-        if event.value and column_key in {"messages", "initial_prompt"}:
-            self._schedule_checkpoint_enrichment()
 
         snapshot = dict(self._columns)
 
@@ -1182,25 +1180,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             exclusive=True,
             group="loop-selector-render",
         )
-
-    def _pending_checkpoint_fields(self) -> tuple[bool, bool]:
-        """Return which visible checkpoint-derived fields still need loading."""
-        # Loop list RPC does not include per-checkpoint message counts in this view
-        return False, False
-
-    async def _populate_visible_checkpoint_details(self) -> tuple[bool, bool]:
-        """Load any still-missing checkpoint-derived fields for visible columns.
-
-        Returns:
-            Tuple indicating whether message counts and prompts were requested.
-        """
-        # Loops don't have checkpoint-derived fields
-        return False, False
-
-    def _schedule_checkpoint_enrichment(self) -> None:
-        """Schedule one checkpoint-enrichment pass for missing row fields."""
-        # Loops don't need checkpoint enrichment
-        pass
 
     @staticmethod
     def _loops_match(old: list[dict[str, Any]], new: list[dict[str, Any]]) -> bool:

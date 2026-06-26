@@ -64,6 +64,45 @@ def is_main_step_level_tool_call_id(tool_call_id: str) -> bool:
     return not is_step_level_task_tool_id(tcid)
 
 
+def predict_main_execute_tool_call_id(
+    step_id: str,
+    *,
+    tool_call_id: str = "",
+    tool_name: str = "",
+    chunk_index: Any = None,
+) -> str:
+    """Best-effort unified id for main-graph execute tools during streaming."""
+    from soothe_sdk.ux.task_namespace import (
+        _format_unified_tool_call_id,
+        _provider_tool_fragment,
+        is_unified_tool_call_id,
+        parse_unified_tool_call_id,
+    )
+
+    tcid = str(tool_call_id or "").strip()
+    if tcid and is_unified_tool_call_id(tcid):
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
+        if parsed_sid and type_code == "s":
+            return tcid
+    sid = str(step_id or "").strip()
+    if not sid:
+        return tcid
+    raw_tid = tcid
+    if not raw_tid:
+        name = str(tool_name or "").strip()
+        if name and chunk_index is not None:
+            try:
+                idx = int(chunk_index)
+            except (TypeError, ValueError):
+                idx = None
+            if idx is not None:
+                raw_tid = f"{name}:{idx}"
+    if not raw_tid:
+        return ""
+    frag = _provider_tool_fragment(raw_tid)
+    return _format_unified_tool_call_id(sid, "s", frag)
+
+
 def is_task_level_subgraph_tool_call_id(tool_call_id: str) -> bool:
     """True for unified subgraph tools (``{step}:t{n}:{tool}:{seq}``), not nested ``task`` rows."""
     from soothe_sdk.ux.task_namespace import (
@@ -87,19 +126,22 @@ def should_ingest_tool_for_step_stats(
 ) -> bool:
     """Whether the TUI should register a tool row for step-card stats.
 
-    Main step-level tools are tracked as soon as ``tool_call_id`` and ``tool_name``
-    are known; display does not wait for streamed args.
+    Main execute-graph tools are tracked as soon as ``tool_call_id`` and ``tool_name``
+    are known; display does not wait for streamed args. Subgraph explore tools often
+    arrive with placeholder kwargs before real args.
     """
+    from soothe_sdk.ux.task_namespace import is_step_level_task_tool_id
+
     name = str(tool_name or "").strip()
     tcid = str(tool_call_id or "").strip()
     if not name or not tcid or name == "task":
         return False
     if args_meaningful:
         return True
-    if is_step_card_scope and is_main_step_level_tool_call_id(tcid):
-        return True
+    if is_step_card_scope:
+        return not is_step_level_task_tool_id(tcid)
     # Subgraph explore tools often arrive with ``{"_subgraph_tool": true}`` before real args.
-    return not is_step_card_scope and is_task_level_subgraph_tool_call_id(tcid)
+    return is_task_level_subgraph_tool_call_id(tcid)
 
 
 def _args_from_toolish_block(block: dict[str, Any]) -> dict[str, Any]:
@@ -498,6 +540,7 @@ __all__ = [
     "is_main_step_level_tool_call_id",
     "is_step_card_tool_scope",
     "is_task_level_subgraph_tool_call_id",
+    "predict_main_execute_tool_call_id",
     "is_toolish_display_block",
     "materialize_ai_blocks_with_resolved_tools",
     "merge_tool_display_args",

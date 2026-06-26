@@ -664,8 +664,6 @@ class _ExecutionMixin:
             await self._submit_cron_job(args, slash_input=command)
         elif cmd == "/autopilot-dashboard":
             await self._show_autopilot_dashboard()
-        elif cmd == "/autopilot-toggle":
-            await self._toggle_autopilot_mode()
         elif cmd == "/mcp":
             await self._show_mcp_viewer()
         elif cmd == "/theme":

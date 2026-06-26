@@ -30,7 +30,7 @@ providers:
       - nomic-embed
 
 router:
-  default: "dashscope:glm-5.2"
+  default: "dashscope:kimi-k2.5"
   fast: "dashscope:kimi-k2.5"
   think: "dashscope:glm-5.2"
   image: "dashscope:kimi-k2.5"

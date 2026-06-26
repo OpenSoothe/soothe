@@ -143,7 +143,10 @@ def test_running_animation_includes_tool_stats_in_status_line() -> None:
     card._status_widget = mock_status_widget
 
     with (
-        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=True),
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=True,
+        ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
@@ -168,7 +171,10 @@ def test_running_animation_updates_stats_dynamically() -> None:
     card._status_widget = mock_status_widget
 
     with (
-        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=True),
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=True,
+        ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
@@ -199,7 +205,10 @@ def test_running_animation_shows_no_stats_when_no_tools() -> None:
     card._status_widget = mock_status_widget
 
     with (
-        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=True),
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=True,
+        ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
@@ -226,7 +235,10 @@ def test_running_animation_includes_elapsed_time() -> None:
     card._status_widget = mock_status_widget
 
     with (
-        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=True),
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=True,
+        ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
@@ -327,7 +339,10 @@ def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
 
     # Add tool calls while widget is NOT visible (visibility returns False)
     with (
-        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=False),
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=False,
+        ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         # Adding tool calls should trigger immediate status update via _sync_running_status_line
@@ -364,7 +379,10 @@ def test_sync_running_status_text_bypasses_visibility_check() -> None:
 
     # Directly call _sync_running_status_text - should always update
     with (
-        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=False),
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=False,
+        ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._sync_running_status_text()
@@ -372,3 +390,44 @@ def test_sync_running_status_text_bypasses_visibility_check() -> None:
     assert mock_status_widget.update.called
     text = _extract_content_text(mock_status_widget.update.call_args[0][0])
     assert "2 tools" in text, f"Should show 2 tools even with visibility=False, got: {text!r}"
+
+
+def test_refresh_tools_display_syncs_status_when_animation_not_visible() -> None:
+    """Tool-list repaint must refresh running status even off-screen (footer hint path)."""
+    card = CognitionStepMessage("REFRESH-01", "Tools refresh", id="step-refresh")
+
+    card._status = "running"
+    card._start_time = 0.0
+    mock_status_widget = MagicMock()
+    card._status_widget = mock_status_widget
+    card._tools_widget = MagicMock()
+
+    card.add_tool_call("REFRESH_01:s:grep:0", "grep", {"pattern": "foo"})
+    mock_status_widget.update.reset_mock()
+
+    with (
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=False,
+        ),
+        patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
+    ):
+        card._refresh_tools_display(force=True)
+
+    assert mock_status_widget.update.called
+    text = _extract_content_text(mock_status_widget.update.call_args[0][0])
+    assert "1 tool" in text, f"Footer status should show 1 tool after tools refresh, got: {text!r}"
+    assert "Running..." in text
+
+
+def test_main_branch_status_line_shows_tool_count_without_task() -> None:
+    """Direct main-agent tools get a branch status line (parity with task delegations)."""
+    card = CognitionStepMessage("MAIN-01", "Direct tools", id="step-main-branch")
+    card.add_tool_call("MAIN_01:s:grep:0", "grep", {"pattern": "foo"})
+    card.add_tool_call("MAIN_01:s:glob:1", "glob", {"pattern": "**/*"})
+    card._status = "running"
+    card._start_time = 0.0
+    content = str(card._step_task_activity_content())
+    assert "2 tools" in content
+    assert "Running..." in content
+    assert card._stats_title_suffix() == " · 2 tools"

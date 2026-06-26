@@ -3,70 +3,12 @@
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from soothe_sdk.client.config import SOOTHE_HOME
 from typing_extensions import TypedDict
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
-    import aiosqlite
-
 logger = logging.getLogger(__name__)
-
-_aiosqlite_patched = False
-
-
-def _patch_aiosqlite() -> None:
-    """Patch aiosqlite.Connection with `is_alive()` if missing.
-
-    Required by langgraph-checkpoint>=2.1.0.
-    See: https://github.com/langchain-ai/langgraph/issues/6583
-    """
-    global _aiosqlite_patched  # noqa: PLW0603  # Module-level flag requires global statement
-    if _aiosqlite_patched:
-        return
-
-    import aiosqlite as _aiosqlite
-
-    if not hasattr(_aiosqlite.Connection, "is_alive"):
-
-        def _is_alive(self: _aiosqlite.Connection) -> bool:
-            """Check if the connection is still alive.
-
-            Returns:
-                True if connection is alive, False otherwise.
-            """
-            return bool(self._running and self._connection is not None)
-
-        # Dynamically adding a method to aiosqlite.Connection at runtime.
-        # Type checkers can't understand this monkey-patch, so we suppress the
-        # "attr-defined" error that would otherwise be raised.
-        _aiosqlite.Connection.is_alive = _is_alive  # type: ignore[attr-defined]
-
-    _aiosqlite_patched = True
-
-
-@asynccontextmanager
-async def _connect() -> AsyncIterator[aiosqlite.Connection]:
-    """Import aiosqlite, apply the compatibility patch, and connect.
-
-    Centralizes the deferred import + patch + connect sequence used by every
-    database function in this module.
-
-    Yields:
-        An open aiosqlite connection to the sessions database.
-    """
-    import aiosqlite as _aiosqlite
-
-    _patch_aiosqlite()
-
-    async with _aiosqlite.connect(str(get_db_path()), timeout=30.0) as conn:
-        yield conn
 
 
 class LoopInfo(TypedDict, total=False):
@@ -182,27 +124,6 @@ def format_relative_timestamp(iso_timestamp: str | None) -> str:
     return f"{years}y ago"
 
 
-_db_path: Path | None = None
-
-
-def get_db_path() -> Path:
-    """Get path to global database.
-
-    The result is cached after the first successful call to avoid repeated
-    filesystem operations.
-
-    Returns:
-        Path to the SQLite database file.
-    """
-    global _db_path  # noqa: PLW0603  # Module-level cache requires global statement
-    if _db_path is not None:
-        return _db_path
-    db_dir = Path(SOOTHE_HOME)
-    db_dir.mkdir(parents=True, exist_ok=True)
-    _db_path = db_dir / "sessions.db"
-    return _db_path
-
-
 def generate_loop_id() -> str:
     """Generate a new loop ID as a full UUID7 string.
 
@@ -212,17 +133,6 @@ def generate_loop_id() -> str:
     from uuid_utils import uuid7
 
     return str(uuid7())
-
-
-async def _table_exists(conn: aiosqlite.Connection, table: str) -> bool:
-    """Check if a table exists in the database.
-
-    Returns:
-        True if table exists, False otherwise.
-    """
-    query = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
-    async with conn.execute(query, (table,)) as cursor:
-        return await cursor.fetchone() is not None
 
 
 async def list_loops_via_daemon_rpc(
@@ -307,97 +217,6 @@ async def list_loops_via_daemon_rpc(
         loops.append(loop_info)
 
     return loops
-
-
-async def get_most_recent(agent_name: str | None = None) -> str | None:
-    """Return the most recent loop id from local SQLite, optionally filtered by agent.
-
-    Returns:
-        Loop id (``checkpoints.thread_id``), or `None` when the database is empty.
-    """
-    async with _connect() as conn:
-        if not await _table_exists(conn, "checkpoints"):
-            return None
-
-        if agent_name:
-            query = """
-                SELECT thread_id FROM checkpoints
-                WHERE json_extract(metadata, '$.agent_name') = ?
-                ORDER BY checkpoint_id DESC
-                LIMIT 1
-            """
-            params: tuple = (agent_name,)
-        else:
-            query = "SELECT thread_id FROM checkpoints ORDER BY checkpoint_id DESC LIMIT 1"
-            params = ()
-
-        async with conn.execute(query, params) as cursor:
-            row = await cursor.fetchone()
-            return row[0] if row else None
-
-
-async def get_loop_agent(loop_id: str) -> str | None:
-    """Return ``agent_name`` metadata for a loop id.
-
-    Returns:
-        Agent name from checkpoint row metadata, or `None` if not found.
-    """
-    async with _connect() as conn:
-        if not await _table_exists(conn, "checkpoints"):
-            return None
-
-        query = """
-            SELECT json_extract(metadata, '$.agent_name')
-            FROM checkpoints
-            WHERE thread_id = ?
-            LIMIT 1
-        """
-        async with conn.execute(query, (loop_id,)) as cursor:
-            row = await cursor.fetchone()
-            return row[0] if row else None
-
-
-async def loop_exists(loop_id: str) -> bool:
-    """Return True if any checkpoint row exists for this loop id.
-
-    Returns:
-        True if a checkpoint row exists, False otherwise.
-    """
-    async with _connect() as conn:
-        if not await _table_exists(conn, "checkpoints"):
-            return False
-
-        query = "SELECT 1 FROM checkpoints WHERE thread_id = ? LIMIT 1"
-        async with conn.execute(query, (loop_id,)) as cursor:
-            row = await cursor.fetchone()
-            return row is not None
-
-
-async def find_similar_loops(loop_id: str, limit: int = 3) -> list[str]:
-    """Find loop ids that share the given prefix.
-
-    Args:
-        loop_id: Prefix to match against `checkpoints.thread_id`.
-        limit: Maximum number of matches.
-
-    Returns:
-        Matching loop ids (SQLite ``thread_id`` column values).
-    """
-    async with _connect() as conn:
-        if not await _table_exists(conn, "checkpoints"):
-            return []
-
-        query = """
-            SELECT DISTINCT thread_id
-            FROM checkpoints
-            WHERE thread_id LIKE ?
-            ORDER BY thread_id
-            LIMIT ?
-        """
-        prefix = loop_id + "%"
-        async with conn.execute(query, (prefix, limit)) as cursor:
-            rows = await cursor.fetchall()
-            return [r[0] for r in rows]
 
 
 def get_loop_limit() -> int:

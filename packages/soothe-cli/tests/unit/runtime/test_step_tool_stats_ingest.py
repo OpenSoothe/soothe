@@ -47,6 +47,12 @@ def test_should_ingest_tool_for_step_stats_without_args() -> None:
         args_meaningful=False,
     )
     assert should_ingest_tool_for_step_stats(
+        is_step_card_scope=True,
+        tool_name="grep",
+        tool_call_id="grep:0",
+        args_meaningful=False,
+    )
+    assert should_ingest_tool_for_step_stats(
         is_step_card_scope=False,
         tool_name="read_file",
         tool_call_id="BCO_01:t0:read_file:1",
@@ -63,6 +69,12 @@ def test_should_ingest_tool_for_step_stats_without_args() -> None:
         tool_name="grep",
         tool_call_id="BCO_01:s:grep:0",
         args_meaningful=True,
+    )
+    assert not should_ingest_tool_for_step_stats(
+        is_step_card_scope=True,
+        tool_name="task",
+        tool_call_id="BCO_01:s:task:0",
+        args_meaningful=False,
     )
 
 
@@ -90,6 +102,44 @@ async def test_wire_update_registers_main_step_tool_with_empty_args() -> None:
         pending_tool_calls_lc={},
     )
     assert handled is True
+    assert card.has_tool_call_row("BCO_01:s:read_file:0")
+    assert card._stats_title_suffix() == " · 1 tool"
+
+
+@pytest.mark.asyncio
+async def test_wire_update_buffers_main_tool_before_step_card() -> None:
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    router = StepTaskRouter()
+    card = CognitionStepMessage("BCO-01", "Read spec", id="stp-wire-buffer")
+    tool_to_step: dict[str, object] = {}
+    display: dict[str, object] = {}
+
+    handled = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "BCO_01:s:read_file:0",
+            "name": "read_file",
+            "args": {},
+        },
+        ns_key=(),
+        pending_tool_calls_lc={},
+    )
+    assert handled is True
+    assert not card.has_tool_call_row("BCO_01:s:read_file:0")
+
+    adapter._current_step_messages["BCO-01"] = card
+    router.on_step_started("BCO-01")
+    routed = router.route_pending_main_tools(
+        adapter._current_step_messages,
+        tool_to_step,
+        display,
+    )
+    assert routed == 1
     assert card.has_tool_call_row("BCO_01:s:read_file:0")
     assert card._stats_title_suffix() == " · 1 tool"
 

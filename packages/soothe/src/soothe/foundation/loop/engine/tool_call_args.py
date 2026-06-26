@@ -163,7 +163,10 @@ def filter_redundant_stream_tool_updates(
 
 def wire_updates_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
     """Build ``soothe.stream.tool_call.update`` payloads from a post-backfill AI message."""
-    from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
+    from soothe_sdk.ux.stream_tool_wire import (
+        tool_call_update_event,
+        unified_tool_update_allowed_without_args,
+    )
 
     if not isinstance(msg, (AIMessage, AIMessageChunk)):
         return []
@@ -172,14 +175,16 @@ def wire_updates_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
 
     def _append(tid: str, name: str, args: dict[str, Any]) -> None:
         key = tid.strip()
-        if not key or key in seen or not args:
+        if not key or key in seen:
+            return
+        if not args and not unified_tool_update_allowed_without_args(key):
             return
         seen.add(key)
         out.append(
             tool_call_update_event(
                 tool_call_id=key,
                 name=name.strip() or "tool",
-                args=dict(args),
+                args=dict(args or {}),
             )
         )
 
@@ -187,19 +192,21 @@ def wire_updates_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
         if not isinstance(tc, dict):
             continue
         tid = str(tc.get("id") or "").strip()
+        name = str(tc.get("name") or "").strip()
+        if not tid or not name:
+            continue
         args = coerce_tool_call_args(tc.get("args"))
-        if args:
-            _append(tid, str(tc.get("name") or ""), args)
+        _append(tid, name, args)
 
     for ch in getattr(msg, "tool_call_chunks", None) or []:
         if not isinstance(ch, dict):
             continue
         tid = str(ch.get("id") or "").strip()
-        if not tid or tid in seen:
+        name = str(ch.get("name") or "").strip()
+        if not tid or not name or tid in seen:
             continue
         args = _chunk_args_dict(ch)
-        if args:
-            _append(tid, str(ch.get("name") or ""), args)
+        _append(tid, name, args)
 
     return out
 
