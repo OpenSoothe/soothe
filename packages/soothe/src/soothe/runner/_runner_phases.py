@@ -202,7 +202,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-            await self._agent.graph.aupdate_state(
+            await self._materialized_core_agent().graph.aupdate_state(
                 config,
                 {"messages": [HumanMessage(content=query), AIMessage(content=response)]},
                 as_node="model",
@@ -217,17 +217,28 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         """Lazily initialize the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
 
         The checkpointer is created from ``self._checkpointer_pool`` and replaces
-        the placeholder on ``self._agent.graph``.  Must be called before
+        the placeholder on ``self._core_agent.graph``.  Must be called before
         any ``core_agent.astream()`` that needs persistent thread state.
 
         Raises ConfigurationError if checkpointer initialization fails.
         """
+        from soothe.foundation.core.agent._lazy import LazyCoreAgent
+
+        if isinstance(self._core_agent, LazyCoreAgent) and not self._core_agent.is_materialized:
+            return
+
         if self._checkpointer_initialized or self._checkpointer_pool is None:
             return
 
+        agent = (
+            self._core_agent.materialize()
+            if isinstance(self._core_agent, LazyCoreAgent)
+            else self._core_agent
+        )
+
         # Check if agent supports LangGraph checkpointer (has .graph property)
         try:
-            _ = self._agent.graph
+            _ = agent.graph
         except NotImplementedError:
             # Agent doesn't use LangGraph (e.g., ClaudeCoreAgent)
             logger.debug("Agent does not support LangGraph checkpointer, skipping initialization")
@@ -252,7 +263,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 await checkpointer.setup()
 
                 self._checkpointer = checkpointer
-                self._agent.graph.checkpointer = checkpointer
+                agent.graph.checkpointer = checkpointer
                 self._checkpointer_initialized = True
                 logger.info(
                     "AsyncSqliteSaver created and tables initialized at %s", self._checkpointer_pool
@@ -313,7 +324,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 await checkpointer.setup()
 
                 self._checkpointer = checkpointer
-                self._agent.graph.checkpointer = checkpointer
+                self._materialized_core_agent().graph.checkpointer = checkpointer
                 self._checkpointer_initialized = True
                 logger.info(
                     "AsyncPostgresSaver pool open and tables initialized, checkpointer replaced"
@@ -394,7 +405,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-            state = await self._agent.graph.aget_state(config)
+            state = await self._materialized_core_agent().graph.aget_state(config)
             if state and state.values:
                 messages = state.values.get("messages", [])
                 return list(messages[-limit:]) if messages else []

@@ -196,6 +196,14 @@ class WorkerPoolConfig(BaseModel):
         le=86400,
         description="Discard stats window if no dispatch activity for this long (seconds)",
     )
+    reuse_runner: bool = Field(
+        default=True,
+        description="Reuse one SootheRunner per worker process between requests (IG-506)",
+    )
+    warmup_runner: bool = Field(
+        default=True,
+        description="Create cached SootheRunner at worker startup when reuse_runner is true",
+    )
 
     def get_effective_pool_size(self) -> int:
         """Get effective max pool size, ensuring max >= min."""
@@ -341,6 +349,14 @@ class ThreadPoolConfig(BaseModel):
         ge=1,
         le=60,
         description="Timeout for thread startup and event loop init (seconds)",
+    )
+    reuse_runner: bool = Field(
+        default=True,
+        description="Reuse one SootheRunner per worker thread between requests (IG-506)",
+    )
+    warmup_runner: bool = Field(
+        default=True,
+        description="Create cached SootheRunner at worker startup when reuse_runner is true",
     )
 
     def get_effective_pool_size(self) -> int:

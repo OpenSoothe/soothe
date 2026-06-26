@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.foundation.core.agent import CoreAgent
+    from soothe.foundation.core.agent._lazy import LazyCoreAgent
     from soothe.middleware.identity import IdentityRuntime
     from soothe.protocols.memory import MemoryProtocol
 
@@ -96,11 +97,14 @@ class SootheRunner(
         import time
 
         from soothe.foundation.core.agent import create_soothe_agent
+        from soothe.foundation.core.agent._lazy import LazyCoreAgent
         from soothe.foundation.loop.intention import IntentClassifier
         from soothe.protocols.concurrency import ConcurrencyPolicy
         from soothe.runner.resolver import (
             resolve_checkpointer,
             resolve_durability,
+            resolve_planner,
+            resolve_policy,
         )
 
         from ._concurrency import ConcurrencyController
@@ -108,6 +112,7 @@ class SootheRunner(
         init_start = time.perf_counter()
 
         self._config = config or SootheConfig()
+        self._identity_runtime = identity_runtime
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
         # Initialize intent classifier (IG-226: core.intention module).
@@ -147,25 +152,47 @@ class SootheRunner(
         checkpointer_ms = (time.perf_counter() - checkpointer_start) * 1000
         logger.debug("Checkpointer resolved in %.1fms", checkpointer_ms)
 
-        agent_start = time.perf_counter()
-        self._agent: CoreAgent = create_soothe_agent(
-            self._config,
-            checkpointer=self._checkpointer,
-            identity_runtime=identity_runtime,
+        default_model_instance = None
+        try:
+            default_model_instance = self._config.create_chat_model("default")
+        except Exception:
+            logger.debug("Default chat model unavailable for planner resolution", exc_info=True)
+
+        self._planner: PlannerProtocol | None = resolve_planner(
+            self._config, default_model_instance
         )
-        agent_ms = (time.perf_counter() - agent_start) * 1000
-        logger.info("CoreAgent created in %.1fms", agent_ms)
+        self._policy: PolicyProtocol | None = resolve_policy(self._config)
+        self._memory: MemoryProtocol | None = None
 
-        # Access protocols via CoreAgent typed properties
-        self._memory: MemoryProtocol | None = self._agent.memory
-        self._planner: PlannerProtocol | None = self._agent.planner
-        self._policy: PolicyProtocol | None = self._agent.policy
+        lazy_core_agent = self._config.agent.runtime.lazy_core_agent
 
-        # RFC-625: GoalEngine deleted, ContextEngine is sole source of truth.
-        # The runner no longer holds a GoalEngine reference. Goal management
-        # is handled by ContextEngine in the daemon's AutopilotService.
-        # HTTP-submitted goals go through the daemon; autonomous CLI runs
-        # use the daemon's AutopilotService via the runner factory.
+        def _build_core_agent() -> CoreAgent:
+            agent_start = time.perf_counter()
+            agent = create_soothe_agent(
+                self._config,
+                checkpointer=self._checkpointer,
+                identity_runtime=self._identity_runtime,
+            )
+            agent_ms = (time.perf_counter() - agent_start) * 1000
+            logger.info("CoreAgent created in %.1fms", agent_ms)
+            self._memory = agent.memory
+            if self._planner is None:
+                self._planner = agent.planner
+            if self._policy is None:
+                self._policy = agent.policy
+            return agent
+
+        if lazy_core_agent:
+            self._core_agent: CoreAgent | LazyCoreAgent = LazyCoreAgent(
+                _build_core_agent,
+                planner=self._planner,
+                policy=self._policy,
+                config=self._config,
+                materialize_hook=lambda _agent: self._ensure_checkpointer_initialized(),
+            )
+            logger.info("[Init] LazyCoreAgent configured (IG-506)")
+        else:
+            self._core_agent = _build_core_agent()
 
         durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)
@@ -212,6 +239,33 @@ class SootheRunner(
 
         total_ms = (time.perf_counter() - init_start) * 1000
         logger.info("SootheRunner initialized in %.1fms", total_ms)
+
+    @property
+    def _agent(self) -> CoreAgent | LazyCoreAgent:
+        """Layer-1 agent handle (lazy or materialized)."""
+        return self._core_agent
+
+    async def _materialize_core_agent(self) -> CoreAgent:
+        """Ensure CoreAgent graph is compiled and checkpointer is attached."""
+        from soothe.foundation.core.agent._lazy import LazyCoreAgent
+
+        if isinstance(self._core_agent, LazyCoreAgent):
+            return await self._core_agent.amaterialize()
+        await self._ensure_checkpointer_initialized()
+        return self._core_agent
+
+    def _materialized_core_agent(self) -> CoreAgent:
+        """Return a compiled CoreAgent, materializing lazily when needed."""
+        from soothe.foundation.core.agent._lazy import LazyCoreAgent
+
+        if isinstance(self._core_agent, LazyCoreAgent):
+            return self._core_agent.materialize()
+        return self._core_agent
+
+    def prepare_for_request(self) -> None:
+        """Reset per-request runner mirrors without recompiling CoreAgent (IG-506)."""
+        self._clear_query_scoped_runner_state()
+        self._client_loop_id_for_stream = None
 
     # -- public helpers -----------------------------------------------------
 
@@ -430,12 +484,12 @@ class SootheRunner(
             State values keyed by channel name. Empty when no checkpoint exists.
         """
         # ClaudeCoreAgent doesn't use LangGraph checkpointing
-        if not hasattr(self._agent, "graph"):
+        if not hasattr(self._core_agent, "graph"):
             return {}
 
         await self._ensure_checkpointer_initialized()
         config = {"configurable": {"thread_id": thread_id}}
-        state = await self._agent.graph.aget_state(config)
+        state = await self._materialized_core_agent().graph.aget_state(config)
         if state and state.values:
             return dict(state.values)
         return {}
@@ -458,12 +512,12 @@ class SootheRunner(
                 written at the current checkpoint version.
         """
         # ClaudeCoreAgent doesn't use LangGraph checkpointing
-        if not hasattr(self._agent, "graph"):
+        if not hasattr(self._core_agent, "graph"):
             return
 
         await self._ensure_checkpointer_initialized()
         config = {"configurable": {"thread_id": thread_id}}
-        await self._agent.graph.aupdate_state(config, values, as_node=as_node)
+        await self._materialized_core_agent().graph.aupdate_state(config, values, as_node=as_node)
 
     async def _close_attached_store(self, owner: Any | None) -> None:
         """Close a nested `_store` field when available."""
