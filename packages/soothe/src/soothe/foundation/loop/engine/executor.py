@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.types import Command, Interrupt
 from soothe_sdk.utils import get_outcome_type
+from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
@@ -1858,11 +1859,8 @@ class Executor:
                 ):
                     msg0 = data_chunk[0]
                     task_idx: int | None = None
-                    # IG-514: execute:{run_id} namespace is step-level, not subgraph.
-                    # Only assign task_idx for true subgraph namespaces (tools:...).
-                    if _ns_chunk and not (
-                        len(_ns_chunk) == 1 and str(_ns_chunk[0] or "").startswith("execute:")
-                    ):
+                    # IG-514: execute:* namespaces (root or sole-child /N reuse) are step-level.
+                    if _ns_chunk and not is_step_level_execute_namespace_key(_ns_chunk):
                         task_idx = subgraph_task_binder.task_idx_for_namespace(stream_ns)
                     if isinstance(msg0, (AIMessage, AIMessageChunk)):
                         filled_msg = _backfill_tool_calls_args_from_chunks(msg0)
@@ -2096,7 +2094,9 @@ class Executor:
                 # Rewrite provider ID to unified ID for args lookup (IG-416).
                 # Namespaced ToolMessages may have provider IDs; subgraph_placeholder_update
                 # requires unified IDs. Ingest from invocation registry and map to unified ID.
-                subgraph_task_idx = subgraph_task_binder.task_idx_for_namespace(ns_tuple)
+                subgraph_task_idx: int | None = None
+                if ns_tuple and not is_step_level_execute_namespace_key(ns_tuple):
+                    subgraph_task_idx = subgraph_task_binder.task_idx_for_namespace(ns_tuple)
                 tool_args.ingest_invocation_registry(raw_tcid)
                 rewritten_tm = _rewrite_tool_message_tool_call_id(
                     tm, step_id or "", task_idx=subgraph_task_idx
@@ -2108,15 +2108,19 @@ class Executor:
                     if raw_args:
                         tool_args.by_id[unified_tcid] = dict(raw_args)
                 messages.append(rewritten_tm)
+                is_execute_ns = is_step_level_execute_namespace_key(ns_tuple)
                 logger.info(
-                    "[SubagentTool] ns=%s name=%s id=%s -> unified=%s preview=%s",
+                    "[%s] ns=%s name=%s id=%s -> unified=%s preview=%s",
+                    "ExecuteTool" if is_execute_ns else "SubagentTool",
                     "/".join(ns_tuple) if ns_tuple else "()",
                     tname,
                     raw_tcid,
                     unified_tcid,
                     body_preview,
                 )
-                if unified_tcid and tname != "task":
+                # Step-level execute tools get wire updates from the AIMessage/ToolMessage
+                # tuple path above; placeholder updates here are for ``tools:`` subgraphs only.
+                if unified_tcid and tname != "task" and not is_execute_ns:
                     tool_ev = tool_args.subgraph_placeholder_update(unified_tcid, tname)
                     if tool_ev is not None:
                         subgraph_tool_updates.append((ns_tuple, tool_ev))

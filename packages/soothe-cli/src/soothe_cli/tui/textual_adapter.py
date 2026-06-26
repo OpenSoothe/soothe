@@ -64,12 +64,12 @@ from soothe_cli.runtime.parse.message_processing import (
 )
 from soothe_cli.runtime.parse.tool_call_resolution import (
     build_streaming_args_overlay,
-    is_execute_step_namespace,
     is_step_card_tool_scope,
     materialize_ai_blocks_with_resolved_tools,
     merge_tool_display_args,
     predict_main_execute_tool_call_id,
     resolve_stream_tool_name,
+    resolve_tool_result_row_key,
     should_ingest_tool_for_step_stats,
     tool_args_meaningful,
 )
@@ -505,20 +505,14 @@ def _log_step_completion_stats(
     """Compact step-completion trace (DEBUG only)."""
     rows = getattr(widget, "_rows", []) or []
     task_rows = sum(1 for r in rows if getattr(r, "is_task_row", False))
-    subgraph_rows = sum(
-        1
-        for r in rows
-        if getattr(r, "parent_tool_call_id", None) or getattr(r, "is_task_row", False)
-    )
     log.debug(
-        "[Step] %s done success=%s duration_ms=%d tools=%d rows=%d task=%d subgraph=%d",
+        "[Step] %s done success=%s duration_ms=%d tools=%d rows=%d task=%d",
         step_id,
         success,
         duration_ms,
         tool_call_count,
         len(rows),
         task_rows,
-        subgraph_rows,
     )
 
 
@@ -869,7 +863,6 @@ def _register_main_tool_on_step_card(
     *,
     raw_args: str = "",
     is_task_row: bool = False,
-    parent_tool_call_id: str | None = None,
 ) -> None:
     """Register a main-graph tool row and promote the step card when authorized (RFC-628)."""
     tcid = str(tool_call_id).strip()
@@ -882,7 +875,6 @@ def _register_main_tool_on_step_card(
             args,
             raw_args=raw_args,
             is_task_row=is_task_row,
-            parent_tool_call_id=parent_tool_call_id,
         )
     router.maybe_promote_step_to_running(
         step_w,
@@ -927,8 +919,8 @@ def _fallback_ingest_subgraph_tool_on_step_card(
 ) -> bool:
     """Best-effort fallback when namespace routing cannot resolve a parent task.
 
-    This keeps subgraph tool activity visible on the step card (as orphan rows)
-    instead of dropping it entirely when task binding arrives late or never.
+    This keeps subgraph tool activity visible on the step card until a SubAgent
+    card is registered, instead of dropping it when task binding arrives late.
     """
     lookup = str(lookup_id or "").strip()
     display = str(display_key or "").strip()
@@ -1219,7 +1211,7 @@ async def apply_tool_call_wire_update(
     if str(data.get("type", "")) != STREAM_TOOL_CALL_UPDATE:
         return False
 
-    if ns_key and not is_execute_step_namespace(ns_key):
+    if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
         router.on_subgraph_namespace(ns_key)
 
     tcid = str(data.get("tool_call_id", "")).strip()
@@ -1273,7 +1265,7 @@ async def apply_tool_call_wire_update(
             "is_main": is_step_scope,
         }
 
-    if ns_key and not is_execute_step_namespace(ns_key):
+    if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
         alias_subgraph_pending_and_overlay(pending_tool_calls_lc, overlay, router, ns_key)
 
     display_args = merge_tool_display_args(
@@ -1429,7 +1421,6 @@ def _detach_step_card_from_adapter(
     stale_tool_ids = [k for k, sw in adapter._tool_to_step.items() if sw is widget]
     for k in stale_tool_ids:
         adapter._tool_to_step.pop(k, None)
-    router.clear_step_tool_bindings(step_id)
     for k, parent in list(adapter._tool_display_by_call_id.items()):
         if parent is widget:
             adapter._tool_display_by_call_id.pop(k, None)
@@ -2164,7 +2155,7 @@ async def execute_task_textual(
                             message, metadata = data
                             message = _normalize_lc_stream_message(message)
 
-                        if ns_key and not is_execute_step_namespace(ns_key):
+                        if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
                             router.on_subgraph_namespace(ns_key)
 
                         # Filter out summarization model output, but keep UI feedback.
@@ -2218,11 +2209,11 @@ async def execute_task_textual(
                             record = file_op_tracker.complete_with_message(message)
 
                             sid = str(tool_id) if tool_id else ""
-                            if sid and not is_main_agent:
-                                ts_row = router.resolve_task_scope(ns_key)
-                                row_key = row_key_for_subgraph_tool(ns_key, sid, task_scope=ts_row)
-                            else:
-                                row_key = sid
+                            row_key = resolve_tool_result_row_key(
+                                ns_key=ns_key,
+                                tool_call_id=sid,
+                                task_scope=router.resolve_task_scope(ns_key),
+                            )
                             output_str = tool_result.output_display
                             if row_key:
                                 step_w = adapter._tool_to_step.pop(row_key, None)
@@ -3132,8 +3123,6 @@ async def execute_task_textual(
                                         ]
                                         for k in stale_tool_ids:
                                             adapter._tool_to_step.pop(k, None)
-                                        # Clean up tool-to-step bindings for this step
-                                        router.clear_step_tool_bindings(step_id)
                                         for k, parent in list(
                                             adapter._tool_display_by_call_id.items()
                                         ):
@@ -3232,7 +3221,7 @@ async def execute_task_textual(
                                 await adapter._mount_message(plan_widget)
                                 continue
 
-                            if ns_key:
+                            if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
                                 router.on_subgraph_namespace(ns_key)
                             task_scope = router.resolve_task_scope(ns_key)
                             if (

@@ -17,7 +17,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+from soothe_sdk.ux.execute_namespace import (
+    is_root_execute_namespace_key,
+    is_step_level_execute_namespace_key,
+)
+from soothe_sdk.ux.task_namespace import (
+    TaskScope,
+    parse_unified_tool_call_id,
+    row_key_for_subgraph_tool,
+)
 
 from soothe_cli.runtime.parse.message_processing import (
     extract_tool_args_dict,
@@ -40,15 +48,32 @@ def tool_args_meaningful(raw: Any) -> bool:
 
 
 def is_execute_step_namespace(ns_key: tuple[str, ...]) -> bool:
-    """True for CoreAgent execute root namespace (``execute:{run_id}``), not nested ``tools:`` subgraphs."""
-    if len(ns_key) != 1:
-        return False
-    return str(ns_key[0] or "").startswith("execute:")
+    """True for CoreAgent execute root namespace (``execute:{run_id}``), not nested ``/N`` or ``tools:`` subgraphs."""
+    return is_root_execute_namespace_key(ns_key)
 
 
 def is_step_card_tool_scope(*, ns_key: tuple[str, ...]) -> bool:
     """True when tool activity belongs on the step card as main execute-graph tools."""
-    return ns_key == () or is_execute_step_namespace(ns_key)
+    return ns_key == () or is_step_level_execute_namespace_key(ns_key)
+
+
+def resolve_tool_result_row_key(
+    *,
+    ns_key: tuple[str, ...],
+    tool_call_id: str,
+    task_scope: TaskScope | None = None,
+) -> str:
+    """Row key for completing a tool row from a streamed ``ToolMessage``.
+
+    Execute-graph namespaces (``()`` or ``execute:…``) keep the unified ``s:`` id.
+    Subagent ``tools:…`` namespaces remap via :func:`row_key_for_subgraph_tool`.
+    """
+    sid = str(tool_call_id or "").strip()
+    if not sid:
+        return ""
+    if is_step_card_tool_scope(ns_key=ns_key):
+        return sid
+    return row_key_for_subgraph_tool(ns_key, sid, task_scope=task_scope)
 
 
 def is_main_step_level_tool_call_id(tool_call_id: str) -> bool:
@@ -546,6 +571,7 @@ __all__ = [
     "merge_tool_display_args",
     "resolve_stream_tool_name",
     "resolve_tool_invocations_for_display",
+    "resolve_tool_result_row_key",
     "should_ingest_tool_for_step_stats",
     "tool_args_meaningful",
 ]

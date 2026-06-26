@@ -760,8 +760,7 @@ class CognitionStepMessage(Vertical):
         args: dict[str, Any],
         *,
         raw_args: str = "",
-        parent_tool_call_id: str | None = None,  # IG-419
-        is_task_row: bool = False,  # IG-419
+        is_task_row: bool = False,
     ) -> None:
         """Register a new tool row (pending).
 
@@ -771,15 +770,12 @@ class CognitionStepMessage(Vertical):
             args: Parsed tool arguments.
             raw_args: Raw JSON args string from streaming (stored on the row for
                 later merge when args arrive incrementally).
-            parent_tool_call_id: IG-419: Link to parent task row for nesting.
-            is_task_row: IG-419: Mark as task delegation parent row.
+            is_task_row: Mark as task delegation row (flat marker on step card).
         """
         tcid = str(tool_call_id).strip()
         if not tcid:
             return
-        # Only main-graph step-level ``task`` delegations are parent rows. Subgraph
-        # ``{step}:t{n}:task:…`` streams must stay nested children (or be skipped).
-        if not is_task_row and parent_tool_call_id is None:
+        if not is_task_row:
             _, type_code, _, _ = parse_unified_tool_call_id(tcid)
             if is_step_level_task_tool_id(tcid) or (
                 (tool_name or "").strip() == "task" and type_code != "t"
@@ -825,12 +821,11 @@ class CognitionStepMessage(Vertical):
             tool_name=(tool_name or "tool").strip() or "tool",
             args=row_args,
             phase="pending",
-            parent_tool_call_id=parent_tool_call_id,
             is_task_row=is_task_row,
         )
         if not is_task_row:
             _, type_code, _, _ = parse_unified_tool_call_id(tcid)
-            if type_code == "t" or parent_tool_call_id:
+            if type_code == "t":
                 row.phase = "running"
                 row.started_at = time()
         self._rows.append(row)
