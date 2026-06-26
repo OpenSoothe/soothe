@@ -336,6 +336,10 @@ agent:
   code_interpreter:
     enabled: false # opt-in; set to true to enable
     ptc_allowlist: [] # tools exposed via tools.* namespace (empty = no PTC)
+
+  # === RUNTIME PERFORMANCE (IG-506) ===
+  runtime:
+    lazy_core_agent: true # defer create_deep_agent until first execute/quiz access
     memory_limit_mb: 128
     timeout_seconds: 30
     max_ptc_calls: 50

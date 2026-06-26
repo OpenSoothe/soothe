@@ -1930,6 +1930,19 @@ class ProgressiveMCPConfig(BaseModel):
     )
 
 
+class AgentRuntimeConfig(BaseModel):
+    """CoreAgent startup and materialization tuning (IG-506).
+
+    Args:
+        lazy_core_agent: Defer ``create_deep_agent`` until first Layer-1 execution.
+    """
+
+    lazy_core_agent: bool = Field(
+        default=True,
+        description="Defer CoreAgent graph compile until first execute/quiz access",
+    )
+
+
 class AgentConfig(BaseModel):
     """Unified agent configuration with progressive disclosure.
 
@@ -2010,6 +2023,12 @@ class AgentConfig(BaseModel):
         description="Code interpreter middleware configuration (IG-423)",
     )
     """Embedded QuickJS interpreter for programmatic tool calling (opt-in)."""
+
+    # === RUNTIME PERFORMANCE (IG-506) ===
+    runtime: AgentRuntimeConfig = Field(
+        default_factory=AgentRuntimeConfig,
+        description="CoreAgent cold-start and materialization tuning",
+    )
 
     # === CLARIFICATION RELAY (RFC-622) ===
     clarification: ClarificationConfig = Field(

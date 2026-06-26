@@ -270,13 +270,18 @@ def build_soothe_middleware_stack(
     logger.debug("[Middleware] Execution hints enabled")
 
     # 6. Code interpreter (embedded QuickJS for programmatic tool calling)
-    if config.agent.code_interpreter.enabled:
+    ci_config = config.agent.code_interpreter
+    if ci_config.enabled and ci_config.ptc_allowlist:
         from .code_interpreter import CodeInterpreterMiddleware
 
         stack.append(CodeInterpreterMiddleware(config=config))
         logger.info(
             "[Middleware] Code interpreter enabled with ptc_allowlist=%s",
-            config.agent.code_interpreter.ptc_allowlist,
+            ci_config.ptc_allowlist,
+        )
+    elif ci_config.enabled:
+        logger.info(
+            "[Middleware] Code interpreter skipped (enabled but empty ptc_allowlist; IG-506)"
         )
     else:
         logger.debug("[Middleware] Code interpreter disabled (opt-in)")

@@ -123,3 +123,19 @@ def test_no_config_uses_defaults() -> None:
     assert middleware._memory_limit_mb == 128
     assert middleware._timeout_seconds == 30
     assert middleware._max_ptc_calls == 50
+
+
+def test_middleware_stack_skips_code_interpreter_without_ptc_allowlist() -> None:
+    """Enabled CI with empty allowlist must not mount middleware (IG-506)."""
+    from soothe.middleware._builder import build_soothe_middleware_stack
+
+    config = SootheConfig(
+        agent={
+            "code_interpreter": {
+                "enabled": True,
+                "ptc_allowlist": [],
+            }
+        }
+    )
+    stack = build_soothe_middleware_stack(config, policy=None)
+    assert not any(type(m).__name__ == "CodeInterpreterMiddleware" for m in stack)
