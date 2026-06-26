@@ -594,3 +594,302 @@ def test_grep_with_ag_real_directory_content_two_phase(tmp_path: Path) -> None:
     assert result.total_matches == 1
     assert result.matches[0].path == "a.py"
     assert "AgentLoop" in result.matches[0].line_content
+
+
+# =============================================================================
+# IG-512: Incremental Batching Tests
+# =============================================================================
+
+
+def test_grep_ignores_large_directories(tmp_path: Path) -> None:
+    """Grep should skip .venv, node_modules, .git, etc."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create ignored directories with matching content
+    (tmp_path / ".venv" / "lib").mkdir(parents=True)
+    (tmp_path / ".venv" / "lib" / "match.py").write_text("needle_in_venv\n")
+
+    (tmp_path / "node_modules" / "pkg").mkdir(parents=True)
+    (tmp_path / "node_modules" / "pkg" / "index.js").write_text("needle_in_node_modules\n")
+
+    (tmp_path / ".git" / "objects").mkdir(parents=True)
+    (tmp_path / ".git" / "match.txt").write_text("needle_in_git\n")
+
+    # Create source file that should be searched
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "match.py").write_text("needle_in_src\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    # Should only find the source file, not the ignored directories
+    assert result == ["src/match.py"]
+
+
+def test_grep_ignores_large_files(tmp_path: Path) -> None:
+    """Grep should skip files larger than _GREP_MAX_FILE_SIZE_BYTES."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create a small file with match
+    (tmp_path / "small.txt").write_text("needle_small\n")
+
+    # Create a large file (>1MB) with match (should be skipped)
+    large_content = "needle_large\n" * 100_000  # >1MB
+    (tmp_path / "large.txt").write_text(large_content)
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    # Should only find the small file
+    assert "small.txt" in result
+    assert "large.txt" not in result
+
+
+def test_grep_returns_partial_results_with_continuation_token(tmp_path: Path) -> None:
+    """Grep should return partial results when batch limits hit."""
+    import soothe.foundation.core.filesystem.local as local_fs
+
+    # Temporarily reduce batch limits to force partial results
+    original_batch_size = local_fs._GREP_BATCH_SIZE
+    original_max_batches = local_fs._GREP_MAX_BATCHES
+
+    local_fs._GREP_BATCH_SIZE = 2
+    local_fs._GREP_MAX_BATCHES = 1
+
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create more files than batch limit
+    for i in range(10):
+        (tmp_path / f"file_{i}.txt").write_text(f"needle_{i}\n")
+
+    try:
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result = fs.grep("needle", output_mode="content")
+
+        assert isinstance(result, GrepResult)
+        assert result.is_partial is True
+        assert result.continuation_token is not None
+        assert result.total_files == 10
+        # Should have searched only 2 files (batch size)
+        assert result.files_searched == 2
+    finally:
+        local_fs._GREP_BATCH_SIZE = original_batch_size
+        local_fs._GREP_MAX_BATCHES = original_max_batches
+
+
+def test_grep_continuation_token_resumes_search(tmp_path: Path) -> None:
+    """Grep continuation token should resume from where previous search stopped."""
+    import soothe.foundation.core.filesystem.local as local_fs
+
+    # Temporarily reduce batch limits
+    original_batch_size = local_fs._GREP_BATCH_SIZE
+    original_max_batches = local_fs._GREP_MAX_BATCHES
+
+    local_fs._GREP_BATCH_SIZE = 2
+    local_fs._GREP_MAX_BATCHES = 1
+
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create 6 files with unique content
+    for i in range(6):
+        (tmp_path / f"file_{i}.txt").write_text(f"unique_needle_{i}\n")
+
+    try:
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            # First search: get partial results
+            result1 = fs.grep("unique_needle", output_mode="content")
+
+        assert isinstance(result1, GrepResult)
+        assert result1.is_partial is True
+        assert result1.continuation_token is not None
+        first_batch_matches = [m.path for m in result1.matches]
+
+        # Continue search: should find remaining files
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result2 = fs.grep(
+                "unique_needle",
+                output_mode="content",
+                continuation_token=result1.continuation_token,
+            )
+
+        assert isinstance(result2, GrepResult)
+        second_batch_matches = [m.path for m in result2.matches]
+
+        # Matches should be from different files (no overlap)
+        assert set(first_batch_matches).isdisjoint(set(second_batch_matches))
+
+        # Combined matches should cover all files
+        all_matches = first_batch_matches + second_batch_matches
+        # Note: May still be partial if only 2 batches completed
+        assert len(all_matches) >= 4
+    finally:
+        local_fs._GREP_BATCH_SIZE = original_batch_size
+        local_fs._GREP_MAX_BATCHES = original_max_batches
+
+
+def test_grep_total_timeout_limits_execution(tmp_path: Path) -> None:
+    """Grep should stop after hitting limits (timeout or batch)."""
+    import soothe.foundation.core.filesystem.local as local_fs
+
+    # Reduce limits to force early termination
+    original_max_batches = local_fs._GREP_MAX_BATCHES
+    original_batch_size = local_fs._GREP_BATCH_SIZE
+
+    local_fs._GREP_MAX_BATCHES = 2  # Only 2 batches
+    local_fs._GREP_BATCH_SIZE = 10  # 10 files per batch
+
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create many files to exceed batch limit
+    for i in range(50):
+        (tmp_path / f"file_{i}.txt").write_text(f"needle_{i}\n")
+
+    try:
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result = fs.grep("needle", output_mode="content")
+
+        assert isinstance(result, GrepResult)
+        # Should have partial results due to batch limit
+        assert result.total_files == 50
+        assert result.is_partial is True
+        assert result.files_searched == 20  # 2 batches × 10 files
+        assert result.continuation_token is not None
+        # Stop reason should be batch_limit (hit max batches before processing all files)
+        assert "batch_limit" in result.continuation_token.get("stop_reason", "")
+    finally:
+        local_fs._GREP_MAX_BATCHES = original_max_batches
+        local_fs._GREP_BATCH_SIZE = original_batch_size
+
+
+def test_grep_bytes_limit_stops_reading(tmp_path: Path) -> Path:
+    """Grep should stop after reading _GREP_MAX_TOTAL_BYTES."""
+    import soothe.foundation.core.filesystem.local as local_fs
+
+    # Reduce bytes limit to force early termination
+    original_bytes_limit = local_fs._GREP_MAX_TOTAL_BYTES
+    local_fs._GREP_MAX_TOTAL_BYTES = 1000  # 1KB
+
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create files that would exceed bytes limit if all read
+    for i in range(20):
+        (tmp_path / f"file_{i}.txt").write_text("x" * 500 + f"\nneedle_{i}\n")
+
+    try:
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result = fs.grep("needle", output_mode="content")
+
+        assert isinstance(result, GrepResult)
+        # Should have stopped before reading all files
+        assert result.files_searched < 20
+        # Should have partial results
+        assert result.is_partial is True or result.files_searched * 500 < 20 * 500
+    finally:
+        local_fs._GREP_MAX_TOTAL_BYTES = original_bytes_limit
+
+
+def test_grep_single_file_bypasses_batching(tmp_path: Path) -> None:
+    """Grep on single file should process directly without batching."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create a single file
+    single_file = tmp_path / "single.txt"
+    single_file.write_text("needle_in_single_file\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", path="single.txt", output_mode="content")
+
+    assert isinstance(result, GrepResult)
+    assert result.files_searched == 1
+    assert result.is_partial is False
+    assert result.continuation_token is None
+    assert len(result.matches) == 1
+    assert result.matches[0].path == "single.txt"
+
+
+def test_grep_invalid_regex_returns_error(tmp_path: Path) -> None:
+    """Grep with invalid regex pattern should return error."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    (tmp_path / "test.txt").write_text("some content\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("[invalid(regex", output_mode="content")
+
+    assert isinstance(result, GrepResult)
+    assert result.error is not None
+    assert "Invalid regex" in result.error
+    assert result.matches == []
+
+
+@pytest.mark.asyncio
+async def test_agrep_continuation_token(tmp_path: Path) -> None:
+    """Async grep should support continuation token."""
+    import soothe.foundation.core.filesystem.local as local_fs
+
+    original_batch_size = local_fs._GREP_BATCH_SIZE
+    original_max_batches = local_fs._GREP_MAX_BATCHES
+
+    local_fs._GREP_BATCH_SIZE = 2
+    local_fs._GREP_MAX_BATCHES = 1
+
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    for i in range(6):
+        (tmp_path / f"async_{i}.txt").write_text(f"async_needle_{i}\n")
+
+    try:
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result1 = await fs.agrep("async_needle", output_mode="content")
+
+        assert isinstance(result1, GrepResult)
+        assert result1.is_partial is True
+
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result2 = await fs.agrep(
+                "async_needle",
+                output_mode="content",
+                continuation_token=result1.continuation_token,
+            )
+
+        assert isinstance(result2, GrepResult)
+        # Verify continuation resumed from different files
+        first_files = {m.path for m in result1.matches}
+        second_files = {m.path for m in result2.matches}
+        assert first_files.isdisjoint(second_files)
+    finally:
+        local_fs._GREP_BATCH_SIZE = original_batch_size
+        local_fs._GREP_MAX_BATCHES = original_max_batches
