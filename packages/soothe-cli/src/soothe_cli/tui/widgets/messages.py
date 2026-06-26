@@ -3239,12 +3239,12 @@ class CognitionReasonMessage(Vertical):
         """Initialize a plan-reason card.
 
         Args:
-            next_action: Deprecated; retained for message-store replay only.
+            next_action: User-facing plan-generate line (RFC-604 / IG-329).
             status: Plan status (continue, replan, done).
             iteration: Agent-loop iteration index.
             plan_action: ``keep`` or ``new`` (execution strategy).
-            assessment_reasoning: Phase-1 status justification.
-            plan_reasoning: Phase-2 plan-strategy text.
+            assessment_reasoning: Phase-1 status justification from plan-assess.
+            plan_reasoning: Legacy phase-2 strategy text (usually empty after IG-329).
             **kwargs: Passed to ``Vertical``.
         """
         super().__init__(**kwargs)
@@ -3261,6 +3261,8 @@ class CognitionReasonMessage(Vertical):
             parts.append(self._assessment_reasoning)
         if self._plan_reasoning:
             parts.append(self._plan_reasoning)
+        elif self._next_action:
+            parts.append(self._next_action)
         if len(parts) == 2:
             first = parts[0]
             if not first.endswith((".", "!", "?")):
@@ -3269,7 +3271,7 @@ class CognitionReasonMessage(Vertical):
         elif parts:
             body = parts[0]
         else:
-            body = self._next_action or ""
+            body = ""
         if self._plan_action in ("keep", "new") and body:
             body = f"{body} · {self._plan_action}"
         return _assemble_card_header(self, "", body)

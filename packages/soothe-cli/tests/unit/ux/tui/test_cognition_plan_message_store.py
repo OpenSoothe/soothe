@@ -76,3 +76,29 @@ def test_intent_only_card_round_trip() -> None:
     assert isinstance(restored, CognitionReasonMessage)
     assert restored._assessment_reasoning == "I'll help you refactor the module."
     assert restored._plan_action == ""
+
+
+def test_plan_generate_next_action_card_round_trip() -> None:
+    """Plan-generate user line is stored on next_action and restored for replay."""
+    w = CognitionReasonMessage(
+        next_action="I will first read the log file to extract loop entries.",
+        status="continue",
+        iteration=0,
+        plan_action="new",
+        assessment_reasoning="",
+        plan_reasoning="",
+        id="msg-plan-gen-01",
+    )
+    md = message_from_widget(w)
+    assert md.type == MessageType.COGNITION_REASON
+    assert (
+        md.cognition_plan_next_action == "I will first read the log file to extract loop entries."
+    )
+    assert md.cognition_plan_assessment == ""
+    assert md.cognition_plan_strategy == ""
+
+    restored = message_to_widget(md)
+    assert isinstance(restored, CognitionReasonMessage)
+    assert restored._next_action == "I will first read the log file to extract loop entries."
+    assert restored._assessment_reasoning == ""
+    assert restored._plan_reasoning == ""
