@@ -53,6 +53,8 @@ from soothe_sdk.ux.task_namespace import (
     normalize_main_task_delegation_id,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
+    task_scope_step_id,
+    task_scope_task_idx,
 )
 
 from soothe_cli.runtime.parse.message_processing import (
@@ -202,6 +204,9 @@ class TextualUIAdapter:
         self._subagent_cards_by_key: dict[str, Any] = {}
         """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
 
+        self._subagent_cards_by_key: dict[str, Any] = {}
+        """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
+
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
         """Called with total context tokens after each LLM response."""
@@ -256,6 +261,7 @@ class TextualUIAdapter:
         self._tool_to_step.clear()
         self._step_by_namespace.clear()
         self._step_router.reset_turn()
+        self._subagent_cards_by_key.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
         self._file_change_previews_shown.clear()
@@ -267,6 +273,13 @@ class TextualUIAdapter:
 
     def finalize_pending_steps_with_error(self, message: str) -> None:
         """Mark in-flight step cards as interrupted and clear tracking."""
+        for step_id in list(self._current_step_messages.keys()):
+            _finalize_subagent_cards_for_step(
+                self,
+                step_id,
+                success=False,
+                summary=message,
+            )
         for step_msg in list(self._current_step_messages.values()):
             step_msg.set_interrupted(message)
         self._current_step_messages.clear()
@@ -274,6 +287,7 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._tool_display_by_call_id.clear()
         self._step_router.reset_turn()
+        self._subagent_cards_by_key.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
 
@@ -508,6 +522,265 @@ def _log_step_completion_stats(
     )
 
 
+def _subagent_registry_key(step_id: str, task_idx: int) -> str:
+    """Registry key for a SubAgent card (``{step}:t{n}``)."""
+    return f"{step_id.strip()}:t{int(task_idx)}"
+
+
+def _lookup_subagent_card(adapter: TextualUIAdapter, display_key: str) -> Any | None:
+    """Return the SubAgent card for a unified task-level tool id, if registered."""
+    parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(str(display_key).strip())
+    if not parsed_sid or type_code != "t" or task_idx is None:
+        return None
+    return adapter._subagent_cards_by_key.get(_subagent_registry_key(parsed_sid, task_idx))
+
+
+def _ingest_tool_on_subagent_card(
+    adapter: TextualUIAdapter,
+    subagent_card: Any,
+    *,
+    display_key: str,
+    tool_name: str,
+    args: dict[str, Any],
+    raw_args: str = "",
+) -> None:
+    """Register or update one tool row on a SubAgent card."""
+    row_id = str(display_key).strip()
+    resolved_args = dict(args or {})
+    if raw_args and not extract_tool_args_dict(resolved_args):
+        parsed = extract_tool_args_dict({"_raw": raw_args})
+        if parsed:
+            resolved_args = parsed
+    if subagent_card.has_tool_call_row(row_id):
+        subagent_card.update_tool_args(row_id, resolved_args)
+    else:
+        subagent_card.add_tool_call(row_id, tool_name, resolved_args, raw_args=raw_args)
+    adapter._tool_to_step[row_id] = subagent_card
+
+
+async def _mount_subagent_card_if_needed(
+    adapter: TextualUIAdapter,
+    subagent_card: Any | None,
+) -> None:
+    """Mount a newly created SubAgent card when not already on the message list."""
+    if subagent_card is None or getattr(subagent_card, "is_mounted", False):
+        return
+    mount_result = adapter._mount_message(subagent_card)
+    if mount_result is not None:
+        await mount_result
+
+
+def _rehome_subgraph_rows_to_subagent(
+    adapter: TextualUIAdapter,
+    step_widget: Any,
+    subagent_card: Any,
+    task_idx: int,
+) -> None:
+    """Move subgraph tool rows from the step card onto the SubAgent card (RFC-628)."""
+    kept: list[Any] = []
+    moved = False
+    for row in step_widget._rows:
+        _, type_code, idx, _ = parse_unified_tool_call_id(str(row.tool_call_id).strip())
+        if type_code == "t" and idx == task_idx:
+            moved = True
+            _ingest_tool_on_subagent_card(
+                adapter,
+                subagent_card,
+                display_key=str(row.tool_call_id),
+                tool_name=str(row.tool_name or "tool"),
+                args=dict(row.args or {}),
+            )
+            if row.phase not in ("pending",):
+                phase = str(row.phase or "pending")
+                if phase == "success":
+                    subagent_card.set_tool_success(
+                        str(row.tool_call_id),
+                        str(row.output or ""),
+                        duration_ms=int(row.duration_ms or 0),
+                    )
+                elif phase in ("error", "rejected", "failed"):
+                    subagent_card.set_tool_error(
+                        str(row.tool_call_id),
+                        str(row.output or "Error"),
+                        duration_ms=int(row.duration_ms or 0),
+                    )
+                elif phase == "running":
+                    subagent_card.set_tool_running(str(row.tool_call_id))
+        else:
+            kept.append(row)
+    if moved:
+        step_widget._rows = kept
+        step_widget._sync_step_card_surface()
+
+
+def _subagent_card_tool_count(card: Any) -> int:
+    """Return tracked tool count for a SubAgent card."""
+    build_index = getattr(card, "_build_row_index", None)
+    if callable(build_index):
+        return int(build_index().total_tool_count)
+    rows = getattr(card, "_rows", None)
+    return len(rows) if isinstance(rows, list) else 0
+
+
+def _complete_subagent_card(
+    adapter: TextualUIAdapter,
+    subagent_card: Any,
+    *,
+    success: bool,
+    duration_ms: int,
+    summary: str,
+) -> None:
+    """Finalize one SubAgent card and sync its task row on the parent step."""
+    if getattr(subagent_card, "_status", "") in ("success", "error"):
+        return
+    start = getattr(subagent_card, "_start_time", None)
+    dur = duration_ms
+    if dur <= 0 and start is not None:
+        dur = int((time.time() - start) * 1000)
+    tool_count = _subagent_card_tool_count(subagent_card)
+    subagent_card.set_complete(success, dur, tool_count, summary)
+    parent_step_id = str(getattr(subagent_card, "_parent_step_id", "") or "").strip()
+    parent_step = adapter._current_step_messages.get(parent_step_id)
+    sync_fn = getattr(subagent_card, "sync_status_to_step", None)
+    if callable(sync_fn) and parent_step is not None:
+        sync_fn(parent_step, success)
+
+
+def _finalize_subagent_cards_for_step(
+    adapter: TextualUIAdapter,
+    step_id: str,
+    *,
+    success: bool,
+    duration_ms: int = 0,
+    summary: str = "Done",
+) -> None:
+    """Complete all SubAgent cards delegated from one execute step."""
+    sid = str(step_id or "").strip()
+    if not sid:
+        return
+    keys_done: list[str] = []
+    for key, card in list(adapter._subagent_cards_by_key.items()):
+        parent = str(getattr(card, "_parent_step_id", "") or "").strip()
+        if parent != sid:
+            continue
+        _complete_subagent_card(
+            adapter,
+            card,
+            success=success,
+            duration_ms=duration_ms,
+            summary=summary,
+        )
+        keys_done.append(key)
+    for key in keys_done:
+        adapter._subagent_cards_by_key.pop(key, None)
+
+
+def _apply_subagent_wire_lifecycle_event(
+    adapter: TextualUIAdapter,
+    *,
+    event_type: str,
+    data: dict[str, Any],
+    task_scope: TaskScope,
+) -> bool:
+    """Handle subagent ``*.completed`` / ``*.failed`` wire events (RFC-628, IG-513)."""
+    et = str(event_type or "").strip()
+    if not (et.endswith(".completed") or et.endswith(".failed")):
+        return True
+    step_id = task_scope_step_id(task_scope)
+    task_idx = task_scope_task_idx(task_scope, step_id)
+    card = adapter._subagent_cards_by_key.get(_subagent_registry_key(step_id, task_idx))
+    if card is None:
+        return True
+    if et.endswith(".failed"):
+        success = False
+        summary = str(data.get("failure_reason") or data.get("error") or "Failed").strip()
+    else:
+        status = str(data.get("completion_status") or "complete").strip().lower()
+        success = status not in ("failed", "error", "cancelled")
+        summary = str(data.get("summary") or data.get("failure_reason") or "Done").strip()
+    if not summary:
+        summary = "Done" if success else "Failed"
+    duration_ms = int(data.get("duration_ms", 0) or 0)
+    _complete_subagent_card(
+        adapter,
+        card,
+        success=success,
+        duration_ms=duration_ms,
+        summary=summary,
+    )
+    adapter._subagent_cards_by_key.pop(_subagent_registry_key(step_id, task_idx), None)
+    return True
+
+
+def _route_subgraph_tool_call(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    ns_key: tuple[str, ...],
+    lookup_id: str,
+    display_key: str,
+    tool_name: str,
+    args: dict[str, Any],
+    raw_args: str = "",
+) -> bool:
+    """Route a subgraph tool to its SubAgent card, or buffer on the step card."""
+    display = str(display_key or lookup_id).strip()
+    subagent_card = _lookup_subagent_card(adapter, display)
+    if subagent_card is not None:
+        _ingest_tool_on_subagent_card(
+            adapter,
+            subagent_card,
+            display_key=display,
+            tool_name=tool_name,
+            args=args,
+            raw_args=raw_args,
+        )
+        router.discard_pending_subgraph_tool(ns_key, str(lookup_id).strip())
+        return True
+    routed = router.try_route_subgraph_tool(
+        ns_key=ns_key,
+        lookup_id=str(lookup_id).strip(),
+        display_key=display,
+        tool_name=tool_name,
+        args=args,
+        raw_args=raw_args,
+        step_cards=adapter._current_step_messages,
+        tool_to_step=adapter._tool_to_step,
+        tool_display_by_call_id=adapter._tool_display_by_call_id,
+    )
+    if routed:
+        return True
+    return _fallback_ingest_subgraph_tool_on_step_card(
+        adapter,
+        router,
+        lookup_id=str(lookup_id),
+        display_key=display,
+        tool_name=tool_name,
+        args=args,
+        raw_args=raw_args,
+        ns_key=ns_key,
+    )
+
+
+def _route_pending_subgraph_tools(adapter: TextualUIAdapter, router: StepTaskRouter) -> int:
+    """Flush buffered subgraph tools, preferring SubAgent cards when registered."""
+    pending = router.pending_subgraph_tools()
+    routed = 0
+    for item in pending:
+        if _route_subgraph_tool_call(
+            adapter,
+            router,
+            ns_key=item.ns_key,
+            lookup_id=item.lookup_id,
+            display_key=item.display_key,
+            tool_name=item.tool_name,
+            args=item.args,
+            raw_args=item.raw_args,
+        ):
+            routed += 1
+    return routed
+
+
 def _ingest_main_task_tool_on_step_card(
     adapter: TextualUIAdapter,
     router: StepTaskRouter,
@@ -535,11 +808,7 @@ def _ingest_main_task_tool_on_step_card(
     if subagent_type:
         router.register_task_spawn(tcid, subagent_type, step_id=sid)
     if not sid:
-        router.route_pending_subgraph_tools(
-            adapter._current_step_messages,
-            adapter._tool_to_step,
-            adapter._tool_display_by_call_id,
-        )
+        _route_pending_subgraph_tools(adapter, router)
         return None
     norm_tcid = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
     step_w = _resolve_step_widget_for_tool(
@@ -580,12 +849,9 @@ def _ingest_main_task_tool_on_step_card(
             )
             adapter._subagent_cards_by_key[subagent_key] = subagent_card
             subagent_card_to_mount = subagent_card  # Return for async mounting
+            _rehome_subgraph_rows_to_subagent(adapter, step_w, subagent_card, task_idx)
 
-    router.route_pending_subgraph_tools(
-        adapter._current_step_messages,
-        adapter._tool_to_step,
-        adapter._tool_display_by_call_id,
-    )
+    _route_pending_subgraph_tools(adapter, router)
     return subagent_card_to_mount
 
 
@@ -1006,10 +1272,7 @@ async def apply_tool_call_wire_update(
             bound_step_id=bound_step_id,
         )
         # IG-513: Mount SubAgent card if newly created
-        if subagent_card is not None:
-            mount_result = adapter._mount_message(subagent_card)
-            if mount_result is not None:
-                await mount_result
+        await _mount_subagent_card_if_needed(adapter, subagent_card)
         return True
 
     if is_step_scope:
@@ -1044,50 +1307,16 @@ async def apply_tool_call_wire_update(
 
     _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     if display_key:
-        # IG-513: Try direct routing to SubAgent card first
-        parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(display_key)
-        if parsed_sid and type_code == "t" and task_idx is not None:
-            subagent_key = f"{parsed_sid}:t{task_idx}"
-            subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
-            if subagent_card is not None:
-                # Route directly to SubAgent card
-                resolved_args = dict(display_args or {})
-                if raw_args_stream and not extract_tool_args_dict(resolved_args):
-                    parsed_from_raw = extract_tool_args_dict({"_raw": raw_args_stream})
-                    if parsed_from_raw:
-                        resolved_args = parsed_from_raw
-                if subagent_card.has_tool_call_row(display_key):
-                    subagent_card.update_tool_args(display_key, resolved_args)
-                else:
-                    subagent_card.add_tool_call(
-                        display_key, name, resolved_args, raw_args=raw_args_stream
-                    )
-                adapter._tool_to_step[display_key] = subagent_card
-                return True
-
-        # Fall back to step card routing if no SubAgent card
-        routed = router.try_route_subgraph_tool(
+        _route_subgraph_tool_call(
+            adapter,
+            router,
             ns_key=ns_key,
             lookup_id=tcid,
             display_key=display_key,
             tool_name=name,
             args=display_args,
             raw_args=raw_args_stream,
-            step_cards=adapter._current_step_messages,
-            tool_to_step=adapter._tool_to_step,
-            tool_display_by_call_id=adapter._tool_display_by_call_id,
         )
-        if not routed:
-            _fallback_ingest_subgraph_tool_on_step_card(
-                adapter,
-                router,
-                lookup_id=tcid,
-                display_key=display_key,
-                tool_name=name,
-                args=display_args,
-                raw_args=raw_args_stream,
-                ns_key=ns_key,
-            )
     return True
 
 
@@ -1115,7 +1344,10 @@ def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> st
 
 
 def _step_card_tool_count(widget: Any) -> int:
-    """Return the number of tool rows tracked on a step card."""
+    """Return scope-local tool count for a step card footer."""
+    build_index = getattr(widget, "_build_row_index", None)
+    if callable(build_index):
+        return int(build_index().total_tool_count)
     rows = getattr(widget, "_rows", None)
     if isinstance(rows, list):
         return len(rows)
@@ -1195,6 +1427,13 @@ def finalize_tracked_step_cards_on_goal_complete(
             duration_ms = int((time.time() - start_time) * 1000)
         tool_call_count = _step_card_tool_count(widget)
         adapter._current_step_messages.pop(step_id, None)
+        _finalize_subagent_cards_for_step(
+            adapter,
+            step_id,
+            success=True,
+            duration_ms=duration_ms,
+            summary="Done",
+        )
         complete_tracked_step_card(
             adapter,
             router,
@@ -2499,12 +2738,15 @@ async def execute_task_textual(
                                             bound_step_id = parsed_step_id or (
                                                 router.step_id_for_tool(str(lookup_id))
                                             )
-                                            _ingest_main_task_tool_on_step_card(
+                                            subagent_card = _ingest_main_task_tool_on_step_card(
                                                 adapter,
                                                 router,
                                                 str(lookup_id),
                                                 parsed_args,
                                                 bound_step_id=bound_step_id,
+                                            )
+                                            await _mount_subagent_card_if_needed(
+                                                adapter, subagent_card
                                             )
                                     elif is_step_scope and buffer_name != "task":
                                         parsed_sid, _, _, _ = parse_unified_tool_call_id(
@@ -2548,28 +2790,16 @@ async def execute_task_textual(
                                             ns_key, str(lookup_id), task_scope=ts_disp
                                         )
                                         display_key = display_key or str(lookup_id)
-                                        routed = router.try_route_subgraph_tool(
+                                        _route_subgraph_tool_call(
+                                            adapter,
+                                            router,
                                             ns_key=ns_key,
                                             lookup_id=str(lookup_id),
                                             display_key=display_key,
                                             tool_name=buffer_name,
                                             args=parsed_args,
                                             raw_args=raw_args_stream,
-                                            step_cards=adapter._current_step_messages,
-                                            tool_to_step=adapter._tool_to_step,
-                                            tool_display_by_call_id=adapter._tool_display_by_call_id,
                                         )
-                                        if not routed:
-                                            _fallback_ingest_subgraph_tool_on_step_card(
-                                                adapter,
-                                                router,
-                                                lookup_id=str(lookup_id),
-                                                display_key=display_key,
-                                                tool_name=buffer_name,
-                                                args=parsed_args,
-                                                raw_args=raw_args_stream,
-                                                ns_key=ns_key,
-                                            )
 
                                 tool_call_buffers.pop(buffer_key, None)
 
@@ -2838,6 +3068,13 @@ async def execute_task_textual(
                                     )
                                     if not summary.strip():
                                         summary = "Failed" if not success else "Done"
+                                    _finalize_subagent_cards_for_step(
+                                        adapter,
+                                        step_id,
+                                        success=success,
+                                        duration_ms=duration_ms,
+                                        summary=summary,
+                                    )
                                     widget = adapter._current_step_messages.pop(step_id, None)
                                     if widget is not None:
                                         if adapter._step_by_namespace.get(ns_key) is widget:
@@ -2957,6 +3194,12 @@ async def execute_task_textual(
                                 and event_type.startswith("soothe.subagent.")
                                 and is_allowlisted_subagent_event_type(event_type)
                             ):
+                                _apply_subagent_wire_lifecycle_event(
+                                    adapter,
+                                    event_type=event_type,
+                                    data=data,
+                                    task_scope=task_scope,
+                                )
                                 continue
                 finally:
                     await ui_coalesce.after_chunk()
@@ -3021,11 +3264,7 @@ async def execute_task_textual(
             adapter._tool_to_step,
             adapter._tool_display_by_call_id,
         )
-        routed_sub = router.route_pending_subgraph_tools(
-            adapter._current_step_messages,
-            adapter._tool_to_step,
-            adapter._tool_display_by_call_id,
-        )
+        routed_sub = _route_pending_subgraph_tools(adapter, router)
         pending_sub = router.pending_subgraph_tools()
         if router.pending_main_tool_count or pending_sub:
             logger.debug(

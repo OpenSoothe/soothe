@@ -586,6 +586,10 @@ class StepTaskRouter:
         """Snapshot of subgraph tools still awaiting parent resolution."""
         return list(self._pending_subgraph_tools.values())
 
+    def discard_pending_subgraph_tool(self, ns_key: tuple[str, ...], lookup_id: str) -> None:
+        """Drop a buffered subgraph tool after routing it to a SubAgent card."""
+        self._pending_subgraph_tools.pop(_subgraph_pending_key(ns_key, lookup_id), None)
+
     @property
     def pending_main_tool_count(self) -> int:
         """Number of root tools still awaiting step card routing."""

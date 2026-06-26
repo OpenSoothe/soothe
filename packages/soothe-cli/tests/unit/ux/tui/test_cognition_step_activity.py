@@ -62,9 +62,9 @@ def test_stats_title_suffix_uses_total_tool_count() -> None:
         _row("ABC_01:t0:glob:1", tool_name="glob", parent="ABC_01:s:task:0"),
     ]
     index = StepRowClassifier.build("ABC-01", rows)
-    assert index.total_tool_count == 2
+    assert index.total_tool_count == 1
     assert index.task_delegation_count == 1
-    assert stats_title_suffix(index) == " · 2 tools, 1 task"
+    assert stats_title_suffix(index) == " · 1 tool, 1 task"
 
 
 def test_row_counts_for_main_tools_excludes_subgraph() -> None:

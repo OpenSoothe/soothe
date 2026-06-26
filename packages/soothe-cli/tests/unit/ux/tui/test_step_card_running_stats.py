@@ -44,14 +44,34 @@ def test_stats_ignore_unified_ids_for_other_steps() -> None:
     assert card._stats_title_suffix() == ""
 
 
-def test_status_tool_stats_suffix_prefers_tracked_totals_over_fallback() -> None:
+def test_status_tool_stats_suffix_prefers_tracked_when_server_count_lower() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-done")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
     card.add_tool_call("ABC_01:s:grep:1", "grep", {})
     card.add_tool_call("ABC_01:s:glob:0", "glob", {})
-    suffix = card._status_tool_stats_suffix(fallback_count=99)
+    suffix = card._status_tool_stats_suffix(fallback_count=1)
     assert suffix == " · 3 tools"
-    assert "99 tools" not in suffix
+    assert "1 tool" not in suffix
+
+
+def test_status_tool_stats_suffix_uses_server_count_when_higher_on_main_only_step() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-server")
+    card.add_tool_call("ABC_01:s:grep:0", "grep", {})
+    suffix = card._status_tool_stats_suffix(fallback_count=5)
+    assert suffix == " · 5 tools"
+
+
+def test_status_tool_stats_suffix_ignores_server_count_for_task_delegated_step() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-delegated")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    suffix = card._status_tool_stats_suffix(fallback_count=8)
+    assert suffix == " · 1 task"
+    assert "8 tools" not in suffix
 
 
 def test_status_tool_stats_suffix_falls_back_to_total_when_untracked() -> None:
@@ -109,7 +129,7 @@ def test_stats_include_main_tools_and_task_delegations() -> None:
         parent_tool_call_id="ABC_01:s:task:0",
     )
     suffix = card._stats_title_suffix()
-    assert suffix == " · 2 tools, 1 task"
+    assert suffix == " · 1 tool, 1 task"
 
 
 def test_route_pending_main_tools_single_active_step_without_unified_id() -> None:

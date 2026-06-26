@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
@@ -368,3 +370,86 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
     assert "mirasurf/soothe" in text
     assert "Glob(" in text
     assert "**/*.py" in text
+
+
+@pytest.mark.asyncio
+async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> None:
+    """Explore completed wire event must finalize SubAgent card (RFC-628, IG-513)."""
+    from soothe_cli.tui.textual_adapter import _apply_subagent_wire_lifecycle_event
+
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    step = CognitionStepMessage("ZCH-01", "Survey RFCs", id="stp-subagent-done")
+    adapter._current_step_messages["ZCH-01"] = step
+    router = StepTaskRouter()
+    router.on_step_started("ZCH-01")
+
+    await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "ZCH_01:s:task:0",
+            "name": "task",
+            "args": {
+                "subagent_type": "explore",
+                "description": "Enumerate files",
+            },
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+    await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "ZCH_01:t0:glob:0",
+            "name": "glob",
+            "args": {"glob_pattern": "**/*"},
+        },
+        ns_key=("execute:abc", "tools:done"),
+        pending_tool_calls_lc={},
+    )
+
+    card = adapter._subagent_cards_by_key["ZCH-01:t0"]
+    assert card._status == "running"
+
+    scope: tuple[str, str, str] = ("ZCH-01:s:task:0", "explore", "ZCH-01")
+    handled = _apply_subagent_wire_lifecycle_event(
+        adapter,
+        event_type="soothe.subagent.explore.completed",
+        data={"duration_ms": 1200, "completion_status": "complete"},
+        task_scope=scope,
+    )
+    assert handled is True
+    assert card._status == "success"
+    assert "ZCH-01:t0" not in adapter._subagent_cards_by_key
+    task_rows = step._iter_task_delegation_rows()
+    assert task_rows and task_rows[0].phase == "success"
+
+
+def test_subagent_footer_ignores_server_step_tool_count() -> None:
+    """SubAgent footer must use scope-local rows, not step-wide server totals."""
+    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+
+    card = create_subagent_card(
+        step_id="ZCH-01",
+        description="Count files",
+        subagent_type="explore",
+        parent_step_id="ZCH-01",
+        parent_task_key="ZCH-01:s:task:0",
+        task_idx=0,
+        id="subagent-test",
+    )
+    for i in range(7):
+        card.add_tool_call(f"ZCH_01:t0:glob:{i}", "glob", {"glob_pattern": f"**/{i}"})
+    card._status_widget = MagicMock()
+    card._detail_widget = MagicMock()
+    card.set_complete(True, 46426, 8, "Done")
+    call_arg = card._status_widget.update.call_args[0][0]
+    text = call_arg.plain if hasattr(call_arg, "plain") else str(call_arg)
+    assert "7 tools" in text
+    assert "8 tools" not in text
