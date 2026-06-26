@@ -251,11 +251,6 @@ def _rewrite_tool_message_tool_call_id(
     return msg.model_copy(update={"tool_call_id": unified})
 
 
-def _rewrite_root_tool_message_tool_call_id(msg: BaseMessage, step_id: str) -> BaseMessage:
-    """Align root-graph ``ToolMessage.tool_call_id`` with unified AIMessage ids."""
-    return _rewrite_tool_message_tool_call_id(msg, step_id, task_idx=None)
-
-
 def _extract_tool_name_from_ai_chunk(msg: BaseMessage, tool_call_id: str) -> str:
     """Extract tool name for a specific tool_call_id from AI message/chunk.
 
@@ -302,7 +297,6 @@ __all__ = [
     "_extract_tool_name_from_ai_chunk",
     "_make_step_tool_call_id",
     "_make_task_inner_tool_call_id",
-    "_rewrite_root_tool_message_tool_call_id",
     "_rewrite_tool_call_ids_to_unified",
     "_rewrite_tool_message_tool_call_id",
     "_SubgraphNamespaceTaskBinder",

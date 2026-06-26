@@ -273,14 +273,6 @@ def step_level_parent_task_call_id(step_id: str, task_idx: int | None = None) ->
     return _format_unified_tool_call_id(step_id, "s", f"task:{idx}")
 
 
-def resolve_step_id_from_subgraph_tool(tool_call_id: str) -> str:
-    """Extract execute ``step_id`` from a unified step- or task-level tool call id."""
-    step_id, type_code, _, _ = parse_unified_tool_call_id(str(tool_call_id).strip())
-    if step_id and type_code in ("s", "t"):
-        return step_id
-    return ""
-
-
 def task_scope_step_id(scope: TaskScope | None) -> str:
     """Return the StrangeLoop step id from a task scope tuple, if present."""
     if not scope:
@@ -309,27 +301,6 @@ def task_scope_task_idx(scope: TaskScope | None, step_id: str) -> int:
     if tail.isdigit():
         return int(tail)
     return 0
-
-
-def resolve_task_parent_for_unified_tool_id(
-    tool_call_id: str,
-    *,
-    spawns_by_step: dict[str, TaskScope],
-    tool_display_by_call_id: dict[str, Any],
-    spawns_by_task_id: dict[str, TaskScope] | None = None,
-) -> Any | None:
-    """Return the Task delegation card for a task-level unified inner tool id."""
-    _, type_code, _, _ = parse_unified_tool_call_id(tool_call_id)
-    if type_code != "t":
-        return None
-    scope = resolve_task_scope_for_subgraph_tool(
-        tool_call_id,
-        spawns_by_step,
-        spawns_by_task_id,
-    )
-    if scope is None:
-        return None
-    return tool_display_by_call_id.get(scope[0])
 
 
 def row_key_for_subgraph_tool(
@@ -537,8 +508,6 @@ __all__ = [
     "prune_bound_pending_namespaces",
     "parse_unified_tool_call_id",
     "register_task_spawn_for_step",
-    "resolve_step_id_from_subgraph_tool",
-    "resolve_task_parent_for_unified_tool_id",
     "resolve_task_parent_lookup",
     "resolve_task_scope_for_subgraph_tool",
     "resolve_task_scope_for_namespace",

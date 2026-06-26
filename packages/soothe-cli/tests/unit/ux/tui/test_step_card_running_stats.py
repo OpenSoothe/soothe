@@ -126,7 +126,6 @@ def test_stats_include_main_tools_and_task_delegations() -> None:
         "ABC_01:t0:glob:1",
         "glob",
         {"pattern": "**/*"},
-        parent_tool_call_id="ABC_01:s:task:0",
     )
     suffix = card._stats_title_suffix()
     assert suffix == " · 1 tool, 1 task"

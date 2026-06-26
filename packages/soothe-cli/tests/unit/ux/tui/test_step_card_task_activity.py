@@ -202,7 +202,6 @@ def test_subgraph_task_level_id_does_not_overwrite_main_delegation() -> None:
         "FHG_01:t0:task:0",
         "task",
         {"description": "Check soothe-cli dependencies", "subagent_type": "explore"},
-        parent_tool_call_id="FHG_01:s:task:0",
     )
     rows = card._iter_task_delegation_rows()
     assert len(rows) == 1
@@ -227,7 +226,6 @@ def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
             "subagent_type": "explore",
             "description": "Count all file types",
         },
-        parent_tool_call_id="FHG_01:s:task:0",
     )
     text = _plain(card._step_task_activity_content())
     assert "Explore(Count all file types)" in text

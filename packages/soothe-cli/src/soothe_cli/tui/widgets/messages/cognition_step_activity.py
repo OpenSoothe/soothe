@@ -32,11 +32,10 @@ from soothe_cli.tui.widgets.messages._helpers import _MAX_TASK_DELEGATION_DESC_C
 
 @dataclass
 class StepToolRow:
-    """One tool invocation row on the step card (IG-402, IG-419).
+    """One tool invocation row on the step card (IG-402 / RFC-628).
 
-    IG-419: Supports nesting via parent_tool_call_id for inner subagent tools.
-    Task delegation rows (is_task_row=True) are parent headers; inner tools
-    nest underneath with indentation.
+    Task delegation rows use ``is_task_row=True`` as flat markers; subgraph tools
+    (type ``t``) are transient until rehomed onto SubAgent cards (IG-513).
     """
 
     tool_call_id: str
@@ -232,6 +231,8 @@ def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
         return False
     if not row_belongs_to_step(row, step_id):
         return False
+    if is_task_metadata_only_tool_row(row):
+        return False
     tcid = str(row.tool_call_id).strip()
     if not tcid:
         return False
@@ -239,8 +240,6 @@ def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
         return False
     _, type_code, _, _ = parse_unified_tool_call_id(tcid)
     if type_code == "t":
-        return False
-    if row.parent_tool_call_id:
         return False
     return True
 

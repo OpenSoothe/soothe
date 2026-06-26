@@ -342,9 +342,8 @@ def test_parallel_subgraph_tools_route_under_explore_row() -> None:
         tool_display_by_call_id=display,
     )
     step.add_tool_call.assert_called_once()
-    _args, kwargs = step.add_tool_call.call_args
+    _args, _kwargs = step.add_tool_call.call_args
     assert _args[0] == "XFJ_01:t0:grep:0"
-    assert kwargs.get("parent_tool_call_id") == "XFJ_01:s:task:0"
 
 
 def test_late_subgraph_namespace_binds_via_unified_tool_call_id() -> None:

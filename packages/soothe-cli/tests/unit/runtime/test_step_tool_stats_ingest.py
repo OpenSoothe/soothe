@@ -12,6 +12,7 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
     is_main_step_level_tool_call_id,
     is_step_card_tool_scope,
     is_task_level_subgraph_tool_call_id,
+    resolve_tool_result_row_key,
     should_ingest_tool_for_step_stats,
 )
 from soothe_cli.runtime.state.step_router import StepTaskRouter
@@ -36,9 +37,45 @@ def test_is_task_level_subgraph_tool_call_id() -> None:
 def test_is_step_card_tool_scope() -> None:
     assert is_step_card_tool_scope(ns_key=())
     assert is_step_card_tool_scope(ns_key=("execute:abc",))
+    assert is_step_card_tool_scope(ns_key=("execute:abc/1",))
     assert not is_step_card_tool_scope(ns_key=("execute:abc", "tools:xyz"))
+    assert not is_step_card_tool_scope(ns_key=("tools:sub",))
     assert is_execute_step_namespace(("execute:abc",))
+    assert not is_execute_step_namespace(("execute:abc/1",))
     assert not is_execute_step_namespace(("execute:abc", "tools:xyz"))
+
+
+def test_resolve_tool_result_row_key_execute_namespace_uses_step_id() -> None:
+    tcid = "HHK_01:s:tool-bf00dc631d174c789e85886a7da41417"
+    assert (
+        resolve_tool_result_row_key(
+            ns_key=("execute:3945bafe-5f07-4575-7e74-e93ad55e7b8",),
+            tool_call_id=tcid,
+        )
+        == tcid
+    )
+    assert (
+        resolve_tool_result_row_key(
+            ns_key=("execute:3945bafe-5f07-4575-7e74-e93ad55e7b8/1",),
+            tool_call_id=tcid,
+        )
+        == tcid
+    )
+
+
+def test_resolve_tool_result_row_key_subgraph_namespace_remaps() -> None:
+    unified = "BCO_01:t0:grep:1"
+    remapped = resolve_tool_result_row_key(
+        ns_key=("tools:sub",),
+        tool_call_id=unified,
+    )
+    assert remapped == unified
+    scoped = resolve_tool_result_row_key(
+        ns_key=("tools:sub",),
+        tool_call_id="grep:1",
+    )
+    assert scoped != "grep:1"
+    assert "grep:1" in scoped
 
 
 def test_should_ingest_tool_for_step_stats_without_args() -> None:
@@ -105,6 +142,35 @@ async def test_wire_update_registers_main_step_tool_with_empty_args() -> None:
     )
     assert handled is True
     assert card.has_tool_call_row("BCO_01:s:read_file:0")
+    assert card._stats_title_suffix() == " · 1 tool"
+
+
+@pytest.mark.asyncio
+async def test_wire_update_nested_execute_namespace_registers_step_level_tool() -> None:
+    """Sole-child reuse uses execute:{run}/N; step-level ``s:`` tools still show on the card."""
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    card = CognitionStepMessage("NKX-02", "Identify approach", id="stp-nkx02")
+    adapter._current_step_messages["NKX-02"] = card
+    router = StepTaskRouter()
+    router.on_step_started("NKX-02")
+
+    handled = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "NKX_02:s:tool-ba49b7f1839341778d7c898c4f306ec9",
+            "name": "read_file",
+            "args": {"path": "pyproject.toml"},
+        },
+        ns_key=("execute:8a35d5ce-4bf3-1f6e-de19-df51982876b8/1",),
+        pending_tool_calls_lc={},
+    )
+    assert handled is True
+    assert card.has_tool_call_row("NKX_02:s:tool-ba49b7f1839341778d7c898c4f306ec9")
     assert card._stats_title_suffix() == " · 1 tool"
 
 

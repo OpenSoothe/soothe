@@ -480,7 +480,6 @@ class StepTaskRouter:
                         resolved_args = parsed
                 update(row_id, resolved_args)
         else:
-            parent_task_id = str(scope[0]).strip()
             resolved_args = dict(item.args or {})
             from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
 
@@ -494,7 +493,6 @@ class StepTaskRouter:
                 item.tool_name,
                 resolved_args,
                 raw_args=item.raw_args,
-                parent_tool_call_id=parent_task_id or None,
             )
         tool_to_step[row_id] = parent
         if step_cards is not None:
@@ -656,10 +654,6 @@ class StepTaskRouter:
     def pending_main_tool_count(self) -> int:
         """Number of root tools still awaiting step card routing."""
         return len(self._pending_main_tools)
-
-    def clear_step_tool_bindings(self, step_id: str) -> None:
-        """No-op: step routing uses unified tool_call_id encoding only."""
-        _ = step_id
 
 
 __all__ = [

@@ -27,21 +27,27 @@ As a result:
 
 ## Fix
 
-Added check in `_act_stream_collector` to skip `task_idx` assignment for `execute:{run_id}` namespace:
+Added check in `_act_stream_collector` to skip `task_idx` assignment for any
+``execute:…`` namespace (root or nested ``/N`` from sole-child thread reuse):
 
 ```python
-# IG-514: execute:{run_id} namespace is step-level, not subgraph.
-# Only assign task_idx for true subgraph namespaces (tools:...).
-if _ns_chunk and not (
-    len(_ns_chunk) == 1
-    and str(_ns_chunk[0] or "").startswith("execute:")
-):
+# IG-514: execute:* namespaces are step-level, not subgraph.
+if _ns_chunk and not is_step_level_execute_namespace_key(_ns_chunk):
     task_idx = subgraph_task_binder.task_idx_for_namespace(stream_ns)
 ```
 
+The same guard applies when rewriting namespaced ``ToolMessage`` ids (the path
+that emits ``[ExecuteTool]`` / ``[SubagentTool]`` wire updates — execute
+namespaces log as ``ExecuteTool`` and skip subgraph placeholder emission).
+
+``is_execute_step_namespace()`` in the CLI matches **root** execute only
+(``execute:{run_id}`` without ``/N``) for subgraph namespace registration.
+``is_step_card_tool_scope()`` treats any ``execute:…`` segment (including ``/N``)
+as main step-card scope so sole-child reuse still renders ``s:`` tools.
+
 This ensures:
-- `execute:{run_id}` namespace → `task_idx=None` → step-level `s:` prefix
-- `tools:...` namespace → `task_idx=0/1/...` → task-level `t{n}:` prefix
+- `execute:{run_id}` and `execute:{run_id}/N` → `task_idx=None` → step-level `s:` prefix
+- `tools:…` namespace → `task_idx=0/1/…` → task-level `t{n}:` prefix
 
 ## File map
 
