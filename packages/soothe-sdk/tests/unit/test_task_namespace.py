@@ -12,8 +12,6 @@ from soothe_sdk.ux.task_namespace import (
     parse_unified_tool_call_id,
     prune_bound_pending_namespaces,
     register_task_spawn_for_step,
-    resolve_step_id_from_subgraph_tool,
-    resolve_task_parent_for_unified_tool_id,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
     resolve_task_scope_for_subgraph_tool,
@@ -180,11 +178,6 @@ def test_legacy_unified_formats_are_not_accepted() -> None:
     assert normalize_unified_tool_call_id("YKF-02:s:task.0") == "YKF-02:s:task.0"
 
 
-def test_resolve_step_id_from_subgraph_tool() -> None:
-    assert resolve_step_id_from_subgraph_tool("YKF_02:t0:glob:1") == "YKF-02"
-    assert resolve_step_id_from_subgraph_tool("YKF_02:s:task:0") == "YKF-02"
-
-
 def test_step_level_parent_task_call_id() -> None:
     assert step_level_parent_task_call_id("ABC-01", 0) == "ABC_01:s:task:0"
 
@@ -305,53 +298,6 @@ def test_resolve_task_parent_lookup_prefers_task_card() -> None:
         tool_display_by_call_id={"FJS_02:s:task:0": task_card},
     )
     assert parent is task_card
-
-
-def test_resolve_task_parent_for_unified_task_level_id() -> None:
-    task_card = object()
-    spawns = {"FJS-02": ("FJS_02:s:task:0", "explore", "FJS-02")}
-    parent = resolve_task_parent_for_unified_tool_id(
-        "FJS_02:t0:grep:0",
-        spawns_by_step=spawns,
-        tool_display_by_call_id={"FJS_02:s:task:0": task_card},
-    )
-    assert parent is task_card
-    assert (
-        resolve_task_parent_for_unified_tool_id(
-            "grep:1",
-            spawns_by_step=spawns,
-            tool_display_by_call_id={"FJS_02:s:task:0": task_card},
-        )
-        is None
-    )
-
-
-def test_resolve_task_parent_uses_spawns_by_task_id_for_parallel_tasks() -> None:
-    first_card = object()
-    second_card = object()
-    spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "tacitus", "WAV-01")}
-    spawns_by_task = {
-        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
-        "WAV_01:s:task:1": ("WAV_01:s:task:1", "tacitus", "WAV-01"),
-    }
-    display = {
-        "WAV_01:s:task:0": first_card,
-        "WAV_01:s:task:1": second_card,
-    }
-    parent0 = resolve_task_parent_for_unified_tool_id(
-        "WAV_01:t0:grep:0",
-        spawns_by_step=spawns_by_step,
-        tool_display_by_call_id=display,
-        spawns_by_task_id=spawns_by_task,
-    )
-    parent1 = resolve_task_parent_for_unified_tool_id(
-        "WAV_01:t1:grep:0",
-        spawns_by_step=spawns_by_step,
-        tool_display_by_call_id=display,
-        spawns_by_task_id=spawns_by_task,
-    )
-    assert parent0 is first_card
-    assert parent1 is second_card
 
 
 def test_shorten_tool_call_id_normalizes_provider_colon_index() -> None:
