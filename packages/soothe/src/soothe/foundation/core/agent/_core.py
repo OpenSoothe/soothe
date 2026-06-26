@@ -7,6 +7,8 @@ Pure Layer 1 runtime - NO goal infrastructure (Layer 2/3 responsibility).
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
@@ -113,6 +115,7 @@ class CoreAgent:
         policy: PolicyProtocol | None = None,
         subagents: list[SubAgent | CompiledSubAgent] | None = None,
         execute_graph: CompiledStateGraph | None = None,
+        execute_graph_compiler: Callable[[], CompiledStateGraph] | None = None,
     ) -> None:
         """Initialize CoreAgent with graph and protocol instances.
 
@@ -126,9 +129,13 @@ class CoreAgent:
             execute_graph: Optional twin graph without checkpointer for execute
                 streaming (IG-477). When set and ephemeral execute is enabled,
                 ACT-phase streaming uses this graph instead of ``graph``.
+            execute_graph_compiler: Lazy factory for ``execute_graph`` (IG-506).
+                When provided and ``execute_graph`` is None, the twin is compiled
+                on first ``execution_graph`` access.
         """
         self._graph = graph
         self._execute_graph = execute_graph
+        self._execute_graph_compiler = execute_graph_compiler
         self._config = config
         self._memory = memory
         self._planner = planner
@@ -148,8 +155,17 @@ class CoreAgent:
         Returns the checkpointer-free twin when ephemeral execute is enabled;
         otherwise the primary ``graph``.
         """
-        if ephemeral_execute_stream_enabled() and self._execute_graph is not None:
-            return self._execute_graph
+        if ephemeral_execute_stream_enabled():
+            if self._execute_graph is None and self._execute_graph_compiler is not None:
+                execute_start = time.perf_counter()
+                self._execute_graph = self._execute_graph_compiler()
+                execute_ms = (time.perf_counter() - execute_start) * 1000
+                logger.info(
+                    "[Init] Ephemeral execute graph created (%.1fms, IG-477 lazy)",
+                    execute_ms,
+                )
+            if self._execute_graph is not None:
+                return self._execute_graph
         return self._graph
 
     @property
