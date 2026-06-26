@@ -1538,7 +1538,7 @@ class Executor:
                         len(graph_input_messages),
                     )
 
-            # IG-510: Build EXECUTION HINTS with merged task instructions
+            # IG-508: Build EXECUTION HINTS with merged task instructions
             # Use full_description for execution context, fallback to description
             step_goal_text = step.full_description or step.description
 
@@ -1546,9 +1546,9 @@ class Executor:
             if wire_subagent:
                 hints_lines.append(f"Suggested subagent: {wire_subagent}")
             if step.expected_output:
-                # IG-510: Format expected output as list item
+                # IG-508: Format expected output as list item
                 hints_lines.append(f"Expected output:\n- {step.expected_output}")
-            # IG-510: Merge task instructions as list items (no separate TASK section)
+            # IG-508: Merge task instructions as list items (no separate TASK section)
             hints_lines.append(
                 "Instructions:\n"
                 "- Execute the step described in GOAL above\n"
@@ -1858,7 +1858,11 @@ class Executor:
                 ):
                     msg0 = data_chunk[0]
                     task_idx: int | None = None
-                    if _ns_chunk:
+                    # IG-630: execute:{run_id} namespace is step-level, not subgraph.
+                    # Only assign task_idx for true subgraph namespaces (tools:...).
+                    if _ns_chunk and not (
+                        len(_ns_chunk) == 1 and str(_ns_chunk[0] or "").startswith("execute:")
+                    ):
                         task_idx = subgraph_task_binder.task_idx_for_namespace(stream_ns)
                     if isinstance(msg0, (AIMessage, AIMessageChunk)):
                         filled_msg = _backfill_tool_calls_args_from_chunks(msg0)
@@ -2193,7 +2197,7 @@ class Executor:
         wire_subagent = _wire_subagent_from_routing(getattr(state, "routing_classification", None))
         messages = []
         for step_index, step in enumerate(steps):
-            # IG-510: Build EXECUTION HINTS with merged task instructions
+            # IG-508: Build EXECUTION HINTS with merged task instructions
             # Use full_description for execution context, fallback to description
             step_goal_text = step.full_description or step.description
 
@@ -2201,9 +2205,9 @@ class Executor:
             if wire_subagent:
                 hints_lines.append(f"Suggested subagent: {wire_subagent}")
             if step.expected_output:
-                # IG-510: Format expected output as list item
+                # IG-508: Format expected output as list item
                 hints_lines.append(f"Expected output:\n- {step.expected_output}")
-            # IG-510: Merge task instructions as list items (no separate TASK section)
+            # IG-508: Merge task instructions as list items (no separate TASK section)
             hints_lines.append(
                 "Instructions:\n"
                 "- Execute the step described in GOAL above\n"
