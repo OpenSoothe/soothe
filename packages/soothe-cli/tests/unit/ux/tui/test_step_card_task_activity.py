@@ -145,14 +145,25 @@ def test_pending_step_shows_no_activity_without_rows() -> None:
 
 def test_pending_step_with_task_delegation_shows_marker() -> None:
     """IG-513: Task marker shown even in pending state."""
+    from soothe_cli.runtime.state.step_router import StepTaskRouter
+
     card = CognitionStepMessage("WAA-03", "Future explore", id="stp-wait-task")
+    active = CognitionStepMessage("WAA-01", "Current step", id="stp-active")
+    active.set_running()
+    step_cards = {"WAA-01": active, "WAA-03": card}
+    router = StepTaskRouter()
     card.add_tool_call(
         "WAA_03:s:task:0",
         "task",
         {"subagent_type": "explore", "description": "scan later"},
         is_task_row=True,
     )
-    card._status = "pending"
+    router.maybe_promote_step_to_running(
+        card,
+        "WAA_03:s:task:0",
+        step_cards=step_cards,
+    )
+    assert card._status == "pending"
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan later)" in text
 
