@@ -13,13 +13,6 @@ Centralizing constants ensures consistency and easier maintenance.
 DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = 99
 
 # ============================================================================
-# Autonomous Goal Management Limits
-# ============================================================================
-
-# Default maximum iterations per autonomous thread (RFC-0007)
-DEFAULT_AUTONOMOUS_MAX_ITERATIONS = 10
-
-# ============================================================================
 # Execution Tool Limits
 # ============================================================================
 
@@ -32,23 +25,3 @@ DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS = 100_000
 
 # Max chars for non-code_exec tool output in StrangeLoop execute-stream aggregation.
 DEFAULT_TOOL_OUTPUT_CHARS = 10_000
-
-# ============================================================================
-# Early Termination Thresholds
-# ============================================================================
-
-# Maximum consecutive empty tool calls before early termination
-MAX_CONSECUTIVE_EMPTY_TOOL_CALLS = 2
-
-# Maximum evidence string length for final stdout display
-MAX_EVIDENCE_STRING_LENGTH = 500
-
-# ============================================================================
-# Conversation Context Limits
-# ============================================================================
-
-# Default limit for recent messages loaded for classification
-DEFAULT_RECENT_MESSAGES_FOR_CLASSIFY_LIMIT = 10
-
-# Default limit for prior conversation excerpts in plan prompts
-DEFAULT_PRIOR_CONVERSATION_LIMIT = 10

@@ -1,22 +1,18 @@
 # Execution Protocols
 
-**RFCs**: RFC-221 (LoopRunner), RFC-000 Module 6 (RemoteAgent), RFC-101 (Toolkit)  
+**RFCs**: RFC-221 (LoopRunner)  
 **Locations**:
 - `packages/soothe/src/soothe/protocols/runner.py`
-- `packages/soothe/src/soothe/protocols/remote.py`
-- `packages/soothe/src/soothe/protocols/toolkit.py`
 
 **Status**: Implemented  
 
 ## Overview
 
-Execution protocols define the interfaces for running agents and delegating work:
+Execution protocols define the interfaces for running agents:
 
 1. **LoopRunnerProtocol**: StrangeLoop runner orchestration
-2. **RemoteAgentProtocol**: Remote agent invocation (ACP, A2A, LangGraph)
-3. **ToolkitProtocol**: Tool collection interface
 
-These protocols form the execution layer, coordinating agent runs, tool invocation, and remote delegation.
+This protocol forms the execution layer, coordinating agent runs and streaming results.
 
 ## LoopRunnerProtocol
 
