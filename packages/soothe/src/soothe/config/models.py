@@ -1276,6 +1276,45 @@ class ContextEngineConfig(BaseModel):
         )
 
 
+class ToolTimeoutConfig(BaseModel):
+    """Tool timeout middleware configuration (IG-512).
+
+    Wraps tool invocations with configurable timeouts, preventing indefinite hangs
+    from tools that lack internal timeout guards.
+
+    Args:
+        enabled: Enable tool timeout middleware.
+        default_seconds: Default timeout for tools without specific override.
+        per_tool: Per-tool timeout overrides (tool_name -> seconds).
+        skip_tools_with_internal_timeout: Skip wrapping tools with robust internal timeout.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable tool timeout middleware (IG-512)",
+    )
+    default_seconds: float = Field(
+        default=60.0,
+        ge=1.0,
+        le=3600.0,
+        description="Default timeout for tools without specific override (seconds)",
+    )
+    per_tool: dict[str, float] = Field(
+        default_factory=lambda: {
+            "grep": 30.0,
+            "glob": 20.0,
+            "read_file": 30.0,
+            "explore": 600.0,  # Subagent exploration can take several minutes
+            "browser_use": 600.0,  # Browser automation can take several minutes
+        },
+        description="Per-tool timeout overrides (tool_name -> seconds)",
+    )
+    skip_tools_with_internal_timeout: bool = Field(
+        default=True,
+        description="Skip wrapping tools that already have robust internal timeout (run_command, execute)",
+    )
+
+
 class StrangeLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
 
@@ -1302,6 +1341,7 @@ class StrangeLoopConfig(BaseModel):
         tool_call_limit: Tool call count limits per thread/run.
         tool_retry: Tool failure retry policy.
         llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
+        tool_timeout: Tool timeout middleware configuration (IG-512).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1456,6 +1496,12 @@ class StrangeLoopConfig(BaseModel):
         default_factory=LLMRateLimitConfig,
         description="LLM rate limiting, per-call timeouts, and retry escalation",
     )
+
+    tool_timeout: ToolTimeoutConfig = Field(
+        default_factory=ToolTimeoutConfig,
+        description="Tool timeout middleware configuration (IG-512)",
+    )
+    """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
 
     context_engine: ContextEngineConfig = Field(
         default_factory=lambda: ContextEngineConfig(),

@@ -54,6 +54,9 @@ agent:
       global_max_llm_calls: 16    # Increased from 10 for more concurrent LLM calls
       step_parallelism: max       # Changed from 'dependency' for maximum parallelism
     max_subagent_tasks_per_wave: 8  # Increased from 4 for larger subagent batches
+    # Tool timeout middleware (IG-512) - prevent indefinite hangs
+    tool_timeout:
+      enabled: true
   # Embedded QuickJS interpreter for programmatic tool calling (PTC).
   # Dependency note: langchain-quickjs is included in soothe base dependencies.
   code_interpreter:

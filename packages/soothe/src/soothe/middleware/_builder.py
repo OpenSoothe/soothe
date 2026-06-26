@@ -121,6 +121,7 @@ def build_soothe_middleware_stack(
     from .system_prompt import SystemPromptMiddleware
     from .tool_concurrency import ToolConcurrencyMiddleware
     from .tool_network_errors import NetworkToolErrorsMiddleware
+    from .tool_timeout import ToolTimeoutMiddleware
     from .workspace_context import WorkspaceContextMiddleware
 
     stack: list[AgentMiddleware] = []
@@ -298,7 +299,26 @@ def build_soothe_middleware_stack(
         stack.append(LLMCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] LLM call profiler enabled (innermost wrapper)")
 
-    # 8. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 8. Tool timeout wrapper (IG-512: prevent indefinite hangs from slow tools)
+    # Positioned after other tool-related middleware, innermost around actual execution
+    tool_timeout_config = config.agent.loop.tool_timeout
+    if tool_timeout_config.enabled:
+        stack.append(
+            ToolTimeoutMiddleware(
+                default_timeout_seconds=tool_timeout_config.default_seconds,
+                per_tool_timeout=dict(tool_timeout_config.per_tool),
+                skip_tools_with_internal_timeout=tool_timeout_config.skip_tools_with_internal_timeout,
+            )
+        )
+        logger.info(
+            "[Middleware] Tool timeout enabled: default=%.1fs, per_tool=%s",
+            tool_timeout_config.default_seconds,
+            dict(tool_timeout_config.per_tool),
+        )
+    else:
+        logger.debug("[Middleware] Tool timeout disabled")
+
+    # 9. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 
