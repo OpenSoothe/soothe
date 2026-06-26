@@ -10,10 +10,10 @@
 providers:
   - name: dashscope
     provider_type: openai
-    api_base_url: "${DASHSCOPE_BASE_URL}"
-    api_key: "${DASHSCOPE_API_KEY}"
+    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
+    api_key: "${DASHSCOPE_CP_API_KEY}"
     models:
-      - glm-5.2
+      - glm-5
       - qwen3.7-plus
       - qwen3.6-plus
       - kimi-k2.5
@@ -30,9 +30,9 @@ providers:
       - nomic-embed
 
 router:
-  default: "dashscope:kimi-k2.5"
+  default: "dashscope:glm-5"
   fast: "dashscope:kimi-k2.5"
-  think: "dashscope:glm-5.2"
+  think: "dashscope:glm-5"
   image: "dashscope:kimi-k2.5"
   embedding: "dashscope:multimodal-embedding-v1"
 
