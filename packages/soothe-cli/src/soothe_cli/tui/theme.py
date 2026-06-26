@@ -99,9 +99,6 @@ LC_TOOL_HOVER = "#FFCB91"
 LC_COGNITION = "#56B6C2"
 """Agent loop step / cognition progress accent (distinct from tool amber)."""
 
-LC_COGNITION_HOVER = "#7BC9D3"
-"""Cognition progress hover — lighter teal for interactive feedback."""
-
 
 # ---------------------------------------------------------------------------
 # Unified Card Palette — Grayscale system for Goal/Plan/Step/Task cards (IG-468)
@@ -194,9 +191,6 @@ CARD_ERROR_LIGHT = "#BE185D"
 LC_COGNITION = CARD_BORDER_DARK
 """Legacy alias — now uses unified card border color."""
 
-LC_COGNITION_HOVER = CARD_BORDER_HOVER_DARK
-"""Legacy alias — now uses unified card hover color."""
-
 
 # ---------------------------------------------------------------------------
 # Brand palette — light
@@ -254,12 +248,6 @@ LC_LIGHT_TOOL = LC_LIGHT_AMBER
 
 LC_LIGHT_TOOL_HOVER = "#78350F"
 """Tool call hover (darkened for light bg contrast)."""
-
-LC_LIGHT_COGNITION = CARD_BORDER_LIGHT
-"""Legacy alias — now uses unified card border color."""
-
-LC_LIGHT_COGNITION_HOVER = CARD_BORDER_HOVER_LIGHT
-"""Legacy alias — now uses unified card hover color."""
 
 
 # ---------------------------------------------------------------------------
