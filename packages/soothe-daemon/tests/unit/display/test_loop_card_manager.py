@@ -58,11 +58,22 @@ def _patch_bind_thread(monkeypatch: pytest.MonkeyPatch, thread_id: str = "thread
     monkeypatch.setattr(dispatcher, "bind_execution_thread_for_loop", _fake)
 
 
+def _patch_langgraph_checkpoint(monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> None:
+    """Control LangGraph checkpoint probe used by the empty-loop fast path."""
+    import soothe_daemon.display.loop_card_manager as lcm
+
+    async def _fake(_thread_id: str) -> bool:
+        return exists
+
+    monkeypatch.setattr(lcm, "langgraph_checkpoint_exists", _fake)
+
+
 @pytest.mark.asyncio
 async def test_ensure_for_loop_backfills_from_checkpoint(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     messages = [
         HumanMessage(content="hello"),
         AIMessage(content="hi there"),
@@ -82,6 +93,7 @@ async def test_ensure_for_loop_uses_activity_log_when_no_checkpoint(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     activity = [
         {
             "kind": "conversation",
@@ -116,8 +128,58 @@ async def test_ensure_for_loop_returns_empty_when_no_data(
     manager = LoopCardManager(daemon)
     ledger = await manager.ensure_for_loop("loop_empty")
     assert ledger.card_count() == 0
+    runner.get_thread_state_values.assert_not_called()
     # cards.jsonl is still created (just contains the header).
     assert (loops_root / "loop_empty" / "cards.jsonl").exists()
+
+
+@pytest.mark.asyncio
+async def test_is_display_empty_skips_core_agent_checkpoint_read(
+    loops_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_bind_thread(monkeypatch)
+    runner = _make_runner(checkpoint_messages=[], activity_log=[])
+    daemon = SimpleNamespace(_runner=runner)
+    manager = LoopCardManager(daemon)
+
+    assert await manager.is_display_empty("loop_fast") is True
+    runner.get_thread_state_values.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_replay_to_client_empty_loop_skips_checkpoint_read(
+    loops_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_bind_thread(monkeypatch)
+    runner = _make_runner(checkpoint_messages=[], activity_log=[])
+    daemon = SimpleNamespace(_runner=runner)
+    manager = LoopCardManager(daemon)
+
+    sent: list[dict] = []
+
+    async def collect(frame: dict) -> None:
+        sent.append(frame)
+
+    total = await manager.replay_to_client("loop_fast_replay", collect)
+    assert total == 0
+    runner.get_thread_state_values.assert_not_called()
+    assert sent[0]["type"] == CARD_REPLAY_BEGIN
+    assert sent[-1]["type"] == CARD_REPLAY_END
+    assert sent[0]["total_cards"] == 0
+
+
+@pytest.mark.asyncio
+async def test_refresh_empty_loop_is_noop(
+    loops_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_bind_thread(monkeypatch)
+    runner = _make_runner(checkpoint_messages=[], activity_log=[])
+    daemon = SimpleNamespace(_runner=runner)
+    manager = LoopCardManager(daemon)
+
+    ledger = await manager.refresh("loop_refresh_empty")
+    assert ledger.card_count() == 0
+    runner.get_thread_state_values.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -125,6 +187,7 @@ async def test_refresh_re_derives_after_messages_added(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     runner = _make_runner(checkpoint_messages=[HumanMessage(content="round1")])
     daemon = SimpleNamespace(_runner=runner)
 
@@ -152,6 +215,7 @@ async def test_replay_to_client_emits_begin_created_end(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     messages = [
         HumanMessage(content="q"),
         AIMessage(
@@ -205,6 +269,7 @@ async def test_replay_to_client_refreshes_before_replay(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     runner = _make_runner(checkpoint_messages=[HumanMessage(content="turn1")])
     daemon = SimpleNamespace(_runner=runner)
     manager = LoopCardManager(daemon)
@@ -239,6 +304,7 @@ async def test_stop_for_loop_releases_in_memory_state(
     loops_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     runner = _make_runner(checkpoint_messages=[HumanMessage(content="x")])
     daemon = SimpleNamespace(_runner=runner)
     manager = LoopCardManager(daemon)
