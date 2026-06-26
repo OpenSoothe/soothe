@@ -41,7 +41,7 @@ into the clarification relay (RFC-622, IG-462)."""
 
 
 class PlanGenerateStep(BaseModel):
-    """Single step in plan-generate structured output (RFC-604, IG-329).
+    """Single step in plan-generate structured output (RFC-604, IG-329, IG-510).
 
     Separate from ``StepAction`` so the LLM schema omits executor-only fields
     (``subagent``, ``evidence_refs``). Converted to ``StepAction`` when building
@@ -51,12 +51,26 @@ class PlanGenerateStep(BaseModel):
     step — instead it routes ``questions`` through the configured
     ``ClarificationPolicy`` (RFC-622) and records a synthesized successful step
     result containing the answers.
+
+    Attributes:
+        id: Step identifier (auto-generated if omitted).
+        description: Brief summary for TUI display and logging (under 20 words).
+        full_description: Detailed execution prompt with key inputs, file paths,
+            identifiers, and context needed to execute independently (IG-510).
+        expected_output: Expected result for evidence accumulation.
+        dependencies: Step IDs this depends on (for DAG execution).
+        kind: ``action`` (normal) or ``ask_user`` (clarification relay).
+        questions: Questions for ``ask_user`` steps.
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     description: str = Field(
         ...,
-        description="Imperative milestone description (under 20 words).",
+        description="Brief summary for TUI display (under 20 words).",
+    )
+    full_description: str | None = Field(
+        default=None,
+        description="Detailed execution prompt with key inputs (50-150 words).",
     )
     expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None
@@ -77,6 +91,7 @@ def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[S
         StepAction(
             id=s.id,
             description=s.description,
+            full_description=s.full_description,
             expected_output=s.expected_output,
             dependencies=s.dependencies,
             kind=s.kind,
@@ -92,6 +107,7 @@ def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGen
         PlanGenerateStep(
             id=s.id,
             description=s.description,
+            full_description=s.full_description,
             expected_output=s.expected_output,
             dependencies=s.dependencies,
             kind=s.kind,
@@ -105,13 +121,16 @@ class StepAction(BaseModel):
     """Single step in execution strategy.
 
     IG-264: Keep execution-critical fields (used by executor).
+    IG-510: ``full_description`` carries detailed execution context.
     RFC-622 / IG-462: ``kind`` and ``questions`` carry planner-emitted
     ``ask_user`` steps through to the clarification relay.
 
     Attributes:
         id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
-        description: What this step does
-        expected_output: Expected result for evidence accumulation
+        description: Brief summary for TUI display and logging (under 20 words).
+        full_description: Detailed execution prompt with key inputs, file paths,
+            identifiers, and context needed to execute independently (IG-510).
+        expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
         kind: ``action`` (normal CoreAgent execution) or ``ask_user``
             (clarification relay short-circuit).
@@ -122,7 +141,11 @@ class StepAction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     description: str = Field(
         ...,
-        description="Imperative milestone description (under 20 words).",
+        description="Brief summary for TUI display (under 20 words).",
+    )
+    full_description: str | None = Field(
+        default=None,
+        description="Detailed execution prompt with key inputs (50-150 words).",
     )
     expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None

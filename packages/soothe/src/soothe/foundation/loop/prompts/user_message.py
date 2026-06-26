@@ -291,28 +291,24 @@ class UserMessageBuilder:
         workspace_state: str | None = None,
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
-        intent_type: str = "agentic",
-        task_complexity: str = "medium",
     ) -> str:
-        """Build user message for an execute-step.
+        """Build user message for an execute-step (IG-510: simplified, no INTENT/TASK).
 
         Args:
-            step_description: The step's description (what to execute).
-            execution_hints: Optional hints text from ExecutionHintsMiddleware.
+            step_description: The step's description or full_description (what to execute).
+            execution_hints: Hints text with merged task instructions (IG-510).
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
-            intent_type: Intent classification.
-            task_complexity: Task complexity level.
 
         Returns:
             Structured text message for the execute-step LoopHumanMessage.
         """
         sections: list[tuple[str, str]] = [
             ("GOAL", _goal_text(step_description)),
-            ("INTENT", f"{intent_type} (complexity: {task_complexity})"),
         ]
 
+        # IG-510: EXECUTION HINTS now contains merged task instructions
         if execution_hints:
             sections.append(("EXECUTION HINTS", execution_hints))
 
@@ -327,15 +323,6 @@ class UserMessageBuilder:
             sections.append(("WORKSPACE STATE", workspace_state))
 
         sections.append(("TIMESTAMP", _timestamp_line()))
-
-        sections.append(
-            (
-                "TASK",
-                "1. Execute the step described in GOAL above\n"
-                "2. Use the suggested approach when execution hints are provided\n"
-                "3. Produce output matching the expected output specification",
-            )
-        )
 
         return _render_sections(sections)
 
