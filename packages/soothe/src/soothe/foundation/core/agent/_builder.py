@@ -289,14 +289,14 @@ class AgentBuilder:
         logger.info("[Init] Deep agent graph created (%.1fms)", deep_agent_ms)
 
         execute_graph = None
+        execute_graph_compiler = None
         if checkpointer is not None:
             from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
 
             if ephemeral_execute_stream_enabled():
-                execute_start = time.perf_counter()
-                execute_graph = _compile_deep_agent(None)
-                execute_ms = (time.perf_counter() - execute_start) * 1000
-                logger.info("[Init] Ephemeral execute graph created (%.1fms, IG-477)", execute_ms)
+
+                def execute_graph_compiler() -> Any:
+                    return _compile_deep_agent(None)
 
         # Wrap graph in CoreAgent with typed protocol properties
         agent = CoreAgent(
@@ -307,6 +307,7 @@ class AgentBuilder:
             policy=resolved_policy,
             subagents=all_subagents,
             execute_graph=execute_graph,
+            execute_graph_compiler=execute_graph_compiler,
         )
 
         total_ms = (time.perf_counter() - create_start) * 1000
