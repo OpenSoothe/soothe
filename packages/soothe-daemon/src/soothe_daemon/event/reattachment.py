@@ -13,6 +13,7 @@ Clients that still expect those frames should upgrade to consume
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -73,4 +74,31 @@ async def handle_loop_reattach(
         )
 
 
-__all__ = ["handle_loop_reattach"]
+def schedule_loop_reattach(
+    loop_id: str,
+    daemon: Any,
+    client_id: Any,
+) -> asyncio.Task[None]:
+    """Schedule card replay after ``loop_subscribe`` without blocking the RPC.
+
+    The subscribe response is sent first so clients (TUI) can leave the
+    connecting state immediately. Card frames stream afterward on the same
+    client connection.
+    """
+
+    async def _run() -> None:
+        try:
+            await handle_loop_reattach(loop_id, daemon, client_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Background loop reattachment failed for %s (client=%s)",
+                loop_id,
+                client_id,
+            )
+
+    return asyncio.create_task(_run(), name=f"loop-reattach-{str(loop_id)[:8]}")
+
+
+__all__ = ["handle_loop_reattach", "schedule_loop_reattach"]
