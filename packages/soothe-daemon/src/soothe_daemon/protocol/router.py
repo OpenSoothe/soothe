@@ -1189,7 +1189,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id.
         """
-        from soothe_daemon.event import handle_loop_reattach
+        from soothe_daemon.event.reattachment import schedule_loop_reattach
 
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1219,8 +1219,6 @@ class MessageRouter:
                 },
             )
             return
-
-        await handle_loop_reattach(loop_id, d, client_id)
 
         from soothe_daemon.runtime.loop_autopilot_mode import ensure_loop_autopilot_mode
 
@@ -1260,6 +1258,8 @@ class MessageRouter:
                 "request_id": request_id,
             },
         )
+
+        schedule_loop_reattach(str(loop_id), d, client_id)
 
     async def _handle_loop_detach(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_detach RPC request (RFC-503).
@@ -1917,12 +1917,21 @@ class MessageRouter:
         from soothe_sdk.display.card_ledger import card_to_wire_dict
 
         try:
-            # Force re-derivation so TUI resume receives the latest final
-            # goal-completion response, not a stale cached snapshot.
-            ledger = await card_manager.refresh(str(loop_id))
-            snapshot = ledger.snapshot()
-            wire_cards = [card_to_wire_dict(card) for card in snapshot]
-            latest_seq = ledger.next_seq() - 1
+            loop_id_str = str(loop_id)
+            if await card_manager.is_display_empty(loop_id_str):
+                ledger = await card_manager.ensure_for_loop(loop_id_str)
+                snapshot = ledger.snapshot()
+                wire_cards: list[dict[str, Any]] = []
+                latest_seq = 0
+                context_tokens = 0
+            else:
+                # Force re-derivation so TUI resume receives the latest final
+                # goal-completion response, not a stale cached snapshot.
+                ledger = await card_manager.refresh(loop_id_str)
+                snapshot = ledger.snapshot()
+                wire_cards = [card_to_wire_dict(card) for card in snapshot]
+                latest_seq = ledger.next_seq() - 1
+                context_tokens = await self._read_loop_context_tokens(loop_id_str)
         except Exception as exc:
             await d._send_client_message(
                 client_id,
@@ -1934,11 +1943,6 @@ class MessageRouter:
                 },
             )
             return
-
-        # Context-token count is owned by the checkpoint state channel, not
-        # the ledger. Read it alongside so the client doesn't need a separate
-        # round-trip (RFC-413).
-        context_tokens = await self._read_loop_context_tokens(str(loop_id))
 
         await d._send_client_message(
             client_id,

@@ -23,6 +23,15 @@ from soothe_daemon.display.loop_card_manager import (
 from soothe_daemon.event.reattachment import handle_loop_reattach
 
 
+def _patch_langgraph_checkpoint(monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> None:
+    import soothe_daemon.display.loop_card_manager as lcm
+
+    async def _fake(_thread_id: str) -> bool:
+        return exists
+
+    monkeypatch.setattr(lcm, "langgraph_checkpoint_exists", _fake)
+
+
 @pytest.fixture
 def loops_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect SOOTHE_HOME so PersistenceDirectoryManager writes into tmp."""
@@ -52,6 +61,7 @@ async def test_handle_loop_reattach_streams_only_card_frames(
 ) -> None:
     """Reattach emits card.* only — RFC-411 legacy frames are gone."""
     _patch_bind_thread(monkeypatch)
+    _patch_langgraph_checkpoint(monkeypatch, exists=True)
     runner = MagicMock()
     runner.get_thread_state_values = AsyncMock(
         return_value={

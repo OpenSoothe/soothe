@@ -30,6 +30,11 @@ from soothe_sdk.display.card_ledger import cards_to_mutations
 from soothe_sdk.langchain_wire import messages_from_wire_dicts
 
 from soothe_daemon.display.loop_card_ledger import LoopCardLedger
+from soothe_daemon.display.loop_history_probe import (
+    filter_derivable_log_events,
+    langgraph_checkpoint_exists,
+    normalize_log_row,
+)
 
 if TYPE_CHECKING:
     from soothe_sdk.display.transcript_types import MessageData
@@ -81,6 +86,52 @@ class LoopCardManager:
     # Derivation
     # ------------------------------------------------------------------
 
+    async def _open_ledger(self, loop_id: str) -> LoopCardLedger:
+        """Return the in-memory ledger for ``loop_id``, creating it if needed."""
+        ledger = self._ledgers.get(loop_id)
+        if ledger is None:
+            directory = PersistenceDirectoryManager.get_loop_directory(loop_id)
+            ledger = LoopCardLedger(loop_id=loop_id, directory=directory)
+            self._ledgers[loop_id] = ledger
+        await ledger.ensure_loaded()
+        return ledger
+
+    async def is_display_empty(self, loop_id: str) -> bool:
+        """Return True when no persisted cards or authoritative history exist.
+
+        Uses the on-disk ledger, activity log, and a read-only LangGraph
+        checkpoint probe. Does **not** materialize ``LazyCoreAgent``.
+        """
+        ledger = await self._open_ledger(loop_id)
+        if ledger.card_count() > 0:
+            return False
+
+        runner = getattr(self._daemon, "_runner", None)
+        if runner is None:
+            return True
+
+        from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
+
+        try:
+            checkpoint_thread_id = await bind_execution_thread_for_loop(self._daemon, loop_id)
+        except Exception:
+            logger.debug(
+                "Cannot bind checkpoint thread while probing display history for %s",
+                loop_id,
+                exc_info=True,
+            )
+            return True
+
+        log_events = await self._fetch_derivable_log_events(
+            runner,
+            checkpoint_thread_id,
+            limit=1,
+        )
+        if log_events:
+            return False
+
+        return not await langgraph_checkpoint_exists(checkpoint_thread_id)
+
     async def ensure_for_loop(self, loop_id: str) -> LoopCardLedger:
         """Return a populated ledger for ``loop_id``, deriving if needed.
 
@@ -88,20 +139,14 @@ class LoopCardManager:
 
         * Creates ``cards.jsonl`` if it does not yet exist.
         * Re-derives the ledger from checkpoint + activity log if the ledger
-          is empty (header-only) on first open.
+          is empty (header-only) on first open and authoritative history exists.
 
         No explicit staleness check is implemented beyond "empty ledger →
         derive once". A future iteration may add live updates that keep
         the ledger in sync with the active loop without re-derivation.
         """
-        ledger = self._ledgers.get(loop_id)
-        if ledger is None:
-            directory = PersistenceDirectoryManager.get_loop_directory(loop_id)
-            ledger = LoopCardLedger(loop_id=loop_id, directory=directory)
-            self._ledgers[loop_id] = ledger
-
-        await ledger.ensure_loaded()
-        if ledger.card_count() == 0:
+        ledger = await self._open_ledger(loop_id)
+        if ledger.card_count() == 0 and not await self.is_display_empty(loop_id):
             await self._derive_into(loop_id, ledger)
         return ledger
 
@@ -112,7 +157,9 @@ class LoopCardManager:
         after a turn completes). Callers may opt to invoke this from a
         turn-completion hook; the default RPC path uses the cached ledger.
         """
-        ledger = await self.ensure_for_loop(loop_id)
+        ledger = await self._open_ledger(loop_id)
+        if await self.is_display_empty(loop_id):
+            return ledger
         await self._derive_into(loop_id, ledger)
         return ledger
 
@@ -137,6 +184,29 @@ class LoopCardManager:
                 loop_id,
                 elapsed_ms,
             )
+
+    async def _fetch_derivable_log_events(
+        self,
+        runner: Any,
+        checkpoint_thread_id: str,
+        *,
+        limit: int = 10000,
+    ) -> list[dict[str, Any]]:
+        """Load derivable activity-log rows without touching LangGraph state."""
+        try:
+            raw_log = await runner.get_persisted_thread_messages(
+                checkpoint_thread_id,
+                limit=limit,
+                include_events=True,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to read activity log for thread %s",
+                checkpoint_thread_id,
+                exc_info=True,
+            )
+            return []
+        return filter_derivable_log_events(raw_log)
 
     async def _derive_cards(self, loop_id: str) -> list[MessageData]:
         """Read checkpoint + activity log and bind to cards via the SDK binder.
@@ -163,42 +233,38 @@ class LoopCardManager:
             )
             return []
 
-        # Checkpoint messages (primary source — canonical user / assistant /
-        # tool message flow).
-        try:
-            state_values = await runner.get_thread_state_values(checkpoint_thread_id)
-        except Exception:
-            logger.warning("Failed to read checkpoint state for loop %s", loop_id, exc_info=True)
-            state_values = {}
+        log_events = await self._fetch_derivable_log_events(runner, checkpoint_thread_id)
+        has_checkpoint = await langgraph_checkpoint_exists(checkpoint_thread_id)
+        if not log_events and not has_checkpoint:
+            logger.debug(
+                "Skipping CoreAgent checkpoint read for empty loop %s",
+                loop_id,
+            )
+            return []
 
-        messages = list(state_values.get("messages", []) or [])
-        if messages and isinstance(messages[0], dict):
+        state_values: dict[str, Any] = {}
+        messages: list[Any] = []
+        if has_checkpoint:
             try:
-                messages = messages_from_wire_dicts(messages)
+                state_values = await runner.get_thread_state_values(checkpoint_thread_id)
             except Exception:
-                logger.debug(
-                    "messages_from_wire_dicts failed for loop %s; using raw dicts",
+                logger.warning(
+                    "Failed to read checkpoint state for loop %s",
                     loop_id,
                     exc_info=True,
                 )
+                state_values = {}
 
-        # Activity log (secondary — cognition card replay + fallback for
-        # checkpoint-less loops).
-        try:
-            raw_log = await runner.get_persisted_thread_messages(
-                checkpoint_thread_id,
-                limit=10000,
-                include_events=True,
-            )
-        except Exception:
-            logger.warning("Failed to read activity log for loop %s", loop_id, exc_info=True)
-            raw_log = []
-
-        log_events = [
-            row
-            for row in (self._normalize_log_row(r) for r in raw_log)
-            if row.get("kind") in ("event", "tool_call", "tool_result", "conversation")
-        ]
+            messages = list(state_values.get("messages", []) or [])
+            if messages and isinstance(messages[0], dict):
+                try:
+                    messages = messages_from_wire_dicts(messages)
+                except Exception:
+                    logger.debug(
+                        "messages_from_wire_dicts failed for loop %s; using raw dicts",
+                        loop_id,
+                        exc_info=True,
+                    )
 
         cognition_replay: list[MessageData] = []
         if log_events:
@@ -222,22 +288,8 @@ class LoopCardManager:
 
     @staticmethod
     def _normalize_log_row(row: Any) -> dict[str, Any]:
-        """Normalize a runner thread-log row into a plain dict.
-
-        ``get_persisted_thread_messages`` returns pydantic models or dicts
-        depending on the durability backend. The binder consumes plain dicts.
-        """
-        if isinstance(row, dict):
-            return row
-        dump = getattr(row, "model_dump", None)
-        if callable(dump):
-            try:
-                d = dump(mode="json") if "mode" in dump.__code__.co_varnames else dump()
-                if isinstance(d, dict):
-                    return d
-            except Exception:
-                logger.debug("model_dump failed on activity-log row", exc_info=True)
-        return {}
+        """Backward-compatible wrapper around ``normalize_log_row``."""
+        return normalize_log_row(row)
 
     # ------------------------------------------------------------------
     # Reattach replay
@@ -257,10 +309,47 @@ class LoopCardManager:
         Returns:
             Number of ``card.created`` frames sent.
         """
+        if await self.is_display_empty(loop_id):
+            logger.debug("Fast-path empty card replay for loop %s", loop_id)
+            return await self._emit_empty_replay(loop_id, send_fn)
+
         # Always refresh before replay so resume/subscription sees the latest
         # goal-completion card (card-only lazy derivation can otherwise return
         # a stale snapshot from an earlier turn).
         ledger = await self.refresh(loop_id)
+        return await self._emit_replay_from_ledger(loop_id, ledger, send_fn)
+
+    async def _emit_empty_replay(
+        self,
+        loop_id: str,
+        send_fn: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> int:
+        """Emit an empty ``card.replay_*`` block without derivation."""
+        await send_fn(
+            {
+                "type": CARD_REPLAY_BEGIN,
+                "loop_id": loop_id,
+                "total_cards": 0,
+                "latest_seq": 0,
+            }
+        )
+        await send_fn(
+            {
+                "type": CARD_REPLAY_END,
+                "loop_id": loop_id,
+                "latest_seq": 0,
+                "card_count": 0,
+            }
+        )
+        return 0
+
+    async def _emit_replay_from_ledger(
+        self,
+        loop_id: str,
+        ledger: LoopCardLedger,
+        send_fn: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> int:
+        """Stream card frames from an already-populated ledger."""
         async with ledger.lock():
             mutations = ledger.to_mutations_snapshot()
         total = len(mutations)
