@@ -13,7 +13,6 @@ from soothe_sdk.protocols.identity import (
     User,
 )
 
-from soothe.protocols.autopilot import AutopilotProtocol
 from soothe.protocols.concurrency import ConcurrencyPolicy
 from soothe.protocols.core_agent import CoreAgentProtocol
 from soothe.protocols.durability import (
@@ -53,16 +52,12 @@ from soothe.protocols.policy import (
     PolicyProfile,
     PolicyProtocol,
 )
-from soothe.protocols.remote import RemoteAgentProtocol
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
-from soothe.protocols.strange_loop import StrangeLoopProtocol
-from soothe.protocols.toolkit import ToolkitProtocol
 from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
     "ActionRequest",
     "AsyncPersistStore",
-    "AutopilotProtocol",
     "CheckpointEnvelope",
     "ConcurrencyPolicy",
     "CoreAgentProtocol",
@@ -90,14 +85,11 @@ __all__ = [
     "PolicyProfile",
     "PolicyProtocol",
     "Reflection",
-    "RemoteAgentProtocol",
     "StepReport",
     "StepResult",
-    "StrangeLoopProtocol",
     "ThreadFilter",
     "ThreadInfo",
     "ThreadMetadata",
-    "ToolkitProtocol",
     "VectorRecord",
     "VectorStoreProtocol",
     # Identity (RFC-307)

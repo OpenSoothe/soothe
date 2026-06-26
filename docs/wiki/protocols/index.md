@@ -39,8 +39,6 @@ Soothe's 9+ core protocols organize into three categories:
 | Protocol | Purpose | Backend | Documentation |
 |----------|---------|---------|---------------|
 | **LoopRunnerProtocol** | StrangeLoop orchestration | SootheRunner | [execution-protocols.md](execution-protocols.md) |
-| **RemoteAgentProtocol** | Remote agent invocation | ACP, A2A, LangGraph Remote | [execution-protocols.md](execution-protocols.md) |
-| **ToolkitProtocol** | Tool collection interface | Built-in + Plugin toolkits | [execution-protocols.md](execution-protocols.md) |
 
 ### Loop-Level Protocols
 
@@ -72,9 +70,7 @@ Soothe's 9+ core protocols organize into three categories:
                           ↓ EXECUTE step
 ┌─────────────────────────────────────────────────────────┐
 │  CoreAgent (runtime)                                     │
-│  - ToolkitProtocol: Tool invocation                     │
 │  - PolicyProtocol: Permission checks                    │
-│  - RemoteAgentProtocol: Remote delegation               │
 └─────────────────────────────────────────────────────────┘
                           ↓ Persistence
 ┌─────────────────────────────────────────────────────────┐
