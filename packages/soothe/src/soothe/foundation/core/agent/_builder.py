@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from langgraph.store.base import BaseStore
     from langgraph.types import Checkpointer
 
+    from soothe.middleware.identity import IdentityRuntime
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
@@ -98,6 +99,7 @@ class AgentBuilder:
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
         mcp_registry: Any | None = None,
+        identity_runtime: IdentityRuntime | None = None,
     ) -> CoreAgent:
         """Build CoreAgent with all components.
 
@@ -126,6 +128,8 @@ class AgentBuilder:
             planner: Override PlannerProtocol implementation. None uses config.
             policy: Override PolicyProtocol implementation. None uses config.
             mcp_registry: Override MCPRegistry. None uses builder's instance (RFC-412).
+            identity_runtime: Optional identity bundle (RFC-307). When enabled,
+                IdentityMiddleware is prepended to the stack.
 
         Returns:
             CoreAgent instance wrapping CompiledStateGraph with typed properties.
@@ -235,11 +239,12 @@ class AgentBuilder:
         # Initialize backend
         resolved_backend = backend or self._initialize_backend(resolved_policy)
 
-        # Build middleware stack (RFC-412: pass mcp_registry)
+        # Build middleware stack (RFC-412: pass mcp_registry; RFC-307: pass identity)
         default_middleware = build_soothe_middleware_stack(
             self._config,
             resolved_policy,
             mcp_registry=registry,
+            identity_runtime=identity_runtime,
         )
         if all_tools:
             from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
@@ -469,6 +474,7 @@ def create_soothe_agent(
     memory_store: MemoryProtocol | None = None,
     planner: PlannerProtocol | None = None,
     policy: PolicyProtocol | None = None,
+    identity_runtime: IdentityRuntime | None = None,
 ) -> CoreAgent:
     """Factory that creates Soothe's Layer 1 CoreAgent runtime.
 
@@ -491,6 +497,7 @@ def create_soothe_agent(
         memory_store: Override MemoryProtocol implementation.
         planner: Override PlannerProtocol implementation.
         policy: Override PolicyProtocol implementation.
+        identity_runtime: Optional identity bundle (RFC-307).
 
     Returns:
         CoreAgent instance wrapping CompiledStateGraph with typed properties.
@@ -507,4 +514,5 @@ def create_soothe_agent(
         memory_store=memory_store,
         planner=planner,
         policy=policy,
+        identity_runtime=identity_runtime,
     )

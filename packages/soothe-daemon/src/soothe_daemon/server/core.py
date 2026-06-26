@@ -34,6 +34,7 @@ from soothe_daemon.protocol import MessageRouter
 from soothe_daemon.query import QueryEngine
 from soothe_daemon.runtime.loop_dispatcher import LoopInputDispatcher
 from soothe_daemon.runtime.thread_state import ThreadStateRegistry
+from soothe_daemon.server.auth_handler import AuthHandler
 from soothe_daemon.server.handlers import DaemonHandlersMixin
 from soothe_daemon.server.session import ClientSessionManager
 from soothe_daemon.services.memory_profiler import MemoryProfiler
@@ -201,6 +202,74 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._daemon_config.memory_profiling.enabled:
             self._memory_profiler = MemoryProfiler(self._daemon_config.memory_profiling)
 
+        # RFC-307: Identity service (AKSK auth + JWT tokens)
+        self._identity_service: Any | None = None  # IdentityService | None
+        self._auth_handler: AuthHandler | None = None
+        if self._daemon_config.identity.enabled:
+            self._identity_service = self._create_identity_service()
+            self._auth_handler = AuthHandler(self._identity_service)
+            logger.info("[Identity] Service enabled (RFC-307 AKSK authentication)")
+
+    def _create_identity_service(self) -> Any:
+        """Create IdentityService from daemon identity config (RFC-307).
+
+        Returns:
+            IdentityService instance configured with JWT key and SQLite backend.
+
+        Raises:
+            RuntimeError: If JWT signing key is required but not available.
+        """
+        from pathlib import Path
+
+        from soothe.core.security.identity_service import IdentityService
+        from soothe_sdk.client.config import SOOTHE_DATA_DIR
+
+        identity_cfg = self._daemon_config.identity
+
+        # Resolve JWT signing key (env var takes priority)
+        jwt_key = identity_cfg.tokens.jwt_signing_key
+        if not jwt_key:
+            jwt_key = os.environ.get("SOOTHE_JWT_KEY", "")
+        if not jwt_key:
+            import secrets
+
+            jwt_key = secrets.token_urlsafe(32)
+            logger.warning(
+                "[Identity] JWT signing key not configured — auto-generated "
+                "(tokens will not survive daemon restart). Set SOOTHE_JWT_KEY env var "
+                "or identity.tokens.jwt_signing_key in config for persistence."
+            )
+
+        # Use shared data directory for identity database
+        db_path = Path(SOOTHE_DATA_DIR) / "identity.db"
+
+        return IdentityService(
+            db_path=db_path,
+            jwt_key=jwt_key,
+            access_expiry_hours=identity_cfg.tokens.access_token_expiry_hours,
+            refresh_expiry_days=identity_cfg.tokens.refresh_token_expiry_days,
+            default_aksk_expiry_days=identity_cfg.aksk.default_expiry_days,
+            max_aksk_expiry_days=identity_cfg.aksk.max_expiry_days,
+            enabled=True,
+        )
+
+    def _build_identity_runtime(self) -> Any | None:
+        """Build identity runtime bundle for agent/runner injection (RFC-307).
+
+        Returns:
+            IdentityRuntime when identity service is enabled, else None.
+        """
+        if self._identity_service is None:
+            return None
+
+        from soothe.middleware.identity import IdentityRuntime
+
+        return IdentityRuntime(
+            service=self._identity_service,
+            config=self._daemon_config.identity,
+            thread_context=self._thread_registry,
+        )
+
     async def _cancel_loop_for_session(self, loop_id: str) -> None:
         """Cancel in-flight work for a loop when a client disconnects (IG-408)."""
         if not str(loop_id or "").strip():
@@ -247,7 +316,12 @@ class SootheDaemon(DaemonHandlersMixin):
             from soothe.runner import SootheRunner
 
             try:
-                self._runner = await asyncio.to_thread(SootheRunner, self._config)
+                identity_runtime = self._build_identity_runtime()
+                self._runner = await asyncio.to_thread(
+                    SootheRunner,
+                    self._config,
+                    identity_runtime=identity_runtime,
+                )
             except Exception as exc:
                 self._readiness_state = "error"
                 self._readiness_message = str(exc)
@@ -258,7 +332,11 @@ class SootheDaemon(DaemonHandlersMixin):
             from soothe_daemon.runner.factory import LoopRunnerFactory
 
             try:
-                self._runner_factory = LoopRunnerFactory(self._daemon_config, self._config)
+                self._runner_factory = LoopRunnerFactory(
+                    self._daemon_config,
+                    self._config,
+                    identity_runtime=self._build_identity_runtime(),
+                )
             except Exception as exc:
                 self._readiness_state = "error"
                 self._readiness_message = str(exc)

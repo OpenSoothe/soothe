@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.foundation.core.agent import CoreAgent
+    from soothe.middleware.identity import IdentityRuntime
     from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
@@ -79,8 +80,19 @@ class SootheRunner(
         config: Soothe configuration. If ``None``, uses defaults.
     """
 
-    def __init__(self, config: SootheConfig | None = None) -> None:
-        """Initialize the runner with optional config."""
+    def __init__(
+        self,
+        config: SootheConfig | None = None,
+        *,
+        identity_runtime: IdentityRuntime | None = None,
+    ) -> None:
+        """Initialize the runner with optional config.
+
+        Args:
+            config: Soothe configuration. If ``None``, uses defaults.
+            identity_runtime: Optional identity bundle (RFC-307). When enabled,
+                IdentityMiddleware is prepended to the agent middleware stack.
+        """
         import time
 
         from soothe.foundation.core.agent import create_soothe_agent
@@ -139,6 +151,7 @@ class SootheRunner(
         self._agent: CoreAgent = create_soothe_agent(
             self._config,
             checkpointer=self._checkpointer,
+            identity_runtime=identity_runtime,
         )
         agent_ms = (time.perf_counter() - agent_start) * 1000
         logger.info("CoreAgent created in %.1fms", agent_ms)

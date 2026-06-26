@@ -137,6 +137,7 @@ def build_auth_response_error(error_code: str, message: str | None = None) -> di
         "aksk_expired": "AKSK has expired",
         "aksk_revoked": "AKSK has been revoked",
         "missing_credentials": "Access key and secret key are required",
+        "identity_disabled": "Identity service is not enabled on this daemon",
     }
 
     return {
@@ -162,6 +163,7 @@ def build_refresh_response_error(error_code: str, message: str | None = None) ->
     error_messages = {
         "invalid_refresh_token": "Refresh token is invalid, expired, or revoked",
         "missing_refresh_token": "Refresh token is required",
+        "identity_disabled": "Identity service is not enabled on this daemon",
     }
 
     return {
