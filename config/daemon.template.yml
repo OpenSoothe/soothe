@@ -159,6 +159,8 @@ thread_pool:
   # With thread_pool, tune config persistence pool sizes if thread_pool.max_pool_size is raised.
   request_timeout_seconds: 0         # 0 = no per-request timeout
   thread_startup_timeout_seconds: 10
+  reuse_runner: true                 # IG-506: one SootheRunner per worker thread
+  warmup_runner: true                  # IG-506: build runner at worker startup
 
 # Worker pool - Process-based isolation
 # Subprocess workers with memory isolation; pre-warmed at startup
@@ -177,6 +179,8 @@ worker_pool:
   request_timeout_seconds: 0         # 0 = no per-request timeout
   heartbeat_interval_seconds: 30
   stuck_worker_timeout_seconds: 180
+  reuse_runner: true                 # IG-506: one SootheRunner per worker process
+  warmup_runner: true                  # IG-506: build runner at worker startup
   dispatch_wait_stats_enabled: true
   dispatch_wait_stats_interval_seconds: 60
   dispatch_wait_stats_idle_pause_seconds: 120

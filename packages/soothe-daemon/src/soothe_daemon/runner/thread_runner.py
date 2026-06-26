@@ -119,13 +119,15 @@ def _thread_worker_body(
     default_timeout_seconds: int,
     *,
     identity_runtime: IdentityRuntime | None = None,
+    reuse_runner: bool = True,
+    warmup_runner: bool = True,
 ) -> None:
     """Thread worker body: maintains event loop, executes requests.
 
     Behavior:
         - Creates dedicated asyncio event loop at startup
         - Wait for requests on request_queue (with idle timeout)
-        - Create fresh SootheRunner per request (no user data leakage)
+        - Reuse one SootheRunner per worker when ``reuse_runner`` (IG-506)
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
         - Exit on stop_event, idle timeout, or max requests
@@ -146,12 +148,27 @@ def _thread_worker_body(
     asyncio.set_event_loop(loop)
 
     requests_completed = 0
+    cached_runner = None
+
+    if reuse_runner and warmup_runner:
+        from soothe_daemon.runner._worker_runner import acquire_worker_runner
+
+        cached_runner, _ = acquire_worker_runner(
+            config=config,
+            cached_runner=None,
+            reuse_runner=reuse_runner,
+            warmup_runner=warmup_runner,
+            identity_runtime=identity_runtime,
+        )
 
     def _run_single(req: LoopRunRequest, request_id: str, pusher: ResponsePusher | None) -> None:
-        """Execute one request with fresh SootheRunner."""
-        from soothe.runner import SootheRunner
+        """Execute one request, reusing worker runner when configured."""
         from soothe.runner._worker_utils import parse_intent_hint
         from soothe.runner.worker_logging import configure_loop_runner_worker_logging
+
+        from soothe_daemon.runner._worker_runner import acquire_worker_runner
+
+        nonlocal cached_runner
 
         def _emit(msg_type: str, payload: Any = None) -> None:
             if pusher is not None:
@@ -173,10 +190,17 @@ def _thread_worker_body(
         timeout_enabled = timeout_seconds > 0
 
         async def _execute() -> None:
-            runner: SootheRunner | None = None
+            nonlocal cached_runner
+            runner = None
 
             try:
-                runner = SootheRunner(config, identity_runtime=identity_runtime)
+                runner, cached_runner = acquire_worker_runner(
+                    config=config,
+                    cached_runner=cached_runner,
+                    reuse_runner=reuse_runner,
+                    warmup_runner=False,
+                    identity_runtime=identity_runtime,
+                )
 
                 timeout_ctx = asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
@@ -400,9 +424,13 @@ class ThreadPool:
         thread_startup_timeout_seconds: int = 10,
         *,
         identity_runtime: IdentityRuntime | None = None,
+        reuse_runner: bool = True,
+        warmup_runner: bool = True,
     ) -> None:
         self._config = config  # Shared memory, no spawn-safe copy needed
         self._identity_runtime = identity_runtime
+        self._reuse_runner = reuse_runner
+        self._warmup_runner = warmup_runner
         self._min_pool_size = min_pool_size
         self._max_pool_size = max(min_pool_size, max_pool_size)
         self._idle_timeout_seconds = idle_timeout_seconds
@@ -454,6 +482,8 @@ class ThreadPool:
                 request_timeout_seconds=pool_config.request_timeout_seconds,
                 thread_startup_timeout_seconds=pool_config.thread_startup_timeout_seconds,
                 identity_runtime=identity_runtime,
+                reuse_runner=pool_config.reuse_runner,
+                warmup_runner=pool_config.warmup_runner,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -520,7 +550,11 @@ class ThreadPool:
                 self._max_requests_per_thread,
                 self._request_timeout_seconds,
             ),
-            kwargs={"identity_runtime": self._identity_runtime},
+            kwargs={
+                "identity_runtime": self._identity_runtime,
+                "reuse_runner": self._reuse_runner,
+                "warmup_runner": self._warmup_runner,
+            },
             daemon=True,
             name=worker_id,
         )

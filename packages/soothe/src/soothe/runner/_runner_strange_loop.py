@@ -346,16 +346,44 @@ def _clip_sloop_step_description(
     return text[: max_len - 1].rstrip() + "…"
 
 
+_BOILERPLATE_PLAN_NEXT_ACTIONS: frozenset[str] = frozenset(
+    {
+        "Goal achieved successfully",
+        "Goal progress sufficient for completion",
+    }
+)
+
+
+def _is_displayable_plan_next_action(text: str) -> bool:
+    """True when ``next_action`` is user-facing plan-generate text worth a reason card."""
+    stripped = (text or "").strip()
+    return bool(stripped) and stripped not in _BOILERPLATE_PLAN_NEXT_ACTIONS
+
+
+def _is_displayable_assessment_reasoning(text: str) -> bool:
+    """True when assess text is real LLM output (not fresh-loop routing placeholders)."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    return not stripped.startswith("Fresh-loop bypass:")
+
+
 def _should_emit_loop_reason_event(
     *,
     assessment_reasoning: str,
     plan_reasoning: str,
+    next_action: str = "",
 ) -> bool:
     """Whether to forward a loop reason event to clients.
 
-    Reason cards show assess/plan reasoning only — not plan-generate ``next_action``.
+    Assess cards use ``assessment_reasoning``; plan-generate cards use ``next_action``
+    (RFC-604 / IG-329 user-facing line). Legacy ``plan_reasoning`` is still honored.
     """
-    return bool(assessment_reasoning.strip() or plan_reasoning.strip())
+    return bool(
+        assessment_reasoning.strip()
+        or plan_reasoning.strip()
+        or _is_displayable_plan_next_action(next_action)
+    )
 
 
 class StrangeLoopMixin:
@@ -401,7 +429,7 @@ class StrangeLoopMixin:
 
         # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
         # One load for unified classification (tail) - IG-128, IG-133
-        await self._ensure_checkpointer_initialized()
+        # IG-506: defer CoreAgent/checkpointer init until quiz or execute materialize.
 
         # RFC-225: intent classification is quiz vs. agentic only.
         # Loop continuation is derived structurally inside StrangeLoop from the
@@ -428,6 +456,7 @@ class StrangeLoopMixin:
 
             # Fast path: skip StrangeLoop entirely for quiz (greetings + trivia)
             if intent_classification.intent_type == "quiz":
+                await self._materialize_core_agent()
                 async for chunk in self._run_quiz(
                     user_input, tid, classification=intent_classification
                 ):
@@ -538,6 +567,7 @@ class StrangeLoopMixin:
                         event_data.get("intent_type") if isinstance(event_data, dict) else None
                     )
                     if intent_type == "quiz":
+                        await self._materialize_core_agent()
                         async for chunk in self._run_quiz(user_input, tid, classification):
                             yield chunk
                         return
@@ -548,15 +578,19 @@ class StrangeLoopMixin:
 
                 elif event_type == "plan_decision":
                     logger.debug(
-                        "[Loop] Plan: %d steps (%s mode)",
+                        "[Loop] Plan: %d steps (%s mode, cumulative: %d total, %d done)",
                         len(event_data.get("steps", [])),
                         event_data.get("execution_mode", ""),
+                        event_data.get("total_steps", 0),
+                        event_data.get("done_steps", 0),
                     )
                     yield _custom(
                         StrangeLoopPlanDecisionEvent(
                             iteration=int(event_data.get("iteration", 0)),
                             steps=list(event_data.get("steps") or []),
                             execution_mode=str(event_data.get("execution_mode", "")),
+                            total_steps=int(event_data.get("total_steps", 0)),
+                            done_steps=int(event_data.get("done_steps", 0)),
                         ).to_dict()
                     )
 
@@ -647,7 +681,7 @@ class StrangeLoopMixin:
 
                 elif event_type == "assess":
                     reasoning = str(event_data.get("assessment_reasoning", "")).strip()
-                    if reasoning:
+                    if _is_displayable_assessment_reasoning(reasoning):
                         yield _custom(
                             LoopAgentReasonEvent(
                                 status="",
@@ -661,7 +695,8 @@ class StrangeLoopMixin:
 
                 elif event_type == "plan":
                     next_action = str(event_data.get("next_action", "")).strip()
-                    if is_simple_query_direct_next_action(next_action):
+                    simple_direct = is_simple_query_direct_next_action(next_action)
+                    if simple_direct:
                         yield loop_assistant_messages_chunk(
                             content=next_action,
                             phase="plan_direct",
@@ -670,15 +705,17 @@ class StrangeLoopMixin:
                         )
                     assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
                     plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
+                    reason_next_action = "" if simple_direct else next_action
                     if _should_emit_loop_reason_event(
                         assessment_reasoning=assessment_reasoning,
                         plan_reasoning=plan_reasoning,
+                        next_action=reason_next_action,
                     ):
                         yield _custom(
                             LoopAgentReasonEvent(
                                 status=str(event_data.get("status", "")),
                                 progress=event_data["progress"],
-                                next_action="",
+                                next_action=reason_next_action,
                                 assessment_reasoning=assessment_reasoning,
                                 plan_reasoning=plan_reasoning,
                                 plan_action=event_data.get("plan_action", "new"),

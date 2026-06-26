@@ -486,6 +486,11 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         clarification_detector = ClarificationDetector()
         clarification_view = _build_loop_state_view(ctx)
 
+    from soothe.foundation.core.agent._lazy import LazyCoreAgent
+
+    if isinstance(strange_loop.core_agent, LazyCoreAgent):
+        await strange_loop.core_agent.amaterialize()
+
     run_executor = Executor(
         strange_loop.core_agent,
         checkpointer=checkpointer,
