@@ -604,10 +604,6 @@ class FuzzyFileController:
         return True
 
 
-# Keep old name as alias for backwards compatibility
-PathCompletionController = FuzzyFileController
-
-
 # ============================================================================
 # Multi-Completion Manager
 # ============================================================================

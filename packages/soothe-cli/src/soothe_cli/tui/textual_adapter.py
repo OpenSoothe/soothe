@@ -66,6 +66,7 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
     is_step_card_tool_scope,
     materialize_ai_blocks_with_resolved_tools,
     merge_tool_display_args,
+    predict_main_execute_tool_call_id,
     resolve_stream_tool_name,
     should_ingest_tool_for_step_stats,
     tool_args_meaningful,
@@ -983,6 +984,16 @@ async def apply_tool_call_wire_update(
             else:
                 step_w.add_tool_call(tcid, name, update_payload, raw_args=raw_args_stream)
             adapter._tool_to_step[tcid] = step_w
+        elif name != "task":
+            update_payload = dict(display_args or {})
+            if not update_payload and raw_args_stream:
+                update_payload = {"_raw": raw_args_stream}
+            router.buffer_main_tool(
+                tcid,
+                name,
+                update_payload,
+                raw_args=raw_args_stream,
+            )
         return True
 
     _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
@@ -2286,6 +2297,23 @@ async def execute_task_textual(
                                     continue
 
                                 lookup_id = str(buffer_id) if buffer_id is not None else ""
+                                if not lookup_id and is_step_scope and buffer_name:
+                                    bound_step_id = ""
+                                    if len(router.active_step_ids) == 1:
+                                        bound_step_id = next(iter(router.active_step_ids))
+                                    elif adapter._step_by_namespace.get(ns_key) is not None:
+                                        bound_step_id = getattr(
+                                            adapter._step_by_namespace[ns_key],
+                                            "_step_id",
+                                            "",
+                                        )
+                                    if bound_step_id:
+                                        lookup_id = predict_main_execute_tool_call_id(
+                                            bound_step_id,
+                                            tool_call_id=lookup_id,
+                                            tool_name=str(buffer_name),
+                                            chunk_index=chunk_index,
+                                        )
                                 raw_args_stream = ""
                                 pend_stream = (
                                     pending_tool_calls_lc.get(lookup_id) if lookup_id else None

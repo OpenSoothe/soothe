@@ -29,6 +29,27 @@ def tool_call_update_event(
     }
 
 
+def unified_tool_update_allowed_without_args(tool_call_id: str) -> bool:
+    """True when a wire update may omit kwargs (unified main or subgraph tool rows).
+
+    Step-level ``task`` delegations are excluded; they are ingested via dedicated paths.
+    Raw provider ids (non-unified) still require parsed args before batching.
+    """
+    from soothe_sdk.ux.task_namespace import (
+        is_inner_subgraph_task_tool_id,
+        is_step_level_task_tool_id,
+        parse_unified_tool_call_id,
+    )
+
+    tcid = str(tool_call_id or "").strip()
+    if not tcid or is_step_level_task_tool_id(tcid) or is_inner_subgraph_task_tool_id(tcid):
+        return False
+    _, type_code, _, tool_info = parse_unified_tool_call_id(tcid)
+    if type_code not in ("s", "t"):
+        return False
+    return (tool_info or "").split(":")[0] != "task"
+
+
 def _args_dict_from_tool_call(tc: dict[str, Any]) -> dict[str, Any]:
     raw = tc.get("args")
     if isinstance(raw, dict) and raw:
@@ -67,15 +88,15 @@ def extract_tool_call_updates_from_wire_message(
         if not tid or tid in seen:
             return
         args = _args_dict_from_tool_call(tc)
-        if not args:
-            return
         name = str(tc.get("name") or "").strip() or "tool"
+        if not args and not unified_tool_update_allowed_without_args(tid):
+            return
         seen.add(tid)
         out.append(
             tool_call_update_event(
                 tool_call_id=tid,
                 name=name,
-                args=args,
+                args=dict(args or {}),
             )
         )
 
@@ -87,18 +108,18 @@ def extract_tool_call_updates_from_wire_message(
         if not isinstance(chunk, dict):
             continue
         tid = str(chunk.get("id") or "").strip()
+        name = str(chunk.get("name") or "").strip() or "tool"
         if not tid or tid in seen:
             continue
         args = _args_dict_from_tool_call(chunk)
-        if not args:
+        if not args and not unified_tool_update_allowed_without_args(tid):
             continue
-        name = str(chunk.get("name") or "").strip() or "tool"
         seen.add(tid)
         out.append(
             tool_call_update_event(
                 tool_call_id=tid,
                 name=name,
-                args=args,
+                args=dict(args or {}),
             )
         )
 
@@ -110,4 +131,5 @@ __all__ = [
     "TOOL_CALL_UPDATES_BATCH",
     "extract_tool_call_updates_from_wire_message",
     "tool_call_update_event",
+    "unified_tool_update_allowed_without_args",
 ]
