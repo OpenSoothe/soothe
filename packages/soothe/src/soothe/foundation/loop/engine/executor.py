@@ -1538,19 +1538,25 @@ class Executor:
                         len(graph_input_messages),
                     )
 
+            # IG-510: Build EXECUTION HINTS with merged task instructions
+            # Use full_description for execution context, fallback to description
+            step_goal_text = step.full_description or step.description
+
             hints_parts: list[str] = []
             if wire_subagent:
                 hints_parts.append(f"Suggested subagent: {wire_subagent}")
             if step.expected_output:
                 hints_parts.append(f"Expected output: {step.expected_output}")
-            execution_hints = None
-            if hints_parts:
-                execution_hints = (
-                    ". ".join(hints_parts) + ". Consider using the suggested approach first."
-                )
+            # IG-510: Merge task instructions into EXECUTION HINTS (no separate TASK section)
+            hints_parts.append(
+                "Execute the step described in GOAL above. "
+                "Use the suggested approach when provided. "
+                "Produce output matching the expected output specification."
+            )
+            execution_hints = ". ".join(hints_parts)
 
             envelope = _user_msg_builder.build_execute_step_message(
-                step.description,
+                step_goal_text,
                 execution_hints=execution_hints,
                 skill_context=loop_state.skill_context if loop_state else None,
             )
@@ -2185,20 +2191,25 @@ class Executor:
         wire_subagent = _wire_subagent_from_routing(getattr(state, "routing_classification", None))
         messages = []
         for step_index, step in enumerate(steps):
-            # Build execution hints from step metadata (RFC-214: hints in user envelope)
+            # IG-510: Build EXECUTION HINTS with merged task instructions
+            # Use full_description for execution context, fallback to description
+            step_goal_text = step.full_description or step.description
+
             hints_parts: list[str] = []
             if wire_subagent:
                 hints_parts.append(f"Suggested subagent: {wire_subagent}")
             if step.expected_output:
                 hints_parts.append(f"Expected output: {step.expected_output}")
-            execution_hints = None
-            if hints_parts:
-                execution_hints = (
-                    ". ".join(hints_parts) + ". Consider using the suggested approach first."
-                )
+            # IG-510: Merge task instructions into EXECUTION HINTS (no separate TASK section)
+            hints_parts.append(
+                "Execute the step described in GOAL above. "
+                "Use the suggested approach when provided. "
+                "Produce output matching the expected output specification."
+            )
+            execution_hints = ". ".join(hints_parts)
 
             envelope = _batch_builder.build_execute_step_message(
-                step.description,
+                step_goal_text,
                 execution_hints=execution_hints,
                 skill_context=state.skill_context,
             )

@@ -1,4 +1,4 @@
-"""Tests for RFC-214 user message envelopes (scenario-based format)."""
+"""Tests for RFC-214 user message envelopes (scenario-based format, IG-510)."""
 
 from __future__ import annotations
 
@@ -53,6 +53,37 @@ def test_execute_message_skill_context_after_goal() -> None:
     goal_idx = msg.index("GOAL:")
     skill_idx = msg.index("SKILL CONTEXT:")
     assert goal_idx < skill_idx
+
+
+def test_execute_message_no_intent_section() -> None:
+    """IG-510: INTENT section removed from execute-step message."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
+        "Analyze logs",
+        execution_hints="Expected output: error list.",
+    )
+    assert "INTENT:" not in msg
+
+
+def test_execute_message_no_task_section() -> None:
+    """IG-510: TASK section removed, merged into EXECUTION HINTS."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
+        "Analyze logs",
+        execution_hints="Expected output: error list.",
+    )
+    assert "TASK:" not in msg
+
+
+def test_execute_message_hints_contains_task_instructions() -> None:
+    """IG-510: Task instructions are merged into EXECUTION HINTS."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
+        "Analyze logs",
+        execution_hints="Expected output: error list. Execute the step described in GOAL above.",
+    )
+    assert "EXECUTION HINTS:" in msg
+    assert "Execute the step" in msg
 
 
 def test_plan_assess_message_uses_goal_label() -> None:
@@ -123,7 +154,7 @@ def test_deprecated_envelope_wrappers_still_work() -> None:
 
 
 def test_flatten_user_message_content_extracts_goal() -> None:
-    msg = "GOAL:\nSearch the repo for *.yml config\n\nINTENT: agentic (complexity: medium)"
+    msg = "GOAL:\nSearch the repo for *.yml config\n\nEXECUTION HINTS: some hints"
     flat = flatten_user_message_content(msg)
     assert flat == "Search the repo for *.yml config"
 
