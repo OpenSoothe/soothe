@@ -409,10 +409,6 @@ class CognitionStepMessage(Vertical):
         """Direct main-agent tool rows (excludes task delegations and subgraph tools)."""
         return self._build_row_index().main_tools
 
-    def _orphan_subgraph_tool_rows_for_preview(self) -> list[_StepToolRow]:
-        """Subgraph tool rows whose parent task delegation row is missing."""
-        return self._build_row_index().orphan_tools
-
     def _task_delegation_dedupe_key(self, row: _StepToolRow) -> str:
         """Stable key for one main-graph task delegation (aliases share one branch)."""
         return task_delegation_dedupe_key(row, self._step_id)
@@ -424,11 +420,6 @@ class CognitionStepMessage(Vertical):
     def _task_idx_from_delegation_row(self, task_row: _StepToolRow) -> int | None:
         """Task index encoded in a step-level ``task`` unified id (``task:0`` → 0)."""
         return task_idx_from_delegation_row(task_row)
-
-    def _child_rows_for_task(self, task_row: _StepToolRow) -> list[_StepToolRow]:
-        """Subgraph tool rows for one task (``parent_tool_call_id`` or ``{step}:t{n}:…``)."""
-        key = task_delegation_dedupe_key(task_row, self._step_id)
-        return self._build_row_index().children_by_task.get(key, [])
 
     def _phase_icon(self, phase: str, g: Any, *, animate_running: bool = False) -> str:
         """Lifecycle glyph for a task branch or tool row."""
@@ -1464,3 +1455,23 @@ class CognitionStepMessage(Vertical):
             self._status_widget.display = True
         if self._detail_widget:
             self._detail_widget.display = False
+
+    def _sync_task_row_status_from_subagent(self, task_key: str, success: bool) -> None:
+        """Update task row icon when SubAgent card completes (IG-629).
+
+        Args:
+            task_key: Dedupe key for the task delegation row.
+            success: True for success (✓ icon), False for error (✗ icon).
+        """
+        if not task_key:
+            return
+        # Find the task row by key and update its phase
+        for row in self._rows:
+            if not getattr(row, "is_task_row", False):
+                continue
+            row_key = task_delegation_dedupe_key(row, self._step_id)
+            if row_key == task_key:
+                row.phase = "success" if success else "error"
+                row.started_at = None
+                self._sync_step_card_surface()
+                return

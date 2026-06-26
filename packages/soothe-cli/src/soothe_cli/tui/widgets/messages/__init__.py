@@ -27,6 +27,7 @@ from soothe_cli.tui.widgets.messages.cognition_goal_tree import CognitionGoalTre
 from soothe_cli.tui.widgets.messages.cognition_reason import CognitionReasonMessage
 from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
 from soothe_cli.tui.widgets.messages.cognition_step_activity import StepToolRow as _StepToolRow
+from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
 from soothe_cli.tui.widgets.messages.diff_message import DiffMessage
 from soothe_cli.tui.widgets.messages.error import ErrorMessage
 from soothe_cli.tui.widgets.messages.skill import (
@@ -66,6 +67,7 @@ __all__ = [
     "CognitionReasonMessage",
     "CognitionStepMessage",
     "_StepToolRow",
+    "create_subagent_card",
     # Diff
     "DiffMessage",
     # Error

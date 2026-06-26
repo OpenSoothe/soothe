@@ -1,16 +1,16 @@
-# RFC-628: Cognition Step Card Display
+# RFC-628: Cognition Step Card & SubAgent Card Display
 
-**RFC**: 628  
-**Title**: Cognition Step Card Display  
-**Status**: Implemented  
-**Kind**: Implementation Interface Design  
-**Created**: 2026-06-26  
-**Updated**: 2026-06-26  
-**Authors**: Xiaming Chen  
-**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements)  
-**Extends**: RFC-500 § Event Rendering (step card), RFC-501 § 7.3 (TUI step card body)  
-**Implemented by**: IG-628  
-**Design draft**: `docs/drafts/2026-06-26-cognition-step-activity-panel-design.md`
+**RFC**: 628
+**Title**: Cognition Step Card & SubAgent Card Display
+**Status**: Draft
+**Kind**: Implementation Interface Design
+**Created**: 2026-06-26
+**Updated**: 2026-06-26
+**Authors**: Xiaming Chen
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements)
+**Extends**: RFC-500 § Event Rendering (step card), RFC-501 § 7.3 (TUI step card body)
+**Implemented by**: IG-628 (original), IG-629 (SubAgent card)
+**Design draft**: `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
 
 ---
 
@@ -267,4 +267,175 @@ Run `./scripts/verify_finally.sh` before merge.
 - RFC-501 — display verbosity (ActivityInfo vs ConversationPanel)
 - RFC-607 — progressive display refinements
 - IG-628 — `docs/impl/IG-628-step-card-display-refactor.md`
-- Design draft — `docs/drafts/2026-06-26-cognition-step-activity-panel-design.md`
+- IG-629 — `docs/impl/IG-629-subagent-card-display.md`
+- Design draft — `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
+
+---
+
+# Part II: SubAgent Card (Flattened Display)
+
+The following sections define the `SubAgentMessage` widget and routing model for flattened step/task display. This replaces the nested `children_by_task` model from the original implementation.
+
+---
+
+## SubAgent Card Overview
+
+Each task/subagent delegation gets its own card (`SubAgentMessage`) appearing immediately after the parent step card. The step card shows a **flat list** of tool calls and task rows — no nesting.
+
+### Motivation
+
+The original nested model (`children_by_task`, indented tool lines) had:
+1. Complex classification logic to track parent IDs and match children
+2. Orphan handling for subgraph tools without visible parents
+3. Visual hierarchy through indentation (hard to parse at speed)
+
+The flattened model:
+1. Step shows flat row list (tools and `Task(...)` markers as peers)
+2. Each SubAgent card owns its own tool rows and status
+3. Direct routing via unified ID parsing — no parent matching
+
+### Widget zones
+
+```
+SubAgentMessage (extends CognitionStepMessage)
+├── subagent-header          🎯 SubAgentName(description)
+├── subagent-activity        activity tree (tool rows only)
+├── subagent-detail          execute prose (optional)
+└── subagent-status          footer: running → completed/failed
+```
+
+| Zone | Visible when | Content |
+|------|--------------|---------|
+| Header | Always | `🎯 {subagent_type}({description})` via `_assemble_card_header` |
+| Activity | Tool rows exist | Flat tool activity lines |
+| Detail | Execute streaming prose | `branched_prose_body` |
+| Footer | Not bare header | `StepCardStatusLine` (running → success/error) |
+
+**CSS:** Inherits `CognitionStepMessage` styles — same cognition-orange border, same structure.
+
+---
+
+## Display Layout
+
+```
+⎿ 🚀 Step: search and analyze
+  ○ read_file(query.txt)
+  ○ Task(search_web)              ← flat row, peer with tools
+  ○ write_file(results.md)
+  ○ Running... · 3 tools, 1 task
+
+⎿ 🎯 Task(search_web)             ← SubAgent card, after parent step
+  ○ web_search("query")
+  ○ read_search_results()
+  ✓ Completed (1.2s) · 2 tools
+
+⎿ 🚀 Step: summarize findings     ← next step
+  ...
+```
+
+### Multiple delegations
+
+Sequential cards after parent step:
+
+```
+⎿ 🚀 Step: research
+  ○ Task(search_web)
+  ○ Task(analyze_papers)
+
+⎿ 🎯 Task(search_web)
+  ○ ...tools...
+
+⎿ 🎯 Task(analyze_papers)
+  ○ ...tools...
+```
+
+---
+
+## Routing Model
+
+### Registry
+
+Message list maintains `_subagent_cards_by_key: dict[str, SubAgentMessage]` where key = `{step}:t{n}`.
+
+### Routing flow
+
+| Unified ID pattern | Route target |
+|--------------------|--------------|
+| `{step}:s:task:{n}` | Create SubAgent card + add task row to step |
+| `{step}:t{n}:tool_name` | Lookup SubAgent card → `add_tool_call` |
+| `{step}:s:tool_name` (non-task) | Step card → `add_tool_call` |
+
+**Creation timing:** SubAgent card created when task call streams in (`task(description, subagent_type=...)`). Card starts with `running` status immediately.
+
+### Simplified StepRowIndex
+
+After flattening, `StepRowIndex` removes nesting fields:
+
+| Field | Status |
+|-------|--------|
+| `task_delegations` | Kept — flat marker rows on step |
+| `main_tools` | Kept — main-agent tools |
+| `orphan_tools` | **Removed** — no orphans |
+| `children_by_task` | **Removed** — no nested children |
+| `total_tool_count` | Kept — main + task markers |
+| `task_delegation_count` | Kept |
+
+---
+
+## Status Sync
+
+When SubAgent card completes:
+
+1. SubAgent footer: `Completed (X.Xs) · N tools` or `Failed (X.Xs)`
+2. Step's corresponding task row icon syncs: `✓ Task(...)` or `✗ Task(...)`
+
+Implementation: SubAgent card calls `step.sync_task_row_status(task_key, success)` via message list mediation.
+
+---
+
+## Lifecycle
+
+| Card | Phases |
+|------|--------|
+| `CognitionStepMessage` | `pending → queued → running → success/error` (unchanged) |
+| `SubAgentMessage` | `running → success/error` only |
+
+SubAgent has no pending/queued states — created when task call arrives (already active).
+
+---
+
+## Module Layout
+
+| Module | Changes |
+|--------|---------|
+| `cognition_step.py` | Remove `children_by_task` classification, simplify activity |
+| `cognition_step_activity.py` | Remove `_child_rows_for_task`, `children_by_task`, orphan logic |
+| `cognition_subagent.py` | NEW — `SubAgentMessage` subclass |
+| `messages/__init__.py` | Export `SubAgentMessage` |
+| Message list container | Add `_subagent_cards_by_key` registry, routing logic |
+
+---
+
+## Removed Complexity
+
+| Removed | Reason |
+|---------|--------|
+| `StepRowIndex.children_by_task` | No nested children |
+| `StepRowClassifier._child_rows_for_task()` | Not needed |
+| `StepRowClassifier._orphan_subgraph_tool_rows()` | No orphans |
+| Nested indentation rendering | Flat display |
+| Task-branch status lines in step card | SubAgent shows its own footer |
+| `parent_tool_call_id` nesting tracking | Unified ID parsing sufficient |
+
+---
+
+## Testing
+
+| Suite | Coverage |
+|-------|----------|
+| `test_subagent_message_creation.py` | Card created on task call |
+| `test_subagent_tool_routing.py` | Inner tools route correctly |
+| `test_subagent_status_sync.py` | Completion syncs to step row |
+| `test_flat_step_activity.py` | Step shows flat rows |
+
+Run `./scripts/verify_finally.sh` before merge.

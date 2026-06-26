@@ -236,7 +236,7 @@ async def test_wire_update_registers_subgraph_tool_with_placeholder_args() -> No
 
 @pytest.mark.asyncio
 async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
-    """Regression: placeholder subgraph rows must later show parsed invocation args."""
+    """IG-629: Subgraph tool args hydrate on SubAgent card (not step card)."""
     adapter = TextualUIAdapter(
         mount_message=lambda _w: None,
         update_status=lambda _s: None,
@@ -277,20 +277,26 @@ async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
     )
     assert handled_placeholder is True
 
-    # Later stream update has no parsed dict yet, but does carry raw JSON args.
-    routed = router.try_route_subgraph_tool(
+    # IG-629: Later stream update routes to SubAgent card
+    handled_hydrate = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "ZCH_01:t0:list_files:0",
+            "name": "list_files",
+            "args": '{"path":"/Users/xiamingchen/Workspace/mirasurf/soothe"}',
+        },
         ns_key=("execute:abc", "tools:late-args"),
-        lookup_id="ZCH_01:t0:list_files:0",
-        display_key="ZCH_01:t0:list_files:0",
-        tool_name="list_files",
-        args={},
-        raw_args='{"path":"/Users/xiamingchen/Workspace/mirasurf/soothe"}',
-        step_cards=adapter._current_step_messages,
-        tool_to_step=adapter._tool_to_step,
-        tool_display_by_call_id=adapter._tool_display_by_call_id,
+        pending_tool_calls_lc={},
     )
-    assert routed is True
-    text = str(card._step_task_activity_content())
+    assert handled_hydrate is True
+
+    # IG-629: Check SubAgent card (not step card)
+    subagent_key = "ZCH-01:t0"
+    subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
+    assert subagent_card is not None, "SubAgent card should exist"
+    text = str(subagent_card._step_task_activity_content())
     assert "ListFiles(" in text
     assert "mirasurf/soothe" in text
 
@@ -352,7 +358,12 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
     )
     assert handled_glob is True
 
-    text = str(card._step_task_activity_content())
+    # IG-629: Subgraph tools now route to SubAgent cards, not step card
+    subagent_key = "ZCH-01:t0"
+    subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
+    assert subagent_card is not None, "SubAgent card should be created for task delegation"
+
+    text = str(subagent_card._step_task_activity_content())
     assert "ListFiles(" in text
     assert "mirasurf/soothe" in text
     assert "Glob(" in text

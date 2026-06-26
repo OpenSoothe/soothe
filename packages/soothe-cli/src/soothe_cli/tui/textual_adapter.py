@@ -114,6 +114,7 @@ from soothe_cli.tui.widgets.messages import (
     CognitionStepMessage,
     DiffMessage,
     SummarizationMessage,
+    create_subagent_card,
     flush_deferred_tools_refreshes,
     reset_turn_tool_refresh_state,
 )
@@ -196,6 +197,10 @@ class TextualUIAdapter:
 
         self._file_preview_assistant_id: str | None = None
         """Agent id for the active turn (path resolution in file previews)."""
+
+        # IG-629: SubAgent card registry for routing inner subgraph tools
+        self._subagent_cards_by_key: dict[str, Any] = {}
+        """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
 
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
@@ -510,14 +515,23 @@ def _ingest_main_task_tool_on_step_card(
     display_args: dict[str, Any],
     *,
     bound_step_id: str,
-) -> None:
-    """Register a main-graph ``task`` delegation on the step card task-activity tree."""
+) -> Any | None:
+    """Register a main-graph ``task`` delegation on the step card and prepare SubAgent card.
+
+    IG-629: Creates a SubAgent card for each task delegation. The caller must mount
+    the returned card asynchronously. Inner subgraph tools route to the SubAgent card
+    via `_subagent_cards_by_key`.
+
+    Returns:
+        SubAgentMessage widget if newly created, None otherwise (caller must mount async).
+    """
     tcid = str(tool_call_id).strip()
     sid = str(bound_step_id).strip()
     if not tcid or is_inner_subgraph_task_tool_id(tcid):
-        return
+        return None
     raw_st = display_args.get("subagent_type", "")
     subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+    desc = str(display_args.get("description") or display_args.get("prompt") or "").strip()
     if subagent_type:
         router.register_task_spawn(tcid, subagent_type, step_id=sid)
     if not sid:
@@ -526,7 +540,7 @@ def _ingest_main_task_tool_on_step_card(
             adapter._tool_to_step,
             adapter._tool_display_by_call_id,
         )
-        return
+        return None
     norm_tcid = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
     step_w = _resolve_step_widget_for_tool(
         adapter,
@@ -534,6 +548,7 @@ def _ingest_main_task_tool_on_step_card(
         bound_step_id=sid,
         ns_key=(),
     )
+    subagent_card_to_mount = None
     if step_w is not None:
         if step_w.has_tool_call_row(norm_tcid):
             step_w.update_tool_args(norm_tcid, display_args)
@@ -541,11 +556,37 @@ def _ingest_main_task_tool_on_step_card(
             step_w.add_tool_call(norm_tcid, "task", display_args, is_task_row=True)
         adapter._tool_to_step[norm_tcid] = step_w
         adapter._tool_display_by_call_id[norm_tcid] = step_w
+
+        # IG-629: Create SubAgent card for this task delegation
+        # Parse task index from unified ID for the key
+        _, _, _, tool_info = parse_unified_tool_call_id(norm_tcid)
+        task_idx = 0
+        if tool_info and ":" in tool_info:
+            tail = tool_info.split(":")[-1]
+            if tail.isdigit():
+                task_idx = int(tail)
+        subagent_key = f"{sid}:t{task_idx}"
+
+        # Only create if not already registered
+        if subagent_key not in adapter._subagent_cards_by_key:
+            subagent_card = create_subagent_card(
+                step_id=sid,  # Use parent step ID for row classification
+                description=desc or f"{subagent_type} task",
+                subagent_type=subagent_type or "Task",
+                parent_step_id=sid,
+                parent_task_key=norm_tcid,
+                task_idx=task_idx,
+                id=f"subagent-{uuid.uuid4().hex[:8]}",
+            )
+            adapter._subagent_cards_by_key[subagent_key] = subagent_card
+            subagent_card_to_mount = subagent_card  # Return for async mounting
+
     router.route_pending_subgraph_tools(
         adapter._current_step_messages,
         adapter._tool_to_step,
         adapter._tool_display_by_call_id,
     )
+    return subagent_card_to_mount
 
 
 def _resolve_step_widget_for_tool(
@@ -957,13 +998,18 @@ async def apply_tool_call_wire_update(
             return True
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
-        _ingest_main_task_tool_on_step_card(
+        subagent_card = _ingest_main_task_tool_on_step_card(
             adapter,
             router,
             tcid,
             display_args,
             bound_step_id=bound_step_id,
         )
+        # IG-629: Mount SubAgent card if newly created
+        if subagent_card is not None:
+            mount_result = adapter._mount_message(subagent_card)
+            if mount_result is not None:
+                await mount_result
         return True
 
     if is_step_scope:
@@ -998,6 +1044,28 @@ async def apply_tool_call_wire_update(
 
     _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     if display_key:
+        # IG-629: Try direct routing to SubAgent card first
+        parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(display_key)
+        if parsed_sid and type_code == "t" and task_idx is not None:
+            subagent_key = f"{parsed_sid}:t{task_idx}"
+            subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
+            if subagent_card is not None:
+                # Route directly to SubAgent card
+                resolved_args = dict(display_args or {})
+                if raw_args_stream and not extract_tool_args_dict(resolved_args):
+                    parsed_from_raw = extract_tool_args_dict({"_raw": raw_args_stream})
+                    if parsed_from_raw:
+                        resolved_args = parsed_from_raw
+                if subagent_card.has_tool_call_row(display_key):
+                    subagent_card.update_tool_args(display_key, resolved_args)
+                else:
+                    subagent_card.add_tool_call(
+                        display_key, name, resolved_args, raw_args=raw_args_stream
+                    )
+                adapter._tool_to_step[display_key] = subagent_card
+                return True
+
+        # Fall back to step card routing if no SubAgent card
         routed = router.try_route_subgraph_tool(
             ns_key=ns_key,
             lookup_id=tcid,

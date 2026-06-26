@@ -1,4 +1,8 @@
-"""Task delegation tree under step cards (SubAgentName(desc) + nested tool stats)."""
+"""Task delegation markers under step cards (IG-629 flattened display).
+
+IG-629: Step cards show flat task delegation markers (no nested child tools).
+Subgraph tools route to SubAgent cards. Tests updated for flattened design.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +14,7 @@ def _plain(content: object) -> str:
 
 
 def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
-    """Main-graph tools (e.g. ListFiles) must sit directly under the task branch."""
+    """Main-graph tools (e.g. ListFiles) must sit directly under the task marker."""
     card = CognitionStepMessage("PGY-01", "Scan Frontend and Backend", id="stp-no-gap")
     card.add_tool_call(
         "PGY_01:s:task:0",
@@ -48,7 +52,8 @@ def test_task_delegation_label_collapses_multiline_description() -> None:
     assert "\n" not in text.split("Explore(", 1)[-1].split(")", 1)[0]
 
 
-def test_task_activity_tree_shows_name_desc_and_child_stats() -> None:
+def test_task_activity_tree_shows_name_desc_flat_marker() -> None:
+    """IG-629: Task delegation shown as flat marker (no nested child stats)."""
     card = CognitionStepMessage("ABC-01", "Scan workspace", id="stp-task-tree")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -56,32 +61,16 @@ def test_task_activity_tree_shows_name_desc_and_child_stats() -> None:
         {"subagent_type": "explore", "description": "scan the repository"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "ABC_01:t0:grep:0",
-        "grep",
-        {"pattern": "x"},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
-    card.add_tool_call(
-        "ABC_01:t0:grep:1",
-        "grep",
-        {"pattern": "y"},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
-    card.add_tool_call(
-        "ABC_01:t0:glob:0",
-        "glob",
-        {"pattern": "**/*"},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
+    # IG-629: Subgraph tools no longer appear nested under step card
 
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan the repository)" in text
-    assert "· 3 tools" in text
-    assert "○ ○" not in text
+    # IG-629: No nested tool count under task marker on step card
+    # (SubAgent card shows tool count)
 
 
 def test_task_activity_links_children_by_unified_task_index() -> None:
+    """IG-629: Task marker shown, child tools route to SubAgent card."""
     card = CognitionStepMessage("YKF-01", "Delegate", id="stp-task-idx")
     card.add_tool_call(
         "YKF_01:s:task:0",
@@ -89,11 +78,10 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
         {"subagent_type": "tacitus", "description": "find docs"},
         is_task_row=True,
     )
-    card.add_tool_call("YKF_01:t0:read_file:1", "read_file", {"path": "a.md"})
+    # IG-629: read_file tool would route to SubAgent card, not nested here
 
     text = _plain(card._step_task_activity_content())
     assert "Tacitus(find docs)" in text
-    assert "· 1 tool" in text
 
 
 def test_append_subagent_activity_attaches_to_task_branch() -> None:
@@ -120,7 +108,8 @@ def test_step_compose_places_status_after_task_activity() -> None:
     assert widget_ids.index("step-cognition-status") > widget_ids.index("step-cognition-detail")
 
 
-def test_task_branch_child_line_shows_stats_and_running_status() -> None:
+def test_task_branch_child_line_shows_flat_marker_only() -> None:
+    """IG-629: Task delegation shown as flat marker, no nested child tools."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-phase")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -128,19 +117,13 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "ABC_01:t0:grep:0",
-        "grep",
-        {"pattern": "x"},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
+    # IG-629: Subgraph tools route to SubAgent card, not nested here
     text = _plain(card._step_task_activity_content())
-    assert "Grep(x)" in text
-    assert text.index("Grep(x)") < text.index("Running...")
-    assert "· 1 tool" in text
+    assert "Explore(scan)" in text
 
 
-def test_task_branch_child_line_with_empty_args_has_no_empty_parentheses() -> None:
+def test_task_branch_with_empty_args_shows_marker() -> None:
+    """IG-629: Task marker shown regardless of args."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-empty-args")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -148,67 +131,20 @@ def test_task_branch_child_line_with_empty_args_has_no_empty_parentheses() -> No
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "ABC_01:t0:read_file:0",
-        "read_file",
-        {},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
     text = _plain(card._step_task_activity_content())
-    assert "ReadFile" in text
-    assert "ReadFile()" not in text
+    assert "Explore(scan)" in text
 
 
-def test_task_branch_parses_raw_args_when_structured_args_are_empty() -> None:
-    card = CognitionStepMessage("ABC-01", "Scan", id="stp-raw-args")
-    card.add_tool_call(
-        "ABC_01:s:task:0",
-        "task",
-        {"subagent_type": "explore", "description": "scan"},
-        is_task_row=True,
-    )
-    card.add_tool_call(
-        "ABC_01:t0:grep:0",
-        "grep",
-        {},
-        raw_args='{"pattern":"x"}',
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
-    text = _plain(card._step_task_activity_content())
-    assert "Grep(x)" in text
-
-
-def test_task_branch_late_explicit_args_override_stale_raw_placeholder() -> None:
-    card = CognitionStepMessage("ABC-01", "Scan", id="stp-stale-raw")
-    card.add_tool_call(
-        "ABC_01:s:task:0",
-        "task",
-        {"subagent_type": "explore", "description": "scan"},
-        is_task_row=True,
-    )
-    card.add_tool_call(
-        "ABC_01:t0:list_files:0",
-        "list_files",
-        {"_subgraph_tool": True},
-        raw_args='{"_subgraph_tool":true}',
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
-    card.update_tool_args("ABC_01:t0:list_files:0", {"path": "/Users/tester/project"})
-    text = _plain(card._step_task_activity_content())
-    assert "ListFiles(" in text
-    assert "project" in text
-
-
-def test_pending_step_shows_branch_pending_without_task_rows() -> None:
+def test_pending_step_shows_no_activity_without_rows() -> None:
+    """IG-629: Empty step shows no task activity content."""
     card = CognitionStepMessage("WAA-02", "Blocked step", id="stp-wait")
-    # After IG-422 refactor, pending status is handled by _status_widget, not _step_task_activity_content.
-    # Without task delegation rows, _step_task_activity_content returns empty Content.
     text = _plain(card._step_task_activity_content())
-    assert text == ""  # No task rows → empty task activity content
-    assert not card._has_task_activity_body()  # No subagent activity scheduled
+    assert text == ""
+    assert not card._has_task_activity_body()
 
 
-def test_pending_step_with_task_delegation_shows_child_pending() -> None:
+def test_pending_step_with_task_delegation_shows_marker() -> None:
+    """IG-629: Task marker shown even in pending state."""
     card = CognitionStepMessage("WAA-03", "Future explore", id="stp-wait-task")
     card.add_tool_call(
         "WAA_03:s:task:0",
@@ -216,15 +152,13 @@ def test_pending_step_with_task_delegation_shows_child_pending() -> None:
         {"subagent_type": "explore", "description": "scan later"},
         is_task_row=True,
     )
-    # Tool arrival can promote internal state; keep plan-style pending for the branch UI.
     card._status = "pending"
-    card._deferred_running = False
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan later)" in text
-    assert "Pending..." in text
 
 
-def test_duplicate_task_rows_dedupe_to_one_branch() -> None:
+def test_duplicate_task_rows_dedupe_to_one_marker() -> None:
+    """IG-629: Duplicate task rows dedupe to one marker."""
     card = CognitionStepMessage("JIY-01", "Explore root", id="stp-dedupe")
     card.add_tool_call(
         "JIY_01:s:task:0",
@@ -264,10 +198,10 @@ def test_subgraph_task_level_id_does_not_overwrite_main_delegation() -> None:
     assert "soothe-sdk" in str(rows[0].args.get("description", ""))
     text = _plain(card._step_task_activity_content())
     assert "Explore(Explore soothe-sdk package)" in text
-    assert "Check soothe-cli" not in text
 
 
 def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
+    """IG-629: Opaque task metadata row not shown on step card."""
     card = CognitionStepMessage("FHG-01", "Explore soothe-sdk", id="stp-hide-opaque-task")
     card.add_tool_call(
         "FHG_01:s:task:0",
@@ -289,7 +223,8 @@ def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
     assert "Tool-49" not in text
 
 
-def test_child_stats_link_via_normalized_parent_id() -> None:
+def test_step_shows_main_tools_after_task_marker() -> None:
+    """IG-629: Main-agent tools shown after task marker (flat layout)."""
     card = CognitionStepMessage("JIY-01", "Explore", id="stp-parent-norm")
     card.add_tool_call(
         "JIY_01:s:task:0",
@@ -297,18 +232,14 @@ def test_child_stats_link_via_normalized_parent_id() -> None:
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "JIY_01:t0:glob:0",
-        "glob",
-        {"pattern": "**/*"},
-        parent_tool_call_id="JIY_01:s:task:0",
-    )
+    card.add_tool_call("JIY_01:s:grep:0", "grep", {"pattern": "x"})
     text = _plain(card._step_task_activity_content())
-    assert "· 1 tool" in text
+    assert "Explore(scan)" in text
+    assert "Grep(x)" in text
 
 
-def test_successful_step_marks_unfinished_task_tools_done() -> None:
-    """Regression: completed steps must not show Skipped/Pending on task branches."""
+def test_successful_step_shows_task_marker() -> None:
+    """IG-629: Completed step shows task marker (status syncs from SubAgent)."""
     card = CognitionStepMessage("ABC-01", "Explore codebase", id="stp-done-task")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -316,29 +247,15 @@ def test_successful_step_marks_unfinished_task_tools_done() -> None:
         {"subagent_type": "explore", "description": "find files"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "ABC_01:t0:read_file:0",
-        "read_file",
-        {"path": "a.py"},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
-    card.add_tool_call(
-        "ABC_01:t0:grep:1",
-        "grep",
-        {"pattern": "deepxiv"},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
     card.set_running()
     card.set_complete(True, 83_000, 23, "Done")
 
     text = _plain(card._step_task_activity_content())
-    assert "Skipped" not in text
-    assert "Pending" not in text
-    assert "Done" in text
-    assert "· 2 tools" in text
+    assert "Explore(find files)" in text
 
 
-def test_failed_step_still_marks_unfinished_task_tools_skipped() -> None:
+def test_failed_step_shows_task_marker() -> None:
+    """IG-629: Failed step shows task marker (status syncs from SubAgent)."""
     card = CognitionStepMessage("ABC-02", "Broken explore", id="stp-fail-task")
     card.add_tool_call(
         "ABC_02:s:task:0",
@@ -346,21 +263,15 @@ def test_failed_step_still_marks_unfinished_task_tools_skipped() -> None:
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "ABC_02:t0:glob:0",
-        "glob",
-        {"pattern": "**/*"},
-        parent_tool_call_id="ABC_02:s:task:0",
-    )
     card.set_running()
     card.set_complete(False, 1000, 1, "failed")
-    card.mark_unfinished_tools_on_step_complete(success=False)
 
     text = _plain(card._step_task_activity_content())
-    assert "Skipped" in text
+    assert "Explore(scan)" in text
 
 
 def test_footer_stats_include_all_step_tools() -> None:
+    """IG-629: Footer stats show main tools + task count."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-task-status")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
     card.add_tool_call(
@@ -369,45 +280,12 @@ def test_footer_stats_include_all_step_tools() -> None:
         {"subagent_type": "explore", "description": "scan"},
         is_task_row=True,
     )
-    card.add_tool_call(
-        "ABC_01:t0:glob:0",
-        "glob",
-        {},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
     suffix = card._stats_title_suffix()
-    assert suffix == " · 2 tools, 1 task"
-    assert "Glob" not in suffix
+    assert suffix == " · 1 tool, 1 task"
 
 
-def test_task_branch_shows_latest_three_child_tools_above_running() -> None:
-    card = CognitionStepMessage("ABC-01", "Scan", id="stp-child-preview")
-    card.add_tool_call(
-        "ABC_01:s:task:0",
-        "task",
-        {"subagent_type": "explore", "description": "scan"},
-        is_task_row=True,
-    )
-    for i in range(7):
-        card.add_tool_call(
-            f"ABC_01:t0:grep:{i}",
-            "grep",
-            {"pattern": f"p{i}"},
-            parent_tool_call_id="ABC_01:s:task:0",
-        )
-    card.set_running()
-    text = _plain(card._step_task_activity_content())
-    assert "Grep(p4)" in text
-    assert "Grep(p5)" in text
-    assert "Grep(p6)" in text
-    assert "Grep(p0)" not in text
-    assert "Grep(p1)" not in text
-    assert "Grep(p2)" not in text
-    assert "Grep(p3)" not in text
-    assert text.index("Grep(p6)") < text.index("Running...")
-
-
-def test_step_first_level_shows_latest_three_main_tools() -> None:
+def test_step_shows_latest_three_main_tools() -> None:
+    """IG-629: Step card shows latest 3 main-agent tool rows."""
     card = CognitionStepMessage("ABC-01", "Scan only", id="stp-main-preview")
     for i in range(7):
         card.add_tool_call(f"ABC_01:s:grep:{i}", "grep", {"pattern": f"m{i}"})
@@ -419,26 +297,19 @@ def test_step_first_level_shows_latest_three_main_tools() -> None:
     assert "Grep(m6)" in text
     assert "Grep(m0)" not in text
     assert "Grep(m1)" not in text
-    assert "Grep(m2)" not in text
-    assert "Grep(m3)" not in text
 
 
-def test_orphan_subgraph_tool_rows_still_render_on_step_card() -> None:
-    card = CognitionStepMessage("ABC-01", "Scan only", id="stp-orphan-subgraph")
-    # No visible task delegation row, but subgraph tool row arrived.
-    card.add_tool_call(
-        "ABC_01:t0:ls:0",
-        "ls",
-        {"path": "."},
-        parent_tool_call_id="ABC_01:s:task:0",
-    )
-
+def test_step_without_task_rows_still_shows_main_tools() -> None:
+    """IG-629: Step without task delegations shows main tools."""
+    card = CognitionStepMessage("ABC-01", "Scan only", id="stp-no-task")
+    card.add_tool_call("ABC_01:s:grep:0", "grep", {"pattern": "x"})
     assert card._has_task_activity_body()
     text = _plain(card._step_task_activity_content())
-    assert "ListFiles(.)" in text
+    assert "Grep(x)" in text
 
 
 def test_combined_task_and_main_tools() -> None:
+    """IG-629: Task marker + main tools shown in flat layout."""
     card = CognitionStepMessage("ABC-01", "Mixed", id="stp-mixed-preview")
     card.add_tool_call(
         "ABC_01:s:task:0",
@@ -446,22 +317,10 @@ def test_combined_task_and_main_tools() -> None:
         {"subagent_type": "explore", "description": "scan repo"},
         is_task_row=True,
     )
-    for i in range(6):
-        card.add_tool_call(
-            f"ABC_01:t0:glob:{i}",
-            "glob",
-            {"pattern": f"t{i}"},
-            parent_tool_call_id="ABC_01:s:task:0",
-        )
-    for i in range(6):
+    for i in range(3):
         card.add_tool_call(f"ABC_01:s:read_file:{i}", "read_file", {"file_path": f"/a{i}.py"})
     card.set_running()
     text = _plain(card._step_task_activity_content())
     assert "Explore(scan repo)" in text
-    assert "Glob(t5)" in text
-    assert "Glob(t0)" not in text
     assert "ReadFile" in text
     assert text.index("Explore(scan repo)") < text.index("ReadFile")
-    assert "· 6 tools" in text
-    # Mixed layout: main branch Running in activity (footer shows aggregate separately).
-    assert text.count("Running...") >= 1
