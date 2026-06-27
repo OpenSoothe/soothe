@@ -347,8 +347,13 @@ class CoreAgent:
         self,
         config: RunnableConfig | None = None,
     ) -> Any:
-        """Read state from ``execution_graph`` after an execute stream."""
-        return await self.execution_graph.aget_state(config=config or {})
+        """Read state after an execute stream.
+
+        Uses the primary ``graph`` for state retrieval since it has the checkpointer.
+        The ephemeral ``execution_graph`` is checkpoint-free for streaming performance
+        (IG-477), but ``aget_state`` requires a checkpointer to read persisted state.
+        """
+        return await self._graph.aget_state(config=config or {})
 
     async def execution_ainvoke(
         self,
