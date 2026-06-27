@@ -13,6 +13,7 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.events import (
+    IntentClassifiedEvent,  # IG-518
     StrangeLoopCompletedEvent,
     StrangeLoopPlanDecisionEvent,
     StrangeLoopStartedEvent,
@@ -453,6 +454,16 @@ class StrangeLoopMixin:
                 intent_classification.intent_type,
                 user_input[:50],
             )
+
+            # IG-518: Emit IntentClassifiedEvent for agentic intents (reasoning for client)
+            if intent_classification.intent_type == "agentic" and intent_classification.reasoning:
+                yield _custom(
+                    IntentClassifiedEvent(
+                        intent_type="agentic",
+                        reasoning=intent_classification.reasoning,
+                        goal_description=intent_classification.goal_description,
+                    ).to_dict()
+                )
 
             # Fast path: skip StrangeLoop entirely for quiz (greetings + trivia)
             if intent_classification.intent_type == "quiz":

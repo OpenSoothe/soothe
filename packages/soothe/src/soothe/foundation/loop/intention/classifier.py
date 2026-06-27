@@ -201,16 +201,23 @@ class IntentClassifier:
         """Build a quiz IntentClassification (fast-path hint bypass)."""
         return IntentClassification(
             intent_type="quiz",
+            reasoning=None,
             goal_description=None,
             task_complexity=TaskComplexity.MINIMAL,
             quiz_response=None,
         )
 
     @staticmethod
-    def _build_agentic_intent(query: str) -> IntentClassification:
-        """Build an agentic IntentClassification with medium complexity."""
+    def _build_agentic_intent(query: str, reasoning: str | None = None) -> IntentClassification:
+        """Build an agentic IntentClassification with medium complexity.
+
+        Args:
+            query: User query text.
+            reasoning: Optional reasoning (IG-518). If None, uses default heuristic message.
+        """
         return IntentClassification(
             intent_type="agentic",
+            reasoning=reasoning or "Query complexity exceeds quiz threshold",
             goal_description=query,
             task_complexity=TaskComplexity.MEDIUM,
             quiz_response=None,
@@ -225,17 +232,27 @@ class IntentClassifier:
         """Safe fallback to agentic when classification is unavailable or fails."""
         reason = type(error_context).__name__ if error_context else "classification_disabled"
         logger.debug("Intent fallback to agentic (%s)", reason)
-        return self._build_agentic_intent(query)
+        return IntentClassification(
+            intent_type="agentic",
+            reasoning=f"Classification fallback ({reason})",
+            goal_description=query,
+            task_complexity=TaskComplexity.MEDIUM,
+            quiz_response=None,
+        )
 
     def _patch_missing_fields(
         self,
         intent: IntentClassification,
         query: str,
     ) -> IntentClassification:
-        """Patch missing goal_description on agentic results."""
-        if intent.intent_type == "agentic" and not intent.goal_description:
-            intent.goal_description = query
-            logger.debug("Patched missing goal_description")
+        """Patch missing goal_description and reasoning on agentic results (IG-518)."""
+        if intent.intent_type == "agentic":
+            if not intent.goal_description:
+                intent.goal_description = query
+                logger.debug("Patched missing goal_description")
+            if not intent.reasoning:
+                intent.reasoning = "Goal requires tool execution"
+                logger.debug("Patched missing reasoning")
         return intent
 
     # -- Heuristic classification -------------------------------------------

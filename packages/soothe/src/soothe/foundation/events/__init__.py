@@ -48,6 +48,7 @@ from .catalog import (
     GoalFailedEvent,
     GoalRemovedEvent,
     GoalReportEvent,
+    IntentClassifiedEvent,  # IG-518
     IterationCompletedEvent,
     IterationStartedEvent,
     LoopCompletedEvent,
@@ -115,6 +116,7 @@ from .constants import (
     GOAL_REMOVED,
     GOAL_REPORT,
     HISTORY_REPLAY_COMPLETE,
+    INTENT_CLASSIFIED,  # IG-518
     ITERATION_COMPLETED,
     ITERATION_STARTED,
     LOOP_COMPLETED,
@@ -173,6 +175,7 @@ __all__ = [
     "GOAL_REPORT",
     "GOAL_DIRECTIVES_APPLIED",
     "GOAL_DEFERRED",
+    "INTENT_CLASSIFIED",  # IG-518
     "PLAN_CREATED",
     "PLAN_BATCH_STARTED",
     "PLAN_REFLECTED",
@@ -244,6 +247,8 @@ __all__ = [
     "StrangeLoopStepQueuedEvent",
     "StrangeLoopStepCompletedEvent",
     "StrangeLoopContextCompactionEvent",
+    # Intent events (IG-518)
+    "IntentClassifiedEvent",
     # Other events
     "MemoryRecalledEvent",
     "MemoryStoredEvent",

@@ -77,6 +77,7 @@ from .constants import (
     GOAL_FAILED,
     GOAL_REMOVED,
     GOAL_REPORT,
+    INTENT_CLASSIFIED,  # IG-518
     ITERATION_COMPLETED,
     # Lifecycle - Iteration
     ITERATION_STARTED,
@@ -376,6 +377,20 @@ class PolicyDeniedEvent(ProtocolEvent):
     action: str = ""
     reason: str = ""
     profile: str | None = None
+
+
+class IntentClassifiedEvent(ProtocolEvent):
+    """Intent classification result for client visibility (IG-518).
+
+    Emitted after intent-classify determines an agentic intent,
+    providing reasoning for why the query requires tool execution
+    rather than a direct quiz-style response.
+    """
+
+    type: Literal["soothe.cognition.intent.classified"] = "soothe.cognition.intent.classified"
+    intent_type: Literal["quiz", "agentic"] = "agentic"
+    reasoning: str | None = None
+    goal_description: str | None = None
 
 
 class GoalCreatedEvent(ProtocolEvent):
@@ -805,6 +820,15 @@ _reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity=VerbosityTier.INTERNAL)
 # -- Protocol: policy --------------------------------------------------------
 _reg(POLICY_CHECKED, PolicyCheckedEvent, summary_template="Policy: {verdict}")
 _reg(POLICY_DENIED, PolicyDeniedEvent, summary_template="Denied: {reason}")
+
+# -- Protocol: intent (IG-518) ------------------------------------------------
+_reg(
+    INTENT_CLASSIFIED,
+    IntentClassifiedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{reasoning}",
+    priority=EventPriority.HIGH,
+)
 
 # -- Protocol: goal ----------------------------------------------------------
 _reg(GOAL_CREATED, GoalCreatedEvent, summary_template="Goal: {description} (priority={priority})")
