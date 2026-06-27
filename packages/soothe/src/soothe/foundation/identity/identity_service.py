@@ -29,7 +29,7 @@ from soothe_sdk.protocols.identity import (
     User,
 )
 
-from soothe.core.security.credentials import (
+from soothe.foundation.identity.credentials import (
     generate_access_key,
     generate_aksk_id,
     generate_secret_key,
@@ -37,13 +37,13 @@ from soothe.core.security.credentials import (
     is_valid_access_key_format,
     verify_secret_key,
 )
-from soothe.core.security.errors import (
+from soothe.foundation.identity.errors import (
     AKSKNotFoundError,
     MappingConflictError,
     MappingNotFoundError,
     UserNotFoundError,
 )
-from soothe.core.security.tokens import (
+from soothe.foundation.identity.tokens import (
     JWTManager,
 )
 

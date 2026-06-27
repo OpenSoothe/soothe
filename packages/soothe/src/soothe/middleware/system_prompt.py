@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Soothe main graph: subagents are invoked only via this tool name.
 _TASK_TOOL_NAME = "task"
-# Layer 2 ``ExecutionHintsMiddleware`` appends using this prefix (must stay in sync).
+# Layer 2 executor appends execution hints using this prefix (must stay in sync).
 _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
 _VALID_TASK_COMPLEXITY = frozenset({"minimal", "simple", "medium", "complex"})
 
@@ -888,9 +888,8 @@ class SystemPromptMiddleware(AgentMiddleware):
     def _extract_execution_hints_from_state(state: Any) -> str | None:
         """Extract execution hints text from state for user message envelope (RFC-214).
 
-        ``ExecutionHintsMiddleware`` appends hints to ``state['system_prompt']``.
-        Instead of merging into the system prompt (which breaks cache), we extract
-        them here so the executor can place them in the user message envelope.
+        The executor builds hints directly into the user message envelope
+        (UserMessageBuilder.build_execute_step_message), not via middleware.
 
         Returns:
             Hints text without the marker prefix, or None if no hints present.

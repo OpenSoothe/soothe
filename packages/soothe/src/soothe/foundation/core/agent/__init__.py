@@ -17,9 +17,8 @@ Architecture:
 │  │  Soothe Middleware Stack:                                 │    │
 │  │  1. SoothePolicyMiddleware - safety enforcement             │    │
 │  │  2. SystemPromptMiddleware - dynamic prompts                │    │
-│  │  3. ExecutionHintsMiddleware - Layer 2 → Layer 1 hints    │    │
-│  │  4. WorkspaceContextMiddleware - thread workspace           │    │
-│  │  5. SubagentContextMiddleware - context briefing            │    │
+│  │  3. WorkspaceContextMiddleware - thread workspace           │    │
+│  │  4. SubagentContextMiddleware - context briefing            │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓

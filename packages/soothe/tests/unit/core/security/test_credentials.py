@@ -9,7 +9,7 @@ import hashlib
 import re
 import uuid
 
-from soothe.core.security.credentials import (
+from soothe.foundation.identity.credentials import (
     ACCESS_KEY_LENGTH,
     ACCESS_KEY_PREFIX,
     SECRET_KEY_LENGTH,

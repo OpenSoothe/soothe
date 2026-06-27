@@ -22,7 +22,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from soothe.core.security.identity_service import IdentityService
+from soothe.foundation.identity.identity_service import IdentityService
 from typer.testing import CliRunner
 
 from soothe_daemon.identity_cli import app as identity_app
@@ -87,11 +87,11 @@ def _create_user_and_aksk(svc: IdentityService, user_id: str = "alice") -> tuple
     svc.create_user(user_id)
     with (
         patch(
-            "soothe.core.security.identity_service.generate_access_key",
+            "soothe.foundation.identity.identity_service.generate_access_key",
             return_value=KNOWN_ACCESS_KEY,
         ),
         patch(
-            "soothe.core.security.identity_service.generate_secret_key",
+            "soothe.foundation.identity.identity_service.generate_secret_key",
             return_value=KNOWN_SECRET_KEY,
         ),
     ):
@@ -188,11 +188,11 @@ class TestCreateAKSK:
         runner.invoke(identity_app, ["create-user", "--user", "alice"])
         with (
             patch(
-                "soothe.core.security.identity_service.generate_access_key",
+                "soothe.foundation.identity.identity_service.generate_access_key",
                 return_value=KNOWN_ACCESS_KEY,
             ),
             patch(
-                "soothe.core.security.identity_service.generate_secret_key",
+                "soothe.foundation.identity.identity_service.generate_secret_key",
                 return_value=KNOWN_SECRET_KEY,
             ),
         ):
@@ -311,11 +311,11 @@ class TestRevokeToken:
         identity.create_user("alice")
         with (
             patch(
-                "soothe.core.security.identity_service.generate_access_key",
+                "soothe.foundation.identity.identity_service.generate_access_key",
                 return_value=KNOWN_ACCESS_KEY,
             ),
             patch(
-                "soothe.core.security.identity_service.generate_secret_key",
+                "soothe.foundation.identity.identity_service.generate_secret_key",
                 return_value=KNOWN_SECRET_KEY,
             ),
         ):
