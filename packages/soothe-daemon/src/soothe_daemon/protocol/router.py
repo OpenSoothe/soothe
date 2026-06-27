@@ -22,7 +22,6 @@ from soothe_daemon.services.image_understanding import validate_and_normalize_im
 
 logger = logging.getLogger(__name__)
 
-_CLIENT_LABEL_LEN = 8
 _LOOP_PROMPT_PREVIEW_MAX = 200
 _LOOP_PROMPT_SCAN_LIMIT = 32
 
@@ -80,13 +79,6 @@ def _peek_loop_prompt(loop_id: str) -> str | None:
 
 # Client messages logged at DEBUG on every dispatch; skip types that poll frequently.
 _SKIP_PER_MESSAGE_DEBUG_TYPES = frozenset({"daemon_ready", "daemon_status"})
-
-
-def _client_label(client_id: Any) -> str:
-    """Short label for logs when ``client_id`` may be a legacy connection object."""
-    if isinstance(client_id, str):
-        return client_id[:_CLIENT_LABEL_LEN] if len(client_id) >= _CLIENT_LABEL_LEN else client_id
-    return f"obj:{id(client_id) & 0xFFFF_FFFF:x}"
 
 
 def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:

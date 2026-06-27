@@ -15,7 +15,6 @@ from typing import Any
 
 from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events import ERROR
-from soothe.foundation.workspace import resolve_workspace_for_stream
 from soothe.logging import ThreadLogger, set_thread_id
 from soothe.utils.error_format import emit_error_event
 from soothe_sdk.client.protocol import _serialize_for_json
@@ -264,17 +263,6 @@ class QueryEngine:
         out.pop("thread_id", None)
         return out
 
-    async def _signal_turn_idle(self, loop_id: str) -> None:
-        """Mark query idle and notify clients (unblocks CLI/TUI waiting on ``status: idle``)."""
-        d = self._daemon
-        async with d._query_state_lock:
-            was_running = d._query_running
-            d._query_running = False
-        if was_running:
-            await d._broadcast(
-                self._loop_scoped_client_message(loop_id, {"type": "status", "state": "idle"})
-            )
-
     async def _broadcast_stream_tuple(
         self,
         loop_id: str,
@@ -397,14 +385,6 @@ class QueryEngine:
             return await enrich_user_text_with_vision(
                 config, text, attachments, session_id=session_id
             )
-
-    def _workspace_str_for_thread(self, thread_id: str) -> str:
-        """Workspace path for ``runner.astream`` via unified resolution (IG-116)."""
-        d = self._daemon
-        return resolve_workspace_for_stream(
-            thread_workspace=d._thread_registry.get_workspace(thread_id),
-            installation_default=d._daemon_workspace,
-        ).path
 
     async def _resolve_query_checkpoint_thread_id(
         self,
