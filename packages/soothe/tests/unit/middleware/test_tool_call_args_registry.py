@@ -8,18 +8,17 @@ import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
+# IG-518: Use ToolCallArgsMiddleware (semaphore removed from stack)
+from soothe.middleware.tool_call_args_middleware import ToolCallArgsMiddleware
 from soothe.middleware.tool_call_args_registry import (
     get_recorded_tool_call_args,
+    init_tool_call_args_registry,
     record_tool_call_args_from_request,
-)
-from soothe.middleware.tool_concurrency import (
-    ToolConcurrencyMiddleware,
-    init_tool_concurrency_for_thread,
 )
 
 
 def test_record_and_get_tool_call_args() -> None:
-    init_tool_concurrency_for_thread(limit=2)
+    init_tool_call_args_registry()
     request = ToolCallRequest(
         tool_call={
             "name": "read_file",
@@ -38,8 +37,8 @@ def test_record_and_get_tool_call_args() -> None:
 
 @pytest.mark.asyncio
 async def test_awrap_tool_call_records_args_before_handler() -> None:
-    init_tool_concurrency_for_thread(limit=1)
-    middleware = ToolConcurrencyMiddleware()
+    init_tool_call_args_registry()
+    middleware = ToolCallArgsMiddleware()
     request = ToolCallRequest(
         tool_call={
             "name": "edit_file",

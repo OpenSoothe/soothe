@@ -184,6 +184,10 @@ class SystemPromptMiddleware(AgentMiddleware):
         self._tool_context_registry = tool_context_registry
         self._mcp_registry = mcp_registry
         self._progressive_tool_middleware = progressive_tool_middleware
+        # IG-518: Instance-level caching for SkillIndex/ProgressiveSkillRegistry
+        # Preserves cache across hops, avoiding re-instantiation overhead (~2.5ms/hop)
+        self._skill_index: Any = None  # Type: SkillIndex (lazy import)
+        self._skill_registry: Any = None  # Type: ProgressiveSkillRegistry (lazy import)
 
     @staticmethod
     def _langfuse_runnable_config() -> dict[str, Any] | None:
@@ -686,22 +690,26 @@ class SystemPromptMiddleware(AgentMiddleware):
         just_invoked = activation.get("just_invoked", set())
         bodies = activation.get("invoked_bodies", {})
 
-        # Build candidate entries via SkillIndex
-        from soothe.skills.index import SkillIndex
-        from soothe.skills.registry import ProgressiveSkillRegistry
+        # IG-518: Use cached SkillIndex/ProgressiveSkillRegistry instances
+        # rebuild_if_stale() checks mtime on every call, so stale files are re-parsed
+        if self._skill_index is None:
+            from soothe.skills.index import SkillIndex
 
-        skill_index = SkillIndex()
-        entries = skill_index.rebuild_if_stale()
+            self._skill_index = SkillIndex()
+        if self._skill_registry is None:
+            from soothe.skills.registry import ProgressiveSkillRegistry
 
-        registry = ProgressiveSkillRegistry()
-        unconditional, _ = registry.partition(entries)
+            self._skill_registry = ProgressiveSkillRegistry()
+
+        entries = self._skill_index.rebuild_if_stale()
+        unconditional, _ = self._skill_registry.partition(entries)
         activated_entries = [e for e in entries if e.name in activated]
         # Merge: unconditional + activated, dedup by name (activated wins for overlap)
         by_name = {e.name: e for e in unconditional}
         by_name.update({e.name: e for e in activated_entries})
         candidates = sorted(by_name.values(), key=lambda e: e.name.lower())
 
-        new_entries = registry.new_for_thread(activation, candidates)
+        new_entries = self._skill_registry.new_for_thread(activation, candidates)
 
         available_block: str | None = None
         if new_entries:
@@ -728,7 +736,7 @@ class SystemPromptMiddleware(AgentMiddleware):
                     available_block = f"<AVAILABLE_SKILLS>\n{text}\n</AVAILABLE_SKILLS>"
 
             # Mark ALL new entries as sent (including just-invoked ones excluded from listing)
-            registry.mark_sent(activation, [e.name for e in new_entries])
+            self._skill_registry.mark_sent(activation, [e.name for e in new_entries])
 
         skill_context_blocks: list[str] = []
         for name in sorted(invoked - just_invoked):

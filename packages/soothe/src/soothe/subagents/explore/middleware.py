@@ -916,15 +916,15 @@ def build_explore_middleware_stack(
         tool_middlewares.extend(build_tool_limit_middleware(tool_call_limit))
         tool_middlewares.extend(build_tool_retry_middleware(loop.tool_retry))
 
-    from soothe.middleware.tool_concurrency import (
-        ToolConcurrencyMiddleware,
+    from soothe.middleware.tool_call_args_middleware import (
+        ToolCallArgsMiddleware,
     )
 
     return [
         # Tool call limit and retry middleware (outermost - applied first)
         *tool_middlewares,
-        # ToolConcurrencyMiddleware captures invocation args for subgraph tool display
-        ToolConcurrencyMiddleware(),
+        # IG-518: ToolCallArgsMiddleware records invocation args for subgraph tool display
+        ToolCallArgsMiddleware(),
         # Explore-specific middlewares
         ExploreWireMiddleware(
             thoroughness=explore_config.thoroughness,
