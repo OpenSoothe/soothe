@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
+import pathspec
 
 from .exceptions import (
     DirectoryNotEmptyError,
@@ -43,13 +44,23 @@ from .unified import UnifiedFilesystem
 
 logger = logging.getLogger(__name__)
 
-# Incremental grep batching constants (IG-510)
+# Incremental grep batching constants (IG-510, IG-520)
 _GREP_BATCH_SIZE: int = 100  # files per batch
 _GREP_MAX_BATCHES: int = 10  # stop after this many batches
-_GREP_BATCH_TIMEOUT_S: float = 5.0  # timeout per batch
+# Per-batch and total budgets kept below the 30s tool timeout so the fallback
+# returns partial results before the tool-timeout middleware kills the call.
+_GREP_BATCH_TIMEOUT_S: float = 2.0  # timeout per batch
 _GREP_MAX_FILE_SIZE_BYTES: int = 1_000_000  # 1 MB per file limit
-_GREP_TOTAL_TIMEOUT_S: float = 60.0  # overall grep timeout
+_GREP_TOTAL_TIMEOUT_S: float = 25.0  # overall grep timeout (< 30s tool limit)
 _GREP_MAX_TOTAL_BYTES: int = 10 * 1024 * 1024  # 10 MB total read limit
+# When ag is unavailable, refuse to Python-walk trees larger than this. A 30s
+# hang becomes a sub-second structured "scope too large" error the agent can act
+# on. Real workspaces (gitignored) are well under this; ~1754 files at the time
+# of writing. See IG-520.
+_GREP_FALLBACK_FILE_LIMIT: int = 50_000
+# Defense-in-depth floor: always skip these even when a repo forgets to
+# .gitignore them. The .gitignore-aware walker (pathspec) is the primary filter;
+# this set is the backstop when pathspec is unavailable or no .gitignore exists.
 _GREP_IGNORE_DIRS: frozenset[str] = frozenset(
     {
         ".git",
@@ -109,6 +120,9 @@ class LocalFilesystem(UnifiedFilesystem):
             max_file_size_mb=max_file_size_mb,
         )
         self._backup_dir = Path(backup_dir)
+        # Cache for compiled .gitignore specs keyed by (workspace_root, search_root) tuple.
+        # None means no .gitignore found; pathspec.PathSpec means compiled patterns.
+        self._gitignore_cache: dict[tuple[Path, Path], pathspec.PathSpec | None] = {}
 
     def _resolve_path(self, path: str) -> Path:
         """Resolve path within workspace.
@@ -1267,6 +1281,28 @@ class LocalFilesystem(UnifiedFilesystem):
                 # ag succeeded, return result (may need to wrap in GrepResult)
                 return ag_result
 
+        # ag unavailable: gate Python fallback by file count to avoid hangs.
+        # The agent receives a structured "scope too large" error it can act on.
+        gitignore_spec = self._load_gitignore(resolved)
+        estimated_file_count = self._estimate_file_count(resolved, gitignore_spec)
+        if estimated_file_count > _GREP_FALLBACK_FILE_LIMIT:
+            logger.warning(
+                "Python grep fallback gated: estimated %d files > limit %d. "
+                "Install 'ag' (The Silver Searcher) for large directory search.",
+                estimated_file_count,
+                _GREP_FALLBACK_FILE_LIMIT,
+            )
+            return GrepResult(
+                matches=[],
+                files_searched=0,
+                total_files=estimated_file_count,
+                error=(
+                    f"Search scope too large ({estimated_file_count} files). "
+                    "Install 'ag' (The Silver Searcher) for efficient search, "
+                    "or narrow the search path/glob pattern."
+                ),
+            )
+
         return self._grep_python_walk_incremental(
             pattern,
             resolved=resolved,
@@ -1511,24 +1547,99 @@ class LocalFilesystem(UnifiedFilesystem):
         return result
 
     def _collect_grep_files(self, resolved: Path, glob: str | None) -> list[Path]:
-        """Collect all files for grep with ignore filter applied.
+        """Collect all files for grep with .gitignore and ignore filter applied.
 
         Pre-collects files to support incremental batching and continuation.
-        Applies ignore directory filter to skip .venv, node_modules, etc.
+        Uses pathspec to honor .gitignore patterns; falls back to _GREP_IGNORE_DIRS
+        floor when no .gitignore exists or pathspec is unavailable.
         """
         all_files: list[Path] = []
 
+        # Load gitignore spec for this search root
+        gitignore_spec = self._load_gitignore(resolved)
+
         for root, dirs, files in os.walk(resolved):
-            # Filter out ignored directories (in-place prevents descent)
-            dirs[:] = [d for d in dirs if not self._should_ignore_dir_for_grep(d)]
+            root_path = Path(root)
+            rel_root = root_path.relative_to(resolved) if root_path != resolved else Path(".")
+
+            # Filter directories using gitignore + floor filter
+            filtered_dirs: list[str] = []
+            for d in dirs:
+                rel_dir = rel_root / d
+                # Gitignore check (primary)
+                if gitignore_spec and gitignore_spec.match_file(str(rel_dir)):
+                    continue
+                # Floor filter (defense-in-depth)
+                if self._should_ignore_dir_for_grep(d):
+                    continue
+                filtered_dirs.append(d)
+            dirs[:] = filtered_dirs
 
             for name in files:
+                file_path = root_path / name
+                rel_file = rel_root / name
+
+                # Gitignore check (primary)
+                if gitignore_spec and gitignore_spec.match_file(str(rel_file)):
+                    continue
+
                 # Apply glob filter if specified
                 if glob and not fnmatch.fnmatch(name, glob):
                     continue
-                all_files.append(Path(root) / name)
+                all_files.append(file_path)
 
         return all_files
+
+    def _load_gitignore(self, search_root: Path) -> pathspec.PathSpec | None:
+        """Load and compile .gitignore patterns for the search tree.
+
+        Scans the entire tree for .gitignore files (gated by file count already).
+        For each .gitignore at path P, prepends patterns with the relative path
+        from search_root to P, matching git's nested .gitignore semantics.
+
+        Caches the compiled spec keyed by workspace root + search root to avoid
+        re-parsing on repeated grep calls within the same session.
+
+        Returns None if no .gitignore files found.
+        """
+        cache_key = (self.workspace.resolve(), search_root.resolve())
+        if cache_key in self._gitignore_cache:
+            return self._gitignore_cache[cache_key]
+
+        patterns: list[str] = []
+
+        # Walk tree to find all .gitignore files (including nested)
+        for root, dirs, files in os.walk(search_root):
+            root_path = Path(root)
+            rel_root = root_path.relative_to(search_root) if root_path != search_root else Path(".")
+
+            # Check for .gitignore at this level
+            if ".gitignore" in files:
+                gitignore_path = root_path / ".gitignore"
+                try:
+                    content = gitignore_path.read_text(encoding="utf-8", errors="ignore")
+                    for line in content.splitlines():
+                        stripped = line.strip()
+                        if stripped and not stripped.startswith("#"):
+                            # Prepend relative path for nested gitignore semantics
+                            if rel_root == Path("."):
+                                patterns.append(stripped)
+                            else:
+                                # Pattern applies relative to this directory
+                                patterns.append(str(rel_root / stripped))
+                except OSError:
+                    pass  # Ignore unreadable gitignore files
+
+            # Skip ignored dirs to speed up scan
+            dirs[:] = [d for d in dirs if not self._should_ignore_dir_for_grep(d)]
+
+        if not patterns:
+            self._gitignore_cache[cache_key] = None
+            return None
+
+        spec = pathspec.PathSpec.from_lines("gitignore", patterns)
+        self._gitignore_cache[cache_key] = spec
+        return spec
 
     def _should_ignore_dir_for_grep(self, name: str) -> bool:
         """Check if directory should be skipped during grep walk."""
@@ -1540,6 +1651,51 @@ class LocalFilesystem(UnifiedFilesystem):
             if "*" in pattern and fnmatch.fnmatch(name, pattern):
                 return True
         return False
+
+    def _estimate_file_count(self, resolved: Path, gitignore_spec: pathspec.PathSpec | None) -> int:
+        """Estimate file count for gating decision without full tree walk.
+
+        Uses shallow sampling: counts files in top-level dirs and extrapolates.
+        Fast enough (<100ms) for gate check, accurate enough for limit decisions.
+        """
+        total_estimate = 0
+        # Sample top-level entries only
+        try:
+            for entry in resolved.iterdir():
+                if entry.is_file():
+                    # Count file directly
+                    if gitignore_spec and gitignore_spec.match_file(entry.name):
+                        continue
+                    total_estimate += 1
+                elif entry.is_dir():
+                    # Skip ignored dirs
+                    if gitignore_spec and gitignore_spec.match_file(entry.name):
+                        continue
+                    if self._should_ignore_dir_for_grep(entry.name):
+                        continue
+                    # Sample: count files in this dir, use as multiplier estimate
+                    # Assume average depth of 3-4 levels for typical project
+                    try:
+                        dir_file_count = sum(
+                            1
+                            for f in entry.iterdir()
+                            if f.is_file()
+                            and not (
+                                gitignore_spec
+                                and gitignore_spec.match_file(entry.name + "/" + f.name)
+                            )
+                        )
+                        # Extrapolate: dir_file_count * estimated_depth (3-4)
+                        # Clamp to avoid overcounting sparse dirs
+                        total_estimate += dir_file_count * 4
+                    except OSError:
+                        # Permission denied or other error: use conservative estimate
+                        total_estimate += 100
+        except OSError:
+            # Can't read directory: assume large
+            return _GREP_FALLBACK_FILE_LIMIT + 1
+
+        return total_estimate
 
     async def agrep(
         self,
