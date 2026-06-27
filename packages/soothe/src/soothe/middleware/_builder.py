@@ -87,19 +87,15 @@ def build_soothe_middleware_stack(
        not thread level. Uses sliding window for RPM and semaphore for concurrent
        requests. Solves thread hanging issues from thread-level blocking.
 
-    5. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
-       (soothe_step_subagent, soothe_step_expected_output)
-       into system prompt via abefore_agent hook. Runs before agent loop starts.
-
-    6. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
+    5. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
        for programmatic tool calling. Enabled when ``code_interpreter.enabled``
        is True. Exposes allowlisted tools via ``tools.*`` namespace.
 
-    7. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    8. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    7. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -113,7 +109,6 @@ def build_soothe_middleware_stack(
     Returns:
         Tuple of middleware instances in execution order.
     """
-    from .execution_hints import ExecutionHintsMiddleware
     from .llm_rate_limit import LLMRateLimitMiddleware
     from .model_call_profiler import is_profiler_enabled
     from .per_turn_model import PerTurnModelMiddleware
@@ -266,11 +261,7 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] LLM rate limiting disabled")
 
-    # 5. Execution hints (Layer 2 → Layer 1 integration)
-    stack.append(ExecutionHintsMiddleware())
-    logger.debug("[Middleware] Execution hints enabled")
-
-    # 6. Code interpreter (embedded QuickJS for programmatic tool calling)
+    # 5. Code interpreter (embedded QuickJS for programmatic tool calling)
     ci_config = config.agent.code_interpreter
     if ci_config.enabled and ci_config.ptc_allowlist:
         from .code_interpreter import CodeInterpreterMiddleware
@@ -287,11 +278,11 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Code interpreter disabled (opt-in)")
 
-    # 7. Workspace context (thread-aware filesystem)
+    # 6. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 7b. LLM profiler (optional, innermost before PerTurnModelMiddleware)
+    # 6b. LLM profiler (optional, innermost before PerTurnModelMiddleware)
     # Captures timing just before the actual model.ainvoke call
     if profile_model_calls:
         from .model_call_profiler import LLMCallProfilerMiddleware
@@ -299,7 +290,7 @@ def build_soothe_middleware_stack(
         stack.append(LLMCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] LLM call profiler enabled (innermost wrapper)")
 
-    # 8. Tool timeout wrapper (IG-511: prevent indefinite hangs from slow tools)
+    # 7. Tool timeout wrapper (IG-511: prevent indefinite hangs from slow tools)
     # Positioned after other tool-related middleware, innermost around actual execution
     tool_timeout_config = config.agent.loop.tool_timeout
     if tool_timeout_config.enabled:
@@ -318,7 +309,7 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Tool timeout disabled")
 
-    # 9. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 8. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

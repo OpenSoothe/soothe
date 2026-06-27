@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from contextvars import ContextVar, Token
+from contextvars import Token
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,10 +14,6 @@ if TYPE_CHECKING:
     from soothe.protocols.policy import PolicyContext, PolicyProtocol
 
 logger = logging.getLogger(__name__)
-
-# Thread-safe workspace context for async execution (RFC-103)
-# Each async task (thread execution) has its own context, preventing cross-thread contamination
-_current_workspace: ContextVar[Path | None] = ContextVar("soothe_workspace", default=None)
 
 
 class FrameworkFilesystem:

@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from soothe.core.security.identity_service import IdentityService
+    from soothe.foundation.identity import IdentityService
 
 app = typer.Typer(
     name="identity",
@@ -61,7 +61,7 @@ def _get_jwt_key() -> str:
 
 def _get_identity_service() -> IdentityService:
     """Get IdentityService instance."""
-    from soothe.core.security.identity_service import IdentityService
+    from soothe.foundation.identity import IdentityService
 
     db_path = _get_db_path()
     jwt_key = _get_jwt_key()

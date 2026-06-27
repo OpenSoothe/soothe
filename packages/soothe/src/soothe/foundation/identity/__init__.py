@@ -1,12 +1,15 @@
-"""Identity service for soothe. RFC-307."""
+"""Identity service for soothe. RFC-307.
 
-from soothe.core.security.credentials import (
+This module provides AKSK-based authentication and JWT token management.
+"""
+
+from soothe.foundation.identity.credentials import (
     generate_access_key,
     generate_secret_key,
     hash_secret_key,
     verify_secret_key,
 )
-from soothe.core.security.errors import (
+from soothe.foundation.identity.errors import (
     AKSKExpiredError,
     AKSKRevokedError,
     IdentityDisabledError,
@@ -17,11 +20,11 @@ from soothe.core.security.errors import (
     TokenRevokedError,
     UnmappedIdentityError,
 )
-from soothe.core.security.identity_service import (
+from soothe.foundation.identity.identity_service import (
     IdentityService,
     initialize_identity_tables_sync,
 )
-from soothe.core.security.models import (
+from soothe.foundation.identity.models import (
     AKSKPair,
     AuthResult,
     ExternalIdentityMapping,
@@ -31,7 +34,7 @@ from soothe.core.security.models import (
     TokenRefreshResult,
     User,
 )
-from soothe.core.security.tokens import (
+from soothe.foundation.identity.tokens import (
     JWTManager,
     generate_jwt_key,
     resolve_jwt_key,

@@ -27,7 +27,6 @@ __all__ = [
     "get_virtual_home_relative_path",
     "get_virtual_mode",
     "resolve_daemon_workspace",
-    "resolve_virtual_path",
     "resolve_workspace",
     "resolve_workspace_for_stream",
     "resolve_workspace_for_tool_execution",
@@ -65,7 +64,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "get_virtual_mode": (".virtual_home", "get_virtual_mode"),
     "set_virtual_mode_context": (".virtual_home", "set_virtual_mode_context"),
     "clear_virtual_mode_context": (".virtual_home", "clear_virtual_mode_context"),
-    "resolve_virtual_path": (".virtual_home", "resolve_virtual_path"),
     "get_virtual_home_relative_path": (".virtual_home", "get_virtual_home_relative_path"),
     # Unified context
     "WorkspaceContext": (".context", "WorkspaceContext"),

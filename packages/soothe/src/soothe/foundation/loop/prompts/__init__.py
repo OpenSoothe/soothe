@@ -22,10 +22,6 @@ from .system_templates import (
     _TOOL_ORCHESTRATION_GUIDE,
     RESPONSE_LANGUAGE_HINT_FRAGMENT,
 )
-from .user_envelope import (
-    build_execute_step_envelope,
-    build_plan_context_envelope,
-)
 from .user_message import (
     UserMessageBuilder,
     flatten_user_message_content,
@@ -45,8 +41,6 @@ __all__ = [
     "_SUBAGENT_GUIDE",
     "_TOOL_ORCHESTRATION_GUIDE",
     "build_context_sections_for_complexity",
-    "build_execute_step_envelope",
-    "build_plan_context_envelope",
     "build_soothe_environment_section",
     "build_soothe_workspace_section",
     "flatten_user_message_content",

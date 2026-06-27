@@ -90,17 +90,15 @@ def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Pa
 
 def test_envelope_functions_do_not_embed_project_instructions() -> None:
     """Envelope builders no longer embed project_instructions (moved to system prompt)."""
-    from soothe.foundation.loop.prompts.user_envelope import (
-        build_execute_step_envelope,
-        build_plan_context_envelope,
-    )
+    from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
 
     # Envelope functions don't have project_instructions parameter anymore
-    execute = build_execute_step_envelope(
+    builder = UserMessageBuilder()
+    execute = builder.build_execute_step_message(
         "step",
         execution_hints="hint text",
     )
-    plan = build_plan_context_envelope(
+    plan = builder.build_plan_assess_message(
         goal="g",
     )
     assert "GOAL:" in execute
