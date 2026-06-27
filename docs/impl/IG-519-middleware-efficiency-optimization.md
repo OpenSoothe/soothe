@@ -18,6 +18,17 @@ Optimize middleware execution efficiency through three targeted changes:
 
 Estimated per-step time savings: **~55 ms** (SystemPrompt caching only).
 
+> **Correction (post-implementation):** Removing `ToolConcurrencyMiddleware`
+> from `build_soothe_middleware_stack` also removed its side effect of calling
+> `record_tool_call_args_from_request()`, which populates the per-thread args
+> registry the executor's stream path reads (`ingest_invocation_registry`) to
+> attach tool-call kwargs to wire events. With nothing recording args on the
+> main path, the TUI stopped showing tool-call args on step and non-explore
+> subagent activities. Fix: the extracted `ToolCallArgsMiddleware` is wired into
+> **both** the explore subagent stack (`build_explore_middleware_stack`) **and**
+> the main CoreAgent stack (`build_soothe_middleware_stack`). See
+> "ToolConcurrencyMiddleware Removal" below.
+
 ---
 
 ## Scope
@@ -53,10 +64,12 @@ The `SkillIndex` already has internal mtime-based caching (`rebuild_if_stale()`)
 | `docs/impl/IG-519-middleware-efficiency-optimization.md` | **Create** — this document |
 | `middleware/system_prompt.py` | **Modify** — add instance-level caching |
 | `middleware/tool_concurrency.py` | **Delete** — dead code |
-| `middleware/_builder.py` | **Modify** — remove ToolConcurrencyMiddleware |
+| `middleware/tool_call_args_middleware.py` | **Create** — extracted args-recording middleware (semaphore dropped) |
+| `middleware/_builder.py` | **Modify** — remove ToolConcurrencyMiddleware, **add ToolCallArgsMiddleware** to preserve args recording on main path |
 | `middleware/tool_timeout.py` | **Modify** — remove ToolConcurrency import |
-| `foundation/loop/engine/executor.py` | **Modify** — checkpointer guard + remove init import |
+| `foundation/loop/engine/executor.py` | **Modify** — checkpointer guard + replace init import with `init_tool_call_args_registry` |
 | `tests/unit/middleware/test_tool_concurrency.py` | **Delete** — if exists |
+| `tests/unit/middleware/test_tool_call_args_registry.py` | **Modify** — add regression test: main stack mounts `ToolCallArgsMiddleware` |
 
 ---
 
@@ -171,10 +184,11 @@ if loop_state is not None:
 - Middleware provides no actual limiting
 
 **Removal scope:**
-1. `_builder.py`: Remove import and stack append
-2. `executor.py`: Remove `init_tool_concurrency_for_thread` import and call
-3. `tool_concurrency.py`: Delete file (or leave with DEPRECATED marker for documentation)
-4. Tests: Delete test file if exists
+1. `_builder.py`: Remove `ToolConcurrencyMiddleware` import and stack append, **but re-add the extracted `ToolCallArgsMiddleware`** to preserve args recording on the main CoreAgent path (step + non-explore subagent activities). Without this, the TUI shows no tool-call args.
+2. `executor.py`: Remove `init_tool_concurrency_for_thread` import and call; call `init_tool_call_args_registry()` directly instead.
+3. `tool_concurrency.py`: Delete file (or leave with DEPRECATED marker for documentation).
+4. `tool_call_args_middleware.py`: New lightweight middleware holding only the args-recording side effect (semaphore dropped). Wired into both `build_soothe_middleware_stack` and `build_explore_middleware_stack`.
+5. Tests: Delete concurrency test; add a regression test asserting the main stack mounts `ToolCallArgsMiddleware`.
 
 **Future consideration:**
 If tool concurrency limiting becomes necessary, re-add middleware with:

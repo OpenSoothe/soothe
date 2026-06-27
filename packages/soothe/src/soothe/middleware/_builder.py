@@ -170,7 +170,15 @@ def build_soothe_middleware_stack(
     stack.append(EditCoalescingMiddleware())
     logger.info("[Middleware] Edit coalescing (IG-517) enabled")
 
-    # IG-519: ToolConcurrencyMiddleware removed (limit=64 was effectively unlimited)
+    # 1e. Record tool-call kwargs for TUI display (IG-519).
+    # The executor's stream path reads these via get_recorded_tool_call_args() to
+    # attach args to wire events for step + non-explore subagent activities. Without
+    # this middleware the registry stays empty and the TUI shows no tool args.
+    # (Explore subagents have their own copy in build_explore_middleware_stack.)
+    from .tool_call_args_middleware import ToolCallArgsMiddleware
+
+    stack.append(ToolCallArgsMiddleware())
+    logger.debug("[Middleware] Tool call args recording enabled")
 
     # 2. Recoverable outbound network errors → tool messages (TLS verify, connection refused)
     stack.append(NetworkToolErrorsMiddleware())
