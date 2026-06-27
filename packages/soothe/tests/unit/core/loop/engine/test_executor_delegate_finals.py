@@ -601,13 +601,14 @@ async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
     """Tool kwargs come from middleware invocation registry when stream has no AI chunks."""
     from langchain.agents.middleware.types import ToolCallRequest
 
+    # IG-518: Use registry directly (semaphore removed from stack)
     from soothe.middleware.tool_call_args_registry import (
         get_recorded_tool_call_args,
+        init_tool_call_args_registry,
         record_tool_call_args_from_request,
     )
-    from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 
-    init_tool_concurrency_for_thread(limit=5)
+    init_tool_call_args_registry()
     registry_key = "functions.read_file:0"
     record_tool_call_args_from_request(
         ToolCallRequest(
