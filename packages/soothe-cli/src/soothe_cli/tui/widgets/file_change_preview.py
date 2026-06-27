@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from textual.containers import Vertical
 from textual.content import Content
-from textual.widgets import Markdown, Static
+from textual.widgets import Static
 
 from soothe_cli.tui import theme
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import (
     TOOL_APPROVAL_BODY_MAX_LINES,
     TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES,
@@ -112,53 +113,112 @@ class FileChangePreviewWidget(Vertical):
         )
 
     def _render_diff_lines_only(self, diff_lines: list[str]) -> ComposeResult:
+        """Render diff lines with gutter bars and line numbers (matching DiffMessage)."""
+        colors = theme.get_theme_colors()
+        glyphs = get_glyphs()
+
+        # Calculate max line number for width
+        max_line = 0
+        for line in diff_lines:
+            if m := __import__("re").match(r"@@ -(\d+)(?:,\d+)? \+(\d+)", line):
+                max_line = max(max_line, int(m.group(1)), int(m.group(2)))
+        width = max(3, len(str(max_line + len(diff_lines))))
+
+        old_num = new_num = 0
         lines_shown = 0
+
         for line in diff_lines:
             if lines_shown >= TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES:
                 yield Static(
                     Content.styled(f"... ({len(diff_lines) - lines_shown} more lines)", "dim")
                 )
                 break
-            if line.startswith(("@@", "---", "+++")):
+
+            # Skip file headers
+            if line.startswith(("---", "+++")):
                 continue
-            widget = self._render_diff_line(line)
-            if widget:
-                yield widget
+
+            # Handle hunk headers - update line numbers, don't display
+            if m := __import__("re").match(r"@@ -(\d+)(?:,\d+)? \+(\d+)", line):
+                old_num, new_num = int(m.group(1)), int(m.group(2))
+                continue
+
+            content = line[1:] if line else ""
+
+            if line.startswith("-"):
+                # Deletion — red gutter bar
+                yield Static(
+                    Content.assemble(
+                        (f"{glyphs.gutter_bar}", f"{colors.error} bold"),
+                        (f"{old_num:>{width}}", "dim"),
+                        f" {content}",
+                    ),
+                    classes="diff-line-removed",
+                )
+                old_num += 1
+                lines_shown += 1
+            elif line.startswith("+"):
+                # Addition — green gutter bar
+                yield Static(
+                    Content.assemble(
+                        (f"{glyphs.gutter_bar}", f"{colors.success} bold"),
+                        (f"{new_num:>{width}}", "dim"),
+                        f" {content}",
+                    ),
+                    classes="diff-line-added",
+                )
+                new_num += 1
+                lines_shown += 1
+            elif line.startswith(" "):
+                # Context line — dim gutter
+                yield Static(
+                    Content.assemble(
+                        (f"{glyphs.box_vertical}{old_num:>{width}}", "dim"),
+                        f"  {content}",
+                    ),
+                )
+                old_num += 1
+                new_num += 1
+                lines_shown += 1
+            elif line.strip() == "...":
+                yield Static(Content.styled("...", "dim"))
+                lines_shown += 1
+            elif line.strip():
+                yield Static(Content.styled(line, "dim"))
                 lines_shown += 1
 
     @staticmethod
-    def _render_diff_line(line: str) -> Static | None:
-        raw = line[1:] if len(line) > 1 else ""
-        if line.startswith("-"):
-            return Static(Content.from_markup("- $text", text=raw), classes="diff-removed")
-        if line.startswith("+"):
-            return Static(Content.from_markup("+ $text", text=raw), classes="diff-added")
-        if line.startswith(" "):
-            return Static(Content.from_markup("  $text", text=raw), classes="diff-context")
-        if line.strip():
-            return Static(line, markup=False)
-        return None
-
-    @staticmethod
     def _render_string_lines(text: str, *, is_addition: bool) -> ComposeResult:
+        """Render string content with gutter bars and line numbers."""
+        colors = theme.get_theme_colors()
+        glyphs = get_glyphs()
         lines = text.split("\n")
-        sign = "+" if is_addition else "-"
-        cls = "diff-added" if is_addition else "diff-removed"
-        for line in lines[:TOOL_APPROVAL_PREVIEW_LINES]:
-            yield Static(Content.from_markup(f"{sign} $text", text=line), classes=cls)
+        total_lines = len(lines)
+        width = max(3, len(str(total_lines)))
+        cls = "diff-line-added" if is_addition else "diff-line-removed"
+        gutter_color = colors.success if is_addition else colors.error
+
+        for i, line in enumerate(lines[:TOOL_APPROVAL_PREVIEW_LINES], start=1):
+            yield Static(
+                Content.assemble(
+                    (f"{glyphs.gutter_bar}", f"{gutter_color} bold"),
+                    (f"{i:>{width}}", "dim"),
+                    f" {line}",
+                ),
+                classes=cls,
+            )
         if len(lines) > TOOL_APPROVAL_PREVIEW_LINES:
             remaining = len(lines) - TOOL_APPROVAL_PREVIEW_LINES
             yield Static(Content.styled(f"... ({remaining} more lines)", "dim"))
 
 
 class WriteFilePreviewWidget(FileChangePreviewWidget):
-    """Preview for write_file — diff on overwrite, syntax body for new files."""
+    """Preview for write_file — diff on overwrite, compact line body for new files."""
 
     def compose(self) -> ComposeResult:
         """Compose file path header and content or unified diff."""
         file_path = self.data.get("file_path", "")
         content = self.data.get("content", "")
-        file_extension = self.data.get("file_extension", "text")
         is_new_file = bool(self.data.get("is_new_file"))
         diff_lines: list[str] = self.data.get("diff_lines", [])
 
@@ -181,13 +241,33 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
             yield Static("Empty file", classes="file-change-preview-body")
             return
 
-        if total_lines > TOOL_APPROVAL_BODY_MAX_LINES:
-            shown_lines = lines[:TOOL_APPROVAL_BODY_MAX_LINES]
-            remaining = total_lines - TOOL_APPROVAL_BODY_MAX_LINES
-            truncated_content = "\n".join(shown_lines) + f"\n... ({remaining} more lines)"
-            yield Markdown(f"```{file_extension}\n{truncated_content}\n```")
-        else:
-            yield Markdown(f"```{file_extension}\n{content}\n```")
+        # Compact line-by-line rendering (matching DiffMessage style)
+        yield from self._compose_content_lines(lines, total_lines)
+
+    def _compose_content_lines(self, lines: list[str], total_lines: int) -> ComposeResult:
+        """Render content as compact line-by-line widgets with gutter bars."""
+        colors = theme.get_theme_colors()
+        glyphs = get_glyphs()
+
+        # Calculate line number width
+        max_line = total_lines
+        width = max(3, len(str(max_line)))
+
+        shown_lines = lines[:TOOL_APPROVAL_BODY_MAX_LINES]
+        remaining = total_lines - TOOL_APPROVAL_BODY_MAX_LINES
+
+        for i, line in enumerate(shown_lines, start=1):
+            yield Static(
+                Content.assemble(
+                    (f"{glyphs.gutter_bar}", f"{colors.success} bold"),
+                    (f"{i:>{width}}", "dim"),
+                    f" {line}",
+                ),
+                classes="diff-line-added",
+            )
+
+        if remaining > 0:
+            yield Static(Content.styled(f"... ({remaining} more lines)", "dim"))
 
     def _compose_overwrite_diff(self, file_path: str, diff_lines: list[str]) -> ComposeResult:
         """Render unified diff when write_file replaces existing content."""
@@ -216,10 +296,18 @@ class DeleteFilePreviewWidget(FileChangePreviewWidget):
             yield Static("No preview available", classes="file-change-preview-body")
             return
 
-        for line in preview_lines[:TOOL_APPROVAL_PREVIEW_LINES]:
+        colors = theme.get_theme_colors()
+        glyphs = get_glyphs()
+        width = max(3, len(str(total_lines)))
+
+        for i, line in enumerate(preview_lines[:TOOL_APPROVAL_PREVIEW_LINES], start=1):
             yield Static(
-                Content.from_markup("- $text", text=line),
-                classes="diff-removed",
+                Content.assemble(
+                    (f"{glyphs.gutter_bar}", f"{colors.error} bold"),
+                    (f"{i:>{width}}", "dim"),
+                    f" {line}",
+                ),
+                classes="diff-line-removed",
             )
         remaining = total_lines - len(preview_lines[:TOOL_APPROVAL_PREVIEW_LINES])
         if remaining > 0:
