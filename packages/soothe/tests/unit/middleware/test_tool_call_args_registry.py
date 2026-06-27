@@ -8,7 +8,7 @@ import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
-# IG-518: Use ToolCallArgsMiddleware (semaphore removed from stack)
+# IG-519: Use ToolCallArgsMiddleware (semaphore removed from stack)
 from soothe.middleware.tool_call_args_middleware import ToolCallArgsMiddleware
 from soothe.middleware.tool_call_args_registry import (
     get_recorded_tool_call_args,

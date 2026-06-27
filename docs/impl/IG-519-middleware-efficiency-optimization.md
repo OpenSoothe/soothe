@@ -1,6 +1,6 @@
-# IG-518: Middleware Efficiency Optimization
+# IG-519: Middleware Efficiency Optimization
 
-**IG**: 518
+**IG**: 519
 **Title**: Middleware Efficiency Optimization — Caching, Bug Fix, Cleanup
 **Status**: In Progress
 **Created**: 2026-06-27
@@ -50,7 +50,7 @@ The `SkillIndex` already has internal mtime-based caching (`rebuild_if_stale()`)
 
 | File | Action |
 |------|--------|
-| `docs/impl/IG-518-middleware-efficiency-optimization.md` | **Create** — this document |
+| `docs/impl/IG-519-middleware-efficiency-optimization.md` | **Create** — this document |
 | `middleware/system_prompt.py` | **Modify** — add instance-level caching |
 | `middleware/tool_concurrency.py` | **Delete** — dead code |
 | `middleware/_builder.py` | **Modify** — remove ToolConcurrencyMiddleware |
