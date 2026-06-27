@@ -22,7 +22,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from soothe.core.security.identity_service import IdentityService
+from soothe.foundation.identity.identity_service import IdentityService
 
 from soothe_daemon.protocol import MessageRouter
 from soothe_daemon.server.auth_handler import (
@@ -78,11 +78,11 @@ def _provision_aksk(svc: IdentityService, user_id: str = "alice") -> tuple[str, 
     svc.create_user(user_id)
     with (
         patch(
-            "soothe.core.security.identity_service.generate_access_key",
+            "soothe.foundation.identity.identity_service.generate_access_key",
             return_value=KNOWN_ACCESS_KEY,
         ),
         patch(
-            "soothe.core.security.identity_service.generate_secret_key",
+            "soothe.foundation.identity.identity_service.generate_secret_key",
             return_value=KNOWN_SECRET_KEY,
         ),
     ):
@@ -218,11 +218,11 @@ class TestHandleAuthExpiredAKSK:
         svc.create_user("alice")
         with (
             patch(
-                "soothe.core.security.identity_service.generate_access_key",
+                "soothe.foundation.identity.identity_service.generate_access_key",
                 return_value=KNOWN_ACCESS_KEY,
             ),
             patch(
-                "soothe.core.security.identity_service.generate_secret_key",
+                "soothe.foundation.identity.identity_service.generate_secret_key",
                 return_value=KNOWN_SECRET_KEY,
             ),
         ):

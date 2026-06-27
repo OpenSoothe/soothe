@@ -74,20 +74,6 @@ def clear_virtual_mode_context() -> None:
     reset_workspace_context()
 
 
-def resolve_virtual_path(relative_path: str) -> Path:
-    """Resolve a path relative to virtual home.
-
-    Args:
-        relative_path: Path relative to SOOTHE_HOME
-            (e.g., "agents/browser/profiles/default").
-
-    Returns:
-        Resolved path under virtual home or host SOOTHE_HOME.
-    """
-    home = get_virtual_home()
-    return home / relative_path
-
-
 def get_virtual_home_relative_path(host_path: Path) -> str | None:
     """Convert a host-absolute path to virtual-home-relative if under virtual home.
 

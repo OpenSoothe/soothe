@@ -6,7 +6,7 @@ from pathlib import Path
 
 import jwt
 
-from soothe.core.security.models import TokenClaims
+from soothe.foundation.identity.models import TokenClaims
 
 
 class JWTManager:

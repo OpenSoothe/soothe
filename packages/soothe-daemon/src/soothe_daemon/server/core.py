@@ -221,7 +221,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         from pathlib import Path
 
-        from soothe.core.security.identity_service import IdentityService
+        from soothe.foundation.identity.identity_service import IdentityService
         from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
         identity_cfg = self._daemon_config.identity

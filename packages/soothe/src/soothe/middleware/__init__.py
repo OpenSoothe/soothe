@@ -5,7 +5,6 @@ This package provides middleware implementations:
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
 - SystemPromptMiddleware: Dynamic prompt adjustment based on classification
 - LLMRateLimitMiddleware: Rate limiting at LLM level, not thread level
-- ExecutionHintsMiddleware: StrangeLoop → CoreAgent execution hints injection
 - WorkspaceContextMiddleware: Thread-aware workspace ContextVar management
 - PerTurnModelMiddleware: Per-stream model override for daemon/TUI
 - SootheFilesystemMiddleware: Extended filesystem tools middleware
@@ -31,7 +30,6 @@ if TYPE_CHECKING:
     )
     from soothe.middleware._utils import create_llm_call_metadata as create_llm_call_metadata
     from soothe.middleware.code_interpreter import CodeInterpreterMiddleware
-    from soothe.middleware.execution_hints import ExecutionHintsMiddleware
     from soothe.middleware.file_lock import FileLockMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.identity import IdentityMiddleware
@@ -53,7 +51,6 @@ if TYPE_CHECKING:
 __all__ = [
     "AKSKConfig",
     "CodeInterpreterMiddleware",
-    "ExecutionHintsMiddleware",
     "FileLockMiddleware",
     "IdentityConfig",
     "IdentityMiddleware",
@@ -88,7 +85,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "CodeInterpreterMiddleware",
     ),
     "create_llm_call_metadata": ("soothe.middleware._utils", "create_llm_call_metadata"),
-    "ExecutionHintsMiddleware": ("soothe.middleware.execution_hints", "ExecutionHintsMiddleware"),
     "FileLockMiddleware": ("soothe.middleware.file_lock", "FileLockMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
     "IdentityConfig": ("soothe.middleware.identity", "IdentityConfig"),

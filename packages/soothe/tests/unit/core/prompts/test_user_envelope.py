@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 from soothe.foundation.loop.prompts.user_message import (
     UserMessageBuilder,
     flatten_user_message_content,
@@ -137,20 +135,14 @@ def test_plan_generate_message_includes_step_id_hint() -> None:
     assert "03" in msg
 
 
-def test_deprecated_envelope_wrappers_still_work() -> None:
-    """Deprecated wrapper functions delegate to UserMessageBuilder."""
-    from soothe.foundation.loop.prompts.user_envelope import (
-        build_execute_step_envelope,
-        build_plan_context_envelope,
-    )
+def test_envelope_builder_direct_usage() -> None:
+    """Use UserMessageBuilder directly (deprecated wrappers removed)."""
+    builder = UserMessageBuilder()
+    exec_msg = builder.build_execute_step_message("Do it")
+    assert "GOAL:" in exec_msg
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        exec_msg = build_execute_step_envelope("Do it")
-        assert "GOAL:" in exec_msg
-
-        plan_msg = build_plan_context_envelope(goal="Plan this")
-        assert "GOAL:" in plan_msg
+    plan_msg = builder.build_plan_assess_message(goal="Plan this")
+    assert "GOAL:" in plan_msg
 
 
 def test_flatten_user_message_content_extracts_goal() -> None:

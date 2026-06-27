@@ -11,7 +11,7 @@ from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field
 from soothe_sdk.protocols.identity import IdentityProtocol
 
-from soothe.core.security.errors import (
+from soothe.foundation.identity.errors import (
     MissingTokenError,
     TokenError,
     UnmappedIdentityError,
