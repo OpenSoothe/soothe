@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import re
-import shlex
 import sys
 import threading
 from dataclasses import dataclass
@@ -498,13 +497,6 @@ def get_banner() -> str:
 
     return banner
 
-
-MAX_ARG_LENGTH = 150
-"""Character limit for tool argument values in the UI.
-
-Longer values are truncated with an ellipsis by `truncate_value`
-in `tool_display`.
-"""
 
 config: RunnableConfig = {
     "recursion_limit": 1000,
@@ -1426,87 +1418,6 @@ def contains_dangerous_patterns(command: str) -> bool:
     return bool(re.search(r"(?<![&])&(?![&])", command))
 
 
-def is_shell_command_allowed(command: str, allow_list: list[str] | None) -> bool:
-    """Check if a shell command is in the allow-list.
-
-    The allow-list matches against the first token of the command (the executable
-    name). This allows read-only commands like ls, cat, grep, etc. to be
-    auto-approved.
-
-    When `allow_list` is the `SHELL_ALLOW_ALL` sentinel, all non-empty commands
-    are approved unconditionally — dangerous pattern checks are skipped.
-
-    SECURITY: For regular allow-lists, this function rejects commands containing
-    dangerous shell patterns (command substitution, redirects, process
-    substitution, etc.) BEFORE parsing, to prevent injection attacks that could
-    bypass the allow-list.
-
-    Args:
-        command: The full shell command to check.
-        allow_list: List of allowed command names (e.g., `["ls", "cat", "grep"]`),
-            the `SHELL_ALLOW_ALL` sentinel to allow any command, or `None`.
-
-    Returns:
-        `True` if the command is allowed, `False` otherwise.
-    """
-    if not allow_list or not command or not command.strip():
-        return False
-
-    # SHELL_ALLOW_ALL sentinel — skip pattern and token checks
-    if isinstance(allow_list, _ShellAllowAll):
-        return True
-
-    # SECURITY: Check for dangerous patterns BEFORE any parsing
-    # This prevents injection attacks like: ls "$(rm -rf /)"
-    if contains_dangerous_patterns(command):
-        return False
-
-    allow_set = set(allow_list)
-
-    # Extract the first command token
-    # Handle pipes and other shell operators by checking each command in the pipeline
-    # Split by compound operators first (&&, ||), then single-char operators (|, ;).
-    # Note: standalone & (background) is blocked by contains_dangerous_patterns above.
-    segments = re.split(r"&&|\|\||[|;]", command)
-
-    # Track if we found at least one valid command
-    found_command = False
-
-    for raw_segment in segments:
-        segment = raw_segment.strip()
-        if not segment:
-            continue
-
-        try:
-            # Try to parse as shell command to extract the executable name
-            tokens = shlex.split(segment)
-            if tokens:
-                found_command = True
-                cmd_name = tokens[0]
-                # Check if this command is in the allow set
-                if cmd_name not in allow_set:
-                    return False
-        except ValueError:
-            # If we can't parse it, be conservative and require approval
-            return False
-
-    # All segments are allowed (and we found at least one command)
-    return found_command
-
-
-def get_default_coding_instructions() -> str:
-    """Get the default coding agent instructions.
-
-    These are the immutable base instructions that cannot be modified by the agent.
-    Long-term memory (AGENTS.md) is handled separately by the middleware.
-
-    Returns:
-        The default agent instructions as a string.
-    """
-    default_prompt_path = Path(__file__).parent / "default_agent_prompt.md"
-    return default_prompt_path.read_text()
-
-
 def detect_provider(model_name: str) -> str | None:
     """Auto-detect provider from model name.
 
@@ -2025,58 +1936,6 @@ def create_model(
         context_limit=context_limit,
         unsupported_modalities=unsupported_modalities,
     )
-
-
-def validate_model_capabilities(model: BaseChatModel, model_name: str) -> None:
-    """Validate that the model has required capabilities for `Soothe`.
-
-    Checks the model's profile (if available) to ensure it supports tool calling, which
-    is required for agent functionality. Issues warnings for models without profiles or
-    with limited context windows.
-
-    Args:
-        model: The instantiated model to validate.
-        model_name: Model name for error/warning messages.
-
-    Note:
-        This validation is best-effort. Models without profiles will pass with
-        a warning. Calls `sys.exit(1)` if the model's profile explicitly
-        indicates `tool_calling=False`.
-    """
-    console = _get_console()
-    profile = getattr(model, "profile", None)
-
-    if profile is None:
-        # Model doesn't have profile data - warn but allow
-        console.print(
-            f"[dim][yellow]Note:[/yellow] No capability profile for "
-            f"'{model_name}'. Cannot verify tool calling support.[/dim]"
-        )
-        return
-
-    if not isinstance(profile, dict):
-        return
-
-    # Check required capability: tool_calling
-    tool_calling = profile.get("tool_calling")
-    if tool_calling is False:
-        console.print(
-            f"[bold red]Error:[/bold red] Model '{model_name}' does not support tool calling."
-        )
-        console.print(
-            "\nDeep Agents requires tool calling for agent functionality. "
-            "Please choose a model that supports tool calling."
-        )
-        console.print("\nSee MODELS.md for supported models.")
-        sys.exit(1)
-
-    # Warn about potentially limited context (< 8k tokens)
-    max_input_tokens = profile.get("max_input_tokens")
-    if max_input_tokens and max_input_tokens < 8000:  # noqa: PLR2004  # Model context window default
-        console.print(
-            f"[dim][yellow]Warning:[/yellow] Model '{model_name}' has limited context "
-            f"({max_input_tokens:,} tokens). Agent performance may be affected.[/dim]"
-        )
 
 
 def _get_console() -> Console:

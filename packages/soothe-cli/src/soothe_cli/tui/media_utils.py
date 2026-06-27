@@ -9,7 +9,6 @@ import shutil
 
 # S404: subprocess needed for clipboard access via pngpaste/osascript
 import subprocess  # noqa: S404
-import sys
 import tempfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -116,25 +115,6 @@ class VideoData:
             base64=self.base64_data,
             mime_type=f"video/{self.format}",
         )
-
-
-def get_clipboard_image() -> ImageData | None:
-    """Attempt to read an image from the system clipboard.
-
-    Supports macOS via `pngpaste` or `osascript`.
-
-    Returns:
-        ImageData if an image is found, None otherwise.
-    """
-    if sys.platform == "darwin":
-        return _get_macos_clipboard_image()
-    logger.warning(
-        "Clipboard image paste is not supported on %s. "
-        "Only macOS is currently supported. "
-        "You can still attach images by dragging and dropping file paths.",
-        sys.platform,
-    )
-    return None
 
 
 def get_image_from_path(path: pathlib.Path) -> ImageData | None:
