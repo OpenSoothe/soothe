@@ -1843,7 +1843,7 @@ class ChatInput(Vertical):
         return True
 
     def clear_input(self) -> None:
-        """Clear draft text, completion UI, and input mode without submitting."""
+        """Clear pending text, completion UI, and input mode without submitting."""
         self.dismiss_completion()
         self.exit_mode()
         self._pending_submit_text = None
