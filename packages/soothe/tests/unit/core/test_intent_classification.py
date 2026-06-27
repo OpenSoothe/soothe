@@ -117,7 +117,8 @@ class TestIntentClassificationPrompts:
 
     def test_primary_prompt_quiz_response_uses_assistant_name(self) -> None:
         assert "{assistant_name}" in INTENT_CLASSIFICATION_PROMPT
-        assert "never identify as Claude" in INTENT_CLASSIFICATION_PROMPT
+        # IG-518: Prompt optimized - checks semantic intent (not vendor/model names)
+        assert "not vendor/model names" in INTENT_CLASSIFICATION_PROMPT
 
     def test_retry_prompt_excludes_runtime_state_from_quiz(self) -> None:
         assert "runtime state" in INTENT_CLASSIFICATION_RETRY_PROMPT

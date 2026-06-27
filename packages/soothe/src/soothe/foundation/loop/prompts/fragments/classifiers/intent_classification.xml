@@ -1,29 +1,26 @@
 <intent_instructions>
-Classify whether the user query is a simple quiz or requires the agentic loop. Reply with ONLY valid JSON matching the schema below.
+Classify user intent. Reply with ONLY valid JSON matching the schema below.
 
-intent_type must be exactly one of:
-- "quiz": greetings, thanks, fillers, pleasantries, static factual/trivia/definitions/simple math — only when answerable reliably from training knowledge without tools, files, web, or live data.
-- "agentic": everything else — needs tools/files/web/search/analysis/code, is a follow-up, or cannot be answered from training knowledge alone.
+intent_type:
+- "quiz": greeting/thanks/static trivia/definitions/simple math answerable from training knowledge WITHOUT tools/files/web/live-data.
+- "agentic": everything else — needs tools/files/web/search/analysis/code, is a follow-up, time-sensitive, or runtime state queries (workspace/pwd/model/tools/loop/policies).
 
-NOT quiz (use "agentic" instead):
-- Real-time or time-sensitive queries: weather, news, stocks, sports scores, exchange rates, traffic, flight status, etc.
-- Anything requiring web search, external APIs, attached files, code execution, or tools to answer correctly.
+NOT quiz (use "agentic"):
+- Real-time or time-sensitive: weather/news/stocks/sports/rates/traffic/flights.
+- Needs web search, external APIs, attached files, code execution, or tools.
 - Questions you cannot answer confidently from training knowledge alone.
 - Follow-ups on prior conversation or work.
-- Questions about this agent's runtime state — current workspace, cwd/pwd, the configured model, available tools or subagents, current loop/goal/thread, policies, or environment configuration. These require live runtime introspection, not training knowledge.
+- Runtime state queries: workspace, cwd, configured model, available tools, current loop/goal/thread, policies, environment.
 
 When intent_type is "quiz", also provide:
-- quiz_response: concise, factual direct answer from training knowledge. For greetings/thanks, a brief polite reply. For factual questions, a direct answer. When the user asks who you are, answer as {assistant_name}; never identify as Claude, ChatGPT, Gemini, or another vendor/model.
+- quiz_response: concise direct answer from training knowledge. For greetings/thanks: brief polite reply. For "who are you": self-identify as {assistant_name}, not vendor/model names.
 
 When intent_type is "agentic", also provide:
-- task_complexity: minimal|simple|medium|complex where minimal=one direct answer without tools; simple=one focused execute step; medium=several steps or moderate tool use; complex=architecture, migration, broad refactor, or multi-phase work.
+- reasoning: ONE brief sentence (max 20 words) explaining why tools/action needed. Examples: "Needs file analysis", "Follow-up on prior work", "Requires web search", "Multi-step code change".
+- task_complexity: minimal|simple|medium|complex (minimal=no tools; simple=one step; medium=several steps; complex=architecture/migration/multi-phase).
 
 JSON schema:
-{{
-  "intent_type": "quiz"|"agentic",
-  "task_complexity": "minimal"|"simple"|"medium"|"complex",
-  "quiz_response": string|null
-}}
+{{"intent_type":"quiz"|"agentic","reasoning":"string|null","task_complexity":"minimal"|"simple"|"medium"|"complex","quiz_response":"string|null"}}
 </intent_instructions>
 
 <current_time>{current_time}</current_time>

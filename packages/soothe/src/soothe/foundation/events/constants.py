@@ -87,6 +87,9 @@ GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 # Autopilot mode switching
 AUTOPILOT_MODE_SWITCHED = "soothe.cognition.autopilot.mode_switched"
 
+# Intent classification (IG-518)
+INTENT_CLASSIFIED = "soothe.cognition.intent.classified"
+
 # Plan cognition (client UX)
 PLAN_CREATED = "soothe.cognition.plan.created"
 PLAN_REFLECTED = "soothe.cognition.plan.reflected"
@@ -154,6 +157,7 @@ __all__ = [
     "AUTOPILOT_STATUS_CHANGED",
     "BRANCH_ANALYZED",
     "BRANCH_CREATED",
+    "INTENT_CLASSIFIED",
     "BRANCH_PRUNED",
     "BRANCH_RETRY_STARTED",
     "CHECKPOINT_ANCHOR_CREATED",
