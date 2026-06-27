@@ -29,6 +29,9 @@ Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests
 ### 6. Terminology
 - NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
 - NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors)—internal only
+- IG-XXX/RFC-XXX references are allowed ONLY in internal code: docstrings, comments, and internal documentation. They must never appear in runtime strings visible to users.
+- DO NOT refer to docs/draft in the codebase. Only docs/specs/ (RFCs) and docs/impl/ (IGs) are allowed for reference.
+- When writing log messages, error text, CLI output, config field descriptions, or any user-visible string, omit all IG-/RFC- identifiers.
 
 ### 7. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
