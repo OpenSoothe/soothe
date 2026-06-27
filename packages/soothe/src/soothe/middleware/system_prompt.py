@@ -184,7 +184,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         self._tool_context_registry = tool_context_registry
         self._mcp_registry = mcp_registry
         self._progressive_tool_middleware = progressive_tool_middleware
-        # IG-518: Instance-level caching for SkillIndex/ProgressiveSkillRegistry
+        # IG-519: Instance-level caching for SkillIndex/ProgressiveSkillRegistry
         # Preserves cache across hops, avoiding re-instantiation overhead (~2.5ms/hop)
         self._skill_index: Any = None  # Type: SkillIndex (lazy import)
         self._skill_registry: Any = None  # Type: ProgressiveSkillRegistry (lazy import)
@@ -690,7 +690,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         just_invoked = activation.get("just_invoked", set())
         bodies = activation.get("invoked_bodies", {})
 
-        # IG-518: Use cached SkillIndex/ProgressiveSkillRegistry instances
+        # IG-519: Use cached SkillIndex/ProgressiveSkillRegistry instances
         # rebuild_if_stale() checks mtime on every call, so stale files are re-parsed
         if self._skill_index is None:
             from soothe.skills.index import SkillIndex

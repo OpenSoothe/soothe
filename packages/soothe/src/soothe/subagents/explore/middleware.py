@@ -923,7 +923,7 @@ def build_explore_middleware_stack(
     return [
         # Tool call limit and retry middleware (outermost - applied first)
         *tool_middlewares,
-        # IG-518: ToolCallArgsMiddleware records invocation args for subgraph tool display
+        # IG-519: ToolCallArgsMiddleware records invocation args for subgraph tool display
         ToolCallArgsMiddleware(),
         # Explore-specific middlewares
         ExploreWireMiddleware(

@@ -170,7 +170,7 @@ def build_soothe_middleware_stack(
     stack.append(EditCoalescingMiddleware())
     logger.info("[Middleware] Edit coalescing (IG-517) enabled")
 
-    # IG-518: ToolConcurrencyMiddleware removed (limit=64 was effectively unlimited)
+    # IG-519: ToolConcurrencyMiddleware removed (limit=64 was effectively unlimited)
 
     # 2. Recoverable outbound network errors → tool messages (TLS verify, connection refused)
     stack.append(NetworkToolErrorsMiddleware())

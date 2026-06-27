@@ -110,7 +110,7 @@ from soothe.foundation.loop.utils.messages import (
     _record_ledger_message,
 )
 
-# IG-518: Import registry directly (removed ToolConcurrencyMiddleware from stack)
+# IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
 from soothe.middleware.tool_call_args_registry import init_tool_call_args_registry
 from soothe.utils.network_errors import (
     format_tool_network_error as _format_tool_network_error,
@@ -1435,7 +1435,7 @@ class Executor:
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
             max_tool_calls_per_step=self._max_tool_calls_per_step(),
         )
-        # IG-518: Init tool_call_args_registry directly (semaphore removed, registry preserved)
+        # IG-519: Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
 
         try:
@@ -1631,7 +1631,7 @@ class Executor:
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             # RFC-105: Snapshot skill_activation from graph state back into LoopState
-            # IG-518: Only call aget_state when checkpointer is configured.
+            # IG-519: Only call aget_state when checkpointer is configured.
             # Without checkpointer, skill_activation lives in LoopState via middleware hooks.
             if loop_state is not None and self.core_agent.checkpointer is not None:
                 try:
