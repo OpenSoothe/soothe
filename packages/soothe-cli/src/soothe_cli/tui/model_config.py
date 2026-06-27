@@ -381,16 +381,6 @@ def save_default_model(model_spec: ModelSpec) -> None:
     pass
 
 
-def save_recent_model(model_spec: ModelSpec) -> None:
-    """Save model to recent models list.
-
-    Args:
-        model_spec: Model specification to add to recent models.
-    """
-    # Stub - should maintain recent models list in SootheConfig
-    pass
-
-
 def clear_default_model() -> None:
     """Clear saved default model preference."""
     # Stub

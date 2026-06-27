@@ -1515,41 +1515,6 @@ def complete_tracked_step_card(
         )
 
 
-def finalize_tracked_step_cards_on_goal_complete(
-    adapter: TextualUIAdapter,
-    router: StepTaskRouter,
-) -> None:
-    """Mark in-flight plan step cards complete when the agent loop goal finishes."""
-    for step_id, widget in list(adapter._current_step_messages.items()):
-        status = getattr(widget, "_status", "")
-        if status not in ("pending", "running"):
-            continue
-        duration_ms = 0
-        start_time = getattr(widget, "_start_time", None)
-        if start_time is not None:
-            duration_ms = int((time.time() - start_time) * 1000)
-        tool_call_count = _step_card_tool_count(widget)
-        adapter._current_step_messages.pop(step_id, None)
-        _finalize_subagent_cards_for_step(
-            adapter,
-            step_id,
-            success=True,
-            duration_ms=duration_ms,
-            summary="Done",
-        )
-        complete_tracked_step_card(
-            adapter,
-            router,
-            step_id=step_id,
-            widget=widget,
-            ns_key=(),
-            success=True,
-            duration_ms=duration_ms,
-            tool_call_count=tool_call_count,
-            summary="Done",
-        )
-
-
 def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
     """True while any tool is awaiting a ``ToolMessage`` on a step card."""
     return bool(adapter._tool_to_step)

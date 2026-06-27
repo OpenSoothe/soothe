@@ -165,26 +165,6 @@ def strip_dangerous_unicode(text: str) -> str:
     return "".join(ch for ch in text if ch not in _DANGEROUS_CHARACTERS)
 
 
-def render_with_unicode_markers(text: str) -> str:
-    """Render hidden Unicode characters as explicit markers.
-
-    Example output: `abc<U+202E RIGHT-TO-LEFT OVERRIDE>def`.
-
-    Args:
-        text: Input text to render.
-
-    Returns:
-        Text where dangerous characters are replaced with visible markers.
-    """
-    rendered_parts: list[str] = []
-    for character in text:
-        if character not in _DANGEROUS_CHARACTERS:
-            rendered_parts.append(character)
-            continue
-        rendered_parts.append(f"<{_format_codepoint(character)} {_unicode_name(character)}>")
-    return "".join(rendered_parts)
-
-
 def summarize_issues(issues: list[UnicodeIssue], *, max_items: int = 3) -> str:
     """Summarize Unicode issues for warning messages.
 
@@ -215,24 +195,6 @@ def summarize_issues(issues: list[UnicodeIssue], *, max_items: int = 3) -> str:
     remainder = len(unique_entries) - max_items
     suffix = "entry" if remainder == 1 else "entries"
     return f"{displayed}, +{remainder} more {suffix}"
-
-
-def format_warning_detail(warnings: tuple[str, ...], *, max_shown: int = 2) -> str:
-    """Join safety warnings into a display string with overflow indicator.
-
-    Args:
-        warnings: Warning strings from a `UrlSafetyResult`.
-        max_shown: Maximum warnings to include before truncating.
-
-    Returns:
-        Semicolon-separated detail string, e.g. `'warn1; warn2; +1 more'`.
-    """
-    shown = warnings[:max_shown]
-    detail = "; ".join(shown)
-    remaining = len(warnings) - max_shown
-    if remaining > 0:
-        detail += f"; +{remaining} more"
-    return detail
 
 
 def check_url_safety(url: str) -> UrlSafetyResult:
