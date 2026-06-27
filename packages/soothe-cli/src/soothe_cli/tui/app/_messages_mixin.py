@@ -393,25 +393,42 @@ class _MessagesMixin:
         copy_selection_to_clipboard(self, notify_if_empty=True)
 
     def action_quit_or_interrupt(self) -> None:
-        """Handle Ctrl+C - interrupt agent or quit on double press.
+        """Handle Ctrl+C - clear input, interrupt agent, or quit on double press.
 
-        Priority order:
-        1. If shell command is running, kill it
-        2. If agent is running, interrupt it (preserve input)
-        3. If double press (quit_pending), quit
-        4. Otherwise clear draft input and show quit hint
+        Priority order when task is running (agent/shell):
+        1. If input has pending text, clear it (first Ctrl+C)
+        2. If input is empty, interrupt the running task (second Ctrl+C)
+
+        Priority order when idle:
+        1. If double press (quit_pending), quit
+        2. Otherwise clear pending input and show quit hint
 
         Note: Copying selected text is bound to Ctrl+Y (`action_copy_selection`)
         so Ctrl+C is reserved for interrupt/quit only.
         """
-        # If shell command is running, cancel the worker
+        # Check if input has pending content (text, mode, or completion)
+        has_pending_input = self._chat_input and (
+            self._chat_input.value.strip()
+            or self._chat_input.mode != "normal"
+            or self._chat_input._current_suggestions
+        )
+
+        # If shell command is running: clear input first, then kill shell
         if self._shell_running and self._shell_worker:
+            if has_pending_input:
+                self._chat_input.clear_input()
+                self._quit_pending = False
+                return
             self._cancel_worker(self._shell_worker)
             self._quit_pending = False
             return
 
-        # If agent is running, interrupt it and discard queued messages
+        # If agent is running: clear input first, then interrupt
         if self._agent_running and self._agent_worker:
+            if has_pending_input:
+                self._chat_input.clear_input()
+                self._quit_pending = False
+                return
             if self._daemon_session is not None:
                 self.run_worker(
                     self._interrupt_daemon_agent_turn(),
@@ -430,7 +447,7 @@ class _MessagesMixin:
             self._arm_quit_pending("Ctrl+C")
 
     def _arm_quit_pending(self, shortcut: str) -> None:
-        """Set the pending-quit flag, clear draft input, and show a matching hint.
+        """Set the pending-quit flag, clear pending input, and show a matching hint.
 
         Args:
             shortcut: The key chord to show in the quit hint.
