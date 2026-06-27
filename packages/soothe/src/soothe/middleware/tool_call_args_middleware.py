@@ -1,4 +1,4 @@
-"""Tool call args recording middleware (IG-518).
+"""Tool call args recording middleware (IG-519).
 
 Lightweight middleware that captures tool-call kwargs for display purposes.
 Extracted from ToolConcurrencyMiddleware when the semaphore functionality
@@ -28,7 +28,7 @@ class ToolCallArgsMiddleware(AgentMiddleware):
     stream code can attach them to unified wire ids (explore subagent display).
 
     This is a lightweight replacement for ToolConcurrencyMiddleware's
-    registry functionality, without the ineffective semaphore (IG-518).
+    registry functionality, without the ineffective semaphore (IG-519).
     """
 
     name = "ToolCallArgsMiddleware"

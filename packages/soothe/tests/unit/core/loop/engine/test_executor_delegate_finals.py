@@ -601,7 +601,7 @@ async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
     """Tool kwargs come from middleware invocation registry when stream has no AI chunks."""
     from langchain.agents.middleware.types import ToolCallRequest
 
-    # IG-518: Use registry directly (semaphore removed from stack)
+    # IG-519: Use registry directly (semaphore removed from stack)
     from soothe.middleware.tool_call_args_registry import (
         get_recorded_tool_call_args,
         init_tool_call_args_registry,
