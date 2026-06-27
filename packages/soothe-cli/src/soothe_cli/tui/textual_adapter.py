@@ -798,7 +798,6 @@ def _ingest_main_task_tool_on_step_card(
         return None
     raw_st = display_args.get("subagent_type", "")
     subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
-    desc = str(display_args.get("description") or display_args.get("prompt") or "").strip()
     if subagent_type:
         router.register_task_spawn(tcid, subagent_type, step_id=sid)
     if not sid:
@@ -813,7 +812,8 @@ def _ingest_main_task_tool_on_step_card(
     )
     subagent_card_to_mount = None
     if step_w is not None:
-        _register_main_tool_on_step_card(
+        # IG-515: _register_main_tool_on_step_card now returns SubAgent card for task rows
+        subagent_card_to_mount = _register_main_tool_on_step_card(
             adapter,
             router,
             step_w,
@@ -824,33 +824,88 @@ def _ingest_main_task_tool_on_step_card(
         )
         adapter._tool_display_by_call_id[norm_tcid] = step_w
 
-        # IG-513: Create SubAgent card for this task delegation
-        # Parse task index from unified ID for the key
-        _, _, _, tool_info = parse_unified_tool_call_id(norm_tcid)
-        task_idx = 0
-        if tool_info and ":" in tool_info:
-            tail = tool_info.split(":")[-1]
-            if tail.isdigit():
-                task_idx = int(tail)
-        subagent_key = f"{sid}:t{task_idx}"
-
-        # Only create if not already registered
-        if subagent_key not in adapter._subagent_cards_by_key:
-            subagent_card = create_subagent_card(
-                step_id=sid,  # Use parent step ID for row classification
-                description=desc or f"{subagent_type} task",
-                subagent_type=subagent_type or "Task",
-                parent_step_id=sid,
-                parent_task_key=norm_tcid,
-                task_idx=task_idx,
-                id=f"subagent-{uuid.uuid4().hex[:8]}",
-            )
-            adapter._subagent_cards_by_key[subagent_key] = subagent_card
-            subagent_card_to_mount = subagent_card  # Return for async mounting
-            _rehome_subgraph_rows_to_subagent(adapter, step_w, subagent_card, task_idx)
-
     _route_pending_subgraph_tools(adapter, router)
     return subagent_card_to_mount
+
+
+def _ensure_subagent_card_for_task_row(
+    adapter: TextualUIAdapter,
+    step_w: CognitionStepMessage,
+    task_tcid: str,
+    task_args: dict[str, Any],
+) -> Any | None:
+    """Create SubAgent card for a task row if not already registered (IG-515 fix).
+
+    Called when buffered task tools are routed to a newly-created step card.
+    Returns the SubAgent card if newly created, None if already exists.
+
+    Args:
+        adapter: TextualUIAdapter with `_subagent_cards_by_key` registry.
+        step_w: Step card that owns the task row.
+        task_tcid: Normalized tool_call_id for the task delegation.
+        task_args: Args dict with subagent_type and description/prompt.
+
+    Returns:
+        SubAgentMessage widget if newly created, None otherwise.
+    """
+    sid = str(getattr(step_w, "_step_id", "") or "").strip()
+    if not sid:
+        return None
+    _, _, _, tool_info = parse_unified_tool_call_id(task_tcid)
+    task_idx = 0
+    if tool_info and ":" in tool_info:
+        tail = tool_info.split(":")[-1]
+        if tail.isdigit():
+            task_idx = int(tail)
+    subagent_key = f"{sid}:t{task_idx}"
+    if subagent_key in adapter._subagent_cards_by_key:
+        return None
+    raw_st = task_args.get("subagent_type", "")
+    subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+    desc = str(task_args.get("description") or task_args.get("prompt") or "").strip()
+    subagent_card = create_subagent_card(
+        step_id=sid,
+        description=desc or f"{subagent_type} task",
+        subagent_type=subagent_type or "Task",
+        parent_step_id=sid,
+        parent_task_key=task_tcid,
+        task_idx=task_idx,
+        id=f"subagent-{uuid.uuid4().hex[:8]}",
+    )
+    adapter._subagent_cards_by_key[subagent_key] = subagent_card
+    _rehome_subgraph_rows_to_subagent(adapter, step_w, subagent_card, task_idx)
+    return subagent_card
+
+
+def _create_subagent_cards_for_step_tasks(
+    adapter: TextualUIAdapter,
+    step_w: CognitionStepMessage,
+) -> list[Any]:
+    """Create SubAgent cards for all task rows on a step card (IG-515 fix).
+
+    Called after routing buffered main tools to a newly-mounted step card.
+    Returns list of newly-created SubAgent cards that need async mounting.
+
+    Args:
+        adapter: TextualUIAdapter with `_subagent_cards_by_key` registry.
+        step_w: Step card with potential task delegation rows.
+
+    Returns:
+        List of newly-created SubAgentMessage widgets to mount.
+    """
+    cards_to_mount: list[Any] = []
+    rows = getattr(step_w, "_rows", []) or []
+    for row in rows:
+        if not getattr(row, "is_task_row", False):
+            continue
+        tcid = str(row.tool_call_id or "").strip()
+        if not tcid:
+            continue
+        args = dict(row.args or {})
+        subagent_card = _ensure_subagent_card_for_task_row(adapter, step_w, tcid, args)
+        if subagent_card is not None:
+            cards_to_mount.append(subagent_card)
+    return cards_to_mount
 
 
 def _register_main_tool_on_step_card(
@@ -863,8 +918,15 @@ def _register_main_tool_on_step_card(
     *,
     raw_args: str = "",
     is_task_row: bool = False,
-) -> None:
-    """Register a main-graph tool row and promote the step card when authorized (RFC-628)."""
+) -> Any | None:
+    """Register a main-graph tool row and promote the step card when authorized (RFC-628).
+
+    For task delegations (is_task_row=True and tool_name=='task'), also ensures
+    a SubAgent card exists via `_ensure_subagent_card_for_task_row`.
+
+    Returns:
+        SubAgentMessage widget if newly created for a task row, None otherwise.
+    """
     tcid = str(tool_call_id).strip()
     if step_w.has_tool_call_row(tcid):
         step_w.update_tool_args(tcid, args)
@@ -882,6 +944,11 @@ def _register_main_tool_on_step_card(
         step_cards=adapter._current_step_messages,
     )
     adapter._tool_to_step[tcid] = step_w
+
+    # IG-515: For task delegations, ensure SubAgent card exists
+    if is_task_row and tool_name == "task":
+        return _ensure_subagent_card_for_task_row(adapter, step_w, tcid, args)
+    return None
 
 
 def _resolve_step_widget_for_tool(
