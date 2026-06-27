@@ -311,6 +311,34 @@ class NormalizedPathBackend:
             logger.warning("aedit error for %s: %s", path, e)
             return EditResult(error=str(e))
 
+    async def aedit_batched(
+        self,
+        path: str,
+        operations: list[Any],
+        *,
+        backup: bool = True,
+    ) -> Any:
+        """Async apply multiple edit operations to a file in one read/modify/write cycle (IG-517).
+
+        Args:
+            path: Path to the file to edit.
+            operations: List of BatchedEditOperation objects.
+            backup: Whether to create a backup before editing.
+
+        Returns:
+            BatchedEditResult with details of all operations applied.
+        """
+        from soothe.foundation.core.filesystem.protocol import BatchedEditResult
+
+        normalized = self._normalize_path(path)
+
+        try:
+            result = await self._fs.aedit_batched(normalized, operations, backup=backup)
+            return result
+        except Exception as e:
+            logger.warning("aedit_batched error for %s: %s", path, e)
+            return BatchedEditResult(path=normalized, error=str(e))
+
     def ls(self, path: str = ".") -> LsResult:
         """List directory contents.
 

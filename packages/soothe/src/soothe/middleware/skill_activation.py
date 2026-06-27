@@ -35,7 +35,7 @@ _PATH_KEYS: tuple[str, ...] = ("file_path", "path", "filepath", "file")
 class SkillActivationMiddleware(AgentMiddleware):
     """Intercepts file-op tool calls; activates conditional skills on path match.
 
-    Installed between SoothePolicyMiddleware and ToolConcurrencyMiddleware
+    Installed between SoothePolicyMiddleware and NetworkToolErrorsMiddleware
     in the middleware stack (RFC-105).
     """
 
@@ -59,6 +59,11 @@ class SkillActivationMiddleware(AgentMiddleware):
 
     async def awrap_tool_call(self, request, handler):
         """Activate conditional skills when file-op tools touch matching paths."""
+        # Fast path: skip skill activation for batched operations (IG-517)
+        metadata = getattr(request, "metadata", None) or {}
+        if metadata.get("_batched"):
+            return await handler(request)
+
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name not in FILE_OP_TOOLS:

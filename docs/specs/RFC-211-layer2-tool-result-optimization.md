@@ -307,6 +307,76 @@ execution:
 4. **Cross-thread caching**: Share common results across threads
 5. **Streaming outcomes**: Generate metadata incrementally for long-running tools
 
+## Middleware-Level Optimization (IG-517)
+
+IG-517 adds **EditCoalescingMiddleware** that optimizes parallel file edit operations:
+
+### Architecture
+
+```
+Tool Calls Arrive
+       │
+       ▼
+┌─────────────────────────────────────┐
+│  EditCoalescingMiddleware           │  ← Position ~2-3 in chain
+│  - Detection window (50ms)          │
+│  - Group edits by file path         │
+│  - Merge edits (deletions →         │
+│    insertions → replacements)       │
+│  - Reject overlapping edits         │
+└─────────────────────────────────────┘
+       │
+       ├──────────────────────────────┐
+       │                              │
+       ▼                              ▼
+┌─────────────────────┐    ┌─────────────────────┐
+│  Batched Call       │    │  Non-Edit Calls     │
+│  (_batched=True)    │    │  (pass through)     │
+└─────────────────────┘    └─────────────────────┘
+       │                              │
+       ▼                              ▼
+┌─────────────────────┐    ┌─────────────────────┐
+│  Fast Path          │    │  Full Middleware    │
+│  - Skip policy      │    │  Chain              │
+│  - Skip skill       │    │  (unchanged)        │
+│  - Skip rate limit  │    │                     │
+│  - Skip concurrency │    │                     │
+└─────────────────────┘    └─────────────────────┘
+       │                              │
+       ▼                              ▼
+┌───────────────────────────────────────────────────┐
+│  UnifiedFilesystem                                │
+│  - aiofiles async I/O (aread, awrite, aedit)      │
+│  - aedit_batched() for merged operations          │
+└───────────────────────────────────────────────────┘
+```
+
+### Benefits
+
+1. **Race condition elimination**: Parallel edits to same file are merged into single operation
+2. **Middleware overhead reduction**: Batched calls skip ~12 middleware layers via `_batched=True` marker
+3. **Event loop unblocked**: `aiofiles` provides true async file I/O
+4. **Single read per file**: Merged edits read file once, apply all changes, write once
+
+### Fast-Path Marker
+
+Downstream middleware check `_batched=True` metadata to skip non-essential work:
+
+| Middleware | Fast Path Behavior |
+|------------|-------------------|
+| PolicyMiddleware | Skip policy check |
+| SkillActivationMiddleware | Skip skill matching |
+| RateLimitMiddleware | Skip rate limit |
+| ToolConcurrencyMiddleware | Skip semaphore |
+
+```python
+async def awrap_tool_call(self, request, handler):
+    metadata = getattr(request, "metadata", None) or {}
+    if metadata.get("_batched"):
+        return await handler(request)  # Fast path
+    # ... normal middleware logic ...
+```
+
 ## Changelog
 
 ### 2026-04-10
