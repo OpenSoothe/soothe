@@ -29,6 +29,7 @@ def _make_request(tool_name: str, tool_call_id: str = "test-id") -> MagicMock:
         "id": tool_call_id,
         "args": {},
     }
+    request.metadata = {}  # IG-517: metadata for fast-path checks
     return request
 
 
@@ -223,6 +224,35 @@ class TestToolTimeoutMiddleware:
 
         assert result.status == "error"
         assert "0.1s" in result.content
+
+    @pytest.mark.asyncio
+    async def test_batched_fast_path_async(self) -> None:
+        """Batched operations should skip timeout wrapper (IG-517)."""
+        middleware = ToolTimeoutMiddleware(default_timeout_seconds=0.1)
+        request = _make_request("slow_tool")
+        # Add _batched metadata
+        request.metadata = {"_batched": True}
+
+        # Even with slow handler (5s > 0.1s timeout), should pass through
+        # because batched ops skip timeout wrapper
+        result = await middleware.awrap_tool_call(request, _make_async_handler("batched_ok"))
+
+        assert isinstance(result, ToolMessage)
+        assert result.content == "batched_ok"
+        assert middleware._timeout_count == 0
+
+    def test_batched_fast_path_sync(self) -> None:
+        """Batched operations should skip timeout wrapper in sync path (IG-517)."""
+        middleware = ToolTimeoutMiddleware(default_timeout_seconds=0.1)
+        request = _make_request("slow_tool")
+        # Add _batched metadata
+        request.metadata = {"_batched": True}
+
+        result = middleware.wrap_tool_call(request, _make_handler("batched_sync_ok"))
+
+        assert isinstance(result, ToolMessage)
+        assert result.content == "batched_sync_ok"
+        assert middleware._timeout_count == 0
 
 
 class TestTimeoutCategories:

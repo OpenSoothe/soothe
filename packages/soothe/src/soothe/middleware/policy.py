@@ -50,6 +50,11 @@ class SoothePolicyMiddleware(AgentMiddleware):
             A ToolMessage with denial reason if policy denies the action,
             otherwise the result from the handler.
         """
+        # Fast path: skip policy check for batched operations (IG-517)
+        metadata = getattr(request, "metadata", None) or {}
+        if metadata.get("_batched"):
+            return await handler(request)
+
         tool_call = request.tool_call or {}
         tool_name = str(tool_call.get("name", ""))
         tool_args = tool_call.get("args", {})

@@ -289,3 +289,76 @@ class DeleteResult:
         if self.backup_path:
             result["backup_path"] = self.backup_path
         return result
+
+
+@dataclass(frozen=True)
+class BatchedEditOperation:
+    """Single edit operation within a batch.
+
+    Attributes:
+        operation_type: Type of edit ("replace", "insert", "delete").
+        start_line: First line (1-indexed, inclusive).
+        end_line: Last line (1-indexed, inclusive). For insert, use start_line - 1.
+        content: New content for replace/insert operations (empty for delete).
+        original_call_id: ID of the original tool call this came from.
+    """
+
+    operation_type: str  # "replace", "insert", "delete"
+    start_line: int
+    end_line: int
+    content: str = ""
+    original_call_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            "operation_type": self.operation_type,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "content": self.content,
+            "original_call_id": self.original_call_id,
+        }
+
+
+@dataclass(frozen=True)
+class BatchedEditResult:
+    """Result of a batched edit operation.
+
+    Attributes:
+        path: Path that was edited.
+        old_hash: Hash of content before edit.
+        new_hash: Hash of content after edit.
+        total_lines_changed: Total number of lines changed across all operations.
+        operations_applied: Number of operations successfully applied.
+        failed_operations: List of operation IDs that failed (e.g., conflicts).
+        backup_path: Path to backup if one was created.
+        error: Error message if batch failed.
+    """
+
+    path: str
+    old_hash: str | None = None
+    new_hash: str | None = None
+    total_lines_changed: int = 0
+    operations_applied: int = 0
+    failed_operations: list[str] | None = None
+    backup_path: str | None = None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary representation."""
+        result: dict[str, Any] = {
+            "path": self.path,
+            "total_lines_changed": self.total_lines_changed,
+            "operations_applied": self.operations_applied,
+        }
+        if self.old_hash:
+            result["old_hash"] = self.old_hash
+        if self.new_hash:
+            result["new_hash"] = self.new_hash
+        if self.failed_operations:
+            result["failed_operations"] = self.failed_operations
+        if self.backup_path:
+            result["backup_path"] = self.backup_path
+        if self.error:
+            result["error"] = self.error
+        return result

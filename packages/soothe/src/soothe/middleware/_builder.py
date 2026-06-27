@@ -74,28 +74,24 @@ def build_soothe_middleware_stack(
        other middleware processes them. Uses PolicyProtocol.check() on every
        tool/subagent call.
 
-    2. **ToolConcurrencyMiddleware** - Limits concurrent tool calls per thread
-       via semaphore. LangChain's ToolNode uses asyncio.gather without limits;
-       this middleware bounds parallelism to prevent resource exhaustion.
-
-    3. **SystemPromptMiddleware** - Modifies prompts BEFORE the
+    2. **SystemPromptMiddleware** - Modifies prompts BEFORE the
        LLM call. Requires ``routing_classification`` state injected by StrangeLoop / runner
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
-    4. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
+    3. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
        not thread level. Uses sliding window for RPM and semaphore for concurrent
        requests. Solves thread hanging issues from thread-level blocking.
 
-    5. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
+    4. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
        for programmatic tool calling. Enabled when ``code_interpreter.enabled``
        is True. Exposes allowlisted tools via ``tools.*`` namespace.
 
-    6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    5. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    7. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    6. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -109,12 +105,12 @@ def build_soothe_middleware_stack(
     Returns:
         Tuple of middleware instances in execution order.
     """
+    from .edit_coalescing import EditCoalescingMiddleware
     from .llm_rate_limit import LLMRateLimitMiddleware
     from .model_call_profiler import is_profiler_enabled
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
     from .system_prompt import SystemPromptMiddleware
-    from .tool_concurrency import ToolConcurrencyMiddleware
     from .tool_network_errors import NetworkToolErrorsMiddleware
     from .tool_timeout import ToolTimeoutMiddleware
     from .workspace_context import WorkspaceContextMiddleware
@@ -170,25 +166,23 @@ def build_soothe_middleware_stack(
         stack.append(MCPToolSearchMiddleware(mcp_registry=mcp_registry))
         logger.info("[Middleware] MCP tool search (RFC-412) enabled")
 
-    # 2. Tool concurrency limit (bounds parallel tool calls per thread)
-    stack.append(ToolConcurrencyMiddleware())
-    max_parallel_tools = config.agent.loop.concurrency.max_parallel_tools
-    logger.info(
-        "[Middleware] Tool concurrency enabled: max_parallel_tools=%d",
-        max_parallel_tools,
-    )
+    # 1d. Edit coalescing for parallel file edits (IG-517)
+    stack.append(EditCoalescingMiddleware())
+    logger.info("[Middleware] Edit coalescing (IG-517) enabled")
 
-    # 2b. Recoverable outbound network errors → tool messages (TLS verify, connection refused)
+    # IG-518: ToolConcurrencyMiddleware removed (limit=64 was effectively unlimited)
+
+    # 2. Recoverable outbound network errors → tool messages (TLS verify, connection refused)
     stack.append(NetworkToolErrorsMiddleware())
     logger.debug("[Middleware] Network tool error recovery enabled")
 
-    # 2c. Cap tool output before graph state / model context
+    # 2b. Cap tool output before graph state / model context
     from .tool_output_cap import ToolOutputCapMiddleware
 
     stack.append(ToolOutputCapMiddleware(config=config))
     logger.debug("[Middleware] Tool output cap enabled")
 
-    # 2d. Progressive builtin-tool loading (optional)
+    # 2c. Progressive builtin-tool loading (optional)
     progressive_tool_middleware = None
     if config.progressive_tools.enabled:
         from .progressive_tools import ProgressiveToolMiddleware

@@ -19,6 +19,8 @@ from soothe.foundation.workspace.resolution import resolve_daemon_workspace
 
 from .local import LocalFilesystem
 from .protocol import (
+    BatchedEditOperation,
+    BatchedEditResult,
     DeleteResult,
     EditResult,
     FileInfo,
@@ -414,6 +416,19 @@ class WorkspaceFilesystem(UnifiedFilesystem):
     ) -> EditResult:
         """Async apply unified diff patch to file."""
         return await self._local_fs.aapply_diff(path, diff, backup=backup)
+
+    async def aedit_batched(
+        self,
+        path: str,
+        operations: list[BatchedEditOperation],
+        *,
+        backup: bool = True,
+    ) -> BatchedEditResult:
+        """Async apply multiple edit operations to a file in one read/modify/write cycle.
+
+        IG-517: Batched edit for coalescing middleware.
+        """
+        return await self._local_fs.aedit_batched(path, operations, backup=backup)
 
     # ========================================================================
     # Directory Operations

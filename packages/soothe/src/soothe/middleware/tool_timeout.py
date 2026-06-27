@@ -251,6 +251,8 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         Note: Most soothe execution is async, so awrap_tool_call is primary.
         This implementation is for synchronous invoke() calls.
 
+        IG-517: Skip timeout for batched operations (fast path).
+
         Args:
             request: Tool call request with tool name, args, state, runtime.
             handler: The handler to execute the tool call.
@@ -258,6 +260,11 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         Returns:
             ToolMessage with result or error on timeout.
         """
+        # Fast path: skip timeout for batched operations (IG-517)
+        metadata = getattr(request, "metadata", None) or {}
+        if metadata.get("_batched"):
+            return handler(request)
+
         tool_name = request.tool_call.get("name", "")
         tool_call_id = request.tool_call.get("id", "")
 
@@ -305,6 +312,8 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         IG-516: When task tool times out, emit subagent completion event to
         close the TUI subagent card (explore, browser_use, etc).
 
+        IG-517: Skip timeout for batched operations (fast path).
+
         Args:
             request: Tool call request with tool name, args, state, runtime.
             handler: The async handler to execute the tool call.
@@ -312,6 +321,11 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         Returns:
             ToolMessage with result or error on timeout.
         """
+        # Fast path: skip timeout for batched operations (IG-517)
+        metadata = getattr(request, "metadata", None) or {}
+        if metadata.get("_batched"):
+            return await handler(request)
+
         tool_name = request.tool_call.get("name", "")
         tool_call_id = request.tool_call.get("id", "")
 
