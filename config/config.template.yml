@@ -235,8 +235,9 @@ agent:
         grep: 30.0
         glob: 20.0
         read_file: 30.0
-        explore: 600.0  # Subagent exploration
-        browser_use: 600.0  # Browser automation
+        explore: 1800.0  # Subagent exploration (30 minutes)
+        browser_use: 1800.0  # Browser automation (30 minutes)
+        task: 86400.0  # Task tool for autonomous subagent work (24 hours)
       skip_tools_with_internal_timeout: true
 
   # --- Protocols ---

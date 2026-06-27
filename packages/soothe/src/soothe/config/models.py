@@ -1304,8 +1304,9 @@ class ToolTimeoutConfig(BaseModel):
             "grep": 30.0,
             "glob": 20.0,
             "read_file": 30.0,
-            "explore": 600.0,  # Subagent exploration can take several minutes
-            "browser_use": 600.0,  # Browser automation can take several minutes
+            "explore": 1800.0,  # Subagent exploration (30 minutes)
+            "browser_use": 1800.0,  # Browser automation (30 minutes)
+            "task": 86400.0,  # Task tool for autonomous subagent work (24 hours)
         },
         description="Per-tool timeout overrides (tool_name -> seconds)",
     )
