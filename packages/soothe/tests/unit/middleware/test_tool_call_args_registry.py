@@ -57,3 +57,20 @@ async def test_awrap_tool_call_records_args_before_handler() -> None:
 
     assert get_recorded_tool_call_args("functions.edit_file:3")["file_path"] == "README.md"
     handler.assert_awaited_once()
+
+
+def test_main_middleware_stack_mounts_tool_call_args_recording() -> None:
+    """The main CoreAgent stack must record tool-call args for TUI display.
+
+    Regression guard (IG-519): removing ToolConcurrencyMiddleware from
+    ``build_soothe_middleware_stack`` silently dropped the only caller of
+    ``record_tool_call_args_from_request`` on the main path, so the executor's
+    stream code (``ingest_invocation_registry``) found an empty registry and the
+    TUI stopped showing tool-call args on step and non-explore subagent
+    activities. The args-recording middleware must stay in the main stack.
+    """
+    from soothe.config import SootheConfig
+    from soothe.middleware._builder import build_soothe_middleware_stack
+
+    stack = build_soothe_middleware_stack(SootheConfig(), policy=None)
+    assert any(type(m).__name__ == "ToolCallArgsMiddleware" for m in stack)
