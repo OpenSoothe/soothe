@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 from collections import deque
 from contextlib import suppress
@@ -28,12 +29,7 @@ except ImportError:
     socketio = None
     SOCKETIO_AVAILABLE = False
 
-try:
-    import msgpack  # noqa: F401
-
-    MSGPACK_AVAILABLE = True
-except ImportError:
-    MSGPACK_AVAILABLE = False
+MSGPACK_AVAILABLE = importlib.util.find_spec("msgpack") is not None
 
 logger = getLogger(__name__)
 
