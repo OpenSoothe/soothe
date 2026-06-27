@@ -23,9 +23,6 @@ _AG_COMMON_PATHS: tuple[str, ...] = (
     "/usr/local/bin/ag",  # macOS Intel Homebrew / manual install
     "/usr/bin/ag",  # Linux distro packages
 )
-# Safe threshold for file count before hitting typical ulimit (256 on macOS).
-# When directory exceeds this, skip ag proactively to avoid FD exhaustion.
-_MAX_FD_SAFE_FILE_COUNT = 200
 _ag_bin_cache: str | None = None
 _ag_bin_resolved: bool = False
 
@@ -83,50 +80,6 @@ def _normalize_ag_executable(path: str) -> str | None:
     return None
 
 
-def _should_skip_ag_due_to_fd_limit(search_path: Path) -> bool:
-    """Check if directory size might exceed system FD limit.
-
-    Quick estimate of files in top 2 directory levels.
-    When count exceeds safe threshold, skip ag proactively.
-
-    Args:
-        search_path: Directory to search.
-
-    Returns:
-        True if directory is too large for safe ag execution.
-    """
-    if not search_path.is_dir():
-        return False
-
-    try:
-        count = 0
-        # Quick estimate: count files in top 2 levels
-        for item in search_path.iterdir():
-            if item.is_file():
-                count += 1
-            elif item.is_dir():
-                # Skip common ignore directories
-                if item.name in {".git", "__pycache__", "node_modules", ".venv", "venv"}:
-                    continue
-                try:
-                    for sub in item.iterdir():
-                        if sub.is_file():
-                            count += 1
-                except OSError:
-                    pass  # Can't read subdir, ignore
-            if count > _MAX_FD_SAFE_FILE_COUNT:
-                logger.debug(
-                    "Directory %s has >%d files, skipping ag to avoid FD exhaustion",
-                    search_path,
-                    _MAX_FD_SAFE_FILE_COUNT,
-                )
-                return True
-        return False
-    except OSError:
-        # Can't read directory, be conservative and skip ag
-        return True
-
-
 def grep_with_ag(
     *,
     workspace: Path,
@@ -145,10 +98,9 @@ def grep_with_ag(
     if not ag_bin:
         return None
 
-    # Pre-flight check: skip ag if directory is too large (FD exhaustion risk)
-    if search_path.is_dir() and _should_skip_ag_due_to_fd_limit(search_path):
-        return None  # Fallback to Python walk
-
+    # ag self-manages its worker FD pool and honors .gitignore; no proactive
+    # file-count gate. If FD exhaustion ever occurs in practice, the EMFILE
+    # (errno 24) branch in _run_ag_subprocess logs guidance and falls back.
     if output_mode == "files_with_matches":
         return _grep_with_ag_files(
             ag_bin=ag_bin,
