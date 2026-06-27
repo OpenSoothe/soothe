@@ -893,3 +893,171 @@ async def test_agrep_continuation_token(tmp_path: Path) -> None:
     finally:
         local_fs._GREP_BATCH_SIZE = original_batch_size
         local_fs._GREP_MAX_BATCHES = original_max_batches
+
+
+# =============================================================================
+# IG-520: Gitignore-Aware Fallback Tests
+# =============================================================================
+
+
+def test_grep_fallback_respects_gitignore(tmp_path: Path) -> None:
+    """Python fallback should honor .gitignore patterns."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create .gitignore that excludes 'excluded_dir'
+    (tmp_path / ".gitignore").write_text("excluded_dir/\n*.log\n")
+
+    # Create files that should be ignored
+    (tmp_path / "excluded_dir").mkdir()
+    (tmp_path / "excluded_dir" / "secret.py").write_text("needle_excluded\n")
+
+    (tmp_path / "debug.log").write_text("needle_log\n")
+
+    # Create files that should be searched
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("needle_main\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    # Should find src/main.py, not excluded_dir/secret.py or debug.log
+    assert result == ["src/main.py"]
+
+
+def test_grep_fallback_gitignore_nested_patterns(tmp_path: Path) -> None:
+    """Gitignore patterns from nested directories should be combined."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Root .gitignore excludes *.tmp
+    (tmp_path / ".gitignore").write_text("*.tmp\n")
+
+    # Nested .gitignore excludes nested_ignored/
+    nested_dir = tmp_path / "nested"
+    nested_dir.mkdir()
+    (nested_dir / ".gitignore").write_text("nested_ignored/\n")
+
+    # Files that should be ignored
+    (tmp_path / "temp.tmp").write_text("needle_tmp\n")
+    (nested_dir / "nested_ignored").mkdir()
+    (nested_dir / "nested_ignored" / "file.py").write_text("needle_nested_ignored\n")
+
+    # Files that should be found
+    (nested_dir / "searchable.py").write_text("needle_searchable\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    # Should find nested/searchable.py, not .tmp or nested_ignored/
+    assert result == ["nested/searchable.py"]
+
+
+def test_grep_fallback_gate_large_directory(tmp_path: Path) -> None:
+    """Python fallback should refuse large directories with helpful error."""
+    import soothe.foundation.core.filesystem.local as local_fs
+
+    original_limit = local_fs._GREP_FALLBACK_FILE_LIMIT
+    local_fs._GREP_FALLBACK_FILE_LIMIT = 10  # Set low for testing
+
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # Create many files to exceed limit
+    for i in range(20):
+        (tmp_path / f"file_{i}.txt").write_text(f"needle_{i}\n")
+
+    try:
+        with patch(
+            "soothe.foundation.core.filesystem.local.is_ag_available",
+            return_value=False,
+        ):
+            result = fs.grep("needle", output_mode="files_with_matches")
+
+        # Should return GrepResult with error about scope
+        assert isinstance(result, GrepResult)
+        assert result.matches == []
+        assert "scope too large" in result.error.lower()
+        assert "ag" in result.error.lower() or "silver searcher" in result.error.lower()
+    finally:
+        local_fs._GREP_FALLBACK_FILE_LIMIT = original_limit
+
+
+def test_grep_fallback_gate_no_gitignore_small_tree(tmp_path: Path) -> None:
+    """Without gitignore, fallback should still work on small trees."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # No .gitignore, small tree
+    for i in range(5):
+        (tmp_path / f"doc_{i}.md").write_text(f"needle_doc_{i}\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    # Should find all 5 files (tree is small, no gate)
+    assert len(result) == 5
+
+
+def test_grep_gitignore_cache(tmp_path: Path) -> None:
+    """Gitignore spec should be cached per workspace."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    (tmp_path / ".gitignore").write_text("cached_excluded/\n")
+    (tmp_path / "cached_excluded").mkdir()
+    (tmp_path / "cached_excluded" / "file.txt").write_text("needle\n")
+    (tmp_path / "included.txt").write_text("needle\n")
+
+    # First call loads and caches gitignore
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        fs.grep("needle", output_mode="files_with_matches")
+
+    # Cache should be populated (key is (workspace, search_root) tuple)
+    cache_key = (tmp_path.resolve(), tmp_path.resolve())
+    assert cache_key in fs._gitignore_cache
+    assert fs._gitignore_cache[cache_key] is not None
+
+    # Second call should use cache (no re-read)
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    assert result == ["included.txt"]
+
+
+def test_grep_gitignore_combined_with_floor_filter(tmp_path: Path) -> None:
+    """Gitignore should be primary, _GREP_IGNORE_DIRS should be floor."""
+    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
+
+    # .gitignore that does NOT exclude .venv
+    (tmp_path / ".gitignore").write_text("custom_excluded/\n")
+
+    # .venv is NOT in .gitignore but IS in _GREP_IGNORE_DIRS floor
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "lib.py").write_text("needle_venv\n")
+
+    # custom_excluded is in .gitignore (primary filter)
+    (tmp_path / "custom_excluded").mkdir()
+    (tmp_path / "custom_excluded" / "file.py").write_text("needle_custom\n")
+
+    # Should be found
+    (tmp_path / "main.py").write_text("needle_main\n")
+
+    with patch(
+        "soothe.foundation.core.filesystem.local.is_ag_available",
+        return_value=False,
+    ):
+        result = fs.grep("needle", output_mode="files_with_matches")
+
+    # Floor filter excludes .venv, gitignore excludes custom_excluded
+    assert result == ["main.py"]
