@@ -13,6 +13,7 @@ from langchain_core.messages import ToolMessage
 from soothe.middleware.tool_timeout import (
     DEFAULT_FILESYSTEM_TIMEOUT_SECONDS,
     DEFAULT_SUBAGENT_TIMEOUT_SECONDS,
+    DEFAULT_TASK_TIMEOUT_SECONDS,
     DEFAULT_TOOL_TIMEOUT_SECONDS,
     FILESYSTEM_TOOL_NAMES,
     SUBAGENT_TOOL_NAMES,
@@ -98,7 +99,10 @@ class TestToolTimeoutMiddleware:
     def test_subagent_category_timeout(self) -> None:
         """Subagent tools should use subagent category timeout."""
         middleware = ToolTimeoutMiddleware()
+        # Task tool has its own 24h timeout, skip it here
         for tool_name in SUBAGENT_TOOL_NAMES:
+            if tool_name == "task":
+                continue
             timeout = middleware._get_timeout_for_tool(tool_name)
             assert timeout == DEFAULT_SUBAGENT_TIMEOUT_SECONDS
 
@@ -106,6 +110,12 @@ class TestToolTimeoutMiddleware:
         assert (
             middleware._get_timeout_for_tool("custom_subagent") == DEFAULT_SUBAGENT_TIMEOUT_SECONDS
         )
+
+    def test_task_tool_timeout(self) -> None:
+        """Task tool should use 24h timeout for autonomous subagent work."""
+        middleware = ToolTimeoutMiddleware()
+        assert middleware._get_timeout_for_tool("task") == DEFAULT_TASK_TIMEOUT_SECONDS
+        assert DEFAULT_TASK_TIMEOUT_SECONDS == 86400.0  # 24 hours
 
     def test_skip_tools_with_internal_timeout(self) -> None:
         """run_command should be skipped when skip_tools_with_internal_timeout=True."""
@@ -232,6 +242,7 @@ class TestTimeoutCategories:
         assert "plan" in SUBAGENT_TOOL_NAMES
         assert "tacitus" in SUBAGENT_TOOL_NAMES
         assert "delegate" in SUBAGENT_TOOL_NAMES
+        assert "task" in SUBAGENT_TOOL_NAMES  # Deepagents task tool for subagent invocation
 
     def test_unknown_tool_uses_default(self) -> None:
         """Unknown tools should use default timeout."""
