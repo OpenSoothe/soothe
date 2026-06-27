@@ -46,9 +46,6 @@ MSTEAMS_AVAILABLE = (
     and importlib.util.find_spec("cryptography") is not None
 )
 
-if TYPE_CHECKING:
-    import jwt
-
 if MSTEAMS_AVAILABLE:
     import jwt
 

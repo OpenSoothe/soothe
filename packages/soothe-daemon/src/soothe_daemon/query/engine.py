@@ -721,7 +721,7 @@ class QueryEngine:
                 )
 
                 async def _process_stream() -> None:
-                    nonlocal chunk_count, warning_sent, full_response_chars, full_response
+                    nonlocal chunk_count, warning_sent, full_response_chars
 
                     async for chunk in _stream_chunks():
                         if d._current_query_task and d._current_query_task.done():

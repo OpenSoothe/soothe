@@ -168,8 +168,6 @@ def _thread_worker_body(
 
         from soothe_daemon.runner._worker_runner import acquire_worker_runner
 
-        nonlocal cached_runner
-
         def _emit(msg_type: str, payload: Any = None) -> None:
             if pusher is not None:
                 pusher.push_from_worker(msg_type, payload)
