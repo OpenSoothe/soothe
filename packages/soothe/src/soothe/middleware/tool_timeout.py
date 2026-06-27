@@ -37,9 +37,8 @@ logger = logging.getLogger(__name__)
 
 # Default timeout values
 DEFAULT_TOOL_TIMEOUT_SECONDS: float = 60.0
-DEFAULT_SUBAGENT_TIMEOUT_SECONDS: float = (
-    600.0  # Subagent exploration/browser can take several minutes
-)
+DEFAULT_SUBAGENT_TIMEOUT_SECONDS: float = 1800.0  # Subagent exploration/browser (30 minutes)
+DEFAULT_TASK_TIMEOUT_SECONDS: float = 86400.0  # Task tool for autonomous subagent work (24 hours)
 DEFAULT_FILESYSTEM_TIMEOUT_SECONDS: float = 30.0
 DEFAULT_EXECUTION_TIMEOUT_SECONDS: float = 120.0
 
@@ -73,6 +72,7 @@ SUBAGENT_TOOL_NAMES: frozenset[str] = frozenset(
         "plan",
         "tacitus",
         "delegate",
+        "task",  # Deepagents task tool invokes subagents dynamically
     }
 )
 
@@ -158,6 +158,10 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
             return DEFAULT_FILESYSTEM_TIMEOUT_SECONDS
         if tool_name in EXECUTION_TOOL_NAMES:
             return DEFAULT_EXECUTION_TIMEOUT_SECONDS
+
+        # Check task tool first (24h timeout for autonomous subagent work)
+        if tool_name == "task":
+            return DEFAULT_TASK_TIMEOUT_SECONDS
 
         # Check subagent pattern (ends with _subagent or matches known names)
         if tool_name in SUBAGENT_TOOL_NAMES or tool_name.endswith("_subagent"):
@@ -291,6 +295,7 @@ __all__ = [
     "DEFAULT_EXECUTION_TIMEOUT_SECONDS",
     "DEFAULT_FILESYSTEM_TIMEOUT_SECONDS",
     "DEFAULT_SUBAGENT_TIMEOUT_SECONDS",
+    "DEFAULT_TASK_TIMEOUT_SECONDS",
     "DEFAULT_TOOL_TIMEOUT_SECONDS",
     "EXECUTION_TOOL_NAMES",
     "FILESYSTEM_TOOL_NAMES",

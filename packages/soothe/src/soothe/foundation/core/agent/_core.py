@@ -289,8 +289,12 @@ class CoreAgent:
             config: RunnableConfig with configurable.thread_id.
 
         Returns:
-            State snapshot from LangGraph aget_state().
+            State snapshot from LangGraph aget_state(), or None if no checkpointer
+            is configured (avoids ValueError from LangGraph).
         """
+        if self.checkpointer is None:
+            logger.debug("[Exec] Cannot get state: no checkpointer configured")
+            return None
         return await self._graph.aget_state(config=config or {})
 
     async def ainvoke(
@@ -352,7 +356,14 @@ class CoreAgent:
         Uses the primary ``graph`` for state retrieval since it has the checkpointer.
         The ephemeral ``execution_graph`` is checkpoint-free for streaming performance
         (IG-477), but ``aget_state`` requires a checkpointer to read persisted state.
+
+        Returns:
+            State snapshot from LangGraph aget_state(), or None if no checkpointer
+            is configured (avoids ValueError from LangGraph).
         """
+        if self.checkpointer is None:
+            logger.debug("[Exec] Cannot get state: no checkpointer configured")
+            return None
         return await self._graph.aget_state(config=config or {})
 
     async def execution_ainvoke(
