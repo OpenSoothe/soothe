@@ -19,12 +19,25 @@ When invoking subagents (explore, browser_use, etc.) via the `task` tool, the ti
 
 The explore subagent was synthesizing results (takes ~20s for LLM call) when the timeout hit.
 
-## Root Cause
+## Root Cause Analysis
+
+### Part 1: Missing Timeout Configuration
 
 The timeout middleware's `SUBAGENT_TOOL_NAMES` included:
 - `browser_use`, `explore`, `plan`, `tacitus`, `delegate`
 
 But when the agent invokes subagents, it uses the **`task` tool** from deepagents, which wraps the actual subagent invocation. The `task` tool name was missing from the list, so it fell through to the default 60s timeout.
+
+### Part 2: Subagent Card/Step Status Inconsistency
+
+When `asyncio.timeout()` fires:
+1. It raises `CancelledError` inside the handler (subagent graph execution)
+2. The timeout context converts it to `TimeoutError`
+3. Middleware catches it and returns error `ToolMessage`
+4. Executor marks step as failed
+5. **BUT**: The subagent's `after_agent` hook **never runs** because graph execution was cancelled
+6. `ExploreCompletedEvent`/`BrowserUseCompletedEvent` never emitted
+7. TUI subagent card stays in "running" state
 
 ## Solution
 
@@ -63,6 +76,26 @@ tool_timeout:
     task: 86400.0  # 24 hours
 ```
 
+4. **Emit completion event on timeout** (IG-516 Part 2)
+
+When `task` tool times out, emit the corresponding subagent completion event to close the TUI card:
+
+```python
+def _emit_subagent_timeout_completion_event(subagent_type: str, timeout_s: float):
+    if subagent_type == "explore":
+        emit_subagent_wire_event(ExploreCompletedEvent(
+            completion_status="timeout",
+            failure_reason=f"Subagent timed out after {timeout_s:.1f}s",
+        ))
+    elif subagent_type == "browser_use":
+        emit_subagent_wire_event(BrowserUseCompletedEvent(
+            success=False,
+            summary=f"Subagent timed out after {timeout_s:.1f}s",
+        ))
+```
+
+This ensures the TUI subagent card transitions from "running" to a proper completed state.
+
 ## Verification
 
 - All unit tests pass
@@ -74,7 +107,19 @@ tool_timeout:
 - Subagent invocations via `task` tool now have proper 24h timeout
 - Explore/browser_use have 30min timeout (sufficient for most operations)
 - No more premature timeouts during synthesis phase
-- Step and subagent cards stay consistent
+- **Step and subagent cards stay consistent**: Timeout triggers completion event
+
+## Files Changed
+
+- `packages/soothe/src/soothe/middleware/tool_timeout.py`:
+  - Added `DEFAULT_TASK_TIMEOUT_SECONDS`
+  - Updated `DEFAULT_SUBAGENT_TIMEOUT_SECONDS` to 1800s
+  - Added `_emit_subagent_timeout_completion_event()` helper
+  - Updated `awrap_tool_call()` to emit completion event on timeout
+- `packages/soothe/src/soothe/config/models.py`: Updated per_tool defaults
+- `config/config.template.yml`: Updated timeout values
+- `packages/soothe/tests/unit/middleware/test_tool_timeout.py`: Updated tests
+- `docs/impl/IG-516-task-tool-timeout.md`: This document
 
 ## Related
 
