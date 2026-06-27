@@ -61,7 +61,7 @@ def test_build_write_file_preview_shows_diff_on_overwrite(tmp_path: Path) -> Non
 
 
 def test_write_file_overwrite_diff_compose_renders_diff_lines(tmp_path: Path) -> None:
-    """Regression: overwrite preview must use base diff renderer, not EditFile-only methods."""
+    """Regression: overwrite preview uses compact gutter-bar style (diff-line-* classes)."""
     target = tmp_path / "existing.txt"
     target.write_text("old\n", encoding="utf-8")
     built = build_file_change_preview(
@@ -75,7 +75,8 @@ def test_write_file_overwrite_diff_compose_renders_diff_lines(tmp_path: Path) ->
     children = list(widget.compose())
     assert children
     classes = {getattr(c, "classes", None) for c in children}
-    assert frozenset({"diff-removed", "diff-added"}) & {
+    # Updated to match compact gutter-bar style (diff-line-removed/diff-line-added)
+    assert frozenset({"diff-line-removed", "diff-line-added"}) & {
         cls for group in classes if group for cls in group
     }
 
