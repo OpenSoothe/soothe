@@ -10,13 +10,14 @@ Architecture:
 
 Default timeouts:
     - Standard tools: 60s
-    - Subagent tools: 180s (delegates can take longer)
+    - Subagent tools: 1800s (30 minutes for exploration/browser)
+    - Task tool: 86400s (24 hours for autonomous subagent work)
     - Filesystem tools: 30s (read, glob, grep)
     - Execution tools: 120s (run_command already has timeout)
 
 Configuration:
     config.agent.tool_timeout.default_seconds: 60.0
-    config.agent.tool_timeout.per_tool: {grep: 30.0, explore_subagent: 180.0}
+    config.agent.tool_timeout.per_tool: {grep: 30.0, explore: 1800.0, task: 86400.0}
 """
 
 from __future__ import annotations
@@ -34,6 +35,61 @@ if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_subagent_timeout_completion_event(
+    subagent_type: str,
+    tool_call_id: str,
+    timeout_s: float,
+) -> None:
+    """Emit completion event for subagent cancelled due to timeout (IG-516).
+
+    When the task tool times out, the subagent graph execution is cancelled
+    and its after_agent hook never runs. This leaves the TUI subagent card
+    in "running" state. Emit a completion event to properly close the card.
+
+    Args:
+        subagent_type: The subagent being invoked (explore, browser_use, etc).
+        tool_call_id: The tool call ID for correlation.
+        timeout_s: The timeout duration in seconds.
+    """
+    # Import lazily to avoid circular imports at module load
+    from soothe.utils.subagent_emit import emit_subagent_wire_event
+
+    if subagent_type == "explore":
+        from soothe.subagents.explore.events import ExploreCompletedEvent
+
+        emit_subagent_wire_event(
+            ExploreCompletedEvent(
+                total_findings=0,
+                thoroughness="",
+                iterations_used=0,
+                duration_ms=0,
+                search_target="",
+                completion_status="timeout",
+                failure_reason=f"Subagent timed out after {timeout_s:.1f}s",
+            ).to_dict(),
+            logger,
+        )
+    elif subagent_type == "browser_use":
+        from soothe.subagents.browser_use.events import BrowserUseCompletedEvent
+
+        emit_subagent_wire_event(
+            BrowserUseCompletedEvent(
+                success=False,
+                duration_ms=0,
+                summary=f"Subagent timed out after {timeout_s:.1f}s",
+            ).to_dict(),
+            logger,
+        )
+    # For other subagent types (plan, tacitus), no specific completion event exists
+    # The timeout error ToolMessage will still mark the step as failed in executor
+    logger.debug(
+        "Subagent %s timeout completion event emitted (tool_call_id=%s)",
+        subagent_type,
+        tool_call_id,
+    )
+
 
 # Default timeout values
 DEFAULT_TOOL_TIMEOUT_SECONDS: float = 60.0
@@ -246,6 +302,9 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         on timeout instead of raising. This allows the agent to adapt its
         strategy rather than crashing the entire request.
 
+        IG-516: When task tool times out, emit subagent completion event to
+        close the TUI subagent card (explore, browser_use, etc).
+
         Args:
             request: Tool call request with tool name, args, state, runtime.
             handler: The async handler to execute the tool call.
@@ -272,6 +331,20 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
                 timeout_s,
             )
             self._timeout_count += 1
+
+            # IG-516: Emit completion event for subagent timeout
+            if tool_name == "task":
+                # Extract subagent_type from tool args
+                tool_args = request.tool_call.get("args", {})
+                if isinstance(tool_args, dict):
+                    subagent_type = tool_args.get("subagent_type", "")
+                    if subagent_type:
+                        _emit_subagent_timeout_completion_event(
+                            subagent_type,
+                            tool_call_id,
+                            timeout_s,
+                        )
+
             return ToolMessage(
                 content=f"Error: Tool '{tool_name}' timed out after {timeout_s:.1f}s. "
                 f"Consider narrowing the scope or using a more specific query.",
