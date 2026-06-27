@@ -62,7 +62,7 @@ class RoutingClassification(BaseModel):
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (RFC-225).
+    """Primary intent classification model (RFC-225, IG-518).
 
     Two-value LLM classification:
     - ``quiz``: minimal direct reply (greeting/thanks/trivia) without tools.
@@ -71,6 +71,7 @@ class IntentClassification(BaseModel):
 
     Args:
         intent_type: ``quiz`` or ``agentic``.
+        reasoning: Brief reasoning for agentic classification (IG-518, agentic only).
         goal_description: Normalized goal description (populated for agentic).
         task_complexity: Routing complexity level.
         quiz_response: Direct quiz answer piggybacked from the LLM (quiz only).
@@ -78,6 +79,10 @@ class IntentClassification(BaseModel):
 
     intent_type: Literal["quiz", "agentic"] = Field(
         description="Primary intent: quiz (greeting/thanks/trivia without tools) or agentic (everything else)"
+    )
+    reasoning: str | None = Field(
+        default=None,
+        description="Brief reasoning for agentic classification (why tools/action needed)",
     )
     goal_description: str | None = Field(
         default=None,
@@ -100,16 +105,21 @@ class IntentClassification(BaseModel):
 
 
 class IntentClassificationLLMResult(BaseModel):
-    """Structured output from intent classifier LLM.
+    """Structured output from intent classifier LLM (IG-518).
 
     The LLM decides ``quiz`` vs. ``agentic`` only. Quiz fast-path piggybacks
     the answer in ``quiz_response`` so the runner can short-circuit without
-    a second LLM call.
+    a second LLM call. Agentic intents include brief ``reasoning`` for
+    client visibility (IG-518).
     """
 
     intent_type: Literal["quiz", "agentic"] = Field(
         description="Primary intent: quiz (greeting/thanks/static trivia without tools), "
         "agentic (everything else — tools, follow-ups, analysis)"
+    )
+    reasoning: str | None = Field(
+        default=None,
+        description="Brief reasoning for agentic classification (one sentence max 20 words). Empty for quiz.",
     )
     goal_description: str | None = Field(
         default=None,
@@ -128,12 +138,14 @@ class IntentClassificationLLMResult(BaseModel):
         if self.intent_type == "quiz":
             return IntentClassification(
                 intent_type="quiz",
+                reasoning=None,
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
                 quiz_response=self.quiz_response,
             )
         return IntentClassification(
             intent_type="agentic",
+            reasoning=self.reasoning,
             goal_description=self.goal_description,
             task_complexity=self.task_complexity,
             quiz_response=None,

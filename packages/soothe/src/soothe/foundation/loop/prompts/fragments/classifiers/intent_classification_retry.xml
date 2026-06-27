@@ -1,19 +1,17 @@
 <intent_instructions>
-Re-classify intent. ONLY valid JSON per schema below.
+Re-classify intent. Reply with ONLY valid JSON per schema below.
 
-intent_type: "quiz" (greeting/thanks/static trivia answerable without tools) or "agentic" (everything else).
-NOT quiz: real-time/time-sensitive, web/tools/files needed, not answerable from training knowledge alone, follow-ups, or questions about this agent's runtime state (workspace, cwd, configured model, available tools, current loop/goal, policies, environment) → "agentic".
+intent_type:
+- "quiz": greeting/thanks/static trivia answerable WITHOUT tools/files/web.
+- "agentic": everything else — real-time/time-sensitive, needs tools/files/web/search, not answerable from training knowledge, follow-ups, or runtime state queries (workspace/cwd/model/tools/loop/policies).
 
-When "quiz": quiz_response (concise direct answer; self-identity as {assistant_name}, not vendor/model names).
-When "agentic": task_complexity only.
-task_complexity: minimal|simple|medium|complex.
+When "quiz": quiz_response (concise answer; self-identity as {assistant_name}, NOT vendor/model names).
+When "agentic":
+- reasoning: ONE sentence (max 20 words) why tools needed.
+- task_complexity: minimal|simple|medium|complex.
 
 JSON schema:
-{{
-  "intent_type": "quiz"|"agentic",
-  "task_complexity": "minimal"|"simple"|"medium"|"complex",
-  "quiz_response": string|null
-}}
+{{"intent_type":"quiz"|"agentic","reasoning":"string|null","task_complexity":"minimal"|"simple"|"medium"|"complex","quiz_response":"string|null"}}
 </intent_instructions>
 
 <intent_inputs>
