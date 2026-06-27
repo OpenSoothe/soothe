@@ -37,6 +37,7 @@ dependencies = [
     "requests>=2.32.3,<3.0.0",
     "bubus>=1.5.6",
     "jinja2>=3.1.0",    # Prompt fragment template rendering
+    "aiofiles>=24.1.0", # Async file I/O (IG-517)
     # Direct pin: langchain-openai needs openai>=1.104.2 (DefaultHttpxClient, etc.).
     "openai>=1.104.2,<3.0.0",
     "dashscope>=1.20.0",

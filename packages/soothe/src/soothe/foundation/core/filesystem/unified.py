@@ -14,6 +14,8 @@ from .exceptions import (
     PathTraversalError,
 )
 from .protocol import (
+    BatchedEditOperation,
+    BatchedEditResult,
     DeleteResult,
     EditResult,
     FileInfo,
@@ -435,6 +437,34 @@ class UnifiedFilesystem(ABC):
         """Async apply unified diff patch to file.
 
         See apply_diff() for details.
+        """
+        ...
+
+    @abstractmethod
+    async def aedit_batched(
+        self,
+        path: str,
+        operations: list[BatchedEditOperation],
+        *,
+        backup: bool = True,
+    ) -> BatchedEditResult:
+        """Apply multiple edit operations to a file in one read/modify/write cycle.
+
+        Operations are applied in order: deletions → insertions → replacements.
+        Replacements are sorted by line number descending (bottom-to-top) to preserve
+        line indices during modification.
+
+        Args:
+            path: Path to the file to edit.
+            operations: List of edit operations to apply.
+            backup: Whether to create a backup before editing.
+
+        Returns:
+            BatchedEditResult with details of all operations applied.
+
+        Raises:
+            PathNotFoundError: If file does not exist.
+            FilesystemError: If operations have overlapping line ranges.
         """
         ...
 

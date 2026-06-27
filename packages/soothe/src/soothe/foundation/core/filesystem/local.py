@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import aiofiles
+
 from .exceptions import (
     DirectoryNotEmptyError,
     FilesystemError,
@@ -26,6 +28,8 @@ from .exceptions import (
 )
 from .grep_search import grep_with_ag, is_ag_available
 from .protocol import (
+    BatchedEditOperation,
+    BatchedEditResult,
     DeleteResult,
     EditResult,
     FileInfo,
@@ -292,9 +296,51 @@ class LocalFilesystem(UnifiedFilesystem):
         limit: int | None = None,
         encoding: str = "utf-8",
     ) -> ReadResult:
-        """Async read file contents."""
-        # For local filesystem, async is same as sync
-        return self.read(path, offset=offset, limit=limit, encoding=encoding)
+        """Async read file contents using aiofiles (IG-517)."""
+        resolved = self._resolve_path(path)
+
+        if not resolved.exists():
+            raise PathNotFoundError(f"File not found: {path}", path=path)
+        if not resolved.is_file():
+            raise NotAFileError(f"Not a file: {path}", path=path)
+
+        # Check file size
+        file_size = resolved.stat().st_size
+        if file_size > self.max_file_size_bytes:
+            raise FilesystemError(
+                f"File too large: {file_size} bytes (max: {self.max_file_size_bytes})",
+                path=path,
+            )
+
+        # Async read content
+        try:
+            async with aiofiles.open(resolved, "rb") as f:
+                if offset:
+                    await f.seek(offset)
+                content_bytes = await f.read(limit) if limit else await f.read()
+        except PermissionError as e:
+            raise PermissionDeniedError(f"Permission denied: {path}", path=path) from e
+        except OSError as e:
+            raise FilesystemError(f"Read error: {e}", path=path) from e
+
+        # Try to decode as text
+        is_binary = False
+        try:
+            content = content_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            # Binary file - encode as base64
+            import base64
+
+            content = base64.b64encode(content_bytes).decode("ascii")
+            is_binary = True
+
+        return ReadResult(
+            content=content,
+            is_binary=is_binary,
+            encoding=encoding if not is_binary else "base64",
+            truncated=limit is not None and len(content_bytes) == limit,
+            total_size=file_size,
+        )
 
     # =======================================================================
     # Write Operations
@@ -359,8 +405,48 @@ class LocalFilesystem(UnifiedFilesystem):
         encoding: str = "utf-8",
         backup: bool = False,
     ) -> WriteResult:
-        """Async write content to file."""
-        return self.write(path, content, encoding=encoding, backup=backup)
+        """Async write content to file using aiofiles (IG-517)."""
+        resolved = self._resolve_path(path)
+
+        # Create backup if needed (sync - rare operation)
+        backup_path = None
+        if backup and resolved.exists():
+            backup_path = self._create_backup(resolved)
+
+        # Ensure parent directory exists
+        try:
+            resolved.parent.mkdir(parents=True, exist_ok=True)
+        except PermissionError as e:
+            raise PermissionDeniedError(f"Permission denied: {path}", path=path) from e
+        except OSError as e:
+            raise FilesystemError(f"Cannot create directory for {path}: {e}", path=path) from e
+
+        # Write content async
+        created = not resolved.exists()
+        try:
+            if isinstance(content, str):
+                async with aiofiles.open(resolved, "w", encoding=encoding) as f:
+                    await f.write(content)
+                bytes_written = len(content.encode(encoding))
+            else:
+                async with aiofiles.open(resolved, "wb") as f:
+                    await f.write(content)
+                bytes_written = len(content)
+        except PermissionError as e:
+            raise PermissionDeniedError(f"Permission denied: {path}", path=path) from e
+        except OSError as e:
+            raise FilesystemError(f"Write error: {e}", path=path) from e
+
+        # Compute result path: use relative path if within workspace, else absolute
+        result_path = self._result_path(resolved)
+        result_backup = self._result_path(backup_path) if backup_path else None
+
+        return WriteResult(
+            path=result_path,
+            bytes_written=bytes_written,
+            created=created,
+            backup_path=result_backup,
+        )
 
     # =======================================================================
     # Edit Operations
@@ -431,8 +517,54 @@ class LocalFilesystem(UnifiedFilesystem):
         *,
         backup: bool = True,
     ) -> EditResult:
-        """Async replace old_string with new_string in file."""
-        return self.edit(path, old_string, new_string, backup=backup)
+        """Async replace old_string with new_string in file using aiofiles (IG-517)."""
+        resolved = self._resolve_path(path)
+
+        if not resolved.exists():
+            raise PathNotFoundError(f"File not found: {path}", path=path)
+
+        # Async read current content
+        async with aiofiles.open(resolved, encoding="utf-8") as f:
+            content = await f.read()
+
+        old_hash = self._compute_hash(content)
+
+        # Check for matches
+        if old_string not in content:
+            raise FilesystemError(f"String not found in file: {old_string!r}", path=path)
+
+        count = content.count(old_string)
+        if count > 1:
+            raise FilesystemError(
+                f"Multiple matches ({count}) found for string: {old_string!r}",
+                path=path,
+            )
+
+        # Create backup (sync - rare operation)
+        backup_path = None
+        if backup:
+            backup_path = self._create_backup(resolved)
+
+        # Apply edit
+        new_content = content.replace(old_string, new_string, 1)
+        new_hash = self._compute_hash(new_content)
+
+        # Count changed lines (approximate)
+        old_lines = old_string.count("\n")
+        new_lines = new_string.count("\n")
+        lines_changed = abs(new_lines - old_lines) + 1
+
+        # Async write back
+        async with aiofiles.open(resolved, "w", encoding="utf-8") as f:
+            await f.write(new_content)
+
+        return EditResult(
+            path=self._result_path(resolved),
+            old_hash=old_hash,
+            new_hash=new_hash,
+            lines_changed=lines_changed,
+            backup_path=self._result_path(backup_path) if backup_path else None,
+        )
 
     def edit_lines(
         self,
@@ -508,8 +640,63 @@ class LocalFilesystem(UnifiedFilesystem):
         *,
         backup: bool = True,
     ) -> EditResult:
-        """Async replace specific line range in file."""
-        return self.edit_lines(path, start_line, end_line, new_content, backup=backup)
+        """Async replace specific line range in file using aiofiles (IG-517)."""
+        resolved = self._resolve_path(path)
+
+        if not resolved.exists():
+            raise PathNotFoundError(f"File not found: {path}", path=path)
+
+        # Async read lines
+        async with aiofiles.open(resolved, encoding="utf-8") as f:
+            content = await f.read()
+        lines = content.splitlines(keepends=True)
+
+        insert_mode = end_line == start_line - 1
+        if insert_mode:
+            if start_line < 1 or start_line > len(lines) + 1:
+                raise FilesystemError(
+                    f"Invalid line number: {start_line} (file has {len(lines)} lines)",
+                    path=path,
+                )
+        elif start_line < 1 or end_line > len(lines) or start_line > end_line:
+            raise FilesystemError(
+                f"Invalid line range: {start_line}-{end_line} (file has {len(lines)} lines)",
+                path=path,
+            )
+
+        old_hash = self._compute_hash(content)
+
+        # Create backup (sync - rare operation)
+        backup_path = None
+        if backup:
+            backup_path = self._create_backup(resolved)
+
+        new_lines = new_content.split("\n")
+        if new_lines and new_lines[-1] == "":
+            new_lines = new_lines[:-1]
+
+        formatted_new_lines = [line + "\n" for line in new_lines]
+        if insert_mode:
+            result_lines = lines[: start_line - 1] + formatted_new_lines + lines[start_line - 1 :]
+            lines_changed = len(formatted_new_lines)
+        else:
+            result_lines = lines[: start_line - 1] + formatted_new_lines + lines[end_line:]
+            lines_changed = end_line - start_line + 1
+
+        new_full_content = "".join(result_lines)
+        new_hash = self._compute_hash(new_full_content)
+
+        # Async write back
+        async with aiofiles.open(resolved, "w", encoding="utf-8") as f:
+            await f.writelines(result_lines)
+
+        return EditResult(
+            path=self._result_path(resolved),
+            old_hash=old_hash,
+            new_hash=new_hash,
+            lines_changed=lines_changed,
+            backup_path=self._result_path(backup_path) if backup_path else None,
+        )
 
     def insert_lines(
         self,
@@ -555,6 +742,130 @@ class LocalFilesystem(UnifiedFilesystem):
     ) -> EditResult:
         """Async delete specific line range from file."""
         return self.delete_lines(path, start_line, end_line, backup=backup)
+
+    async def aedit_batched(
+        self,
+        path: str,
+        operations: list[BatchedEditOperation],
+        *,
+        backup: bool = True,
+    ) -> BatchedEditResult:
+        """Apply multiple edit operations to a file in one read/modify/write cycle (IG-517).
+
+        Operations are applied in order: deletions → insertions → replacements.
+        Replacements are sorted by line number descending (bottom-to-top) to preserve
+        line indices during modification.
+
+        Args:
+            path: Path to the file to edit.
+            operations: List of edit operations to apply.
+            backup: Whether to create a backup before editing.
+
+        Returns:
+            BatchedEditResult with details of all operations applied.
+
+        Raises:
+            PathNotFoundError: If file does not exist.
+            FilesystemError: If operations have overlapping line ranges.
+        """
+        resolved = self._resolve_path(path)
+
+        if not resolved.exists():
+            raise PathNotFoundError(f"File not found: {path}", path=path)
+
+        # Separate operations by type
+        deletions = [op for op in operations if op.operation_type == "delete"]
+        insertions = [op for op in operations if op.operation_type == "insert"]
+        replacements = [op for op in operations if op.operation_type == "replace"]
+
+        # Check for overlaps in replacements
+        for i, op_a in enumerate(replacements):
+            for op_b in replacements[i + 1 :]:
+                if self._ranges_overlap(op_a, op_b):
+                    return BatchedEditResult(
+                        path=self._result_path(resolved),
+                        error=f"Overlapping edits: lines {op_a.start_line}-{op_a.end_line} and {op_b.start_line}-{op_b.end_line}",
+                        failed_operations=[
+                            op_a.original_call_id or "",
+                            op_b.original_call_id or "",
+                        ],
+                    )
+
+        # Async read file
+        async with aiofiles.open(resolved, encoding="utf-8") as f:
+            content = await f.read()
+        lines = content.splitlines(keepends=True)
+        old_hash = self._compute_hash(content)
+
+        # Create backup (sync - rare operation)
+        backup_path = None
+        if backup:
+            backup_path = self._create_backup(resolved)
+
+        # Track changes
+        total_lines_changed = 0
+        operations_applied = 0
+        failed_ops: list[str] = []
+
+        # Apply deletions first (sorted descending to preserve indices)
+        deletions_sorted = sorted(deletions, key=lambda op: op.start_line, reverse=True)
+        for op in deletions_sorted:
+            if op.start_line < 1 or op.end_line > len(lines) or op.start_line > op.end_line:
+                failed_ops.append(op.original_call_id or "")
+                continue
+            lines = lines[: op.start_line - 1] + lines[op.end_line :]
+            total_lines_changed += op.end_line - op.start_line + 1
+            operations_applied += 1
+
+        # Apply insertions (sorted by line number ascending)
+        insertions_sorted = sorted(insertions, key=lambda op: op.start_line)
+        for op in insertions_sorted:
+            if op.start_line < 1 or op.start_line > len(lines) + 1:
+                failed_ops.append(op.original_call_id or "")
+                continue
+            new_lines = op.content.split("\n")
+            if new_lines and new_lines[-1] == "":
+                new_lines = new_lines[:-1]
+            formatted_new_lines = [line + "\n" for line in new_lines]
+            lines = lines[: op.start_line - 1] + formatted_new_lines + lines[op.start_line - 1 :]
+            total_lines_changed += len(formatted_new_lines)
+            operations_applied += 1
+
+        # Apply replacements (sorted descending to preserve indices)
+        replacements_sorted = sorted(replacements, key=lambda op: op.start_line, reverse=True)
+        for op in replacements_sorted:
+            if op.start_line < 1 or op.end_line > len(lines) or op.start_line > op.end_line:
+                failed_ops.append(op.original_call_id or "")
+                continue
+            new_lines = op.content.split("\n")
+            if new_lines and new_lines[-1] == "":
+                new_lines = new_lines[:-1]
+            formatted_new_lines = [line + "\n" for line in new_lines]
+            lines = lines[: op.start_line - 1] + formatted_new_lines + lines[op.end_line :]
+            total_lines_changed += max(op.end_line - op.start_line + 1, len(formatted_new_lines))
+            operations_applied += 1
+
+        # Compute new hash
+        new_content = "".join(lines)
+        new_hash = self._compute_hash(new_content)
+
+        # Async write back
+        async with aiofiles.open(resolved, "w", encoding="utf-8") as f:
+            await f.write(new_content)
+
+        return BatchedEditResult(
+            path=self._result_path(resolved),
+            old_hash=old_hash,
+            new_hash=new_hash,
+            total_lines_changed=total_lines_changed,
+            operations_applied=operations_applied,
+            failed_operations=failed_ops if failed_ops else None,
+            backup_path=self._result_path(backup_path) if backup_path else None,
+        )
+
+    def _ranges_overlap(self, a: BatchedEditOperation, b: BatchedEditOperation) -> bool:
+        """Check if two edit operations have overlapping line ranges."""
+        return a.start_line <= b.end_line and b.start_line <= a.end_line
 
     def apply_diff(
         self,

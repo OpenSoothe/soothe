@@ -436,6 +436,51 @@ def error_response(
     )
 ```
 
+### 7.5 Batched Edit Operations (IG-517)
+
+For parallel file edits, the filesystem backend supports batched operations:
+
+```python
+@dataclass(frozen=True)
+class BatchedEditOperation:
+    """Single edit operation within a batch."""
+    operation_type: str  # "replace", "insert", "delete"
+    start_line: int
+    end_line: int
+    content: str = ""
+    original_call_id: str | None = None
+
+@dataclass(frozen=True)
+class BatchedEditResult:
+    """Result of a batched edit operation."""
+    path: str
+    old_hash: str | None = None
+    new_hash: str | None = None
+    total_lines_changed: int = 0
+    operations_applied: int = 0
+    failed_operations: list[str] | None = None
+    backup_path: str | None = None
+    error: str | None = None
+```
+
+Operations are applied in order: deletions → insertions → replacements.
+Replacements are sorted by line number descending (bottom-to-top) to preserve indices.
+
+### 7.6 Async File I/O Pattern (IG-517)
+
+File operations use `aiofiles` for true async I/O, unblocking the event loop:
+
+```python
+async def aread(self, path: str) -> ReadResult:
+    async with aiofiles.open(resolved, "rb") as f:
+        content_bytes = await f.read()
+    # Decode and return...
+
+async def awrite(self, path: str, content: str) -> WriteResult:
+    async with aiofiles.open(resolved, "w", encoding=encoding) as f:
+        await f.write(content)
+```
+
 ---
 
 ## 8. Examples

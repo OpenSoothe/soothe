@@ -8432,6 +8432,7 @@ wheels = [
 name = "soothe"
 source = { editable = "packages/soothe" }
 dependencies = [
+    { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "aiosqlite" },
     { name = "anthropic" },
@@ -8512,6 +8513,7 @@ tabular = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "aiohttp", specifier = ">=3.9.0,<4.0.0" },
     { name = "aiosqlite", specifier = ">=0.22.1,<1.0.0" },
     { name = "anthropic", specifier = ">=0.96.0,<1.0.0" },
