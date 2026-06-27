@@ -458,7 +458,6 @@ def _pool_worker_body(
 
     def _run_single(req: LoopRunRequest, request_id: str) -> None:
         """Execute one request, reusing worker runner when configured."""
-        nonlocal cached_runner
         configure_loop_runner_worker_logging(config, req.loop_id)
 
         # Clear cancel event at start of new request

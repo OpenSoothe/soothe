@@ -11,21 +11,20 @@ from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 def _check_postgresql_import() -> CheckResult:
     """Check if PostgreSQL driver is importable."""
-    try:
-        import psycopg  # noqa: F401
+    import importlib.util
 
+    if importlib.util.find_spec("psycopg") is not None:
         return CheckResult(
             name="postgresql_import",
             status=CheckStatus.OK,
             message="PostgreSQL driver (psycopg) available",
         )
-    except ImportError:
-        return CheckResult(
-            name="postgresql_import",
-            status=CheckStatus.INFO,
-            message="PostgreSQL driver not installed (optional)",
-            details={"remediation": "Install psycopg for PostgreSQL support"},
-        )
+    return CheckResult(
+        name="postgresql_import",
+        status=CheckStatus.INFO,
+        message="PostgreSQL driver not installed (optional)",
+        details={"remediation": "Install psycopg for PostgreSQL support"},
+    )
 
 
 def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
