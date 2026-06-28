@@ -800,6 +800,37 @@ class CognitionStepMessage(Vertical):
         if tcid in self._row_index:
             self.update_tool_args(tcid, args)
             return
+        # IG-517: Deduplicate task rows by semantic identity before creating.
+        # Multiple streaming chunks may arrive with different raw tool_call_ids
+        # for the same delegation (same subagent_type + description). Check for
+        # existing task row with matching semantics, not just tool_call_id.
+        if is_task_row and tool_name == "task":
+            from soothe_cli.tui.tool_display import compact_arg_text
+
+            candidate_subagent = str(args.get("subagent_type") or "").strip()
+            candidate_desc = str(args.get("description") or args.get("prompt") or "").strip()
+            candidate_desc_compact = compact_arg_text(candidate_desc)
+            for existing_row in self._rows:
+                if not getattr(existing_row, "is_task_row", False):
+                    continue
+                existing_args = existing_row.args or {}
+                existing_subagent = str(existing_args.get("subagent_type") or "").strip()
+                existing_desc = str(
+                    existing_args.get("description") or existing_args.get("prompt") or ""
+                ).strip()
+                existing_desc_compact = compact_arg_text(existing_desc)
+                # Match by subagent_type + description semantics
+                if candidate_subagent == existing_subagent:
+                    # If both have descriptions, compare compacted form (allows minor diffs)
+                    if candidate_desc_compact and existing_desc_compact:
+                        if candidate_desc_compact == existing_desc_compact:
+                            self.update_tool_args(existing_row.tool_call_id, args)
+                            return
+                    # If only subagent_type matches and one has no description,
+                    # treat as same delegation (streaming may fill description later)
+                    elif not candidate_desc_compact or not existing_desc_compact:
+                        self.update_tool_args(existing_row.tool_call_id, args)
+                        return
         row_args: dict[str, Any] = dict(args or {})
         if not row_args and raw_args:
             # Subgraph rows often arrive before namespace binding with only raw JSON.
