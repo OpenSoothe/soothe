@@ -24,33 +24,29 @@ PolicyProtocol defines the interface for **permission-based access control** in 
 ```python
 @runtime_checkable
 class PolicyProtocol(Protocol):
-    """Protocol for permission-based access control.
-    
-    Every tool invocation and subagent spawn passes through
-    PolicyProtocol before execution. Permissions are structured
-    with category, action, and scope for fine-grained control.
-    """
+    """Protocol for permission checking and enforcement."""
 
-    def check(self, request: ActionRequest, context: PolicyContext) -> PolicyDecision:
+    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
         """Check if an action is permitted.
-        
+
         Args:
-            request: The action being requested.
-            context: Current policy context (profile, delegation depth).
-            
+            action: The action being requested.
+            context: The current policy context.
+
         Returns:
-            PolicyDecision (allowed, denied, need_approval).
+            A decision with verdict and reason.
         """
         ...
 
-    def get_permissions(self, profile: str) -> PermissionSet:
-        """Get the permission set for a policy profile.
-        
+    def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet:
+        """Compute a narrowed permission set for a child subagent.
+
         Args:
-            profile: Profile name (readonly, standard, privileged).
-            
+            parent_permissions: The parent's permissions.
+            child_name: The child subagent's name.
+
         Returns:
-            PermissionSet for the profile.
+            A narrowed PermissionSet for the child.
         """
         ...
 ```
@@ -155,74 +151,76 @@ class PermissionSet:
 
 ```python
 class ActionRequest(BaseModel):
-    """Request to perform an action requiring permission check.
-    
+    """Describes an action requiring permission.
+
     Args:
-        action: The action being requested.
-        context: Additional context for the request.
-        delegation_depth: How many levels deep the delegation is.
+        action_type: Kind of action (tool_call, subagent_spawn, mcp_connect).
+        tool_name: Name of the tool being invoked (if applicable).
+        tool_args: Arguments to the tool (for scope extraction).
     """
 
-    action: Permission
-    context: dict[str, Any] = Field(default_factory=dict)
-    delegation_depth: int = 0
+    action_type: str
+    tool_name: str | None = None
+    tool_args: dict[str, Any] = Field(default_factory=dict)
 ```
 
 ### PolicyContext
 
 ```python
 class PolicyContext(BaseModel):
-    """Context for policy decisions.
-    
+    """Context for policy evaluation.
+
     Args:
-        profile: Active policy profile name.
-        thread_id: Current thread ID.
-        delegation_depth: Current delegation depth (for subagent spawning).
-        parent_permissions: Permission set of parent (for narrowing).
+        active_permissions: The currently granted permissions.
+        scope_id: Opaque execution scope for audit (e.g. StrangeLoop id).
+        workspace: Absolute workspace root for stream-scoped filesystem policy.
     """
 
-    profile: str = "standard"
-    thread_id: str | None = None
-    delegation_depth: int = 0
-    parent_permissions: PermissionSet | None = None
+    model_config = {"arbitrary_types_allowed": True}
+
+    active_permissions: Any  # PermissionSet
+    scope_id: str | None = None
+    workspace: str | None = None
 ```
 
 ### PolicyDecision
 
 ```python
 class PolicyDecision(BaseModel):
-    """Decision from policy check.
-    
+    """Result of a policy check.
+
     Args:
-        allowed: Whether the action is permitted.
-        reason: Explanation for the decision.
-        need_approval: Whether manual approval is needed.
-        approval_message: Message for approval request.
+        verdict: The decision (allow, deny, need_approval).
+        reason: Human-readable explanation.
+        matched_permission: The grant that matched (if allowed).
     """
 
-    allowed: bool
+    model_config = {"arbitrary_types_allowed": True}
+
+    verdict: Literal["allow", "deny", "need_approval"]
     reason: str
-    need_approval: bool = False
-    approval_message: str | None = None
+    matched_permission: Any = None  # Permission | None
 ```
 
 ### PolicyProfile
 
 ```python
 class PolicyProfile(BaseModel):
-    """Named configuration of permitted actions.
-    
+    """A named policy configuration.
+
     Args:
-        name: Profile name.
-        permissions: List of granted permissions.
-        description: Human-readable description.
-        approval_required: Actions requiring manual approval.
+        name: Profile name (e.g., "readonly", "standard", "privileged").
+        permissions: Granted permissions.
+        approvable: Permissions that can be approved interactively.
+        deny_rules: Explicit deny rules that override grants.
     """
 
+    model_config = {"arbitrary_types_allowed": True}
+
     name: str
-    permissions: list[Permission]
-    description: str = ""
-    approval_required: list[str] = Field(default_factory=list)
+    permissions: Any  # PermissionSet
+    approvable: Any = None  # PermissionSet | None
+    deny_rules: list[Any] = Field(default_factory=list)  # list[Permission]
 ```
 
 ## Backend Implementations
@@ -574,7 +572,7 @@ policy:
 ### Resolution
 
 ```python
-from soothe.core.resolver import resolve_policy
+from soothe.runner.resolver import resolve_policy
 
 # Resolve policy protocol from config
 policy = resolve_policy(config)

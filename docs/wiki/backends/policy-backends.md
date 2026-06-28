@@ -16,13 +16,10 @@ Policy backends implement `PolicyProtocol` for managing security policies, files
 
 ```python
 class PolicyProtocol(Protocol):
-    """Security and filesystem policy."""
-    
-    async def check_permission(self, action: str, resource: str, context: PolicyContext) -> bool: ...
-    async def get_allowed_tools(self, context: PolicyContext) -> list[str]: ...
-    async def get_allowed_paths(self, context: PolicyContext) -> list[str]: ...
-    async def validate_file_access(self, path: str, operation: str, context: PolicyContext) -> bool: ...
-    async def get_sandbox_config(self, context: PolicyContext) -> SandboxConfig: ...
+    """Permission-based access control."""
+
+    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision: ...
+    def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet: ...
 ```
 
 ---
@@ -35,29 +32,77 @@ Policy evaluation context:
 
 ```python
 class PolicyContext(BaseModel):
-    """Policy evaluation context."""
-    
-    thread_id: str          # Thread identifier
-    workspace: str          # Workspace directory
-    user_id: str            # User identifier
-    goal: str               # Current goal
-    metadata: dict[str, Any] = {}  # Additional context
+    """Context for policy evaluation."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    active_permissions: Any  # PermissionSet (the currently granted permissions)
+    scope_id: str | None = None  # Opaque execution scope for audit (e.g. loop id)
+    workspace: str | None = None  # Absolute workspace root (from config)
 ```
 
-### SandboxConfig
+### Permission
 
-Sandbox execution configuration:
+A structured permission with category, action, and scope:
 
 ```python
-class SandboxConfig(BaseModel):
-    """Sandbox configuration."""
-    
-    enabled: bool = True          # Enable sandboxing
-    allowed_paths: list[str] = []  # Allowed file paths
-    denied_paths: list[str] = []   # Denied file paths
-    allowed_commands: list[str] = []  # Allowed shell commands
-    network_access: bool = False    # Allow network access
-    timeout: int = 60               # Execution timeout (seconds)
+@dataclass(frozen=True)
+class Permission:
+    """A structured permission."""
+
+    category: str  # Permission category (fs, shell, net, mcp, subagent)
+    action: str    # Action type (read, write, execute, connect, spawn)
+    scope: str = "*"  # Scope qualifier (* for all, glob for paths, name or !name for commands)
+
+    def matches(self, requested: Permission) -> bool: ...
+```
+
+### PermissionSet
+
+Immutable collection of permissions with scope-aware matching:
+
+```python
+class PermissionSet:
+    """Immutable collection of permissions."""
+
+    def __init__(self, permissions: frozenset[Permission] | None = None) -> None: ...
+
+    @property
+    def permissions(self) -> frozenset[Permission]: ...
+
+    def contains(self, requested: Permission) -> bool: ...
+    def narrow(self, allowed: frozenset[Permission]) -> PermissionSet: ...
+```
+
+### PolicyDecision
+
+Result of a policy check:
+
+```python
+class PolicyDecision(BaseModel):
+    """Result of a policy check."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    verdict: Literal["allow", "deny", "need_approval"]
+    reason: str
+    matched_permission: Any = None  # Permission | None
+```
+
+### PolicyProfile
+
+A named policy configuration:
+
+```python
+class PolicyProfile(BaseModel):
+    """A named policy configuration."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    name: str  # Profile name (e.g., "readonly", "standard", "privileged")
+    permissions: Any  # PermissionSet (granted permissions)
+    approvable: Any = None  # PermissionSet | None (permissions that can be approved interactively)
+    deny_rules: list[Any] = []  # list[Permission] (explicit deny rules that override grants)
 ```
 
 ---
@@ -81,424 +126,212 @@ Configuration-based policy management with flexible rules.
 
 ```
 ConfigDrivenPolicy Architecture
-├─ Policy Configuration
-│  ├─ YAML-based rules
-│  ├─ Path policies (allow/deny)
-│  ├─ Tool policies (allow/deny)
-│  ├─ Command policies
-│  ├─ Network policies
-│  └─ Sandbox settings
+├─ Policy Profiles
+│  ├─ Named profiles (readonly, standard, privileged)
+│  ├─ PermissionSet per profile
+│  ├─ Approvable permissions (interactive approval)
+│  └─ Deny rules (explicit overrides)
 │
 ├─ Policy Evaluation Engine
-│  ├─ Permission checks
-│  ├─ Resource validation
-│  ├─ Path normalization
-│  ├─ Wildcard matching
-│  └─ Context-aware decisions
+│  ├─ Action → Permission extraction
+│  ├─ Deny-rule check (first priority)
+│  ├─ Permission grant check
+│  ├─ Approvable set check
+│  └─ Default deny
 │
-├─ Enforcement Layer
-│  ├─ Filesystem interception
-│  ├─ Tool filtering
-│  ├─ Command blocking
-│  ├─ Network blocking
-│  └─ Timeout enforcement
+├─ Least-Privilege Delegation
+│  ├─ narrow_for_child() for subagent spawning
+│  └─ Intersection semantics
 │
-└─ Audit & Logging
-   ├─ Policy decisions
-   ├─ Denied operations
-   ├─ Sandbox violations
-   └─ Security events
+├─ Operation Security
+│  ├─ WorkspaceToolOperationSecurity integration
+│  ├─ Filesystem path extraction
+│  └─ Shell command extraction
+│
+└─ Child Restrictions
+   ├─ Per-child permission overrides
+   └─ Delegation depth tracking
 ```
 
 #### Implementation
 
 ```python
-class ConfigDrivenPolicy(PolicyProtocol):
-    """PolicyProtocol implementation using configuration."""
-    
-    def __init__(self, config: PolicyConfig):
-        """Initialize config-driven policy backend."""
-        
+class ConfigDrivenPolicy:
+    """PolicyProtocol implementation driven by named policy profiles.
+
+    Evaluation order: (1) deny rules, (2) granted permissions,
+    (3) approvable set, (4) default deny.
+    """
+
+    def __init__(
+        self,
+        profiles: dict[str, PolicyProfile] | None = None,
+        child_restrictions: dict[str, frozenset[Permission]] | None = None,
+        config: Any = None,
+    ):
+        """Initialize the config-driven policy.
+
+        Args:
+            profiles: Mapping of profile name to PolicyProfile.
+                      Defaults to readonly/standard/privileged.
+            child_restrictions: Per-child permission overrides.
+            config: SootheConfig instance for security policy checks.
+        """
+        self._profiles = profiles or dict(DEFAULT_PROFILES)
+        self._child_restrictions = child_restrictions or {}
         self._config = config
-        
-        # Parse policy rules
-        self._path_rules = self._parse_path_rules(config.path_policies)
-        self._tool_rules = self._parse_tool_rules(config.tool_policies)
-        self._command_rules = self._parse_command_rules(config.command_policies)
-        
-    async def check_permission(
-        self,
-        action: str,
-        resource: str,
-        context: PolicyContext
-    ) -> bool:
-        """Check if action is permitted on resource."""
-        
-        # Check path permissions for file operations
-        if action in ["read", "write", "delete"]:
-            return await self.validate_file_access(resource, action, context)
-        
-        # Check tool permissions
-        if action == "use_tool":
-            allowed_tools = await self.get_allowed_tools(context)
-            return resource in allowed_tools
-        
-        # Check command permissions
-        if action == "execute":
-            allowed_commands = self._get_allowed_commands(context)
-            return self._match_command(resource, allowed_commands)
-        
-        # Default deny
-        return False
-    
-    async def get_allowed_tools(self, context: PolicyContext) -> list[str]:
-        """Get list of allowed tools for context."""
-        
-        # Start with default allowed tools
-        allowed = self._config.default_tools.copy()
-        
-        # Apply tool rules based on context
-        for rule in self._tool_rules:
-            if self._matches_context(rule, context):
-                if rule["action"] == "allow":
-                    allowed.extend(rule["tools"])
-                elif rule["action"] == "deny":
-                    allowed = [t for t in allowed if t not in rule["tools"]]
-        
-        return allowed
-    
-    async def get_allowed_paths(self, context: PolicyContext) -> list[str]:
-        """Get list of allowed paths for context."""
-        
-        # Start with workspace (always allowed)
-        allowed = [context.workspace]
-        
-        # Apply path rules based on context
-        for rule in self._path_rules:
-            if self._matches_context(rule, context):
-                if rule["action"] == "allow":
-                    allowed.extend(rule["paths"])
-                elif rule["action"] == "deny":
-                    allowed = [p for p in allowed if not self._matches_path(p, rule["paths"])]
-        
-        # Normalize paths
-        allowed = [self._normalize_path(p) for p in allowed]
-        
-        return allowed
-    
-    async def validate_file_access(
-        self,
-        path: str,
-        operation: str,
-        context: PolicyContext
-    ) -> bool:
-        """Validate file access permission."""
-        
-        # Normalize path
-        norm_path = self._normalize_path(path)
-        
-        # Check denied paths first
-        denied_paths = self._get_denied_paths(context)
-        for denied in denied_paths:
-            if self._matches_path(norm_path, [denied]):
-                return False
-        
-        # Check allowed paths
-        allowed_paths = await self.get_allowed_paths(context)
-        for allowed in allowed_paths:
-            if self._matches_path(norm_path, [allowed]):
-                return True
-        
-        # Default deny
-        return False
-    
-    async def get_sandbox_config(self, context: PolicyContext) -> SandboxConfig:
-        """Get sandbox configuration for context."""
-        
-        # Build sandbox config from policy rules
-        sandbox = SandboxConfig(
-            enabled=self._config.sandbox_enabled,
-            allowed_paths=await self.get_allowed_paths(context),
-            denied_paths=self._get_denied_paths(context),
-            allowed_commands=self._get_allowed_commands(context),
-            network_access=self._get_network_access(context),
-            timeout=self._config.timeout
-        )
-        
-        return sandbox
-    
-    # Helper methods
-    def _parse_path_rules(self, policies: list[dict]) -> list[dict]: ...
-    def _parse_tool_rules(self, policies: list[dict]) -> list[dict]: ...
-    def _parse_command_rules(self, policies: list[dict]) -> list[dict]: ...
-    def _matches_context(self, rule: dict, context: PolicyContext) -> bool: ...
-    def _matches_path(self, path: str, patterns: list[str]) -> bool: ...
-    def _normalize_path(self, path: str) -> str: ...
-    def _get_denied_paths(self, context: PolicyContext) -> list[str]: ...
-    def _get_allowed_commands(self, context: PolicyContext) -> list[str]: ...
-    def _match_command(self, command: str, patterns: list[str]) -> bool: ...
-    def _get_network_access(self, context: PolicyContext) -> bool: ...
+        self._operation_security = WorkspaceToolOperationSecurity()
+
+    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
+        """Check if an action is permitted under the active profile."""
+
+        # Operation security check for tool calls
+        if action.action_type == "tool_call" and action.tool_name:
+            request = self._build_operation_security_request(action)
+            op_context = OperationSecurityContext(
+                thread_id=context.scope_id,
+                workspace=context.workspace,
+                security_config=getattr(self._config, "security", None),
+            )
+            op_decision = self._operation_security.evaluate(request, op_context)
+            if op_decision.verdict != "allow":
+                return PolicyDecision(verdict=op_decision.verdict, reason=op_decision.reason)
+
+        # Extract required permission from action
+        required = _extract_required_permission(action)
+        if required is None:
+            return PolicyDecision(verdict="allow", reason="No permission required")
+
+        permissions: PermissionSet = context.active_permissions
+        profile = self._find_profile(permissions)
+
+        # (1) Check deny rules first
+        if profile and any(
+            Permission(d.category, d.action, d.scope).matches(required)
+            for d in profile.deny_rules
+        ):
+            return PolicyDecision(verdict="deny", reason=f"Explicitly denied: {required}")
+
+        # (2) Check granted permissions
+        if permissions.contains(required):
+            return PolicyDecision(
+                verdict="allow",
+                reason="Permitted by grant",
+                matched_permission=required,
+            )
+
+        # (3) Check approvable set
+        if profile and profile.approvable and profile.approvable.contains(required):
+            return PolicyDecision(verdict="need_approval", reason=f"Requires approval: {required}")
+
+        # (4) Default deny
+        return PolicyDecision(verdict="deny", reason=f"Not permitted: {required}")
+
+    def narrow_for_child(
+        self, parent_permissions: PermissionSet, child_name: str
+    ) -> PermissionSet:
+        """Compute a narrowed permission set for a child subagent."""
+        allowed = self._child_restrictions.get(child_name)
+        if allowed is not None:
+            return parent_permissions.narrow(allowed)
+        return parent_permissions
 ```
 
 #### Configuration
 
 ```yaml
-protocols:
-  policy:
-    enabled: true
-    backend: config          # ConfigDrivenPolicy backend
-    
-    # Sandbox settings
-    sandbox_enabled: true    # Enable sandboxing
-    timeout: 60              # Execution timeout (seconds)
-    
-    # Default permissions
-    default_tools:
-      - ls
-      - read_file
-      - grep
-      - glob
-    
-    # Path policies
-    path_policies:
-      # Allow workspace by default
-      - action: allow
-        paths: ["${workspace}"]
-        context: {}
-      
-      # Deny system paths
-      - action: deny
-        paths: ["/etc", "/usr", "/bin"]
-        context: {}
-      
-      # Allow user home for specific contexts
-      - action: allow
-        paths: ["${HOME}"]
-        context:
-          tags: ["personal"]
-      
-      # Deny sensitive files
-      - action: deny
-        paths: ["**/.env", "**/secrets.*"]
-        context: {}
-    
-    # Tool policies
-    tool_policies:
-      # Deny execute tool by default
-      - action: deny
-        tools: ["execute"]
-        context: {}
-      
-      # Allow execute for trusted contexts
-      - action: allow
-        tools: ["execute"]
-        context:
-          tags: ["trusted"]
-      
-      # Allow all tools for admin contexts
-      - action: allow
-        tools: ["*"]
-        context:
-          user_id: ["admin"]
-    
-    # Command policies
-    command_policies:
-      # Allow safe commands
-      - action: allow
-        commands: ["ls", "cat", "grep", "find"]
-        context: {}
-      
-      # Deny dangerous commands
-      - action: deny
-        commands: ["rm", "dd", "mkfs"]
-        context: {}
-      
-      # Network access
-      network_access: false   # Disable by default
+agent:
+  protocols:
+    policy:
+      enabled: true
+      profile: standard          # Default policy profile (readonly, standard, privileged)
 ```
+
+Built-in profiles:
+- **readonly**: `fs:read:*`, `net:outbound:*`, `subagent:spawn:*` (write/execute approvable)
+- **standard**: Full read/write/execute/net/mcp/subagent (default)
+- **privileged**: Same as standard (no approvable restrictions)
 
 #### Usage Example
 
 ```python
-from soothe.backends.policy import ConfigDrivenPolicy
-from soothe.protocols.policy import PolicyContext
+from soothe.foundation.core.security.config_policy import ConfigDrivenPolicy
+from soothe.protocols.policy import ActionRequest, PolicyContext, PermissionSet, Permission
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
-policy = ConfigDrivenPolicy(config.agent.protocols.policy)
+config = SootheConfig.from_yaml_file("config.yml")
+policy = ConfigDrivenPolicy(config=config)
 
-# Check permission
+# Check permission for a tool call
 context = PolicyContext(
-    thread_id="thread_abc",
+    active_permissions=PermissionSet(frozenset([
+        Permission("fs", "read", "*"),
+        Permission("fs", "write", "/tmp/**"),
+    ])),
+    scope_id="loop_abc",
     workspace="/path/to/project",
-    user_id="user123",
-    goal="analyze codebase"
 )
 
-allowed = await policy.check_permission("read", "/path/to/project/src", context)
-print(f"Read access allowed: {allowed}")
+action = ActionRequest(action_type="tool_call", tool_name="read_file", tool_args={"path": "/path/to/src"})
+decision = policy.check(action, context)
+print(f"Verdict: {decision.verdict}")  # "allow"
 
-# Get allowed tools
-tools = await policy.get_allowed_tools(context)
-print(f"Allowed tools: {tools}")
-
-# Get allowed paths
-paths = await policy.get_allowed_paths(context)
-print(f"Allowed paths: {paths}")
-
-# Validate file access
-allowed = await policy.validate_file_access("/path/to/project/.env", "read", context)
-print(f"Can read .env: {allowed}")  # Should be False
-
-# Get sandbox config
-sandbox = await policy.get_sandbox_config(context)
-print(f"Sandbox enabled: {sandbox.enabled}")
+# Narrow permissions for a child subagent
+child_perms = policy.narrow_for_child(context.active_permissions, "explore")
 ```
 
 ---
 
-## Policy Rules
+## Permission Model
 
-### Path Policies
+### Permission Categories
 
-Control filesystem access:
+Permissions use a structured `category:action:scope` format:
 
-```yaml
-path_policies:
-  # Allow workspace
-  - action: allow
-    paths: ["${workspace}"]
-    context: {}
-  
-  # Deny system paths
-  - action: deny
-    paths: ["/etc", "/usr", "/bin", "/sbin"]
-    context: {}
-  
-  # Deny sensitive files (wildcards)
-  - action: deny
-    paths: ["**/.env", "**/secrets.*", "**/.git/**"]
-    context: {}
-  
-  # Allow specific paths for trusted contexts
-  - action: allow
-    paths: ["/tmp", "/var/tmp"]
-    context:
-      tags: ["trusted"]
+| Category | Actions | Scope Examples |
+|----------|---------|----------------|
+| `fs` | `read`, `write` | `*`, `/tmp/**`, `/home/user/**` |
+| `shell` | `execute` | `ls`, `git`, `!rm` (anything except rm) |
+| `net` | `outbound` | `*.example.com`, `*` |
+| `mcp` | `connect`, `invoke`, `read_resource` | server name |
+| `subagent` | `spawn` | subagent name |
+
+### Built-in Profiles
+
+Three built-in policy profiles are available:
+
+```python
+# readonly: read-only filesystem + network + subagent spawn
+READONLY_PROFILE = PolicyProfile(
+    name="readonly",
+    permissions=PermissionSet(frozenset([
+        Permission("fs", "read", "*"),
+        Permission("net", "outbound", "*"),
+        Permission("subagent", "spawn", "*"),
+    ])),
+    approvable=PermissionSet(frozenset([
+        Permission("fs", "write", "*"),
+        Permission("shell", "execute", "*"),
+    ])),
+)
+
+# standard: full read/write/execute/net/mcp/subagent
+STANDARD_PROFILE = PolicyProfile(name="standard", ...)
+
+# privileged: same as standard, no approvable restrictions
+PRIVILEGED_PROFILE = PolicyProfile(name="privileged", ...)
 ```
 
-**Wildcard Patterns**:
-- `*` - Single directory/file level
-- `**` - Recursive (all levels)
-- `${workspace}` - Current workspace
-- `${HOME}` - User home directory
+### Permission Matching
 
----
+Matching uses glob patterns with negation support:
 
-### Tool Policies
-
-Control tool availability:
-
-```yaml
-tool_policies:
-  # Deny dangerous tools by default
-  - action: deny
-    tools: ["execute", "delete_file"]
-    context: {}
-  
-  # Allow execute for trusted contexts
-  - action: allow
-    tools: ["execute"]
-    context:
-      tags: ["trusted"]
-  
-  # Allow all tools for admin
-  - action: allow
-    tools: ["*"]  # Wildcard for all tools
-    context:
-      user_id: ["admin"]
-  
-  # Deny specific tools for untrusted
-  - action: deny
-    tools: ["requests_post", "requests_put", "requests_delete"]
-    context:
-      tags: ["untrusted"]
-```
-
----
-
-### Command Policies
-
-Control shell command execution:
-
-```yaml
-command_policies:
-  # Allow safe commands
-  - action: allow
-    commands: ["ls", "cat", "grep", "find", "wc", "sort"]
-    context: {}
-  
-  # Deny dangerous commands
-  - action: deny
-    commands: ["rm", "dd", "mkfs", "chmod", "chown"]
-    context: {}
-  
-  # Allow development commands for trusted
-  - action: allow
-    commands: ["git", "npm", "pip", "python"]
-    context:
-      tags: ["trusted"]
-```
-
----
-
-### Network Policies
-
-Control network access:
-
-```yaml
-# Network access policy
-network_access: false  # Disable by default
-
-# Or context-based
-network_policies:
-  - action: allow
-    context:
-      tags: ["web_research"]
-  
-  - action: deny
-    context:
-      tags: ["local_only"]
-```
-
----
-
-## Context Matching
-
-### Policy Context Fields
-
-Policies can match on context fields:
-
-```yaml
-context:
-  # Match by thread_id
-  thread_id: ["thread_specific"]
-  
-  # Match by workspace
-  workspace: ["trusted_workspace"]
-  
-  # Match by user_id
-  user_id: ["admin", "trusted"]
-  
-  # Match by goal keywords
-  goal_keywords: ["analyze", "research"]
-  
-  # Match by tags
-  tags: ["trusted", "personal"]
-  
-  # Match by metadata
-  metadata:
-    source: ["cli", "daemon"]
+```python
+Permission("fs", "read", "*")           # Read any file
+Permission("fs", "write", "/tmp/**")     # Write only under /tmp
+Permission("shell", "execute", "ls")     # Execute only ls
+Permission("shell", "execute", "!rm")    # Anything EXCEPT rm
+Permission("net", "outbound", "*.example.com")  # Only example.com
 ```
 
 ---
@@ -507,54 +340,41 @@ context:
 
 ### Principle
 
-Soothe enforces least-privilege: operations receive minimum necessary permissions.
+Soothe enforces least-privilege: subagents receive a narrowed subset of the parent's permissions.
 
 ```python
-# Goal: "Read file from /tmp"
-# Permission: read access to /tmp only
-
-# Goal: "Execute build script"
-# Permission: execute "npm run build" only
-
-# Goal: "Delete temporary files"
-# Permission: delete access to workspace/tmp/** only
+# Parent has: fs:read:*, fs:write:/tmp/**
+# Child "explore" gets: fs:read:* (intersection)
+child_perms = policy.narrow_for_child(parent_permissions, "explore")
 ```
 
-### Delegation Example
+### Child Restrictions
 
-```yaml
-# Least-privilege delegation
-tool_policies:
-  # Allow read-only for analysis
-  - action: allow
-    tools: ["ls", "read_file", "grep", "glob"]
-    context:
-      goal_keywords: ["analyze", "inspect"]
-  
-  # Deny write for read-only goals
-  - action: deny
-    tools: ["write_file", "edit_file", "delete_file"]
-    context:
-      goal_keywords: ["analyze", "inspect"]
+Per-child overrides can restrict further:
+
+```python
+policy = ConfigDrivenPolicy(
+    profiles=dict(DEFAULT_PROFILES),
+    child_restrictions={
+        "explore": frozenset({Permission("fs", "read", "*")}),
+    },
+)
 ```
 
 ---
 
 ## Sandbox Enforcement
 
-### Sandbox Configuration
+### Operation Security Integration
 
-Sandboxed execution isolates operations:
+ConfigDrivenPolicy integrates with `WorkspaceToolOperationSecurity` for tool-call evaluation:
 
 ```python
-sandbox = await policy.get_sandbox_config(context)
-
-# Sandbox applies:
-# - Path restrictions (allowed/denied)
-# - Command filtering
-# - Network blocking
-# - Timeout enforcement
-# - Audit logging
+# When a tool_call action is checked, ConfigDrivenPolicy first evaluates
+# operation security (filesystem path validation, shell command validation)
+# before checking permissions.
+decision = policy.check(action, context)
+# decision.verdict: "allow", "deny", or "need_approval"
 ```
 
 ### Integration with FrameworkFilesystem
@@ -562,21 +382,12 @@ sandbox = await policy.get_sandbox_config(context)
 ```python
 class FrameworkFilesystem:
     """Workspace-aware filesystem backend."""
-    
+
     async def read_file(self, path: str):
-        # Check policy
-        allowed = await self._policy.validate_file_access(
-            path, "read", self._context
-        )
-        
-        if not allowed:
-            raise PolicyViolationError(f"Read access denied: {path}")
-        
-        # Audit log
-        self._audit_logger.log("read", path, allowed=True)
-        
-        # Execute operation
-        return await self._filesystem.read_file(path)
+        # Policy is enforced via middleware, not direct calls
+        # PolicyEnforcementMiddleware intercepts tool calls and
+        # calls policy.check(action, context) before execution
+        ...
 ```
 
 ---
@@ -587,11 +398,9 @@ class FrameworkFilesystem:
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
-| `check_permission()` | ~5-10ms | Rule evaluation |
-| `get_allowed_tools()` | ~5-10ms | Rule parsing + matching |
-| `get_allowed_paths()` | ~5-10ms | Path normalization + matching |
-| `validate_file_access()` | ~5-15ms | Path matching overhead |
-| `get_sandbox_config()` | ~10-20ms | Config compilation |
+| `check()` | ~5-15ms | Permission extraction + matching |
+| `narrow_for_child()` | ~1-5ms | Set intersection |
+| `_find_profile()` | ~1-2ms | Profile lookup |
 
 **Optimization Tips**:
 - Cache policy decisions per context
@@ -607,16 +416,16 @@ class FrameworkFilesystem:
 
 | Feature | ConfigDrivenPolicy |
 |---------|--------------------|
-| Configuration Type | YAML-based |
-| Least-privilege Support | ✅ |
-| Path Policies | ✅ (allow/deny, wildcards) |
-| Tool Policies | ✅ (allow/deny, wildcards) |
-| Command Policies | ✅ (allow/deny) |
-| Network Policies | ✅ |
-| Sandbox Enforcement | ✅ |
+| Configuration Type | Profile-based (named profiles) |
+| Least-privilege Support | ✅ (narrow_for_child) |
+| Permission Model | Structured (category/action/scope) |
+| Built-in Profiles | readonly, standard, privileged |
+| Custom Profiles | ✅ |
+| Child Restrictions | ✅ (per-subagent overrides) |
+| Deny Rules | ✅ (override grants) |
+| Approvable Permissions | ✅ (interactive approval) |
+| Operation Security | ✅ (WorkspaceToolOperationSecurity) |
 | Context-aware Decisions | ✅ |
-| Audit Logging | ✅ |
-| Dynamic Policies | ✅ |
 
 ---
 
@@ -652,27 +461,18 @@ except PolicyViolationError as e:
 
 ```python
 class FrameworkFilesystem:
-    def __init__(self, policy: PolicyProtocol, context: PolicyContext):
+    def __init__(self, policy: ConfigDrivenPolicy, context: PolicyContext):
         self._policy = policy
         self._context = context
-        self._audit_logger = AuditLogger()
-        
-    async def _check_permission(self, operation: str, path: str):
+
+    async def _check_permission(self, action: ActionRequest):
         """Check permission before operation."""
-        allowed = await self._policy.validate_file_access(
-            path, operation, self._context
-        )
-        
-        if not allowed:
-            # Log denied access
-            self._audit_logger.log_denied(operation, path)
-            
+        decision = self._policy.check(action, self._context)
+
+        if decision.verdict != "allow":
             raise PolicyViolationError(
-                f"Access denied: {operation} on {path}"
+                f"Access denied: {decision.reason}"
             )
-        
-        # Log allowed access
-        self._audit_logger.log_allowed(operation, path)
 ```
 
 ---
@@ -687,37 +487,30 @@ import pytest
 @pytest.mark.asyncio
 async def test_config_driven_policy():
     """Test ConfigDrivenPolicy backend."""
-    config = create_test_policy_config()
-    policy = ConfigDrivenPolicy(config)
-    
+    policy = ConfigDrivenPolicy()
+
     context = PolicyContext(
-        thread_id="test",
+        active_permissions=PermissionSet(frozenset([
+            Permission("fs", "read", "*"),
+            Permission("fs", "write", "/tmp/**"),
+        ])),
+        scope_id="test",
         workspace="/tmp/workspace",
-        user_id="user123",
-        goal="test goal"
     )
-    
-    # Test allowed path
-    allowed = await policy.validate_file_access(
-        "/tmp/workspace/file.txt", "read", context
-    )
-    assert allowed is True
-    
-    # Test denied path
-    allowed = await policy.validate_file_access(
-        "/etc/passwd", "read", context
-    )
-    assert allowed is False
-    
-    # Test allowed tools
-    tools = await policy.get_allowed_tools(context)
-    assert "ls" in tools
-    assert "execute" not in tools
-    
-    # Test sandbox config
-    sandbox = await policy.get_sandbox_config(context)
-    assert sandbox.enabled is True
-    assert "/etc" not in sandbox.allowed_paths
+
+    # Test allowed read
+    action = ActionRequest(action_type="tool_call", tool_name="read_file", tool_args={"path": "/tmp/workspace/file.txt"})
+    decision = policy.check(action, context)
+    assert decision.verdict == "allow"
+
+    # Test denied write outside /tmp
+    action = ActionRequest(action_type="tool_call", tool_name="write_file", tool_args={"path": "/etc/passwd"})
+    decision = policy.check(action, context)
+    assert decision.verdict == "deny"
+
+    # Test narrow_for_child
+    child_perms = policy.narrow_for_child(context.active_permissions, "explore")
+    assert child_perms.contains(Permission("fs", "read", "*"))
 ```
 
 ---
@@ -727,97 +520,32 @@ async def test_config_driven_policy():
 ### Basic Configuration
 
 ```yaml
-protocols:
-  policy:
-    enabled: true
-    backend: config
-    sandbox_enabled: true
-    timeout: 60
-    
-    default_tools:
-      - ls
-      - read_file
-      - grep
-    
-    path_policies:
-      - action: allow
-        paths: ["${workspace}"]
-      - action: deny
-        paths: ["/etc", "/usr"]
+agent:
+  protocols:
+    policy:
+      enabled: true
+      profile: standard    # readonly, standard, or privileged
 ```
 
 ### Advanced Configuration
 
 ```yaml
-protocols:
-  policy:
-    enabled: true
-    backend: config
-    sandbox_enabled: true
-    timeout: 300
-    
-    # Default permissions
-    default_tools:
-      - ls
-      - read_file
-      - write_file
-      - grep
-      - glob
-    
-    # Path policies
-    path_policies:
-      # Workspace access
-      - action: allow
-        paths: ["${workspace}"]
-        context: {}
-      
-      # Deny system paths
-      - action: deny
-        paths: ["/etc", "/usr", "/bin", "/sbin"]
-        context: {}
-      
-      # Deny sensitive files
-      - action: deny
-        paths: ["**/.env", "**/secrets.*", "**/.git/**"]
-        context: {}
-      
-      # Allow home for personal
-      - action: allow
-        paths: ["${HOME}"]
-        context:
-          tags: ["personal"]
-    
-    # Tool policies
-    tool_policies:
-      # Deny execute by default
-      - action: deny
-        tools: ["execute"]
-        context: {}
-      
-      # Allow execute for trusted
-      - action: allow
-        tools: ["execute"]
-        context:
-          tags: ["trusted"]
-      
-      # All tools for admin
-      - action: allow
-        tools: ["*"]
-        context:
-          user_id: ["admin"]
-    
-    # Command policies
-    command_policies:
-      - action: allow
-        commands: ["ls", "cat", "grep", "find"]
-        context: {}
-      
-      - action: deny
-        commands: ["rm", "dd", "mkfs"]
-        context: {}
-    
-    # Network policy
-    network_access: false
+agent:
+  protocols:
+    policy:
+      enabled: true
+      profile: standard
+
+agent:
+  security:
+    sandbox: true
+    allow_paths_outside_workspace: false
+    denied_paths:
+      - /etc
+      - /usr
+    denied_file_types:
+      - .env
+      - .pem
 ```
 
 ---
@@ -836,16 +564,18 @@ protocols:
 ### ConfigDrivenPolicy Class
 
 ```python
-class ConfigDrivenPolicy(PolicyProtocol):
-    """PolicyProtocol implementation using configuration."""
-    
-    def __init__(self, config: PolicyConfig) -> None: ...
-    
-    async def check_permission(self, action: str, resource: str, context: PolicyContext) -> bool: ...
-    async def get_allowed_tools(self, context: PolicyContext) -> list[str]: ...
-    async def get_allowed_paths(self, context: PolicyContext) -> list[str]: ...
-    async def validate_file_access(self, path: str, operation: str, context: PolicyContext) -> bool: ...
-    async def get_sandbox_config(self, context: PolicyContext) -> SandboxConfig: ...
+class ConfigDrivenPolicy:
+    """PolicyProtocol implementation driven by named policy profiles."""
+
+    def __init__(
+        self,
+        profiles: dict[str, PolicyProfile] | None = None,
+        child_restrictions: dict[str, frozenset[Permission]] | None = None,
+        config: Any = None,
+    ) -> None: ...
+
+    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision: ...
+    def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet: ...
 ```
 
 ---

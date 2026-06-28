@@ -4,7 +4,7 @@ This guide explains how to create new channel plugins for the Soothe daemon. Cha
 
 ## Overview
 
-Soothe uses a unified `Channel` abstraction (RFC-620) where all communication endpoints—WebSocket, HTTP REST, and external chat platforms—implement the same interface. This enables:
+Soothe uses a unified `Channel` abstraction (RFC-620) where all communication endpoints—WebSocket and external chat platforms—implement the same interface. This enables:
 
 - **Plugin discovery**: Built-in and external channels loaded via registry
 - **Unified routing**: All messages flow through EventBus

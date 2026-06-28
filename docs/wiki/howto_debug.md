@@ -115,10 +115,9 @@ Verbosity is a **client-side preference** that controls what progress events are
 |-----------------|---------------------|----------|
 | `quiet` | Only errors and final answers | Minimal distraction, production use |
 | `normal` | Plan updates, tool summaries, subagent start/end | Default balanced view |
-| `detailed` | Protocol events, tool calls, **subagent internals**, step progress | Understanding agent behavior |
-| `debug` | Everything including thinking, heartbeats, internal state | Deep debugging |
+| `debug` | Protocol events, tool calls, **subagent internals**, step progress, thinking, heartbeats, internal state | Deep debugging |
 
-**Example**: To see subagent internal reasoning and step-by-step progress, set `verbosity: detailed` or `verbosity: debug`.
+**Example**: To see subagent internal reasoning and step-by-step progress, set `verbosity: debug`.
 
 ---
 
@@ -512,7 +511,7 @@ rm -rf ~/.soothe/data/threads/*
 ## 🔗 Related Documentation
 
 - [Troubleshooting Guide](wiki/troubleshooting.md) - Common issues and solutions
-- [Configuration Guide](wiki/configuration.md) - Configuration reference
+- [Configuration Guide](wiki/configuration-guide/README.md) - Configuration reference
 - [Daemon Management](wiki/daemon-management.md) - Daemon lifecycle
 - [RFC-302](specs/RFC-302-context-protocol-architecture.md) - Progress event protocol
 - [RFC-401](specs/RFC-401.md) - Event filtering and verbosity
@@ -522,7 +521,7 @@ rm -rf ~/.soothe/data/threads/*
 ## 💡 Tips
 
 1. **Use environment variables for temporary debugging**: `SOOTHE_LOG_LEVEL=DEBUG` is faster than editing config files
-2. **Match verbosity to your needs**: `detailed` for understanding behavior, `debug` for deep debugging
+2. **Match verbosity to your needs**: `debug` for understanding behavior and deep debugging
 3. **Monitor logs in real-time**: `tail -f` gives immediate feedback during debugging
 4. **Use grep to filter logs**: Focus on specific components (subagent, tool, protocol)
 5. **Enable thread logging for audit trails**: Critical for production deployments

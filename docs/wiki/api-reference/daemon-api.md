@@ -39,7 +39,7 @@ SootheDaemon(
 
 **Parameters**:
 - `config`: Soothe configuration
-- `transports`: List of transport types to enable (`["websocket", "http_rest"]`)
+- `transports`: List of transport types to enable (`["websocket"]`)
 - `enable_autopilot`: Enable autopilot autonomous goal execution
 
 **Example**:
@@ -48,11 +48,11 @@ from soothe_daemon import SootheDaemon
 from soothe.config import SootheConfig
 
 # Create daemon with configuration
-config = SootheConfig.from_yaml("config/config.yml")
+config = SootheConfig.from_yaml_file("config/config.yml")
 
 daemon = SootheDaemon(
     config=config,
-    transports=["websocket", "http_rest"],
+    transports=["websocket"],
     enable_autopilot=True,
 )
 ```
@@ -147,8 +147,7 @@ Get daemon status dictionary.
     "active_connections": 3,
     "active_loops": 2,
     "transports": {
-        "websocket": {"enabled": True, "client_count": 3},
-        "http_rest": {"enabled": True}
+        "websocket": {"enabled": True, "client_count": 3}
     },
     "autopilot": {
         "enabled": True,
@@ -163,83 +162,6 @@ Get daemon status dictionary.
 status = daemon.status()
 print(f"Daemon state: {status['state']}")
 print(f"Active connections: {status['active_connections']}")
-```
-
----
-
-### DaemonProcess
-
-**Import**: `from soothe_daemon.server.process import DaemonProcess`
-
-Process-level daemon management for background operation.
-
-#### Constructor
-
-```python
-DaemonProcess(
-    config_path: str | None = None,
-    pid_file: str | None = None,
-)
-```
-
-**Parameters**:
-- `config_path`: Path to configuration file
-- `pid_file`: Path to PID file for process tracking
-
-**Methods**:
-
-##### `spawn()`
-
-```python
-async def spawn() -> int
-```
-
-Spawn daemon as background process.
-
-**Returns**: Process ID
-
-**Example**:
-```python
-from soothe_daemon.server.process import DaemonProcess
-
-process = DaemonProcess(
-    config_path="config/config.yml",
-    pid_file="/tmp/soothe.pid"
-)
-
-pid = await process.spawn()
-print(f"Daemon started with PID {pid}")
-```
-
-##### `kill()`
-
-```python
-async def kill() -> None
-```
-
-Kill the daemon process.
-
-**Example**:
-```python
-process = DaemonProcess()
-await process.kill()
-print("Daemon process killed")
-```
-
-##### `is_alive()`
-
-```python
-def is_alive() -> bool
-```
-
-Check if daemon process is running.
-
-**Example**:
-```python
-if process.is_alive():
-    print("Daemon is running")
-else:
-    print("Daemon is stopped")
 ```
 
 ---
@@ -278,7 +200,7 @@ from soothe_daemon.bootstrap import run_daemon
 # Run daemon in foreground
 asyncio.run(run_daemon(
     config_path="config/config.yml",
-    transports=["websocket", "http_rest"],
+    transports=["websocket"],
     enable_autopilot=True,
 ))
 ```
@@ -351,7 +273,7 @@ async def register_channel(
 Register a communication channel.
 
 **Parameters**:
-- `channel`: Channel instance (WebSocket, HTTP REST, etc.)
+- `channel`: Channel instance (WebSocket, Telegram, Slack, etc.)
 - `runner`: Optional SootheRunner for agent execution
 - `config`: Optional SootheConfig
 
@@ -359,17 +281,12 @@ Register a communication channel.
 ```python
 from soothe_daemon.channel_manager import ChannelManager
 from soothe_daemon.channels.websocket import WebSocketChannel
-from soothe_daemon.channels.http_rest import HttpRestChannel
 
 manager = ChannelManager()
 
 # Register WebSocket channel
 ws_channel = WebSocketChannel(config.ws_config, manager)
 await manager.register_channel(ws_channel, runner=my_runner)
-
-# Register HTTP REST channel
-http_channel = HttpRestChannel(config.http_config, manager)
-await manager.register_channel(http_channel, runner=my_runner)
 ```
 
 ##### `broadcast()`
@@ -510,11 +427,13 @@ WebSocketChannel(
 transport:
   websocket:
     enabled: true
-    host: localhost
+    host: "127.0.0.1"
     port: 8765
+    tls_enabled: false
+    tls_cert: null
+    tls_key: null
+    cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
     max_frame_size: 10485760  # 10 MiB
-    ping_interval: 30
-    ping_timeout: 60
 ```
 
 **Example**:
@@ -541,68 +460,9 @@ print(f"WebSocket listening on ws://{ws_config.host}:{ws_config.port}")
 
 ---
 
-### HttpRestChannel
-
-**Import**: `from soothe_daemon.channels.http_rest import HttpRestChannel`
-
-HTTP REST transport for RESTful API access (see [REST API Reference](rest-api.md)).
-
-#### Constructor
-
-```python
-HttpRestChannel(
-    config: HttpRestConfig,
-    manager: ChannelManager,
-    *,
-    runner: SootheRunner | None = None,
-    soothe_config: SootheConfig | None = None,
-    session_manager: ClientSessionManager | None = None,
-    unified_app: FastAPI | None = None,
-    autopilot_service: AutopilotService | None = None,
-)
-```
-
-**Configuration**:
-```yaml
-transport:
-  http_rest:
-    enabled: true
-    host: localhost
-    port: 8080
-    tls_enabled: false
-    tls_cert: null
-    tls_key: null
-    cors_origins: ["*"]
-```
-
-**Example**:
-```python
-from soothe_daemon.channels.http_rest import HttpRestChannel
-from soothe_daemon.config.models import HttpRestConfig
-
-http_config = HttpRestConfig(
-    host="localhost",
-    port=8080,
-    cors_origins=["http://localhost:3000"],
-)
-
-http_channel = HttpRestChannel(
-    http_config,
-    manager,
-    runner=my_runner,
-    soothe_config=config,
-    autopilot_service=autopilot_svc,
-)
-
-await http_channel.start()
-print(f"HTTP REST listening on http://{http_config.host}:{http_config.port}")
-```
-
----
-
 ### Platform Channels
 
-Soothe supports integration with external messaging platforms:
+Soothe supports integration with 16+ external messaging platforms via channel plugins. Each channel extends the `Channel` base class:
 
 #### TelegramChannel
 
@@ -654,54 +514,87 @@ channels:
     guild_id: 123456789
 ```
 
+#### Full Channel List
+
+All available platform channels (16+):
+
+| Channel | Module | Platform |
+|---------|--------|----------|
+| Telegram | `channels.telegram` | Telegram Bot API |
+| Slack | `channels.slack` | Slack Socket Mode |
+| Discord | `channels.discord` | Discord Bot API |
+| Feishu/Lark | `channels.feishu` | Feishu/Lark WebSocket |
+| Matrix | `channels.matrix` | Matrix (Element) |
+| WhatsApp | `channels.whatsapp` | WhatsApp (Node.js bridge) |
+| Signal | `channels.signal` | Signal (signal-cli JSON-RPC) |
+| Email | `channels.email` | Email (IMAP/SMTP) |
+| MS Teams | `channels.msteams` | Microsoft Teams |
+| WeChat | `channels.weixin` | Personal WeChat |
+| WeCom | `channels.wecom` | Enterprise WeChat |
+| DingTalk | `channels.dingtalk` | DingTalk |
+| QQ | `channels.qq` | QQ |
+| Mochat | `channels.mochat` | Mochat (Socket.IO) |
+
+Each channel follows the same `Channel` base class pattern and is configured under the `channels:` section of the daemon config.
+
 ---
 
 ## Health Checks
 
-### health_check()
+### HealthChecker
 
-**Import**: `from soothe_daemon.health import health_check`
+**Import**: `from soothe_daemon.health.checker import HealthChecker`
 
-Comprehensive daemon health check.
+Comprehensive daemon health checker. Invoked by the `soothed doctor` CLI command.
 
-#### Signature
+#### Constructor
 
 ```python
-async def health_check(
-    *,
-    include_external: bool = False,
-    verbose: bool = False,
-) -> HealthReport
+HealthChecker(
+    config: SootheConfig | None = None,
+    daemon_config: SootheDaemonConfig | None = None,
+)
 ```
 
 **Parameters**:
-- `include_external`: Check external service connectivity
-- `verbose`: Include detailed component information
+- `config`: Soothe configuration
+- `daemon_config`: Daemon-specific configuration
+
+#### Methods
+
+##### `run_all_checks()`
+
+```python
+async def run_all_checks(
+    categories: list[str] | None = None,
+    exclude: list[str] | None = None,
+) -> HealthReport
+```
+
+Run all (or a subset of) health check categories.
+
+**Parameters**:
+- `categories`: Optional list of category names to run (default: all)
+- `exclude`: Optional list of category names to skip
 
 **Returns**: HealthReport with component statuses
 
 **Example**:
 ```python
-from soothe_daemon.health import health_check
+from soothe_daemon.health.checker import HealthChecker
 
-# Basic health check
-report = await health_check()
+checker = HealthChecker(config, daemon_config=daemon_cfg)
+report = await checker.run_all_checks()
 
 print(f"Overall status: {report.status}")
 
-for component, status in report.components.items():
-    print(f"  {component}: {status}")
-
-# Detailed check with external services
-report = await health_check(include_external=True, verbose=True)
-
-for component, details in report.details.items():
-    print(f"{component}:")
-    print(f"  Status: {details['status']}")
-    print(f"  Message: {details['message']}")
-    if "metrics" in details:
-        print(f"  Metrics: {details['metrics']}")
+# Run specific categories only
+report = await checker.run_all_checks(
+    categories=["config", "protocols", "providers"]
+)
 ```
+
+The `HealthChecker` also exposes individual category methods: `check_config()`, `check_daemon()`, `check_persistence()`, `check_protocols()`, `check_vector_stores()`, `check_providers()`, `check_mcp_servers()`, `check_models()`, `check_external_apis()`, `check_observability()`.
 
 ---
 
@@ -735,29 +628,17 @@ class HealthReport(BaseModel):
 
 ### Component Health Checks
 
-#### Protocol Health
+Individual check modules live in `soothe_daemon.health.checks`:
 
-**Import**: `from soothe_daemon.health.checks.protocol_health import check_protocols`
+#### Protocols Check
+
+**Import**: `from soothe_daemon.health.checks.protocols_check import check_protocols`
 
 Check protocol backend health.
 
 ```python
 async def check_protocols(config: SootheConfig) -> dict[str, Any]:
     """Check all configured protocol backends."""
-    ...
-```
-
----
-
-#### Persistence Health
-
-**Import**: `from soothe_daemon.health.checks.persistence_health import check_persistence`
-
-Check database connectivity.
-
-```python
-async def check_persistence(config: SootheConfig) -> dict[str, Any]:
-    """Check persistence backend connectivity."""
     ...
 ```
 
@@ -774,6 +655,8 @@ async def check_external_apis(config: SootheConfig) -> dict[str, Any]:
     """Check external API connectivity."""
     ...
 ```
+
+Other available check modules include: `config_check`, `daemon_check`, `mcp_check`, `providers_check`, `vector_stores_check`, `embedding_warmup_check`, `observability_check`.
 
 ---
 
@@ -846,7 +729,7 @@ RPC commands are handled via WebSocket using structured request/response format.
 {
     "command": "thread",
     "params": {
-        "action": "create" | "suspend" | "resume" | "archive" | "list",
+        "action": "create" | "list" | "show" | "delete",
         "thread_id": "optional thread ID"
     }
 }
@@ -1006,42 +889,11 @@ class WebSocketConfig(BaseModel):
     enabled: bool = True
     """Enable WebSocket transport."""
     
-    host: str = "localhost"
+    host: str = "127.0.0.1"
     """WebSocket host."""
     
     port: int = 8765
     """WebSocket port."""
-    
-    max_frame_size: int = 10 * 1024 * 1024  # 10 MiB
-    """Maximum frame size."""
-    
-    ping_interval: int = 30
-    """Ping interval for keepalive."""
-    
-    ping_timeout: int = 60
-    """Ping timeout."""
-```
-
----
-
-### HttpRestConfig
-
-**Import**: `from soothe_daemon.config.models import HttpRestConfig`
-
-HTTP REST transport configuration.
-
-```python
-class HttpRestConfig(BaseModel):
-    """HTTP REST configuration."""
-    
-    enabled: bool = True
-    """Enable HTTP REST transport."""
-    
-    host: str = "localhost"
-    """HTTP host."""
-    
-    port: int = 8080
-    """HTTP port."""
     
     tls_enabled: bool = False
     """Enable TLS/SSL."""
@@ -1052,15 +904,17 @@ class HttpRestConfig(BaseModel):
     tls_key: str | None = None
     """TLS key path."""
     
-    cors_origins: list[str] = ["*"]
+    cors_origins: list[str] = ["http://localhost:*", "http://127.0.0.1:*"]
     """CORS allowed origins."""
+    
+    max_frame_size: int = 10 * 1024 * 1024  # 10 MiB
+    """Maximum frame size in bytes."""
 ```
 
 ---
 
 ## See Also
 
-- **[REST API Reference](rest-api.md)** - HTTP REST endpoints documentation
 - **[SDK API: WebSocketClient](sdk-api.md#websocket-client)** - WebSocket client usage
 - **[Daemon Management Guide](../daemon-management.md)** - Daemon lifecycle management
 - **[Multi-Transport Communication](../multi-transport.md)** - Transport architecture

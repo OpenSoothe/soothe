@@ -57,10 +57,10 @@ packages/
 |------|-------|
 | Agent factory | `packages/soothe/src/soothe/foundation/core/agent/_builder.py` |
 | Config | `packages/soothe/src/soothe/config/settings.py` |
-| Protocols | `packages/soothe/src/soothe/foundation/protocols/` |
+| Protocols | `packages/soothe/src/soothe/protocols/` |
 | RFCs | `docs/specs/` |
 | IGs | `docs/impl/` |
-| Debug guide | `docs/howto_debug.md` |
+| Debug guide | `docs/wiki/howto_debug.md` |
 
 ---
 
@@ -115,5 +115,5 @@ langchain provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, G
 - Architecture → `docs/specs/RFC-*.md`
 - Patterns → `docs/impl/IG-*.md`
 - APIs → `thirdparty/` (reference only, don't import)
-- Debug → `docs/howto_debug.md`
+- Debug → `docs/wiki/howto_debug.md`
 - Config → `config/config.template.yml`

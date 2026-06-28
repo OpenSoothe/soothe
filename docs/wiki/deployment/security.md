@@ -51,7 +51,7 @@ This guide covers:
 
 ### Why Reverse Proxy?
 
-WebSocket and HTTP REST transports expose daemon ports (8765, 8766). These MUST be protected by reverse proxy:
+The WebSocket transport exposes daemon port 8765. This MUST be protected by reverse proxy:
 
 **Security responsibilities**:
 - TLS termination (HTTPS/WSS)
@@ -80,11 +80,6 @@ WebSocket and HTTP REST transports expose daemon ports (8765, 8766). These MUST 
 # WebSocket upstream
 upstream soothe_ws {
     server 127.0.0.1:8765;
-}
-
-# HTTP REST upstream
-upstream soothe_http {
-    server 127.0.0.1:8766;
 }
 
 # WebSocket endpoint (WSS)
@@ -125,20 +120,6 @@ server {
         # WebSocket timeouts
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
-    }
-    
-    # HTTP REST endpoint (HTTPS)
-    location /api {
-        limit_req zone=ws_limit burst=20 nodelay;
-        
-        auth_jwt "Soothe API";
-        auth_jwt_key_file /etc/nginx/jwt_key.pem;
-        
-        proxy_pass http://soothe_http;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-User $jwt_user;
     }
 }
 ```
@@ -198,11 +179,11 @@ server {
 
 **Client usage**:
 ```bash
-# WebSocket with API key
-soothe --daemon \
-  --transport websocket \
-  --url wss://soothe.your-domain.com/ws \
-  --header "X-API-Key: sk-soothe-api-key-123"
+# WebSocket with API key (API key validated by reverse proxy, not Soothe)
+soothe \
+  --daemon-host soothe.your-domain.com \
+  --daemon-port 443 \
+  -p "Check workspace status"
 ```
 
 #### OAuth 2.0 / OIDC Authentication (Enterprise)
@@ -390,8 +371,8 @@ sudo certbot --nginx -d soothe.your-domain.com
 
 ```bash
 # Config file permissions
-chmod 600 ~/.soothe/config.yml  # User-only
-chown $USER ~/.soothe/config.yml
+chmod 600 ~/.soothe/config/config.yml  # User-only
+chown $USER ~/.soothe/config/config.yml
 
 # Production deployment
 sudo chmod 600 /var/lib/soothe/config/config.yml
@@ -470,7 +451,6 @@ sudo ufw allow 443/tcp
 
 # Block direct daemon access
 sudo ufw deny 8765/tcp  # WebSocket
-sudo ufw deny 8766/tcp  # HTTP REST
 
 # Block direct PostgreSQL access
 sudo ufw deny 5432/tcp
@@ -859,7 +839,7 @@ sudo tail -f /var/log/nginx/error.log | grep "limiting"
 # Update API keys in secrets manager
 
 # Review security policy violations
-grep "Permission denied" ~/.soothe/logs/daemon.log
+grep "Permission denied" ~/.soothe/logs/soothed.log
 
 # Scan for vulnerabilities
 trivy image registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest

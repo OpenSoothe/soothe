@@ -41,10 +41,10 @@ Use autonomous mode for tasks that:
 
 ```bash
 # Dedicated autopilot command
-soothe autopilot "Research quantum error correction advances"
+soothe autopilot run "Research quantum error correction advances"
 
-# With iteration limit
-soothe autopilot "Build a web scraper" --max-iterations 15
+# With iteration limit (note: max-iterations is ignored; configure via agent.autonomous.max_iterations)
+soothe autopilot run "Build a web scraper" --max-iterations 15
 ```
 
 ## Progress Events
@@ -62,22 +62,24 @@ During autonomous execution, you'll see progress events:
 Set defaults in your configuration file:
 
 ```yaml
-# Enable autonomous mode by default
-autonomous_enabled_by_default: false
+agent:
+  autonomous:
+    # Enable autonomous mode (starts scheduling loop for 24/7 operation)
+    enabled: false
 
-# Maximum iterations (default: 10)
-autonomous_max_iterations: 10
+    # Maximum iterations per autonomous thread (default: 10)
+    max_iterations: 10
 
-# Maximum retries per iteration (default: 2)
-autonomous_max_retries: 2
+    # Maximum retries per goal on failure (default: 2)
+    max_retries: 2
 ```
 
 ### Environment Variables
 
 ```bash
-export SOOTHE_AUTONOMOUS_ENABLED_BY_DEFAULT=true
-export SOOTHE_AUTONOMOUS_MAX_ITERATIONS=15
-export SOOTHE_AUTONOMOUS_MAX_RETRIES=3
+export SOOTHE_AGENT_AUTONOMOUS_ENABLED=true
+export SOOTHE_AGENT_AUTONOMOUS_MAX_ITERATIONS=15
+export SOOTHE_AGENT_AUTONOMOUS_MAX_RETRIES=3
 ```
 
 ## How It Works
@@ -103,7 +105,7 @@ Autonomous mode stops when:
 ### Optimization Task
 
 ```bash
-soothe autopilot "Optimize the database queries for better performance"
+soothe autopilot run "Optimize the database queries for better performance"
 ```
 
 Soothe will:
@@ -116,7 +118,7 @@ Soothe will:
 ### Research Task
 
 ```bash
-soothe autopilot "Research and document the best practices for REST API design"
+soothe autopilot run "Research and document the best practices for REST API design"
 ```
 
 Soothe will:
@@ -129,7 +131,7 @@ Soothe will:
 ### Development Task
 
 ```bash
-soothe autopilot --max-iterations 25 "Build a comprehensive test suite for the authentication module"
+soothe autopilot run --max-iterations 25 "Build a comprehensive test suite for the authentication module"
 ```
 
 Soothe will:

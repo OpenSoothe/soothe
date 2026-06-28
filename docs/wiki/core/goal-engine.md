@@ -1,14 +1,14 @@
-# GoalEngine
+# ContextEngine
 
-Autonomous goal management for long-running complex workflows.
+Unified context management for goals, steps, ledger, and projection.
 
 ---
 
 ## Overview
 
-GoalEngine (`soothe.core.goal_engine`) implements Layer 3 of Soothe's three-layer execution architecture, providing autonomous goal management for long-running complex workflows. It manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities.
+ContextEngine (`soothe.foundation.context`) provides autonomous goal management for long-running complex workflows. It manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. ContextEngine composes GoalStepDAG, LedgerManager, SemanticLoader, ProjectionEngine, and a pluggable persistence backend into a single interface.
 
-**RFC**: [RFC-200](../../specs/RFC-200-autonomous-goal-management.md)
+**RFC**: [RFC-624](../../specs/RFC-624-context-engine.md) (Context Engine), [RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md) (Autopilot-Monitor-ContextEngine unification)
 
 ---
 
@@ -16,17 +16,17 @@ GoalEngine (`soothe.core.goal_engine`) implements Layer 3 of Soothe's three-laye
 
 ### Goal DAG Management
 
-GoalEngine manages goals as a Directed Acyclic Graph (DAG):
+ContextEngine manages goals as a Directed Acyclic Graph (DAG):
 
 ```
-GoalEngine Architecture
-├─ Goal DAG
+ContextEngine Architecture
+├─ GoalStepDAG
 │  ├─ Goals with dependencies
 │  ├─ Priority-based scheduling
 │  └─ Dynamic restructuring
 │
 ├─ Goal Lifecycle
-│  ├─ Created → Ready → Running → Completed
+│  ├─ pending → active → completed
 │  ├─ Backoff reasoning
 │  └─ Failure handling
 │
@@ -35,86 +35,122 @@ GoalEngine Architecture
 │  ├─ REFLECT evaluation
 │  └─ DAG update
 │
-└─ Scheduled Tasks
-   ├─ Wall-clock scheduling
-   ├─ Webhook triggers
-   └─ Dreaming (background processing)
+├─ Step DAG
+│  ├─ Steps per goal
+│  ├─ Dependency satisfaction
+│  └─ Completion tracking
+│
+├─ LedgerManager
+│  ├─ Message history
+│  └─ Phase filtering
+│
+├─ ProjectionEngine
+│  ├─ Bounded context projection
+│  └─ Prompt template injection
+│
+└─ Planning Submodule
+   ├─ StepPlanningSubengine
+   ├─ GoalPlanningSubengine
+   └─ GoalScheduler
 ```
 
 ---
 
 ## Core Concepts
 
-### Goal DAG
+### GoalStepDAG
 
-Goals organized as a directed acyclic graph:
+Goals organized as a directed acyclic graph with embedded step DAGs:
 
 ```python
-class GoalDAG:
-    """Directed Acyclic Graph of goals."""
-    
-    goals: dict[str, Goal]      # Goal registry
-    dependencies: dict[str, list[str]]  # Dependency edges
-    
-    def add_goal(self, goal: Goal):
-        """Add goal to DAG."""
-    
-    def get_ready_goals(self) -> list[Goal]:
-        """Get goals ready for execution."""
-    
-    def update_dependencies(self, goal_id: str, deps: list[str]):
-        """Update goal dependencies."""
+class GoalStepDAG:
+    """Unified Goal+Step DAG."""
+
+    goals: dict[str, GoalNode]      # Goal registry
+
+    def add_goal(self, goal: GoalNode): ...
+    def get_goal(self, goal_id: str) -> GoalNode | None: ...
+    def complete_goal(self, goal_id: str): ...
+    def fail_goal(self, goal_id: str, error: str): ...
+    def snapshot(self) -> GoalStepDAGSnapshot: ...
 ```
 
-### Goal
+### GoalNode
 
 Individual goal in the DAG:
 
 ```python
-class Goal:
-    """Single goal in the DAG."""
-    
-    # Identity
-    id: str                 # Goal identifier
-    description: str        # Goal description
-    
-    # State
-    status: GoalStatus      # created, ready, running, completed, failed
-    priority: int           # Execution priority
-    
-    # Dependencies
-    dependencies: list[str] # Required goals
-    dependents: list[str]   # Goals that depend on this
-    
-    # Execution
-    assigned_thread: str | None  # Assigned thread ID
-    plan_result: PlanResult | None  # Execution result
-    
-    # Timing
-    created_at: datetime
-    started_at: datetime | None
-    completed_at: datetime | None
-    
-    # Metadata
-    tags: list[str]         # Goal tags
-    criticality: float      # Importance score
-    directives: GoalDirectives  # Execution directives
+class GoalNode:
+    """Single goal in the unified Goal+Step DAG."""
+
+    # Core identity
+    id: str                        # Goal identifier (auto-generated)
+    description: str               # Goal description
+    priority: int                  # Execution priority (0-100, default 50)
+    status: GoalStatus             # pending, active, completed, failed, etc.
+
+    # DAG relationships
+    parent_id: str | None          # Parent goal ID
+    depends_on: list[str]          # Hard dependency goal IDs
+    informs: list[str]             # Informs relationships
+    conflicts_with: list[str]      # Conflict relationships
+
+    # Embedded step DAG
+    steps: StepDAG                 # Steps for this goal
+
+    # Lineage
+    generating_reasoning: str | None
+    source: str                    # user, directive, file_discovery, decomposition
+
+    # Execution tracking
+    iteration_count: int           # Current iteration number
+    total_tokens_used: int
+    total_duration_ms: int
+    max_iterations: int            # 0 = no cap
+    thread_id: str | None
+    assigned_loop_id: str | None
+    action_history: list[str]
+
+    # Retry/backoff
+    retry_count: int
+    max_retries: int               # Default 2
+    send_back_count: int
+    max_send_backs: int            # Default 3
+    attempts_after_crash: int
+
+    # Workspace/source
+    source_file: str | None        # GOAL.md path if file-sourced
+    workspace: str | None          # Autopilot dispatch workspace
+
+    # Completion state
+    report: dict[str, Any] | None  # Serialized GoalReport on completion
+    error: str | None              # Failure reason
+    pending_clarification: dict[str, Any] | None  # RFC-622
+
+    # Dreaming (RFC-625)
+    topic: str | None              # Topic tag for cross-loop dreaming
+    findings: list[str]            # Key findings from execution
 ```
 
-### Goal Status
+### GoalStatus
 
 Lifecycle states:
 
 ```python
-class GoalStatus:
-    """Goal lifecycle states."""
-    
-    CREATED = "created"      # Initial state
-    READY = "ready"          # Dependencies satisfied
-    RUNNING = "running"      # Currently executing
-    COMPLETED = "completed"  # Successfully finished
-    FAILED = "failed"        # Execution failed
-    BACKED_OFF = "backed_off"  # Backed off after failure
+GoalStatus = Literal[
+    "pending",                    # Initial state
+    "active",                     # Activated for execution
+    "completed",                  # Successfully finished
+    "failed",                     # Execution failed
+    "suspended",                  # Temporarily suspended
+    "blocked",                    # Blocked by dependency
+    "validated",                  # Validated
+    "awaiting_clarification",     # Awaiting user clarification (RFC-622)
+    "cancelled",                  # Cancelled by user
+]
+
+TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
+BLOCKED_STATES = frozenset({"awaiting_clarification", "suspended"})
 ```
 
 ---
@@ -127,473 +163,152 @@ Create goals with dependencies:
 
 ```python
 # Create simple goal
-goal = Goal(
-    id="goal-123",
+goal = await engine.create_goal(
     description="Analyze codebase structure",
-    priority=5
+    priority=50
 )
 
 # Create goal with dependencies
-goal = Goal(
-    id="goal-456",
+goal = await engine.create_goal(
     description="Implement feature",
-    dependencies=["goal-123"],  # Wait for analysis
-    priority=10
+    depends_on=["goal-123"],  # Wait for analysis
+    priority=80
 )
-
-# Add to DAG
-goal_engine.add_goal(goal)
 ```
 
-### 2. Dependency Resolution
+### 2. Goal Activation
 
-Check and resolve dependencies:
+Activate a pending goal:
 
 ```python
-def get_ready_goals(self) -> list[Goal]:
-    """Get goals ready for execution."""
-    
-    ready_goals = []
-    for goal in self.goals.values():
-        # Check status
-        if goal.status != GoalStatus.CREATED:
-            continue
-        
-        # Check dependencies
-        deps_satisfied = all(
-            self.goals[dep_id].status == GoalStatus.COMPLETED
-            for dep_id in goal.dependencies
-        )
-        
-        if deps_satisfied:
-            goal.status = GoalStatus.READY
-            ready_goals.append(goal)
-    
-    # Sort by priority
-    return sorted(ready_goals, key=lambda g: g.priority)
+await engine.activate_goal(goal_id, loop_id="loop-abc")
+# Transitions goal from "pending" to "active"
 ```
 
-### 3. Goal Execution
-
-Delegate execution to StrangeLoop:
-
-```python
-async def perform_goal(self, goal: Goal):
-    """Delegate goal execution to StrangeLoop."""
-    
-    # Update status
-    goal.status = GoalStatus.RUNNING
-    goal.started_at = datetime.now()
-    
-    # Create thread
-    thread_id = f"{base_tid}__goal_{goal.id}"
-    goal.assigned_thread = thread_id
-    
-    # Delegate to StrangeLoop (via daemon dispatch in RFC-222)
-    # StrangeLoop executes Plan → Execute loop
-    plan_result = await self.dispatch_to_sloop(goal)
-    
-    return plan_result
-```
-
-### 4. Goal Completion
+### 3. Goal Completion
 
 Handle goal completion:
 
 ```python
-def complete_goal(self, goal_id: str, plan_result: PlanResult):
-    """Mark goal as completed."""
-    
-    goal = self.goals[goal_id]
-    goal.status = GoalStatus.COMPLETED
-    goal.plan_result = plan_result
-    goal.completed_at = datetime.now()
-    
-    # Update dependents
-    self.update_dependent_goals(goal_id)
+await engine.complete_goal(goal_id)
+# Transitions goal to "completed" terminal state
 ```
 
-### 5. Goal Failure
+### 4. Goal Failure
 
-Handle goal failure with backoff:
-
-```python
-async def fail_goal(self, goal_id: str, evidence: EvidenceBundle):
-    """Handle goal failure."""
-    
-    goal = self.goals[goal_id]
-    
-    # Apply backoff reasoning
-    backoff_result = await self.apply_backoff_reasoning(goal, evidence)
-    
-    if backoff_result.should_retry:
-        # Backoff and retry
-        goal.status = GoalStatus.BACKED_OFF
-        await self.schedule_retry(goal, backoff_result)
-    else:
-        # Permanent failure
-        goal.status = GoalStatus.FAILED
-        goal.evidence = evidence
-```
-
----
-
-## Backoff Reasoning
-
-### Backoff Architecture
-
-Sophisticated failure handling with reasoning:
+Handle goal failure with retry support:
 
 ```python
-class BackoffReasoner:
-    """Reasoning-based backoff system."""
-    
-    async def analyze_failure(
-        self,
-        goal: Goal,
-        evidence: EvidenceBundle
-    ) -> BackoffResult:
-        """Analyze failure and decide backoff strategy."""
-        
-        # Failure classification
-        failure_type = self.classify_failure(evidence)
-        
-        # Retry decision
-        should_retry = self.decide_retry(goal, failure_type)
-        
-        # Backoff strategy
-        strategy = self.select_strategy(failure_type)
-        
-        return BackoffResult(
-            should_retry=should_retry,
-            strategy=strategy,
-            reasoning=self.generate_reasoning(failure_type)
-        )
-```
-
-### Backoff Strategies
-
-```python
-class BackoffStrategy:
-    """Backoff strategies."""
-    
-    EXPONENTIAL = "exponential"  # Exponential backoff
-    LINEAR = "linear"            # Linear backoff
-    FIXED = "fixed"              # Fixed delay
-    ADAPTIVE = "adaptive"        # Adaptive based on failure type
-```
-
-### Failure Classification
-
-```python
-def classify_failure(self, evidence: EvidenceBundle) -> FailureType:
-    """Classify failure type from evidence."""
-    
-    # Analyze evidence
-    analysis = self.analyze_evidence(evidence)
-    
-    # Classify failure
-    if analysis.tool_failure:
-        return FailureType.TOOL_ERROR
-    elif analysis.resource_exhausted:
-        return FailureType.RESOURCE_LIMIT
-    elif analysis.goal_unclear:
-        return FailureType.GOAL_AMBIGUOUS
-    elif analysis.strategy_failed:
-        return FailureType.STRATEGY_MISMATCH
-    else:
-        return FailureType.UNKNOWN
-```
-
----
-
-## Dynamic Goal Restructuring
-
-### Goal Mutation
-
-Modify goals during execution:
-
-```python
-async def mutate_goal(self, goal_id: str, mutation: GoalMutation):
-    """Mutate goal based on execution learning."""
-    
-    goal = self.goals[goal_id]
-    
-    # Apply mutation
-    if mutation.update_description:
-        goal.description = mutation.new_description
-    
-    if mutation.add_dependencies:
-        goal.dependencies.extend(mutation.new_deps)
-    
-    if mutation.update_priority:
-        goal.priority = mutation.new_priority
-    
-    # Validate DAG
-    self.validate_dag_integrity()
-```
-
-### Goal Generation
-
-Generate new goals dynamically:
-
-```python
-async def generate_subgoals(
-    self,
-    parent_goal: Goal,
-    execution_result: PlanResult
-) -> list[Goal]:
-    """Generate subgoals from execution result."""
-    
-    # Analyze result
-    analysis = self.analyze_execution_result(execution_result)
-    
-    # Identify subgoals
-    subgoal_descriptions = self.identify_subgoals(analysis)
-    
-    # Create subgoals
-    subgoals = []
-    for desc in subgoal_descriptions:
-        subgoal = Goal(
-            id=generate_goal_id(),
-            description=desc,
-            dependencies=[parent_goal.id],
-            priority=parent_goal.priority + 1
-        )
-        subgoals.append(subgoal)
-    
-    return subgoals
-```
-
----
-
-## Scheduled Tasks
-
-### Wall-Clock Scheduling
-
-Schedule goals at specific times:
-
-```python
-class SchedulerService:
-    """Wall-clock scheduled task management."""
-    
-    def schedule_goal(
-        self,
-        goal: Goal,
-        schedule_time: datetime
-    ):
-        """Schedule goal for execution at specific time."""
-        
-        task = ScheduledTask(
-            goal_id=goal.id,
-            schedule_time=schedule_time,
-            status=ScheduledStatus.PENDING
-        )
-        
-        self.scheduled_tasks.append(task)
-    
-    async def process_scheduled_tasks(self):
-        """Process due scheduled tasks."""
-        
-        now = datetime.now()
-        due_tasks = [
-            t for t in self.scheduled_tasks
-            if t.schedule_time <= now and t.status == ScheduledStatus.PENDING
-        ]
-        
-        for task in due_tasks:
-            await self.execute_scheduled_task(task)
-```
-
-### Webhook Triggers
-
-Trigger goals via webhooks:
-
-```python
-class WebhookManager:
-    """Webhook-triggered goal management."""
-    
-    async def handle_webhook(
-        self,
-        webhook_id: str,
-        payload: dict
-    ):
-        """Handle webhook trigger."""
-        
-        webhook = self.webhooks[webhook_id]
-        
-        # Generate goal from webhook
-        goal = self.generate_goal_from_webhook(webhook, payload)
-        
-        # Add to DAG
-        self.goal_engine.add_goal(goal)
-```
-
----
-
-## Dreaming
-
-### Background Processing
-
-Background processing for goal optimization:
-
-```python
-class DreamingEngine:
-    """Background goal processing (dreaming)."""
-    
-    async def process_goals_background(self):
-        """Process goals in background."""
-        
-        # Analyze goal patterns
-        patterns = await self.analyze_goal_patterns()
-        
-        # Optimize DAG
-        optimizations = await self.identify_optimizations(patterns)
-        
-        # Apply optimizations
-        await self.apply_dag_optimizations(optimizations)
-```
-
----
-
-## Goal Directives
-
-Execution directives for goals:
-
-```python
-class GoalDirectives:
-    """Execution directives for goals."""
-    
-    # Execution constraints
-    max_iterations: int | None      # Maximum iterations
-    timeout_seconds: int | None     # Timeout limit
-    required_tools: list[str] | None # Required tools
-    
-    # Strategy hints
-    preferred_strategy: str | None  # Preferred strategy
-    avoid_tools: list[str] | None   # Tools to avoid
-    
-    # Priority modifiers
-    boost_priority_on_failure: bool # Boost after failure
-    deprioritize_after_n_failures: int | None # Deprioritize threshold
-```
-
----
-
-## Criticality Assessment
-
-### Criticality Scoring
-
-Score goal importance:
-
-```python
-class CriticalityAssessor:
-    """Assess goal criticality."""
-    
-    def assess_criticality(self, goal: Goal) -> float:
-        """Assess goal criticality score."""
-        
-        # Base criticality
-        base_score = self.base_criticality(goal)
-        
-        # Dependency criticality
-        dep_score = self.dependency_criticality(goal)
-        
-        # User priority
-        user_score = self.user_priority_score(goal)
-        
-        # Combined score
-        return self.combine_scores(base_score, dep_score, user_score)
-```
-
----
-
-## Usage Patterns
-
-### Basic Goal Management
-
-```python
-from soothe.core.goal_engine import GoalEngine
-from soothe.config import SootheConfig
-
-config = SootheConfig.from_file("config.yml")
-goal_engine = GoalEngine(config)
-
-# Create goal
-goal = Goal(
-    id="goal-123",
-    description="Analyze codebase",
-    priority=5
+await engine.fail_goal(
+    goal_id,
+    error="Tool execution timed out",
+    evidence=evidence_bundle,
+    allow_retry=True  # Allow retry if retries remain
 )
-goal_engine.add_goal(goal)
-
-# Get ready goals
-ready_goals = goal_engine.get_ready_goals()
-
-# Complete goal
-goal_engine.complete_goal("goal-123", plan_result)
 ```
 
-### Goal DAG Management
+### 5. Goal Suspension/Blocking
+
+Suspend or block goals:
 
 ```python
-# Create goal with dependencies
-goal1 = Goal(id="goal-1", description="Analysis")
-goal2 = Goal(id="goal-2", description="Implementation", dependencies=["goal-1"])
-
-goal_engine.add_goal(goal1)
-goal_engine.add_goal(goal2)
-
-# goal-2 waits for goal-1 completion
-ready = goal_engine.get_ready_goals()  # Only goal-1 initially
+await engine.suspend_goal(goal_id, reason="waiting for external API")
+await engine.block_goal(goal_id)    # Block by dependency
+await engine.unblock_goal(goal_id)  # Unblock back to pending
 ```
 
-### Autopilot Integration
+### 6. Goal Cancellation
+
+Cancel a goal (terminal state):
 
 ```python
-# GoalEngine works with daemon AutopilotService
-# Autopilot dispatches goals to StrangeLoop workers
-# GoalEngine provides goal state service
+await engine.cancel_goal(goal_id, reason="user_cancelled")
 ```
 
 ---
 
-## Event Types
+## Event System
 
-### Goal Events
-- `soothe.goal.created` - Goal creation
-- `soothe.goal.ready` - Goal ready for execution
-- `soothe.goal.started` - Goal execution started
-- `soothe.goal.completed` - Goal completion
-- `soothe.goal.failed` - Goal failure
-- `soothe.goal.backed_off` - Goal backoff
+ContextEngine fires callbacks for lifecycle events:
 
-### DAG Events
-- `soothe.dag.updated` - DAG structure updated
-- `soothe.dag.restructured` - DAG restructuring
+```python
+EngineEvent = Literal[
+    "goal_created",
+    "goal_activated",
+    "goal_completed",
+    "goal_failed",
+    "goal_suspended",
+    "goal_cancelled",
+    "goal_blocked",
+    "goal_unblocked",
+    "step_completed",
+    "step_failed",
+    "step_skipped",
+]
+
+# Register callbacks
+engine.on("goal_completed", lambda goal_id: print(f"Done: {goal_id}"))
+engine.off("goal_completed", callback)
+```
+
+---
+
+## Planning Submodule
+
+ContextEngine exposes a planning facade:
+
+```python
+engine.planning.step    # StepPlanningSubengine
+engine.planning.goal    # GoalPlanningSubengine
+engine.planning.scheduler  # GoalScheduler
+```
+
+---
+
+## Projection
+
+Bounded context projection for prompt template injection:
+
+```python
+engine.ledger  # LedgerManager access
+
+# Get DAG snapshot
+snapshot = engine.get_dag_snapshot()
+
+# Get step DAG for a goal
+step_dag = engine.get_step_dag(goal_id)
+
+# Get ledger entries (optionally filtered by phase)
+entries = engine.get_ledger_entries(phases=["plan", "execute"])
+
+# Get all goals
+all_goals = engine.get_all_goals()
+
+# Get goal lineage
+lineage = engine.get_goal_lineage(goal_id)
+```
 
 ---
 
 ## Configuration
 
-### GoalEngine Settings
+### ContextEngine Settings
+
+Projection limits are configured under `agent.loop.context_engine`:
 
 ```yaml
-goal_engine:
-  max_goals: 100           # Maximum goals in DAG
-  backoff_strategy: adaptive  # Backoff strategy
-  dreaming_enabled: true   # Enable background processing
-  scheduled_tasks_enabled: true  # Enable scheduled tasks
+agent:
+  loop:
+    context_engine:  # Projection limits for prompt template context injection
+      projection_max_goals: 5
+      projection_max_steps_per_goal: 10
+      projection_max_ledger_chars: 4000
+      projection_max_ledger_messages: 20
+      projection_max_lineage_chars: 2000
+      projection_max_project_instructions_chars: 8000
 ```
 
-### Backoff Settings
-
-```yaml
-backoff:
-  max_retries: 5           # Maximum retry attempts
-  initial_delay: 60        # Initial delay (seconds)
-  max_delay: 3600          # Maximum delay (seconds)
-```
+The persistence backend follows `persistence.default_backend` — no separate configuration needed. When the global backend is `postgresql`, ContextEngine uses PgsqlContextPersistence with the same DSN. When `sqlite` (default), it uses SqliteContextPersistence.
 
 ---
 
@@ -601,74 +316,85 @@ backoff:
 
 - **[StrangeLoop](strangeloop.md)** - Goal execution integration
 - **[SootheRunner](runner.md)** - Runner orchestration
-- **[Backoff Reasoning](../architecture/backoff-reasoning.md)** - Backoff details
-- **[Autopilot Service](../daemon/autopilot.md)** - Daemon integration
-- **[RFC-200](../../specs/RFC-200-autonomous-goal-management.md)** - Full specification
+- **[RFC-624](../../specs/RFC-624-context-engine.md)** - Context Engine specification
+- **[RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md)** - Autopilot unification
 
 ---
 
 ## API Reference
 
-### GoalEngine Class
+### ContextEngine Class
 
 ```python
-class GoalEngine:
-    """Autonomous goal management engine."""
-    
-    def __init__(self, config: SootheConfig):
-        """Initialize engine with configuration."""
-    
+class ContextEngine:
+    """Unified context management for goals, steps, ledger, and projection."""
+
+    def __init__(
+        self,
+        persistence: Any | None = None,        # Defaults to in-memory SQLite
+        projection_config: ProjectionConfig | None = None,
+        soothe_home: Path | None = None,
+        workspace: Path | None = None,
+    ) -> None: ...
+
+    # Callback mechanism
+    def on(self, event: EngineEvent, callback: Callable) -> None: ...
+    def off(self, event: EngineEvent, callback: Callable) -> None: ...
+
+    # Public read API
+    def get_dag_snapshot(self) -> GoalStepDAGSnapshot: ...
+    def get_step_dag(self, goal_id: str) -> StepDAG | None: ...
+    def get_ledger_entries(self, phases: list[str] | None = None) -> list[tuple[BaseMessage, str | None]]: ...
+    def get_all_goals(self) -> list[GoalNode]: ...
+    def get_goal_lineage(self, goal_id: str) -> list[str]: ...
+    def get_goal_sync(self, goal_id: str) -> GoalNode | None: ...
+
+    # Properties
+    @property
+    def ledger(self) -> LedgerManager: ...
+    @property
+    def planning(self) -> PlanningFacade: ...
+
     # Goal management
-    def add_goal(self, goal: Goal): ...
-    def remove_goal(self, goal_id: str): ...
-    def get_goal(self, goal_id: str) -> Goal: ...
-    
-    # Goal state
-    def get_ready_goals(self) -> list[Goal]: ...
-    def get_running_goals(self) -> list[Goal]: ...
-    def get_all_goals(self) -> list[Goal]: ...
-    
-    # Goal lifecycle
-    def complete_goal(self, goal_id: str, plan_result: PlanResult): ...
-    async def fail_goal(self, goal_id: str, evidence: EvidenceBundle): ...
-    
-    # Goal mutation
-    async def mutate_goal(self, goal_id: str, mutation: GoalMutation): ...
-    async def generate_subgoals(self, parent_goal: Goal) -> list[Goal]: ...
+    async def create_goal(self, description: str, *, priority: int = 50, parent_id: str | None = None, depends_on: list[str] | None = None, ...) -> GoalNode: ...
+    async def get_goal(self, goal_id: str) -> GoalNode | None: ...
+    async def list_goals(self, status: str | None = None) -> list[GoalNode]: ...
+    async def activate_goal(self, goal_id: str, loop_id: str | None = None) -> None: ...
+    async def complete_goal(self, goal_id: str) -> None: ...
+    async def fail_goal(self, goal_id: str, error: str | None = None, *, evidence: Any | None = None, allow_retry: bool = True) -> None: ...
+    async def suspend_goal(self, goal_id: str, reason: str) -> None: ...
+    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> None: ...
+    async def block_goal(self, goal_id: str) -> None: ...
+    async def unblock_goal(self, goal_id: str) -> None: ...
+    async def finalize_goal(self, goal_id: str, *, status: str = "completed") -> None: ...
+
+    # Step/iteration tracking
+    def record_action(self, goal_id: str, action: str) -> None: ...
+    def increment_iteration(self, goal_id: str) -> int: ...
 ```
 
-### Goal Classes
+### GoalNode Class
 
 ```python
-class Goal:
-    """Single goal in DAG."""
+class GoalNode:
+    """Single goal in the unified Goal+Step DAG."""
     id: str
     description: str
-    status: GoalStatus
     priority: int
-    dependencies: list[str]
-    ...
-
-class GoalDAG:
-    """Directed Acyclic Graph of goals."""
-    goals: dict[str, Goal]
-    dependencies: dict[str, list[str]]
-    ...
-
-class GoalStatus:
-    """Goal lifecycle states."""
-    CREATED = "created"
-    READY = "ready"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    BACKED_OFF = "backed_off"
+    status: GoalStatus
+    parent_id: str | None
+    depends_on: list[str]
+    steps: StepDAG
+    iteration_count: int
+    max_iterations: int
+    assigned_loop_id: str | None
+    # ... (see source for full field list)
 ```
 
 ---
 
 ## See Also
 
-- **[Autonomous Mode](../user-guide/autonomous-mode.md)** - User guide
-- **[Thread Management](../user-guide/thread-management.md)** - Thread handling
-- **[Daemon Architecture](../daemon/README.md)** - Daemon overview
+- **[Autonomous Mode](../autonomous-mode.md)** - User guide
+- **[Thread Management](../thread-management.md)** - Thread handling
+- **[Daemon Architecture](../daemon-management.md)** - Daemon overview

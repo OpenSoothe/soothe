@@ -181,10 +181,10 @@ Resume previous conversations:
 
 ```bash
 # List recent threads
-soothe thread list
+soothe loop list
 
-# Resume a specific thread
-soothe thread resume <thread-id>
+# Continue a specific thread
+soothe loop continue <thread-id>
 
 # Or use the TUI's thread browser
 soothe
@@ -237,13 +237,8 @@ Web automation:
 soothe -p "Go to the project's GitHub page and extract the open issues count"
 ```
 
-### Claude Subagent
-
-Complex code analysis:
-
-```bash
-soothe -p "Analyze this codebase for potential security vulnerabilities and suggest fixes"
-```
+> **Note**: The `claude` subagent (complex code analysis) and other community
+> agents are available via the `soothe-plugins` package, not as core subagents.
 
 ---
 
@@ -283,7 +278,6 @@ export OPENAI_API_KEY=sk-your-key-here
 
 # Optional
 export SOOTHE_DEBUG=true              # Enable debug logging
-export SOOTHE_PROGRESS_VERBOSITY=detailed  # More verbose output
 ```
 
 ### YAML Configuration
@@ -299,8 +293,11 @@ router:
   default: "openai:gpt-4o-mini"
   think: "openai:o3-mini"
 
-workspace_dir: "."
-progress_verbosity: normal
+filesystem_middleware:
+  workspace_root: "."
+
+observability:
+  verbosity: normal
 ```
 
 ### Model Selection
@@ -384,7 +381,7 @@ For long-running operations or remote access:
 soothed start
 
 # Check status
-soothe doctor
+soothed doctor
 
 # Stop daemon
 soothed stop

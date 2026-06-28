@@ -32,18 +32,18 @@ soothe --config custom.yml
 soothe -p "Analyze data" --format jsonl
 
 # Set progress verbosity
-soothe -p "Complex task" --verbosity detailed
+soothe -p "Complex task" --verbosity debug
 ```
 
 ## Thread Management
 
 Manage conversation threads with explicit actions.
 
-### soothe thread list
+### soothe loop list
 
 List all conversation threads.
 
-**Usage**: `soothe thread list [options]`
+**Usage**: `soothe loop list [options]`
 
 **Options**:
 - `--status <status>` - Filter by status (active, archived)
@@ -52,32 +52,32 @@ List all conversation threads.
 **Examples**:
 ```bash
 # List all threads
-soothe thread list
+soothe loop list
 
 # Filter by status
-soothe thread list --status active
-soothe thread list --status archived
+soothe loop list --status active
+soothe loop list --status archived
 ```
 
-### soothe thread show
+### soothe loop show
 
 Show thread details.
 
-**Usage**: `soothe thread show <thread-id> [options]`
+**Usage**: `soothe loop show <thread-id> [options]`
 
 **Options**:
 - `--config <file>` - Use custom configuration file
 
 **Examples**:
 ```bash
-soothe thread show abc123
+soothe loop show abc123
 ```
 
-### soothe thread continue
+### soothe loop continue
 
 Continue a conversation thread in the TUI.
 
-**Usage**: `soothe thread continue [thread-id] [options]`
+**Usage**: `soothe loop continue [thread-id] [options]`
 
 **Arguments**:
 - `thread-id` - Optional. Thread ID to continue. Omit to continue last active thread.
@@ -95,34 +95,34 @@ Continue a conversation thread in the TUI.
 soothed start
 
 # Continue specific thread
-soothe thread continue abc123
+soothe loop continue abc123
 
 # Start a new thread
-soothe thread continue --new
+soothe loop continue --new
 
 # Continue last active thread
-soothe thread continue
+soothe loop continue
 ```
 
-### soothe thread archive
+### soothe loop archive
 
 Archive a thread.
 
-**Usage**: `soothe thread archive <thread-id> [options]`
+**Usage**: `soothe loop archive <thread-id> [options]`
 
 **Options**:
 - `--config <file>` - Use custom configuration file
 
 **Examples**:
 ```bash
-soothe thread archive abc123
+soothe loop archive abc123
 ```
 
-### soothe thread delete
+### soothe loop delete
 
 Permanently delete a thread.
 
-**Usage**: `soothe thread delete <thread-id> [options]`
+**Usage**: `soothe loop delete <thread-id> [options]`
 
 **Options**:
 - `--yes, -y` - Skip confirmation prompt
@@ -131,17 +131,17 @@ Permanently delete a thread.
 **Examples**:
 ```bash
 # Delete with confirmation
-soothe thread delete abc123
+soothe loop delete abc123
 
 # Delete without confirmation
-soothe thread delete abc123 --yes
+soothe loop delete abc123 --yes
 ```
 
-### soothe thread export
+### soothe loop show
 
 Export thread conversation to a file.
 
-**Usage**: `soothe thread export <thread-id> [options]`
+**Usage**: `soothe loop show <thread-id> [options]`
 
 **Options**:
 - `--output, -o <file>` - Output file path
@@ -150,31 +150,31 @@ Export thread conversation to a file.
 **Examples**:
 ```bash
 # Export to JSONL (default)
-soothe thread export abc123 --output thread.json
+soothe loop show abc123 --output thread.json
 
 # Export to Markdown
-soothe thread export abc123 --output thread.md --format md
+soothe loop show abc123 --output thread.md --format md
 ```
 
-### soothe thread stats
+### soothe loop stats
 
 Show thread execution statistics.
 
-**Usage**: `soothe thread stats <thread-id> [options]`
+**Usage**: `soothe loop stats <thread-id> [options]`
 
 **Options**:
 - `--config <file>` - Use custom configuration file
 
 **Examples**:
 ```bash
-soothe thread stats abc123
+soothe loop stats abc123
 ```
 
-### soothe thread tag
+### soothe loop tag
 
 Add or remove tags from a thread.
 
-**Usage**: `soothe thread tag <thread-id> <tags...> [options]`
+**Usage**: `soothe loop tag <thread-id> <tags...> [options]`
 
 **Arguments**:
 - `thread-id` - Thread ID
@@ -187,10 +187,10 @@ Add or remove tags from a thread.
 **Examples**:
 ```bash
 # Add tags
-soothe thread tag abc123 research analysis
+soothe loop tag abc123 research analysis
 
 # Remove tags
-soothe thread tag abc123 research --remove
+soothe loop tag abc123 research --remove
 ```
 
 ## Configuration Management
@@ -342,9 +342,7 @@ Daemon Status: running
 PID: 12345
 Uptime: 2 hours
 Transports:
-  - Unix Socket: ✅ Enabled (~/.soothe/soothe.sock)
-  - WebSocket: ❌ Disabled
-  - HTTP REST: ❌ Disabled
+  - WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
 Active Threads: 3
 ```
 
@@ -427,13 +425,13 @@ soothe autopilot run "Optimize the database queries" --max-iterations 20
 
 ```bash
 # List threads
-soothe thread list
+soothe loop list
 
 # Continue specific thread
-soothe thread continue abc123
+soothe loop continue abc123
 
 # Continue last active thread
-soothe thread continue
+soothe loop continue
 ```
 
 ### Background Processing
@@ -453,13 +451,13 @@ soothed status
 
 ```bash
 # List active threads
-soothe thread list --status active
+soothe loop list --status active
 
 # Export thread for backup
-soothe thread export abc123 --output backup.json
+soothe loop show abc123 --output backup.json
 
 # Tag thread for organization
-soothe thread tag abc123 research important
+soothe loop tag abc123 research important
 ```
 
 ## Migration from Old Syntax
@@ -468,13 +466,13 @@ If you were using the old flat command syntax, here's how to migrate:
 
 | Old Command | New Command |
 |-------------|-------------|
-| `soothe thread` | `soothe thread list` |
-| `soothe thread -l` | `soothe thread list` |
-| `soothe thread <id>` | `soothe thread show <id>` |
-| `soothe thread -c <id>` | `soothe thread continue <id>` |
-| `soothe thread -a <id>` | `soothe thread archive <id>` |
-| `soothe thread -d <id>` | `soothe thread delete <id>` |
-| `soothe thread -e <id>` | `soothe thread export <id>` |
+| `soothe thread` | `soothe loop list` |
+| `soothe thread -l` | `soothe loop list` |
+| `soothe thread <id>` | `soothe loop show <id>` |
+| `soothe thread -c <id>` | `soothe loop continue <id>` |
+| `soothe thread -a <id>` | `soothe loop archive <id>` |
+| `soothe thread -d <id>` | `soothe loop delete <id>` |
+| `soothe thread -e <id>` | `soothe loop show <id>` |
 | `soothe config` | `soothe config show` |
 | `soothe config -i` | `soothe config init` |
 | `soothe config --validate` | `soothe config validate` |

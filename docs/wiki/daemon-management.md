@@ -7,7 +7,7 @@ Manage the Soothe daemon process for background execution.
 The Soothe daemon is a background process that:
 - Runs Soothe continuously without a TUI
 - Enables detached execution
-- Supports multiple transports (Unix Socket, WebSocket, HTTP REST)
+- Supports WebSocket transport
 - Allows multiple clients to connect
 - Maintains thread state
 
@@ -29,7 +29,7 @@ soothed start --foreground
 ```
 Daemon started successfully
 PID: 12345
-Socket: ~/.soothe/soothe.sock
+WebSocket: ws://127.0.0.1:8765
 Status: running
 ```
 
@@ -47,9 +47,7 @@ Daemon Status: running
 PID: 12345
 Uptime: 2 hours
 Transports:
-  - Unix Socket: ✅ Enabled (~/.soothe/soothe.sock)
-  - WebSocket: ❌ Disabled
-  - HTTP REST: ❌ Disabled
+  - WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
 Active Threads: 3
 Memory Usage: 256 MB
 ```
@@ -79,14 +77,14 @@ soothed restart
 
 ### Attach to Daemon
 
-**Note**: The `soothe thread continue` command was removed in RFC-303. To reconnect to a running daemon, use:
+**Note**: To reconnect to a running daemon, use:
 
 ```bash
-# Resume last active thread via daemon
-soothe thread -c --daemon
+# Continue last active loop via daemon
+soothe loop continue  # CLI auto-connects to running daemon
 
-# Resume specific thread via daemon
-soothe thread -c --daemon <thread-id>
+# Continue specific loop via daemon
+soothe loop continue <loop-id>  # CLI auto-connects to running daemon
 ```
 
 This opens the TUI and connects to the already-running daemon.
@@ -112,8 +110,8 @@ The daemon continues running in the background.
 Reconnect to the daemon:
 
 ```bash
-# Resume via running daemon
-soothe thread -c --daemon
+# Continue via running daemon
+soothe loop continue  # CLI auto-connects to running daemon
 ```
 
 ## When to Use Daemon Mode
@@ -139,7 +137,6 @@ Connect multiple clients to the same daemon:
 - CLI client
 - TUI client
 - Web UI (via WebSocket)
-- REST API client
 
 ### 24/7 Availability
 
@@ -154,7 +151,7 @@ Daemon logs are stored in:
 
 ```bash
 ~/.soothe/logs/
-├── daemon.log          # Daemon transport, sessions, routing (soothe_daemon.*)
+├── soothed.log          # Daemon transport, sessions, routing (soothe_daemon.*)
 ├── soothe.log          # In-process agent core (soothe.*, soothe_plugins.*)
 └── soothe-cli.log      # CLI client (when using soothe TUI/CLI)
 ```
@@ -162,8 +159,8 @@ Daemon logs are stored in:
 ### View Logs
 
 ```bash
-# Daemon server (WebSocket, HTTP, session lifecycle)
-tail -f ~/.soothe/logs/daemon.log
+# Daemon server (WebSocket, session lifecycle)
+tail -f ~/.soothe/logs/soothed.log
 
 # Agent execution inside the daemon process
 tail -f ~/.soothe/logs/soothe.log
@@ -183,33 +180,22 @@ soothed start
 
 ## Configuration
 
-Configure daemon behavior in `~/.soothe/config.yml`:
+Configure daemon behavior in `~/.soothe/config/daemon.yml`:
 
 ```yaml
-daemon:
-  # Transport configuration
-  transports:
-    unix_socket:
-      enabled: true
-      path: "~/.soothe/soothe.sock"
+# Transport configuration
+transports:
+  websocket:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8765
 
-    websocket:
-      enabled: false
-      host: "127.0.0.1"
-      port: 8765
+# Concurrency
+max_concurrent_threads: 100
+thread_max_age_hours: 24
 
-    http_rest:
-      enabled: false
-      host: "127.0.0.1"
-      port: 8766
-
-  # Logging
-  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
-  log_dir: "~/.soothe/logs"
-
-  # Thread management
-  max_threads: 100
-  thread_timeout: 3600  # 1 hour
+# Logging (agent config in config.yml → observability)
+# log_file_level: INFO  # DEBUG, INFO, WARNING, ERROR
 ```
 
 ## Monitoring
@@ -228,10 +214,10 @@ htop -p $(pgrep -f "soothed")
 
 ### Health Checks
 
-For HTTP REST transport:
+Use the daemon doctor command:
 
 ```bash
-curl http://localhost:8766/api/v1/health
+soothed doctor
 ```
 
 **Response**:
@@ -250,9 +236,9 @@ curl http://localhost:8766/api/v1/health
 
 **Error**: `Address already in use`
 
-**Solution**: Socket file exists from previous run
+**Solution**: Port 8765 is already in use by a previous instance
 ```bash
-rm ~/.soothe/soothe.sock
+soothed stop
 soothed start
 ```
 
@@ -268,14 +254,14 @@ soothed start
 
 **Error**: `No daemon running`
 
-**Solution**: Start daemon first, then use thread continue
+**Solution**: Start daemon first, then use loop continue
 ```bash
 soothed start
-soothe thread -c --daemon
+soothe loop continue  # CLI auto-connects to running daemon
 ```
 
 ## Related Guides
 
-- [Multi-Transport Setup](multi-transport.md) - Configure WebSocket and HTTP REST
+- [Transport Setup](multi-transport.md) - Configure WebSocket
 - [Thread Management](thread-management.md) - Work with threads
 - [Troubleshooting](troubleshooting.md) - Common daemon issues

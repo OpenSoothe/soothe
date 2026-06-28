@@ -7,7 +7,7 @@ The **Capabilities Layer** is Soothe's extensibility framework for adding specia
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │  Core Agent Loop                                                    │
-│  (GoalEngine → StrangeLoop → CoreAgent)                               │
+│  (ContextEngine → StrangeLoop → CoreAgent)                           │
 └────────────────────────┬───────────────────────────────────────────┘
                          │
                          ▼

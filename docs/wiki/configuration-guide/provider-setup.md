@@ -36,7 +36,6 @@ providers:
       - gpt-4o          # Latest GPT-4 with vision
       - gpt-4o-mini     # Fast, cheap GPT-4
       - o3-mini         # Reasoning model
-      - gpt-3.5-turbo   # Legacy model
 ```
 
 **Environment**:
@@ -91,8 +90,8 @@ providers:
     api_key: ${DASHSCOPE_API_KEY}
     models:
       - qwen-max           # Strong reasoning
-      - qwen3.5-flash      # Fast model
-      - qwen3.5-plus       # Balanced
+      - qwen3.7-plus       # Fast model
+      - qwen3.6-plus       # Balanced, coding-optimized
       - MiniMax-M2.5       # Alternative
       - kimi-k2.5          # Moonshot
 ```
@@ -230,7 +229,7 @@ router:
 |------|-------|---------------|
 | `default` | CoreAgent, orchestrator reasoning | gpt-4o-mini |
 | `think` | Planning, consensus, backoff reasoning | o3-mini, claude-sonnet |
-| `fast` | Classification, routing, subagents | gpt-4o-mini, qwen-flash |
+| `fast` | Classification, routing, subagents | gpt-4o-mini, qwen3.7-plus |
 | `image` | Vision, image analysis | gpt-4o, gemini-pro-vision |
 | `embedding` | Vector search, semantic memory | text-embedding-3-small |
 
@@ -253,7 +252,7 @@ router:
 router:
   default: openai:gpt-4o-mini
   think: anthropic:claude-sonnet-4-20250514
-  fast: dashscope:qwen3.5-flash
+  fast: dashscope:qwen3.7-plus
   image: openai:gpt-4o
   embedding: dashscope:multimodal-embedding-v1
 ```
@@ -513,9 +512,9 @@ Configure rate limits for provider APIs:
 ```yaml
 agent:
   loop:
-    limits:
-      llm_rpm_limit: 120      # Requests per minute
-      llm_concurrent_limit: 10  # Concurrent requests
+    llm_rate_limit:
+      rpm_limit: 120           # Requests per minute
+      concurrent_limit: 10     # Concurrent requests
 ```
 
 **Provider-specific limits**:
@@ -532,23 +531,22 @@ agent:
 ```yaml
 agent:
   loop:
-    limits:
-      llm_call_timeout_seconds: 120
-      llm_call_timeout_adaptive: true
-      llm_call_timeout_max_seconds: 300
-      llm_retry_on_timeout: true
-      llm_max_timeout_retries: 2
-      llm_timeout_retry_multiplier: 2.0
+    llm_rate_limit:
+      call_timeout_seconds: 600
+      call_timeout_max_seconds: 900
+      retry_on_timeout: true
+      max_timeout_retries: 10
+      timeout_retry_multiplier: 1.2
 ```
 
 **Timeout fields**:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `llm_call_timeout_seconds` | 120 | Base timeout per call |
-| `llm_call_timeout_adaptive` | true | Scale timeout by prompt size |
-| `llm_call_timeout_max_seconds` | 120 | Adaptive timeout ceiling |
-| `llm_retry_on_timeout` | true | Retry with timeout escalation |
+| `call_timeout_seconds` | 600 | Base timeout per call |
+| `call_timeout_max_seconds` | 900 | Timeout ceiling for retries |
+| `retry_on_timeout` | true | Retry with timeout escalation |
+| `max_timeout_retries` | 10 | Max retry attempts after timeout |
 
 ### Cost Optimization
 
@@ -602,7 +600,7 @@ export TAVILY_API_KEY=tvly-xxx
 export DEEPXIV_API_KEY=your-key
 
 # Config file location
-export SOOTHE_CONFIG_FILE=~/.soothe/config.yml
+export SOOTHE_CONFIG_FILE=~/.soothe/config/config.yml
 ```
 
 ### Docker Secrets
@@ -645,7 +643,7 @@ stringData:
 soothe --debug "test prompt"
 
 # Check resolved config
-soothe doctor
+soothed doctor
 
 # View model resolution
 export SOOTHE_DEBUG=true
@@ -704,14 +702,14 @@ router:
 
 **Error**: `Rate limit exceeded`
 
-**Solution**: Reduce `llm_rpm_limit` or `llm_concurrent_limit`:
+**Solution**: Reduce `rpm_limit` or `concurrent_limit`:
 
 ```yaml
 agent:
   loop:
-    limits:
-      llm_rpm_limit: 60  # Lower RPM
-      llm_concurrent_limit: 5  # Lower concurrency
+    llm_rate_limit:
+      rpm_limit: 60            # Lower RPM
+      concurrent_limit: 5      # Lower concurrency
 ```
 
 ### Timeout Errors
@@ -723,9 +721,9 @@ agent:
 ```yaml
 agent:
   loop:
-    limits:
-      llm_call_timeout_seconds: 300  # Increase timeout
-      llm_call_timeout_max_seconds: 600
+    llm_rate_limit:
+      call_timeout_seconds: 300  # Increase timeout
+      call_timeout_max_seconds: 600
 ```
 
 ### Model Not Available

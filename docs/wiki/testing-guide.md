@@ -6,14 +6,15 @@ Comprehensive testing guide for Soothe monorepo.
 
 ## Testing Architecture
 
-Soothe uses a **multi-package monorepo** with four packages:
+Soothe uses a **multi-package monorepo** with five packages:
 
 ```
 packages/
 ├── soothe-sdk/        # Shared SDK (protocol types, decorators)
 ├── soothe-cli/        # CLI + TUI
 ├── soothe/            # Agent core (library)
-└── soothe-daemon/     # Daemon server
+├── soothe-daemon/     # Daemon server
+└── soothe-plugins/    # Optional plugins and subagents
 ```
 
 Each package has its own test suite:
@@ -324,7 +325,7 @@ def test_config():
 @pytest.fixture
 def test_agent(test_config):
     """Create a test agent instance."""
-    from soothe.core.agent import create_soothe_agent
+    from soothe.foundation.core.agent import create_soothe_agent
     return create_soothe_agent(test_config)
 
 @pytest.fixture
@@ -346,7 +347,7 @@ import pytest
 
 def test_with_mock_llm(mock_llm_response):
     """Test with mocked LLM."""
-    with patch('soothe.core.agent.ChatOpenAI') as mock_chat:
+    with patch('soothe.foundation.core.agent.ChatOpenAI') as mock_chat:
         mock_chat.return_value.invoke.return_value = mock_llm_response
         
         # Test code here

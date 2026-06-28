@@ -17,15 +17,14 @@ Durability backends implement `DurabilityProtocol` for managing thread lifecycle
 ```python
 class DurabilityProtocol(Protocol):
     """Thread lifecycle and state management."""
-    
+
     async def create_thread(self, metadata: ThreadMetadata, thread_id: str | None = None) -> ThreadInfo: ...
     async def resume_thread(self, thread_id: str) -> ThreadInfo: ...
-    async def suspend_thread(self, thread_id: str) -> ThreadInfo: ...
-    async def complete_thread(self, thread_id: str) -> ThreadInfo: ...
-    async def persist_thread(self, thread_id: str, state: dict[str, Any]) -> None: ...
-    async def restore_thread(self, thread_id: str) -> dict[str, Any]: ...
-    async def list_threads(self, filter: ThreadFilter) -> list[ThreadInfo]: ...
-    async def delete_thread(self, thread_id: str) -> bool: ...
+    async def suspend_thread(self, thread_id: str) -> None: ...
+    async def archive_thread(self, thread_id: str) -> None: ...
+    async def update_thread_metadata(self, thread_id: str, metadata: dict[str, Any] | ThreadMetadata) -> None: ...
+    async def get_thread(self, thread_id: str) -> ThreadInfo | None: ...
+    async def list_threads(self, thread_filter: ThreadFilter | None = None) -> list[ThreadInfo]: ...
 ```
 
 ---
@@ -63,8 +62,7 @@ SQLiteDurability Backend Architecture
 └─ Data Models
    ├─ ThreadInfo
    ├─ ThreadMetadata
-   ├─ ThreadFilter
-   └─ ThreadStatus
+   └─ ThreadFilter
 ```
 
 #### Implementation
@@ -72,25 +70,28 @@ SQLiteDurability Backend Architecture
 ```python
 class SQLiteDurability(BasePersistStoreDurability):
     """DurabilityProtocol implementation using SQLite."""
-    
-    def __init__(self, persist_dir: str):
+
+    def __init__(
+        self,
+        persist_store: AsyncPersistStore | None = None,
+        db_path: str | None = None,
+    ):
         """Initialize SQLite durability backend."""
-        
-        # Create async SQLite store
-        store = SQLitePersistStore(persist_dir)
-        
-        # Initialize base class
-        super().__init__(store)
+
+        if persist_store is None:
+            from soothe_sdk.client.config import SOOTHE_DATA_DIR
+            actual_path = db_path or str(Path(SOOTHE_DATA_DIR) / "metadata.db")
+            persist_store = SQLitePersistStore(actual_path, namespace="durability")
+        super().__init__(persist_store)
     
     # Inherits all methods from BasePersistStoreDurability:
     # - create_thread()
     # - resume_thread()
     # - suspend_thread()
-    # - complete_thread()
-    # - persist_thread()
-    # - restore_thread()
+    # - archive_thread()
+    # - update_thread_metadata()
+    # - get_thread()
     # - list_threads()
-    # - delete_thread()
 ```
 
 #### Configuration
@@ -117,24 +118,30 @@ durability = SQLiteDurability("~/.soothe/durability")
 
 # Create thread
 metadata = ThreadMetadata(
-    goal="Analyze codebase structure",
-    workspace="/path/to/project",
-    tags=["analysis", "code"]
+    tags=["analysis", "code"],
+    plan_summary="Analyze codebase structure",
+    priority="normal",
 )
 thread = await durability.create_thread(metadata)
 
-# Persist state
-await durability.persist_thread(thread.thread_id, {"iteration": 1, "steps": []})
+# Get thread
+info = await durability.get_thread(thread.thread_id)
 
-# Restore state
-state = await durability.restore_thread(thread.thread_id)
+# Suspend thread
+await durability.suspend_thread(thread.thread_id)
+
+# Resume thread
+resumed = await durability.resume_thread(thread.thread_id)
 
 # List threads
-filter = ThreadFilter(status="active", limit=10)
-threads = await durability.list_threads(filter)
+thread_filter = ThreadFilter(status="active", tags=["analysis"])
+threads = await durability.list_threads(thread_filter)
 
-# Complete thread
-await durability.complete_thread(thread.thread_id)
+# Update metadata
+await durability.update_thread_metadata(thread.thread_id, {"tags": ["analysis", "complete"]})
+
+# Archive thread
+await durability.archive_thread(thread.thread_id)
 ```
 
 ---
@@ -180,20 +187,13 @@ PostgreSQLDurability Backend Architecture
 ```python
 class PostgreSQLDurability(BasePersistStoreDurability):
     """DurabilityProtocol implementation using PostgreSQL."""
-    
-    def __init__(self, dsn: str, pool_size: int = 5):
+
+    def __init__(self, persist_store: AsyncPersistStore):
         """Initialize PostgreSQL durability backend."""
-        
-        # Create async PostgreSQL store
-        store = PostgreSQLPersistStore(
-            dsn=dsn,
-            pool_size=pool_size,
-            table_name="durability"
-        )
-        
-        # Initialize base class
-        super().__init__(store)
-    
+
+        # Initialize base class with PostgreSQL persist store
+        super().__init__(persist_store)
+
     # Inherits all methods from BasePersistStoreDurability
 ```
 
@@ -219,16 +219,15 @@ protocols:
 ```python
 from soothe.backends.durability import PostgreSQLDurability
 
-# Initialize backend
-durability = PostgreSQLDurability(
-    dsn="postgresql://localhost/soothe",
-    pool_size=5
-)
+# Initialize backend (requires an AsyncPersistStore instance)
+from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
+persist_store = PostgreSQLPersistStore(dsn="postgresql://localhost/soothe")
+durability = PostgreSQLDurability(persist_store)
 
 # All operations same as SQLiteDurability
 thread = await durability.create_thread(metadata)
-await durability.persist_thread(thread.thread_id, state)
-threads = await durability.list_threads(filter)
+await durability.suspend_thread(thread.thread_id)
+threads = await durability.list_threads(thread_filter)
 ```
 
 ---
@@ -242,9 +241,9 @@ Thread state container:
 ```python
 class ThreadInfo(BaseModel):
     """Thread information."""
-    
+
     thread_id: str             # Unique thread ID
-    status: ThreadStatus       # Thread status
+    status: Literal["active", "suspended", "archived"]  # Thread status
     created_at: datetime       # Creation timestamp
     updated_at: datetime       # Last update timestamp
     metadata: ThreadMetadata   # Thread metadata
@@ -257,12 +256,14 @@ Thread metadata:
 ```python
 class ThreadMetadata(BaseModel):
     """Thread metadata."""
-    
-    goal: str                  # Thread goal
-    workspace: str             # Workspace directory
-    tags: list[str] = []       # Classification tags
-    parent_thread: str | None  # Parent thread ID
-    config_overrides: dict = {} # Configuration overrides
+
+    tags: list[str] = []           # Categorical tags for filtering
+    plan_summary: str | None       # Brief summary of the thread's plan
+    policy_profile: str = "standard"  # Name of the active policy profile
+    labels: list[str] = []         # User-defined labels for organization
+    priority: Literal["low", "normal", "high"] = "normal"  # Thread priority
+    category: str | None           # User-defined category
+    claude_sessions: dict[str, str] = {}  # Workspace cwd → Claude session UUID
 ```
 
 ### ThreadFilter
@@ -272,29 +273,28 @@ Thread listing filter:
 ```python
 class ThreadFilter(BaseModel):
     """Thread filter criteria."""
-    
-    status: ThreadStatus | None  # Filter by status
-    tags: list[str] | None       # Filter by tags
-    workspace: str | None        # Filter by workspace
-    limit: int = 10              # Result limit
-    offset: int = 0              # Result offset
+
+    # Protocol-level fields (used by durability backend)
+    status: Literal["active", "suspended", "archived", "idle", "running", "error"] | None = None
+    tags: list[str] | None        # Filter by tags (must have all specified tags)
+    created_after: datetime | None  # Filter by creation time lower bound
+    created_before: datetime | None  # Filter by creation time upper bound
+
+    # Manager-level fields (used by ThreadContextManager in-memory)
+    labels: list[str] | None     # Filter by user-defined labels
+    priority: Literal["low", "normal", "high"] | None  # Filter by priority
+    category: str | None         # Filter by category
+    updated_after: datetime | None  # Filter by update time lower bound
+    updated_before: datetime | None  # Filter by update time upper bound
 ```
 
-### ThreadStatus
+### Thread Status
 
-Thread status enumeration:
+Thread status uses string literals (not a separate enum):
 
-```python
-class ThreadStatus(str, Enum):
-    """Thread status."""
-    
-    DRAFT = "draft"           # Not yet started
-    ACTIVE = "active"         # Currently running
-    SUSPENDED = "suspended"   # Paused execution
-    COMPLETED = "completed"   # Finished successfully
-    FAILED = "failed"         # Failed execution
-    DELETED = "deleted"       # Marked for deletion
-```
+- `"active"` — Currently running
+- `"suspended"` — Paused execution
+- `"archived"` — Archived (triggers memory consolidation)
 
 ---
 
@@ -303,12 +303,12 @@ class ThreadStatus(str, Enum):
 ### Thread Creation
 
 ```python
-async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
+async def create_thread(self, metadata: ThreadMetadata, thread_id: str | None = None) -> ThreadInfo:
     """Create a new thread."""
-    
+
     # Generate thread ID
-    thread_id = generate_thread_id()
-    
+    thread_id = thread_id or generate_thread_id()
+
     # Create thread info
     now = datetime.now(tz=UTC)
     info = ThreadInfo(
@@ -318,73 +318,77 @@ async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
         updated_at=now,
         metadata=metadata
     )
-    
+
     # Save thread info
     await self._store.save(f"thread:{thread_id}", info.model_dump())
-    
+
     # Add to thread index
     await self._update_thread_index(thread_id, action="add")
-    
+
     return info
 ```
 
-### Thread State Management
+### Thread Lifecycle Transitions
 
 ```python
-async def persist_thread(self, thread_id: str, state: dict[str, Any]) -> None:
-    """Persist thread state."""
-    
-    # Validate thread exists
-    info = await self.restore_thread_info(thread_id)
-    
-    # Save state
-    await self._store.save(f"thread_state:{thread_id}", state)
-    
-    # Update thread timestamp
-    await self._update_thread_timestamp(thread_id)
+async def suspend_thread(self, thread_id: str) -> None:
+    """Suspend an active thread, persisting its state."""
+    data = await self._store.load(f"thread:{thread_id}")
+    if data is None:
+        return
+    info = ThreadInfo.model_validate(data)
+    info = info.model_copy(update={"status": "suspended", "updated_at": datetime.now(tz=UTC)})
+    await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
 
-async def restore_thread(self, thread_id: str) -> dict[str, Any]:
-    """Restore thread state."""
-    
-    # Load state
-    state = await self._store.load(f"thread_state:{thread_id}")
-    
-    if state is None:
-        return {}
-    
-    return state
+async def archive_thread(self, thread_id: str) -> None:
+    """Archive a thread. Triggers memory consolidation."""
+    data = await self._store.load(f"thread:{thread_id}")
+    if data is None:
+        return
+    info = ThreadInfo.model_validate(data)
+    info = info.model_copy(update={"status": "archived", "updated_at": datetime.now(tz=UTC)})
+    await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+
+async def resume_thread(self, thread_id: str) -> ThreadInfo:
+    """Resume a suspended thread. Supports prefix matching."""
+    data = await self._store.load(f"thread:{thread_id}")
+    if data is not None:
+        info = ThreadInfo.model_validate(data)
+        info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
+        await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+        return info
+    # Try prefix matching ...
 ```
 
 ### Thread Listing
 
 ```python
-async def list_threads(self, filter: ThreadFilter) -> list[ThreadInfo]:
+async def list_threads(self, thread_filter: ThreadFilter | None = None) -> list[ThreadInfo]:
     """List threads matching filter."""
-    
-    # Load thread index
-    index = await self._load_thread_index()
-    
-    # Filter threads
-    threads = []
-    for thread_id in index["thread_ids"]:
-        info = await self.restore_thread_info(thread_id)
-        
-        # Apply filters
-        if filter.status and info.status != filter.status:
-            continue
-        
-        if filter.tags and not any(tag in info.metadata.tags for tag in filter.tags):
-            continue
-        
-        if filter.workspace and info.metadata.workspace != filter.workspace:
-            continue
-        
-        threads.append(info)
-    
-    # Apply limit/offset
-    threads = threads[filter.offset:filter.offset + filter.limit]
-    
-    return threads
+    index_data = await self._store.load(self._thread_index_key)
+    thread_ids = index_data if isinstance(index_data, list) else []
+
+    results = []
+    for tid in thread_ids:
+        data = await self._store.load(f"thread:{tid}")
+        if data:
+            results.append(ThreadInfo.model_validate(data))
+
+    if thread_filter is None:
+        return results
+
+    # Apply filters
+    if thread_filter.status:
+        results = [t for t in results if t.status == thread_filter.status]
+    if thread_filter.tags:
+        tag_set = set(thread_filter.tags)
+        results = [t for t in results if tag_set.issubset(set(t.metadata.tags))]
+    if thread_filter.created_after:
+        results = [t for t in results if t.created_at >= thread_filter.created_after]
+    if thread_filter.created_before:
+        results = [t for t in results if t.created_at <= thread_filter.created_before]
+
+    return results
 ```
 
 ---
@@ -405,19 +409,16 @@ class BasePersistStoreDurability:
         self._thread_index_key = "thread_index"
     
     # Thread lifecycle methods
-    async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo: ...
+    async def create_thread(self, metadata: ThreadMetadata, thread_id: str | None = None) -> ThreadInfo: ...
     async def resume_thread(self, thread_id: str) -> ThreadInfo: ...
-    async def suspend_thread(self, thread_id: str) -> ThreadInfo: ...
-    async def complete_thread(self, thread_id: str) -> ThreadInfo: ...
-    async def delete_thread(self, thread_id: str) -> bool: ...
-    
-    # State management methods
-    async def persist_thread(self, thread_id: str, state: dict[str, Any]) -> None: ...
-    async def restore_thread(self, thread_id: str) -> dict[str, Any]: ...
-    
+    async def suspend_thread(self, thread_id: str) -> None: ...
+    async def archive_thread(self, thread_id: str) -> None: ...
+    async def get_thread(self, thread_id: str) -> ThreadInfo | None: ...
+    async def update_thread_metadata(self, thread_id: str, metadata: dict[str, Any] | ThreadMetadata) -> None: ...
+
     # Listing methods
-    async def list_threads(self, filter: ThreadFilter) -> list[ThreadInfo]: ...
-    
+    async def list_threads(self, thread_filter: ThreadFilter | None = None) -> list[ThreadInfo]: ...
+
     # Index management methods
     async def _update_thread_index(self, thread_id: str, action: str) -> None: ...
     async def _load_thread_index(self) -> dict[str, Any]: ...
@@ -432,20 +433,22 @@ class BasePersistStoreDurability:
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
 | `create_thread()` | ~10-20ms | Single-threaded writes |
-| `persist_thread()` | ~10-20ms | JSON serialization |
-| `restore_thread()` | ~5-10ms | Fast read |
+| `get_thread()` | ~5-10ms | Fast read |
+| `suspend_thread()` | ~10-20ms | JSON serialization |
+| `archive_thread()` | ~10-20ms | JSON serialization |
 | `list_threads()` | ~50-100ms | Index scan |
-| `delete_thread()` | ~10-20ms | Single-threaded writes |
+| `update_thread_metadata()` | ~10-20ms | Merge + save |
 
 ### PostgreSQLDurability Performance
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
 | `create_thread()` | ~20-50ms | Connection pool overhead |
-| `persist_thread()` | ~20-50ms | JSON serialization + network |
-| `restore_thread()` | ~10-30ms | Network overhead |
+| `get_thread()` | ~10-30ms | Network overhead |
+| `suspend_thread()` | ~20-50ms | JSON serialization + network |
+| `archive_thread()` | ~20-50ms | JSON serialization + network |
 | `list_threads()` | ~50-200ms | Index scan + network |
-| `delete_thread()` | ~20-50ms | Connection pool overhead |
+| `update_thread_metadata()` | ~20-50ms | Merge + save + network |
 
 ---
 
@@ -480,10 +483,10 @@ except DurabilityBackendError as e:
     if "connection_failed" in str(e):
         # Retry or fallback to SQLite
         durability = SQLiteDurability("~/.soothe/durability")
-    
+
     elif "thread_exists" in str(e):
         # Use existing thread
-        thread = await durability.restore_thread_info(thread_id)
+        thread = await durability.get_thread(thread_id)
     
     elif "storage_error" in str(e):
         # Check storage health
@@ -504,33 +507,28 @@ async def pre_stream_phase(self, thread_id: str):
     if thread_id:
         # Resume existing thread
         thread_info = await self.durability.resume_thread(thread_id)
-        state = await self.durability.restore_thread(thread_id)
     else:
         # Create new thread
         metadata = ThreadMetadata(
-            goal=self.goal,
-            workspace=self.workspace
+            tags=[],
+            plan_summary=self.goal,
         )
         thread_info = await self.durability.create_thread(metadata)
-        state = {}
-    
-    return thread_info, state
+
+    return thread_info
 ```
 
 ### Post-stream Phase
 
 ```python
-async def post_stream_phase(self, thread_id: str, state: dict[str, Any]):
+async def post_stream_phase(self, thread_id: str):
     """Post-stream processing."""
-    
-    # Persist thread state
-    await self.durability.persist_thread(thread_id, state)
-    
+
     # Update thread status
-    if state.get("completed"):
-        await self.durability.complete_thread(thread_id)
-    elif state.get("paused"):
+    if state.get("paused"):
         await self.durability.suspend_thread(thread_id)
+    else:
+        await self.durability.archive_thread(thread_id)
 ```
 
 ---
@@ -545,29 +543,34 @@ import pytest
 @pytest.mark.asyncio
 async def test_sqlite_durability():
     """Test SQLite durability backend."""
-    durability = SQLiteDurability(":memory:")  # In-memory SQLite
-    
+    durability = SQLiteDurability(persist_store=None, db_path=":memory:")
+
     # Test create thread
-    metadata = ThreadMetadata(goal="test", workspace="/tmp")
+    metadata = ThreadMetadata(tags=["test"], plan_summary="test")
     thread = await durability.create_thread(metadata)
     assert thread.thread_id is not None
-    
-    # Test persist state
-    state = {"iteration": 1}
-    await durability.persist_thread(thread.thread_id, state)
-    
-    # Test restore state
-    restored = await durability.restore_thread(thread.thread_id)
-    assert restored["iteration"] == 1
-    
+
+    # Test get thread
+    info = await durability.get_thread(thread.thread_id)
+    assert info is not None
+
+    # Test suspend
+    await durability.suspend_thread(thread.thread_id)
+    info = await durability.get_thread(thread.thread_id)
+    assert info.status == "suspended"
+
+    # Test resume
+    resumed = await durability.resume_thread(thread.thread_id)
+    assert resumed.status == "active"
+
     # Test list threads
     threads = await durability.list_threads(ThreadFilter())
     assert len(threads) > 0
-    
-    # Test complete thread
-    await durability.complete_thread(thread.thread_id)
-    info = await durability.restore_thread_info(thread.thread_id)
-    assert info.status == "completed"
+
+    # Test archive
+    await durability.archive_thread(thread.thread_id)
+    info = await durability.get_thread(thread.thread_id)
+    assert info.status == "archived"
 ```
 
 ---
@@ -643,8 +646,12 @@ class BasePersistStoreDurability:
 ```python
 class SQLiteDurability(BasePersistStoreDurability):
     """DurabilityProtocol implementation using SQLite."""
-    
-    def __init__(self, persist_dir: str) -> None: ...
+
+    def __init__(
+        self,
+        persist_store: AsyncPersistStore | None = None,
+        db_path: str | None = None,
+    ) -> None: ...
 ```
 
 ### PostgreSQLDurability Class
@@ -652,8 +659,8 @@ class SQLiteDurability(BasePersistStoreDurability):
 ```python
 class PostgreSQLDurability(BasePersistStoreDurability):
     """DurabilityProtocol implementation using PostgreSQL."""
-    
-    def __init__(self, dsn: str, pool_size: int = 5) -> None: ...
+
+    def __init__(self, persist_store: AsyncPersistStore) -> None: ...
 ```
 
 ### BasePersistStoreDurability Class

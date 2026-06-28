@@ -25,7 +25,7 @@ Soothe supports three deployment tiers:
 ```
 ┌─────────────┐
 │ CLI/TUI     │
-│ (Unix Socket)│
+│ (WebSocket) │
 └──────┬──────┘
        │
        ▼
@@ -50,7 +50,7 @@ persistence:
 ┌──────────────┐
 │ CLI/TUI/Web  │
 └──────┬───────┘
-       │ Unix Socket / WebSocket
+       │ WebSocket
        ▼
 ┌──────────────┐
 │  Soothe      │
@@ -197,19 +197,23 @@ See: [Production Setup](production-setup.md#systemd-deployment)
 **Setup**:
 - Single PostgreSQL instance (4 databases per RFC-802)
 - Single Soothe daemon
-- Unix Socket transport
+- WebSocket transport (localhost)
 - SQLite fallback for testing
 
-**Config**:
+**Config** (`config.yml` + `daemon.yml`):
 ```yaml
+# config.yml
 persistence:
   default_backend: postgresql
   postgres_base_dsn: postgresql://user:pass@postgres-host:5432
-  
-daemon:
-  transports:
-    unix_socket:
-      enabled: true
+```
+```yaml
+# daemon.yml
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
 ```
 
 ### Scenario 2: Production Team (50 users)
@@ -220,8 +224,9 @@ daemon:
 - WebSocket transport
 - Langfuse observability
 
-**Config**:
+**Config** (`config.yml` + `daemon.yml`):
 ```yaml
+# config.yml
 persistence:
   default_backend: postgresql
   
@@ -230,13 +235,14 @@ observability:
     enabled: true
     public_key: ${LANGFUSE_PUBLIC_KEY}
     secret_key: ${LANGFUSE_SECRET_KEY}
-    
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: 127.0.0.1
-      port: 8765
+```
+```yaml
+# daemon.yml
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
 ```
 
 ### Scenario 3: Large Organization (500 users)
@@ -274,7 +280,7 @@ observability:
   langfuse:
     enabled: true
     host: https://your-langfuse-instance.com
-  log_file_path: /var/log/soothe/daemon.log
+  log_file_path: /var/log/soothe/soothed.log
   log_file_level: INFO
 ```
 
@@ -344,7 +350,7 @@ See [Security Hardening](security.md)
 
 - [Configuration Guide](../configuration-guide/README.md) - Complete YAML reference
 - [Daemon Management](../daemon-management.md) - Daemon lifecycle
-- [Multi-Transport](../multi-transport.md) - Unix Socket, WebSocket, HTTP REST
+- [Transport Setup](../multi-transport.md) - WebSocket configuration
 - [Authentication](../authentication.md) - Reverse proxy authentication
 - [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 

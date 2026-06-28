@@ -17,8 +17,7 @@ All SootheConfig fields can be set with `SOOTHE_` prefix:
 
 ```bash
 export SOOTHE_DEBUG=true
-export SOOTHE_AGENT_AUTONOMOUS_ENABLED_BY_DEFAULT=true
-export SOOTHE_OBSERVABILITY_VERBOSITY=detailed
+export SOOTHE_OBSERVABILITY_VERBOSITY=debug
 ```
 
 **Naming convention**: `SOOTHE_<SECTION>_<FIELD>` (nested fields use underscores)
@@ -79,33 +78,27 @@ export LANGFUSE_HOST=https://cloud.langfuse.com  # Optional
 export SOOTHE_CONFIG_FILE=/path/to/config.yml
 ```
 
-Priority: `--config` CLI arg > `SOOTHE_CONFIG_FILE` > `~/.soothe/config.yml`
+Priority: `--config` CLI arg > `SOOTHE_CONFIG_FILE` > `~/.soothe/config/config.yml`
 
 ### Home Directory
 
 ```bash
 export SOOTHE_HOME=~/.soothe  # Default
-export SOOTHE_DATA_DIR=~/.soothe/data
-export SOOTHE_LOG_DIR=~/.soothe/logs
 ```
 
 Paths:
 - `SOOTHE_HOME`: Base directory (default: `~/.soothe`)
-- `SOOTHE_DATA_DIR`: Data directory (default: `$SOOTHE_HOME/data`)
-- `SOOTHE_LOG_DIR`: Log directory (default: `$SOOTHE_HOME/logs`)
 
 ### Debug & Logging
 
 ```bash
 export SOOTHE_DEBUG=true  # Enable debug mode
-export SOOTHE_LOG_LEVEL=DEBUG  # Set log level
-export SOOTHE_TUI_DEBUG=true  # Enable TUI debug mode
 ```
 
 ### Observability
 
 ```bash
-export SOOTHE_OBSERVABILITY_VERBOSITY=detailed  # minimal | normal | detailed | debug
+export SOOTHE_OBSERVABILITY_VERBOSITY=debug  # quiet | normal | debug
 export SOOTHE_OBSERVABILITY_LOG_FILE_LEVEL=INFO
 export SOOTHE_OBSERVABILITY_LOG_FILE_PATH=/path/to/logfile.log
 export SOOTHE_OBSERVABILITY_CONSOLE_ENABLED=true
@@ -116,10 +109,9 @@ export SOOTHE_OBSERVABILITY_CONSOLE_LEVEL=WARNING
 
 ```bash
 export SOOTHE_AGENT_NAME=Soothe
-export SOOTHE_AGENT_AUTONOMOUS_ENABLED_BY_DEFAULT=false
 export SOOTHE_AGENT_AUTONOMOUS_MAX_ITERATIONS=10
-export SOOTHE_STRANGE_LOOP_MAX_ITERATIONS=10
-export SOOTHE_STRANGE_LOOP_CONTEXT_WINDOW_LIMIT=200000
+export SOOTHE_AGENT_LOOP_MAX_ITERATIONS=10
+export SOOTHE_AGENT_LOOP_CONTEXT_WINDOW_LIMIT=200000
 ```
 
 ### Providers & Router
@@ -186,7 +178,7 @@ Pydantic nested fields map to env vars with underscore path:
 # YAML
 agent:
   autonomous:
-    enabled_by_default: false
+    enabled: false
     max_iterations: 10
 ```
 
@@ -194,7 +186,7 @@ Maps to:
 
 ```bash
 # Environment
-export SOOTHE_AGENT_AUTONOMOUS_ENABLED_BY_DEFAULT=false
+export SOOTHE_AGENT_AUTONOMOUS_ENABLED=false
 export SOOTHE_AGENT_AUTONOMOUS_MAX_ITERATIONS=10
 ```
 
@@ -206,15 +198,14 @@ export SOOTHE_AGENT_AUTONOMOUS_MAX_ITERATIONS=10
 # YAML
 agent:
   loop:
-    limits:
-      tool_call_limit:
-        global_thread_limit: 200
+    tool_call_limit:
+      global_thread_limit: 200
 ```
 
 Maps to:
 
 ```bash
-export SOOTHE_STRANGE_LOOP_LIMITS_TOOL_CALL_LIMIT_GLOBAL_THREAD_LIMIT=150
+export SOOTHE_AGENT_LOOP_TOOL_CALL_LIMIT_GLOBAL_THREAD_LIMIT=150
 ```
 
 ```yaml
@@ -257,8 +248,6 @@ export OPENAI_BASE_URL=https://custom-openai-endpoint.com/v1  # Optional
 ```bash
 export DASHSCOPE_API_KEY=your-dashscope-key
 export DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-export DASHSCOPE_CP_API_KEY=your-coding-plan-key  # Coding-plan endpoint
-export DASHSCOPE_CP_BASE_URL=https://coding-plan-endpoint.com/v1
 ```
 
 ### MCP Server Tokens
@@ -327,7 +316,7 @@ services:
   soothe:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SOOTHE_OBSERVABILITY_VERBOSITY=detailed
+      - SOOTHE_OBSERVABILITY_VERBOSITY=debug
       - SOOTHE_PERSISTENCE_DEFAULT_BACKEND=postgresql
       - SOOTHE_PERSISTENCE_POSTGRES_BASE_DSN=postgresql://postgres:postgres@db:5432
     volumes:
@@ -341,7 +330,7 @@ Add to your shell profile (`~/.bashrc`, `~/.zshrc`):
 ```bash
 # Soothe configuration
 export SOOTHE_HOME=~/.soothe
-export SOOTHE_CONFIG_FILE=~/.soothe/config.yml
+export SOOTHE_CONFIG_FILE=~/.soothe/config/config.yml
 
 # Provider keys
 export OPENAI_API_KEY=sk-xxx
@@ -352,7 +341,6 @@ export TAVILY_API_KEY=tvly-xxx
 export DEEPXIV_API_KEY=your-key
 
 # Logging (optional)
-export SOOTHE_LOG_LEVEL=INFO
 export SOOTHE_OBSERVABILITY_VERBOSITY=normal
 ```
 
@@ -427,7 +415,7 @@ export LANGFUSE_SECRET_KEY=sk-prod-xxx
 ```bash
 # ~/.bashrc or ~/.zshrc
 export SOOTHE_DEBUG=true
-export SOOTHE_OBSERVABILITY_VERBOSITY=detailed
+export SOOTHE_OBSERVABILITY_VERBOSITY=debug
 export SOOTHE_CONFIG_FILE=~/.soothe/config.dev.yml
 
 export OPENAI_API_KEY=sk-dev-xxx
@@ -440,8 +428,7 @@ export DEEPXIV_API_KEY=dev-xxx
 ```bash
 # For CI/CD or testing
 export SOOTHE_PERSISTENCE_DEFAULT_BACKEND=sqlite
-export SOOTHE_AGENT_AUTONOMOUS_ENABLED_BY_DEFAULT=false
-export SOOTHE_STRANGE_LOOP_MAX_ITERATIONS=5
+export SOOTHE_AGENT_LOOP_MAX_ITERATIONS=5
 export SOOTHE_OBSERVABILITY_LANGFUSE_ENABLED=false
 
 export OPENAI_API_KEY=sk-test-xxx
@@ -454,7 +441,6 @@ export OPENAI_API_KEY=sk-test-xxx
 | `SOOTHE_HOME` | Base | Home directory |
 | `SOOTHE_CONFIG_FILE` | Base | Config file path |
 | `SOOTHE_DEBUG` | Runtime | Debug mode |
-| `SOOTHE_LOG_LEVEL` | Runtime | Log level |
 | `OPENAI_API_KEY` | Provider | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Provider | Anthropic API key |
 | `TAVILY_API_KEY` | Tools | Tavily search |
@@ -496,9 +482,10 @@ If `${ENV_VAR}` not resolved:
 # Verify env var is set
 echo $OPENAI_API_KEY
 
-# Check YAML syntax (no quotes around ${})
-api_key: ${OPENAI_API_KEY}  # ✅ Correct
-api_key: "${OPENAI_API_KEY}"  # ❌ Wrong (quotes prevent interpolation)
+# Both forms work — YAML quotes are delimiters, not part of the value
+api_key: ${OPENAI_API_KEY}       # ✅ Correct
+api_key: "${OPENAI_API_KEY}"    # ✅ Also correct (quotes are YAML delimiters)
+api_key: '${OPENAI_API_KEY}'    # ✅ Single quotes also work
 ```
 
 ### Docker Missing Variables

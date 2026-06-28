@@ -424,7 +424,7 @@ class SearchFailedEvent(ToolEvent):
 ### Event Registration
 
 ```python
-from soothe.core.event_catalog import register_event
+from soothe.foundation.events import register_event
 
 register_event(ReadEvent, summary_template="File read: {file_path}")
 register_event(SearchStartedEvent, summary_template="Search started: {query}")
@@ -496,7 +496,7 @@ class MyToolsPlugin:
 
 4. **Add events** (optional):
 ```python
-from soothe.core.event_catalog import register_event
+from soothe.foundation.events import register_event
 
 class MyToolEvent(ToolEvent):
     type: str = "soothe.tool.my_tools.process"
@@ -528,7 +528,7 @@ register_event(MyToolEvent)
 Tools are resolved via `resolve_tools()` in the agent builder:
 
 ```python
-from soothe.core.agent._resolver_tools import resolve_tools
+from soothe.foundation.core.agent._resolver_tools import resolve_tools
 
 # Resolve all tools from config
 tools = resolve_tools(
