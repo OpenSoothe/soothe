@@ -183,7 +183,6 @@ class Channel(ABC):
         content: str,
         media: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
-        is_dm: bool = False,
     ) -> str | None:
         """Handle incoming message from platform.
 
@@ -196,7 +195,6 @@ class Channel(ABC):
             content: Message text.
             media: Optional media attachments (URLs or file paths).
             metadata: Optional channel-specific metadata.
-            is_dm: Whether this is a direct message.
 
         Returns:
             loop_id assigned to this conversation, or None if denied.

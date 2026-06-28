@@ -119,7 +119,6 @@ class ClusterMemoriesAction(BaseAction):
         existing_clusters: list[str],
         new_memory_items: list[dict[str, str]],
         new_theory_of_mind_items: list[dict[str, str]],
-        count_threshold: int = 3,  # noqa: ARG002
     ) -> list[str]:
         """Merge existing clusters with new memory items and theory of mind items."""
         all_items = {
@@ -206,7 +205,6 @@ Your task is to analyze if each of the memory items is related to any of the exi
         existing_clusters: list[str],
         new_memory_items: list[dict[str, str]],
         new_theory_of_mind_items: list[dict[str, str]],
-        count_threshold: int = 3,  # noqa: ARG002
     ) -> list[str]:
         """Detect new clusters from new memory items and theory of mind items."""
         all_items = {

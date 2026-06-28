@@ -444,7 +444,6 @@ class SlackChannel(Channel):
                     "channel_type": channel_type,
                 },
             },
-            is_dm=channel_type == "im",
         )
 
     async def _download_slack_file(self, file_info: dict[str, Any]) -> tuple[str | None, str]:
@@ -513,7 +512,6 @@ class SlackChannel(Channel):
             chat_id=chat_id,
             content=value,
             metadata={"slack": {"thread_ts": thread_ts, "channel_type": channel_type}},
-            is_dm=channel_type == "im",
         )
 
     async def _with_thread_context(

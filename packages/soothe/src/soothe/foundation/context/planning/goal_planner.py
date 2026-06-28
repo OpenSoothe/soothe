@@ -139,7 +139,6 @@ class GoalPlanningSubengine:
     def suggest_goal_adjustments(
         self,
         goal_id: str,
-        execution_evidence: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Suggest priority/dependency adjustments based on execution evidence.
 
@@ -153,7 +152,6 @@ class GoalPlanningSubengine:
     async def reflect_and_create_goals(
         self,
         completed_goal_id: str,
-        context_summary: str = "",
     ) -> list[GoalNode]:
         """LLM-driven reflection on a completed goal to identify follow-up goals.
 

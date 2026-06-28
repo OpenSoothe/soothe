@@ -38,16 +38,14 @@ def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
     return _format_unified_tool_call_id(step_id, "s", short_tid)
 
 
-def _make_task_inner_tool_call_id(
-    step_id: str, task_idx: int, raw_tid: str, inner_call_idx: int
-) -> str:
+def _make_task_inner_tool_call_id(step_id: str, task_idx: int, raw_tid: str) -> str:
     """Generate unified task-level (subagent inner) tool call ID.
 
     Format: {step_wire}:t{task_idx}:{tool}:{idx}
 
     Examples:
-        ('GHT-01', 0, 'functions.read_file:1', 0) → 'GHT_01:t0:read_file:1'
-        ('GHT-01', 0, 'functions.grep:2', 1) → 'GHT_01:t0:grep:2'
+        ('GHT-01', 0, 'functions.read_file:1') → 'GHT_01:t0:read_file:1'
+        ('GHT-01', 0, 'functions.grep:2') → 'GHT_01:t0:grep:2'
     """
     short_tid = _shorten_tool_call_id(raw_tid)
     return _format_unified_tool_call_id(step_id, f"t{task_idx}", short_tid)
@@ -62,7 +60,7 @@ def _unified_tool_call_id_for_stream(
     """Build step- or task-level unified tool_call_id for stream rewriting."""
     if task_idx is None:
         return _make_step_tool_call_id(step_id, raw_tid, 0)
-    return _make_task_inner_tool_call_id(step_id, task_idx, raw_tid, 0)
+    return _make_task_inner_tool_call_id(step_id, task_idx, raw_tid)
 
 
 @dataclass

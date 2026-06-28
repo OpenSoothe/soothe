@@ -11,10 +11,6 @@ import shutil
 import subprocess  # noqa: S404
 import tempfile
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from langchain_core.messages.content import VideoContentBlock
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +99,7 @@ class VideoData:
     format: str  # "mp4", "quicktime", etc.
     placeholder: str  # Display text like "[video 1]"
 
-    def to_message_content(self) -> "VideoContentBlock":
+    def to_message_content(self) -> dict:
         """Convert to LangChain `VideoContentBlock` format.
 
         Returns:

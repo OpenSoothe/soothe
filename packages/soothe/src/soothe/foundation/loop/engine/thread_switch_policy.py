@@ -35,14 +35,12 @@ class ThreadSwitchPolicyManager:
     def evaluate(
         self,
         checkpoint: StrangeLoopCheckpoint,
-        next_goal: str | None = None,
         model: BaseChatModel | None = None,
     ) -> tuple[bool, str]:
         """Evaluate all triggers for thread switching.
 
         Args:
             checkpoint: Loop checkpoint with thread health metrics
-            next_goal: Next goal to execute (for relevance analysis)
             model: LLM model for semantic analysis (optional)
 
         Returns:

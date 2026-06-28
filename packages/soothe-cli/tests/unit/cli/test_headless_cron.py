@@ -52,7 +52,7 @@ async def test_headless_cron_slash_requires_text(monkeypatch) -> None:
         connect,
     )
 
-    exit_code, retry = await _run_headless_session_once(cfg := MagicMock(), "/cron")
+    exit_code, retry = await _run_headless_session_once(MagicMock(), "/cron")
 
     assert exit_code == 1
     assert retry is False

@@ -1033,7 +1033,7 @@ class TestGoalPlanningSubengineReflect:
     def test_suggest_adjustments_stub(self) -> None:
         ce = ContextEngine()
         planner = ce.planning.goal
-        assert planner.suggest_goal_adjustments("g1", {}) == []
+        assert planner.suggest_goal_adjustments("g1") == []
 
 
 # ═══════════════════════════════════════════════════════════════════════
