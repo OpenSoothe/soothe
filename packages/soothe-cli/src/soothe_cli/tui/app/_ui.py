@@ -8,7 +8,6 @@ import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from textual.containers import Container
     from textual.widget import Widget
     from textual.widgets._scrollbar import ScrollUp
 

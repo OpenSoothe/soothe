@@ -388,7 +388,6 @@ class MSTeamsChannel(Channel):
                     "from_name": from_user.get("name"),
                 }
             },
-            is_dm=True,
         )
 
     def _sanitize_inbound_text(self, activity: dict[str, Any]) -> str:

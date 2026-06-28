@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from rich.cells import cell_len
@@ -18,7 +19,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Checkbox, Input, Static
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     from textual.app import ComposeResult
     from textual.events import Click, Key
@@ -106,9 +107,9 @@ _RELATIVE_TIME_SWITCH_ID = "loop-relative-time"
 _CELL_PADDING_RIGHT = 1
 
 _FormatFns = tuple[
-    "Callable[[str | None], str]",  # format_path
-    "Callable[[str | None], str]",  # format_relative_timestamp
-    "Callable[[str | None], str]",  # format_timestamp
+    Callable[[str | None], str],  # format_path
+    Callable[[str | None], str],  # format_relative_timestamp
+    Callable[[str | None], str],  # format_timestamp
 ]
 """Cached `(format_path, format_relative_timestamp, format_timestamp)`.
 

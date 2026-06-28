@@ -35,12 +35,12 @@ class ModelLabel(Widget):
     provider: reactive[str] = reactive("", layout=True)
     model: reactive[str] = reactive("", layout=True)
 
-    def get_content_width(self, container: Size, viewport: Size) -> int:  # noqa: ARG002
+    def get_content_width(self, container: Size, _viewport: Size) -> int:  # noqa: ARG002
         """Return the intrinsic width so `width: auto` works.
 
         Args:
             container: Size of the container.
-            viewport: Size of the viewport.
+            _viewport: Size of the viewport (unused).
 
         Returns:
             Character length of the full provider:model string.

@@ -1768,7 +1768,6 @@ class FeishuChannel(Channel):
                         sender_id=sender_id,
                         chat_id=sender_id,
                         content="",
-                        is_dm=True,
                     )
                 return
 
@@ -1881,7 +1880,6 @@ class FeishuChannel(Channel):
                     "thread_id": thread_id,
                 },
                 session_key=session_key,
-                is_dm=chat_type == "p2p",
             )
 
         except Exception:

@@ -8,7 +8,6 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from textual.containers import Container
     from textual.events import Click, Paste, TextSelected
     from textual.widgets import Static
     from textual.worker import Worker

@@ -137,9 +137,6 @@ class TestWizsearchToolErrors:
             pytest.skip("SERPER_API_KEY required")
 
         pytest.importorskip("wizsearch", reason="wizsearch package required")
-        from soothe.toolkits.wizsearch import WizsearchSearchTool
-
-        tool = WizsearchSearchTool()  # noqa: F841
 
         # Make multiple rapid requests
         pytest.skip("Requires specific test setup for rate limiting scenarios")

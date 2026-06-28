@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
     from langchain_core.runnables import RunnableConfig
 
-    from soothe_cli.tui.widgets.messages import AssistantMessage
-
     class _TokensUpdateCallback(Protocol):
         def __call__(self, count: int, *, approximate: bool = False) -> None: ...
 

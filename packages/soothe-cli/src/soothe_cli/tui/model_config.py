@@ -361,12 +361,12 @@ def save_loop_columns(columns: dict[str, bool]) -> bool:
     return True
 
 
-def suppress_warning(warning_type: str) -> bool:
+def suppress_warning(_warning_type: str) -> bool:
     """Persist suppressed notification preference (stub: no-op success)."""
     return True
 
 
-def unsuppress_warning(warning_type: str) -> bool:
+def unsuppress_warning(_warning_type: str) -> bool:
     """Clear suppressed notification preference (stub: no-op success)."""
     return True
 
@@ -397,11 +397,11 @@ def clear_caches() -> None:
         logger.debug("Could not clear config_loader cache", exc_info=True)
 
 
-def is_warning_suppressed(warning_type: str) -> bool:
+def is_warning_suppressed(_warning_type: str) -> bool:
     """Check if a warning type is suppressed in user preferences.
 
     Args:
-        warning_type: Warning type identifier.
+        _warning_type: Warning type identifier.
 
     Returns:
         True if warning should be suppressed.

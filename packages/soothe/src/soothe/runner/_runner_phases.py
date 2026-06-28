@@ -604,8 +604,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
             store.save_manifest()
 
         if requested_thread_id:
-            async for chunk in self._try_recover_checkpoint(state):
-                yield chunk
+            await self._try_recover_checkpoint(state)
 
         protocols = self.protocol_summary()
         yield _custom(

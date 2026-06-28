@@ -11,11 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.protocols.planner import Plan
 
-from ._runner_shared import StreamChunk
-
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-
     from ._artifact_store import RunArtifactStore
 
 logger = logging.getLogger(__name__)
@@ -56,14 +52,11 @@ class CheckpointMixin:
         user_input: str,
         mode: str = "single_pass",
         status: str = "in_progress",
-    ) -> AsyncGenerator[StreamChunk]:
+    ) -> None:
         """Save progressive checkpoint for crash recovery (RFC-0010).
 
         IG-271: checkpoint events removed from normal execution, replaced with logging.
         Events only emitted conditionally during recovery mode.
-
-        Yields:
-            No events in normal execution (logging replacement).
         """
         from datetime import UTC, datetime
 
@@ -119,15 +112,10 @@ class CheckpointMixin:
         except Exception:
             logger.debug("Checkpoint save failed", exc_info=True)
 
-        # IG-271: No events emitted in normal execution (logging replacement)
-        # Maintain async generator signature with dummy yield
-        if False:
-            yield
-
     async def _try_recover_checkpoint(
         self,
         state: Any,
-    ) -> AsyncGenerator[StreamChunk]:
+    ) -> None:
         """Attempt to restore from a progressive checkpoint (RFC-0010).
 
         Loads checkpoint from ``RunArtifactStore``, restores goal engine
@@ -136,15 +124,7 @@ class CheckpointMixin:
 
         Args:
             state: Current runner state to populate with recovered data.
-
-        Yields:
-            Recovery stream events (currently no events emitted, but signature
-            maintained for future checkpoint recovery events).
         """
-        # Maintain async generator signature with dummy yield (no events currently)
-        if False:
-            yield
-
         self._ensure_artifact_store(state)
         store = getattr(state, "artifact_store", None)
         if not store:

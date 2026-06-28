@@ -17,8 +17,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from textual.content import Content
-
 from soothe_sdk.display import card_binder as _binder
 from soothe_sdk.display.text_extract import (
     extract_ai_text_for_display,
