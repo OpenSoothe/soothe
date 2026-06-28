@@ -51,9 +51,7 @@ def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
         details["host"] = host
 
     if pub and sec:
-        details["cost_dashboard"] = (
-            "docs/impl/IG-379-langfuse-cost-dashboard-bridge.md — model pricing and verification"
-        )
+        details["cost_dashboard"] = "model pricing and verification"
         return CheckResult(
             name="langfuse",
             status=CheckStatus.OK,

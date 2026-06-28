@@ -272,7 +272,7 @@ class GoalNode(BaseModel):
     action_history: list[str] = Field(default_factory=list)
     evidence_ledger: list[EvidenceEntry] = Field(
         default_factory=list,
-        description="Append-only evidence ids for plan validation (RFC-220).",
+        description="Append-only evidence ids for plan validation.",
     )
 
     # Retry/backoff (from Goal, RFC-204)

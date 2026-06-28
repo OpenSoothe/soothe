@@ -48,7 +48,7 @@ class LoopRunnerFactory:
             raise ValueError(
                 "Identity service requires thread_pool mode: worker_pool uses "
                 "multiprocessing spawn and cannot propagate IdentityService to "
-                "subprocess workers (RFC-307)."
+                "subprocess workers."
             )
 
         if mode == "worker_pool":

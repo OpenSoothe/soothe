@@ -123,7 +123,7 @@ def build_soothe_middleware_stack(
         from .identity import IdentityMiddleware
 
         stack.append(IdentityMiddleware(identity_runtime))
-        logger.info("[Middleware] Identity validation enabled (RFC-307)")
+        logger.info("[Middleware] Identity validation enabled")
 
     # 0b. Model call profiler (optional, for latency debugging)
     # Insert at the very start to capture full middleware chain timing
@@ -157,18 +157,18 @@ def build_soothe_middleware_stack(
             config=config,
         )
     )
-    logger.info("[Middleware] Skill activation (RFC-105) enabled")
+    logger.info("[Middleware] Skill activation enabled")
 
     # 1c. MCP tool search (RFC-412: MCP progressive disclosure telemetry)
     if mcp_registry is not None:
         from .mcp_tool_search import MCPToolSearchMiddleware
 
         stack.append(MCPToolSearchMiddleware(mcp_registry=mcp_registry))
-        logger.info("[Middleware] MCP tool search (RFC-412) enabled")
+        logger.info("[Middleware] MCP tool search enabled")
 
     # 1d. Edit coalescing for parallel file edits (IG-517)
     stack.append(EditCoalescingMiddleware())
-    logger.info("[Middleware] Edit coalescing (IG-517) enabled")
+    logger.info("[Middleware] Edit coalescing enabled")
 
     # 1e. Record tool-call kwargs for TUI display (IG-519).
     # The executor's stream path reads these via get_recorded_tool_call_args() to

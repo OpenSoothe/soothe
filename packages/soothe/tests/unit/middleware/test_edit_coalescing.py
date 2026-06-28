@@ -342,6 +342,7 @@ class TestEditCoalescingMiddleware:
         """_is_edit_tool should recognize edit tools."""
         middleware = EditCoalescingMiddleware()
 
+        assert middleware._is_edit_tool("edit_file") is True
         assert middleware._is_edit_tool("edit_file_lines") is True
         assert middleware._is_edit_tool("insert_lines") is True
         assert middleware._is_edit_tool("delete_lines") is True
@@ -455,6 +456,7 @@ class TestEditToolNames:
 
     def test_edit_tool_names_contains_expected(self) -> None:
         """EDIT_TOOL_NAMES should contain expected tool names."""
+        assert "edit_file" in EDIT_TOOL_NAMES
         assert "edit_file_lines" in EDIT_TOOL_NAMES
         assert "insert_lines" in EDIT_TOOL_NAMES
         assert "delete_lines" in EDIT_TOOL_NAMES
