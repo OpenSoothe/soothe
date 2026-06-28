@@ -6,7 +6,7 @@ Protocol-orchestrated agent runner for thread lifecycle management.
 
 ## Overview
 
-SootheRunner (`soothe.core.runner`) wraps `create_soothe_agent()` with protocol pre/post-processing and yields the canonical event stream with `soothe.*` custom events for protocol observability.
+SootheRunner (`soothe.runner`) wraps `create_soothe_agent()` with protocol pre/post-processing and yields the canonical event stream with `soothe.*` custom events for protocol observability.
 
 **RFC**: [RFC-001](../../specs/RFC-001-core-modules-architecture.md)
 
@@ -237,10 +237,10 @@ async def post_stream_phase(self, thread_id: str, result: dict):
 ### Basic Execution
 
 ```python
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 runner = SootheRunner(config)
 
 # Execute query

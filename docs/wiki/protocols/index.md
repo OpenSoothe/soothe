@@ -57,7 +57,7 @@ Soothe's 9+ core protocols organize into three categories:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  GoalEngine (autonomous goal management)                 │
+│  ContextEngine (autonomous goal management)               │
 │  - Delegates to StrangeLoop for single-goal execution     │
 └─────────────────────────────────────────────────────────┘
                           ↓ PERFORM delegation
@@ -155,7 +155,7 @@ class MyImplementation(MyProtocol):
 Protocols are resolved via configuration:
 
 ```python
-from soothe.core.resolver import resolve_protocol
+from soothe.runner.resolver import resolve_protocol
 
 # Resolve protocol from config
 memory = resolve_protocol("memory", config)  # → MemoryProtocol
@@ -473,7 +473,7 @@ All backends must satisfy:
 ### Protocol Resolution
 
 ```python
-from soothe.core.resolver import (
+from soothe.runner.resolver import (
     resolve_memory,
     resolve_durability,
     resolve_planner,

@@ -16,7 +16,7 @@ Soothe uses a **layered configuration system** with three methods:
 
 ### Minimal Configuration
 
-Create `~/.soothe/config.yml`:
+Create `~/.soothe/config/config.yml`:
 
 ```yaml
 providers:
@@ -47,9 +47,9 @@ soothe "Analyze this codebase"
 Start from the complete template:
 
 ```bash
-cp config/config.template.yml ~/.soothe/config.yml
+cp config/config.template.yml ~/.soothe/config/config.yml
 # Edit the file, set your API keys
-soothe --config ~/.soothe/config.yml
+soothe --config ~/.soothe/config/config.yml
 ```
 
 ## Documentation Sections
@@ -73,7 +73,7 @@ Soothe looks for configuration in this order:
 
 1. `--config PATH` - Explicit command-line path
 2. `SOOTHE_CONFIG_FILE` - Environment variable path
-3. `~/.soothe/config.yml` - User directory
+3. `~/.soothe/config/config.yml` - User directory
 4. `config/develop/config.yml` - Repository default (development)
 5. Built-in defaults (from `SootheConfig` Pydantic model)
 

@@ -74,15 +74,19 @@ packages/
 │   ├── src/soothe/
 │   ├── tests/
 │   └── pyproject.toml
-└── soothe-daemon/     # Daemon server
+├── soothe-daemon/     # Daemon server
 │   ├── src/soothe_daemon/
 │   ├── tests/
 │   └── pyproject.toml
+└── soothe-plugins/    # Optional plugins and subagents
+    ├── src/soothe_plugins/
+    ├── tests/
+    └── pyproject.toml
 ```
 
 **Dependency order** (important for imports):
 ```
-soothe-sdk → soothe-cli → soothe → soothe-daemon
+soothe-sdk → soothe-cli → soothe → soothe-daemon → soothe-plugins
 ```
 
 **Rules**:
@@ -90,6 +94,7 @@ soothe-sdk → soothe-cli → soothe → soothe-daemon
 - **CLI**: Can import SDK, **NOT** soothe/daemon
 - **soothe**: Can import SDK, **NOT** daemon
 - **daemon**: Can import all packages (SDK, CLI, soothe)
+- **plugins**: Can import SDK, soothe; optional subagents for the daemon
 
 ---
 
@@ -350,8 +355,8 @@ packages/soothe/tests/unit/core/strange_loop/
 Each module registers its own events:
 
 ```python
-from soothe.core.event_catalog import register_event
-from soothe.core.base_events import SootheEvent
+from soothe.foundation.events import register_event
+from soothe.foundation.base_events import SootheEvent
 
 class MyCustomEvent(SootheEvent):
     type: str = "soothe.my_module.custom.event"
@@ -389,7 +394,7 @@ Use concrete module names instead:
 
 - ❌ "Layer 1" → ✅ "CoreAgent"
 - ❌ "Layer 2" → ✅ "StrangeLoop"
-- ❌ "Layer 3" → ✅ "GoalEngine"
+- ❌ "Layer 3" → ✅ "ContextEngine"
 
 Apply to: docstrings, comments, log messages, documentation.
 

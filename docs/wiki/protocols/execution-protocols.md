@@ -46,6 +46,10 @@ class LoopRunnerProtocol(Protocol):
             StreamChunk tuples (namespace, mode, data).
         """
         ...
+
+    async def cancel(self) -> None:
+        """Request cancellation of the running loop."""
+        ...
 ```
 
 ### Data Models
@@ -89,22 +93,23 @@ class LoopRunRequest:
     clarification_answers: list[str] | None = None
     
     # RFC-222 revised: Autopilot job dispatch
-    autopilot_job: AutopilotJob | None = None
+    autopilot_job: GoalDispatchEnvelope | None = None
     
     def resolve_workspace_path(self) -> str:
         """Absolute workspace path for runner."""
         ...
 ```
 
-#### AutopilotJob
+#### GoalDispatchEnvelope
 
 ```python
 @dataclass(frozen=True)
-class AutopilotJob:
-    """Autopilot-dispatched goal job (RFC-222 revised).
-    
-    Attached to LoopRunRequest.autopilot_job when daemon's
-    AutopilotService dispatches goal to subprocess worker.
+class GoalDispatchEnvelope:
+    """Transient dispatch message for worker goal execution (RFC-222 revised).
+
+    This is a wire message, not a persistent entity. Created by the daemon's
+    AutopilotService when dispatching a goal to a subprocess worker, and
+    consumed by the worker's SootheRunner.astream(autopilot_job=...) path.
     
     Attributes:
         goal_id: Daemon's canonical goal id.
@@ -120,6 +125,8 @@ class AutopilotJob:
     deadline_seconds: float | None = None
     attempt: int = 1
 ```
+
+> **Note**: `AutopilotJob` is a deprecated backward-compatible alias for `GoalDispatchEnvelope`. Use `GoalDispatchEnvelope` in new code.
 
 #### StreamChunk
 
@@ -359,7 +366,7 @@ class MyPlugin:
 
 ```python
 from soothe.protocols import ToolkitProtocol
-from soothe.core.resolver import resolve_toolkit
+from soothe.runner.resolver import resolve_toolkit
 
 # Resolve toolkit
 filesystem_kit: ToolkitProtocol = resolve_toolkit(
@@ -423,7 +430,7 @@ remote_wrapper = CompiledSubAgent.from_remote_agent(remote)
 Toolkits populate tool registry:
 
 ```python
-from soothe.core.context.tool_registry import ToolRegistry
+from soothe.foundation.context.tool_registry import ToolRegistry
 
 registry = ToolRegistry()
 
@@ -492,7 +499,7 @@ toolkits:
 
 Tests verify:
 - LoopRunRequest workspace resolution
-- AutopilotJob dispatch
+- GoalDispatchEnvelope dispatch
 - RemoteAgent health checks
 - Toolkit tool instantiation
 

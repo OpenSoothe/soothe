@@ -11,11 +11,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Summary |
 |---------|-------------|---------|
-| **0.5.x** | 2025-01+ | Current development - RFC-220 loop orchestrator, deployment guides |
+| **0.6.x** | 2025-Q2+ | Current — HTTP REST removed, soothe-plugins package, 16+ channels, unified autonomous config |
+| **0.5.x** | 2025-01+ | RFC-220 loop orchestrator, deployment guides |
 | **0.4.x** | 2024-Q4 | Protocol consolidation, multi-package monorepo, RFC-802 PostgreSQL |
-| **0.3.x** | 2024-Q3 | Daemon multi-transport (WebSocket, HTTP REST), event system |
+| **0.3.x** | 2024-Q3 | Daemon multi-transport (WebSocket, Unix Socket), event system |
 | **0.2.x** | 2024-Q2 | CoreAgent + StrangeLoop, autonomous goal execution |
 | **0.1.x** | 2024-Q1 | Initial prototype - basic agent runtime |
+
+---
+
+## [0.6.x] - 2025-Q2+
+
+### Added - soothe-plugins Package
+
+**Major change**: The monorepo now ships **5 packages** (previously 4).
+
+| Package | Purpose |
+|---------|---------|
+| `soothe-sdk` | Shared SDK (protocol types, decorators, WebSocket client) |
+| `soothe-cli` | CLI + TUI (`soothe` command) |
+| `soothe` | Agent core (library) |
+| `soothe-daemon` | Daemon server (`soothed` command) |
+| `soothe-plugins` | Optional delegate subagents and community plugins |
+
+### Added - Channel System
+
+16+ built-in channels for messaging platform integration:
+
+- WebSocket, Slack, Feishu/Lark, Matrix, WhatsApp, Telegram, Signal, Email
+- Discord, Microsoft Teams, Personal WeChat, Enterprise WeChat, DingTalk
+- QQ, Mochat (Socket.IO)
+
+### Added - Core Subagents
+
+Five built-in subagents ship with the core `soothe` package:
+
+- `explore`: Targeted filesystem search
+- `plan`: Structured planning delegate
+- `tacitus`: Public-domain research (web, academic, URLs)
+- `browser_use`: Browser automation specialist
+- `veritas`: Intent-grounded clarification auto-answerer
+
+### Changed - HTTP REST Transport Removed
+
+HTTP REST transport has been removed. WebSocket is the supported transport. All daemon communication is via WebSocket RPC.
+
+### Changed - Unified Autonomous Configuration
+
+Autonomous settings are now nested under `agent.autonomous`:
+
+```yaml
+agent:
+  autonomous:
+    enabled: false
+    max_iterations: 10
+    max_retries: 2
+```
+
+### Changed - Thread Commands
+
+Thread management uses the `loop` subcommand group:
+
+- `soothe loop continue` — continue an existing loop
+- `soothe loop list` — list loops
+- `soothe loop new` — create a new loop
+
+### Changed - Autopilot Command
+
+`soothe autopilot run "..."` is the production autopilot path (was `soothe autopilot "..."`).
+
+### Changed - Health Checks
+
+`HealthChecker` class with `run_all_checks()` replaces the standalone `health_check()` function. Health check modules renamed (`protocols_check`, `config_check`, etc.).
 
 ---
 
@@ -81,17 +148,17 @@ Previously separate sections merged into `agent.autonomous`:
 ```yaml
 # Before (separate sections)
 autonomous:
-  enabled_by_default: false
+  enabled: false
 autopilot:
   max_loops: 4
 
 # After (unified)
 agent:
   autonomous:
-    enabled_by_default: false
-    max_loops: 4
+    enabled: false
+    max_iterations: 10
+    max_retries: 2
     max_parallel_goals: 3
-    poll_interval: 5
 ```
 
 **IG-407**: Unified strange_loop configuration under `agent.loop`.
@@ -104,8 +171,8 @@ agent:
     context_window_limit: 200000
     output_streaming:
       mode: adaptive
-    limits:
-      llm_concurrent_limit: 10
+    llm_rate_limit:
+      concurrent_limit: 10
 ```
 
 ### Changed - Event System
@@ -130,7 +197,7 @@ agent:
 
 ### Added - Multi-Package Monorepo
 
-**Major refactoring**: Consolidated into 4 packages.
+**Major refactoring**: Consolidated into 5 packages.
 
 | Package | Purpose |
 |---------|---------|
@@ -138,6 +205,7 @@ agent:
 | `soothe-cli` | CLI + TUI (`soothe` command) |
 | `soothe` | Agent core (library) |
 | `soothe-daemon` | Daemon server (`soothed` command) |
+| `soothe-plugins` | Optional delegate subagents and community plugins |
 
 **Dependency order**: `soothe-sdk` → `soothe-cli` → `soothe` → `soothe-daemon`
 
@@ -227,7 +295,6 @@ packages/soothe/tests/unit/core/strange_loop/
 |-----------|----------|
 | Unix Socket | Local CLI/TUI (filesystem permissions) |
 | WebSocket | Remote clients (TLS via reverse proxy) |
-| HTTP REST | API integration (TLS via reverse proxy) |
 
 **Configuration**:
 ```yaml
@@ -240,10 +307,6 @@ daemon:
       enabled: true
       host: "0.0.0.0"
       port: 8765
-    http_rest:
-      enabled: true
-      host: "0.0.0.0"
-      port: 8766
 ```
 
 ### Added - External Authentication
@@ -275,9 +338,8 @@ register_event(MyCustomEvent, summary_template="Custom: {data}")
 Persistent conversation threads:
 
 - Thread directory: `~/.soothe/data/threads/<thread-id>/`
-- Thread logs: `thread.log`
 - Thread metadata: `thread_metadata.json`
-- Thread continuation: `soothe thread continue`
+- Thread continuation: `soothe loop continue`
 
 See [Thread Management Guide](thread-management.md).
 
@@ -328,12 +390,13 @@ If complete → Final response
 Multi-step autonomous task execution:
 
 ```yaml
-autonomous:
-  enabled_by_default: false
-  max_iterations: 10
-  max_retries: 2
-  max_total_goals: 50
-  max_goal_depth: 5
+agent:
+  autonomous:
+    enabled: false
+    max_iterations: 10
+    max_retries: 2
+    max_total_goals: 50
+    max_goal_depth: 5
 ```
 
 See [Autonomous Mode Guide](autonomous-mode.md).
@@ -345,6 +408,8 @@ Built-in specialized agents:
 - `explore`: Targeted filesystem search
 - `plan`: Planning delegate
 - `tacitus`: Deep public-domain research
+- `browser_use`: Browser automation (added in 0.6.x)
+- `veritas`: Clarification auto-answerer (added in 0.6.x)
 
 ### Changed - Configuration System
 

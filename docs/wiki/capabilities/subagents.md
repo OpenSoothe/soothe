@@ -370,8 +370,8 @@ def create_<name>_subagent(model, config, context):
 ### Event Registration
 
 ```python
-from soothe.core.event_catalog import register_event
-from soothe.core.base_events import SootheEvent
+from soothe.foundation.events import register_event
+from soothe.foundation.base_events import SootheEvent
 
 class <Name>StartedEvent(SootheEvent):
     type: str = "soothe.subagent.<name>.started"
@@ -485,7 +485,7 @@ class MyAgentResult(BaseModel):
 
 5. **Register events** (`events.py`):
 ```python
-from soothe.core.event_catalog import register_event
+from soothe.foundation.events import register_event
 
 class MyAgentStartedEvent(SootheEvent):
     type: str = "soothe.subagent.my_agent.started"

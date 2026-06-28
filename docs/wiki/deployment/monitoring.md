@@ -181,7 +181,7 @@ Soothe emits structured JSON logs for daemon activity, thread execution, and err
 **Default paths**:
 ```bash
 ~/.soothe/logs/               # Daemon logs (SOOTHE_HOME)
-~/.soothe/runs/               # Thread execution logs
+~/.soothe/data/threads/       # Thread execution logs
 /var/log/soothe/              # Production deployment (Docker/systemd)
 ```
 
@@ -189,7 +189,7 @@ Soothe emits structured JSON logs for daemon activity, thread execution, and err
 
 ```yaml
 observability:
-  log_file_path: /var/log/soothe/daemon.log
+  log_file_path: /var/log/soothe/soothed.log
   log_file_level: INFO
   log_file_max_bytes: 5242880  # 5 MB
   log_file_backup_count: 3
@@ -200,7 +200,7 @@ observability:
     stream: stderr
     format: '%(level_short)s %(name)s %(message)s'
   
-  verbosity: normal  # minimal | normal | detailed | debug
+  verbosity: normal  # quiet | normal | debug
   
   thread_logging_enabled: true
   thread_logging_retention_days: 30
@@ -211,10 +211,9 @@ observability:
 
 | Level | Logs Included | Use Case |
 |-------|---------------|----------|
-| `minimal` | Errors only | Production (minimal overhead) |
+| `quiet` | Errors only | Production (minimal overhead) |
 | `normal` | Protocol events + errors | Standard monitoring |
-| `detailed` | Subagent events + tool calls | Debugging |
-| `debug` | All events + heartbeat | Deep debugging |
+| `debug` | Subagent events, tool calls, all events + heartbeat | Debugging |
 
 ### Log Structure
 
@@ -238,7 +237,7 @@ observability:
 {
   "timestamp": "2026-06-06T02:40:15Z",
   "level": "DEBUG",
-  "logger": "soothe.core.strange_loop",
+  "logger": "soothe.foundation.loop.engine.strange_loop",
   "message": "Tool invocation completed",
   "tool_name": "read_file",
   "execution_time_ms": 150,
@@ -282,7 +281,7 @@ scrape_configs:
 
 ```bash
 # Monitor daemon logs
-tail -f ~/.soothe/logs/daemon.log
+tail -f ~/.soothe/logs/soothed.log
 
 # Docker logs
 docker compose logs -f soothed
@@ -291,17 +290,17 @@ docker compose logs -f soothed
 sudo journalctl -u soothed -f
 
 # Filter by level
-tail -f ~/.soothe/logs/daemon.log | grep "ERROR"
+tail -f ~/.soothe/logs/soothed.log | grep "ERROR"
 
 # Filter by thread
-tail -f ~/.soothe/logs/daemon.log | grep "thread-xyz789"
+tail -f ~/.soothe/logs/soothed.log | grep "thread-xyz789"
 ```
 
 ### Log Analysis Queries
 
 **Find slow operations**:
 ```bash
-grep "execution_time_ms" daemon.log | \
+grep "execution_time_ms" soothed.log | \
   awk -F'"execution_time_ms":' '{print $2}' | \
   awk -F',' '{print $1}' | \
   sort -n | tail -20
@@ -309,7 +308,7 @@ grep "execution_time_ms" daemon.log | \
 
 **Count errors by type**:
 ```bash
-grep "ERROR" daemon.log | \
+grep "ERROR" soothed.log | \
   awk -F'"message":"' '{print $2}' | \
   awk -F'"' '{print $1}' | \
   sort | uniq -c
@@ -318,7 +317,7 @@ grep "ERROR" daemon.log | \
 **Thread execution summary**:
 ```bash
 # Extract thread IDs
-grep "thread_id" daemon.log | \
+grep "thread_id" soothed.log | \
   awk -F'"thread_id":"' '{print $2}' | \
   awk -F'"' '{print $1}' | \
   sort -u
@@ -359,31 +358,12 @@ docker compose ps
 # soothed-1         Up (healthy)
 ```
 
-### HTTP Health Endpoint
+### Daemon Health Checks
 
-Enable HTTP REST transport for health endpoint:
+Health checks are performed via the `soothed doctor` command, which verifies daemon connectivity, database access, and overall system health:
 
-```yaml
-daemon:
-  transports:
-    http_rest:
-      enabled: true
-      host: "0.0.0.0"
-      port: 8766
-```
-
-**Health check endpoint**:
 ```bash
-curl http://localhost:8766/health
-
-# Response:
-{
-  "status": "healthy",
-  "daemon_uptime_seconds": 3600,
-  "active_threads": 5,
-  "postgresql_connected": true,
-  "memory_usage_mb": 256
-}
+soothed doctor
 ```
 
 ### systemd Health Monitoring
@@ -424,8 +404,8 @@ Soothe maintains detailed logs for each thread/goal execution.
 ### Thread Log Location
 
 ```bash
-~/.soothe/runs/<run-id>/threads/<thread-id>/conversation.json
-~/.soothe/runs/<run-id>/threads/<thread-id>/goal_log.json
+~/.soothe/data/threads/<thread-id>/logs/conversation.jsonl
+~/.soothe/data/threads/<thread-id>/goal_log.json
 ```
 
 ### Thread Log Configuration
@@ -493,14 +473,14 @@ observability:
 **Performance analysis**:
 ```bash
 # Extract execution time per goal
-cat ~/.soothe/runs/*/threads/*/goal_log.json | \
+cat ~/.soothe/data/threads/*/goal_log.json | \
   jq '.phases[] | {phase, duration_seconds}'
 ```
 
 **Tool usage patterns**:
 ```bash
 # Count tool invocations
-cat ~/.soothe/runs/*/threads/*/goal_log.json | \
+cat ~/.soothe/data/threads/*/goal_log.json | \
   jq '[.phases[].tools_invoked[]]' | \
   jq 'group_by(.) | map({tool: .[0], count: length})'
 ```
@@ -508,7 +488,7 @@ cat ~/.soothe/runs/*/threads/*/goal_log.json | \
 **Error investigation**:
 ```bash
 # Find failed goals
-grep -r "ERROR" ~/.soothe/runs/*/threads/*/conversation.json
+grep -r "ERROR" ~/.soothe/data/threads/*/logs/conversation.jsonl
 ```
 
 ## Metrics and Performance Monitoring
@@ -539,7 +519,7 @@ Enable detailed metrics logging:
 
 ```yaml
 observability:
-  verbosity: detailed
+  verbosity: debug
   log_file_level: INFO
 ```
 
@@ -652,7 +632,7 @@ docker compose ps
 docker compose exec soothe-pgvector pg_isready
 
 # Review recent errors
-grep "ERROR" ~/.soothe/logs/daemon.log | tail -20
+grep "ERROR" ~/.soothe/logs/soothed.log | tail -20
 
 # Check Langfuse traces
 # Open http://localhost:3300 → Traces → Last 24 hours
@@ -695,14 +675,14 @@ find ~/.soothe/runs -type d -mtime +30 -exec rm -rf {} +
 
 ### Log File Permissions
 
-**Error**: `Permission denied: /var/log/soothe/daemon.log`
+**Error**: `Permission denied: /var/log/soothe/soothed.log`
 
 **Solution**:
 ```bash
 # Fix permissions
 sudo chown -R soothe:soothe /var/log/soothe
 sudo chmod 755 /var/log/soothe
-sudo chmod 644 /var/log/soothe/daemon.log
+sudo chmod 644 /var/log/soothe/soothed.log
 ```
 
 ### PostgreSQL Monitoring Connection
@@ -763,7 +743,7 @@ docker compose exec soothe-pgvector psql -U postgres -d soothe_metadata -c "SELE
 └─────────────┘
        ↓
 ┌─────────────┐
-│  Debug logs │  ← verbosity: debug, detailed
+│  Debug logs │  ← verbosity: debug
 └─────────────┘
        ↓
 ┌─────────────┐

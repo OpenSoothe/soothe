@@ -158,7 +158,7 @@ docs/wiki/
 │   │   ├── soothe.middleware.md
 │   │   └── soothe_sdk.md
 │   │
-│   └── daemon-api/
+│   └── rest-api/
 │       ├── README.md
 │       └── endpoints.md         # (reference RFC-450)
 │
@@ -388,7 +388,7 @@ Related modules should be linked:
 │
 ├── 📚 API Reference
 │   ├── Python API
-│   └── Daemon API
+│   └── REST API
 │
 ├── 🎓 Tutorials
 │   ├── Basic
@@ -607,7 +607,7 @@ Integrate with Algolia or similar for full-text search.
 ### Phase 4: API Reference
 
 - [ ] Generate Python API docs
-- [ ] Document daemon API endpoints
+- [ ] Document REST API endpoints
 - [ ] Create code examples
 
 ### Phase 5: Tutorials

@@ -49,7 +49,7 @@ Soothe operates through a hierarchical execution model with three distinct level
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ GoalEngine: Autonomous Goal Management (RFC-200)           │
+│ ContextEngine: Autonomous Goal Management (RFC-200)        │
 │ • Scope: Long-running complex workflows, multi-goal DAGs   │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update     │
 │ • Delegation: PERFORM invokes StrangeLoop's full loop       │
@@ -73,26 +73,26 @@ Soothe operates through a hierarchical execution model with three distinct level
 
 | Level | Responsibility | Delegates To |
 |-------|---------------|--------------|
-| **GoalEngine** | Goal DAG management, multi-goal coordination | StrangeLoop |
+| **ContextEngine** | Goal DAG management, multi-goal coordination | StrangeLoop |
 | **StrangeLoop** | Single-goal execution, plan-execute iteration | CoreAgent |
 | **CoreAgent** | Tool/subagent execution, LLM interaction | langgraph |
 
 ### Level Interactions
 
 ```
-GoalEngine (Layer 3)
+ContextEngine
     │
     ├─ Receives: User goals, scheduled tasks, autonomous proposals
     ├─ Manages: Goal DAG, priorities, dependencies
     └─ Delegates: Single goals to StrangeLoop
     
-StrangeLoop (Layer 2)
+StrangeLoop
     │
-    ├─ Receives: Single goal from GoalEngine
+    ├─ Receives: Single goal from ContextEngine
     ├─ Manages: Plan → Execute iterations (max ~8)
     └─ Delegates: Individual steps to CoreAgent
     
-CoreAgent (Layer 1)
+CoreAgent
     │
     ├─ Receives: Step execution from StrangeLoop
     ├─ Manages: Model → Tools → Model loop
@@ -106,7 +106,7 @@ CoreAgent (Layer 1)
 ```
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
-|  - GoalEngine: Autonomous Goal Management            |
+|  - ContextEngine: Autonomous Goal Management         |
 |  - StrangeLoop: Agentic Goal Execution                 │
 |  - CoreAgent: Runtime                                │
 |  - ContextProtocol, MemoryProtocol,                  │
@@ -127,7 +127,7 @@ CoreAgent (Layer 1)
 
 | Layer | Components | Responsibility |
 |-------|------------|----------------|
-| **Soothe** | GoalEngine, StrangeLoop, Protocols | Orchestration, planning, durability, policy |
+| **Soothe** | ContextEngine, StrangeLoop, Protocols | Orchestration, planning, durability, policy |
 | **deepagents** | SubAgent, Middleware, Backend | Agent construction, summarization, backends |
 | **langchain/langgraph** | Models, Tools, StateGraph | Runtime execution, state management |
 
@@ -141,7 +141,9 @@ CoreAgent (Layer 1)
 packages/
 ├── soothe-sdk/        # Plugin SDK (decorators, types, utilities)
 ├── soothe-cli/        # CLI client (Typer CLI + Textual TUI)
-└── soothe/            # Core framework (daemon server)
+├── soothe-daemon/     # Background daemon server (transports, lifecycle)
+├── soothe-plugins/    # Community plugins (e.g. claude subagent)
+└── soothe/            # Agent core (library)
 ```
 
 ### soothe Package (Core Framework)
@@ -151,7 +153,7 @@ packages/
 | **core/** | Framework orchestration | agent, runner, events, workspace, context, scheduling, persistence, middleware |
 | **protocols/** | Protocol definitions | context, memory, planner, policy, durability, vector_store |
 | **backends/** | Protocol implementations | memory, durability, vector_store, persistence |
-| **subagents/** | Built-in subagents | explore, plan, veritas, tacitus, claude, browser_use |
+| **subagents/** | Built-in subagents | explore, plan, tacitus, browser_use, veritas |
 | **skills/** | Agent skills | builtin_skills, registry, budget |
 | **middleware/** | Event processing | system_prompt, policy, workspace_context, execution_hints |
 | **mcp/** | MCP integration | server management, tool discovery |
@@ -168,7 +170,7 @@ core/
 ├── agent/           # CoreAgent wraps deepagents
 ├── runner/          # StrangeLoop orchestration, mixins
 ├── loop/            # Plan-execute loop (RFC-201)
-├── goal_engine/     # Autonomous goal lifecycle (RFC-200)
+├── context/        # Autonomous goal lifecycle (RFC-200, RFC-624)
 ├── events/          # Event system, registry
 ├── workspace/       # Workspace resolution, backends
 ├── context/         # Tool context, triggers

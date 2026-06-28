@@ -127,9 +127,10 @@ agent:
     max_loops: 8            # Worker pool size
     
   loop:
-    limits:
+    concurrency:
       max_parallel_tools: 30
-      llm_concurrent_limit: 20
+    llm_rate_limit:
+      concurrent_limit: 20
 ```
 
 ## Kubernetes Deployment
@@ -350,10 +351,11 @@ agent:
     max_parallel_goals: 10    # Concurrent goal execution
     
   loop:
-    limits:
+    concurrency:
       max_parallel_tools: 30  # Tool call parallelism
-      llm_concurrent_limit: 20 # LLM API concurrency
-      llm_rpm_limit: 500      # Requests per minute
+    llm_rate_limit:
+      concurrent_limit: 20    # LLM API concurrency
+      rpm_limit: 500          # Requests per minute
 ```
 
 **Pool sizing formula**:
@@ -369,15 +371,14 @@ agent:
 ```yaml
 agent:
   loop:
-    limits:
-      llm_rpm_limit: 500       # OpenAI limit
-      llm_concurrent_limit: 20 # Max concurrent API calls
+    llm_rate_limit:
+      rpm_limit: 500              # OpenAI limit
+      concurrent_limit: 20        # Max concurrent API calls
       
       # Adaptive timeouts for rate limit handling
-      llm_call_timeout_seconds: 120
-      llm_call_timeout_adaptive: true
-      llm_retry_on_timeout: true
-      llm_max_timeout_retries: 3
+      call_timeout_seconds: 600
+      retry_on_timeout: true
+      max_timeout_retries: 10
 ```
 
 **Provider rate limits** (reference):

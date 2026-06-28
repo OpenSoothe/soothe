@@ -66,16 +66,16 @@ Prefix your message with a number to route to a specific subagent:
 | Prefix | Subagent | Best For |
 |--------|----------|----------|
 | `1` | Main | General tasks (default) |
-| `7` | Skillify | Retrieving relevant skills |
-| `8` | Weaver | Generating specialized agents |
+| `7` | Skillify *(plugin)* | Retrieving relevant skills |
+| `8` | Weaver *(plugin)* | Generating specialized agents |
 
 Numeric slots `2`–`6` are reserved for optional installs; see soothe-plugins for the current mapping on your distribution.
 
 **Examples:**
 
 ```
-7 Find relevant skills for data processing
-8 Generate a specialized agent for monitoring uptime
+7 Find relevant skills for data processing       # Requires soothe-plugins
+8 Generate a specialized agent for monitoring uptime  # Requires soothe-plugins
 ```
 
 ## Multi-Line Input
@@ -111,7 +111,7 @@ Reattach later:
 
 ```bash
 # Resume via running daemon
-soothe thread continue --daemon
+soothe loop continue --daemon
 ```
 
 ## Viewing Progress

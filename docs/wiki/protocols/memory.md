@@ -295,7 +295,7 @@ agent:
 ### Resolution
 
 ```python
-from soothe.core.resolver import resolve_memory
+from soothe.runner.resolver import resolve_memory
 
 # Resolve memory protocol from config
 memory = resolve_memory(config)

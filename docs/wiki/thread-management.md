@@ -22,11 +22,11 @@ View all your threads:
 
 ```bash
 # List all threads
-soothe thread list
+soothe loop list
 
 # Filter by status
-soothe thread list --status active
-soothe thread list --status archived
+soothe loop list --status active
+soothe loop list --status archived
 ```
 
 **Output**:
@@ -43,16 +43,16 @@ Continue a previous conversation:
 
 ```bash
 # Continue a specific thread
-soothe thread continue abc123
+soothe loop continue abc123
 
 # Continue last active thread
-soothe thread continue
+soothe loop continue
 
 # Resume via running daemon
-soothe thread continue abc123 --daemon
+soothe loop continue abc123 --daemon
 
 # Start a new thread
-soothe thread continue --new
+soothe loop continue --new
 
 # In TUI - Interactive thread selection
 /resume
@@ -72,7 +72,7 @@ View detailed information about a thread:
 
 ```bash
 # Show thread details
-soothe thread show abc123
+soothe loop show abc123
 ```
 
 **Output**:
@@ -102,7 +102,7 @@ Clean up old threads without deleting them:
 
 ```bash
 # Archive a thread
-soothe thread archive abc123
+soothe loop archive abc123
 ```
 
 Archived threads:
@@ -116,7 +116,7 @@ Archived threads:
 View execution statistics for a thread:
 
 ```bash
-soothe thread stats abc123
+soothe loop stats abc123
 ```
 
 **Output**:
@@ -135,10 +135,10 @@ Add or remove tags to organize threads:
 
 ```bash
 # Add tags
-soothe thread tag abc123 research analysis
+soothe loop tag abc123 research analysis
 
 # Remove tags
-soothe thread tag abc123 research --remove
+soothe loop tag abc123 research --remove
 ```
 
 Tags help you categorize and find threads later.
@@ -149,10 +149,10 @@ Permanently remove a thread:
 
 ```bash
 # Delete with confirmation
-soothe thread delete abc123
+soothe loop delete abc123
 
 # Skip confirmation
-soothe thread delete abc123 --yes
+soothe loop delete abc123 --yes
 ```
 
 **Warning**: This action cannot be undone. All conversation history, context, and memory will be lost.
@@ -163,10 +163,10 @@ Export a thread to a file:
 
 ```bash
 # Export as JSONL (default)
-soothe thread export abc123 --output thread_abc123.json
+soothe loop show abc123 --output thread_abc123.json
 
 # Export as markdown
-soothe thread export abc123 --output thread_abc123.md --format md
+soothe loop show abc123 --output thread_abc123.md --format md
 ```
 
 **Export includes**:
@@ -188,7 +188,7 @@ soothe thread export abc123 --output thread_abc123.md --format md
 Threads are stored in the Soothe home directory:
 
 ```bash
-~/.soothe/threads/
+~/.soothe/data/threads/
 ├── abc123/
 │   ├── messages.json
 │   ├── context.json

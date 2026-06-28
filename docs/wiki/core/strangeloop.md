@@ -6,7 +6,7 @@ Plan-Execute loop for single-goal agentic execution.
 
 ## Overview
 
-StrangeLoop (`soothe.core.loop`) implements Layer 2 of Soothe's three-layer execution architecture, providing agentic goal execution through iterative refinement. It uses a Plan → Execute loop where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via Layer 1 CoreAgent.
+StrangeLoop (`soothe.foundation.loop`) provides agentic goal execution through iterative refinement, forming the middle tier of Soothe's three-level execution architecture. It uses a Plan → Execute loop where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via CoreAgent.
 
 **RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
 
@@ -440,10 +440,10 @@ def detect_convergence(self, state: LoopState) -> bool:
 ### Basic Execution
 
 ```python
-from soothe.core.loop import StrangeLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 loop = StrangeLoop(config)
 
 # Run loop
@@ -468,7 +468,7 @@ result = await loop.run_with_progress(
 ### Goal-Based Execution
 
 ```python
-# Run with goal ID (GoalEngine integration)
+# Run with goal ID (ContextEngine integration)
 result = await loop.run_with_progress(
     goal="Optimize performance",
     goal_id="goal-456"
@@ -479,14 +479,14 @@ result = await loop.run_with_progress(
 
 ## Integration Points
 
-### GoalEngine Integration
+### ContextEngine Integration
 
-Report to GoalEngine:
+Report to ContextEngine:
 
 ```python
-# GoalEngine pull architecture
-goal_engine = config.resolve_goal_engine()
-current_goal = goal_engine.get_next_ready_goal()
+# ContextEngine pull architecture
+context_engine = config.resolve_context_engine()
+current_goal = context_engine.get_next_ready_goal()
 
 # Execute goal
 result = await loop.run_with_progress(
@@ -494,11 +494,11 @@ result = await loop.run_with_progress(
     goal_id=current_goal.id
 )
 
-# Report to GoalEngine
+# Report to ContextEngine
 if result.status == "done":
-    goal_engine.complete_goal(current_goal.id, result)
+    await context_engine.complete_goal(current_goal.id)
 elif result.status == "failed":
-    await goal_engine.fail_goal(current_goal.id, result.evidence)
+    await context_engine.fail_goal(current_goal.id, result.evidence)
 ```
 
 ### CoreAgent Integration
@@ -564,7 +564,7 @@ planning:
 
 ## Related Documentation
 
-- **[GoalEngine](goal-engine.md)** - Goal management integration
+- **[ContextEngine](goal-engine.md)** - Goal management integration
 - **[Agent Factory](agent-factory.md)** - CoreAgent integration
 - **[SootheRunner](runner.md)** - Runner orchestration
 - **[Evidence System](../architecture/evidence-system.md)** - Evidence handling

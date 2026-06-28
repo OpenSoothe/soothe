@@ -6,7 +6,7 @@ Unified workspace resolution, validation, and backend management.
 
 ## Overview
 
-The workspace module (`soothe.core.workspace`) provides unified workspace resolution and validation for Soothe. It manages workspace-aware backends, the FrameworkFilesystem singleton, and workspace resolution for daemon and runner.
+The workspace module (`soothe.foundation.workspace`) provides unified workspace resolution and validation for Soothe. It manages workspace-aware backends, the FrameworkFilesystem singleton, and workspace resolution for daemon and runner.
 
 ---
 
@@ -90,21 +90,18 @@ class FrameworkFilesystem:
 Resolve workspace for daemon server:
 
 ```python
-def resolve_daemon_workspace(
-    workspace_dir: str | None,
-    config: SootheConfig
-) -> str:
-    """Resolve workspace for daemon.
+def resolve_daemon_workspace() -> Path:
+    """Resolve daemon fallback workspace (ephemeral TEMP unless overridden).
     
-    Args:
-        workspace_dir: Explicit workspace directory
-        config: Soothe configuration
+    Priority:
+    1. ``SOOTHE_WORKSPACE`` environment variable (absolute override).
+    2. TEMP directory (ephemeral, not persisted across restarts).
         
     Returns:
-        Resolved workspace path
+        Resolved absolute workspace path.
         
     Raises:
-        WorkspaceValidationError: If workspace invalid
+        ValueError: If resolved workspace is invalid system directory.
     """
 ```
 
@@ -339,23 +336,20 @@ class RateLimiter:
 ### Basic Workspace Resolution
 
 ```python
-from soothe.core.workspace import resolve_daemon_workspace
+from soothe.foundation.workspace import resolve_daemon_workspace
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 
 # Resolve daemon workspace
-workspace = resolve_daemon_workspace(
-    workspace_dir=None,  # Use config default
-    config=config
-)
+workspace = resolve_daemon_workspace()
 print(workspace)  # "/path/to/workspace"
 ```
 
 ### FrameworkFilesystem Usage
 
 ```python
-from soothe.core.workspace import FrameworkFilesystem
+from soothe.foundation.workspace import FrameworkFilesystem
 
 # Get singleton instance
 fs = FrameworkFilesystem()
@@ -373,7 +367,7 @@ files = await fs.list_directory("/path/to/dir")
 ### Workspace-Aware Backend
 
 ```python
-from soothe.core.workspace import WorkspaceAwareBackend
+from soothe.foundation.workspace import WorkspaceAwareBackend
 
 # Wrap backend with workspace
 backend = WorkspaceAwareBackend(
@@ -417,7 +411,7 @@ Handle validation failures:
 
 ```python
 try:
-    workspace = resolve_daemon_workspace(workspace_dir, config)
+    workspace = resolve_daemon_workspace()
 except WorkspaceValidationError as e:
     logger.error(f"Workspace validation failed: {e}")
     # Fallback or exit
@@ -452,10 +446,7 @@ except PolicyViolationError as e:
 ### Core Functions
 
 ```python
-def resolve_daemon_workspace(
-    workspace_dir: str | None,
-    config: SootheConfig
-) -> str: ...
+def resolve_daemon_workspace() -> Path: ...
 
 def resolve_workspace_for_stream(
     stream_id: str,

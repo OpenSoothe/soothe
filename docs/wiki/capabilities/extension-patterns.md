@@ -105,11 +105,17 @@ The `context` object in `on_load()` provides:
 ```python
 class PluginContext:
     config: dict              # Plugin-specific configuration
-    soothe_config: SootheConfig  # Global configuration
+    soothe_config: SootheConfigProtocol  # Global configuration (via protocol)
     logger: Logger            # Python logger instance
-    work_dir: str             # Workspace directory
+    services: dict            # Runtime services (populated by daemon)
     emit_event: callable      # Event emission function
 ```
+
+**Services dict keys** (populated by daemon during plugin loading):
+- `"policy"`: PolicyProtocol instance
+- `"persistence"`: Persistence backend
+- `"emit_progress"`: Progress emission callback
+- `"vector_store"`: Vector store instance
 
 ### Manifest Fields
 
@@ -145,7 +151,7 @@ class MyPlugin:
         - Setting up connections
         
         Args:
-            context: PluginContext with config, logger, work_dir.
+            context: PluginContext with config, logger, services.
         """
         pass
     
@@ -229,7 +235,7 @@ class MyToolsPlugin:
 ### Tool with Security
 
 ```python
-from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.foundation.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityRequest
 
 class SecureFileTool(BaseTool):
@@ -266,8 +272,8 @@ class SecureToolsPlugin:
 ### Tool Events
 
 ```python
-from soothe.core.event_catalog import register_event
-from soothe.core.base_events import SootheEvent
+from soothe.foundation.events import register_event
+from soothe.foundation.base_events import SootheEvent
 
 class AnalyzeEvent(SootheEvent):
     """Event for analyze_data tool."""
@@ -421,7 +427,7 @@ class MyAgentResult(BaseModel):
 ### Subagent Events
 
 ```python
-from soothe.core.event_catalog import register_event
+from soothe.foundation.events import register_event
 
 class MyAgentStartedEvent(SootheEvent):
     """Event for subagent start."""
@@ -747,7 +753,7 @@ my_package/
 
 ```python
 # my_package/events.py
-from soothe.core.event_catalog import register_event
+from soothe.foundation.events import register_event
 
 class MyPluginLoadedEvent(SootheEvent):
     type: str = "soothe.plugin.my_plugin.loaded"

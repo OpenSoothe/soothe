@@ -6,7 +6,7 @@ Wire protocols from configuration to runtime instances.
 
 ## Overview
 
-The protocol resolver (`soothe.core.resolver`) wires protocol instances from SootheConfig, connecting configuration declarations to runtime protocol implementations. It handles checkpointer resolution, durability setup, goal engine instantiation, and tools/subagents wiring.
+The protocol resolver (`soothe.runner.resolver`) wires protocol instances from SootheConfig, connecting configuration declarations to runtime protocol implementations. It handles checkpointer resolution, durability setup, and tools/subagents wiring.
 
 ---
 
@@ -24,17 +24,14 @@ Protocol Resolver Flow
 │  └─ Map model routing
 │
 ├─ Protocol Resolution
-│  ├─ ContextProtocol → Backend implementation
 │  ├─ MemoryProtocol → Backend implementation
 │  ├─ PlannerProtocol → Backend implementation
 │  ├─ PolicyProtocol → Backend implementation
-│  ├─ DurabilityProtocol → Backend implementation
-│  └─ GoalEngine → Engine instance
+│  └─ DurabilityProtocol → Backend implementation
 │
 ├─ Capability Resolution
 │  ├─ Tools → Tool registry
-│  ├─ Subagents → Subagent registry
-│  └─ MCP servers → MCP registry
+│  └─ Subagents → Subagent registry
 │
 └─ Dependency Injection
    ├─ Attach to agent
@@ -50,30 +47,45 @@ Protocol Resolver Flow
 Resolve protocol instances from configuration:
 
 ```python
-def resolve_context(config: SootheConfig) -> ContextProtocol:
-    """Resolve ContextProtocol from config.
-    
+def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
+    """Resolve MemoryProtocol from config.
+
     Args:
         config: Soothe configuration
-        
+
     Returns:
-        ContextProtocol implementation instance
+        A MemoryProtocol instance, or None if disabled.
     """
 
-def resolve_memory(config: SootheConfig) -> MemoryProtocol:
-    """Resolve MemoryProtocol from config."""
+def resolve_planner(
+    config: SootheConfig,
+    model: BaseChatModel | None,
+) -> PlannerProtocol:
+    """Resolve LLMPlanner as the sole planner implementation.
 
-def resolve_planner(config: SootheConfig) -> PlannerProtocol:
-    """Resolve PlannerProtocol from config."""
+    Args:
+        config: Soothe configuration.
+        model: The resolved chat model.
 
-def resolve_policy(config: SootheConfig) -> PolicyProtocol:
-    """Resolve PolicyProtocol from config."""
+    Returns:
+        LLMPlanner instance.
+    """
+
+def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
+    """Resolve PolicyProtocol from config.
+
+    Args:
+        config: Soothe configuration
+
+    Returns:
+        A PolicyProtocol instance, or None if disabled.
+    """
 
 def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
-    """Resolve DurabilityProtocol from config."""
+    """Resolve DurabilityProtocol from config.
 
-def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
-    """Resolve GoalEngine from config."""
+    Supports: postgresql, sqlite backends.
+    """
 ```
 
 ### Capability Resolution
@@ -83,19 +95,16 @@ Resolve tools and subagents:
 ```python
 def resolve_tools(config: SootheConfig) -> list[BaseTool]:
     """Resolve tools from config.
-    
+
     Args:
         config: Soothe configuration
-        
+
     Returns:
         List of BaseTool instances
     """
 
 def resolve_subagents(config: SootheConfig) -> list[SubAgent]:
     """Resolve subagents from config."""
-
-def resolve_mcp_servers(config: SootheConfig) -> dict:
-    """Resolve MCP servers from config."""
 ```
 
 ### Checkpointer Resolution
@@ -122,51 +131,20 @@ def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
 
 Resolve protocol backend implementation:
 
-```python
-def resolve_context_backend(config: SootheConfig) -> ContextProtocol:
-    """Resolve context backend from config."""
-    
-    backend_type = config.context_backend  # "keyword" or "vector"
-    
-    if backend_type == "keyword":
-        return KeywordContext(
-            persist_dir=config.context_persist_dir,
-            ...
-        )
-    elif backend_type == "vector":
-        vector_store = resolve_vector_store(config)
-        return VectorContext(
-            vector_store=vector_store,
-            embedding_model=config.create_embedding_model(),
-            ...
-        )
-    else:
-        raise ValueError(f"Unknown context backend: {backend_type}")
-```
-
 ### Backend Types
 
-ContextProtocol backends:
-- `keyword`: KeywordContext (keyword/tag matching)
-- `vector`: VectorContext (semantic search)
-
 MemoryProtocol backends:
-- `keyword`: KeywordMemory (keyword matching)
-- `vector`: VectorMemory (semantic search)
+- `memu`: MemUMemory (semantic search + keyword indexing)
 
 PlannerProtocol backends:
-- `simple`: SimplePlanner
-- `subagent`: SubagentPlanner
-- `model`: Model-specific planner
-- `auto`: AutoPlanner (model selection)
+- `llm`: LLMPlanner (unified, IG-150 consolidation)
 
 PolicyProtocol backends:
-- `config`: ConfigDrivenPolicy
+- `config`: ConfigDrivenPolicy (profile-based)
 
 DurabilityProtocol backends:
-- `json`: JsonDurability
-- `rocksdb`: RocksDBDurability
-- `postgres`: PostgreSQLDurability
+- `sqlite`: SQLiteDurability (via SQLitePersistStore)
+- `postgres`: PostgreSQLDurability (via PostgreSQLPersistStore)
 
 ---
 
@@ -182,21 +160,19 @@ def attach_protocols(
     config: SootheConfig
 ) -> CompiledStateGraph:
     """Attach resolved protocols to agent."""
-    
+
     # Resolve protocols
-    context = resolve_context(config)
     memory = resolve_memory(config)
     planner = resolve_planner(config)
     policy = resolve_policy(config)
     durability = resolve_durability(config)
-    
+
     # Attach as attributes
-    agent.soothe_context = context
     agent.soothe_memory = memory
     agent.soothe_planner = planner
     agent.soothe_policy = policy
     agent.soothe_durability = durability
-    
+
     return agent
 ```
 
@@ -207,13 +183,12 @@ Configure middleware with resolved protocols:
 ```python
 def configure_middlewares(
     config: SootheConfig,
-    context: ContextProtocol,
     memory: MemoryProtocol,
     planner: PlannerProtocol,
     policy: PolicyProtocol
 ) -> list[AgentMiddleware]:
     """Configure middlewares with protocols."""
-    
+
     middlewares = [
         SoothePolicyMiddleware(policy),
         SystemPromptMiddleware(config),
@@ -221,7 +196,7 @@ def configure_middlewares(
         WorkspaceContextMiddleware(config),
         SubagentContextMiddleware(planner)
     ]
-    
+
     return middlewares
 ```
 
@@ -235,84 +210,54 @@ Map configuration to runtime instances:
 
 ```yaml
 # Configuration YAML
-context_backend: keyword
-context_persist_dir: ~/.soothe/context
+agent:
+  protocols:
+    memory:
+      enabled: true
+      llm_chat_role: think
+      llm_embed_role: embedding
 
-memory_backend: keyword
-memory_persist_dir: ~/.soothe/memory
+    planner:
+      enabled: true
+      model: think
 
-planner_routing: auto
+    policy:
+      enabled: true
+      profile: standard
 
-policy_backend: config
-
-durability_backend: json
-durability_persist_dir: ~/.soothe/durability
+    durability:
+      enabled: true
+      backend: sqlite
 ```
 
 ```python
 # Resolver mapping
-context = resolve_context(config)
-# → KeywordContext(persist_dir="~/.soothe/context")
-
 memory = resolve_memory(config)
-# → KeywordMemory(persist_dir="~/.soothe/memory")
+# → MemUMemory(config)
 
-planner = resolve_planner(config)
-# → AutoPlanner(config)
+planner = resolve_planner(config, model)
+# → LLMPlanner(model=model, config=config)
 
 policy = resolve_policy(config)
-# → ConfigDrivenPolicy(config)
+# → ConfigDrivenPolicy(config=config)
 
 durability = resolve_durability(config)
-# → JsonDurability(persist_dir="~/.soothe/durability")
+# → SQLiteDurability(db_path=...) or PostgreSQLDurability(persist_store=...)
 ```
 
 ---
 
 ## Backend Dependencies
 
-### Vector Backend Dependencies
-
-Vector backends require vector store and embeddings:
-
-```python
-def resolve_vector_backend(config: SootheConfig):
-    """Resolve vector backend with dependencies."""
-    
-    # Vector store
-    vector_store = resolve_vector_store(config)
-    
-    # Embedding model
-    embedding_model = config.create_embedding_model()
-    
-    # Create backend
-    return VectorBackend(
-        vector_store=vector_store,
-        embedding_model=embedding_model
-    )
-```
-
 ### Planner Dependencies
 
 Planner requires model for reasoning:
 
 ```python
-def resolve_planner(config: SootheConfig):
+def resolve_planner(config: SootheConfig, model: BaseChatModel | None):
     """Resolve planner with model."""
-    
-    routing = config.planner_routing
-    
-    if routing == "auto":
-        # Auto-select model based on task
-        return AutoPlanner(config)
-    elif routing == "subagent":
-        # Use plan subagent
-        plan_subagent = resolve_plan_subagent(config)
-        return SubagentPlanner(plan_subagent)
-    else:
-        # Use model-specific planner
-        model = config.create_chat_model("think")
-        return ModelPlanner(model)
+    from soothe.foundation.loop.planning.planner import LLMPlanner
+    return LLMPlanner(model=model, config=config)
 ```
 
 ---
@@ -428,49 +373,6 @@ subagents:
 
 ---
 
-## MCP Server Resolution
-
-### MCP Registry
-
-Resolve MCP servers from configuration:
-
-```python
-def resolve_mcp_servers(config: SootheConfig) -> dict:
-    """Resolve MCP servers from config."""
-    
-    mcp_servers = {}
-    
-    for server_config in config.mcp.servers:
-        # Load MCP server
-        server = load_mcp_server(server_config)
-        
-        # Register tools
-        tools = server.get_tools()
-        mcp_servers[server_config.name] = {
-            "server": server,
-            "tools": tools
-        }
-    
-    return mcp_servers
-```
-
-### MCP Configuration
-
-```yaml
-mcp:
-  servers:
-    - name: filesystem
-      command: mcp-server-filesystem
-      args: ["/path/to/workspace"]
-    
-    - name: github
-      command: mcp-server-github
-      env:
-        GITHUB_TOKEN: "${GITHUB_TOKEN}"
-```
-
----
-
 ## Checkpointer Resolution
 
 ### Checkpointer Types
@@ -478,18 +380,24 @@ mcp:
 Resolve checkpointer for thread durability:
 
 ```python
-def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
-    """Resolve checkpointer from config."""
-    
-    durability = resolve_durability(config)
-    
-    # Create checkpointer based on durability backend
-    if config.durability_backend == "json":
-        return JsonCheckpointer(durability)
-    elif config.durability_backend == "rocksdb":
-        return RocksDBCheckpointer(durability)
-    elif config.durability_backend == "postgres":
-        return PostgresCheckpointer(durability)
+def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Checkpointer:
+    """Resolve checkpointer from config.
+
+    Uses persistence configuration for PostgreSQL or SQLite connection.
+    No fallback to in-memory storage - persistent storage required.
+
+    Returns:
+        A tuple of (checkpointer, connection_resource) for PostgreSQL, or
+        just the checkpointer for SQLite. The connection_resource must be
+        closed during cleanup (e.g., via runner.cleanup()).
+    """
+    backend = config.resolve_checkpointer_backend()
+    if backend == "postgresql":
+        # Uses SharedCheckpointerPool for PostgreSQL
+        ...
+    if backend == "sqlite":
+        # Resolves db_path, defers AsyncSqliteSaver to async context
+        ...
 ```
 
 ---
@@ -499,17 +407,16 @@ def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
 ### Basic Resolution
 
 ```python
-from soothe.core.resolver import (
-    resolve_context,
+from soothe.runner.resolver import (
     resolve_memory,
-    resolve_tools
+    resolve_tools,
+    resolve_subagents,
 )
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 
 # Resolve protocols
-context = resolve_context(config)
 memory = resolve_memory(config)
 
 # Resolve capabilities
@@ -520,13 +427,12 @@ subagents = resolve_subagents(config)
 ### Agent Construction
 
 ```python
-from soothe.core.agent import create_soothe_agent
+from soothe.foundation.core.agent import create_soothe_agent
 
 # Resolver is called internally
 agent = create_soothe_agent(config)
 
 # Protocols already attached
-agent.soothe_context  # ContextProtocol instance
 agent.soothe_memory   # MemoryProtocol instance
 ```
 
@@ -540,11 +446,11 @@ Handle resolution failures:
 
 ```python
 try:
-    context = resolve_context(config)
+    memory = resolve_memory(config)
 except BackendNotFoundError as e:
     logger.error(f"Backend not found: {e.backend}")
-    # Fallback to default
-    context = KeywordContext()
+    # Fallback to default memory backend
+    memory = MemUMemory(config)
 
 try:
     tools = resolve_tools(config)
@@ -561,7 +467,6 @@ except ToolLoadError as e:
 
 ```yaml
 resolution:
-  fallback_backend: keyword  # Fallback backend on error
   validate_backends: true    # Validate backend availability
   load_plugins: true         # Load plugin tools/subagents
 ```
@@ -584,38 +489,30 @@ resolution:
 
 ```python
 # Protocol resolution
-def resolve_context(config: SootheConfig) -> ContextProtocol: ...
-def resolve_memory(config: SootheConfig) -> MemoryProtocol: ...
-def resolve_planner(config: SootheConfig) -> PlannerProtocol: ...
-def resolve_policy(config: SootheConfig) -> PolicyProtocol: ...
+def resolve_memory(config: SootheConfig) -> MemoryProtocol | None: ...
+def resolve_planner(config: SootheConfig, model: BaseChatModel | None) -> PlannerProtocol: ...
+def resolve_policy(config: SootheConfig) -> PolicyProtocol | None: ...
 def resolve_durability(config: SootheConfig) -> DurabilityProtocol: ...
-def resolve_goal_engine(config: SootheConfig) -> GoalEngine: ...
 
 # Capability resolution
 def resolve_tools(config: SootheConfig) -> list[BaseTool]: ...
 def resolve_subagents(config: SootheConfig) -> list[SubAgent]: ...
-def resolve_mcp_servers(config: SootheConfig) -> dict: ...
 
-# Checkpointer resolution
-def resolve_checkpointer(config: SootheConfig) -> Checkpointer: ...
+# Infrastructure resolution
+def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Checkpointer: ...
 ```
 
 ### Helper Functions
 
 ```python
-def resolve_vector_store(config: SootheConfig) -> VectorStoreProtocol: ...
-def resolve_embedding_model(config: SootheConfig) -> Embeddings: ...
-
 def load_plugin_tools(config: SootheConfig) -> list[BaseTool]: ...
 def load_plugin_subagents(config: SootheConfig) -> list[SubAgent]: ...
-
-def load_mcp_server(config: dict) -> MCPServer: ...
 ```
 
 ---
 
 ## See Also
 
-- **[Configuration](../configuration.md)** - Configuration system
+- **[Configuration](../configuration-guide/README.md)** - Configuration system
 - **[Protocol Layer](../architecture/protocol-first.md)** - Protocol overview
 - **[Backend Implementations](../modules/backends/README.md)** - Backend details

@@ -139,10 +139,10 @@ router:
 
 ```yaml
 router:
-  default: "coding-plan:glm-5"
-  fast: "coding-plan:kimi-k2.5"
-  think: "coding-plan:glm-5"
-  image: "coding-plan:qwen3.6-plus"
+  default: "dashscope:glm-5.2"
+  fast: "dashscope:kimi-k2.5"
+  think: "dashscope:glm-5.2"
+  image: "dashscope:kimi-k2.5"
   embedding: "dashscope:multimodal-embedding-v1"
 ```
 
@@ -165,7 +165,7 @@ agent:
 ```yaml
 agent:
   autonomous:
-    enabled_by_default: false
+    enabled: false
     
     # Goal execution limits
     max_iterations: 10
@@ -212,7 +212,7 @@ agent:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled_by_default` | bool | `false` | Enable autonomous mode for new threads |
+| `enabled` | bool | `false` | Enable autonomous mode for new threads |
 | `max_iterations` | int | `10` | Max iterations per autonomous thread |
 | `max_retries` | int | `2` | Max retries per goal on failure |
 | `max_total_goals` | int | `50` | Maximum goals allowed |
@@ -281,36 +281,50 @@ agent:
       plan_ledger_max_total_chars: 0
       plan_ledger_max_message_chars: 0
     
-    # Infrastructure limits
-    limits:
+    # Concurrency controls
+    concurrency:
       max_parallel_goals: 4
       max_parallel_steps: 4
       max_parallel_subagents: 4
       max_parallel_tools: 50
       global_max_llm_calls: 10
       step_parallelism: dependency  # sequential | dependency | max
-      llm_rpm_limit: 120
-      llm_concurrent_limit: 10
-      llm_call_timeout_seconds: 120
-      llm_call_timeout_adaptive: true
-      llm_call_timeout_max_seconds: 120
-      llm_retry_on_timeout: true
-      llm_max_timeout_retries: 2
-      llm_timeout_retry_multiplier: 2.0
-      recovery:
-        progressive_checkpoints: true
-        auto_resume_on_start: false
-      tool_call_limit:
-        global_thread_limit: 200
-        global_run_limit: 200
-        tool_specific_limits:
-          wizsearch_search:
-            thread_limit: 5
-            run_limit: 3
-      tool_retry:
-        max_retries: 3
-        backoff_factor: 2.0
-        initial_delay: 1.0
+    
+    # LLM rate limiting, timeouts, and retries
+    llm_rate_limit:
+      enabled: true
+      rpm_limit: 120
+      concurrent_limit: 10
+      call_timeout_seconds: 600
+      call_timeout_max_seconds: 900
+      retry_on_timeout: true
+      max_timeout_retries: 10
+      timeout_retry_multiplier: 1.2
+      retry_on_rate_limit: true
+      max_rate_limit_retries: 10
+      rate_limit_backoff_base: 2.0
+      rate_limit_backoff_max: 60.0
+      respect_retry_after_header: true
+    
+    # Checkpoint and recovery
+    checkpoint:
+      progressive: true
+      auto_resume_on_start: false
+    
+    # Tool call count limits
+    tool_call_limit:
+      global_thread_limit: 200
+      global_run_limit: 200
+      tool_specific_limits:
+        wizsearch_search:
+          thread_limit: 5
+          run_limit: 3
+    
+    # Tool failure retry policy
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
 ```
 
 **Loop Fields:**
@@ -600,7 +614,7 @@ observability:
     dedup_window: 10
     retention_days: 90
   
-  verbosity: normal  # minimal | normal | detailed | debug
+  verbosity: normal  # quiet | normal | debug
   thread_logging_enabled: true
   thread_logging_retention_days: 30
   thread_logging_max_size_mb: 100
@@ -627,10 +641,9 @@ observability:
 
 | Level | Shows |
 |-------|-------|
-| `minimal` | Assistant text + errors |
+| `quiet` | Assistant text + errors |
 | `normal` | Assistant text + protocol events + errors |
-| `detailed` | Adds subagent events + tool activity |
-| `debug` | All events (heartbeat/thinking) |
+| `debug` | All events including subagent events, tool activity, heartbeat/thinking |
 
 ---
 
@@ -825,13 +838,13 @@ router:
 
 agent:
   autonomous:
-    enabled_by_default: true
+    enabled: true
     max_iterations: 5
   loop:
     max_iterations: 10
 
 observability:
-  verbosity: detailed
+  verbosity: debug
   langfuse:
     enabled: true
     public_key: ${LANGFUSE_PUBLIC_KEY}

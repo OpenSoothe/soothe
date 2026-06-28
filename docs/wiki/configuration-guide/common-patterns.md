@@ -47,12 +47,12 @@ router:
 
 agent:
   autonomous:
-    enabled_by_default: false
+    enabled: false
   loop:
     max_iterations: 10
 
 observability:
-  verbosity: detailed
+  verbosity: debug
   console:
     enabled: true
     level: INFO
@@ -87,17 +87,18 @@ embedding_dims: 1536
 
 agent:
   autonomous:
-    enabled_by_default: true
+    enabled: true
     max_iterations: 15
     max_parallel_goals: 5
     max_loops: 8
   loop:
     max_iterations: 20
     context_window_limit: 200000
-    limits:
+    concurrency:
       max_parallel_steps: 4
-      llm_concurrent_limit: 20
       global_max_llm_calls: 50
+    llm_rate_limit:
+      concurrent_limit: 20
 
 persistence:
   default_backend: postgresql
@@ -428,7 +429,7 @@ router:
 
 agent:
   autonomous:
-    enabled_by_default: true
+    enabled: true
     max_iterations: 20
     max_retries: 3
     max_total_goals: 100
@@ -456,7 +457,7 @@ persistence:
   postgres_base_dsn: ${POSTGRES_DSN}
 
 observability:
-  verbosity: detailed
+  verbosity: debug
   langfuse:
     enabled: true
 ```
@@ -485,7 +486,7 @@ router:
 
 agent:
   autonomous:
-    enabled_by_default: false  # Off by default
+    enabled: false  # Off by default
     max_iterations: 5
     max_retries: 1
     max_total_goals: 10
@@ -498,13 +499,13 @@ agent:
   
   loop:
     max_iterations: 10
-    limits:
+    concurrency:
       max_parallel_steps: 1
       max_parallel_tools: 5
       global_max_llm_calls: 10
-      tool_call_limit:
-        global_thread_limit: 50
-        global_run_limit: 20
+    tool_call_limit:
+      global_thread_limit: 50
+      global_run_limit: 20
 ```
 
 ## Vector Store Patterns
@@ -597,7 +598,7 @@ agent:
     poll_interval: 2
 
 observability:
-  verbosity: detailed
+  verbosity: debug
   console:
     enabled: true
 ```
@@ -655,7 +656,7 @@ debug: true
 
 ```yaml
 observability:
-  verbosity: minimal
+  verbosity: quiet
   log_file_level: WARNING
   log_file_max_bytes: 5242880  # 5 MB
   log_file_backup_count: 3
@@ -824,12 +825,12 @@ router:
 
 agent:
   autonomous:
-    enabled_by_default: false
+    enabled: false
   loop:
     max_iterations: 3
 
 observability:
-  verbosity: minimal
+  verbosity: quiet
   langfuse:
     enabled: false
 
@@ -856,7 +857,7 @@ agent:
     max_iterations: 5
   loop:
     max_iterations: 10
-    limits:
+    concurrency:
       global_max_llm_calls: 10
 
 persistence:
@@ -864,7 +865,7 @@ persistence:
   checkpoint_sqlite_path: /tmp/integration_checkpoints.db
 
 observability:
-  verbosity: detailed
+  verbosity: debug
   langfuse:
     enabled: true
     environment: testing

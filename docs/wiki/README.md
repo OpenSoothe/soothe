@@ -11,7 +11,7 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
 **New to Soothe?** Follow these steps:
 
 1. **Install**: `pip install -U 'soothe[all]' soothe-cli soothe-daemon`
-2. **Configure**: Set `OPENAI_API_KEY` or create `~/.soothe/config.yml`
+2. **Configure**: Set `OPENAI_API_KEY` or create `~/.soothe/config/config.yml`
 3. **Run**: `soothe -p "your query"` for one-shot mode
 4. **Learn**: Read [Getting Started](getting-started/README.md)
 
@@ -59,7 +59,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
   - **[Provider Setup](configuration-guide/provider-setup.md)** - LLM providers, vector stores, persistence
 - **[Configuration (Quick Reference)](configuration.md)** - Quick config overview
 - **[Daemon Management](daemon-management.md)** - Daemon lifecycle (start, stop, attach)
-- **[Multi-Transport](multi-transport.md)** - Unix Socket, WebSocket, HTTP REST transports
+- **[Transport Setup](multi-transport.md)** - WebSocket transport configuration
 - **[Authentication](authentication.md)** - External authentication with reverse proxies
 
 ### 🚀 Deployment & Operations
@@ -77,7 +77,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
   - **[Agent Factory](core/agent-factory.md)** - CoreAgent construction and runtime
   - **[SootheRunner](core/runner.md)** - Protocol-orchestrated execution
   - **[StrangeLoop](core/strangeloop.md)** - Plan-Execute loop for single goals
-  - **[GoalEngine](core/goal-engine.md)** - Autonomous goal management
+  - **[ContextEngine](core/goal-engine.md)** - Autonomous goal management
   - **[Event System](core/events.md)** - Event infrastructure and registration
   - **[Protocol Resolver](core/resolver.md)** - Protocol wiring from config
   - **[Workspace Management](core/workspace.md)** - Workspace resolution and validation
@@ -112,7 +112,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ GoalEngine: Autonomous Goal Management (RFC-200)           │
+│ ContextEngine: Autonomous Goal Management (RFC-200)        │
 │ • Manages goal DAGs, delegates single goals to StrangeLoop   │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update     │
 └─────────────────────────────────────────────────────────────┘
@@ -143,7 +143,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 ```
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
-|  - GoalEngine: Autonomous Goal Management            |
+|  - ContextEngine: Autonomous Goal Management         |
 |  - StrangeLoop: Agentic Goal Execution                 |
 |  - CoreAgent: Runtime                                |
 |  - ContextProtocol, MemoryProtocol,                  |

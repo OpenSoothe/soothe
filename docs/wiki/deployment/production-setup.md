@@ -34,7 +34,7 @@ This guide covers production deployment using Docker Compose (recommended), syst
 ### Network Requirements
 
 - Database port (5432) accessible from daemon
-- Daemon port (8765) accessible from clients (if WebSocket/HTTP)
+- Daemon port (8765) accessible from clients (if WebSocket enabled)
 - Outbound HTTPS for LLM provider APIs
 
 ## Docker Compose Deployment (Recommended)
@@ -88,7 +88,7 @@ providers:
     api_key: "${DASHSCOPE_API_KEY}"
     models:
       - qwen-max
-      - qwen3.5-plus
+      - qwen3.7-plus
       - multimodal-embedding-v1
 
 router:
@@ -158,17 +158,14 @@ docker compose exec soothe-pgvector psql -U postgres -l
 docker compose logs soothed
 
 # Test daemon connectivity (WebSocket)
-curl http://localhost:8765/health  # If HTTP REST enabled
-
-# Or connect with client
-soothe --daemon --transport websocket --url ws://localhost:8765
+soothe --daemon-host 127.0.0.1 --daemon-port 8765 -p "Hello"  # Test WebSocket connectivity
 ```
 
 ### Step 6: Test Full Stack
 
 ```bash
 # Send test query
-soothe --daemon -p "List all Python files in the workspace"
+soothe -p "List all Python files in the workspace"  # CLI auto-connects to daemon
 
 # Verify thread created in database
 docker compose exec soothe-pgvector psql -U postgres -d soothe_metadata \
@@ -319,7 +316,7 @@ sudo vim /etc/default/soothe
 ```bash
 SOOTHE_POSTGRES_BASE_DSN=postgresql://postgres:password@localhost:5432
 DASHSCOPE_API_KEY=<your_key>
-SOOTHE_LOG_FILE_PATH=/var/log/soothe/daemon.log
+SOOTHE_LOG_FILE_PATH=/var/log/soothe/soothed.log
 SOOTHE_LOG_FILE_LEVEL=INFO
 ```
 
@@ -455,37 +452,19 @@ persistence:
 
 ### Daemon Transports
 
-**Unix Socket (local)**:
+Configure in `~/.soothe/config/daemon.yml`:
+
+**WebSocket (local and remote)**:
 ```yaml
-daemon:
-  transports:
-    unix_socket:
-      enabled: true
-      path: "/var/lib/soothe/soothe.sock"
+transports:
+  websocket:
+    enabled: true
+    host: "127.0.0.1"  # Bind to localhost; use reverse proxy for remote
+    port: 8765
+    cors_origins: ["https://your-app.com"]
 ```
 
-**WebSocket (remote)**:
-```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: "0.0.0.0"
-      port: 8765
-      cors_origins: ["https://your-app.com"]
-```
-
-**HTTP REST (API clients)**:
-```yaml
-daemon:
-  transports:
-    http_rest:
-      enabled: true
-      host: "0.0.0.0"
-      port: 8766
-```
-
-**Important**: Use reverse proxy for WebSocket/HTTP transports. See [Security Hardening](security.md).
+**Important**: Use reverse proxy for remote WebSocket access. See [Security Hardening](security.md).
 
 ### Firewall Rules
 
@@ -498,12 +477,8 @@ daemon:
 # Allow daemon WebSocket from reverse proxy
 sudo ufw allow from 10.0.0.0/8 to any port 8765 proto tcp
 
-# Allow daemon HTTP REST from reverse proxy
-sudo ufw allow from 10.0.0.0/8 to any port 8766 proto tcp
-
 # Block direct daemon access from external
 sudo ufw deny 8765
-sudo ufw deny 8766
 
 # Allow reverse proxy HTTPS
 sudo ufw allow 443/tcp
@@ -582,10 +557,7 @@ soothed status
 # Verify transports
 soothed status --verbose
 
-# Test Unix Socket
-ls -la ~/.soothe/soothe.sock
-
-# Test WebSocket (if enabled)
+# Test WebSocket
 curl http://localhost:8765/health
 ```
 
@@ -603,7 +575,7 @@ docker compose logs soothed | grep "config loaded"
 
 ```bash
 # Create test thread
-soothe --daemon -p "Hello, this is a test"
+soothe -p "Hello, this is a test"  # CLI auto-connects to daemon
 
 # Verify in database
 psql -h postgres-host -U user -d soothe_metadata \
@@ -675,12 +647,12 @@ providers:
     api_key: "${DASHSCOPE_API_KEY}"
     models:
       - qwen-max
-      - qwen3.5-plus
+      - qwen3.7-plus
       - multimodal-embedding-v1
 
 router:
   default: "dashscope:qwen-max"
-  fast: "dashscope:qwen3.5-plus"
+  fast: "dashscope:qwen3.7-plus"
   think: "dashscope:qwen-max"
   embedding: "dashscope:multimodal-embedding-v1"
 
@@ -698,7 +670,7 @@ vector_stores:
     index_type: hnsw
 
 observability:
-  log_file_path: /var/log/soothe/daemon.log
+  log_file_path: /var/log/soothe/soothed.log
   log_file_level: INFO
   verbosity: normal
 ```

@@ -659,7 +659,7 @@ mcp_servers:
 3. **Secure auth headers**: Use `${ENV_VAR}` interpolation, never hardcode secrets
 4. **Handle disconnects**: Implement fallback behavior for transient failures
 5. **Budget listing**: Keep `<AVAILABLE_MCP_TOOLS>` under 2000 chars
-6. **Test connectivity**: Use `soothe doctor` to verify MCP server health
+6. **Test connectivity**: Use `soothed doctor` to verify MCP server health
 
 ## Troubleshooting
 
@@ -687,7 +687,7 @@ mcp_servers:
 
 ```bash
 # Check MCP server health
-soothe doctor --mcp
+soothed doctor --mcp
 
 # Enable MCP debug logs
 SOOTHE_LOG_LEVEL=DEBUG soothe -p "use MCP tools"
