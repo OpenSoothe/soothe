@@ -330,18 +330,24 @@ class UserMessageBuilder:
         self,
         user_query: str,
         *,
-        state: LoopState,
+        state: LoopState,  # noqa: ARG002 — kept for signature compatibility
         classification: ScenarioClassification,
         evidence_body: str,
         intent_type: str = "agentic",
         task_complexity: str = "medium",
     ) -> str:
-        """Build user message for goal-completion synthesis.
+        """Build user message for goal-completion synthesis (IG-524).
+
+        Removed EXECUTION SUMMARY and AVAILABLE BUILT-IN SCENARIOS sections:
+        - EXECUTION SUMMARY: Previously read from state.step_results, could show misleading
+          zeros when evidence exists in loop_messages. LLM derives summary from EVIDENCE.
+        - AVAILABLE BUILT-IN SCENARIOS: Static content moved to system prompt
+          (synthesis_report_system.xml) for caching.
 
         Args:
             user_query: The original user request text.
-            state: Loop state for extracting execution summary.
-            classification: Scenario classification result.
+            state: Loop state (unused after IG-524; kept for signature compatibility).
+            classification: Scenario classification result with sections, focus, emphasis.
             evidence_body: Pre-formatted evidence (step summaries + work transcript).
             intent_type: Intent classification.
             task_complexity: Task complexity level.
@@ -349,35 +355,10 @@ class UserMessageBuilder:
         Returns:
             Structured text message for the synthesis HumanMessage.
         """
-        from soothe.foundation.loop.engine.scenario_classifier import (
-            _SCENARIO_DESCRIPTIONS,
-            BUILTIN_SCENARIOS,
-            _extract_execution_summary,
-        )
-
-        exec_summary = _extract_execution_summary(state)
-
         sections: list[tuple[str, str]] = [
             ("GOAL", _goal_text(user_query)),
             ("INTENT", f"{intent_type} (complexity: {task_complexity})"),
         ]
-
-        # Execution summary
-        summary_lines = [
-            f"- Total steps: {exec_summary['total_steps']}",
-            f"- Successful: {exec_summary['successful_steps']}",
-            f"- Step types: {exec_summary['step_types']}",
-            f"- Tools used: {exec_summary['tools_used']}",
-            f"- Evidence volume: {exec_summary['evidence_volume']} chars",
-        ]
-        sections.append(("EXECUTION SUMMARY", "\n".join(summary_lines)))
-
-        # Available scenarios
-        scenarios_list = "\n".join(
-            f"{i + 1}. {name} - {_SCENARIO_DESCRIPTIONS.get(name, 'General synthesis')}"
-            for i, name in enumerate(BUILTIN_SCENARIOS.keys())
-        )
-        sections.append(("AVAILABLE BUILT-IN SCENARIOS", scenarios_list))
 
         # Contextual focus from classification
         focus_text = "\n".join(f"- {item}" for item in classification.contextual_focus)
