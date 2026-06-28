@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+from soothe.foundation.core.filesystem._lock_registry import FileEditLockRegistry
 from soothe.foundation.core.filesystem.protocol import BatchedEditOperation
 
 if TYPE_CHECKING:
@@ -36,9 +37,14 @@ logger = logging.getLogger(__name__)
 # Detection window in milliseconds
 DEFAULT_DETECTION_WINDOW_MS: int = 50
 
+# Default staging buffer limits
+DEFAULT_STAGING_BUFFER_MAX_ENTRIES: int = 64
+DEFAULT_STAGING_BUFFER_EVICTION_POLICY: str = "reject_newest"
+
 # Edit tools that are coalesced
 EDIT_TOOL_NAMES: frozenset[str] = frozenset(
     {
+        "edit_file",
         "edit_file_lines",
         "insert_lines",
         "delete_lines",
@@ -47,6 +53,9 @@ EDIT_TOOL_NAMES: frozenset[str] = frozenset(
 
 # Path argument keys to extract file path from tool args
 _PATH_ARG_KEYS: tuple[str, ...] = ("path", "file_path", "filepath", "file")
+
+# Valid eviction policies for the staging buffer
+_VALID_EVICTION_POLICIES: frozenset[str] = frozenset({"reject_newest", "evict_oldest"})
 
 
 @dataclass
@@ -60,6 +69,62 @@ class PendingEdit:
     result_future: asyncio.Future[ToolMessage | Command[Any]]
     handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]]
     request: ToolCallRequest
+
+
+@dataclass
+class StringReplacement:
+    """A single string-replacement operation for the staging buffer.
+
+    Attributes:
+        old_string: The exact text to find in the file.
+        new_string: The replacement text.
+        replace_all: If True, replace all occurrences; if False, the
+            old_string must be unique in the file.
+        tool_call_id: ID of the original tool call this replacement came from.
+    """
+
+    old_string: str
+    new_string: str
+    replace_all: bool = False
+    tool_call_id: str = ""
+
+
+@dataclass
+class EditCoalescingConfig:
+    """Configuration for edit coalescing middleware.
+
+    Attributes:
+        detection_window_ms: Detection window in milliseconds during which
+            incoming edit tool calls are collected before being batched.
+        staging_buffer_max_entries: Maximum number of string-replacement
+            entries the staging buffer can hold per file before eviction
+            kicks in.
+        staging_buffer_eviction_policy: Policy when the staging buffer
+            exceeds max entries. ``reject_newest`` rejects the incoming
+            entry (default); ``evict_oldest`` drops the oldest entry.
+    """
+
+    detection_window_ms: int = DEFAULT_DETECTION_WINDOW_MS
+    staging_buffer_max_entries: int = DEFAULT_STAGING_BUFFER_MAX_ENTRIES
+    staging_buffer_eviction_policy: str = DEFAULT_STAGING_BUFFER_EVICTION_POLICY
+
+    def __post_init__(self) -> None:
+        """Validate config fields after initialization."""
+        if self.detection_window_ms <= 0:
+            raise ValueError(
+                f"detection_window_ms must be positive, got {self.detection_window_ms}"
+            )
+        if self.staging_buffer_max_entries <= 0:
+            raise ValueError(
+                f"staging_buffer_max_entries must be positive, "
+                f"got {self.staging_buffer_max_entries}"
+            )
+        if self.staging_buffer_eviction_policy not in _VALID_EVICTION_POLICIES:
+            raise ValueError(
+                f"staging_buffer_eviction_policy must be one of "
+                f"{sorted(_VALID_EVICTION_POLICIES)}, "
+                f"got {self.staging_buffer_eviction_policy!r}"
+            )
 
 
 @dataclass
@@ -118,7 +183,12 @@ class EditBatch:
 
 
 class EditConflictError(Exception):
-    """Raised when edits have overlapping line ranges."""
+    """Raised when edits have overlapping ranges.
+
+    This covers both line-range overlaps (for edit_file_lines / insert_lines /
+    delete_lines) and string-replacement overlaps (for edit_file where one
+    edit's old_string spans text that another edit also modifies).
+    """
 
     def __init__(
         self,
@@ -129,21 +199,26 @@ class EditConflictError(Exception):
         self.file_path = file_path
         self.conflicting_ranges = conflicting_ranges
         self.edit_ids = edit_ids
-        super().__init__(
-            f"Edit conflict in {file_path}: overlapping line ranges {conflicting_ranges}"
-        )
+        super().__init__(f"Edit conflict in {file_path}: overlapping ranges {conflicting_ranges}")
 
 
 class EditCoalescingMiddleware(AgentMiddleware):
     """Coalesces parallel edits to same file into batched operations.
 
-    IG-517: Eliminates race conditions and reduces middleware overhead for
-    parallel file edits by collecting, grouping, and merging operations.
+    Eliminates race conditions and reduces middleware overhead for parallel
+    file edits by collecting, grouping, and merging operations.
 
     Detection Window:
-        - Collects incoming edit tool calls for 50ms
+        - Collects incoming edit tool calls for detection_window_ms
         - Groups edits by target file path
-        - Merges same-file edits into single BatchedEditOperation
+        - Merges same-file edits into single batched operation
+
+    Staging Buffer (edit_file string replacements):
+        - edit_file calls accumulate (old_string, new_string, replace_all)
+          tuples in a per-file staging buffer during the detection window
+        - After the window, all replacements for a file are applied in a
+          single read-modify-write cycle via the backend's atomic write path
+        - Overlapping string replacements are rejected with EditConflictError
 
     Fast Path:
         - Batched calls dispatched with `_batched=True` metadata
@@ -151,7 +226,12 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
     Conflict Handling:
         - Overlapping line ranges → reject with EditConflictError
+        - Overlapping string replacements → reject with EditConflictError
         - Successful edits proceed, failed edits get error ToolMessage
+
+    Lock Serialization:
+        - FileEditLockRegistry serializes batch dispatch per-file, ensuring
+          the coalesced write is protected from concurrent non-coalesced writes
     """
 
     name = "EditCoalescingMiddleware"
@@ -159,17 +239,35 @@ class EditCoalescingMiddleware(AgentMiddleware):
     def __init__(
         self,
         *,
-        detection_window_ms: int = DEFAULT_DETECTION_WINDOW_MS,
+        detection_window_ms: int | None = None,
+        config: EditCoalescingConfig | None = None,
+        lock_registry: FileEditLockRegistry | None = None,
     ) -> None:
         """Initialize edit coalescing middleware.
 
         Args:
-            detection_window_ms: Detection window in milliseconds.
+            detection_window_ms: Detection window in milliseconds. If provided,
+                overrides the config value. Deprecated in favor of ``config``.
+            config: Configuration object. If None, a default
+                ``EditCoalescingConfig`` is used (or constructed from
+                ``detection_window_ms`` if that is provided).
+            lock_registry: External ``FileEditLockRegistry`` for serializing
+                per-file batch dispatch. If None, a new registry is created.
         """
-        self._detection_window_ms = detection_window_ms
+        if config is not None:
+            self._config = config
+        elif detection_window_ms is not None:
+            self._config = EditCoalescingConfig(detection_window_ms=detection_window_ms)
+        else:
+            self._config = EditCoalescingConfig()
+
+        self._detection_window_ms = self._config.detection_window_ms
         self._pending_edits: dict[str, list[PendingEdit]] = {}
+        # Staging buffer: path -> list of (old_string, new_string, replace_all)
+        self._staging_buffer: dict[str, list[tuple[str, str, bool, str]]] = {}
         self._window_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
+        self._lock_registry = lock_registry or FileEditLockRegistry()
 
     def _is_edit_tool(self, tool_name: str) -> bool:
         """Check if tool is an edit operation that should be coalesced."""
@@ -191,7 +289,11 @@ class EditCoalescingMiddleware(AgentMiddleware):
         """Intercept edit tool calls and coalesce them.
 
         Non-edit tools pass through immediately.
-        Edit tools are collected, grouped, and batched after detection window.
+        edit_file (string-replacement) calls are accumulated in the staging
+        buffer and dispatched as a single atomic batch after the detection
+        window.
+        Other edit tools (edit_file_lines, insert_lines, delete_lines) are
+        collected, grouped, and batched after the detection window.
 
         Args:
             request: Tool call request.
@@ -218,6 +320,66 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
         tool_call_id = str(tool_call.get("id", ""))
 
+        # edit_file uses the string-replacement staging buffer
+        if tool_name == "edit_file":
+            old_string = str(tool_args.get("old_string", ""))
+            new_string = str(tool_args.get("new_string", ""))
+            replace_all = bool(tool_args.get("replace_all", False))
+
+            # Create future for result (will be filled after batch execution)
+            result_future: asyncio.Future[ToolMessage | Command[Any]] = asyncio.Future()
+
+            pending_edit = PendingEdit(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                file_path=file_path,
+                args=tool_args,
+                result_future=result_future,
+                handler=handler,
+                request=request,
+            )
+
+            async with self._lock:
+                # Check staging buffer capacity / eviction
+                entries = self._staging_buffer.setdefault(file_path, [])
+                if len(entries) >= self._config.staging_buffer_max_entries:
+                    policy = self._config.staging_buffer_eviction_policy
+                    if policy == "reject_newest":
+                        result_future.set_result(
+                            ToolMessage(
+                                content=(
+                                    f"Error: Staging buffer full for {file_path}. "
+                                    f"Maximum {self._config.staging_buffer_max_entries} "
+                                    f"entries. Submit edits sequentially."
+                                ),
+                                tool_call_id=tool_call_id,
+                                name=tool_name,
+                                status="error",
+                            )
+                        )
+                        return await result_future
+                    elif policy == "evict_oldest":
+                        entries.pop(0)
+                        logger.debug(
+                            "Evicted oldest staging buffer entry for %s",
+                            file_path,
+                        )
+
+                entries.append((old_string, new_string, replace_all, tool_call_id))
+
+                # Also track in pending_edits so _process_after_window picks it up
+                if file_path not in self._pending_edits:
+                    self._pending_edits[file_path] = []
+                self._pending_edits[file_path].append(pending_edit)
+
+                # Start detection window if not running
+                if self._window_task is None:
+                    self._window_task = asyncio.create_task(self._process_after_window())
+
+            # Wait for result (filled by batch execution)
+            return await result_future
+
+        # Other edit tools (edit_file_lines, insert_lines, delete_lines)
         # Create future for result (will be filled after batch execution)
         result_future: asyncio.Future[ToolMessage | Command[Any]] = asyncio.Future()
 
@@ -251,6 +413,8 @@ class EditCoalescingMiddleware(AgentMiddleware):
         async with self._lock:
             pending = self._pending_edits.copy()
             self._pending_edits.clear()
+            staging = self._staging_buffer.copy()
+            self._staging_buffer.clear()
             self._window_task = None
 
         if not pending:
@@ -258,7 +422,287 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
         # Process each file's batch
         for file_path, edits in pending.items():
-            await self._dispatch_batched_edits(file_path, edits)
+            # Separate edit_file (string replacement) from line-based edits
+            string_edits = [e for e in edits if e.tool_name == "edit_file"]
+            line_edits = [e for e in edits if e.tool_name != "edit_file"]
+
+            # Dispatch string-replacement batch if any
+            if string_edits:
+                replacements = staging.get(file_path, [])
+                await self._dispatch_string_replacements(file_path, string_edits, replacements)
+
+            # Dispatch line-based batch if any
+            if line_edits:
+                await self._dispatch_batched_edits(file_path, line_edits)
+
+    async def _dispatch_string_replacements(
+        self,
+        file_path: str,
+        edits: list[PendingEdit],
+        replacements: list[tuple[str, str, bool, str]],
+    ) -> None:
+        """Dispatch coalesced string-replacement edits for a single file.
+
+        Reads the file once, applies all string replacements sequentially in
+        memory, and writes the result via a single atomic write. The entire
+        read-modify-write cycle is protected by the per-file lock from
+        ``FileEditLockRegistry``.
+
+        Args:
+            file_path: Target file path.
+            edits: List of pending edit_file edits for this file.
+            replacements: List of ``(old_string, new_string, replace_all,
+                tool_call_id)`` tuples from the staging buffer.
+        """
+        # Detect overlapping string replacements before touching the filesystem
+        try:
+            content = await self._read_file_for_batch(file_path)
+        except Exception as e:
+            for edit in edits:
+                edit.result_future.set_result(
+                    ToolMessage(
+                        content=f"Error: {e}",
+                        tool_call_id=edit.tool_call_id,
+                        name=edit.tool_name,
+                        status="error",
+                    )
+                )
+            return
+
+        # Compute character ranges for each replacement in the original content
+        conflict = self._find_string_overlaps(content, replacements)
+        if conflict:
+            conflicting_ids, ranges = conflict
+            for edit in edits:
+                edit.result_future.set_result(
+                    ToolMessage(
+                        content=(
+                            f"Error: Edit conflict in {file_path}. "
+                            f"Overlapping string replacements detected. "
+                            f"Submit edits sequentially to avoid conflicts."
+                        ),
+                        tool_call_id=edit.tool_call_id,
+                        name=edit.tool_name,
+                        status="error",
+                    )
+                )
+            return
+
+        # Acquire per-file lock and apply all replacements atomically
+        try:
+            async with self._lock_registry.acquire(file_path):
+                # Re-read under the lock to get the authoritative content
+                content = await self._read_file_for_batch(file_path)
+
+                # Apply replacements sequentially in memory
+                applied_count = 0
+                for old_string, new_string, replace_all, _call_id in replacements:
+                    if old_string not in content:
+                        # String not found — skip this replacement but continue
+                        continue
+                    if replace_all:
+                        content = content.replace(old_string, new_string)
+                    else:
+                        content = content.replace(old_string, new_string, 1)
+                    applied_count += 1
+
+                # Single atomic write via the backend's write path
+                await self._atomic_write(file_path, content)
+
+            # All edits succeed together
+            for edit in edits:
+                edit.result_future.set_result(
+                    ToolMessage(
+                        content=(
+                            f"String replacement applied to {file_path}. "
+                            f"{applied_count} replacement(s) in batched write."
+                        ),
+                        tool_call_id=edit.tool_call_id,
+                        name=edit.tool_name,
+                    )
+                )
+
+        except Exception as e:
+            logger.exception("Batched string replacement failed for %s", file_path)
+            for edit in edits:
+                if not edit.result_future.done():
+                    edit.result_future.set_result(
+                        ToolMessage(
+                            content=f"Error: {e}",
+                            tool_call_id=edit.tool_call_id,
+                            name=edit.tool_name,
+                            status="error",
+                        )
+                    )
+
+    async def _read_file_for_batch(self, file_path: str) -> str:
+        """Read file content for batch processing.
+
+        Attempts to use the workspace filesystem backend; falls back to direct
+        file read if no workspace context is available.
+
+        Args:
+            file_path: Path to the file to read.
+
+        Returns:
+            File content as a string.
+
+        Raises:
+            Exception: If the file cannot be read.
+        """
+        try:
+            from soothe.foundation.workspace.framework_filesystem import (
+                FrameworkFilesystem,
+            )
+            from soothe.foundation.workspace.normalized_backend import (
+                NormalizedPathBackend,
+            )
+
+            current_workspace = FrameworkFilesystem.get_current_workspace()
+            if current_workspace is not None:
+                backend = NormalizedPathBackend(
+                    workspace=current_workspace,
+                    virtual_mode=True,
+                )
+                result = await backend.aread(file_path)
+                if hasattr(result, "error") and getattr(result, "error", None):
+                    raise Exception(result.error)
+                return result.content
+        except Exception:
+            # Fall back to direct read if no workspace context or read error
+            pass
+
+        # Direct file read fallback
+        import aiofiles
+
+        async with aiofiles.open(file_path, encoding="utf-8") as f:
+            return await f.read()
+
+    async def _atomic_write(self, file_path: str, content: str) -> None:
+        """Write content atomically via the backend's write path.
+
+        Attempts to use the workspace filesystem backend's ``awrite`` (which
+        uses temp-file + ``os.replace``); falls back to direct write.
+
+        Args:
+            file_path: Path to the file to write.
+            content: Content to write.
+
+        Raises:
+            Exception: If the write fails.
+        """
+        try:
+            from soothe.foundation.workspace.framework_filesystem import (
+                FrameworkFilesystem,
+            )
+            from soothe.foundation.workspace.normalized_backend import (
+                NormalizedPathBackend,
+            )
+
+            current_workspace = FrameworkFilesystem.get_current_workspace()
+            if current_workspace is not None:
+                backend = NormalizedPathBackend(
+                    workspace=current_workspace,
+                    virtual_mode=True,
+                )
+                result = await backend.awrite(file_path, content)
+                if hasattr(result, "error") and getattr(result, "error", None):
+                    raise Exception(result.error)
+                return
+        except Exception:
+            # Fall back to direct write if no workspace context or write error
+            pass
+
+        # Direct write fallback (still atomic via temp + rename)
+        import os
+        import tempfile
+
+        dir_path = os.path.dirname(os.path.abspath(file_path))
+        fd, tmp_path = tempfile.mkstemp(dir=dir_path, prefix=".edit_coalesce_")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(tmp_path, file_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    def _find_string_overlaps(
+        self,
+        content: str,
+        replacements: list[tuple[str, str, bool, str]],
+    ) -> tuple[set[str], list[tuple[int, int]]] | None:
+        """Detect overlapping string-replacement ranges.
+
+        For each replacement, the character range of ``old_string`` in the
+        content is computed. If two replacements' ranges overlap (one edit's
+        old_string spans text that another edit also modifies), the batch is
+        considered conflicting.
+
+        Args:
+            content: Original file content.
+            replacements: List of ``(old_string, new_string, replace_all,
+                tool_call_id)`` tuples.
+
+        Returns:
+            Tuple of (conflicting call_ids, conflicting char ranges) if a
+            conflict is found, otherwise None.
+        """
+        # Compute character ranges for each replacement
+        ranges: list[tuple[int, int, str]] = []
+        cursor = 0
+        for old_string, _new_string, replace_all, call_id in replacements:
+            if not old_string:
+                continue
+            if old_string not in content:
+                # String not found — can't compute range, skip
+                ranges.append((-1, -1, call_id))
+                continue
+            if replace_all:
+                # For replace_all, find all occurrences and treat the full
+                # span (first start to last end) as the range
+                starts: list[int] = []
+                search_from = 0
+                while True:
+                    idx = content.find(old_string, search_from)
+                    if idx == -1:
+                        break
+                    starts.append(idx)
+                    search_from = idx + len(old_string)
+                if starts:
+                    start = starts[0]
+                    end = starts[-1] + len(old_string)
+                    ranges.append((start, end, call_id))
+            else:
+                idx = content.find(old_string, cursor)
+                if idx == -1:
+                    idx = content.find(old_string)
+                if idx != -1:
+                    end = idx + len(old_string)
+                    ranges.append((idx, end, call_id))
+                    cursor = end
+
+        # Check pairwise overlaps
+        conflicting_ids: set[str] = set()
+        conflicting_ranges: list[tuple[int, int]] = []
+        for i, (start_a, end_a, id_a) in enumerate(ranges):
+            if start_a == -1:
+                continue
+            for start_b, end_b, id_b in ranges[i + 1 :]:
+                if start_b == -1:
+                    continue
+                if start_a < end_b and start_b < end_a:
+                    conflicting_ids.add(id_a)
+                    conflicting_ids.add(id_b)
+                    conflicting_ranges.append((start_a, end_a))
+                    conflicting_ranges.append((start_b, end_b))
+
+        if conflicting_ids:
+            return conflicting_ids, conflicting_ranges
+        return None
 
     async def _dispatch_batched_edits(
         self,
@@ -410,9 +854,13 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
 __all__ = [
     "DEFAULT_DETECTION_WINDOW_MS",
+    "DEFAULT_STAGING_BUFFER_MAX_ENTRIES",
+    "DEFAULT_STAGING_BUFFER_EVICTION_POLICY",
     "EDIT_TOOL_NAMES",
     "EditBatch",
+    "EditCoalescingConfig",
     "EditCoalescingMiddleware",
     "EditConflictError",
     "PendingEdit",
+    "StringReplacement",
 ]

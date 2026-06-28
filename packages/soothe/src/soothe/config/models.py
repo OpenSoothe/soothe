@@ -314,7 +314,7 @@ class HttpRequestsToolsConfig(ToolConfig):
 
     enabled: bool = Field(
         default=True,
-        description="Enable requests_get / requests_post / ... tools (IG-339).",
+        description="Enable requests_get / requests_post / ... tools.",
     )
     allow_dangerous_requests: bool = Field(
         default=True,
@@ -676,7 +676,7 @@ class AutonomousConfig(BaseModel):
         default=30,
         ge=5,
         le=300,
-        description="Background verification loop interval (seconds, RFC-625)",
+        description="Background verification loop interval (seconds)",
     )
     """Seconds between DAG health verification cycles."""
 
@@ -684,19 +684,19 @@ class AutonomousConfig(BaseModel):
         default=300,
         ge=60,
         le=3600,
-        description="Time-based dreaming trigger interval (seconds, RFC-625)",
+        description="Time-based dreaming trigger interval (seconds)",
     )
     """Seconds between time-triggered dreaming mode entries."""
 
     dreaming_scope: Literal["loop", "workspace", "topic"] = Field(
         default="workspace",
-        description="Cross-loop dreaming scope for memory distillation (RFC-625)",
+        description="Cross-loop dreaming scope for memory distillation",
     )
     """Scope for dreaming: loop (current), workspace (all goals), topic (tagged goals)."""
 
     dreaming_modes: DreamingModesConfig = Field(
         default_factory=lambda: DreamingModesConfig(),
-        description="Per-mode dreaming distillation config (RFC-625 §13)",
+        description="Per-mode dreaming distillation config",
     )
     """Configuration for each dreaming distillation mode."""
 
@@ -714,22 +714,22 @@ class AutonomousConfig(BaseModel):
         default=4,
         ge=1,
         le=32,
-        description="Maximum concurrent StrangeLoop workers in the autopilot pool (RFC-222)",
+        description="Maximum concurrent StrangeLoop workers in the autopilot pool",
     )
     loop_idle_timeout: int = Field(
         default=300,
         ge=10,
-        description="Seconds an idle loop is kept before release (RFC-222)",
+        description="Seconds an idle loop is kept before release",
     )
     poll_interval: int = Field(
         default=5,
         ge=1,
-        description="AutopilotService scheduling-loop tick interval, seconds (RFC-222)",
+        description="AutopilotService scheduling-loop tick interval, seconds",
     )
     dreaming_poll_interval: int = Field(
         default=60,
         ge=5,
-        description="Reduced polling cadence when in dreaming mode, seconds (RFC-222)",
+        description="Reduced polling cadence when in dreaming mode, seconds",
     )
     # RFC-222 H5: wall-clock budget per dispatched goal. None disables.
     goal_deadline_seconds: float | None = Field(
@@ -746,7 +746,7 @@ class AutonomousConfig(BaseModel):
     # caps memory of the GoalDispatchContextStore in durability.
     context_projection: ContextProjectionConfig = Field(
         default_factory=lambda: ContextProjectionConfig(),
-        description="Bounds for GoalDispatchContextBundle merging (RFC-222 revised)",
+        description="Bounds for GoalDispatchContextBundle merging",
     )
 
     # === Workspace reservation (RFC-222 revised) ===
@@ -754,7 +754,7 @@ class AutonomousConfig(BaseModel):
     # workspace prefixes overlap. Supersedes per-path FileLockMiddleware for v1.
     workspace_reservation: WorkspaceReservationConfig = Field(
         default_factory=lambda: WorkspaceReservationConfig(),
-        description="Workspace-prefix conflict gate config (RFC-222 revised)",
+        description="Workspace-prefix conflict gate config",
     )
 
 
@@ -806,7 +806,7 @@ class LoopWorkingMemoryConfig(BaseModel):
         max_entry_chars_before_spill: Per-step output larger than this is written to disk.
     """
 
-    enabled: bool = Field(default=True, description="Enable RFC-203 working memory")
+    enabled: bool = Field(default=True, description="Enable working memory")
     max_inline_chars: int = Field(
         default=4000,
         ge=400,
@@ -1291,7 +1291,7 @@ class ToolTimeoutConfig(BaseModel):
 
     enabled: bool = Field(
         default=True,
-        description="Enable tool timeout middleware (IG-511)",
+        description="Enable tool timeout middleware",
     )
     default_seconds: float = Field(
         default=60.0,
@@ -1438,7 +1438,7 @@ class StrangeLoopConfig(BaseModel):
 
     output_streaming: OutputStreamingConfig = Field(
         default_factory=OutputStreamingConfig,
-        description="Output streaming configuration (RFC-614)",
+        description="Output streaming configuration",
     )
 
     loop_orchestrator_evidence_validate: bool = Field(
@@ -1450,12 +1450,12 @@ class StrangeLoopConfig(BaseModel):
 
     working_memory: LoopWorkingMemoryConfig = Field(
         default_factory=LoopWorkingMemoryConfig,
-        description="Loop working memory (RFC-203)",
+        description="Loop working memory",
     )
 
     goal_context: GoalContextConfig = Field(
         default_factory=GoalContextConfig,
-        description="Goal context injection for Plan/Execute phases (RFC-217)",
+        description="Goal context injection for Plan/Execute phases",
     )
 
     report_output: ReportOutputConfig = Field(
@@ -1465,12 +1465,12 @@ class StrangeLoopConfig(BaseModel):
 
     plan_prompt_ledger: PlanPromptLedgerConfig = Field(
         default_factory=PlanPromptLedgerConfig,
-        description="Plan-phase ledger projection limits (IG-380); zeros = full ledger passthrough",
+        description="Plan-phase ledger projection limits; zeros = full ledger passthrough",
     )
 
     checkpoint: LoopCheckpointConfig = Field(
         default_factory=LoopCheckpointConfig,
-        description="Progressive checkpoint persistence and startup resume (RFC-203)",
+        description="Progressive checkpoint persistence and startup resume",
     )
 
     concurrency: LoopConcurrencyConfig = Field(
@@ -1500,13 +1500,13 @@ class StrangeLoopConfig(BaseModel):
 
     tool_timeout: ToolTimeoutConfig = Field(
         default_factory=ToolTimeoutConfig,
-        description="Tool timeout middleware configuration (IG-511)",
+        description="Tool timeout middleware configuration",
     )
     """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
 
     context_engine: ContextEngineConfig = Field(
         default_factory=lambda: ContextEngineConfig(),
-        description="Context Engine integration (RFC-624 Phase 3)",
+        description="Context Engine integration",
     )
 
 
@@ -2046,14 +2046,14 @@ class AgentConfig(BaseModel):
     # === AUTONOMOUS (Self-Driving - Unified) ===
     autonomous: AutonomousConfig = Field(
         default_factory=AutonomousConfig,
-        description="Unified self-driving configuration (IG-434: merged autonomous+autopilot)",
+        description="Unified self-driving configuration (merged autonomous+autopilot)",
     )
     """Controls 24/7 self-running behavior for both goal-level and daemon-level."""
 
     # === LOOP (StrangeLoop Internal Tuning) ===
     loop: StrangeLoopConfig = Field(
         default_factory=StrangeLoopConfig,
-        description="StrangeLoop configuration (IG-407: unified agentic+execution)",
+        description="StrangeLoop configuration (unified agentic+execution)",
     )
     """Internal tuning for the agent loop execution mode."""
 
@@ -2067,7 +2067,7 @@ class AgentConfig(BaseModel):
     # === CODE INTERPRETER ===
     code_interpreter: CodeInterpreterConfig = Field(
         default_factory=CodeInterpreterConfig,
-        description="Code interpreter middleware configuration (IG-423)",
+        description="Code interpreter middleware configuration",
     )
     """Embedded QuickJS interpreter for programmatic tool calling (opt-in)."""
 
@@ -2080,14 +2080,14 @@ class AgentConfig(BaseModel):
     # === CLARIFICATION RELAY (RFC-622) ===
     clarification: ClarificationConfig = Field(
         default_factory=lambda: ClarificationConfig(),
-        description="Clarification relay configuration (RFC-622)",
+        description="Clarification relay configuration",
     )
     """How CoreAgent clarification questions are routed (manual TUI vs auto/veritas)."""
 
     # === VERITAS (Clarification auto-answerer, RFC-622) ===
     veritas: VeritasConfig = Field(
         default_factory=lambda: VeritasConfig(),
-        description="Veritas auto-answerer configuration (RFC-622)",
+        description="Veritas auto-answerer configuration",
     )
     """Settings for the intent-grounded clarification answerer."""
 

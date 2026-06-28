@@ -208,7 +208,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._daemon_config.identity.enabled:
             self._identity_service = self._create_identity_service()
             self._auth_handler = AuthHandler(self._identity_service)
-            logger.info("[Identity] Service enabled (RFC-307 AKSK authentication)")
+            logger.info("[Identity] Service enabled")
 
     def _create_identity_service(self) -> Any:
         """Create IdentityService from daemon identity config (RFC-307).

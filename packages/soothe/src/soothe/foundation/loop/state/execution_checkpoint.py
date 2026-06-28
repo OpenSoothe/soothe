@@ -64,7 +64,7 @@ class WaveMetrics(BaseModel):
     )
     answer_from_delegate_final: bool = Field(
         default=False,
-        description="True when assistant_text came from task tool returns (IG-355)",
+        description="True when assistant_text came from task tool returns",
     )
 
 
@@ -120,9 +120,7 @@ class ExecutionCheckpoint(BaseModel):
 
     # Thread/worker assignment
     thread_id: str = Field(description="Thread identifier for this goal execution")
-    worker_id: str | None = Field(
-        default=None, description="Assigned worker loop_id if executing (RFC-222)"
-    )
+    worker_id: str | None = Field(default=None, description="Assigned worker loop_id if executing")
 
     # Loop status
     status: Literal["running", "idle", "finalized", "cancelled"] = Field(
@@ -130,7 +128,7 @@ class ExecutionCheckpoint(BaseModel):
     )
     thread_switch_pending: bool = Field(
         default=False,
-        description="Flag indicating thread just switched, Execute needs goal briefing (RFC-217)",
+        description="Flag indicating thread just switched, Execute needs goal briefing",
     )
 
     # Loop-level cumulative metrics
