@@ -73,6 +73,11 @@ def _step_evidence_lines(state: LoopState) -> list[str]:
 
 
 def _execute_transcript_lines(state: LoopState) -> list[str]:
+    """Format execution transcript with standard conversation markers (IG-524).
+
+    Uses USER:/AI: markers instead of [Task]/[Finding] to improve LLM comprehension.
+    Standard conversation markers are universally recognized as turn boundaries.
+    """
     lines: list[str] = []
     if not state.loop_messages:
         return lines
@@ -87,11 +92,11 @@ def _execute_transcript_lines(state: LoopState) -> list[str]:
         if isinstance(msg, LoopHumanMessage):
             text = flatten_execute_human_content(extract_text_from_message_content(msg.content))
             if text:
-                lines.append(f"[Task] {text}")
+                lines.append(f"USER: {text}")
         elif isinstance(msg, LoopAIMessage):
             text = extract_text_from_message_content(msg.content).strip()
             if text:
-                lines.append(f"[Finding] {text}")
+                lines.append(f"AI: {text}")
 
     return lines
 
