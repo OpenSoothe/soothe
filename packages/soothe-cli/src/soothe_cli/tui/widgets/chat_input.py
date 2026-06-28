@@ -26,6 +26,7 @@ from soothe_cli.tui.config import (
     MODE_PREFIXES,
     PREFIX_TO_MODE,
     is_ascii_mode,
+    newline_shortcut,
 )
 from soothe_cli.tui.input import (
     IMAGE_PLACEHOLDER_PATTERN,
@@ -404,8 +405,6 @@ class ChatTextArea(TextArea):
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the chat text area."""
-        # Remove placeholder if passed, TextArea doesn't support it the same way
-        kwargs.pop("placeholder", None)
         super().__init__(**kwargs)
         self._skip_history_change_events = 0
         self._in_history = False
@@ -996,9 +995,10 @@ class ChatInput(Vertical):
         Yields:
             Widgets for the input row and completion popup.
         """
+        newline_hint = f"{newline_shortcut()} for new line"
         with Horizontal(classes="input-row"):
             yield Static(">", classes="input-prompt", id="prompt")
-            yield ChatTextArea(id="chat-input")
+            yield ChatTextArea(id="chat-input", placeholder=newline_hint)
 
         yield CompletionPopup(id="completion-popup")
 

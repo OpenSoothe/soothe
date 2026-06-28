@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+# Display names for known soothe core subagents (IG-517).
+# Only include subagents that actually exist in soothe core:
+# - Built-in: explore, plan, tacitus (registered in SUBAGENT_FACTORIES)
+# - Plugin-based: browser_use (registered via @plugin decorator)
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "tacitus": "Tacitus",
     "explore": "Explore",
+    "plan": "Plan",
+    "tacitus": "Tacitus",
+    "browser_use": "Browser",
 }
 
 # Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
