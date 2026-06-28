@@ -53,6 +53,11 @@ agent:
       max_parallel_tools: 64      # Increased from 50 for higher tool throughput
       global_max_llm_calls: 16    # Increased from 10 for more concurrent LLM calls
       step_parallelism: max       # Changed from 'dependency' for maximum parallelism
+      # RFC-803 Phase 6: Async checkpoint writes
+      checkpoint:
+        async_write: true        # Enable fire-and-forget writes (non-blocking)
+        flush_interval: 5.0       # Periodic forced write interval (seconds)
+        queue_size: 100           # Max queued checkpoints before blocking
     max_subagent_tasks_per_wave: 8  # Increased from 4 for larger subagent batches
     tool_timeout:
       enabled: true
