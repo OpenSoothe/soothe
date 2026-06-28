@@ -1,639 +1,168 @@
 # PolicyProtocol
 
 **RFC**: 305 (Protocol Specifications series)
-**Module**: RFC-000 Module 4
-**Location**: `packages/soothe-sdk/src/soothe_sdk/protocols/policy.py` (SDK)
-**Re-exported**: `packages/soothe/src/soothe/protocols/policy.py`
-**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics
-**Status**: Implemented  
+**Location**: `packages/soothe/src/soothe/protocols/policy.py` (re-exported from `packages/soothe-sdk/src/soothe_sdk/protocols/policy.py`)
+**Status**: Implemented
 
-## Overview
+## What PolicyProtocol Is
 
-PolicyProtocol defines the interface for **permission-based access control** in Soothe. It implements the least-privilege delegation principle (RFC-000 Principle 7), checking whether actions (tool calls, subagent spawns, MCP connections) are permitted under the current permission set.
+PolicyProtocol defines the interface for **permission-based access control** in Soothe. It implements the least-privilege delegation principle (RFC-000 Principle 7): before any action — a tool call, a subagent spawn, an MCP connection — the runtime asks PolicyProtocol "is this permitted?" and proceeds only on an `allow` verdict.
 
-## Purpose
+The protocol is defined in the SDK package (`soothe_sdk`) for reusability and re-exported from the main `soothe` package for backwards compatibility.
 
-- **Permission enforcement**: Check actions before execution
-- **Least-privilege delegation**: Subagents inherit narrower permissions
-- **Structured permissions**: Category + action + scope granularity
-- **Profile-based configuration**: Named permission profiles
-- **Approval workflow**: Allow/deny/need-approval decisions
+## Why It Exists
 
-## Protocol Interface
+Agent systems that execute shell commands, write files, and spawn subagents need guardrails. Without a centralized permission system, security checks scatter across tool implementations, becoming inconsistent and hard to audit. PolicyProtocol centralizes:
 
-```python
-@runtime_checkable
-class PolicyProtocol(Protocol):
-    """Protocol for permission checking and enforcement."""
+- **Permission enforcement** — a single chokepoint for all action checks
+- **Least-privilege delegation** — subagents inherit *narrower* permissions than their parent
+- **Structured permissions** — category + action + scope granularity, not opaque strings
+- **Profile-based configuration** — named profiles (`readonly`, `standard`, `privileged`) that users select
+- **Approval workflow** — `allow` / `deny` / `need_approval` verdicts enable interactive confirmation
 
-    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
-        """Check if an action is permitted.
+## Key Operations
 
-        Args:
-            action: The action being requested.
-            context: The current policy context.
+- **`check(action, context) → PolicyDecision`** — evaluate whether an action is permitted under the current context. Returns a verdict (`allow` / `deny` / `need_approval`) with a human-readable reason and the matched permission (if allowed).
+- **`narrow_for_child(parent_permissions, child_name) → PermissionSet`** — compute a narrowed permission set for a child subagent. Children can never exceed parent permissions (intersection semantics).
 
-        Returns:
-            A decision with verdict and reason.
-        """
-        ...
+## The Permission Model
 
-    def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet:
-        """Compute a narrowed permission set for a child subagent.
+### Structured Permissions
 
-        Args:
-            parent_permissions: The parent's permissions.
-            child_name: The child subagent's name.
+Permissions are three-part: `Permission(category, action, scope)`.
 
-        Returns:
-            A narrowed PermissionSet for the child.
-        """
-        ...
-```
+- **Category**: `fs` (filesystem), `shell`, `net` (network), `mcp` (MCP servers), `subagent`
+- **Action**: `read`, `write`, `execute`, `connect`, `spawn`
+- **Scope**: `*` (all), glob patterns (`/tmp/**`), specific names (`ls`), or exclusion (`!rm`)
 
-## Data Models
+This structure is clearer than flat strings (`fs_read_tmp`) and enables grouping, glob matching, and deny semantics.
 
-### Permission
+### Scope Patterns
 
-```python
-@dataclass(frozen=True)
-class Permission:
-    """A structured permission with category, action, and scope.
-    
-    Examples:
-        Permission("fs", "read", "*")           -- read any file
-        Permission("fs", "write", "/tmp/**")     -- write only under /tmp
-        Permission("shell", "execute", "ls")     -- execute only ls
-        Permission("shell", "execute", "!rm")    -- anything EXCEPT rm
-        Permission("net", "outbound", "*.example.com")  -- only example.com
-        Permission("mcp", "connect", "my-server")       -- specific MCP server
-        Permission("subagent", "spawn", "planner")       -- specific subagent
-    
-    Args:
-        category: Permission category (fs, shell, net, mcp, subagent).
-        action: Action type (read, write, execute, connect, spawn).
-        scope: Scope qualifier (* for all, glob for paths, 
-               name or !name for commands).
-    """
+| Pattern | Meaning |
+|---------|---------|
+| `*` | All items in the category |
+| `/project/**` | Glob — any path under /project |
+| `ls` | Specific item (exact match) |
+| `!rm` | Exclusion — anything *except* `rm` |
 
-    category: str
-    action: str
-    scope: str = "*"
-
-    def matches(self, requested: Permission) -> bool:
-        """Check if this granted permission covers a requested permission.
-        
-        Args:
-            requested: The permission being requested.
-            
-        Returns:
-            True if this grant covers the request.
-        """
-        ...
-```
-
-**Permission Categories**:
-- **fs**: File system operations (read, write)
-- **shell**: Shell command execution
-- **net**: Network outbound connections
-- **mcp**: MCP server connections
-- **subagent**: Subagent spawning
-
-**Scope Patterns**:
-- `*`: All items in category
-- `path/**`: Glob pattern for paths
-- `name`: Specific item (command, server, subagent)
-- `!name`: Exclusion pattern (anything except)
+Exclusion patterns (`!`) are how deny semantics work: grant `shell:execute:*` and `shell:execute:!rm` together means "all commands except `rm`."
 
 ### PermissionSet
 
-```python
-class PermissionSet:
-    """Immutable collection of permissions with scope-aware matching.
-    
-    Args:
-        permissions: The set of granted permissions.
-    """
-
-    def __init__(self, permissions: frozenset[Permission] | None = None) -> None:
-        self._permissions: frozenset[Permission] = permissions or frozenset()
-
-    @property
-    def permissions(self) -> frozenset[Permission]:
-        """The underlying permission set."""
-        return self._permissions
-
-    def contains(self, requested: Permission) -> bool:
-        """Check if a requested permission is covered by any grant.
-        
-        Args:
-            requested: The permission being checked.
-            
-        Returns:
-            True if any granted permission covers the request.
-        """
-        return any(p.matches(requested) for p in self._permissions)
-
-    def narrow(self, allowed: frozenset[Permission]) -> PermissionSet:
-        """Return a subset for child delegation.
-        
-        Args:
-            allowed: The permissions allowed for the child.
-            
-        Returns:
-            A narrowed PermissionSet (intersection semantics).
-        """
-        narrowed = self._permissions & allowed
-        return PermissionSet(narrowed)
-```
-
-### ActionRequest
-
-```python
-class ActionRequest(BaseModel):
-    """Describes an action requiring permission.
-
-    Args:
-        action_type: Kind of action (tool_call, subagent_spawn, mcp_connect).
-        tool_name: Name of the tool being invoked (if applicable).
-        tool_args: Arguments to the tool (for scope extraction).
-    """
-
-    action_type: str
-    tool_name: str | None = None
-    tool_args: dict[str, Any] = Field(default_factory=dict)
-```
-
-### PolicyContext
-
-```python
-class PolicyContext(BaseModel):
-    """Context for policy evaluation.
-
-    Args:
-        active_permissions: The currently granted permissions.
-        scope_id: Opaque execution scope for audit (e.g. StrangeLoop id).
-        workspace: Absolute workspace root for stream-scoped filesystem policy.
-    """
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    active_permissions: Any  # PermissionSet
-    scope_id: str | None = None
-    workspace: str | None = None
-```
+`PermissionSet` is an immutable collection of `Permission` grants with scope-aware matching. `contains(requested)` returns `True` if *any* granted permission covers the request. `narrow(allowed)` returns a subset for child delegation (set intersection).
 
 ### PolicyDecision
 
-```python
-class PolicyDecision(BaseModel):
-    """Result of a policy check.
+The verdict has three states:
 
-    Args:
-        verdict: The decision (allow, deny, need_approval).
-        reason: Human-readable explanation.
-        matched_permission: The grant that matched (if allowed).
-    """
+- **`allow`** — proceed; includes the matched permission and reason
+- **`deny`** — block; includes the reason
+- **`need_approval`** — pause for user confirmation; the action would be permitted *if approved*
 
-    model_config = {"arbitrary_types_allowed": True}
+The `need_approval` flow enables interactive security: dangerous operations (e.g., `rm -rf`) can be configured as approvable rather than hard-denied, letting users make case-by-case decisions.
 
-    verdict: Literal["allow", "deny", "need_approval"]
-    reason: str
-    matched_permission: Any = None  # Permission | None
-```
+## Permission Narrowing
 
-### PolicyProfile
-
-```python
-class PolicyProfile(BaseModel):
-    """A named policy configuration.
-
-    Args:
-        name: Profile name (e.g., "readonly", "standard", "privileged").
-        permissions: Granted permissions.
-        approvable: Permissions that can be approved interactively.
-        deny_rules: Explicit deny rules that override grants.
-    """
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    name: str
-    permissions: Any  # PermissionSet
-    approvable: Any = None  # PermissionSet | None
-    deny_rules: list[Any] = Field(default_factory=list)  # list[Permission]
-```
-
-## Backend Implementations
-
-### ConfigDrivenPolicy
-
-**Status**: Current implementation  
-**Location**: `packages/soothe/src/soothe/backends/policy/config_policy.py`  
-**Dependencies**: Configuration-based permission profiles
-
-**Features**:
-- YAML-based profile configuration
-- Permission inheritance for subagents
-- Approval workflow support
-- Delegation depth tracking
-
-**Configuration**:
-```yaml
-# config/config.template.yml
-policy:
-  profiles:
-    readonly:
-      permissions:
-        - category: fs
-          action: read
-          scope: "*"
-        - category: shell
-          action: execute
-          scope: "ls"
-      description: Read-only access
-    
-    standard:
-      permissions:
-        - category: fs
-          action: read
-          scope: "*"
-        - category: fs
-          action: write
-          scope: "/tmp/**"
-        - category: shell
-          action: execute
-          scope: "*"
-        - category: shell
-          action: execute
-          scope: "!rm"  # Deny rm
-      description: Standard development access
-    
-    privileged:
-      permissions:
-        - category: "*"
-          action: "*"
-          scope: "*"
-      description: Full access (dangerous)
-```
-
-**Implementation Example**:
-```python
-class ConfigDrivenPolicy(PolicyProtocol):
-    """Policy implementation driven by configuration profiles."""
-    
-    def __init__(self, config: SootheConfig) -> None:
-        self._profiles = self._load_profiles(config)
-    
-    def check(
-        self, 
-        request: ActionRequest, 
-        context: PolicyContext
-    ) -> PolicyDecision:
-        """Check action against profile permissions."""
-        profile = self._profiles.get(context.profile)
-        if not profile:
-            return PolicyDecision(
-                allowed=False,
-                reason=f"Unknown profile: {context.profile}"
-            )
-        
-        permissions = profile.permissions
-        if request.action in permissions:
-            return PolicyDecision(
-                allowed=True,
-                reason=f"Permitted by profile {context.profile}"
-            )
-        
-        return PolicyDecision(
-            allowed=False,
-            reason=f"Action {request.action} not in profile {context.profile}"
-        )
-```
-
-## Usage Patterns
-
-### Permission Checking
-
-```python
-from soothe.protocols import (
-    Permission, PermissionSet, ActionRequest, 
-    PolicyContext, PolicyProtocol
-)
-
-policy: PolicyProtocol = resolve_policy(config)
-
-# Check file system read permission
-request = ActionRequest(
-    action=Permission("fs", "read", "/project/src/main.py"),
-    delegation_depth=0
-)
-context = PolicyContext(profile="readonly")
-
-decision = policy.check(request, context)
-if decision.allowed:
-    # Proceed with file read
-    ...
-elif decision.need_approval:
-    # Request user approval
-    ...
-else:
-    # Deny action
-    raise PermissionError(decision.reason)
-```
-
-### Subagent Permission Narrowing
-
-```python
-# Parent has standard permissions
-parent_permissions = policy.get_permissions("standard")
-
-# Child subagent gets narrower permissions
-child_allowed = frozenset([
-    Permission("fs", "read", "/project/**"),
-    Permission("shell", "execute", "git"),
-])
-
-child_permissions = parent_permissions.narrow(child_allowed)
-
-# Child context
-child_context = PolicyContext(
-    profile="standard",
-    delegation_depth=1,
-    parent_permissions=parent_permissions
-)
-```
-
-### Exclusion Patterns
-
-```python
-# Deny rm command but allow everything else
-profile_permissions = PermissionSet(frozenset([
-    Permission("shell", "execute", "*"),  # Allow all commands
-    Permission("shell", "execute", "!rm"),  # Deny rm
-]))
-
-# Request to execute rm
-request = Permission("shell", "execute", "rm")
-decision = profile_permissions.contains(request)  # False
-
-# Request to execute ls
-request = Permission("shell", "execute", "ls")
-decision = profile_permissions.contains(request)  # True
-```
-
-## Integration with Other Protocols
-
-### Policy ↔ Enforcement Integration
-
-Policy decisions are enforced via middleware:
-
-```python
-from soothe.middleware.policy_enforcement import PolicyEnforcementMiddleware
-
-# Middleware intercepts tool calls and subagent spawns
-enforcement = PolicyEnforcementMiddleware(policy_protocol)
-
-# Before each action:
-# 1. Create ActionRequest
-# 2. Call policy.check(request, context)
-# 3. If allowed: proceed
-# 4. If denied: raise PermissionError
-# 5. If need_approval: pause for user input
-```
-
-### Policy ↔ Durability Integration
-
-Threads carry policy profile:
-
-```python
-from soothe.protocols import ThreadMetadata
-
-metadata = ThreadMetadata(
-    policy_profile="readonly"  # Applied to all thread operations
-)
-
-thread = await durability.create_thread(metadata)
-```
-
-### Policy ↔ Subagent Integration
-
-Subagents inherit narrowed permissions:
+The least-privilege principle in action:
 
 ```
 Parent (depth=0, profile=standard):
-  → PermissionSet([...])
-  
+  → PermissionSet: [fs:read:*, shell:execute:*, ...]
+
 Child Subagent (depth=1):
-  → Narrowed to allowed subset
+  → Narrowed to allowed subset (intersection)
   → Cannot exceed parent permissions
-  
+
 Grandchild Subagent (depth=2):
   → Further narrowed
-  → Depth tracking for auditing
+  → Delegation depth tracked for auditing
 ```
 
-## Permission Categories
+Children get an *intersection* of the parent's permissions and the allowed set. This is a one-way ratchet: permissions only narrow, never expand. Delegation depth is tracked for audit trails.
 
-### File System (fs)
+## Profile-Based Configuration
 
-```python
-# Read any file
-Permission("fs", "read", "*")
+Profiles are named bundles of permissions:
 
-# Write only under /tmp
-Permission("fs", "write", "/tmp/**")
+- **`readonly`** — `fs:read:*`, `shell:execute:ls`, `shell:execute:cat`. No modifications.
+- **`standard`** — `fs:read:*`, `fs:write:/tmp/**`, `shell:execute:*` except `rm`, `mcp:connect:*`, `subagent:spawn:*`. Standard development access.
+- **`privileged`** — `*:*:*`. Full access (dangerous).
 
-# Read specific project directory
-Permission("fs", "read", "/project/**")
+Profiles also carry `approvable` (permissions that can be interactively approved) and `deny_rules` (explicit denies that override grants). `PolicyProfile` bundles these into a named, reusable configuration.
+
+## Backend: ConfigDrivenPolicy
+
+The current implementation, driven by YAML configuration. Features:
+
+- YAML-based profile definitions (see `config/config.template.yml`)
+- Permission inheritance and narrowing for subagents
+- Approval workflow support
+- Delegation depth tracking
+
+Resolved via `resolve_policy(config)` → returns a `PolicyProtocol` instance.
+
+## Integration Points
+
+### Policy ↔ Enforcement Middleware
+
+Policy decisions are enforced via `PolicyEnforcementMiddleware`, which intercepts tool calls and subagent spawns:
+
+```
+Before each action:
+  1. Create ActionRequest from the operation
+  2. Call policy.check(request, context)
+  3. allow → proceed
+  4. deny → raise PermissionError
+  5. need_approval → pause for user input
 ```
 
-### Shell (shell)
+### Policy ↔ Durability
 
-```python
-# Execute any command
-Permission("shell", "execute", "*")
+Threads carry a `policy_profile` in their `ThreadMetadata`. A thread created with `policy_profile="readonly"` enforces read-only permissions for its entire lifetime. The profile is set at creation and applies to all operations within the thread. See [durability.md](durability.md).
 
-# Execute only safe commands
-Permission("shell", "execute", "ls")
-Permission("shell", "execute", "git")
-Permission("shell", "execute", "cat")
+### Policy ↔ Subagent Delegation
 
-# Deny dangerous commands
-Permission("shell", "execute", "!rm")
-Permission("shell", "execute", "!sudo")
-```
+When a subagent is spawned, the runtime calls `narrow_for_child()` to compute the child's permission set. The child receives a `PolicyContext` with the narrowed permissions and an incremented delegation depth. The child's own `check()` calls use this narrowed set — it physically cannot perform actions outside its scope.
 
-### Network (net)
+### Policy ↔ OperationSecurity
 
-```python
-# Outbound to any host
-Permission("net", "outbound", "*")
-
-# Outbound only to specific domains
-Permission("net", "outbound", "*.example.com")
-Permission("net", "outbound", "api.github.com")
-```
-
-### MCP (mcp)
-
-```python
-# Connect to any MCP server
-Permission("mcp", "connect", "*")
-
-# Connect to specific MCP server
-Permission("mcp", "connect", "filesystem-server")
-Permission("mcp", "connect", "github-server")
-```
-
-### Subagent (subagent)
-
-```python
-# Spawn any subagent
-Permission("subagent", "spawn", "*")
-
-# Spawn specific subagents
-Permission("subagent", "spawn", "planner")
-Permission("subagent", "spawn", "explore")
-Permission("subagent", "spawn", "research")
-```
-
-## Policy Profiles
-
-### readonly Profile
-
-```yaml
-readonly:
-  permissions:
-    - category: fs
-      action: read
-      scope: "*"
-    - category: shell
-      action: execute
-      scope: "ls"
-    - category: shell
-      action: execute
-      scope: "cat"
-  description: Read-only access, no modifications
-```
-
-### standard Profile
-
-```yaml
-standard:
-  permissions:
-    - category: fs
-      action: read
-      scope: "*"
-    - category: fs
-      action: write
-      scope: "/tmp/**"
-    - category: shell
-      action: execute
-      scope: "*"
-    - category: shell
-      action: execute
-      scope: "!rm"
-    - category: mcp
-      action: connect
-      scope: "*"
-    - category: subagent
-      action: spawn
-      scope: "*"
-  description: Standard development access
-```
-
-### privileged Profile
-
-```yaml
-privileged:
-  permissions:
-    - category: "*"
-      action: "*"
-      scope: "*"
-  description: Full access (dangerous, use with caution)
-```
-
-## Configuration
-
-### Policy Protocol Settings
-
-```yaml
-# config/config.template.yml
-policy:
-  profiles:
-    readonly: [...]
-    standard: [...]
-    privileged: [...]
-  
-  default_profile: standard
-  approval_timeout: 300  # seconds
-```
-
-### Resolution
-
-```python
-from soothe.runner.resolver import resolve_policy
-
-# Resolve policy protocol from config
-policy = resolve_policy(config)
-
-# Returns: PolicyProtocol implementation
-# Backend: ConfigDrivenPolicy
-```
-
-## Testing
-
-### Unit Tests
-
-**Location**: `packages/soothe/tests/unit/backends/policy/`
-
-Tests verify:
-- Permission matching logic
-- Scope pattern evaluation
-- Exclusion pattern handling
-- Permission set narrowing
-- Profile-based decisions
-
-### Integration Tests
-
-Policy integration tests verify:
-- Enforcement middleware integration
-- Subagent permission inheritance
-- Thread profile application
-- Approval workflow
+`OperationSecurityProtocol` (see [loop-protocols.md](loop-protocols.md)) normalizes concrete operations into security requests and can delegate to `PolicyProtocol` for permission matching. Policy is the decision engine; operation security is the operation-aware wrapper.
 
 ## Design Rationale
 
 ### Why Structured Permissions?
 
-String-based permissions lack granularity:
-- `fs:read:/tmp/**` vs `fs_read_tmp` is clearer
-- Category/action separation enables grouping
-- Scope patterns support glob matching
-- Exclusion patterns (!) enable deny semantics
+Flat string permissions (`fs_read_tmp`) lack granularity and are hard to match. The category/action/scope split enables:
+- Grouping by category (all `fs` permissions)
+- Glob scope matching (`/tmp/**` covers `/tmp/a/b/c`)
+- Exclusion semantics (`!rm` for deny)
+- Clear audit trails (which grant matched which request)
 
 ### Why Permission Narrowing?
 
-Least-privilege principle (RFC-000 Principle 7):
-- Children cannot exceed parent permissions
-- Intersection semantics ensure safety
-- Delegation depth tracking for auditing
+The least-privilege principle (RFC-000 Principle 7) demands that delegated agents can't exceed their delegator's power. Intersection semantics guarantee this: a child's permissions are always a subset of the parent's. Delegation depth tracking provides audit visibility into how far down the chain a permission propagated.
 
 ### Why Profile-Based?
 
-Named profiles simplify configuration:
-- `readonly`, `standard`, `privileged` are intuitive
-- Users select profiles, not permission lists
-- Profiles are reusable across threads
+Named profiles (`readonly`, `standard`, `privileged`) are far more intuitive than raw permission lists. Users select a profile by name; they don't construct permission sets manually. Profiles are reusable across threads and deployments, making security configuration consistent and reviewable.
+
+## Gotchas
+
+- **Deny rules override grants** — a `deny_rules` entry in a profile takes precedence over any matching grant, even if the grant is broader. Always check deny rules when debugging unexpected denials.
+- **`need_approval` blocks execution** — if no approval mechanism is wired up, `need_approval` effectively becomes a deny. Ensure the enforcement middleware handles the approval flow.
+- **Narrowing is intersection, not union** — `narrow(allowed)` returns `parent ∩ allowed`, not `parent ∪ allowed`. If `allowed` contains permissions the parent doesn't have, those are silently dropped.
+- **Exclusion scope is per-permission** — `shell:execute:!rm` only denies `rm`. You still need `shell:execute:*` (or specific allows) for other commands to work.
+- **Profiles are defined in SDK** — the `PolicyProtocol` and its data models live in `soothe_sdk.protocols.policy`. The `soothe.protocols.policy` module re-exports them. Import from either; the SDK path is canonical.
 
 ## Specification Reference
 
 - **RFC-305**: Policy Protocol Architecture
 - **RFC-102**: Security Filesystem Policy
-- **RFC-000**: System Conceptual Design (least-privilege principle)
+- **RFC-000**: System Conceptual Design (Principle 7: least-privilege)
 
 ## Related Documentation
 
-- [Operation Security Protocol](operation-security.md)
-- [Durability Protocol](durability.md)
-- [Middleware Integration](../middleware.md)
+- [Loop Protocols](loop-protocols.md) — `OperationSecurityProtocol` wraps policy
+- [Durability Protocol](durability.md) — `policy_profile` in thread metadata
+- [Execution Protocols](execution-protocols.md) — enforcement during runs

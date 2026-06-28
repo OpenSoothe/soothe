@@ -1,51 +1,38 @@
 # Vector Store Backends
 
-VectorStoreProtocol implementations for semantic search and embeddings.
+Semantic search via `VectorStoreProtocol`. Vector store backends store embedding vectors and perform similarity search, enabling meaning-based retrieval for memory, context, and knowledge systems. They are the engine behind Soothe's "find by meaning, not keywords" capabilities.
 
 ---
 
-## Overview
+## What Vector Store Backends Do
 
-Vector store backends implement `VectorStoreProtocol` for storing and searching vector embeddings. They enable semantic search capabilities for memory, context, and knowledge retrieval.
+Vector store backends manage collections of embedding vectors with associated metadata payloads. The core operations:
 
----
+- **`create_collection()`** — Initialize a vector table with a given dimension and distance metric.
+- **`insert()`** — Add vectors with optional payloads (metadata dicts) and IDs.
+- **`search()`** — Find nearest neighbors to a query vector, returning ranked `VectorRecord` results with similarity scores.
+- **`get/update/delete`** — CRUD operations on individual records by ID.
+- **`list_records()`** — List records with optional metadata filters.
+- **`reset()/delete_collection()`** — Clear data.
 
-## VectorStoreProtocol Interface
-
-### Core Operations
-
-```python
-class VectorStoreProtocol(Protocol):
-    """Async protocol for vector database operations."""
-
-    async def create_collection(self, vector_size: int, distance: str = "cosine") -> None: ...
-    async def insert(self, vectors: list[list[float]], payloads: list[dict] | None = None, ids: list[str] | None = None) -> None: ...
-    async def search(self, query: str, vector: list[float], limit: int = 5, filters: dict | None = None) -> list[VectorRecord]: ...
-    async def delete(self, record_id: str) -> None: ...
-    async def update(self, record_id: str, vector: list[float] | None = None, payload: dict | None = None) -> None: ...
-    async def get(self, record_id: str) -> VectorRecord | None: ...
-    async def list_records(self, filters: dict | None = None, limit: int | None = None) -> list[VectorRecord]: ...
-    async def delete_collection(self) -> None: ...
-    async def reset(self) -> None: ...
-    async def close(self) -> None: ...
-```
+**Critical design choice**: All backends use **self-provided vectors** — Soothe generates embeddings externally (via its configured embedding model) and passes raw vectors to the store. No backend runs its own vectorizer. This ensures consistent embedding dimensions across backends.
 
 ---
 
-## Vector Record Model
+## Backend Comparison
 
-### VectorRecord
-
-Vector record data structure:
-
-```python
-class VectorRecord(BaseModel):
-    """A stored vector record with metadata."""
-
-    id: str                      # Unique identifier
-    score: float | None          # Similarity score from search (None for non-search results)
-    payload: dict[str, Any]      # Arbitrary metadata stored alongside the vector
-```
+| Feature | PGVectorStore | SQLiteVecStore | WeaviateVectorStore |
+|---------|---------------|---------------|---------------------|
+| Engine | PostgreSQL + pgvector | sqlite-vec extension | Weaviate v4 (gRPC) |
+| Index type | HNSW / IVFFlat / none | HNSW (built-in) | HNSW (built-in) |
+| Connection pooling | ✅ (psycopg_pool, default 5) | ✅ (reader pool, default 8) | ✅ (via client) |
+| Metadata filtering | ✅ (SQL WHERE) | ⚠️ Limited | ✅ (GraphQL filters) |
+| Concurrent writes | ✅ | ❌ (single writer, WAL) | ✅ |
+| Cloud-ready | ✅ | ❌ (local file) | ✅ (Weaviate Cloud) |
+| External dependencies | PostgreSQL, pgvector, psycopg_pool | sqlite-vec (optional, has fallback) | weaviate-client, Weaviate server |
+| Setup complexity | Medium | Low | Medium-High |
+| Scalability | High | Limited | High |
+| Fallback behavior | N/A | Python-side similarity if extension missing | N/A |
 
 ---
 
@@ -53,656 +40,46 @@ class VectorRecord(BaseModel):
 
 ### PGVectorStore
 
-Production-grade vector storage using PostgreSQL pgvector extension.
+Production-grade vector storage using PostgreSQL with the pgvector extension.
 
-#### Features
+**Key characteristics**:
+- **Index choice**: Supports HNSW (fast approximate search, higher recall, moderate build time), IVFFlat (faster build, good for large datasets), or no index (exact search, for small datasets <1000 vectors).
+- **Connection pooling** via `psycopg_pool.AsyncConnectionPool` (default 5 connections, min 1).
+- **Distance metrics**: cosine (default), l2 (Euclidean), ip (inner product) — mapped to pgvector operators.
+- **Metadata filtering** via SQL WHERE clauses on JSONB payload columns.
+- **Native PostgreSQL integration** — shares infrastructure with durability and persistence backends.
 
-- **Async Operations**: Connection pooling with async support
-- **Index Types**: HNSW and IVFFlat index support
-- **Production-grade**: Scalable, concurrent access
-- **Native PostgreSQL**: Integrated with existing PostgreSQL infrastructure
-- **Metadata Filtering**: Filter search results by metadata
-- **Connection Pooling**: Efficient connection management
+**When to choose**: Production deployments with existing PostgreSQL infrastructure, scenarios requiring scalable concurrent access, or when you want vector storage co-located with other Soothe data.
 
-#### Architecture
-
-```
-PGVectorStore Architecture
-├─ PostgreSQL Database
-│  ├─ pgvector extension
-│  ├─ Vector table
-│  ├─ HNSW/IVFFlat index
-│  ├─ Async connection pool (psycopg_pool)
-│  └─ Transaction support
-│
-├─ Index Types
-│  ├─ HNSW (Hierarchical Navigable Small World)
-│  │  ├─ Fast approximate search
-│  │  ├─ Better recall than IVFFlat
-│  │  └─ Build time: O(n log n)
-│  │
-│  └─ IVFFlat (Inverted File with Flat compression)
-│  │  ├─ Faster build than HNSW
-│  │  ├─ Good for large datasets
-│  │  └─ Build time: O(n)
-│  │
-│  └─ None (no index)
-│     ├─ Exact search (slow)
-│     └─ Use for small datasets
-│
-└─ Configuration
-   ├─ Collection name
-   ├─ Vector dimension
-   ├─ Index type
-   ├─ Pool size
-   └─ DSN
-```
-
-#### Index Types Comparison
-
-| Index Type | Build Speed | Search Speed | Recall | Best Use Case |
-|------------|-------------|--------------|--------|---------------|
-| **HNSW** | Moderate | Fast | High | Production, accuracy-critical |
-| **IVFFlat** | Fast | Moderate | Good | Large datasets, speed-critical |
-| **None** | N/A | Slow | Perfect | Small datasets (<1000 vectors), exact search |
-
-#### Implementation
-
-```python
-class PGVectorStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using PostgreSQL with pgvector."""
-
-    def __init__(
-        self,
-        collection: str = "soothe_vectors",
-        dsn: str = "postgresql://localhost/soothe",
-        pool_size: int = 5,
-        index_type: str = "hnsw",
-        vector_size: int = 1536,
-    ) -> None:
-        """Initialize PGVectorStore.
-
-        Args:
-            collection: Table name for storing vectors.
-            dsn: PostgreSQL connection string.
-            pool_size: Connection pool size.
-            index_type: Index type (hnsw, ivfflat, or none).
-            vector_size: Dimension of vectors (default: 1536).
-        """
-        ...
-
-    async def create_collection(
-        self, vector_size: int | None = None, distance: str = "cosine"
-    ) -> None:
-        """Create or ensure a collection exists."""
-        ...
-
-    async def insert(
-        self,
-        vectors: list[list[float]],
-        payloads: list[dict] | None = None,
-        ids: list[str] | None = None,
-    ) -> None:
-        """Insert vectors with optional payloads and IDs."""
-        ...
-
-    async def search(
-        self,
-        query: str,
-        vector: list[float],
-        limit: int = 5,
-        filters: dict | None = None,
-    ) -> list[VectorRecord]:
-        """Search for nearest neighbours."""
-        ...
-
-    async def delete(self, record_id: str) -> None:
-        """Delete a record by ID."""
-        ...
-
-    async def update(
-        self,
-        record_id: str,
-        vector: list[float] | None = None,
-        payload: dict | None = None,
-    ) -> None:
-        """Update a record's vector and/or payload."""
-        ...
-
-    async def get(self, record_id: str) -> VectorRecord | None:
-        """Retrieve a single record by ID."""
-        ...
-
-    async def list_records(
-        self,
-        filters: dict | None = None,
-        limit: int | None = None,
-    ) -> list[VectorRecord]:
-        """List records matching optional filters."""
-        ...
-
-    async def delete_collection(self) -> None:
-        """Delete the entire collection and its data."""
-        ...
-
-    async def reset(self) -> None:
-        """Clear all records from the collection."""
-        ...
-
-    async def close(self) -> None:
-        """Close connections and release resources."""
-        ...
-```
-
-#### Configuration
-
+**Minimal config**:
 ```yaml
 vector_store:
   enabled: true
-  provider: pgvector        # PGVectorStore backend
-  
-  # PostgreSQL connection
+  provider: pgvector
   dsn: postgresql://localhost/soothe
-  pool_size: 5
-  
-  # Collection settings
   collection: soothe_vectors
-  vector_size: 1536         # OpenAI embedding dimension
-  
-  # Index settings
-  index_type: hnsw          # HNSW index (recommended)
+  vector_size: 1536
+  index_type: hnsw
 ```
 
-#### Usage Example
-
-```python
-from soothe.backends.vector_store import PGVectorStore
-from soothe.protocols.vector_store import VectorRecord
-
-# Initialize store
-store = PGVectorStore(
-    dsn="postgresql://localhost/soothe",
-    collection="memories",
-    vector_size=1536,
-)
-
-# Create collection
-await store.create_collection(vector_size=1536, distance="cosine")
-
-# Insert vectors
-await store.insert(
-    vectors=[[0.1, 0.2, ...], [0.3, 0.4, ...]],
-    payloads=[{"content": "test memory"}, {"content": "another"}],
-    ids=["mem_abc123", "mem_def456"],
-)
-
-# Search vectors
-results = await store.search(
-    query="test memory",
-    vector=[0.1, 0.2, ...],
-    limit=10,
-    filters={"tags": ["test"]},
-)
-
-# Get vector
-record = await store.get("mem_abc123")
-
-# Update vector
-await store.update("mem_abc123", payload={"tags": ["updated"]})
-
-# List records
-records = await store.list_records(limit=100)
-
-# Delete vector
-await store.delete("mem_abc123")
-
-# Close connections
-await store.close()
-```
+Source: `packages/soothe/src/soothe/backends/vector_store/pgvector.py`
 
 ---
 
 ### SQLiteVecStore
 
-Embedded vector storage using sqlite-vec extension.
+Embedded vector storage using the sqlite-vec extension — no external database required.
 
-#### Features
+**Key characteristics**:
+- **Embedded**: Vectors stored in a local SQLite database file (default `$SOOTHE_HOME/vector.db`). Zero external dependencies.
+- **Graceful fallback**: If the sqlite-vec extension (virtual tables) is unavailable, falls back to Python-side similarity computation (`_cosine_similarity`, `_l2_distance`, `_ip_similarity`). This is slower but functional.
+- **WAL mode + reader pool**: Concurrent reads via a reader pool (default 8 connections), single serialized writer via `asyncio.Lock`. Supports multiple concurrent loops.
+- **Binary vector packing**: Vectors are packed into F32 binary format (`struct.pack`) for efficient sqlite-vec storage.
+- **Distance metrics**: cosine, l2, ip — mapped to sqlite-vec distance functions.
 
-- **Embedded**: No external database required
-- **Async Operations**: Async SQLite support
-- **HNSW Index**: Fast approximate search
-- **Local Storage**: File-based persistence
-- **No External Dependencies**: Self-contained
+**When to choose**: Local development, embedded deployments, single-process production, or any scenario avoiding external dependencies. The fallback ensures it works even without the extension installed.
 
-#### Architecture
-
-```
-SQLiteVecStore Architecture
-├─ SQLite Database
-│  ├─ sqlite-vec extension
-│  ├─ Vector table
-│  ├─ HNSW index (built-in)
-│  ├─ Async connection (aiosqlite)
-│  └─ WAL mode
-│
-├─ Index Management
-│  ├─ HNSW index (automatic)
-│  ├─ Index configuration
-│  └─ Reindex support
-│
-└─ Configuration
-   ├─ Database file
-   ├─ Collection name
-   ├─ Vector dimension
-   └─ Index parameters
-```
-
-#### Implementation
-
-```python
-class SQLiteVecStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using sqlite-vec.
-
-    Uses the sqlite-vec extension for vector similarity search.
-    Falls back to Python-side similarity computation if sqlite-vec
-    virtual tables are unavailable.
-
-    Args:
-        collection: Collection name (becomes table name prefix).
-        db_path: Path to SQLite database. Defaults to $SOOTHE_HOME/vector.db.
-        vector_size: Dimension of vectors (default: 1536).
-        distance: Distance metric (cosine, l2, ip).
-        reader_pool_size: Number of reader connections for concurrent reads.
-    """
-
-    def __init__(
-        self,
-        collection: str = "soothe_vectors",
-        db_path: str | None = None,
-        vector_size: int = 1536,
-        distance: str = "cosine",
-        reader_pool_size: int = 8,
-    ) -> None:
-        """Initialize SQLiteVecStore."""
-        ...
-
-    async def create_collection(
-        self, vector_size: int | None = None, distance: str = "cosine"
-    ) -> None:
-        """Create or ensure a collection exists."""
-        ...
-
-    async def insert(
-        self,
-        vectors: list[list[float]],
-        payloads: list[dict] | None = None,
-        ids: list[str] | None = None,
-    ) -> None:
-        """Insert vectors with optional payloads and IDs."""
-        ...
-
-    async def search(
-        self,
-        query: str,
-        vector: list[float],
-        limit: int = 5,
-        filters: dict | None = None,
-    ) -> list[VectorRecord]:
-        """Search for nearest neighbours."""
-        ...
-
-    async def delete(self, record_id: str) -> None: ...
-    async def update(self, record_id: str, vector: list[float] | None = None, payload: dict | None = None) -> None: ...
-    async def get(self, record_id: str) -> VectorRecord | None: ...
-    async def list_records(self, filters: dict | None = None, limit: int | None = None) -> list[VectorRecord]: ...
-    async def delete_collection(self) -> None: ...
-    async def reset(self) -> None: ...
-    async def close(self) -> None: ...
-```
-
-#### Configuration
-
-```yaml
-vector_store:
-  enabled: true
-  provider: sqlite_vec      # SQLiteVecStore backend
-
-  # Storage
-  db_path: ~/.soothe/vector_store/vector.db
-
-  # Collection settings
-  collection: soothe_vectors
-  vector_size: 1536         # OpenAI embedding dimension
-
-  # Index parameters
-  distance: cosine          # Distance metric (cosine, l2, ip)
-  reader_pool_size: 8       # Concurrent reader connections
-```
-
-#### Usage Example
-
-```python
-from soothe.backends.vector_store import SQLiteVecStore
-
-# Initialize store
-store = SQLiteVecStore(
-    collection="memories",
-    db_path="~/.soothe/vector_store/vector.db",
-    vector_size=1536,
-)
-
-# Create collection
-await store.create_collection(vector_size=1536)
-
-# Insert vectors
-await store.insert(
-    vectors=[[0.1, 0.2, ...]],
-    payloads=[{"content": "test memory"}],
-    ids=["mem_abc123"],
-)
-
-# Search
-results = await store.search(query="test", vector=[0.1, 0.2, ...], limit=10)
-
-# Get, update, delete, list
-record = await store.get("mem_abc123")
-await store.update("mem_abc123", payload={"tags": ["updated"]})
-await store.delete("mem_abc123")
-records = await store.list_records(limit=100)
-await store.close()
-```
-
----
-
-### WeaviateVectorStore
-
-Cloud-native vector storage using Weaviate.
-
-#### Features
-
-- **Cloud-native**: Designed for cloud deployment
-- **GraphQL API**: Rich querying capabilities
-- **Multi-modal**: Support for various data types
-- **Semantic Search**: Advanced semantic search features
-- **Schema Management**: Automatic schema inference
-- **Modules**: Extensible with modules (text2vec, img2vec, etc.)
-
-#### Architecture
-
-```
-WeaviateVectorStore Architecture
-├─ Weaviate Server
-│  ├─ GraphQL API
-│  ├─ REST API
-│  ├─ HNSW index (built-in)
-│  ├─ Schema management
-│  └─ Module system
-│
-├─ Client Library
-│  ├─ weaviate-client
-│  ├─ Async support
-│  ├─ GraphQL queries
-│  ├─ Batch operations
-│  └─ Schema utilities
-│
-└─ Configuration
-   ├─ Weaviate URL
-   ├─ Collection class
-   ├─ Vectorizer module
-   └─ Authentication
-```
-
-#### Implementation
-
-```python
-class WeaviateVectorStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using Weaviate v4 async client.
-
-    Uses self-provided vectors (skip vectorizer) so embedding is
-    handled externally by Soothe's embedding model.
-
-    Args:
-        collection: Weaviate collection (class) name.
-        url: Weaviate server URL.
-        api_key: Weaviate API key (for Weaviate Cloud).
-        grpc_port: gRPC port for Weaviate.
-    """
-
-    def __init__(
-        self,
-        collection: str = "SootheVectors",
-        url: str = "http://localhost:8080",
-        api_key: str | None = None,
-        grpc_port: int = 50051,
-    ) -> None:
-        """Initialize WeaviateVectorStore."""
-        ...
-
-    async def create_collection(
-        self, vector_size: int | None = None, distance: str = "cosine"
-    ) -> None: ...
-    async def insert(
-        self, vectors: list[list[float]], payloads: list[dict] | None = None, ids: list[str] | None = None
-    ) -> None: ...
-    async def search(
-        self, query: str, vector: list[float], limit: int = 5, filters: dict | None = None
-    ) -> list[VectorRecord]: ...
-    async def delete(self, record_id: str) -> None: ...
-    async def update(self, record_id: str, vector: list[float] | None = None, payload: dict | None = None) -> None: ...
-    async def get(self, record_id: str) -> VectorRecord | None: ...
-    async def list_records(self, filters: dict | None = None, limit: int | None = None) -> list[VectorRecord]: ...
-    async def delete_collection(self) -> None: ...
-    async def reset(self) -> None: ...
-    async def close(self) -> None: ...
-```
-
-#### Configuration
-
-```yaml
-vector_store:
-  enabled: true
-  provider: weaviate        # WeaviateVectorStore backend
-
-  # Weaviate connection
-  url: http://localhost:8080
-  grpc_port: 50051
-
-  # Collection settings
-  collection: SootheVectors
-
-  # Authentication (optional)
-  api_key: null             # Weaviate API key (for Weaviate Cloud)
-```
-
-#### Usage Example
-
-```python
-from soothe.backends.vector_store import WeaviateVectorStore
-
-# Initialize store
-store = WeaviateVectorStore(
-    collection="Memories",
-    url="http://localhost:8080",
-)
-
-# Create collection
-await store.create_collection(vector_size=1536)
-
-# Insert vectors
-await store.insert(
-    vectors=[[0.1, 0.2, ...]],
-    payloads=[{"content": "test memory"}],
-    ids=["mem_abc123"],
-)
-
-# Search
-results = await store.search(query="test", vector=[0.1, 0.2, ...], limit=10)
-
-# Get, update, delete, list
-record = await store.get("mem_abc123")
-await store.update("mem_abc123", payload={"tags": ["updated"]})
-await store.delete("mem_abc123")
-records = await store.list_records(limit=100)
-await store.close()
-```
-
----
-
-## Performance Characteristics
-
-### PGVectorStore Performance
-
-| Operation | Performance | Notes |
-|-----------|-------------|-------|
-| `create_collection()` | ~50-100ms | DDL with index creation |
-| `insert()` | ~20-50ms | Connection pool overhead |
-| `search()` | ~50-100ms | HNSW index, fast approximate search |
-| `get()` | ~10-30ms | Network overhead |
-| `delete()` | ~20-50ms | Connection pool overhead |
-| `list_records()` | ~50-200ms | Filter + network |
-
-### SQLiteVecStore Performance
-
-| Operation | Performance | Notes |
-|-----------|-------------|-------|
-| `create_collection()` | ~5-10ms | Local DDL |
-| `insert()` | ~10-20ms | Local, no network |
-| `search()` | ~20-50ms | HNSW index, local |
-| `get()` | ~5-10ms | Fast local read |
-| `delete()` | ~10-20ms | Local |
-| `list_records()` | ~50-100ms | Index scan |
-
-### WeaviateVectorStore Performance
-
-| Operation | Performance | Notes |
-|-----------|-------------|-------|
-| `create_collection()` | ~100-200ms | Schema creation |
-| `insert()` | ~50-100ms | gRPC API overhead |
-| `search()` | ~100-200ms | gRPC query overhead |
-| `get()` | ~50-100ms | REST API overhead |
-| `delete()` | ~50-100ms | REST API overhead |
-| `list_records()` | ~100-300ms | GraphQL aggregation |
-
----
-
-## Comparison Table
-
-### Vector Store Backend Comparison
-
-| Feature | PGVectorStore | SQLiteVecStore | WeaviateVectorStore |
-|---------|---------------|---------------|--------------|
-| Storage Type | PostgreSQL pgvector | sqlite-vec | Weaviate |
-| Index Type | HNSW/IVFFlat | HNSW | HNSW (built-in) |
-| Async Operations | ✅ | ✅ | ✅ |
-| Connection Pooling | ✅ | ✅ (reader pool) | ✅ (via client) |
-| Metadata Filtering | ✅ | ⚠️ (limited) | ✅ |
-| Production Use | ✅ | ⚠️ (local) | ✅ (cloud) |
-| External Dependencies | PostgreSQL, pgvector, psycopg_pool | sqlite-vec | weaviate-client, Weaviate server |
-| Setup Complexity | Medium | Low | Medium-High |
-| Scalability | High | Limited | High |
-| Cloud-ready | ✅ | ❌ | ✅ |
-
----
-
-## Error Handling
-
-### Common Errors
-
-```python
-try:
-    await store.insert(
-        vectors=[[0.1, 0.2, ...]],
-        payloads=[{"content": "test"}],
-        ids=["mem_abc123"],
-    )
-except VectorStoreBackendError as e:
-    logger.error(f"Vector store backend error: {e}")
-
-    # Handle specific errors:
-    if "connection_failed" in str(e):
-        # Retry or fallback
-        pass
-
-    elif "index_error" in str(e):
-        # Reindex
-        await store.reset()
-
-    elif "dimension_mismatch" in str(e):
-        # Check vector dimension
-        pass
-```
-
----
-
-## Integration with Memory
-
-### Memory → Vector Store Flow
-
-Memory backends use vector stores for semantic search:
-
-```python
-class MemUMemory(MemoryProtocol):
-    def __init__(self, config: SootheConfig):
-        # Create embedding model
-        embedding_model = config.create_embedding_model()
-        
-        # Use vector store for semantic search
-        # (MemU has its own embedding store)
-```
-
----
-
-## Testing
-
-### Unit Testing
-
-```python
-import pytest
-
-@pytest.mark.asyncio
-async def test_pgvector_store():
-    """Test PGVectorStore backend."""
-    store = PGVectorStore(
-        dsn="postgresql://localhost/test",
-        collection="test_vectors"
-    )
-
-    # Create collection
-    await store.create_collection(vector_size=1536)
-
-    # Test insert
-    await store.insert(
-        vectors=[[0.1] * 1536],
-        payloads=[{"test": "data"}],
-        ids=["test_1"],
-    )
-
-    # Test search
-    results = await store.search(query="test", vector=[0.1] * 1536, limit=10)
-    assert len(results) > 0
-
-    # Test get
-    result = await store.get("test_1")
-    assert result.id == "test_1"
-
-    # Test list
-    records = await store.list_records()
-    assert len(records) > 0
-
-    # Test delete
-    await store.delete("test_1")
-    result = await store.get("test_1")
-    assert result is None
-
-    await store.close()
-```
-
----
-
-## Configuration Examples
-
-### Basic SQLiteVec Configuration
-
+**Minimal config**:
 ```yaml
 vector_store:
   enabled: true
@@ -710,109 +87,95 @@ vector_store:
   db_path: ~/.soothe/vector_store/vector.db
   collection: soothe_vectors
   vector_size: 1536
-  distance: cosine
-  reader_pool_size: 8
 ```
 
-### Production PGVector Configuration
+Source: `packages/soothe/src/soothe/backends/vector_store/sqlite_vec.py`
 
-```yaml
-vector_store:
-  enabled: true
-  provider: pgvector
-  
-  # PostgreSQL connection
-  dsn: postgresql://user:pass@host:5432/soothe
-  pool_size: 10
-  
-  # Collection settings
-  collection: soothe_vectors
-  vector_size: 1536
-  
-  # Index settings
-  index_type: hnsw
-```
+---
 
-### Cloud Weaviate Configuration
+### WeaviateVectorStore
 
+Cloud-native vector storage using Weaviate v4's async client with gRPC.
+
+**Key characteristics**:
+- **Self-provided vectors**: Uses `skip` vectorizer mode — Weaviate doesn't generate embeddings; Soothe provides them. This ensures consistent embedding dimensions.
+- **gRPC for search**: Uses gRPC (default port 50051) for fast query/response, REST for management operations.
+- **Weaviate Cloud support**: API key authentication for Weaviate Cloud deployments; local mode for self-hosted instances.
+- **Schema management**: Automatic schema inference and collection creation.
+- **Timeout configuration**: Init 30s, query 30s, insert 120s (configurable via `AdditionalConfig`).
+
+**When to choose**: Cloud-native deployments, managed vector search, multi-modal data, or when you need Weaviate's GraphQL querying and module ecosystem (text2vec, img2vec, etc.).
+
+**Minimal config**:
 ```yaml
 vector_store:
   enabled: true
   provider: weaviate
-
-  # Weaviate connection
-  url: https://your-weaviate-instance.weaviate.cloud
-  grpc_port: 443
-  api_key: your-api-key
-
-  # Collection settings
+  url: http://localhost:8080
+  grpc_port: 50051
   collection: SootheVectors
 ```
+
+Source: `packages/soothe/src/soothe/backends/vector_store/weaviate.py`
+
+---
+
+## Index Type Selection (PGVectorStore)
+
+| Index Type | Build Speed | Search Speed | Recall | Best For |
+|------------|-------------|--------------|--------|----------|
+| **HNSW** | Moderate (O(n log n)) | Fast | High | Production, accuracy-critical |
+| **IVFFlat** | Fast (O(n)) | Moderate | Good | Large datasets, speed-critical |
+| **None** | N/A | Slow | Perfect | Small datasets (<1000), exact search |
+
+**Recommendation**: Use HNSW for most production workloads — it offers the best recall-to-speed trade-off. Switch to IVFFlat only if build time becomes a bottleneck on very large datasets. Use `none` only for testing or tiny collections.
+
+---
+
+## Performance Characteristics
+
+| Operation | PGVector | SQLiteVec | Weaviate |
+|-----------|----------|-----------|----------|
+| `create_collection()` | ~50-100ms | ~5-10ms | ~100-200ms |
+| `insert()` | ~20-50ms | ~10-20ms | ~50-100ms |
+| `search()` | ~50-100ms | ~20-50ms | ~100-200ms |
+| `get()` | ~10-30ms | ~5-10ms | ~50-100ms |
+| `delete()` | ~20-50ms | ~10-20ms | ~50-100ms |
+| `list_records()` | ~50-200ms | ~50-100ms | ~100-300ms |
+
+**SQLiteVec is fastest for local operations** (no network). PGVector adds network overhead but scales to concurrent access. Weaviate has the highest latency due to gRPC/REST overhead but offers cloud scalability.
+
+**Search latency scales with collection size**: HNSW search is approximately O(log n); exact search (no index) is O(n). Monitor search latency as collections grow.
+
+---
+
+## Production Gotchas
+
+1. **Vector dimension is fixed per collection**: The `vector_size` (default 1536 for OpenAI embeddings) is set at collection creation and cannot change. Switching embedding models requires creating a new collection and re-inserting all vectors.
+
+2. **SQLiteVec fallback is slow**: Without the sqlite-vec extension, Python-side similarity computation iterates all vectors — O(n) per search. Install the extension for production use. The fallback exists for compatibility, not performance.
+
+3. **SQLiteVec single-writer contention**: Like other SQLite backends, writes are serialized via `asyncio.Lock`. Under heavy concurrent insertion, throughput is limited. PGVector and Weaviate handle concurrent writes via pooling.
+
+4. **Weaviate timeout tuning**: Default timeouts (init 30s, query 30s, insert 120s) may need adjustment for large batch inserts or slow networks. Increase `insert` timeout for bulk loading.
+
+5. **PGVector index build time**: Creating an HNSW index on a large existing table can take minutes to hours. Build the index *after* bulk insertion, not before, to avoid re-indexing overhead during loads.
+
+6. **Metadata filter limitations**: SQLiteVec has limited metadata filtering compared to PGVector (SQL WHERE) and Weaviate (GraphQL). If complex filtering is critical, prefer PGVector or Weaviate.
+
+7. **Collection naming**: PGVector uses the collection name as a table name; Weaviate uses it as a class name; SQLiteVec uses it as a table prefix. Ensure names are valid identifiers across your chosen backend.
+
+---
+
+## Integration with Memory
+
+Memory backends (MemUMemory) use vector stores indirectly — MemU maintains its own embedding store for semantic recall. However, the `VectorStoreProtocol` is available for direct semantic search use cases, and the protocol abstraction means you can swap engines without changing application code.
 
 ---
 
 ## Related Documentation
 
-- **[Backends Overview](README.md)** - Backend layer introduction
-- **[Memory Backends](memory-backends.md)** - Memory semantic search
-- **[Context Protocol](../architecture/protocols.md#context)** - Context semantic search
-- **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** - Vector store protocol spec
-
----
-
-## API Reference
-
-### PGVectorStore Class
-
-```python
-class PGVectorStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using PostgreSQL with pgvector."""
-
-    def __init__(
-        self,
-        collection: str = "soothe_vectors",
-        dsn: str = "postgresql://localhost/soothe",
-        pool_size: int = 5,
-        index_type: str = "hnsw",
-        vector_size: int = 1536,
-    ) -> None: ...
-```
-
-### SQLiteVecStore Class
-
-```python
-class SQLiteVecStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using sqlite-vec."""
-
-    def __init__(
-        self,
-        collection: str = "soothe_vectors",
-        db_path: str | None = None,
-        vector_size: int = 1536,
-        distance: str = "cosine",
-        reader_pool_size: int = 8,
-    ) -> None: ...
-```
-
-### WeaviateVectorStore Class
-
-```python
-class WeaviateVectorStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using Weaviate v4 async client."""
-
-    def __init__(
-        self,
-        collection: str = "SootheVectors",
-        url: str = "http://localhost:8080",
-        api_key: str | None = None,
-        grpc_port: int = 50051,
-    ) -> None: ...
-```
-
----
-
-## See Also
-
-- **[VectorStore Protocol](../architecture/protocols.md)** - Protocol definition
-- **[Protocol Resolver](../core/resolver.md)** - Backend resolution
-- **[Memory Backends](memory-backends.md)** - Memory integration
+- **[Backends Overview](README.md)** — Backend layer introduction
+- **[Memory Backends](memory-backends.md)** — Memory semantic search integration
+- **[Context Protocol](../architecture/protocols.md#context)** — Context semantic search
+- **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** — Vector store protocol spec

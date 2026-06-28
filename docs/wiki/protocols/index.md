@@ -1,534 +1,127 @@
 # Protocol Layer: Core Abstractions
 
-**Status**: Implemented  
-**Philosophy**: Protocol-first, runtime-second (RFC-000 Principle 1)  
+**Status**: Implemented (except ContextProtocol — draft)
+**Philosophy**: Protocol-first, runtime-second (RFC-000 Principle 1)
 
-## Overview
+## What the Protocol Layer Is
 
-The Protocol Layer defines Soothe's core abstractions as **runtime-agnostic interfaces**. Every Soothe module is defined as a Protocol (abstract interface), enabling backend swappability without runtime dependencies.
+Soothe's Protocol Layer defines every core module as a **runtime-agnostic interface** (Python `Protocol`). Protocols declare *what* operations exist; backends define *how* they run. This separation lets Soothe swap SQLite for PostgreSQL, swap an in-memory store for a vector database, or add a plugin backend — all without touching consuming code.
 
-**Key Principle**: Protocols define **what** operations are available, backends define **how** they are implemented. This separation enables:
-- Development backends (SQLite, in-memory) for rapid iteration
-- Production backends (PostgreSQL, vector databases) for scale
-- Plugin backends for custom implementations
-- Zero code changes when switching backends
+### Why Protocols Exist
+
+Three forces shaped this design:
+
+1. **Testability** — consuming modules (runners, agents, planners) depend on interfaces, not concrete backends. Tests inject fakes.
+2. **Pluggability** — the same `MemoryProtocol` shape covers MemU today and custom stores tomorrow. New backends are additive, not invasive.
+3. **Runtime decoupling** — protocol signatures never leak runtime types (LangGraph nodes, langchain `BaseTool`). Runtime concerns live in backends, keeping the interface surface stable.
 
 ## Protocol Taxonomy
 
-Soothe's 9+ core protocols organize into three categories:
+Soothe's protocols organize into four categories:
 
 ### Persistence Protocols
 
-| Protocol | Purpose | Backend | Documentation |
-|----------|---------|---------|---------------|
-| **MemoryProtocol** | Cross-thread long-term memory | MemU, (planned: KeywordMemory, VectorMemory) | [memory.md](memory.md) |
-| **DurabilityProtocol** | Thread lifecycle management | PostgreSQL, SQLite | [durability.md](durability.md) |
-| **VectorStoreProtocol** | Vector database abstraction | PGVector, SQLiteVec, Weaviate | [vector-store-persistence.md](vector-store-persistence.md) |
-| **AsyncPersistStore** | Key-value persistence | PostgreSQL, SQLite | [vector-store-persistence.md](vector-store-persistence.md) |
+| Protocol | Role | Backends | Docs |
+|----------|------|----------|------|
+| **DurabilityProtocol** | Thread lifecycle (create, resume, suspend, archive) | PostgreSQL, SQLite | [durability.md](durability.md) |
+| **MemoryProtocol** | Cross-thread long-term knowledge | MemU | [memory.md](memory.md) |
+| **VectorStoreProtocol** | Semantic vector search | PGVector, SQLiteVec, Weaviate | [vector-store-persistence.md](vector-store-persistence.md) |
+| **AsyncPersistStore** | Namespaced key-value storage | PostgreSQL, SQLite | [vector-store-persistence.md](vector-store-persistence.md) |
 
 ### Cognition Protocols
 
-| Protocol | Purpose | Backend | Documentation |
-|----------|---------|---------|---------------|
-| **PlannerProtocol** | Goal decomposition into plans | LLMPlanner | [planner.md](planner.md) |
-| **LoopPlannerProtocol** | StrangeLoop Plan phase | LLMPlanner (two-phase) | [planner.md](planner.md) |
-| **PolicyProtocol** | Permission-based access control | ConfigDrivenPolicy | [policy.md](policy.md) |
+| Protocol | Role | Backends | Docs |
+|----------|------|----------|------|
+| **PlannerProtocol** | Goal → plans/steps decomposition with DAG dependencies | LLMPlanner | [planner.md](planner.md) |
+| **LoopPlannerProtocol** | StrangeLoop Plan phase (assess + generate) | LLMPlanner (two-phase) | [planner.md](planner.md) |
+| **PolicyProtocol** | Permission-based access control, least-privilege delegation | ConfigDrivenPolicy | [policy.md](policy.md) |
 
 ### Execution Protocols
 
-| Protocol | Purpose | Backend | Documentation |
-|----------|---------|---------|---------------|
-| **LoopRunnerProtocol** | StrangeLoop orchestration | SootheRunner | [execution-protocols.md](execution-protocols.md) |
+| Protocol | Role | Backends | Docs |
+|----------|------|----------|------|
+| **LoopRunnerProtocol** | StrangeLoop orchestration, streaming, subprocess execution | LocalLoopRunner, RayLoopRunner | [execution-protocols.md](execution-protocols.md) |
 
 ### Loop-Level Protocols
 
-| Protocol | Purpose | Documentation |
-|----------|---------|---------------|
-| **LoopWorkingMemoryProtocol** | Bounded Plan prompt scratchpad | [loop-protocols.md](loop-protocols.md) |
-| **OperationSecurityProtocol** | Operation-level security context | [loop-protocols.md](loop-protocols.md) |
+| Protocol | Role | Docs |
+|----------|------|------|
+| **LoopWorkingMemoryProtocol** | Bounded scratchpad for Plan prompts | [loop-protocols.md](loop-protocols.md) |
+| **OperationSecurityProtocol** | Operation-level security checks | [loop-protocols.md](loop-protocols.md) |
 
-### Future Protocols
+### Future
 
-| Protocol | Status | RFC |
-|----------|---------|-----|
-| **ContextProtocol** | Draft (RFC-302) | Unbounded knowledge accumulator |
+| Protocol | Status |
+|----------|--------|
+| **ContextProtocol** | Draft (RFC-302) — unbounded within-thread knowledge accumulator |
 
 ## Protocol Relationships
 
+The protocols form a layered delegation chain. High-level cognition delegates downward; persistence sits at the bottom:
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│  ContextEngine (autonomous goal management)               │
-│  - Delegates to StrangeLoop for single-goal execution     │
-└─────────────────────────────────────────────────────────┘
-                          ↓ PERFORM delegation
-┌─────────────────────────────────────────────────────────┐
-│  StrangeLoop (agentic goal execution)                      │
-│  - LoopPlannerProtocol: Plan phase                      │
-│  - LoopWorkingMemoryProtocol: Bounded memory            │
-│  - LoopRunnerProtocol: Orchestration                    │
-└─────────────────────────────────────────────────────────┘
-                          ↓ EXECUTE step
-┌─────────────────────────────────────────────────────────┐
-│  CoreAgent (runtime)                                     │
-│  - PolicyProtocol: Permission checks                    │
-└─────────────────────────────────────────────────────────┘
-                          ↓ Persistence
-┌─────────────────────────────────────────────────────────┐
-│  Persistence Layer                                       │
-│  - DurabilityProtocol: Thread lifecycle                 │
-│  - MemoryProtocol: Long-term knowledge                  │
-│  - VectorStoreProtocol: Semantic search                 │
-│  - AsyncPersistStore: Key-value storage                 │
-└─────────────────────────────────────────────────────────┘
+ContextEngine (autonomous goal management)
+    │  delegates single-goal execution to ↓
+StrangeLoop (agentic Plan → Execute loop)
+    ├─ LoopPlannerProtocol   (Plan phase)
+    ├─ LoopWorkingMemoryProtocol (bounded scratchpad)
+    └─ LoopRunnerProtocol    (orchestration)
+    │  executes steps via ↓
+CoreAgent (runtime)
+    └─ PolicyProtocol        (permission checks)
+    │  persists via ↓
+Persistence Layer
+    ├─ DurabilityProtocol    (thread lifecycle)
+    ├─ MemoryProtocol        (cross-thread knowledge)
+    ├─ VectorStoreProtocol   (semantic search)
+    └─ AsyncPersistStore     (key-value storage)
 ```
 
-## Protocol Interface Patterns
+## Protocol Interface Conventions
 
-All Soothe protocols follow consistent patterns:
+All Soothe protocols share a few invariants worth knowing:
 
-### Runtime-Agnostic Signatures
+- **`@runtime_checkable`** — enables `isinstance()` structural checks, so code can verify a backend satisfies a protocol at runtime without inheritance.
+- **Async-first** — persistence and cognition methods are `async` to support concurrency and connection pooling.
+- **Pydantic data models** — structured inputs/outputs (`MemoryItem`, `ThreadInfo`, `Plan`) live alongside their protocol.
+- **No runtime types in signatures** — protocol definitions avoid langchain/LangGraph types; backends adapt at the edges.
 
-```python
-@runtime_checkable
-class MyProtocol(Protocol):
-    """Protocol for [purpose].
-    
-    No runtime types (LangGraph, langchain) in signatures.
-    """
+### Resolution Pattern
 
-    async def operation(self, arg: str) -> Result:
-        """Operation description.
-        
-        Args:
-            arg: Parameter description.
-            
-        Returns:
-            Result data model.
-        """
-        ...
+Protocols are never instantiated directly. A resolver reads config and returns a backend instance typed as the protocol:
+
+```
+Config → resolve_protocol(name, config) → Backend instance (typed as Protocol)
 ```
 
-**Key Features**:
-- `@runtime_checkable`: Enable `isinstance()` checks
-- Async operations: Concurrent-safe execution
-- Pydantic data models: Structured inputs/outputs
-- No runtime dependencies: Pure protocol definitions
+Backends are selected purely by configuration keys — `durability_backend: sqlite` vs `postgresql` — so deployment swaps are config-only changes.
 
-### Data Model Organization
+## Cross-Protocol Integration Points
 
-Each protocol defines associated data models:
+A few non-obvious collaborations to keep in mind:
 
-```python
-# Protocol in protocols/my_protocol.py
-class MyProtocol(Protocol):
-    async def operation(self, request: MyRequest) -> MyResult: ...
+- **Durability ↔ Memory**: archiving a thread triggers memory consolidation. Thread metadata carries a `policy_profile` that flows into policy decisions.
+- **Policy ↔ Execution**: `PolicyEnforcementMiddleware` intercepts tool calls and subagent spawns, calling `PolicyProtocol.check()` before any action proceeds.
+- **Planner ↔ Runner**: the runner drives the StrangeLoop; each iteration calls `LoopPlanner.plan()`, executes the returned decision, collects `StepResult`s, and loops.
+- **VectorStore ↔ Memory**: memory backends use vector search for semantic recall; `AsyncPersistStore` underpins durability and (future) context persistence.
 
-# Data models in same file
-class MyRequest(BaseModel):
-    """Request model."""
-    field: str
+## Multi-Database Architecture (RFC-802)
 
-class MyResult(BaseModel):
-    """Result model."""
-    data: Any
-```
+PostgreSQL deployments split data across dedicated databases for isolation and independent scaling:
 
-### Backend Implementation Pattern
+- `soothe_metadata` — DurabilityProtocol thread records
+- `soothe_vectors` — VectorStoreProtocol embeddings
+- `soothe_checkpoints` — LangGraph Checkpointer state
+- `soothe_context` — ContextProtocol (future)
 
-Backends implement protocols:
+Each database has its own connection pool, backup strategy, and ownership boundary, preventing data contamination between concerns.
 
-```python
-# Backend in backends/my_backend/my_implementation.py
-class MyImplementation(MyProtocol):
-    """Backend implementation using [storage backend]."""
+## Source Reference
 
-    def __init__(self, config: Config) -> None:
-        self._store = resolve_store(config)
-
-    async def operation(self, request: MyRequest) -> MyResult:
-        data = await self._store.load(request.field)
-        return MyResult(data=data)
-```
-
-## Protocol Resolution
-
-Protocols are resolved via configuration:
-
-```python
-from soothe.runner.resolver import resolve_protocol
-
-# Resolve protocol from config
-memory = resolve_protocol("memory", config)  # → MemoryProtocol
-durability = resolve_protocol("durability", config)  # → DurabilityProtocol
-planner = resolve_protocol("planner", config)  # → PlannerProtocol
-
-# Backend determined by configuration
-config.persistence.memory_backend  # "memu" → MemUMemory
-config.persistence.durability_backend  # "postgresql" → PostgreSQLDurability
-```
-
-**Resolution Flow**:
-```
-Config → Resolver → Backend Instance → Protocol Interface
-
-1. Config specifies backend name
-2. Resolver loads backend implementation
-3. Backend initialized with config
-4. Returns protocol-compatible instance
-```
-
-## Configuration Architecture
-
-### Protocol Configuration Schema
-
-```yaml
-# config/config.template.yml
-agent:
-  protocols:
-    memory:
-      enabled: true
-      backend: memu
-      persist_dir: ~/.soothe/memory
-      llm_chat_role: memory
-    
-    durability:
-      backend: postgresql  # or sqlite
-    
-    planner:
-      enabled: true
-      llm_role: planner
-      max_iterations: 8
-    
-    policy:
-      enabled: true
-      default_profile: standard
-
-persistence:
-  # Backend-specific settings
-  postgres_base_dsn: postgresql://user:pass@host:port
-  postgres_databases:
-    metadata: soothe_metadata
-    vectors: soothe_vectors
-    checkpoints: soothe_checkpoints
-  
-  vector_store_backend: pgvector
-  metadata_sqlite_path: ~/.soothe/metadata.db
-```
-
-### Backend Selection
-
-Backends are selected via configuration:
-
-```yaml
-# Development configuration
-persistence:
-  durability_backend: sqlite
-  vector_store_backend: sqlite_vec
-  memory_backend: memu
-
-# Production configuration
-persistence:
-  durability_backend: postgresql
-  vector_store_backend: pgvector
-  postgres_base_dsn: ${POSTGRES_DSN}
-```
-
-## Protocol Integration Guide
-
-### Cross-Protocol Communication
-
-Protocols collaborate through well-defined boundaries:
-
-#### Memory ↔ Durability Integration
-
-```python
-# Thread creation triggers memory scope
-thread = await durability.create_thread(
-    metadata=ThreadMetadata(...)
-)
-
-# Memory items reference thread
-memory_item = MemoryItem(
-    content="Important finding",
-    source_thread=thread.thread_id  # Durability provides thread ID
-)
-await memory.remember(memory_item)
-```
-
-#### Policy ↔ Execution Integration
-
-```python
-# Policy checks before tool execution
-tool_request = OperationSecurityRequest(
-    kind=OperationKind.tool_call,
-    target="shell_execute"
-)
-
-decision = await security.check_operation(tool_request, context)
-if decision.allowed:
-    # Toolkit provides tools
-    tools = toolkit.get_tools()
-    result = await execute_tool("shell_execute", tools)
-```
-
-#### Planner ↔ Runner Integration
-
-```python
-# Runner orchestrates planner
-request = LoopRunRequest(
-    user_input="Optimize database",
-    thread_id="thread_abc123"
-)
-
-async for chunk in runner.run(request):
-    # Planner decisions drive execution
-    if chunk.mode == "plan_result":
-        plan_result = PlanResult.from_chunk(chunk)
-        # Execute based on plan_result.decision
-```
-
-### Protocol Lifecycle
-
-Protocol instances have distinct lifecycles:
-
-#### Singleton Protocols
-
-Some protocols are singleton (shared across threads):
-
-- **MemoryProtocol**: Shared cross-thread memory
-- **VectorStoreProtocol**: Shared vector database
-- **DurabilityProtocol**: Shared thread management
-- **PolicyProtocol**: Shared permission profiles
-
-```python
-# Singleton protocols
-memory = resolve_memory(config)  # One instance
-durability = resolve_durability(config)  # One instance
-```
-
-#### Thread-Scoped Protocols
-
-Some protocols are thread-scoped (per-thread instance):
-
-- **LoopWorkingMemoryProtocol**: Per-thread scratchpad
-- **ContextProtocol** (future): Per-thread ledger
-
-```python
-# Thread-scoped protocols
-working_memory = DefaultWorkingMemory()  # Per-thread instance
-```
-
-#### Request-Scoped Protocols
-
-Some protocols are request-scoped (per-request instance):
-
-- **OperationSecurityContext**: Per-operation context
-- **PlanContext**: Per-planning context
-
-```python
-# Request-scoped contexts
-context = OperationSecurityContext(
-    thread_id=current_thread,
-    policy_profile=current_profile
-)
-```
-
-## Backend Development Guide
-
-### Creating New Backend
-
-To create a new backend for existing protocol:
-
-#### 1. Choose Protocol
-
-```python
-# protocols/my_protocol.py
-class MyProtocol(Protocol):
-    async def operation(self, arg: str) -> str: ...
-```
-
-#### 2. Implement Backend
-
-```python
-# backends/my_backend/my_implementation.py
-class MyImplementation(MyProtocol):
-    """Custom backend for MyProtocol."""
-
-    def __init__(self, config: Config) -> None:
-        self._config = config
-
-    async def operation(self, arg: str) -> str:
-        # Implementation logic
-        return f"Processed: {arg}"
-```
-
-#### 3. Add Resolver
-
-```python
-# core/resolver/_resolver_infra.py
-def resolve_my_protocol(config: Config) -> MyProtocol:
-    """Resolve MyProtocol from config."""
-    backend = config.my_backend
-    
-    if backend == "my_implementation":
-        return MyImplementation(config)
-    
-    raise ConfigurationError(f"Unknown backend: {backend}")
-```
-
-#### 4. Add Configuration
-
-```yaml
-# config/config.template.yml
-my_protocol:
-  backend: my_implementation
-  custom_option: value
-```
-
-#### 5. Add Tests
-
-```python
-# tests/unit/backends/my_backend/test_my_implementation.py
-def test_operation():
-    impl = MyImplementation(test_config)
-    result = await impl.operation("test")
-    assert result == "Processed: test"
-```
-
-### Backend Interface Contracts
-
-All backends must satisfy:
-
-1. **Protocol compliance**: Implement all protocol methods
-2. **Async operations**: All methods must be async
-3. **Error handling**: Raise appropriate exceptions (KeyError, ConfigurationError)
-4. **Resource cleanup**: Implement cleanup/close methods
-5. **Thread safety**: Support concurrent operations
-
-## Specification Reference
-
-### Primary RFCs
-
-| RFC | Title | Protocols Covered |
-|-----|-------|-------------------|
-| RFC-000 | System Conceptual Design | Protocol philosophy |
-| RFC-001 | Core Modules Architecture | All protocols overview |
-| RFC-303 | Memory Protocol Architecture | MemoryProtocol |
-| RFC-306 | Durability Protocol Architecture | DurabilityProtocol |
-| RFC-305 | Policy Protocol Architecture | PolicyProtocol |
-| RFC-304 | Planner Protocol Architecture | PlannerProtocol |
-| RFC-604 | Reason Phase Robustness | LoopPlannerProtocol |
-| RFC-203 | StrangeLoop State Memory | LoopWorkingMemoryProtocol |
-| RFC-221 | Loop Runner Protocol | LoopRunnerProtocol |
-
-### Related RFCs
-
-| RFC | Title | Protocol Integration |
-|-----|-------|---------------------|
-| RFC-802 | Persistence Architecture Refactor | Multi-database |
-| RFC-222 | Autopilot Goal Engine Architecture | LoopRunner + AutopilotJob |
-| RFC-901 | Operation Security Protocol | OperationSecurityProtocol |
-
-## Implementation Status
-
-| Protocol | Implemented | Backend(s) | RFC Status |
-|----------|-------------|------------|------------|
-| MemoryProtocol | ✅ | MemU | RFC-303 |
-| DurabilityProtocol | ✅ | PostgreSQL, SQLite | RFC-306 |
-| VectorStoreProtocol | ✅ | PGVector, SQLiteVec, Weaviate | RFC-000 Module 8 |
-| AsyncPersistStore | ✅ | PostgreSQL, SQLite | RFC-300 |
-| PlannerProtocol | ✅ | LLMPlanner | RFC-304 |
-| LoopPlannerProtocol | ✅ | LLMPlanner (two-phase) | RFC-604 |
-| PolicyProtocol | ✅ | ConfigDrivenPolicy | RFC-305 |
-| LoopRunnerProtocol | ✅ | SootheRunner | RFC-221 |
-| RemoteAgentProtocol | ✅ | Direct access | RFC-000 Module 6 |
-| ToolkitProtocol | ✅ | Built-in + Plugins | RFC-101 |
-| LoopWorkingMemoryProtocol | ✅ | Default implementation | RFC-203 |
-| OperationSecurityProtocol | ✅ | Default implementation | RFC-901 |
-| ContextProtocol | ⚠️ Draft | RFC-302 draft | RFC-302 |
-
-## Protocol Documentation Index
-
-### Persistence Protocols
-
-- **[Memory Protocol](memory.md)**: Cross-thread long-term memory with MemU backend
-- **[Durability Protocol](durability.md)**: Thread lifecycle management with PostgreSQL/SQLite backends
-- **[VectorStore & Persistence](vector-store-persistence.md)**: Vector database and key-value persistence
-
-### Cognition Protocols
-
-- **[Policy Protocol](policy.md)**: Permission-based access control with structured permissions
-- **[Planner Protocol](planner.md)**: Goal decomposition and StrangeLoop Plan phase
-
-### Execution Protocols
-
-- **[Execution Protocols](execution-protocols.md)**: LoopRunner, RemoteAgent, Toolkit protocols
-
-### Loop-Level Protocols
-
-- **[Loop Protocols](loop-protocols.md)**: LoopWorkingMemory and OperationSecurity protocols
-
-## Quick Reference
-
-### Protocol Resolution
-
-```python
-from soothe.runner.resolver import (
-    resolve_memory,
-    resolve_durability,
-    resolve_planner,
-    resolve_loop_planner,
-    resolve_policy,
-    resolve_vector_store,
-)
-
-memory = resolve_memory(config)
-durability = resolve_durability(config)
-planner = resolve_planner(config)
-loop_planner = resolve_loop_planner(config)
-policy = resolve_policy(config)
-vector_store = resolve_vector_store(config)
-```
-
-### Protocol Imports
-
-```python
-from soothe.protocols import (
-    # Memory
-    MemoryProtocol, MemoryItem,
-    
-    # Durability
-    DurabilityProtocol, ThreadInfo, ThreadMetadata, ThreadFilter,
-    
-    # Planner
-    PlannerProtocol, Plan, PlanStep, PlanContext, StepResult,
-    
-    # LoopPlanner
-    LoopPlannerProtocol, PlanResult, StatusAssessment,
-    
-    # Policy
-    PolicyProtocol, Permission, PermissionSet, ActionRequest,
-    
-    # VectorStore
-    VectorStoreProtocol, VectorRecord,
-    
-    # Persistence
-    AsyncPersistStore,
-    
-    # Runner
-    LoopRunnerProtocol, LoopRunRequest,
-    
-    # Remote
-    RemoteAgentProtocol,
-    
-    # Toolkit
-    ToolkitProtocol,
-)
-```
+Protocol interfaces live in `packages/soothe/src/soothe/protocols/`. Several are re-exported from the SDK package (`packages/soothe-sdk/src/soothe_sdk/protocols/`) for reuse across packages. See individual protocol docs for specific file locations.
 
 ## Related Documentation
 
-- [RFC-000: System Conceptual Design](../specs/RFC-000-system-conceptual-design.md)
-- [RFC-001: Core Modules Architecture](../specs/RFC-001-core-modules-architecture.md)
+- [RFC-000](../../specs/) — System Conceptual Design (protocol philosophy)
+- [RFC-802](../../specs/) — Persistence Architecture Refactor
 - [Backend Implementation Guide](../backends.md)
-- [Configuration Reference](../configuration.md)

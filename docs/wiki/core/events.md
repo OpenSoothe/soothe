@@ -1,579 +1,143 @@
 # Event System
 
-Centralized event system infrastructure for Soothe.
+Centralized event infrastructure for Soothe's protocol observability.
 
 ---
 
-## Overview
+## What This Module Is
 
-The event system (`soothe.foundation.events`) provides a centralized infrastructure for event management in Soothe. It includes event constants, models, registry, and a public API for event registration.
+The event system (`soothe.foundation.events`) provides the vocabulary and plumbing for all observability in Soothe. It defines event type constants, Pydantic event models, a registry for O(1) lookup, and the visibility rules that decide which events reach WebSocket clients. Every `soothe.*` custom event in the stream originates here.
 
----
+The system exists because Soothe streams execution progress to clients in real time. Without a centralized event catalog, visibility rules would be scattered across daemon delivery stages, and bugs would silently drop user-visible output.
 
-## Architecture
-
-### Event System Components
-
-```
-Event System Architecture
-├─ Event Constants (constants.py)
-│  ├─ 60+ event type constants
-│  ├─ Namespace-based organization
-│  └─ Type-safe event identifiers
-│
-├─ Event Models (catalog.py)
-│  ├─ Base event models
-│  ├─ Specialized event types
-│  └─ Pydantic validation
-│
-├─ Event Registry
-│  ├─ register_event() API
-│  ├─ Summary templates
-│  └─ Visibility controls
-│
-├─ Internal Events
-│  ├─ Internal bus
-│  ├─ Internal event types
-│  └─ Event filtering
-│
-└─ Visibility System
-   ├─ Visibility levels
-   ├─ Visibility filters
-   └─ Visibility inheritance
-```
+**Source**: `packages/soothe/src/soothe/foundation/events/` (`constants.py`, `catalog.py`, `visibility.py`, `internal_bus.py`)
 
 ---
 
-## Event Constants
+## The Naming Convention (RFC-0015)
 
-### Namespace Organization
+All event types follow a **4-segment convention**: `soothe.<domain>.<component>.<action>`
 
-Events are organized by namespace:
+This is enforced as string constants in `constants.py` — the single source of truth. There is no string concatenation at call sites; every event type is a named constant imported from the catalog.
 
-```python
-# Thread namespace
-THREAD_CREATED = "soothe.thread.created"
-THREAD_RESUMED = "soothe.thread.resumed"
-THREAD_COMPLETED = "soothe.thread.completed"
+The critical design split is between two namespaces:
 
-# Plan namespace
-PLAN_CREATED = "soothe.plan.created"
-PLAN_UPDATED = "soothe.plan.updated"
-PLAN_COMPLETED = "soothe.plan.completed"
+- **Client-facing** (`soothe.<domain>.*`) — events that may reach WebSocket clients. Domains include `cognition` (goal/plan/strange_loop), `system` (autopilot status), and `error`.
+- **Internal** (`soothe.internal.*`) — **never** broadcast to clients. These cover iteration lifecycle, checkpointing, recovery, loop lifecycle, memory/policy protocol internals, daemon heartbeats, plugin lifecycle, and branch internals.
 
-# Step namespace
-STEP_STARTED = "soothe.step.started"
-STEP_COMPLETED = "soothe.step.completed"
-STEP_FAILED = "soothe.step.failed"
-
-# Context namespace
-CONTEXT_INGESTED = "soothe.context.ingested"
-CONTEXT_PERSISTED = "soothe.context.persisted"
-CONTEXT_PROJECTED = "soothe.context.projected"
-
-# Memory namespace
-MEMORY_REMEMBERED = "soothe.memory.remembered"
-MEMORY_RECALLED = "soothe.memory.recalled"
-MEMORY_FORGOTTEN = "soothe.memory.forgot"
-
-# Goal namespace
-GOAL_CREATED = "soothe.goal.created"
-GOAL_READY = "soothe.goal.ready"
-GOAL_STARTED = "soothe.goal.started"
-GOAL_COMPLETED = "soothe.goal.completed"
-GOAL_FAILED = "soothe.goal.failed"
-```
-
-### Complete Event Types
-
-60+ event type constants covering:
-- Thread lifecycle (created, resumed, completed)
-- Plan management (created, updated, completed)
-- Step execution (started, completed, failed)
-- Context operations (ingested, persisted, projected)
-- Memory operations (remembered, recalled, forgot)
-- Goal lifecycle (created, ready, started, completed, failed)
-- Tool events (called, completed, error)
-- Subagent events (spawned, completed, error)
-- Policy events (validated, violation)
-- Durability events (checkpoint, restored)
+This split exists because the daemon, workers, and internal tooling need fine-grained observability that clients shouldn't see (implementation details, high-frequency checkpoints, internal state transitions). Mixing them into one namespace would require filtering logic everywhere; the prefix makes the intent explicit at the constant definition site.
 
 ---
 
-## Event Models
+## Event Domains at a Glance
 
-### Base Event Model
+Rather than enumerate all 60+ constants, here are the domains and what they represent:
 
-```python
-class SootheEvent(BaseModel):
-    """Base event model for all Soothe events."""
-    
-    # Core fields
-    type: str                 # Event type identifier
-    timestamp: datetime       # Event timestamp
-    
-    # Optional fields
-    thread_id: str | None     # Associated thread
-    goal_id: str | None       # Associated goal
-    
-    # Data payload
-    data: dict[str, Any]      # Event-specific data
-    
-    # Metadata
-    visibility: VisibilityLevel = VisibilityLevel.NORMAL
-    source: str | None        # Event source
-```
+| Domain | Namespace | Covers |
+|--------|-----------|--------|
+| **Goal cognition** | `soothe.cognition.goal.*` | created, completed, failed, removed, decomposed, deferred, reported |
+| **Plan cognition** | `soothe.cognition.plan.*` | created, reflected |
+| **StrangeLoop** | `soothe.cognition.strange_loop.*` | started, completed, step started/queued/completed, plan decision, reasoned, context compacted |
+| **Branch** | `soothe.cognition.branch.*` | created, retry started |
+| **Autopilot** | `soothe.system.autopilot.*` | status changed, goal created/progress/completed/suspended/blocked, dreaming |
+| **Intent** | `soothe.cognition.intent.*` | classified (IG-518) |
+| **Error** | `soothe.error.*` | general failures |
+| **LLM retry** | `soothe.cognition.llm.retry.*` | retry attempts (IG-504) |
+| **Internal** | `soothe.internal.*` | iteration, checkpoint, recovery, loop, memory, policy, daemon, plugin, plan DAG, skill, MCP, branch analysis, autopilot details |
 
-### Specialized Events
+---
 
-Thread events:
+## The Registry Pattern
 
-```python
-class ThreadCreatedEvent(SootheEvent):
-    """Thread creation event."""
-    type: str = "soothe.thread.created"
-    thread_id: str
-    query: str
+Event models (Pydantic subclasses of `SootheEvent` from `soothe_sdk`) are registered in an `EventRegistry` at import time. The registry provides:
 
-class ThreadCompletedEvent(SootheEvent):
-    """Thread completion event."""
-    type: str = "soothe.thread.completed"
-    thread_id: str
-    result: dict
-```
+- **O(1) lookup** by event type string — used by the daemon's delivery pipeline to check visibility and verbosity.
+- **Summary templates** — string templates (e.g., `"Goal {goal_id} created"`) that interpolate event fields for human-readable summaries.
+- **Verbosity tiers** — each event type is assigned a tier (`QUIET`, `NORMAL`, `VERBOSE`, `DEBUG`) that controls client delivery based on the client's configured verbosity ceiling.
 
-Plan events:
+Custom events from plugins register via `register_event()`:
 
 ```python
-class PlanCreatedEvent(SootheEvent):
-    """Plan creation event."""
-    type: str = "soothe.plan.created"
-    thread_id: str
-    plan: Plan
+from soothe.foundation.events import register_event, SootheEvent
 
-class PlanStepEvent(SootheEvent):
-    """Step execution event."""
-    type: str = "soothe.step.started"  # or completed/failed
-    step_id: str
-    step: PlanStep
-```
+class MyCustomEvent(SootheEvent):
+    type: str = "soothe.cognition.plugin.my_event"
+    custom_data: str
 
-Goal events:
-
-```python
-class GoalCreatedEvent(SootheEvent):
-    """Goal creation event."""
-    type: str = "soothe.goal.created"
-    goal_id: str
-    goal: Goal
-
-class GoalCompletedEvent(SootheEvent):
-    """Goal completion event."""
-    type: str = "soothe.goal.completed"
-    goal_id: str
-    result: PlanResult
+register_event(MyCustomEvent, summary_template="Custom: {custom_data}")
 ```
 
 ---
 
-## Event Registry
+## The Visibility System — Why It's Centralized
 
-### register_event() API
+Visibility rules silently drop frames. A bug here is invisible until users report "no output." The IG-435 regression postmortem documented exactly this: `mode=messages` envelopes weren't enumerated as a wire shape, fell through to "unknown event type → DEBUG tier → suppress," and every synthesized answer was dropped.
 
-Public API for registering custom events:
+To prevent that class of regression, `visibility.py` classifies each wire frame into an explicit `WireEnvelopeKind` and dispatches on it. **There is no implicit fallback.** Unknown shapes fail loud (warning log + suppress) so future schema changes are caught immediately.
 
-```python
-def register_event(
-    event_class: type[SootheEvent],
-    summary_template: str | None = None,
-    visibility: VisibilityLevel | None = None
-) -> None:
-    """Register custom event type.
-    
-    Args:
-        event_class: Event model class to register
-        summary_template: Template for event summaries (e.g., "Goal {goal_id} created")
-        visibility: Default visibility level for this event type
-        
-    Example:
-        register_event(
-            MyCustomEvent,
-            summary_template="Custom: {data}",
-            visibility=VisibilityLevel.NORMAL
-        )
-    """
-```
+The visibility module is the single authority for "may this frame reach a WebSocket client?" Four daemon delivery stages funnel through it:
 
-### Registry Functions
+1. `SootheDaemon._broadcast` — broadcast-time gate
+2. Session manager sender — per-client tier filter
+3. `StreamDeliveryCoalescer` — early drop of invisible `custom` payloads
+4. Event reattachment — history-replay filter on reattach
 
-```python
-# Get registered event types
-def get_registered_events() -> list[str]:
-    """Get all registered event types."""
+### Wire Frame Shapes
 
-# Check if event is registered
-def is_event_registered(event_type: str) -> bool:
-    """Check if event type is registered."""
+The daemon sends five kinds of frames to clients:
 
-# Get event summary template
-def get_summary_template(event_type: str) -> str | None:
-    """Get summary template for event type."""
-```
+1. **Control frames** (`status`, `error`, `replay_complete`, `loop_*_response`) — always visible.
+2. **Catalog events** — `{"type": "event", "mode": "custom", "data": {"type": "soothe.*"}}`. Visible iff non-internal and verbosity tier ≤ client ceiling.
+3. **LangGraph message chunks** — `mode: "messages"`. Always visible (carries assistant text and tool I/O).
+4. **LangGraph updates** — `mode: "updates"`. Dropped earlier by the coalescer (only interrupts survive).
+5. **Unknown** — logged at WARNING on first observation, then suppressed.
 
 ---
 
-## Visibility System
+## The Canonical Stream Chunk
 
-### Visibility Levels
+Events flow through the system as `StreamChunk` tuples: `(namespace, mode, data)`. The helper `custom_event(data)` builds a chunk with an empty namespace and `"custom"` mode. This is the deepagents-canonical format that the runner yields and the daemon delivers.
+
+---
+
+## Event Emission Pattern
+
+The recommended pattern for type-safe emission:
 
 ```python
-class VisibilityLevel:
-    """Event visibility levels."""
-    
-    INTERNAL = "internal"    # Internal only (not exposed to clients)
-    NORMAL = "normal"        # Normal visibility (exposed to clients)
-    VERBOSE = "verbose"      # Verbose visibility (debug mode)
-    SILENT = "silent"        # Silent (no visibility)
+from soothe.foundation.events import GoalCreatedEvent, custom_event
+
+yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
 ```
 
-### Visibility Inheritance
-
-Events inherit visibility from registration:
+For comparisons and routing, use the string constants:
 
 ```python
-# Register with visibility
-register_event(
-    InternalEvent,
-    visibility=VisibilityLevel.INTERNAL
-)
-
-# Event instances inherit visibility
-event = InternalEvent(...)
-# event.visibility == VisibilityLevel.INTERNAL
-```
-
-### Visibility Filtering
-
-Filter events by visibility level:
-
-```python
-def filter_events_by_visibility(
-    events: list[SootheEvent],
-    max_visibility: VisibilityLevel
-) -> list[SootheEvent]:
-    """Filter events by visibility level."""
-    
-    return [
-        e for e in events
-        if e.visibility <= max_visibility
-    ]
+from soothe.foundation.events import GOAL_CREATED
+if event_type == GOAL_CREATED:
+    handle_goal_created(event_data)
 ```
 
 ---
 
 ## Internal Event Bus
 
-### Internal Bus
-
-Internal event bus for internal events:
-
-```python
-class InternalEventBus:
-    """Internal event bus for Soothe."""
-    
-    async def publish(self, event: SootheEvent):
-        """Publish event to internal bus."""
-        
-    async def subscribe(
-        self,
-        event_types: list[str],
-        handler: EventHandler
-    ):
-        """Subscribe to event types."""
-```
-
-### Internal Events
-
-Internal event types for internal processing:
-
-```python
-class InternalEvent(SootheEvent):
-    """Internal event for internal processing."""
-    type: str
-    visibility: VisibilityLevel = VisibilityLevel.INTERNAL
-```
+Beyond the client-facing stream, there's an `InternalEventBus` for daemon/worker-internal pub/sub. This is separate from the client stream — internal events (`soothe.internal.*`) never appear on the WebSocket. The bus supports subscribing to specific event types with handler callbacks, used for cross-component coordination within the daemon process.
 
 ---
 
-## Summary Templates
+## Gotchas
 
-### Template Format
-
-Summary templates use string interpolation:
-
-```python
-# Template format
-template = "Goal {goal_id} created with priority {priority}"
-
-# Event data provides values
-event = GoalCreatedEvent(
-    goal_id="goal-123",
-    goal=Goal(priority=5)
-)
-
-# Generated summary
-summary = template.format(**event.data)
-# "Goal goal-123 created with priority 5"
-```
-
-### Template Registration
-
-Register templates with events:
-
-```python
-register_event(
-    GoalCreatedEvent,
-    summary_template="Goal {goal_id} created"
-)
-
-register_event(
-    StepCompletedEvent,
-    summary_template="Step {step_id} completed in {duration}s"
-)
-```
+- **Never broadcast `soothe.internal.*`** — the visibility module enforces this, but if you bypass the centralized predicates (e.g., by writing directly to the WebSocket), you'll leak internal state to clients.
+- **Adding a new wire shape requires extending the enum** — the `WireEnvelopeKind` dispatch table has no implicit fallback. If you introduce a new `mode` value, you must register it or it will be suppressed with a warning.
+- **Verbosity tiers are per-event-type, not per-event-instance** — the registry assigns the tier at registration time. To change visibility, re-register the event type.
+- **The `REPLAY_COMPLETE` constant** is a wire envelope, not a `soothe.*` catalog event. Prefer the wire `replay_complete` envelope over the deprecated `HISTORY_REPLAY_COMPLETE` alias.
 
 ---
 
-## Usage Patterns
+## Related
 
-### Basic Event Creation
-
-```python
-from soothe.foundation.events import ThreadCreatedEvent
-
-# Create event
-event = ThreadCreatedEvent(
-    thread_id="thread-123",
-    query="Analyze codebase"
-)
-
-# Event fields
-print(event.type)  # "soothe.thread.created"
-print(event.timestamp)  # Current datetime
-print(event.thread_id)  # "thread-123"
-```
-
-### Custom Event Registration
-
-```python
-from soothe.foundation.events import register_event, SootheEvent
-
-class MyCustomEvent(SootheEvent):
-    type: str = "soothe.plugin.custom.event"
-    custom_data: str
-
-# Register custom event
-register_event(
-    MyCustomEvent,
-    summary_template="Custom: {custom_data}",
-    visibility=VisibilityLevel.NORMAL
-)
-
-# Use registered event
-event = MyCustomEvent(custom_data="test")
-```
-
-### Event Filtering
-
-```python
-from soothe.foundation.events import filter_events_by_visibility, VisibilityLevel
-
-# Filter events
-filtered = filter_events_by_visibility(
-    events,
-    max_visibility=VisibilityLevel.NORMAL
-)
-
-# Only NORMAL and INTERNAL events included
-```
-
----
-
-## Module Organization
-
-### Package Structure
-
-```
-soothe.foundation.events/
-├─ constants.py      # Event type constants
-├─ catalog.py        # Event models, registry
-├─ internal_events.py  # Internal event types
-├─ internal_bus.py   # Internal event bus
-├─ visibility.py     # Visibility system
-└─ __init__.py       # Public exports
-```
-
-### Imports
-
-```python
-# Import event constants
-from soothe.foundation.events import (
-    THREAD_CREATED,
-    PLAN_CREATED,
-    STEP_STARTED
-)
-
-# Import event models
-from soothe.foundation.events import (
-    ThreadCreatedEvent,
-    PlanCreatedEvent,
-    StepStartedEvent
-)
-
-# Import registry functions
-from soothe.foundation.events import (
-    register_event,
-    get_registered_events
-)
-
-# Import visibility
-from soothe.foundation.events import VisibilityLevel
-```
-
----
-
-## Event Examples
-
-### Thread Events
-
-```python
-# Thread creation
-event = ThreadCreatedEvent(
-    thread_id="thread-123",
-    query="Analyze codebase"
-)
-
-# Thread completion
-event = ThreadCompletedEvent(
-    thread_id="thread-123",
-    result={"status": "done", "output": "Analysis complete"}
-)
-```
-
-### Plan Events
-
-```python
-# Plan creation
-event = PlanCreatedEvent(
-    thread_id="thread-123",
-    plan=Plan(
-        steps=[step1, step2, step3],
-        strategy="iterative analysis"
-    )
-)
-
-# Step completion
-event = StepCompletedEvent(
-    step_id="step-1",
-    step=step1,
-    result={"files": 10, "lines": 5000}
-)
-```
-
-### Goal Events
-
-```python
-# Goal creation
-event = GoalCreatedEvent(
-    goal_id="goal-123",
-    goal=Goal(
-        description="Analyze codebase",
-        priority=5
-    )
-)
-
-# Goal completion
-event = GoalCompletedEvent(
-    goal_id="goal-123",
-    result=PlanResult(
-        status="done",
-        progress=1.0
-    )
-)
-```
-
----
-
-## Related Documentation
-
-- **[SootheRunner](runner.md)** - Runner event handling
-- **[StrangeLoop](strangeloop.md)** - Loop events
-- **[ContextEngine](goal-engine.md)** - Goal events
-- **[Event Catalog](../../specs/event-catalog.md)** - Event catalog spec
-- **[RFC-401](../../specs/RFC-401-event-processing.md)** - Event processing
-
----
-
-## API Reference
-
-### Core Functions
-
-```python
-# Event registration
-def register_event(
-    event_class: type[SootheEvent],
-    summary_template: str | None = None,
-    visibility: VisibilityLevel | None = None
-) -> None: ...
-
-# Registry functions
-def get_registered_events() -> list[str]: ...
-def is_event_registered(event_type: str) -> bool: ...
-def get_summary_template(event_type: str) -> str | None: ...
-
-# Visibility filtering
-def filter_events_by_visibility(
-    events: list[SootheEvent],
-    max_visibility: VisibilityLevel
-) -> list[SootheEvent]: ...
-```
-
-### Event Classes
-
-```python
-class SootheEvent(BaseModel):
-    """Base event model."""
-    type: str
-    timestamp: datetime
-    thread_id: str | None
-    goal_id: str | None
-    data: dict[str, Any]
-    visibility: VisibilityLevel
-    ...
-
-class ThreadCreatedEvent(SootheEvent):
-    """Thread creation event."""
-    type: str = "soothe.thread.created"
-    thread_id: str
-    query: str
-
-class PlanCreatedEvent(SootheEvent):
-    """Plan creation event."""
-    type: str = "soothe.plan.created"
-    thread_id: str
-    plan: Plan
-
-class GoalCreatedEvent(SootheEvent):
-    """Goal creation event."""
-    type: str = "soothe.goal.created"
-    goal_id: str
-    goal: Goal
-```
-
----
-
-## See Also
-
-- **[RFC-401](../../specs/RFC-401-event-processing.md)** - Event processing spec
-- **[RFC-600](../../specs/RFC-600-plugin-extension-system.md)** - Plugin events
-- **[Plugin System](../architecture/plugin-system.md)** - Plugin event registration
+- **[SootheRunner](runner.md)** — yields the canonical event stream
+- **[StrangeLoop](strangeloop.md)** — emits cognition events during execution
+- **[ContextEngine](goal-engine.md)** — emits goal lifecycle events
+- **[RFC-401](../../specs/RFC-401-event-processing.md)** — event processing spec

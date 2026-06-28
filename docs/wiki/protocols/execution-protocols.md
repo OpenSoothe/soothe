@@ -1,519 +1,120 @@
 # Execution Protocols
 
-**RFCs**: RFC-221 (LoopRunner)  
-**Locations**:
-- `packages/soothe/src/soothe/protocols/runner.py`
+**RFC**: 221 (LoopRunner), 222 revised (Autopilot dispatch)
+**Location**: `packages/soothe/src/soothe/protocols/runner.py`
+**Status**: Implemented
 
-**Status**: Implemented  
+## What the Execution Layer Is
 
-## Overview
+Execution protocols define how agent runs are launched, orchestrated, and streamed back to consumers. The central abstraction is `LoopRunnerProtocol` — the interface that runs complete StrangeLoop (Plan → Execute) cycles and streams results in real time.
 
-Execution protocols define the interfaces for running agents:
-
-1. **LoopRunnerProtocol**: StrangeLoop runner orchestration
-
-This protocol forms the execution layer, coordinating agent runs and streaming results.
+The execution layer sits between high-level orchestration (the daemon's `QueryEngine`) and low-level agent execution (the StrangeLoop graph). Consumers depend only on `LoopRunnerProtocol`; the concrete runner — `LocalLoopRunner` (multiprocessing) or `RayLoopRunner` (Ray actor) — is selected by the daemon's `LoopRunnerFactory` based on config.
 
 ## LoopRunnerProtocol
 
-### Purpose
+### Role
 
-- **StrangeLoop orchestration**: Run complete Plan → Execute loops
-- **Subprocess execution**: Worker pool management
-- **Streaming**: Real-time result streaming
-- **Timeout management**: Execution timeout and cancellation
+`LoopRunnerProtocol` is a two-method interface:
 
-### Protocol Interface
+- **`run(request)`** — execute the StrangeLoop, yielding `StreamChunk` tuples until completion. This is an `AsyncIterator` — results stream in real time, they don't arrive all at once.
+- **`cancel()`** — request cancellation of a running loop.
 
-```python
-class LoopRunnerProtocol(Protocol):
-    """Protocol for StrangeLoop runner orchestration.
-    
-    Orchestrates complete Plan → Execute loops, handling subprocess
-    execution, streaming, and timeout management.
-    """
+The deliberately tiny surface (two methods) is a design choice: all execution complexity is encapsulated in `LoopRunRequest` and the streaming protocol, keeping the interface stable as internals evolve.
 
-    async def run(
-        self,
-        request: LoopRunRequest,
-    ) -> AsyncIterator[StreamChunk]:
-        """Run StrangeLoop and stream results.
-        
-        Args:
-            request: LoopRunRequest with all parameters.
-            
-        Yields:
-            StreamChunk tuples (namespace, mode, data).
-        """
-        ...
-
-    async def cancel(self) -> None:
-        """Request cancellation of the running loop."""
-        ...
-```
-
-### Data Models
-
-#### LoopRunRequest
-
-```python
-@dataclass
-class LoopRunRequest:
-    """All parameters needed to run one agent loop in a subprocess.
-    
-    Consolidates fields previously passed ad-hoc to SootheRunner.astream(),
-    including thread/workspace binding.
-    
-    Workspace resolution:
-        - client_workspace set → use that path directly
-        - else → $SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>
-    """
-
-    loop_id: str
-    thread_id: str
-    user_input: str
-    client_workspace: str | None = None
-    user_id: str | None = None
-    client_workspace_id: str | None = None
-    autonomous: bool = False
-    max_iterations: int | None = None
-    preferred_subagent: str | None = None
-    model: str | None = None
-    model_params: dict[str, Any] = field(default_factory=dict)
-    
-    # Worker pool timeout and cancellation support
-    timeout_seconds: float | None = None
-    
-    # Intent hint to bypass LLM classification
-    intent_hint: str | None = None
-    
-    # RFC-622: Clarification mode and answer handling
-    clarification_mode: str | None = None
-    clarification_answer: bool = False
-    clarification_answers: list[str] | None = None
-    
-    # RFC-222 revised: Autopilot job dispatch
-    autopilot_job: GoalDispatchEnvelope | None = None
-    
-    def resolve_workspace_path(self) -> str:
-        """Absolute workspace path for runner."""
-        ...
-```
-
-#### GoalDispatchEnvelope
-
-```python
-@dataclass(frozen=True)
-class GoalDispatchEnvelope:
-    """Transient dispatch message for worker goal execution (RFC-222 revised).
-
-    This is a wire message, not a persistent entity. Created by the daemon's
-    AutopilotService when dispatching a goal to a subprocess worker, and
-    consumed by the worker's SootheRunner.astream(autopilot_job=...) path.
-    
-    Attributes:
-        goal_id: Daemon's canonical goal id.
-        goal_description: Frozen at dispatch time.
-        merged_context: Pre-projected hydration bundle.
-        deadline_seconds: Wall-clock budget (None = no cap).
-        attempt: 1 on first dispatch, N on retry/backoff.
-    """
-
-    goal_id: str
-    goal_description: str
-    merged_context: GoalDispatchContextBundle
-    deadline_seconds: float | None = None
-    attempt: int = 1
-```
-
-> **Note**: `AutopilotJob` is a deprecated backward-compatible alias for `GoalDispatchEnvelope`. Use `GoalDispatchEnvelope` in new code.
-
-#### StreamChunk
+### The StreamChunk Contract
 
 ```python
 StreamChunk = tuple[tuple[str, ...], str, Any]
-"""Deepagents-canonical stream chunk: (namespace, mode, data)."""
+# (namespace, mode, data)
 ```
 
-**Components**:
-- **namespace**: Path tuple (e.g., `("agent", "loop")`)
-- **mode**: Stream mode (e.g., `"messages", "updates", "custom"`)
-- **data**: Payload data (e.g., message dict, event object)
+This is the deepagents-canonical streaming format:
 
-### Backend Implementation
+- **namespace** — a path tuple (e.g., `("agent", "loop")`) identifying which subgraph produced the chunk
+- **mode** — the stream mode (`"messages"`, `"updates"`, `"custom"`)
+- **data** — the payload (message dict, event object, etc.)
 
-#### SootheRunner
+Consumers parse chunks by mode and namespace to render TUI output, extract plan results, or detect completion. The runner streams multiple modes simultaneously (`subgraphs=True`), so a single run interleaves message tokens, state updates, and custom events.
 
-**Status**: Current implementation  
-**Location**: `packages/soothe/src/soothe/core/runner/`  
+## LoopRunRequest: The Execution Envelope
 
-**Features**:
-- Complete StrangeLoop orchestration
-- Worker pool management
-- Timeout handling
-- Checkpoint persistence
-- Streaming result delivery
-- Autopilot job dispatch (RFC-222)
+`LoopRunRequest` is a dataclass consolidating *everything* needed to run one agent loop. It replaced ad-hoc parameters previously passed to `SootheRunner.astream()`, including thread/workspace binding that was once mutated on a shared singleton.
 
-**Implementation Pattern**:
-```python
-class SootheRunner(LoopRunnerProtocol):
-    """Runner implementation with full StrangeLoop orchestration."""
-    
-    async def run(
-        self,
-        request: LoopRunRequest,
-    ) -> AsyncIterator[StreamChunk]:
-        # Resolve workspace
-        workspace = request.resolve_workspace_path()
-        
-        # Configure agent loop
-        loop_config = self._configure_loop(request)
-        
-        # Run agent loop with streaming
-        async for chunk in self._strange_loop.astream(
-            input=request.user_input,
-            config=loop_config,
-            stream_mode=["messages", "updates", "custom"],
-            subgraphs=True
-        ):
-            yield chunk
-```
+Key fields and their purposes:
 
-## RemoteAgentProtocol
+- **`loop_id` / `thread_id`** — bind the run to a durable thread (DurabilityProtocol) and a unique loop instance.
+- **`user_input`** — the user's query or instruction.
+- **`client_workspace` / `user_id` / `client_workspace_id`** — workspace resolution. If `client_workspace` is set, it's used directly; otherwise the runner computes `$SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>`.
+- **`autonomous` / `max_iterations`** — control autonomous goal management and loop iteration limits.
+- **`timeout_seconds`** — worker pool timeout for cancellation.
+- **`intent_hint`** — bypass LLM classification with a known intent.
+- **`clarification_mode` / `clarification_answer` / `clarification_answers`** (RFC-622) — when `clarification_answer=True`, the runner treats `user_input` as the answer to a pending clarification interrupt and resumes the graph via `Command(resume=...)` rather than starting a new turn. The runner verifies against the loop's persisted `pending_clarification` state.
+- **`autopilot_job`** (RFC-222 revised) — when set, this request is dispatched by the daemon's `AutopilotService`; the worker hydrates from a context bundle instead of `user_input`.
 
-### Purpose
+### GoalDispatchEnvelope
 
-- **Remote agent invocation**: Call agents via ACP, A2A, or LangGraph Remote
-- **Streaming support**: Stream results from remote agents
-- **Health checking**: Verify remote agent availability
+When `autopilot_job` is set, it carries a `GoalDispatchEnvelope` — a **transient wire message** (not a persistent entity). Created by the daemon when dispatching a goal to a subprocess worker, consumed by the worker's hydration path:
 
-### Protocol Interface
+- `goal_id` — daemon's canonical goal ID
+- `goal_description` — frozen at dispatch time
+- `merged_context` — pre-projected hydration bundle from the daemon's `ContextProjector`; the worker treats it as opaque
+- `deadline_seconds` — wall-clock budget (`None` = no cap)
+- `attempt` — 1 on first dispatch, N on retry/backoff
 
-```python
-@runtime_checkable
-class RemoteAgentProtocol(Protocol):
-    """Protocol for invoking remote agents via ACP, A2A, or LangGraph.
-    
-    Current implementations are accessed through RemoteAgentProtocol
-    directly. Future remote backends may be wrapped as CompiledSubAgent
-    instances for uniform task-tool access.
-    """
+> **Terminology gotcha**: "Job" in Desktop UX = user-facing term for a *root Goal* (persistent). `GoalDispatchEnvelope` = transient dispatch *message* (not stored). `AutopilotJob` is a deprecated alias — use `GoalDispatchEnvelope` in new code.
 
-    async def invoke(
-        self, 
-        task: str, 
-        context: dict[str, Any] | None = None
-    ) -> str:
-        """Invoke the remote agent and return the result.
-        
-        Args:
-            task: The task description.
-            context: Optional context to pass to the remote agent.
-            
-        Returns:
-            The agent's result as text.
-        """
-        ...
+## Execution Flow
 
-    async def stream(
-        self, 
-        task: str, 
-        context: dict[str, Any] | None = None
-    ) -> AsyncIterator[str]:
-        """Stream results from the remote agent.
-        
-        Args:
-            task: The task description.
-            context: Optional context to pass.
-            
-        Yields:
-            Incremental result chunks.
-        """
-        ...
-
-    async def health_check(self) -> bool:
-        """Check if the remote agent is reachable.
-        
-        Returns:
-            True if the agent responded to health check.
-        """
-        ...
-```
-
-### Backend Implementations
-
-Remote agent backends implement various protocols:
-
-- **ACP**: Agent Communication Protocol (HTTP-based)
-- **A2A**: Agent-to-Agent protocol (peer-to-peer)
-- **LangGraph Remote**: LangGraph RemoteGraph
-
-**Implementation Note**: Current implementations are accessed via protocol directly. Planned: wrap as `CompiledSubAgent` for uniform delegation envelope.
-
-### Usage Patterns
-
-```python
-from soothe.protocols import RemoteAgentProtocol
-
-# Invoke remote agent
-remote_agent: RemoteAgentProtocol = resolve_remote_agent(config)
-
-# Non-streaming invocation
-result = await remote_agent.invoke(
-    task="Analyze database performance",
-    context={"database": "production"}
-)
-
-# Streaming invocation
-async for chunk in remote_agent.stream(
-    task="Generate migration plan",
-    context={"schema": "current_schema"}
-):
-    print(chunk)
-
-# Health check
-is_reachable = await remote_agent.health_check()
-```
-
-## ToolkitProtocol
-
-### Purpose
-
-- **Tool collections**: Group related tools into cohesive kits
-- **Instantiation**: Toolkits create tools with configuration
-- **Domain organization**: Organize tools by domain (filesystem, web, etc.)
-
-### Protocol Interface
-
-```python
-@runtime_checkable
-class ToolkitProtocol(Protocol):
-    """Protocol for toolkits -- collections of related tools.
-    
-    Each toolkit provides a cohesive set of tools for a specific domain.
-    Toolkits are instantiated by resolver or plugin system with
-    configuration parameters, and return BaseTool instances via get_tools().
-    """
-
-    def get_tools(self) -> list[BaseTool]:
-        """Return all tools in this toolkit.
-        
-        Returns:
-            List of langchain BaseTool instances.
-        """
-        ...
-```
-
-### Built-in Toolkits
-
-Soothe provides several built-in toolkits:
-
-- **FileSystemToolkit**: File operations (read, write, edit)
-- **WebToolkit**: Web search, crawling, requests
-- **ResearchToolkit**: Academic search, paper reading
-- **ExecutionToolkit**: Shell commands, Python execution
-- **MediaToolkit**: Image, audio, video analysis
-
-**Example Implementation**:
-```python
-from langchain_core.tools import BaseTool
-from soothe.protocols import ToolkitProtocol
-
-class FileSystemToolkit(ToolkitProtocol):
-    """Toolkit for filesystem operations."""
-    
-    def __init__(self, config: ToolkitConfig) -> None:
-        self._config = config
-    
-    def get_tools(self) -> list[BaseTool]:
-        """Return filesystem tools."""
-        from soothe.toolkits.filesystem import (
-            ReadFileTool,
-            WriteFileTool,
-            EditFileTool,
-            ListDirectoryTool,
-        )
-        
-        return [
-            ReadFileTool(config=self._config),
-            WriteFileTool(config=self._config),
-            EditFileTool(config=self._config),
-            ListDirectoryTool(config=self._config),
-        ]
-```
-
-### Plugin Toolkits
-
-Plugins can register custom toolkits:
-
-```python
-from soothe_sdk.plugin import plugin, tool
-
-@plugin(name="my-plugin", version="1.0.0")
-class MyPlugin:
-    @tool(name="my_custom_tool", description="Custom tool")
-    def my_custom_tool(self, arg: str) -> str:
-        """Custom tool implementation."""
-        return f"Processed: {arg}"
-    
-    def get_tools(self) -> list[BaseTool]:
-        """Return plugin tools."""
-        return [self.my_custom_tool]
-```
-
-### Usage Patterns
-
-```python
-from soothe.protocols import ToolkitProtocol
-from soothe.runner.resolver import resolve_toolkit
-
-# Resolve toolkit
-filesystem_kit: ToolkitProtocol = resolve_toolkit(
-    "filesystem",
-    config
-)
-
-# Get tools
-tools = filesystem_kit.get_tools()
-
-# Use in agent
-agent = create_agent_with_tools(tools)
-
-# Or add to tool registry
-for tool in tools:
-    registry.register(tool)
-```
-
-## Integration Patterns
-
-### Runner ↔ LoopPlanner Integration
+The runner orchestrates the full StrangeLoop cycle:
 
 ```
-Runner execution flow:
-
-1. LoopRunner.run(request)
-   ↓
-2. Resolve workspace and configuration
-   ↓
-3. Initialize StrangeLoop
-   ↓
-4. Loop iteration:
-   a. LoopPlanner.plan() → PlanResult
-   b. Execute decision → CoreAgent
-   c. Collect StepResult
-   d. Update LoopState
-   ↓
-5. Stream chunks to client
-   ↓
-6. Persist final state
+LoopRunner.run(request)
+  → resolve workspace path
+  → configure agent loop (model, concurrency, subagents)
+  → initialize StrangeLoop
+  → loop iteration:
+      a. LoopPlanner.plan() → PlanResult
+      b. execute decision via CoreAgent (tools/subagents)
+      c. collect StepResult, update LoopState
+  → stream StreamChunks to consumer throughout
+  → persist final state
 ```
 
-### RemoteAgent ↔ Subagent Integration
+The runner streams chunks *during* execution, not after. This is why `run()` is an `AsyncIterator` — consumers (TUI, API) render progress incrementally.
 
-Remote agents can be wrapped as subagents:
+## Backends
 
-```python
-# Current: Direct protocol access
-remote: RemoteAgentProtocol = resolve_remote_agent(config)
-result = await remote.invoke(task)
+| Backend | Status | Use Case |
+|---------|--------|----------|
+| `LocalLoopRunner` | Current | Multiprocessing-based subprocess execution |
+| `RayLoopRunner` | Available | Ray actor-based distributed execution |
 
-# Planned: CompiledSubAgent wrapper
-from deepagents import CompiledSubAgent
+Both implement `LoopRunnerProtocol`. The daemon's `LoopRunnerFactory` selects between them via `SootheDaemonConfig`. Consumers (`QueryEngine`) see only the protocol.
 
-remote_wrapper = CompiledSubAgent.from_remote_agent(remote)
-# Use via task tool like local subagents
-```
+## Integration Points
 
-### Toolkit ↔ ToolRegistry Integration
+### Runner ↔ LoopPlanner
 
-Toolkits populate tool registry:
+Each StrangeLoop iteration calls `LoopPlannerProtocol.plan()` to get a `PlanResult`. If `plan_action == "new"`, the runner executes the new decision; if `status == "complete"`, the goal is achieved and the loop ends. See [planner.md](planner.md).
 
-```python
-from soothe.foundation.context.tool_registry import ToolRegistry
+### Runner ↔ Policy
 
-registry = ToolRegistry()
+Before executing any tool or subagent, the runtime consults `PolicyProtocol` for permission. Denied actions raise `PermissionError`; `need_approval` actions pause for user input. See [policy.md](policy.md).
 
-# Register toolkit tools
-filesystem_tools = filesystem_kit.get_tools()
-for tool in filesystem_tools:
-    registry.register(tool)
+### Runner ↔ Durability
 
-# Registry provides unified tool access
-available_tools = registry.get_available_tools()
-```
+The run binds to a `thread_id` (DurabilityProtocol). Thread metadata — including `policy_profile` — flows from durability into the runner's configuration. On completion, state persists to the thread.
 
-## Configuration
+## Gotchas
 
-### Runner Settings
-
-```yaml
-# config/config.template.yml
-agent:
-  runner:
-    max_iterations: 8
-    timeout_seconds: 600
-    worker_pool_size: 4
-    
-  loop:
-    autonomous: false
-    preferred_subagent: null
-```
-
-### RemoteAgent Settings
-
-```yaml
-remote_agents:
-  production_analyzer:
-    type: acp
-    endpoint: https://analyzer.example.com
-    timeout: 30
-    
-  research_peer:
-    type: a2a
-    peer_id: research-agent-001
-```
-
-### Toolkit Settings
-
-```yaml
-toolkits:
-  filesystem:
-    enabled: true
-    allowed_paths:
-      - /project/**
-      - /tmp/**
-    
-  web:
-    enabled: true
-    search_engine: tavily
-```
-
-## Testing
-
-### Unit Tests
-
-**Locations**:
-- `packages/soothe/tests/unit/protocols/test_runner_autopilot_job.py`
-- Toolkit tests in respective toolkit packages
-
-Tests verify:
-- LoopRunRequest workspace resolution
-- GoalDispatchEnvelope dispatch
-- RemoteAgent health checks
-- Toolkit tool instantiation
-
-## Specification Reference
-
-- **RFC-221**: Loop Runner Protocol and Ray
-- **RFC-222**: Autopilot Goal Engine Architecture
-- **RFC-622**: CoreAgent Clarification Relay
-- **RFC-000**: System Conceptual Design (Module 6)
-- **RFC-101**: Tool Interface
+- **`autopilot_job` vs `user_input` are mutually exclusive paths** — when `autopilot_job` is set, the worker ignores `user_input` and hydrates from `merged_context`. When `None`, the worker runs solo-mode (today's default path).
+- **Clarification resume is state-verified** — the runner checks persisted `pending_clarification` state before treating input as an answer. If no clarification is pending, it falls back to a normal turn.
+- **Streaming is multi-mode** — the runner streams `messages`, `updates`, and `custom` modes simultaneously with `subgraphs=True`. Consumers must handle interleaved chunk types.
+- **`resolve_workspace_path()` has fallback logic** — when `client_workspace` is absent, it derives a path from `user_id` (or `"anonymous"`) hashed with `client_workspace_id` or `loop_id`. Don't assume a specific path without calling this method.
 
 ## Related Documentation
 
+- [Planner Protocol](planner.md) — `LoopPlannerProtocol` drives each iteration
+- [Loop Protocols](loop-protocols.md) — working memory and operation security within loops
+- [Policy Protocol](policy.md) — permission checks during execution
 - [StrangeLoop Architecture](../sloop.md)
-- [Planner Protocol](planner.md)
-- [Plugin System](../plugins.md)
-- [Tool Registry](../tool-registry.md)

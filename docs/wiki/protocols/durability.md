@@ -1,560 +1,100 @@
 # DurabilityProtocol
 
 **RFC**: 306 (Protocol Specifications series)
-**Module**: RFC-000 Module 5
 **Location**: `packages/soothe/src/soothe/protocols/durability.py`
 **Status**: Implemented
-**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics  
 
-## Overview
+## What DurabilityProtocol Is
 
-DurabilityProtocol defines the interface for **thread lifecycle management** in Soothe. It handles creation, resumption, suspension, and archiving of agent conversation threads, maintaining thread metadata and status across restarts and crashes.
+DurabilityProtocol defines the interface for **thread lifecycle management**. A "thread" is Soothe's unit of conversational continuity — an agent run with its own ID, metadata, and status. DurabilityProtocol handles creating, resuming, suspending, archiving, and querying threads, plus their metadata.
 
-**Note**: State persistence (checkpoints, artifacts) is handled separately by LangGraph's Checkpointer system and `RunArtifactStore` (RFC-0010).
+A critical distinction: DurabilityProtocol manages *thread metadata and lifecycle status*, not execution state. Checkpoint state (LangGraph graph snapshots) and run artifacts are handled separately by the Checkpointer system and `RunArtifactStore` (RFC-0010). DurabilityProtocol is the *identity and metadata* layer; the Checkpointer is the *execution state* layer.
 
-## Purpose
+## Why It Exists
 
-- **Thread lifecycle**: Create, resume, suspend, archive threads
-- **Metadata persistence**: Thread tags, labels, policy profiles
-- **Status tracking**: active, suspended, archived states
-- **Prefix matching**: Resume threads by partial ID
-- **Thread filtering**: Query threads by status, tags, metadata
+Without a dedicated thread lifecycle abstraction, thread management scatters across the runtime — ad-hoc UUIDs, inconsistent status transitions, no queryable metadata. The protocol centralizes:
 
-## Protocol Interface
+- **Identity** — stable thread IDs that survive restarts and crashes
+- **Lifecycle** — a defined state machine (active → suspended → archived)
+- **Metadata** — tags, labels, policy profiles, priority attached to each thread
+- **Querying** — filter threads by status, tags, priority, time ranges
 
-```python
-@runtime_checkable
-class DurabilityProtocol(Protocol):
-    """Protocol for thread lifecycle management.
-    
-    State persistence (checkpoints, artifacts) is handled by
-    ``RunArtifactStore`` (RFC-0010).
-    """
+This separation lets the daemon manage many concurrent threads (interactive, autopilot, background) with a uniform interface, regardless of backend.
 
-    async def create_thread(
-        self,
-        metadata: ThreadMetadata,
-        thread_id: str | None = None,
-    ) -> ThreadInfo:
-        """Create a new thread with metadata.
-        
-        Args:
-            metadata: Thread metadata.
-            thread_id: Optional thread ID. If not provided, 
-                       a new UUID is generated.
-                       
-        Returns:
-            ThreadInfo for the created thread.
-        """
-        ...
+## Thread Lifecycle State Machine
 
-    async def resume_thread(self, thread_id: str) -> ThreadInfo:
-        """Resume a suspended thread.
-        
-        Supports prefix matching for thread IDs. If the provided
-        thread_id is a prefix that matches one or more threads,
-        the first match is resumed.
-        
-        Args:
-            thread_id: Full thread ID or prefix.
-            
-        Returns:
-            ThreadInfo for the resumed thread.
-            
-        Raises:
-            KeyError: If thread not found.
-        """
-        ...
-
-    async def suspend_thread(self, thread_id: str) -> None:
-        """Suspend an active thread, persisting its state.
-        
-        Args:
-            thread_id: The thread to suspend.
-        """
-        ...
-
-    async def archive_thread(self, thread_id: str) -> None:
-        """Archive a thread. Triggers memory consolidation.
-        
-        Args:
-            thread_id: The thread to archive.
-        """
-        ...
-
-    async def get_thread(self, thread_id: str) -> ThreadInfo | None:
-        """Retrieve thread info by ID (exact match only).
-        
-        Args:
-            thread_id: The thread ID.
-            
-        Returns:
-            ThreadInfo if found, None otherwise.
-        """
-        ...
-
-    async def list_threads(
-        self,
-        thread_filter: ThreadFilter | None = None,
-    ) -> list[ThreadInfo]:
-        """List threads matching filter criteria.
-        
-        Args:
-            thread_filter: Optional filter criteria.
-            
-        Returns:
-            Matching threads ordered by updated_at descending.
-        """
-        ...
-
-    async def update_thread_metadata(
-        self,
-        thread_id: str,
-        metadata: dict[str, Any] | ThreadMetadata,
-    ) -> None:
-        """Update thread metadata (partial update).
-
-        Merges the provided metadata with existing metadata.
-        Only updates fields that are present in the new metadata.
-        
-        Args:
-            thread_id: The thread to update.
-            metadata: New metadata to merge. Can be dict or ThreadMetadata.
-            
-        Raises:
-            KeyError: If thread not found.
-        """
-        ...
-```
-
-## Data Models
-
-### ThreadMetadata
-
-```python
-class ThreadMetadata(BaseModel):
-    """Metadata associated with a thread.
-    
-    Args:
-        tags: Categorical tags for filtering.
-        plan_summary: Brief summary of the thread's plan (if any).
-        policy_profile: Name of the active policy profile.
-        labels: User-defined labels for organization (RFC-303).
-        priority: Thread priority level (RFC-303).
-        category: User-defined category (RFC-303).
-        claude_sessions: Maps resolved workspace cwd to Claude Agent SDK
-            session UUID for resumption (IG-202).
-    """
-
-    tags: list[str] = Field(default_factory=list)
-    plan_summary: str | None = None
-    policy_profile: str = "standard"
-    # RFC-303: Enhanced metadata
-    labels: list[str] = Field(default_factory=list)
-    priority: Literal["low", "normal", "high"] = "normal"
-    category: str | None = None
-    claude_sessions: dict[str, str] = Field(default_factory=dict)
-```
-
-**Key Fields**:
-- **tags**: System-level categorical tags (e.g., "autopilot", "interactive")
-- **labels**: User-defined organization labels
-- **priority**: Execution priority (low, normal, high)
-- **policy_profile**: Security policy applied to thread
-
-### ThreadInfo
-
-```python
-class ThreadInfo(BaseModel):
-    """Full information about a thread.
-    
-    Args:
-        thread_id: Unique thread identifier.
-        status: Current lifecycle status.
-        created_at: Creation timestamp.
-        updated_at: Last update timestamp.
-        metadata: Associated metadata.
-    """
-
-    thread_id: str
-    status: Literal["active", "suspended", "archived"]
-    created_at: datetime
-    updated_at: datetime
-    metadata: ThreadMetadata = Field(default_factory=ThreadMetadata)
-```
-
-### ThreadFilter
-
-```python
-class ThreadFilter(BaseModel):
-    """Filter criteria for listing threads.
-    
-    Supports both protocol-level filtering (durability backend) and
-    manager-level in-memory filtering (ThreadContextManager).
-    
-    Args:
-        status: Filter by status.
-        tags: Filter by tags (items must have all specified tags).
-        labels: Filter by user-defined labels.
-        priority: Filter by priority level.
-        category: Filter by category.
-        created_after: Filter by creation time lower bound.
-        created_before: Filter by creation time upper bound.
-        updated_after: Filter by update time lower bound.
-        updated_before: Filter by update time upper bound.
-    """
-
-    status: Literal["active", "suspended", "archived", "idle", "running", "error"] | None = None
-    tags: list[str] | None = None
-    labels: list[str] | None = None
-    priority: Literal["low", "normal", "high"] | None = None
-    category: str | None = None
-    created_after: datetime | None = None
-    created_before: datetime | None = None
-    updated_after: datetime | None = None
-    updated_before: datetime | None = None
-```
-
-## Backend Implementations
-
-### PostgreSQLDurability
-
-**Status**: Production implementation  
-**Location**: `packages/soothe/src/soothe/backends/durability/postgresql.py`  
-**Dependencies**: PostgreSQL database (metadata database per RFC-802)
-
-**Features**:
-- Production-grade persistence
-- Connection pooling
-- Multi-database architecture (RFC-802)
-- Thread prefix matching
-- Async operations
-
-**Configuration**:
-```yaml
-persistence:
-  durability_backend: postgresql
-  postgres_base_dsn: postgresql://user:pass@host:port
-  postgres_databases:
-    metadata: soothe_metadata  # Durability data
-```
-
-**Implementation**:
-```python
-class PostgreSQLDurability(BasePersistStoreDurability):
-    """PostgreSQL durability backend using dedicated metadata database."""
-    
-    def __init__(self, persist_store: AsyncPersistStore) -> None:
-        super().__init__(persist_store)
-        # Uses AsyncPersistStore with PostgreSQL backend
-```
-
-### SQLiteDurability
-
-**Status**: Development implementation  
-**Location**: `packages/soothe/src/soothe/backends/durability/sqlite.py`  
-**Dependencies**: SQLite database (metadata.db)
-
-**Features**:
-- Lightweight, zero-configuration
-- Single-file storage
-- Async operations via aiosqlite
-- Suitable for development and testing
-
-**Configuration**:
-```yaml
-persistence:
-  durability_backend: sqlite
-  metadata_sqlite_path: ~/.soothe/metadata.db
-```
-
-**Implementation**:
-```python
-class SQLiteDurability(BasePersistStoreDurability):
-    """SQLite durability backend using metadata.db."""
-    
-    def __init__(self, db_path: str) -> None:
-        persist_store = create_persist_store(
-            backend="sqlite",
-            db_path=db_path,
-        )
-        super().__init__(persist_store)
-```
-
-### BasePersistStoreDurability
-
-**Location**: `packages/soothe/src/soothe/backends/durability/base.py`  
-**Purpose**: Base implementation using `AsyncPersistStore`
-
-```python
-class BasePersistStoreDurability:
-    """Base implementation using AsyncPersistStore.
-    
-    Provides thread lifecycle management. Subclasses only need to
-    provide an AsyncPersistStore instance.
-    """
-
-    def __init__(self, persist_store: AsyncPersistStore) -> None:
-        self._store = persist_store
-        self._thread_index_key = "thread_index"
-```
-
-**Key Features**:
-- Thread storage key: `thread:{thread_id}`
-- Thread index tracking for listing
-- Prefix matching support for resumption
-- Automatic UUID generation if thread_id not provided
-
-## Usage Patterns
-
-### Thread Creation
-
-```python
-from soothe.protocols import ThreadMetadata, DurabilityProtocol
-
-durability: DurabilityProtocol = resolve_durability(config)
-
-# Create new thread with metadata
-metadata = ThreadMetadata(
-    tags=["autopilot", "goal-oriented"],
-    labels=["project-alpha"],
-    priority="high",
-    policy_profile="standard"
-)
-
-thread_info = await durability.create_thread(metadata)
-print(f"Thread created: {thread_info.thread_id}")
-```
-
-### Thread Resumption
-
-```python
-# Resume with exact ID
-thread = await durability.resume_thread("thread_abc123")
-
-# Resume with prefix (matches first result)
-thread = await durability.resume_thread("abc")  # Matches thread_abc123
-
-# Get thread without changing status
-thread = await durability.get_thread("thread_abc123")
-if thread:
-    print(f"Thread status: {thread.status}")
-```
-
-### Thread Listing and Filtering
-
-```python
-from soothe.protocols import ThreadFilter
-
-# List all active threads
-filter = ThreadFilter(status="active")
-active_threads = await durability.list_threads(filter)
-
-# List high-priority threads with specific labels
-filter = ThreadFilter(
-    priority="high",
-    labels=["critical"],
-    updated_after=datetime.now() - timedelta(days=7)
-)
-recent_critical = await durability.list_threads(filter)
-
-# List all threads (no filter)
-all_threads = await durability.list_threads()
-```
-
-### Thread Lifecycle Management
-
-```python
-# Suspend thread (can be resumed later)
-suspended = await durability.suspend_thread("thread_abc123")
-
-# Archive thread (permanent, no resumption)
-archived = await durability.archive_thread("thread_xyz789")
-
-# Update metadata
-new_metadata = ThreadMetadata(
-    tags=["autopilot", "completed"],
-    priority="low"
-)
-updated = await durability.update_thread_metadata(
-    "thread_abc123",
-    new_metadata
-)
-```
-
-## Integration with Other Protocols
-
-### Durability ↔ Checkpointer Integration
-
-Durability and Checkpointer have separate responsibilities:
-
-- **DurabilityProtocol**: Thread metadata and lifecycle
-- **LangGraph Checkpointer**: Execution state and checkpoints
+Threads move through three core states:
 
 ```
-Thread Lifecycle (Durability):
-  - Thread ID, status, metadata
-  - ThreadFilter queries
-  
-Execution State (Checkpointer):
-  - LangGraph checkpoint snapshots
-  - Conversation history
-  - Tool/subagent state
+create → active ⇄ suspended → archived
 ```
 
-### Durability ↔ Memory Integration
+- **`create_thread(metadata, thread_id?)`** — creates a new thread. If `thread_id` is omitted, a UUID is generated; providing it lets you persist a draft thread with its existing ID.
+- **`suspend_thread(id)`** — pauses an active thread, persisting its state. The thread can be resumed later.
+- **`resume_thread(id)`** — wakes a suspended thread back to active. Supports **prefix matching**: if the ID is a prefix matching multiple threads, the first match resumes.
+- **`archive_thread(id)`** — archives a thread. Archiving triggers **memory consolidation**, flushing thread knowledge into long-term storage.
+- **`get_thread(id)`** — loads thread info *without* changing lifecycle status (read-only, exact match only).
 
-Threads track source of memory items:
+### Two-Level Filtering
 
-```python
-# MemoryItem has source_thread field
-memory_item = MemoryItem(
-    content="Important finding",
-    source_thread="thread_abc123",  # From ThreadInfo.thread_id
-    ...
-)
-```
+A non-obvious design: `ThreadFilter` splits filter fields into two tiers:
 
-### Durability ↔ Policy Integration
+- **Protocol-level** (used by the durability backend): `status`, `tags`, `created_after`/`created_before`
+- **Manager-level** (used by `ThreadContextManager` in-memory): `labels`, `priority`, `category`, `updated_after`/`updated_before`
 
-Threads carry policy profile:
+This split exists because the backend database may not index all fields efficiently. Heavy user-defined metadata filtering happens in-memory after the backend narrows by its indexed fields.
 
-```python
-# ThreadMetadata has policy_profile field
-metadata = ThreadMetadata(
-    policy_profile="readonly"  # Applied to all operations in thread
-)
-```
+## Data Models (Conceptual)
 
-## Thread ID Generation
+The protocol defines three associated models — see `durability.py` for full definitions:
 
-Thread IDs are UUID-based:
+- **`ThreadMetadata`** — tags (system categorical), `policy_profile` (security profile applied to thread operations), `plan_summary`, user-defined `labels`/`priority`/`category` (RFC-452), and `claude_sessions` (maps workspace cwd → Claude Agent SDK session UUID for resumption, IG-202).
+- **`ThreadInfo`** — the full thread record: `thread_id`, `status`, `created_at`, `updated_at`, `metadata`.
+- **`ThreadFilter`** — the two-tier filter criteria described above.
 
-```python
-# Auto-generated if not provided
-thread = await durability.create_thread(metadata)
-# thread.thread_id = "thread_abc123def456..."
+A key gotcha: `update_thread_metadata` does a **partial merge** — only fields present in the new metadata are updated; absent fields keep their existing values. It accepts either a `dict` or a `ThreadMetadata` instance.
 
-# Custom ID for persistence
-thread = await durability.create_thread(
-    metadata,
-    thread_id="thread_custom123"  # User-provided
-)
-```
+## Integration Points
 
-**Prefix Matching**:
-```python
-# Resume by prefix
-thread = await durability.resume_thread("abc")
-# Matches thread_abc123def456...
+### Durability ↔ Memory
 
-# Multiple matches? Returns most recently updated
-```
+Archiving a thread (`archive_thread`) triggers memory consolidation. Thread knowledge is flushed to `MemoryProtocol` so it survives beyond the thread's lifecycle. Memory items carry `source_thread` for traceability back to the archived thread.
 
-## Thread Status Flow
+### Durability ↔ Policy
 
-```
-Thread Lifecycle States:
+Each thread's `ThreadMetadata.policy_profile` determines which `PolicyProfile` governs all operations within that thread. A thread created with `policy_profile="readonly"` will enforce read-only permissions for its entire lifetime. See [policy.md](policy.md).
 
-[Create] → active → [Suspend] → suspended → [Resume] → active
-             ↓                           ↓
-          [Archive]                   [Archive]
-             ↓                           ↓
-          archived                    archived (no resumption)
-```
+### Durability ↔ Persistence
 
-**States**:
-- **active**: Currently executing or ready to execute
-- **suspended**: Paused, can be resumed
-- **archived**: Permanent archive, cannot resume
-- **idle/running/error**: Additional status from ThreadFilter (for querying)
+PostgreSQL deployments store thread records in a dedicated `soothe_metadata` database (RFC-802 multi-database architecture). SQLite deployments use a single-file `metadata.db`. Both implement `DurabilityProtocol` identically from the consumer's perspective.
 
-## Configuration
+## Backends
 
-### Durability Backend Settings
+| Backend | Status | Use Case |
+|---------|--------|----------|
+| PostgreSQL (`PostgreSQLDurability`) | Production | Multi-process, concurrent thread management |
+| SQLite (`SQLiteDurability`) | Development | Single-process, zero-config, rapid iteration |
 
-```yaml
-# config/config.template.yml
-persistence:
-  durability_backend: postgresql  # or sqlite
-  
-  # PostgreSQL configuration
-  postgres_base_dsn: postgresql://user:pass@host:port
-  postgres_databases:
-    metadata: soothe_metadata  # Durability data
-    
-  # SQLite configuration
-  metadata_sqlite_path: ~/.soothe/metadata.db
-```
+Backends are selected via `persistence.durability_backend` in config. The `resolve_persist_store` helper creates the underlying `AsyncPersistStore` that backends use for key-value storage.
 
-### Resolution
+## Gotchas
 
-```python
-from soothe.runner.resolver import resolve_durability
-
-# Resolve durability protocol from config
-durability = resolve_durability(config)
-
-# Returns: DurabilityProtocol implementation
-# Backend: PostgreSQLDurability or SQLiteDurability
-```
-
-## Testing
-
-### Unit Tests
-
-**Location**: `packages/soothe/tests/unit/backends/durability/test_sqlite_durability.py`
-
-Tests verify:
-- Thread creation with metadata
-- Thread resumption (exact and prefix matching)
-- Thread suspension and archiving
-- Thread listing and filtering
-- Metadata updates
-
-### Integration Tests
-
-Durability integration tests verify:
-- PostgreSQL connection handling
-- Multi-database architecture
-- Thread persistence across restarts
-- Concurrent thread operations
-
-## Design Rationale
-
-### Why Separate Durability from Checkpointer?
-
-**RFC-000 Principle 5**: Durable by default.
-
-- **Durability**: Thread-level metadata and lifecycle
-- **Checkpointer**: Execution-level state and snapshots
-- Different data structures, different query patterns
-
-### Why Prefix Matching?
-
-Convenience for thread resumption:
-- Full UUIDs are hard to remember/type
-- Prefix matching enables easy resumption
-- Returns most recently updated if multiple matches
-
-### Why Three Status States?
-
-- **active**: Execution-ready
-- **suspended**: Pause for later resumption
-- **archived**: Permanent storage, no resumption
-
-Separate states for different lifecycle phases.
+- **Prefix matching on resume** — `resume_thread` accepts a prefix and resumes the *first* match. If multiple threads share a prefix, you may not get the one you expect. Use full IDs when precision matters.
+- **`get_thread` is exact-match only** — unlike `resume_thread`, `get_thread` does not do prefix matching. It returns `None` (not an error) if the thread doesn't exist.
+- **`resume_thread` raises `KeyError`** — unlike `get_thread` (which returns `None`), `resume_thread` raises `KeyError` if the thread doesn't exist. Callers must handle this differently.
+- **Archive is terminal** — archiving triggers memory consolidation and moves the thread out of active/suspended states. There's no "unarchive" in the core protocol.
+- **Metadata merge semantics** — `update_thread_metadata` merges, it doesn't replace. To clear a field, you must explicitly set it (where the model allows `None`).
+- **`list_threads` ordering** — results are ordered by `updated_at` descending (most recently touched first), not by creation time.
 
 ## Specification Reference
 
 - **RFC-306**: Durability Protocol Architecture
-- **RFC-802**: Persistence Architecture Refactor (multi-database)
-- **RFC-452**: Unified Thread Management
-- **RFC-000**: System Conceptual Design (protocol philosophy)
+- **RFC-452**: Enhanced thread metadata (labels, priority, category)
+- **RFC-802**: Multi-database persistence architecture
+- **RFC-0010**: RunArtifactStore (separate from durability)
 
 ## Related Documentation
 
-- [Persistence Protocol](persistence.md)
-- [Memory Protocol](memory.md)
-- [Policy Protocol](policy.md)
-- [Backend Implementation Guide](../backends.md)
+- [Memory Protocol](memory.md) — triggered on archive
+- [Policy Protocol](policy.md) — `policy_profile` in thread metadata
+- [Vector Store & Persistence](vector-store-persistence.md) — `AsyncPersistStore` backends

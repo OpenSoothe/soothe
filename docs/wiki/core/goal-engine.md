@@ -1,400 +1,151 @@
-# ContextEngine
+# ContextEngine (Goal Engine)
 
-Unified context management for goals, steps, ledger, and projection.
-
----
-
-## Overview
-
-ContextEngine (`soothe.foundation.context`) provides autonomous goal management for long-running complex workflows. It manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. ContextEngine composes GoalStepDAG, LedgerManager, SemanticLoader, ProjectionEngine, and a pluggable persistence backend into a single interface.
-
-**RFC**: [RFC-624](../../specs/RFC-624-context-engine.md) (Context Engine), [RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md) (Autopilot-Monitor-ContextEngine unification)
+Autonomous goal management via goal DAGs, ledger, and bounded projection.
 
 ---
 
-## Architecture
+## What This Module Is
 
-### Goal DAG Management
+ContextEngine (`soothe.foundation.context`) is **Layer 3** of Soothe's execution model — the "goal engine." It manages autonomous goal execution for long-running, complex workflows. Where StrangeLoop (Layer 2) executes a single goal iteratively, ContextEngine orchestrates *which* goals to pursue, in what order, and how they relate to each other.
 
-ContextEngine manages goals as a Directed Acyclic Graph (DAG):
+ContextEngine composes five subsystems into a single interface: `GoalStepDAG` (goal/step graph), `LedgerManager` (message history), `SemanticLoader` (file/context loading), `ProjectionEngine` (bounded context for prompts), and a pluggable persistence backend (SQLite or PostgreSQL).
 
-```
-ContextEngine Architecture
-├─ GoalStepDAG
-│  ├─ Goals with dependencies
-│  ├─ Priority-based scheduling
-│  └─ Dynamic restructuring
-│
-├─ Goal Lifecycle
-│  ├─ pending → active → completed
-│  ├─ Backoff reasoning
-│  └─ Failure handling
-│
-├─ Goal Execution
-│  ├─ PERFORM delegation (StrangeLoop)
-│  ├─ REFLECT evaluation
-│  └─ DAG update
-│
-├─ Step DAG
-│  ├─ Steps per goal
-│  ├─ Dependency satisfaction
-│  └─ Completion tracking
-│
-├─ LedgerManager
-│  ├─ Message history
-│  └─ Phase filtering
-│
-├─ ProjectionEngine
-│  ├─ Bounded context projection
-│  └─ Prompt template injection
-│
-└─ Planning Submodule
-   ├─ StepPlanningSubengine
-   ├─ GoalPlanningSubengine
-   └─ GoalScheduler
-```
+**RFC**: [RFC-624](../../specs/RFC-624-context-engine.md), [RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md)
+**Source**: `packages/soothe/src/soothe/foundation/context/engine.py`, `models.py`
 
 ---
 
-## Core Concepts
+## The Goal DAG — Why a Graph, Not a List
 
-### GoalStepDAG
+Goals are organized as a **Directed Acyclic Graph** (DAG), not a flat queue. This is the core design decision. A DAG captures four relationship types that a queue cannot:
 
-Goals organized as a directed acyclic graph with embedded step DAGs:
+- **`depends_on`** — hard dependency: goal B cannot start until goal A completes.
+- **`informs`** — soft relationship: goal B should consider A's results, but can proceed without them.
+- **`conflicts_with`** — mutual exclusion: goals that shouldn't run concurrently.
+- **`parent_id`** — decomposition hierarchy: sub-goals spawned by a parent goal.
 
-```python
-class GoalStepDAG:
-    """Unified Goal+Step DAG."""
+Each `GoalNode` also embeds its own `StepDAG` — a per-goal DAG of execution steps with dependencies. This two-level structure (goals form a DAG, each goal's steps form a sub-DAG) lets the engine reason about both inter-goal ordering and intra-goal execution sequencing.
 
-    goals: dict[str, GoalNode]      # Goal registry
+### Goal Lifecycle States
 
-    def add_goal(self, goal: GoalNode): ...
-    def get_goal(self, goal_id: str) -> GoalNode | None: ...
-    def complete_goal(self, goal_id: str): ...
-    def fail_goal(self, goal_id: str, error: str): ...
-    def snapshot(self) -> GoalStepDAGSnapshot: ...
-```
+Goals move through these states: `pending → active → completed` (happy path), with branches for `failed`, `suspended`, `blocked`, `awaiting_clarification`, `validated`, and `cancelled`.
 
-### GoalNode
+Key groupings:
+- **Terminal states** (`completed`, `failed`, `cancelled`) — no further transitions.
+- **Blocked states** (`awaiting_clarification`, `suspended`) — paused, can resume.
 
-Individual goal in the DAG:
+### Goal Depth Limit
 
-```python
-class GoalNode:
-    """Single goal in the unified Goal+Step DAG."""
-
-    # Core identity
-    id: str                        # Goal identifier (auto-generated)
-    description: str               # Goal description
-    priority: int                  # Execution priority (0-100, default 50)
-    status: GoalStatus             # pending, active, completed, failed, etc.
-
-    # DAG relationships
-    parent_id: str | None          # Parent goal ID
-    depends_on: list[str]          # Hard dependency goal IDs
-    informs: list[str]             # Informs relationships
-    conflicts_with: list[str]      # Conflict relationships
-
-    # Embedded step DAG
-    steps: StepDAG                 # Steps for this goal
-
-    # Lineage
-    generating_reasoning: str | None
-    source: str                    # user, directive, file_discovery, decomposition
-
-    # Execution tracking
-    iteration_count: int           # Current iteration number
-    total_tokens_used: int
-    total_duration_ms: int
-    max_iterations: int            # 0 = no cap
-    thread_id: str | None
-    assigned_loop_id: str | None
-    action_history: list[str]
-
-    # Retry/backoff
-    retry_count: int
-    max_retries: int               # Default 2
-    send_back_count: int
-    max_send_backs: int            # Default 3
-    attempts_after_crash: int
-
-    # Workspace/source
-    source_file: str | None        # GOAL.md path if file-sourced
-    workspace: str | None          # Autopilot dispatch workspace
-
-    # Completion state
-    report: dict[str, Any] | None  # Serialized GoalReport on completion
-    error: str | None              # Failure reason
-    pending_clarification: dict[str, Any] | None  # RFC-622
-
-    # Dreaming (RFC-625)
-    topic: str | None              # Topic tag for cross-loop dreaming
-    findings: list[str]            # Key findings from execution
-```
-
-### GoalStatus
-
-Lifecycle states:
-
-```python
-GoalStatus = Literal[
-    "pending",                    # Initial state
-    "active",                     # Activated for execution
-    "completed",                  # Successfully finished
-    "failed",                     # Execution failed
-    "suspended",                  # Temporarily suspended
-    "blocked",                    # Blocked by dependency
-    "validated",                  # Validated
-    "awaiting_clarification",     # Awaiting user clarification (RFC-622)
-    "cancelled",                  # Cancelled by user
-]
-
-TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
-BLOCKED_STATES = frozenset({"awaiting_clarification", "suspended"})
-```
+There's a `MAX_GOAL_DEPTH = 5` constant — the decomposition hierarchy can't nest deeper than 5 levels. This prevents infinite goal decomposition chains.
 
 ---
 
-## Goal Lifecycle
+## The Planning Submodule
 
-### 1. Goal Creation
+ContextEngine exposes a planning facade with three sub-engines:
 
-Create goals with dependencies:
+- **`StepPlanningSubengine`** — plans steps within a single goal's step DAG.
+- **`GoalPlanningSubengine`** — decomposes goals, detects relationships between goals.
+- **`GoalScheduler`** — decides which ready goals to activate next (priority-based, dependency-aware).
 
-```python
-# Create simple goal
-goal = await engine.create_goal(
-    description="Analyze codebase structure",
-    priority=50
-)
-
-# Create goal with dependencies
-goal = await engine.create_goal(
-    description="Implement feature",
-    depends_on=["goal-123"],  # Wait for analysis
-    priority=80
-)
-```
-
-### 2. Goal Activation
-
-Activate a pending goal:
-
-```python
-await engine.activate_goal(goal_id, loop_id="loop-abc")
-# Transitions goal from "pending" to "active"
-```
-
-### 3. Goal Completion
-
-Handle goal completion:
-
-```python
-await engine.complete_goal(goal_id)
-# Transitions goal to "completed" terminal state
-```
-
-### 4. Goal Failure
-
-Handle goal failure with retry support:
-
-```python
-await engine.fail_goal(
-    goal_id,
-    error="Tool execution timed out",
-    evidence=evidence_bundle,
-    allow_retry=True  # Allow retry if retries remain
-)
-```
-
-### 5. Goal Suspension/Blocking
-
-Suspend or block goals:
-
-```python
-await engine.suspend_goal(goal_id, reason="waiting for external API")
-await engine.block_goal(goal_id)    # Block by dependency
-await engine.unblock_goal(goal_id)  # Unblock back to pending
-```
-
-### 6. Goal Cancellation
-
-Cancel a goal (terminal state):
-
-```python
-await engine.cancel_goal(goal_id, reason="user_cancelled")
-```
+Access via `engine.planning.step`, `engine.planning.goal`, `engine.planning.scheduler`.
 
 ---
 
-## Event System
+## Projection — Bounded Context for Prompts
 
-ContextEngine fires callbacks for lifecycle events:
-
-```python
-EngineEvent = Literal[
-    "goal_created",
-    "goal_activated",
-    "goal_completed",
-    "goal_failed",
-    "goal_suspended",
-    "goal_cancelled",
-    "goal_blocked",
-    "goal_unblocked",
-    "step_completed",
-    "step_failed",
-    "step_skipped",
-]
-
-# Register callbacks
-engine.on("goal_completed", lambda goal_id: print(f"Done: {goal_id}"))
-engine.off("goal_completed", callback)
-```
-
----
-
-## Planning Submodule
-
-ContextEngine exposes a planning facade:
-
-```python
-engine.planning.step    # StepPlanningSubengine
-engine.planning.goal    # GoalPlanningSubengine
-engine.planning.scheduler  # GoalScheduler
-```
-
----
-
-## Projection
-
-Bounded context projection for prompt template injection:
-
-```python
-engine.ledger  # LedgerManager access
-
-# Get DAG snapshot
-snapshot = engine.get_dag_snapshot()
-
-# Get step DAG for a goal
-step_dag = engine.get_step_dag(goal_id)
-
-# Get ledger entries (optionally filtered by phase)
-entries = engine.get_ledger_entries(phases=["plan", "execute"])
-
-# Get all goals
-all_goals = engine.get_all_goals()
-
-# Get goal lineage
-lineage = engine.get_goal_lineage(goal_id)
-```
-
----
-
-## Configuration
-
-### ContextEngine Settings
+A critical responsibility: ContextEngine produces **bounded projections** of its state for injection into LLM prompts. Without bounds, a long-running workflow with 50 goals and 200 steps would blow the context window.
 
 Projection limits are configured under `agent.loop.context_engine`:
 
 ```yaml
 agent:
   loop:
-    context_engine:  # Projection limits for prompt template context injection
+    context_engine:
       projection_max_goals: 5
       projection_max_steps_per_goal: 10
       projection_max_ledger_chars: 4000
       projection_max_ledger_messages: 20
       projection_max_lineage_chars: 2000
-      projection_max_project_instructions_chars: 8000
 ```
 
-The persistence backend follows `persistence.default_backend` — no separate configuration needed. When the global backend is `postgresql`, ContextEngine uses PgsqlContextPersistence with the same DSN. When `sqlite` (default), it uses SqliteContextPersistence.
+The `ProjectionEngine` assembles a `ContextBundle` containing: DAG snapshot (truncated goals/steps), ledger entries (optionally filtered by phase), goal lineage, and project instructions — all within character/count bounds.
+
+### Ledger Phase Filtering
+
+`get_ledger_entries(phases=["plan", "execute"])` returns only messages from specified phases. This lets the projection include just the relevant reasoning history, not the entire conversation.
 
 ---
 
-## Related Documentation
+## Persistence — Follows the Global Backend
 
-- **[StrangeLoop](strangeloop.md)** - Goal execution integration
-- **[SootheRunner](runner.md)** - Runner orchestration
-- **[RFC-624](../../specs/RFC-624-context-engine.md)** - Context Engine specification
-- **[RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md)** - Autopilot unification
+ContextEngine does **not** have its own persistence configuration. It follows `persistence.default_backend`:
+
+- When the global backend is `postgresql`, ContextEngine uses `PgsqlContextPersistence` with the same DSN.
+- When `sqlite` (default), it uses `SqliteContextPersistence`.
+- If no persistence is supplied, it defaults to **in-memory SQLite** (`:memory:`) — suitable for tests only. Production code must supply an explicit backend.
 
 ---
 
-## API Reference
+## Goal Lifecycle Operations
 
-### ContextEngine Class
+The async API manages goal state transitions:
+
+- `create_goal(description, priority=, depends_on=)` — creates a pending goal with optional dependencies.
+- `activate_goal(goal_id, loop_id=)` — transitions pending → active, assigning it to a StrangeLoop instance.
+- `complete_goal(goal_id)` — terminal transition to completed.
+- `fail_goal(goal_id, error=, evidence=, allow_retry=True)` — failure with retry support; if retries remain, the goal can be re-activated.
+- `suspend_goal(goal_id, reason)` / `block_goal(goal_id)` / `unblock_goal(goal_id)` — temporary pauses.
+- `cancel_goal(goal_id, reason=)` — terminal cancellation.
+
+### Retry and Backoff
+
+`GoalNode` tracks `retry_count`, `max_retries` (default 2), `send_back_count`, and `max_send_backs` (default 3). The `fail_goal` call with `allow_retry=True` checks whether retries remain before transitioning to the terminal `failed` state. This gives the engine automatic retry without external orchestration.
+
+### Dreaming (RFC-625)
+
+Goals have `topic` and `findings` fields for "cross-loop dreaming" — a mechanism where completed goals' findings can inform future goal planning. This is part of the autopilot-monitor unification (RFC-625).
+
+---
+
+## Callback System
+
+ContextEngine fires callbacks for lifecycle events: `goal_created`, `goal_activated`, `goal_completed`, `goal_failed`, `goal_suspended`, `goal_cancelled`, `goal_blocked`, `goal_unblocked`, `step_completed`, `step_failed`, `step_skipped`.
 
 ```python
-class ContextEngine:
-    """Unified context management for goals, steps, ledger, and projection."""
-
-    def __init__(
-        self,
-        persistence: Any | None = None,        # Defaults to in-memory SQLite
-        projection_config: ProjectionConfig | None = None,
-        soothe_home: Path | None = None,
-        workspace: Path | None = None,
-    ) -> None: ...
-
-    # Callback mechanism
-    def on(self, event: EngineEvent, callback: Callable) -> None: ...
-    def off(self, event: EngineEvent, callback: Callable) -> None: ...
-
-    # Public read API
-    def get_dag_snapshot(self) -> GoalStepDAGSnapshot: ...
-    def get_step_dag(self, goal_id: str) -> StepDAG | None: ...
-    def get_ledger_entries(self, phases: list[str] | None = None) -> list[tuple[BaseMessage, str | None]]: ...
-    def get_all_goals(self) -> list[GoalNode]: ...
-    def get_goal_lineage(self, goal_id: str) -> list[str]: ...
-    def get_goal_sync(self, goal_id: str) -> GoalNode | None: ...
-
-    # Properties
-    @property
-    def ledger(self) -> LedgerManager: ...
-    @property
-    def planning(self) -> PlanningFacade: ...
-
-    # Goal management
-    async def create_goal(self, description: str, *, priority: int = 50, parent_id: str | None = None, depends_on: list[str] | None = None, ...) -> GoalNode: ...
-    async def get_goal(self, goal_id: str) -> GoalNode | None: ...
-    async def list_goals(self, status: str | None = None) -> list[GoalNode]: ...
-    async def activate_goal(self, goal_id: str, loop_id: str | None = None) -> None: ...
-    async def complete_goal(self, goal_id: str) -> None: ...
-    async def fail_goal(self, goal_id: str, error: str | None = None, *, evidence: Any | None = None, allow_retry: bool = True) -> None: ...
-    async def suspend_goal(self, goal_id: str, reason: str) -> None: ...
-    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> None: ...
-    async def block_goal(self, goal_id: str) -> None: ...
-    async def unblock_goal(self, goal_id: str) -> None: ...
-    async def finalize_goal(self, goal_id: str, *, status: str = "completed") -> None: ...
-
-    # Step/iteration tracking
-    def record_action(self, goal_id: str, action: str) -> None: ...
-    def increment_iteration(self, goal_id: str) -> int: ...
+engine.on("goal_completed", lambda goal_id: log.info(f"Done: {goal_id}"))
 ```
 
-### GoalNode Class
-
-```python
-class GoalNode:
-    """Single goal in the unified Goal+Step DAG."""
-    id: str
-    description: str
-    priority: int
-    status: GoalStatus
-    parent_id: str | None
-    depends_on: list[str]
-    steps: StepDAG
-    iteration_count: int
-    max_iterations: int
-    assigned_loop_id: str | None
-    # ... (see source for full field list)
-```
+This is a simple pub/sub for in-process observers — not to be confused with the event system's client-facing stream.
 
 ---
 
-## See Also
+## Step DAG Dependency Resolution
 
-- **[Autonomous Mode](../autonomous-mode.md)** - User guide
-- **[Thread Management](../thread-management.md)** - Thread handling
-- **[Daemon Architecture](../daemon-management.md)** - Daemon overview
+A non-obvious detail: `StepDAG.ready_steps()` uses **dependency token expansion**. When a composite step ID like `KFA-01` is completed, later plans may reference it as `01` or `1`. The `_expand_dependency_satisfaction_ids()` function adds these numeric aliases — but only when unambiguous (i.e., only one completed step has that numeric suffix). This handles the LLM's tendency to use shorthand step references.
+
+---
+
+## Integration Points
+
+- **StrangeLoop** — ContextEngine activates goals and assigns them to StrangeLoop instances via `loop_id`. StrangeLoop reports back via `complete_goal`/`fail_goal`.
+- **SootheRunner** — the runner creates loop-scoped ContextEngine instances (RFC-624 Phase 4) and uses projection for prompt context injection.
+- **Autopilot** — the daemon-owned autopilot system dispatches goals through ContextEngine, arriving via `LoopRunRequest.autopilot_job`.
+
+---
+
+## Gotchas
+
+- **In-memory default is for tests only** — if you construct `ContextEngine()` without a persistence backend, you get `:memory:` SQLite. State vanishes on process exit. Always pass an explicit backend in production.
+- **`max_entries=0` means unlimited** — the `LedgerManager` is initialized with `max_entries=0`, which preserves *full* ledger history. A positive value caps it. This is intentional: downstream LLM calls benefit from full history unless explicitly bounded.
+- **Goal source tracking** — `GoalNode.source` can be `user`, `directive`, `file_discovery`, or `decomposition`. This affects how the goal is displayed and whether it can be auto-cancelled.
+- **`awaiting_clarification` is a blocked state** — goals in this state won't be scheduled until clarification is provided (RFC-622). They're not terminal.
+
+---
+
+## Related
+
+- **[StrangeLoop](strangeloop.md)** — Layer 2 goal execution
+- **[SootheRunner](runner.md)** — runner orchestration
+- **[RFC-624](../../specs/RFC-624-context-engine.md)** — Context Engine specification
+- **[RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md)** — unification spec

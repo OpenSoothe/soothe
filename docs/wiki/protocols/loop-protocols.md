@@ -1,538 +1,131 @@
 # Loop-Level Protocols
 
-**RFCs**: RFC-203 (LoopWorkingMemory), RFC-220 (StrangeLoop), RFC-604 (LoopPlanner)  
+**RFCs**: 203 (LoopWorkingMemory), 220 (StrangeLoop), 604 (LoopPlanner), 617 (OperationSecurity)
 **Locations**:
 - `packages/soothe/src/soothe/protocols/loop_working_memory.py`
-- `packages/soothe/src/soothe/protocols/loop_planner.py`
+- `packages/soothe/src/soothe/protocols/loop_planner.py` (covered in [planner.md](planner.md))
 - `packages/soothe/src/soothe/protocols/operation_security.py`
+**Status**: Implemented
 
-**Status**: Implemented  
+## What Loop-Level Protocols Are
 
-## Overview
+These protocols serve StrangeLoop's Plan → Execute cycle specifically. They are *not* general-purpose infrastructure — they exist because the agentic loop has unique needs: a bounded scratchpad for planning prompts, and operation-level security checks during execution.
 
-Loop-level protocols define interfaces specific to StrangeLoop execution:
+Two protocols live here:
 
-1. **LoopWorkingMemoryProtocol**: Bounded scratchpad for Plan prompts
-2. **LoopPlannerProtocol**: Unified Plan phase (covered in [Planner Protocol](planner.md))
-3. **OperationSecurityProtocol**: Operation-level security context
+1. **`LoopWorkingMemoryProtocol`** — a bounded scratchpad that records Act-step outcomes and renders them into Plan-phase prompts.
+2. **`OperationSecurityProtocol`** — operation-level security evaluation for individual tool calls and spawns.
 
-These protocols support StrangeLoop's Plan → Execute cycle, providing bounded memory, planning decisions, and operation-level security.
+(`LoopPlannerProtocol` is documented in [planner.md](planner.md) since it shares the planner domain.)
 
 ## LoopWorkingMemoryProtocol
 
-### Purpose
+### Role
 
-- **Bounded scratchpad**: Keep working memory within prompt limits
-- **Step result recording**: Track Act step outcomes
-- **Reason prompt injection**: Render memory for planning decisions
-- **Optional workspace spill**: Overflow to workspace when bounded
+During a StrangeLoop, each Execute phase produces step results. The Plan phase (next iteration) needs to see what happened — but not the full raw history, which would blow the LLM context window. `LoopWorkingMemoryProtocol` is the bounded intermediary: it records step outcomes, then renders a *truncated* view for the planner.
 
-### Protocol Interface
+### Key Operations
 
-```python
-class LoopWorkingMemoryProtocol(Protocol):
-    """Bounded working memory for StrangeLoop Plan prompts.
-    
-    Optional workspace spill when bounded memory exceeds limits.
-    """
+- **`clear()`** — reset for a new goal. Called at loop start.
+- **`record_step_result(step_id, description, output, error, success, workspace, thread_id)`** — record one Act-step outcome. Outputs are truncated to bounded previews (e.g., 200 chars) to control size.
+- **`render_for_reason(max_chars?)`** — return formatted text for Plan-phase prompt injection. When `max_chars` is set, the rendered text is hard-truncated.
 
-    def clear(self) -> None:
-        """Reset for a new goal."""
-        ...
+### Design Principle: Bounded Memory
 
-    def record_step_result(
-        self,
-        *,
-        step_id: str,
-        description: str,
-        output: str | None,
-        error: str | None,
-        success: bool,
-        workspace: str | None,
-        thread_id: str,
-    ) -> None:
-        """Record one Act step outcome.
-        
-        Args:
-            step_id: The step that was executed.
-            description: Step description from plan.
-            output: Tool/subagent output (truncated preview).
-            error: Error message if failed.
-            success: Whether step succeeded.
-            workspace: Workspace path used.
-            thread_id: Thread ID for context.
-        """
-        ...
-
-    def render_for_reason(self, *, max_chars: int | None = None) -> str:
-        """Return text for Reason prompt injection.
-        
-        Args:
-            max_chars: Maximum characters to render (None = no limit).
-            
-        Returns:
-            Formatted working memory text.
-        """
-        ...
-```
-
-### Design Principles
-
-#### Bounded Memory
-
-Working memory is bounded to prevent prompt overflow:
+Working memory is deliberately bounded — the default implementation caps at ~20 entries with truncated previews. The philosophy: the planner needs *recent* outcomes and *patterns*, not exhaustive history. When memory exceeds the bound, oldest entries are evicted (FIFO).
 
 ```
-Goal → Plan → Execute → Record → WorkingMemory
-
-Plan Phase:
-  - WorkingMemory.render_for_reason(max_chars=2000)
-  - Bounded view injected into planner prompt
-  - Planner sees recent step results, not full history
-  
-Execute Phase:
-  - Record new step results
-  - Working memory grows (bounded)
-  - Optional: spill to workspace file
+Execute phase: record_step_result(...) → memory grows (bounded)
+Plan phase:    render_for_reason(max_chars=2000) → bounded slice injected into prompt
 ```
 
-#### Step Result Recording
+This bounded approach contrasts with `ContextProtocol` (future), which would provide *unbounded* accumulation with relevance-based projection. Working memory is the pragmatic, always-available scratchpad; Context would be the richer, persistent ledger.
 
-Each Act step records outcome:
+### Workspace Spill
 
-```python
-working_memory.record_step_result(
-    step_id="S_1",
-    description="Research database optimization techniques",
-    output="Found PostgreSQL tuning guide...",
-    error=None,
-    success=True,
-    workspace="/project/workspace",
-    thread_id="thread_abc123"
-)
-```
+When bounded memory exceeds limits, implementations *may* spill overflow to a workspace file (e.g., `.soothe/working_memory_spill.json`) before evicting from the in-memory list. This is optional — the protocol doesn't mandate it — but it preserves detail that bounded eviction would lose. Recent entries stay in memory; older ones spill to disk.
 
 ### Implementation
 
-#### Default Implementation
-
-**Location**: `packages/soothe/src/soothe/core/loop/engine/working_memory.py`
-
-**Features**:
-- In-memory bounded list
-- Truncated output previews
-- Error tracking
-- Workspace spill support (optional)
-
-**Example**:
-```python
-class DefaultWorkingMemory(LoopWorkingMemoryProtocol):
-    """Default bounded working memory implementation."""
-    
-    def __init__(self, max_entries: int = 20) -> None:
-        self._entries: list[StepResultEntry] = []
-        self._max_entries = max_entries
-    
-    def clear(self) -> None:
-        """Reset for new goal."""
-        self._entries = []
-    
-    def record_step_result(...) -> None:
-        """Record step outcome."""
-        entry = StepResultEntry(
-            step_id=step_id,
-            description=description,
-            output_preview=self._truncate(output, max_len=200),
-            error=error,
-            success=success,
-            workspace=workspace,
-            thread_id=thread_id,
-            timestamp=datetime.utcnow()
-        )
-        
-        self._entries.append(entry)
-        
-        # Bounded: remove oldest if exceeds limit
-        if len(self._entries) > self._max_entries:
-            self._entries.pop(0)
-    
-    def render_for_reason(self, *, max_chars: int | None = None) -> str:
-        """Render bounded view for planner."""
-        text = "\n".join([
-            f"[{entry.step_id}] {entry.description}"
-            f" → {entry.output_preview or entry.error}"
-            for entry in self._entries
-        ])
-        
-        if max_chars:
-            text = text[:max_chars]
-        
-        return text
-```
-
-### Usage Patterns
-
-#### StrangeLoop Integration
-
-```python
-from soothe.protocols import LoopWorkingMemoryProtocol
-
-# Initialize working memory for loop
-working_memory: LoopWorkingMemoryProtocol = DefaultWorkingMemory()
-
-# Clear for new goal
-working_memory.clear()
-
-# During Execute phase:
-for step in plan.steps:
-    result = await execute_step(step)
-    
-    # Record outcome
-    working_memory.record_step_result(
-        step_id=step.id,
-        description=step.description,
-        output=result.preview,
-        error=result.error,
-        success=result.success,
-        workspace=current_workspace,
-        thread_id=current_thread
-    )
-
-# During Plan phase:
-memory_text = working_memory.render_for_reason(max_chars=2000)
-
-# Inject into planner prompt
-planner_prompt = f"""
-Recent progress:
-{memory_text}
-
-Goal: {goal}
-Capabilities: {capabilities}
-
-Generate next execution step...
-"""
-```
-
-#### Workspace Spill
-
-When bounded memory exceeds limits, overflow to workspace:
-
-```python
-# Optional: spill to file
-if len(working_memory._entries) > MAX_ENTRIES:
-    spill_file = workspace / ".soothe" / "working_memory_spill.json"
-    spill_file.write_text(working_memory.serialize_entries())
-    
-    # Keep recent entries in bounded memory
-    working_memory._entries = working_memory._entries[-MAX_ENTRIES:]
-```
+The default implementation (`DefaultWorkingMemory`) is an in-memory bounded list with truncated output previews, error tracking, and optional workspace spill. Configurable via `agent.loop.working_memory` settings (`max_entries`, `max_chars_per_entry`, `spill_to_workspace`).
 
 ## OperationSecurityProtocol
 
-### Purpose
+### Role
 
-- **Operation-level context**: Security context for individual operations
-- **Request/decision tracking**: Track security requests and decisions
-- **Context propagation**: Propagate security context to tools/subagents
+`OperationSecurityProtocol` provides **operation-level security checks** — evaluating whether a specific operation (tool call, shell command, file write) should proceed. It's a normalized, operation-focused layer distinct from the broader `PolicyProtocol`.
 
-### Protocol Interface
+### Key Operation
 
-```python
-@runtime_checkable
-class OperationSecurityProtocol(Protocol):
-    """Protocol for operation-level security context.
-    
-    Tracks security context for individual operations (tool calls,
-    subagent spawns, MCP connections).
-    """
+- **`evaluate(request, context) → OperationSecurityDecision`** — evaluate whether an operation should be allowed, returning a verdict (`allow` / `deny` / `need_approval`) with a reason.
 
-    async def check_operation(
-        self,
-        request: OperationSecurityRequest,
-        context: OperationSecurityContext,
-    ) -> OperationSecurityDecision:
-        """Check if operation is permitted.
-        
-        Args:
-            request: The operation being requested.
-            context: Current operation security context.
-            
-        Returns:
-            OperationSecurityDecision (allow/deny/need_approval).
-        """
-        ...
+### Operation Kinds
+
+The protocol normalizes operations into typed kinds:
+
+- `filesystem_read`, `filesystem_write` — file operations
+- `shell_execute`, `python_execute` — code execution
+- `process_control` — process management
+- `generic` — fallback
+
+This typing lets security rules target specific operation categories (e.g., audit all `shell_execute` calls) without parsing tool arguments generically.
+
+### Request and Context
+
+- **`OperationSecurityRequest`** — carries `action_type`, `tool_name`, `tool_args`, `operation_kind`, `target_path`, and `command` (for shell operations). This is richer than `PolicyProtocol`'s `ActionRequest` because it includes operation-specific extraction (path, command).
+- **`OperationSecurityContext`** — thread ID, workspace path, and security config. Workspace is used for stream-scoped filesystem policy.
+- **`OperationSecurityDecision`** — verdict, reason, optional `rule_id` for audit traceability.
+
+### Relationship to PolicyProtocol
+
+`OperationSecurityProtocol` and `PolicyProtocol` are complementary, not redundant:
+
+- **`PolicyProtocol`** (see [policy.md](policy.md)) operates on structured `Permission` grants (category/action/scope) and computes narrowed permission sets for subagent delegation. It's the *policy decision* layer.
+- **`OperationSecurityProtocol`** is the *operation evaluation* layer — it normalizes concrete operations (a shell command, a file path) into security requests and applies rules, potentially delegating to `PolicyProtocol` for permission matching.
+
+In practice, operation security can wrap policy: convert an `OperationSecurityRequest` into an `ActionRequest`, call `PolicyProtocol.check()`, then augment the result with operation-specific concerns (audit logging, path validation).
+
+## Integration with StrangeLoop
+
+These protocols plug into the Plan → Execute cycle at specific points:
+
+```
+StrangeLoop iteration:
+  Plan phase:
+    → LoopWorkingMemory.render_for_reason() injected into planner prompt
+    → LoopPlanner.plan() produces PlanResult
+  Execute phase:
+    → OperationSecurity.evaluate() checks each tool call before execution
+    → LoopWorkingMemory.record_step_result() captures outcome
+  → next iteration
 ```
 
-### Data Models
+Working memory flows *into* the Plan phase (rendering); operation security gates the Execute phase (checking). Both are per-loop, in-memory, and reset between goals.
 
-#### OperationKind
+## Gotchas
 
-```python
-class OperationKind(str, Enum):
-    """Types of operations requiring security checks.
-    
-    Values:
-        tool_call: Direct tool invocation.
-        subagent_spawn: Subagent creation/delegation.
-        mcp_connect: MCP server connection.
-        remote_invoke: Remote agent invocation.
-    """
-
-    tool_call = "tool_call"
-    subagent_spawn = "subagent_spawn"
-    mcp_connect = "mcp_connect"
-    remote_invoke = "remote_invoke"
-```
-
-#### OperationSecurityRequest
-
-```python
-class OperationSecurityRequest(BaseModel):
-    """Request to perform an operation requiring security check.
-    
-    Args:
-        kind: Type of operation.
-        target: Operation target (tool name, subagent name, MCP server).
-        parameters: Operation parameters.
-        delegation_depth: Current delegation depth.
-    """
-
-    kind: OperationKind
-    target: str
-    parameters: dict[str, Any] = Field(default_factory=dict)
-    delegation_depth: int = 0
-```
-
-#### OperationSecurityContext
-
-```python
-class OperationSecurityContext(BaseModel):
-    """Context for operation security decisions.
-    
-    Args:
-        thread_id: Current thread ID.
-        policy_profile: Active policy profile.
-        workspace: Current workspace path.
-        parent_permissions: Permission set from parent operation.
-    """
-
-    thread_id: str | None = None
-    policy_profile: str = "standard"
-    workspace: str | None = None
-    parent_permissions: PermissionSet | None = None
-```
-
-#### OperationSecurityDecision
-
-```python
-class OperationSecurityDecision(BaseModel):
-    """Decision from operation security check.
-    
-    Args:
-        allowed: Whether operation is permitted.
-        reason: Explanation for decision.
-        audit_required: Whether operation requires audit logging.
-        narrowed_permissions: Permission set for child operations.
-    """
-
-    allowed: bool
-    reason: str
-    audit_required: bool = False
-    narrowed_permissions: PermissionSet | None = None
-```
-
-### Usage Patterns
-
-#### Tool Call Security
-
-```python
-from soothe.protocols import (
-    OperationSecurityProtocol,
-    OperationSecurityRequest,
-    OperationSecurityContext,
-    OperationKind
-)
-
-security: OperationSecurityProtocol = resolve_security(config)
-
-# Check tool call
-request = OperationSecurityRequest(
-    kind=OperationKind.tool_call,
-    target="shell_execute",
-    parameters={"command": "rm -rf /tmp/cache"},
-    delegation_depth=0
-)
-
-context = OperationSecurityContext(
-    thread_id="thread_abc123",
-    policy_profile="standard",
-    workspace="/project/workspace"
-)
-
-decision = await security.check_operation(request, context)
-
-if decision.allowed:
-    # Execute tool
-    result = await execute_tool("shell_execute", command="rm -rf /tmp/cache")
-    
-    # Audit if required
-    if decision.audit_required:
-        audit_logger.log_operation(request, context, decision)
-else:
-    # Deny operation
-    raise PermissionError(decision.reason)
-```
-
-#### Subagent Spawn Security
-
-```python
-# Check subagent spawn
-request = OperationSecurityRequest(
-    kind=OperationKind.subagent_spawn,
-    target="explore",
-    parameters={"goal": "Search for database files"},
-    delegation_depth=1  # Child delegation
-)
-
-decision = await security.check_operation(request, context)
-
-if decision.allowed:
-    # Create subagent with narrowed permissions
-    subagent = create_subagent(
-        name="explore",
-        permissions=decision.narrowed_permissions  # Narrowed from parent
-    )
-```
-
-#### MCP Connection Security
-
-```python
-# Check MCP connection
-request = OperationSecurityRequest(
-    kind=OperationKind.mcp_connect,
-    target="filesystem-server",
-    parameters={},
-    delegation_depth=0
-)
-
-decision = await security.check_operation(request, context)
-
-if decision.allowed:
-    # Connect to MCP server
-    mcp_client = await connect_mcp_server("filesystem-server")
-```
-
-### Integration with PolicyProtocol
-
-OperationSecurityProtocol uses PolicyProtocol for decisions:
-
-```python
-class DefaultOperationSecurity(OperationSecurityProtocol):
-    """Default implementation using PolicyProtocol."""
-    
-    def __init__(self, policy: PolicyProtocol) -> None:
-        self._policy = policy
-    
-    async def check_operation(
-        self,
-        request: OperationSecurityRequest,
-        context: OperationSecurityContext,
-    ) -> OperationSecurityDecision:
-        # Convert to PolicyProtocol request
-        action_request = ActionRequest(
-            action=self._convert_operation_to_permission(request),
-            delegation_depth=request.delegation_depth
-        )
-        
-        policy_context = PolicyContext(
-            profile=context.policy_profile,
-            thread_id=context.thread_id,
-            delegation_depth=request.delegation_depth
-        )
-        
-        # Use PolicyProtocol for decision
-        policy_decision = self._policy.check(action_request, policy_context)
-        
-        # Convert to operation decision
-        return OperationSecurityDecision(
-            allowed=policy_decision.allowed,
-            reason=policy_decision.reason,
-            audit_required=self._should_audit(request),
-            narrowed_permissions=self._narrow_permissions(request, context)
-        )
-```
+- **Working memory is per-loop, not per-thread** — `clear()` is called at the start of each goal/loop. Cross-thread continuity requires `MemoryProtocol`, not working memory.
+- **Truncation is lossy** — `record_step_result` truncates outputs to bounded previews. If you need full output, capture it separately; working memory is for the planner's summary view.
+- **Operation security may run synchronously** — unlike persistence protocols, `evaluate()` is not async in the source. Don't block on external calls inside it.
+- **`operation_kind` affects audit** — security config can specify which operation kinds require audit logging (`audit_operations` list). Generic kind misses targeted audit rules.
 
 ## Configuration
 
-### WorkingMemory Settings
-
 ```yaml
-# config/config.template.yml
 agent:
   loop:
     working_memory:
       max_entries: 20
       max_chars_per_entry: 200
       spill_to_workspace: false
-```
-
-### OperationSecurity Settings
-
-```yaml
-agent:
   security:
-    audit_operations:
-      - tool_call
-      - subagent_spawn
+    audit_operations: [shell_execute, subagent_spawn]
     audit_log_path: ~/.soothe/logs/operations.log
 ```
 
-## Testing
-
-### Unit Tests
-
-Tests verify:
-- Working memory bounded limits
-- Step result recording accuracy
-- Reason prompt rendering
-- Operation security decisions
-- Permission narrowing
-
-## Design Rationale
-
-### Why Bounded Working Memory?
-
-Prompt efficiency:
-- Planner only needs recent results
-- Full history is in Context (unbounded)
-- Working memory is bounded view
-- Prevents prompt token exhaustion
-
-### Why Operation-Level Security?
-
-Fine-grained control:
-- Each operation needs security check
-- Delegation depth tracking
-- Permission narrowing for children
-- Audit trail for sensitive operations
-
-### Why Separate from PolicyProtocol?
-
-Different abstraction levels:
-- **PolicyProtocol**: Profile-based permission management
-- **OperationSecurityProtocol**: Operation-level context and decisions
-- Operation security delegates to policy for core decisions
-
-## Specification Reference
-
-- **RFC-203**: StrangeLoop State Memory
-- **RFC-604**: Reason Phase Robustness
-- **RFC-220**: LangGraph Agent Loop Orchestrator
-- **RFC-901**: Operation Security Protocol
-
 ## Related Documentation
 
-- [Planner Protocol](planner.md)
-- [Policy Protocol](policy.md)
-- [StrangeLoop Architecture](../sloop.md)
-- [Security Enforcement](../security.md)
+- [Planner Protocol](planner.md) — `LoopPlannerProtocol` consumes working memory
+- [Policy Protocol](policy.md) — `PolicyProtocol` backs operation security decisions
+- [Execution Protocols](execution-protocols.md) — `LoopRunnerProtocol` orchestrates the loop
+- [Context Protocol](context.md) — future unbounded ledger
