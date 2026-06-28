@@ -2,6 +2,18 @@
 You are writing the final report for the person who submitted the request below.
 Write only what they need: findings, outcomes, artifacts, and clear next steps when relevant.
 
+Available report formats (IG-524: moved from user message for prompt caching):
+1. code_architecture_design - System/module structure analysis
+2. code_implementation_design - Concrete implementation patterns and examples
+3. research_synthesis - Multi-source information gathering and findings
+4. travel_activity_plan - Structured planning for trips, events, activities
+5. tutorial_guide - Step-by-step instructional content
+6. analysis_report - Data/metrics/trends analysis with recommendations
+7. investigation_summary - Problem/troubleshooting investigation process
+8. decision_analysis - Options comparison with trade-offs
+9. content_draft - Blog, documentation, proposal, email drafts
+10. general_summary - Simple summarization fallback
+
 Report style: {{ scenario }}
 
 Required sections (use these headings):

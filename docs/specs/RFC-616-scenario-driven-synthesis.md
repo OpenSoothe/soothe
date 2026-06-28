@@ -271,3 +271,85 @@ Delete all tests for:
 3. **Multi-scenario synthesis**: Complex goals with multiple deliverable components
 4. **Section-level templates**: Richer guidance per section (beyond names)
 5. **Quality metrics**: Measure synthesis quality (structure adherence, evidence usage, actionability)
+
+---
+
+## Amendments
+
+### Amendment A: Prompt Structure Improvements (IG-524)
+
+**Date**: 2026-06-28
+**Issue**: Misleading execution summary, static content in dynamic message, non-standard markers
+
+**Changes**:
+
+1. **Removed EXECUTION SUMMARY from user message**:
+   - Previously showed `step_results` data which could be empty while `loop_messages` contained evidence
+   - Misleading "Total steps: 0" signals degraded LLM reasoning
+   - LLM derives needed summary from EVIDENCE section content
+
+2. **Moved AVAILABLE BUILT-IN SCENARIOS to system prompt**:
+   - Scenario list (~300 tokens) was identical for every request
+   - Placed in user message → no caching, paid per synthesis call
+   - Now in `synthesis_report_system.xml` → cached once per session
+
+3. **Standardized transcript markers**:
+   - Changed `[Task]` → `USER:` and `[Finding]` → `AI:`
+   - Standard conversation markers universally recognized by LLMs
+   - Improves comprehension without changing flattening approach
+
+**Updated Prompt Structure** (after IG-524):
+
+System Prompt (`synthesis_report_system.xml`):
+```xml
+<SYNTHESIS_REPORT>
+Available report formats:
+1. code_architecture_design - System/module structure analysis
+...
+10. general_summary - Simple summarization fallback
+
+Report style: {{ scenario }}
+Required sections: {{ sections }}
+Focus areas: {{ contextual_focus }}
+How to use evidence: {{ evidence_emphasis }}
+Rules: ...
+</SYNTHESIS_REPORT>
+```
+
+User Message (`user_message.py:build_synthesis_message()`):
+```
+GOAL:
+{user_query}
+
+INTENT:
+{intent_type} (complexity: {task_complexity})
+
+CONTEXTUAL FOCUS:
+- {item 1}
+- {item 2}
+
+EVIDENCE EMPHASIS:
+{evidence_emphasis}
+
+EVIDENCE:
+STEP SUMMARIES:
+  [Step S1] {summary}
+  ...
+
+WORK TRANSCRIPT:
+  USER: {human content}
+  AI: {ai content}
+  USER: {human content}
+  AI: {ai content}
+
+TASK:
+1. Write a final report for the person who submitted the request
+2. Use only the execution evidence provided — do not invent results
+3. Organize by theme, not chronologically
+4. Include the required sections for the matched scenario
+```
+
+**Files Modified**:
+- `user_message.py` — Removed EXECUTION SUMMARY + AVAILABLE BUILT-IN SCENARIOS sections
+- `synthesis_report_system.xml` — Added scenario list to system prompt
+- `synthesis_projection.py` — Changed `[Task]`→`USER:` and `[Finding]`→`AI:`

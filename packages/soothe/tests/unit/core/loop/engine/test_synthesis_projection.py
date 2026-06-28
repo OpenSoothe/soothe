@@ -110,3 +110,49 @@ def test_build_synthesis_messages_uses_system_and_human_only() -> None:
     assert "Research topic X" in human
     assert "EVIDENCE:" in human or "STEP SUMMARIES:" in human
     assert "StrangeLoop" not in human
+    # IG-524: EXECUTION SUMMARY and AVAILABLE BUILT-IN SCENARIOS removed from user message
+    assert "EXECUTION SUMMARY:" not in human
+    assert "AVAILABLE BUILT-IN SCENARIOS:" not in human
+
+
+def test_transcript_uses_standard_conversation_markers() -> None:
+    """IG-524: Transcript uses USER:/AI: instead of [Task]/[Finding]."""
+    execute_human = LoopHumanMessage(
+        content="Execute: read README",
+        thread_id="t",
+        iteration=0,
+        phase="execute_step",
+    )
+    execute_ai = LoopAIMessage(
+        content="README documents the API.",
+        thread_id="t",
+        iteration=0,
+        phase="execute_step",
+    )
+    state = LoopState(
+        goal="Analyze code",
+        thread_id="t",
+        loop_messages=[execute_human, execute_ai],
+    )
+    ctx = project_synthesis_user_context(state)
+    # IG-524: Standard markers USER:/AI: instead of [Task]/[Finding]
+    assert "USER: Execute: read README" in ctx.evidence_body
+    assert "AI: README documents the API." in ctx.evidence_body
+    # Legacy markers removed
+    assert "[Task]" not in ctx.evidence_body
+    assert "[Finding]" not in ctx.evidence_body
+
+
+def test_system_prompt_includes_scenario_list() -> None:
+    """IG-524: Available scenarios moved to system prompt for caching."""
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by theme",
+    )
+    text = render_synthesis_system_prompt(classification)
+    # IG-524: Scenario list in system prompt (not user message)
+    assert "code_architecture_design" in text
+    assert "research_synthesis" in text
+    assert "general_summary" in text
