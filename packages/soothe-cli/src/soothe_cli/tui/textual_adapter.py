@@ -926,6 +926,15 @@ def _register_main_tool_on_step_card(
         SubAgentMessage widget if newly created for a task row, None otherwise.
     """
     tcid = str(tool_call_id).strip()
+    # IG-517: Ensure subagent_type is present in args for task delegations.
+    # The router records this via register_task_spawn, but streaming args
+    # may arrive incomplete. Inject from router registry when missing.
+    if is_task_row and tool_name == "task":
+        existing_type = args.get("subagent_type")
+        if not existing_type or not str(existing_type).strip():
+            spawn_scope = router._spawns_by_task_id.get(tcid)
+            if spawn_scope is not None and len(spawn_scope) >= 2:
+                args["subagent_type"] = str(spawn_scope[1] or "").strip()
     if step_w.has_tool_call_row(tcid):
         step_w.update_tool_args(tcid, args)
     else:
