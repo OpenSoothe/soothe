@@ -115,6 +115,23 @@ class StrangeLoopStateManager:
         self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
         self._init_lock = asyncio.Lock()
 
+        # RFC-803 Phase 6: Async checkpoint write configuration
+        checkpoint_cfg = (
+            config.agent.loop.concurrency.checkpoint
+            if config and hasattr(config.agent.loop.concurrency, "checkpoint")
+            else None
+        )
+        self._async_write_enabled = checkpoint_cfg.async_write if checkpoint_cfg else True
+        self._flush_interval = checkpoint_cfg.flush_interval if checkpoint_cfg else 5.0
+        self._queue_size = checkpoint_cfg.queue_size if checkpoint_cfg else 100
+
+        # Async write infrastructure (lazy initialized)
+        self._pending_saves: asyncio.Queue[StrangeLoopCheckpoint] | None = None
+        self._flush_worker: asyncio.Task | None = None
+        self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
+        self._worker_started = False
+        self._worker_lock = asyncio.Lock()
+
     async def _ensure_backend_initialized(self) -> None:
         """Lazy backend initialization (IG-055: PostgreSQL or SQLite).
 
@@ -500,9 +517,48 @@ class StrangeLoopStateManager:
 
         IG-258 Phase 2: Use single writer connection for SQLite consistency.
         IG-055: PostgreSQL uses connection pool for async operations.
+        RFC-803 Phase 6: Fire-and-forget async writes with periodic flush.
         """
         checkpoint.updated_at = datetime.now(UTC)
 
+        # Immediate local cache update (ensures subsequent reads get latest)
+        self._checkpoint = checkpoint
+        self._last_save_checkpoint = checkpoint
+
+        if self._async_write_enabled:
+            # RFC-803 Phase 6: Async mode - enqueue for background write
+            if not self._worker_started:
+                await self._start_flush_worker()
+
+            # Enqueue (non-blocking if queue not full)
+            if self._pending_saves is not None:
+                try:
+                    self._pending_saves.put_nowait(checkpoint)
+                    logger.debug(
+                        "Enqueued async checkpoint: loop=%s status=%s",
+                        self.loop_id,
+                        checkpoint.status,
+                    )
+                    return  # Early return - worker will handle write
+                except asyncio.QueueFull:
+                    # Queue full - fallback to sync write
+                    logger.warning(
+                        "Checkpoint queue full, sync write fallback: loop=%s",
+                        self.loop_id,
+                    )
+
+        # Sync write (either disabled or queue full fallback)
+        await self._do_save_checkpoint(checkpoint)
+        await asyncio.to_thread(self._sync_metadata_to_disk)
+        logger.debug(
+            "Saved loop checkpoint (sync): loop=%s status=%s", self.loop_id, checkpoint.status
+        )
+
+    async def _do_save_checkpoint(self, checkpoint: StrangeLoopCheckpoint) -> None:
+        """Perform actual checkpoint write (called by worker or sync fallback).
+
+        RFC-803 Phase 6: Extracted backend write logic for reuse.
+        """
         if self._backend_type == "postgresql":
             # PostgreSQL async save
             await self._ensure_backend_initialized()
@@ -512,12 +568,79 @@ class StrangeLoopStateManager:
             conn = await self._ensure_writer_connection()
             await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
 
-        self._checkpoint = checkpoint
+    async def _start_flush_worker(self) -> None:
+        """Start background worker for periodic checkpoint flushes.
 
-        # Sync metadata to filesystem (denormalized cache for CLI)
-        self._sync_metadata_to_disk()
+        RFC-803 Phase 6: Fire-and-forget async write infrastructure.
+        """
+        async with self._worker_lock:
+            if self._worker_started:
+                return
 
-        logger.debug("Saved loop checkpoint: loop=%s status=%s", self.loop_id, checkpoint.status)
+            self._pending_saves = asyncio.Queue(maxsize=self._queue_size)
+            self._flush_worker = asyncio.create_task(self._flush_worker_loop())
+            self._worker_started = True
+
+            logger.info(
+                "Async checkpoint worker started: loop=%s flush_interval=%ss queue_size=%d",
+                self.loop_id,
+                self._flush_interval,
+                self._queue_size,
+            )
+
+    async def _flush_worker_loop(self) -> None:
+        """Background loop that flushes queued checkpoints.
+
+        RFC-803 Phase 6: Handles queued writes and periodic forced flush.
+        """
+        while True:
+            try:
+                # Wait for either:
+                # 1. New checkpoint in queue
+                # 2. Flush interval timeout (force periodic write)
+                checkpoint = await asyncio.wait_for(
+                    self._pending_saves.get(),
+                    timeout=self._flush_interval,
+                )
+                await self._do_save_checkpoint(checkpoint)
+                await asyncio.to_thread(self._sync_metadata_to_disk)
+
+            except TimeoutError:
+                # Periodic flush: ensure latest checkpoint is persisted
+                if self._last_save_checkpoint:
+                    await self._do_save_checkpoint(self._last_save_checkpoint)
+                    await asyncio.to_thread(self._sync_metadata_to_disk)
+                    logger.debug(
+                        "Periodic checkpoint flush: loop=%s",
+                        self.loop_id,
+                    )
+
+            except asyncio.CancelledError:
+                # Final flush on shutdown
+                if self._last_save_checkpoint:
+                    try:
+                        await self._do_save_checkpoint(self._last_save_checkpoint)
+                        await asyncio.to_thread(self._sync_metadata_to_disk)
+                    except Exception:
+                        logger.exception("Final checkpoint flush failed: loop=%s", self.loop_id)
+                logger.info("Async checkpoint worker stopped: loop=%s", self.loop_id)
+                raise
+
+            except Exception:
+                logger.exception("Async checkpoint write failed: loop=%s", self.loop_id)
+                # Continue loop - periodic flush will retry
+
+    async def force_flush(self) -> None:
+        """Force immediate checkpoint write (for critical operations).
+
+        RFC-803 Phase 6: Used by finalize_loop, archive_and_finalize, close.
+
+        Ensures latest checkpoint state is persisted before critical operations.
+        """
+        if self._last_save_checkpoint:
+            await self._do_save_checkpoint(self._last_save_checkpoint)
+            await asyncio.to_thread(self._sync_metadata_to_disk)
+            logger.info("Force checkpoint flush: loop=%s", self.loop_id)
 
     def _save_checkpoint_sync(
         self, conn: sqlite3.Connection, checkpoint: StrangeLoopCheckpoint
@@ -879,6 +1002,8 @@ class StrangeLoopStateManager:
     async def finalize_loop(self, status: str) -> None:
         """Mark loop finalized (no more goals accepted).
 
+        RFC-803 Phase 6: Uses force_flush for critical final state persistence.
+
         Args:
             status: Final status (finalized, cancelled)
         """
@@ -886,7 +1011,8 @@ class StrangeLoopStateManager:
             return
 
         self._checkpoint.status = status
-        await self.save(self._checkpoint)
+        # Use force_flush for critical operations - must persist final state
+        await self.force_flush()
 
         logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
 
@@ -936,8 +1062,8 @@ class StrangeLoopStateManager:
             "archive_path": archive_path,
         }
 
-        # Save finalized checkpoint to database
-        await self.save(self._checkpoint)
+        # RFC-803 Phase 6: Force flush for critical archive operation
+        await self.force_flush()
 
         logger.info(
             "Archived loop %s: goals=%d completed=%d reason=%s path=%s",
@@ -1023,10 +1149,24 @@ class StrangeLoopStateManager:
 
         IG-404: Prevent pool exhaustion in concurrent execution.
         IG-406: Shared pools are closed at daemon level, not per-StrangeLoop.
+        RFC-803 Phase 6: Force final checkpoint flush before closing.
 
         Must be called after StrangeLoop completes to release database connections.
         For shared pool mode, only clears references (pool closed at daemon shutdown).
         """
+        # RFC-803 Phase 6: Force final flush and stop worker
+        if self._worker_started and self._flush_worker:
+            self._flush_worker.cancel()
+            try:
+                await self._flush_worker
+            except asyncio.CancelledError:
+                pass
+            self._flush_worker = None
+            self._worker_started = False
+
+        # Force final checkpoint write
+        await self.force_flush()
+
         # Close PostgreSQL backend pool (only if owned, not shared)
         if self._postgres_backend is not None:
             await self._postgres_backend.close()

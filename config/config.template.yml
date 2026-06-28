@@ -181,6 +181,11 @@ agent:
       max_parallel_tools: 50
       global_max_llm_calls: 10
       step_parallelism: dependency
+      # RFC-803 Phase 6: Async checkpoint writes
+      checkpoint:
+        async_write: true        # Enable fire-and-forget writes (non-blocking)
+        flush_interval: 5.0       # Periodic forced write interval (seconds)
+        queue_size: 100           # Max queued checkpoints before blocking
 
     # LLM rate limiting (moderate defaults for Dashscope/Zhipu)
     llm_rate_limit:

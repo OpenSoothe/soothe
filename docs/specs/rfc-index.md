@@ -1,6 +1,6 @@
 # RFC Index
 
-**Last Updated**: 2026-06-26
+**Last Updated**: 2026-06-28
 **Total RFCs**: 80 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
@@ -9,8 +9,8 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 50 |
-| Implemented | 16 |
+| Draft | 51 |
+| Implemented | 15 |
 | Implemented (Partially Superseded) | 1 |
 | Implemented — runtime architecture refined | 1 |
 | Archived | 6 |
@@ -21,12 +21,13 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 53 |
+| Architecture Design | 52 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Conceptual Design | 1 |
 | Architecture Design / Impl Interface | 1 |
+| Architecture Design + Protocol Specification | 1 |
 | Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
@@ -321,9 +322,11 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Authors: xiaming (with Claude)
 
 - **RFC-450**: [Unified Daemon Communication Protocol for WebSocket IPC](RFC-450-daemon-communication-protocol.md)
-  - Kind: Architecture Design
-  - Status: Implemented
+  - Kind: Architecture Design + Protocol Specification
+  - Status: Draft
   - Created: 2026-03-19
+  - Updated: 2026-06-28
+  - Note: Rewritten 2026-06-28 to incorporate unified protocol-1 wire contract (envelope format, schema validation, error standardization, versioning, message taxonomy, naming conventions, AsyncAPI documentation). RFC-460 content merged into this RFC; RFC-460 deleted.
 
 - **RFC-452**: [Unified Thread Management Architecture](RFC-452-unified-thread-management.md)
   - Kind: Architecture Design
@@ -555,12 +558,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-803**: [StrangeLoop Checkpoint Backend Architecture](RFC-803-strangeloop-checkpoint-backend.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Implemented
   - Created: 2026-04-22
-  - Updated: 2026-06-19
+  - Updated: 2026-06-28
   - Dependencies: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
   - Authors: Claude Sonnet 4.6
-  - Note: Moved from 2xx (RFC-215) per RFC-900 reclassification
+  - Note: Moved from 2xx (RFC-215) per RFC-900 reclassification. Phase 6 async checkpoint added (IG-523).
 
 ---
 
@@ -639,6 +642,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 | RFC | Title | Status | Created |
 |-----|-------|--------|---------|
+| RFC-450 | Unified Daemon Communication Protocol (rewritten) | Draft | 2026-03-19 |
 | RFC-900 | RFC Deprecation and Reclassification Scheme | Proposed | 2026-06-16 |
 | RFC-626 | Entity Model and State Management Consolidation | Draft | 2026-06-16 |
 | RFC-625 | AutopilotMonitor and ContextEngine Unification | Implemented | 2026-06-15 |
@@ -692,6 +696,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)
 - **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)
 - **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
 - **RFC-625**: AutopilotMonitor as ContextEngine Monitor Submodule — GoalEngine Deletion (2026-06-15)

@@ -999,6 +999,36 @@ class LLMRateLimitConfig(BaseModel):
     )
 
 
+class LoopCheckpointAsyncConfig(BaseModel):
+    """Async checkpoint write configuration (RFC-803 Phase 6).
+
+    Enables fire-and-forget checkpoint writes with periodic forced flush
+    to bound crash data loss risk. Reduces peak latency at step boundaries.
+
+    Args:
+        async_write: Enable non-blocking checkpoint writes.
+        flush_interval: Periodic forced write interval (seconds).
+        queue_size: Max queued checkpoints before blocking caller.
+    """
+
+    async_write: bool = Field(
+        default=True,
+        description="Enable fire-and-forget checkpoint writes (non-blocking)",
+    )
+    flush_interval: float = Field(
+        default=5.0,
+        ge=1.0,
+        le=60.0,
+        description="Periodic forced write interval (seconds). Bounds crash data loss window.",
+    )
+    queue_size: int = Field(
+        default=100,
+        ge=10,
+        le=500,
+        description="Max queued checkpoints before blocking caller",
+    )
+
+
 class LoopConcurrencyConfig(BaseModel):
     """Loop execution concurrency and scheduling controls.
 
@@ -1030,6 +1060,10 @@ class LoopConcurrencyConfig(BaseModel):
     )
     max_parallel_tools: int = Field(
         default=50, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
+    )
+    checkpoint: LoopCheckpointAsyncConfig = Field(
+        default_factory=LoopCheckpointAsyncConfig,
+        description="Async checkpoint write configuration (RFC-803 Phase 6)",
     )
 
 
