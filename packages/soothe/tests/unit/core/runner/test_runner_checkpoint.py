@@ -31,18 +31,13 @@ class TestCheckpointEventEmission:
         state.thread_id = "test-thread-123"
         state.artifact_store = RunArtifactStore("test-thread-123", soothe_home=str(tmp_path))
 
-        events = [
-            chunk
-            async for chunk in runner._save_checkpoint(
-                state,
-                user_input="test query",
-                mode="single_pass",
-                status="in_progress",
-            )
-        ]
-
         # IG-271: No events emitted in normal execution (replaced with logging)
-        assert len(events) == 0
+        await runner._save_checkpoint(
+            state,
+            user_input="test query",
+            mode="single_pass",
+            status="in_progress",
+        )
 
     @pytest.mark.asyncio
     async def test_checkpoint_event_not_emitted_without_artifact_store(
@@ -59,18 +54,13 @@ class TestCheckpointEventEmission:
         state = RunnerState()
         state.thread_id = "test-thread-456"
 
-        events = [
-            chunk
-            async for chunk in runner._save_checkpoint(
-                state,
-                user_input="test query",
-                mode="single_pass",
-                status="in_progress",
-            )
-        ]
-
         # Should emit no events (artifact store is None)
-        assert len(events) == 0
+        await runner._save_checkpoint(
+            state,
+            user_input="test query",
+            mode="single_pass",
+            status="in_progress",
+        )
 
     @pytest.mark.asyncio
     async def test_checkpoint_event_counts_steps(self, tmp_path: Path) -> None:
@@ -97,15 +87,10 @@ class TestCheckpointEventEmission:
         state.plan = plan
         state.artifact_store = RunArtifactStore("test-thread-789", soothe_home=str(tmp_path))
 
-        events = [
-            chunk
-            async for chunk in runner._save_checkpoint(
-                state,
-                user_input="test query",
-                mode="autonomous",
-                status="in_progress",
-            )
-        ]
-
         # IG-271: No events emitted in normal execution (replaced with logging)
-        assert len(events) == 0
+        await runner._save_checkpoint(
+            state,
+            user_input="test query",
+            mode="autonomous",
+            status="in_progress",
+        )

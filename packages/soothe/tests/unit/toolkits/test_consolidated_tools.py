@@ -153,7 +153,8 @@ class TestFileOpsToolkit:
 
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
-        tool = next(t for t in middleware.tools if t.name == "apply_diff")  # noqa: F841
+        # Verify apply_diff tool is registered
+        assert any(t.name == "apply_diff" for t in middleware.tools)
         # Note: apply_diff implementation would need proper diff format
         # This is a placeholder test
 

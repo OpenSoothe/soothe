@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from discord import app_commands
     from discord.abc import Messageable
 
+# Runtime imports — the TYPE_CHECKING block above is erased at runtime, so these
+# real imports are required for runtime resolution (discord.Client,
+# app_commands.CommandTree, and Messageable are used in class bodies below).
 if DISCORD_AVAILABLE:
     import discord
     from discord import app_commands
@@ -190,7 +193,6 @@ if DISCORD_AVAILABLE:
                 chat_id=str(channel_id),
                 content=command_text,
                 metadata=metadata,
-                is_dm=channel is None or getattr(channel, "guild", None) is None,
             )
 
         def _register_app_commands(self) -> None:
@@ -567,7 +569,6 @@ class DiscordChannel(Channel):
             content=full_content,
             media=media_paths,
             metadata=metadata,
-            is_dm=message.guild is None,
         )
 
     async def _resolve_channel(self, chat_id: str) -> Any | None:

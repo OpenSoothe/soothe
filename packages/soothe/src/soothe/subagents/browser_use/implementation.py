@@ -38,9 +38,6 @@ from soothe.subagents.browser_use.events import (
     BrowserUseStepCompletedEvent,
 )
 
-if TYPE_CHECKING:
-    from deepagents.middleware.subagents import CompiledSubAgent
-
 logger = logging.getLogger(__name__)
 
 

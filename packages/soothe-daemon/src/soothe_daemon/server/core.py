@@ -313,8 +313,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # (create_persisted_thread, touch_thread_activity_timestamp, etc.).
             # Streaming is handled per-loop by LoopRunnerFactory — this instance
             # is never passed to astream().
-            from soothe.runner import SootheRunner
-
+            # (SootheRunner already imported at the top of this method.)
             try:
                 identity_runtime = self._build_identity_runtime()
                 self._runner = await asyncio.to_thread(

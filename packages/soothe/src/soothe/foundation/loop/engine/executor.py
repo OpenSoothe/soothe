@@ -1222,7 +1222,7 @@ class Executor:
         gather_results: list[Any] = [None] * n_steps
         step_wave_index: dict[str, int] = {step.id: i for i, step in enumerate(steps)}
 
-        async def _run_parallel_step(step: StepAction, *, first_in_wave: bool) -> None:
+        async def _run_parallel_step(step: StepAction) -> None:
             sid = step.id
             try:
                 # Per-step thread isolation; predecessor context flows via
@@ -1236,7 +1236,6 @@ class Executor:
                     continue_loop_mode=continue_loop_mode,
                     loop_state=state,
                     live_event_queue=live_queue,
-                    first_human_in_wave=first_in_wave,
                 )
                 live_queue.put_nowait(_ParallelStepDone(sid, payload))
             except asyncio.CancelledError:
@@ -1244,10 +1243,7 @@ class Executor:
             except Exception as exc:
                 live_queue.put_nowait(_ParallelStepDone(sid, exc))
 
-        tasks = [
-            asyncio.create_task(_run_parallel_step(step, first_in_wave=(i == 0)))
-            for i, step in enumerate(steps)
-        ]
+        tasks = [asyncio.create_task(_run_parallel_step(step)) for step in steps]
 
         all_step_results: list[StepResult] = []
         single_wave_messages: list[BaseMessage] = []
@@ -1401,7 +1397,6 @@ class Executor:
         continue_loop_mode: bool = False,
         loop_state: LoopState | None = None,
         live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None = None,
-        first_human_in_wave: bool = True,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
         """Execute single step, collecting events for the parallel merge queue.
 

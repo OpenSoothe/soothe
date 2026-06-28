@@ -822,7 +822,6 @@ class TelegramChannel(Channel):
             chat_id=str(message.chat_id),
             content=content,
             metadata=self._build_message_metadata(message, user),
-            is_dm=message.chat.type == "private",
         )
 
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -869,7 +868,6 @@ class TelegramChannel(Channel):
             content=content,
             media=media_paths,
             metadata=self._build_message_metadata(message, user),
-            is_dm=message.chat.type == "private",
         )
 
     async def _download_message_media(self, msg: Any) -> tuple[list[str], list[str]]:
@@ -1022,7 +1020,6 @@ class TelegramChannel(Channel):
             chat_id=str(chat_id),
             content=button_label,
             metadata={"callback_query_id": query.id, "button_label": button_label},
-            is_dm=True,
         )
 
     def _build_keyboard(self, buttons: list[list[str]]) -> InlineKeyboardMarkup | None:

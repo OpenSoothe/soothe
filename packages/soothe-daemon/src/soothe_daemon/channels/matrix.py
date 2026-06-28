@@ -1020,7 +1020,6 @@ class MatrixChannel(Channel):
                 chat_id=room.room_id,
                 content=event.body,
                 metadata=self._base_metadata(room, event),
-                is_dm=self._is_direct_room(room),
             )
         except Exception:
             await self._stop_typing_keepalive(room.room_id, clear_typing=True)
@@ -1060,7 +1059,6 @@ class MatrixChannel(Channel):
                 content="\n".join(parts),
                 media=[attachment["path"]] if attachment else [],
                 metadata=meta,
-                is_dm=self._is_direct_room(room),
             )
         except Exception:
             await self._stop_typing_keepalive(room.room_id, clear_typing=True)
