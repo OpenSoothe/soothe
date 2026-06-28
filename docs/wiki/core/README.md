@@ -6,7 +6,7 @@ Soothe's core framework provides the foundational runtime for autonomous agent e
 
 ## Overview
 
-The core package (`soothe.core`) implements Soothe's protocol-orchestrated agent runtime with no transport or UI dependencies. It sits between the CLI/daemon layer and the protocol/backend layer.
+The foundation package (`soothe.foundation`) implements Soothe's protocol-orchestrated agent runtime with no transport or UI dependencies. It sits between the CLI/daemon layer and the protocol/backend layer.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -14,12 +14,12 @@ The core package (`soothe.core`) implements Soothe's protocol-orchestrated agent
 └──────────────────────┬──────────────────────────────┘
                        │ uses
 ┌──────────────────────▼──────────────────────────────┐
-│  Core Framework (soothe.core)                      │
+│  Core Framework (soothe.foundation)                │
 │                                                     │
 │  • agent/        CoreAgent factory                 │
 │  • runner/       SootheRunner orchestration        │
 │  • loop/         StrangeLoop (Plan-Execute)          │
-│  • goal_engine/  GoalEngine (autonomous management)│
+│  • context/      ContextEngine (autonomous mgmt)   │
 │  • events/       Event system                      │
 │  • workspace/    Workspace resolution              │
 │  • context/      Tool context & model override     │
@@ -41,11 +41,11 @@ The core package (`soothe.core`) implements Soothe's protocol-orchestrated agent
 
 Soothe's execution architecture is organized into three hierarchical levels:
 
-### Level 3: GoalEngine - Autonomous Goal Management
+### Level 3: ContextEngine - Autonomous Goal Management
 **RFC**: [RFC-200](../../specs/RFC-200-autonomous-goal-management.md)
 **Scope**: Long-running complex workflows, multi-goal DAGs
 **Loop**: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
-**Module**: `goal_engine/`
+**Module**: `context/`
 
 ### Level 2: StrangeLoop - Agentic Goal Execution
 **RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
@@ -64,7 +64,7 @@ Soothe's execution architecture is organized into three hierarchical levels:
 ## Core Modules
 
 ### Agent Factory
-**Module**: `soothe.core.agent`
+**Module**: `soothe.foundation.core.agent`
 **Purpose**: CoreAgent factory and construction logic
 
 Key components:
@@ -77,7 +77,7 @@ Key components:
 ---
 
 ### SootheRunner
-**Module**: `soothe.core.runner`
+**Module**: `soothe.runner`
 **Purpose**: Protocol-orchestrated agent runner
 
 Key responsibilities:
@@ -91,7 +91,7 @@ Key responsibilities:
 ---
 
 ### StrangeLoop
-**Module**: `soothe.core.loop`
+**Module**: `soothe.foundation.loop`
 **Purpose**: Plan-Execute loop for single-goal execution
 
 Key responsibilities:
@@ -104,8 +104,8 @@ Key responsibilities:
 
 ---
 
-### GoalEngine
-**Module**: `soothe.core.goal_engine`
+### ContextEngine
+**Module**: `soothe.foundation.context`
 **Purpose**: Autonomous goal management for complex workflows
 
 Key responsibilities:
@@ -114,12 +114,12 @@ Key responsibilities:
 - Backoff reasoning
 - Dynamic goal restructuring
 
-**Documentation**: [GoalEngine](goal-engine.md)
+**Documentation**: [ContextEngine](goal-engine.md)
 
 ---
 
 ### Event System
-**Module**: `soothe.core.events`
+**Module**: `soothe.foundation.events`
 **Purpose**: Centralized event system infrastructure
 
 Key components:
@@ -133,7 +133,7 @@ Key components:
 ---
 
 ### Workspace Management
-**Module**: `soothe.core.workspace`
+**Module**: `soothe.foundation.workspace`
 **Purpose**: Unified workspace resolution and validation
 
 Key responsibilities:
@@ -146,7 +146,7 @@ Key responsibilities:
 ---
 
 ### Protocol Resolver
-**Module**: `soothe.core.resolver`
+**Module**: `soothe.runner.resolver`
 **Purpose**: Wire protocols from configuration
 
 Key responsibilities:
@@ -162,7 +162,7 @@ Key responsibilities:
 ## Supporting Modules
 
 ### Context Management
-**Module**: `soothe.core.context`
+**Module**: `soothe.foundation.context`
 **Purpose**: Tool context registry and model override
 
 Key components:
@@ -173,7 +173,7 @@ Key components:
 ---
 
 ### Persistence
-**Module**: `soothe.core.persistence`
+**Module**: `soothe.foundation.persistence`
 **Purpose**: Artifact store and policy implementation
 
 Key responsibilities:
@@ -184,7 +184,7 @@ Key responsibilities:
 ---
 
 ### Middleware Stack
-**Module**: `soothe.core.middleware`
+**Module**: `soothe.middleware`
 **Purpose**: 5 Soothe-specific middlewares
 
 Middlewares:
@@ -197,7 +197,7 @@ Middlewares:
 ---
 
 ### Prompts
-**Module**: `soothe.core.prompts`
+**Module**: `soothe.foundation.loop.prompts`
 **Purpose**: System prompt building
 
 Key components:
@@ -212,7 +212,7 @@ Key components:
 | RFC | Title | Module |
 |-----|-------|--------|
 | [RFC-100](../../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime | `agent/` |
-| [RFC-200](../../specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management | `goal_engine/` |
+| [RFC-200](../../specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management | `context/` |
 | [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop | `loop/` |
 | [RFC-001](../../specs/RFC-001-core-modules-architecture.md) | Core Protocol Modules | Multiple |
 
@@ -222,10 +222,10 @@ Key components:
 
 ### Create Agent
 ```python
-from soothe.core.agent import create_soothe_agent
+from soothe.foundation.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 agent = create_soothe_agent(config)
 
 # Execute
@@ -235,10 +235,10 @@ async for chunk in agent.astream("query", config={"thread_id": "test"}):
 
 ### SootheRunner
 ```python
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 runner = SootheRunner(config)
 
 # Execute with protocols
@@ -248,10 +248,10 @@ async for event in runner.run("query"):
 
 ### StrangeLoop
 ```python
-from soothe.core.loop import StrangeLoop
+from soothe.foundation.loop import StrangeLoop
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 loop = StrangeLoop(config)
 
 # Run plan-execute loop

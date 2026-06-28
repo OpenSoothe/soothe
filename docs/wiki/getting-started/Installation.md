@@ -34,7 +34,7 @@ pip install -U 'soothe[all]' soothe-cli soothe-daemon
 This includes:
 - **soothe[all]**: Core runtime plus optional extras (`tabular`, `document`, `github`, `claude`)
 - **soothe-cli**: Interactive TUI and command-line interface
-- **soothe-daemon**: Background daemon (WebSocket, HTTP REST)
+- **soothe-daemon**: Background daemon (WebSocket)
 
 ### Option 2: Core Installation
 
@@ -157,9 +157,9 @@ This creates:
 ```
 ~/.soothe/                    # SOOTHE_HOME (default location)
 ├── config/
-│   └── config.yml            # Default configuration
+│   ├── config.yml            # Default agent configuration
+│   └── daemon.yml            # Default daemon configuration
 ├── runs/                     # Thread execution data
-├── generated_agents/         # Weaver-generated agents
 └── logs/                     # Daemon and thread logs
 ```
 
@@ -184,7 +184,7 @@ soothe -p "Hello, are you working?"
 
 ```bash
 # Run diagnostic tests
-soothe doctor
+soothed doctor
 ```
 
 This checks:
@@ -207,7 +207,7 @@ soothe -p "What is 2 + 2?"
 
 # 3. Start daemon (optional)
 soothed start
-soothe doctor
+soothed doctor
 ```
 
 ---

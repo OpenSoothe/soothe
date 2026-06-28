@@ -336,7 +336,7 @@ When `autonomous=True`, the system uses explicit goal-driven execution:
 ```
 _run_autonomous()
     ↓
-_goal_engine.create_goal(user_input)
+_context_engine.create_goal(user_input)
     ↓
 GoalCreatedEvent
     ↓
@@ -344,7 +344,7 @@ GoalCreatedEvent
 │      GOAL EXECUTION LOOP            │
 └─────────────────────────────────────┘
     ↓
-ready_goals = goal_engine.ready_goals()
+ready_goals = context_engine.list_goals()
     ↓
 _execute_autonomous_goal() per goal
     ↓
@@ -360,7 +360,7 @@ FinalReportEvent
 
 **Key files:**
 - `packages/soothe/src/soothe/core/runner/_runner_autonomous.py`
-- `packages/soothe/src/soothe/core/goal_engine/engine.py`
+- `packages/soothe/src/soothe/foundation/context/engine.py`
 
 ## 10. Event Flow Summary
 

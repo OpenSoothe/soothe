@@ -515,7 +515,7 @@ persistence:
 ### Resolution
 
 ```python
-from soothe.core.resolver import (
+from soothe.runner.resolver import (
     resolve_vector_store,
     resolve_persist_store
 )

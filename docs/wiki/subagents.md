@@ -1,6 +1,6 @@
 # Specialized Subagents
 
-Core Soothe ships **explore**, **plan**, and **tacitus** subagents. Additional optional delegated agents (extra slash commands, numeric prefixes, and install steps) are maintained in the **`soothe-plugins`** repository—see that project’s README and docs.
+Core Soothe ships five built-in subagents: **explore**, **plan**, **tacitus**, **browser_use**, and **veritas**. Additional optional delegated agents (e.g. **skillify**, **weaver**, and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.
 
 ## Overview
 
@@ -9,8 +9,8 @@ Core Soothe ships **explore**, **plan**, and **tacitus** subagents. Additional o
 | Tacitus | `/tacitus <query>` | (see TUI guide) | Multi-source public-domain research |
 | Explore | `/explore <query>` | (see TUI guide) | Readonly repository search |
 | Plan | `/plan` or `/plan <prompt>` | — | Plan-mode routing |
-| Skillify | `/skillify <query>` | `7` | Skill retrieval and discovery |
-| Weaver | `/weaver <query>` | `8` | Agent generation |
+| Browser Use | `/browser_use <url>` | (see TUI guide) | Browser automation and web interaction |
+| Veritas | (auto-invoked) | — | Clarification auto-answerer in autonomous mode |
 
 ## Tacitus Agent
 
@@ -103,67 +103,56 @@ subagents:
 
 **Note**: Explore is designed for readonly operations only. It cannot modify files or execute commands. Use it to understand codebases before making changes.
 
-## Skillify Agent
+## Browser Use Agent
 
-Skill warehouse and retrieval system.
+Browser automation specialist for web navigation and interaction.
 
 **Capabilities**:
-- Retrieve relevant skills
-- Discover patterns and best practices
-- Apply learned workflows
-- Index and search skill embeddings
-
-**Installation**:
-```bash
-pip install soothe[pgvector]  # For vector storage
-```
+- Navigate pages and interact with elements (click, fill forms)
+- Extract content from web pages
+- Take screenshots for verification
+- Handle JavaScript-heavy dynamic pages
 
 **Usage**:
 ```bash
 # In TUI
-/skillify Find skills for data processing workflows
+/browser_use Navigate to https://example.com and extract the main heading
 
-# With prefix
-7 Retrieve relevant skills for building a REST API
+# Form automation
+/browser_use Fill out the contact form on https://example.com/contact
 ```
 
 **Configuration**:
 ```yaml
 subagents:
-  skillify:
+  browser_use:
     enabled: true
-    warehouse_paths: []  # Additional warehouse paths
-    index_interval_seconds: 300  # Background indexing interval
-    index_collection: "soothe_skillify"  # Vector collection name
-    retrieval_top_k: 10  # Number of results to retrieve
+    # Optional: browser automation settings
+    headless: true
+    max_steps: 50
 ```
 
-## Weaver Agent
+**Note**: Browser Use requires the `browser-use` library. If not installed, the subagent's `on_load` hook raises a `PluginError` with install instructions.
 
-Agent generation system for creating specialized agents.
+## Veritas Agent
+
+Intent-grounded clarification auto-answerer for autonomous mode.
 
 **Capabilities**:
-- Generate specialized agents
-- Analyze requirements
-- Compose agent code
-- Reuse existing patterns
+- Automatically answers clarification questions when the StrangeLoop pauses on an `ask_user` interrupt
+- Uses the goal's first-principles context to produce best-effort answers
+- Defers to manual resolution when confidence is insufficient
 
-**Usage**:
-```bash
-# In TUI
-/weaver Create an agent for analyzing PDF documents
-
-# With prefix
-8 Generate a specialized agent for monitoring website uptime
-```
+**Usage**: Veritas is automatically invoked by the `AutoClarificationPolicy` when the loop pauses. No manual slash command is needed.
 
 **Configuration**:
 ```yaml
 subagents:
-  weaver:
+  veritas:
     enabled: true
-    reuse_index_collection: "soothe_weaver_reuse"  # Vector collection for reuse
 ```
+
+**Note**: Veritas is a single structured-output LLM call (not a CoreAgent). When it cannot answer with sufficient confidence, it sets `defer=True` and the loop transitions the goal to `awaiting_clarification` for out-of-band resolution.
 
 ## Plan Agent
 
@@ -205,8 +194,8 @@ Direct routing with slash commands for core agents:
 ```bash
 /tacitus <query>    # Route to Tacitus
 /explore <query>   # Route to Explore
-/skillify <query>  # Route to Skillify
-/weaver <query>    # Route to Weaver
+/plan <prompt>     # Route to Plan
+/browser_use <url> # Route to Browser Use
 ```
 
 ### Prefix Routing
@@ -232,15 +221,20 @@ Without a prefix or slash command, queries go to the Main agent (prefix `1`):
 /explore Find where authentication middleware is registered
 ```
 
-### Skill Discovery
+### Browser Automation
 ```bash
-/skillify Find patterns for implementing retry logic with exponential backoff
+/browser_use Navigate to https://news.ycombinator.com and list the top 5 stories
 ```
 
-### Agent Generation
-```bash
-/weaver Create an agent that monitors SSL certificate expiration dates
-```
+## Optional Plugin Subagents
+
+The `soothe-plugins` package provides additional delegate subagents that are not part of core:
+
+- **Skillify**: Skill retrieval and discovery (`/skillify`)
+- **Weaver**: Agent generation (`/weaver`)
+- **Claude**: Claude Code integration
+
+Install `soothe-plugins` and follow its README for provider keys, extras, and `subagents.*` YAML configuration.
 
 ## Related Guides
 

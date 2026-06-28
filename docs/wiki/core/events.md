@@ -6,7 +6,7 @@ Centralized event system infrastructure for Soothe.
 
 ## Overview
 
-The event system (`soothe.core.events`) provides a centralized infrastructure for event management in Soothe. It includes event constants, models, registry, and a public API for event registration.
+The event system (`soothe.foundation.events`) provides a centralized infrastructure for event management in Soothe. It includes event constants, models, registry, and a public API for event registration.
 
 ---
 
@@ -349,7 +349,7 @@ register_event(
 ### Basic Event Creation
 
 ```python
-from soothe.core.events import ThreadCreatedEvent
+from soothe.foundation.events import ThreadCreatedEvent
 
 # Create event
 event = ThreadCreatedEvent(
@@ -366,7 +366,7 @@ print(event.thread_id)  # "thread-123"
 ### Custom Event Registration
 
 ```python
-from soothe.core.events import register_event, SootheEvent
+from soothe.foundation.events import register_event, SootheEvent
 
 class MyCustomEvent(SootheEvent):
     type: str = "soothe.plugin.custom.event"
@@ -386,7 +386,7 @@ event = MyCustomEvent(custom_data="test")
 ### Event Filtering
 
 ```python
-from soothe.core.events import filter_events_by_visibility, VisibilityLevel
+from soothe.foundation.events import filter_events_by_visibility, VisibilityLevel
 
 # Filter events
 filtered = filter_events_by_visibility(
@@ -404,7 +404,7 @@ filtered = filter_events_by_visibility(
 ### Package Structure
 
 ```
-soothe.core.events/
+soothe.foundation.events/
 ├─ constants.py      # Event type constants
 ├─ catalog.py        # Event models, registry
 ├─ internal_events.py  # Internal event types
@@ -417,27 +417,27 @@ soothe.core.events/
 
 ```python
 # Import event constants
-from soothe.core.events import (
+from soothe.foundation.events import (
     THREAD_CREATED,
     PLAN_CREATED,
     STEP_STARTED
 )
 
 # Import event models
-from soothe.core.events import (
+from soothe.foundation.events import (
     ThreadCreatedEvent,
     PlanCreatedEvent,
     StepStartedEvent
 )
 
 # Import registry functions
-from soothe.core.events import (
+from soothe.foundation.events import (
     register_event,
     get_registered_events
 )
 
 # Import visibility
-from soothe.core.events import VisibilityLevel
+from soothe.foundation.events import VisibilityLevel
 ```
 
 ---
@@ -508,7 +508,7 @@ event = GoalCompletedEvent(
 
 - **[SootheRunner](runner.md)** - Runner event handling
 - **[StrangeLoop](strangeloop.md)** - Loop events
-- **[GoalEngine](goal-engine.md)** - Goal events
+- **[ContextEngine](goal-engine.md)** - Goal events
 - **[Event Catalog](../../specs/event-catalog.md)** - Event catalog spec
 - **[RFC-401](../../specs/RFC-401-event-processing.md)** - Event processing
 

@@ -25,15 +25,6 @@ This directory contains comprehensive API reference documentation for Soothe, or
   - Bootstrap and configuration
   - Health checks
 
-### REST API
-
-- **[REST API Reference](rest-api.md)** - HTTP REST endpoints
-  - Health and status endpoints
-  - Configuration management
-  - Autopilot job management
-  - File operations
-  - System operations
-
 ## Quick Reference
 
 ### Import Paths
@@ -49,8 +40,8 @@ from soothe_sdk.protocols import AsyncPersistStore, VectorStoreProtocol
 **Core (Framework Development)**:
 ```python
 from soothe.config import SootheConfig
-from soothe.core.agent import CoreAgent, create_soothe_agent
-from soothe.core.runner import SootheRunner
+from soothe.foundation.core.agent import CoreAgent, create_soothe_agent
+from soothe.runner import SootheRunner
 from soothe.protocols import MemoryProtocol, DurabilityProtocol
 ```
 
@@ -71,7 +62,7 @@ from soothe_daemon.bootstrap import run_daemon
 - **[Architecture Overview](../architecture/README.md)** - System architecture and design
 - **[Protocols Layer](../protocols/README.md)** - Protocol specifications
 - **[Capabilities Layer](../capabilities/README.md)** - Subagents, tools, MCP
-- **[Configuration Guide](../configuration.md)** - Configuration reference
+- **[Configuration Guide](../configuration-guide/README.md)** - Configuration reference
 - **[RFC Specifications](../../specs/)** - Detailed RFCs for each component
 
 ## API Stability
@@ -84,10 +75,9 @@ APIs are versioned according to the following stability tiers:
 | **Stable** | `soothe.protocols` | ✅ Stable | Backward compatible |
 | **Stable** | `soothe_sdk.client` | ✅ Stable | Backward compatible |
 | **Stable** | `soothe_sdk.plugin` | ✅ Stable | Backward compatible |
-| **Beta** | `soothe.core.agent` | ⚠️ Beta | Minor breaking changes |
-| **Beta** | `soothe.core.runner` | ⚠️ Beta | Minor breaking changes |
+| **Beta** | `soothe.foundation.core.agent` | ⚠️ Beta | Minor breaking changes |
+| **Beta** | `soothe.runner` | ⚠️ Beta | Minor breaking changes |
 | **Alpha** | `soothe_daemon` | ⚠️ Alpha | Breaking changes possible |
-| **Alpha** | REST API | ⚠️ Alpha | Breaking changes possible |
 
 ## Documentation Conventions
 

@@ -6,7 +6,7 @@ CoreAgent construction and runtime factory.
 
 ## Overview
 
-The agent factory module (`soothe.core.agent`) provides the foundational runtime for Soothe. Built on the `create_soothe_agent()` factory, CoreAgent delivers a CompiledStateGraph with built-in tools, subagents, and middlewares, executing through LangGraph's Model → Tools → Model loop.
+The agent factory module (`soothe.foundation.core.agent`) provides the foundational runtime for Soothe. Built on the `create_soothe_agent()` factory, CoreAgent delivers a CompiledStateGraph with built-in tools, subagents, and middlewares, executing through LangGraph's Model → Tools → Model loop.
 
 **RFC**: [RFC-100](../../specs/RFC-100-coreagent-runtime.md)
 
@@ -120,7 +120,7 @@ def create_soothe_agent(config: SootheConfig) -> CompiledStateGraph:
         - soothe_durability: DurabilityProtocol instance
         
     Example:
-        config = SootheConfig.from_file("config.yml")
+        config = SootheConfig.from_yaml_file("config.yml")
         agent = create_soothe_agent(config)
         
         async for chunk in agent.astream("query", config={"thread_id": "test"}):
@@ -228,10 +228,10 @@ Manages subagent context isolation.
 ### Basic Execution
 
 ```python
-from soothe.core.agent import create_soothe_agent
+from soothe.foundation.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 agent = create_soothe_agent(config)
 
 # Execute query
@@ -266,7 +266,7 @@ projection = await context.project("goal", token_budget=2000)
 
 ### StrangeLoop Integration
 
-CoreAgent serves as Layer 1 foundation for StrangeLoop:
+CoreAgent serves as the foundation runtime for StrangeLoop:
 
 ```python
 # StrangeLoop uses CoreAgent for Execute phase

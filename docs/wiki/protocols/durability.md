@@ -66,31 +66,19 @@ class DurabilityProtocol(Protocol):
         """
         ...
 
-    async def suspend_thread(self, thread_id: str) -> ThreadInfo:
-        """Suspend an active thread.
+    async def suspend_thread(self, thread_id: str) -> None:
+        """Suspend an active thread, persisting its state.
         
         Args:
             thread_id: The thread to suspend.
-            
-        Returns:
-            ThreadInfo for the suspended thread.
-            
-        Raises:
-            KeyError: If thread not found.
         """
         ...
 
-    async def archive_thread(self, thread_id: str) -> ThreadInfo:
-        """Archive a thread (permanent archive, no resumption).
+    async def archive_thread(self, thread_id: str) -> None:
+        """Archive a thread. Triggers memory consolidation.
         
         Args:
             thread_id: The thread to archive.
-            
-        Returns:
-            ThreadInfo for the archived thread.
-            
-        Raises:
-            KeyError: If thread not found.
         """
         ...
 
@@ -107,12 +95,12 @@ class DurabilityProtocol(Protocol):
 
     async def list_threads(
         self,
-        filter: ThreadFilter | None = None,
+        thread_filter: ThreadFilter | None = None,
     ) -> list[ThreadInfo]:
         """List threads matching filter criteria.
         
         Args:
-            filter: Optional filter criteria.
+            thread_filter: Optional filter criteria.
             
         Returns:
             Matching threads ordered by updated_at descending.
@@ -122,16 +110,16 @@ class DurabilityProtocol(Protocol):
     async def update_thread_metadata(
         self,
         thread_id: str,
-        metadata: ThreadMetadata,
-    ) -> ThreadInfo:
-        """Update thread metadata.
+        metadata: dict[str, Any] | ThreadMetadata,
+    ) -> None:
+        """Update thread metadata (partial update).
+
+        Merges the provided metadata with existing metadata.
+        Only updates fields that are present in the new metadata.
         
         Args:
             thread_id: The thread to update.
-            metadata: New metadata to apply.
-            
-        Returns:
-            Updated ThreadInfo.
+            metadata: New metadata to merge. Can be dict or ThreadMetadata.
             
         Raises:
             KeyError: If thread not found.
@@ -502,7 +490,7 @@ persistence:
 ### Resolution
 
 ```python
-from soothe.core.resolver import resolve_durability
+from soothe.runner.resolver import resolve_durability
 
 # Resolve durability protocol from config
 durability = resolve_durability(config)

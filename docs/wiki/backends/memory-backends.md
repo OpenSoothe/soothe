@@ -161,7 +161,7 @@ from soothe.backends.memory import MemUMemory
 from soothe.protocols.memory import MemoryItem
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 memory = MemUMemory(config)
 
 # Remember a memory

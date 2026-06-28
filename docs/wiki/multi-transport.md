@@ -1,18 +1,17 @@
-# Multi-Transport Setup
+# Transport Setup
 
-Configure WebSocket and HTTP REST transports for the Soothe daemon.
+Configure the WebSocket transport for the Soothe daemon.
 
 ## Transport Overview
 
-The Soothe daemon supports two transport protocols:
+The Soothe daemon supports WebSocket as its transport protocol:
 
 | Transport | Status | Use Case | Performance |
 |-----------|--------|----------|-------------|
 | **WebSocket** | ✅ Default | All clients (CLI, TUI, web apps) | ~1-5ms latency |
-| **HTTP REST** | ⚙️ Opt-in | CRUD operations, health checks | ~5-20ms latency |
 
-All transports share the same:
-- Authentication system
+All clients share the same:
+- Authentication system (via reverse proxy)
 - Protocol layer
 - Thread management
 - Event streaming
@@ -21,16 +20,18 @@ All transports share the same:
 
 **Status**: ✅ Enabled by default
 
-**Configuration**:
+**Configuration** (`~/.soothe/config/daemon.yml`):
 ```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8765
-      tls_enabled: false
-      cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
+transports:
+  websocket:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8765
+    tls_enabled: false
+    tls_cert: null
+    tls_key: null
+    cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
+    max_frame_size: 10485760
 ```
 
 **Features**:
@@ -78,137 +79,50 @@ ws.onmessage = (event) => {
 };
 ```
 
-## HTTP REST API (Opt-in)
+## TLS Configuration
 
-**Status**: ❌ Disabled by default
-
-**Configuration**:
-```yaml
-daemon:
-  transports:
-    http_rest:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8766
-      require_auth_for_localhost: false
-```
-
-**Features**:
-- RESTful API for CRUD operations
-- Thread management endpoints
-- File upload/download
-- Configuration management
-- Health checks and monitoring
-- OpenAPI documentation (Swagger UI and ReDoc)
-
-**Use When**:
-- Building integrations with other tools
-- Implementing custom clients
-- Performing file operations
-- Checking system health
-
-### Enable HTTP REST
-
-1. **Update configuration**:
-```yaml
-daemon:
-  transports:
-    http_rest:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8766
-```
-
-2. **Restart daemon**:
-```bash
-soothed stop
-soothed start
-```
-
-### Key Endpoints
-
-**Thread Management**:
-```bash
-# List threads
-GET http://localhost:8766/api/v1/threads
-
-# Create thread
-POST http://localhost:8766/api/v1/threads
-
-# Get messages
-GET http://localhost:8766/api/v1/threads/{id}/messages
-```
-
-**File Operations**:
-```bash
-# Upload file
-POST http://localhost:8766/api/v1/files/upload
-
-# Download file
-GET http://localhost:8766/api/v1/files/{id}
-```
-
-**Health Check**:
-```bash
-GET http://localhost:8766/api/v1/health
-```
-
-**Authentication**:
-```bash
-# Create API key (requires authentication)
-POST http://localhost:8766/api/v1/auth/api-keys
-```
-
-### API Documentation
-
-When enabled, visit:
-- **Swagger UI**: http://localhost:8766/docs
-- **ReDoc**: http://localhost:8766/redoc
-
-### Using the REST API
-
-**List Threads**:
-```bash
-curl -H "Authorization: Bearer sk_live_abc123..." \
-  http://localhost:8766/api/v1/threads
-```
-
-**Send Input**:
-```bash
-curl -X POST \
-  -H "Authorization: Bearer sk_live_abc123..." \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Analyze the data"}' \
-  http://localhost:8766/api/v1/threads/abc123/input
-```
-
-## Enabling Both Transports
-
-You can enable both transports simultaneously:
+Enable TLS for direct remote connections (without reverse proxy):
 
 ```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8765
-      cors_origins: ["http://localhost:3000"]
-
-    http_rest:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8766
+# ~/.soothe/config/daemon.yml
+transports:
+  websocket:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8765
+    tls_enabled: true
+    tls_cert: "/path/to/cert.pem"
+    tls_key: "/path/to/key.pem"
 ```
 
-**Status Output**:
+**Note**: For production, prefer a reverse proxy (nginx, Caddy) for TLS termination. See [Authentication Guide](authentication.md).
+
+## CORS Configuration
+
+Configure allowed origins for browser-based clients:
+
+```yaml
+# ~/.soothe/config/daemon.yml
+transports:
+  websocket:
+    cors_origins:
+      - "http://localhost:3000"
+      - "https://app.example.com"
+```
+
+## Status Output
+
+```bash
+soothed status
+```
+
+**Output**:
 ```
 Daemon Status: running
 PID: 12345
 Uptime: 2 hours
 Transports:
   - WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
-  - HTTP REST: ✅ Enabled (http://127.0.0.1:8766)
 Active Threads: 3
 ```
 
@@ -216,8 +130,7 @@ Active Threads: 3
 
 ### Localhost Connections
 
-- **WebSocket localhost**: No built-in authentication
-- **HTTP REST localhost**: No built-in authentication
+- **WebSocket localhost**: No built-in authentication; bind to 127.0.0.1 for local-only access
 
 ### Remote Connections
 
@@ -228,17 +141,3 @@ Active Threads: 3
 - **Request filtering**: Block malicious requests
 
 See [Authentication Guide](authentication.md) for deployment patterns with nginx, Caddy, or Traefik.
-
-## Performance Characteristics
-
-| Transport | Latency | Throughput | Best For |
-|-----------|---------|------------|----------|
-| WebSocket | ~1-5ms | High | All clients, streaming |
-| HTTP REST | ~5-20ms | Medium | CRUD operations |
-
-## Related Guides
-
-- [Authentication](authentication.md) - API keys and JWT
-- [Daemon Management](daemon-management.md) - Server lifecycle
-- [Configuration Guide](configuration.md) - Complete configuration reference
-- [Troubleshooting](troubleshooting.md) - Connection issues

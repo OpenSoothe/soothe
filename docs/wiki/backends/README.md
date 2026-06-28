@@ -105,10 +105,10 @@ Implement `PolicyProtocol` for security and filesystem policies.
 Backends are resolved from configuration by the resolver:
 
 ```python
-from soothe.core.resolver import resolve_memory, resolve_durability
+from soothe.runner.resolver import resolve_memory, resolve_durability
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_file("config.yml")
+config = SootheConfig.from_yaml_file("config.yml")
 
 # Resolve backends
 memory = resolve_memory(config)       # MemUMemory instance

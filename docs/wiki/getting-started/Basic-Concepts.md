@@ -26,7 +26,7 @@ Soothe uses a hierarchical execution model:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ GoalEngine: Autonomous Goal Management                     │
+│ ContextEngine: Autonomous Goal Management                  │
 │ • Manages goal DAGs (directed acyclic graphs)             │
 │ • Delegates single goals to StrangeLoop                     │
 │ • Loop: Goal → PLAN → PERFORM → REFLECT → Update          │
@@ -53,7 +53,7 @@ Soothe uses a hierarchical execution model:
 
 | Component | Purpose | Key Features |
 |-----------|---------|--------------|
-| **GoalEngine** | Autonomous goal management | Goal DAGs, inter-goal coordination, reflection |
+| **ContextEngine** | Autonomous goal management | Goal DAGs, inter-goal coordination, reflection |
 | **StrangeLoop** | Single goal execution | Plan-adapt-execute cycles, step management |
 | **CoreAgent** | Foundation runtime | LangGraph agent, tool execution, memory |
 
@@ -103,13 +103,13 @@ A **thread** is a conversation context that maintains:
 
 ```bash
 # List recent threads
-soothe thread list
+soothe loop list
 
-# Resume a thread
-soothe thread resume <thread-id>
+# Continue a thread
+soothe loop continue <thread-id>
 
 # Delete a thread
-soothe thread delete <thread-id>
+soothe loop delete <thread-id>
 ```
 
 ---
@@ -126,10 +126,12 @@ soothe thread delete <thread-id>
 |----------|---------|-----------|
 | **Explore** | Filesystem search and analysis | Finding files, exploring codebases |
 | **Plan** | Task planning and decomposition | Complex multi-step tasks |
-| **Veritas** | Research synthesis and verification | Fact-checking, validation |
 | **Tacitus** | Academic research | Finding papers, literature reviews |
 | **Browser Use** | Web automation | Interacting with websites |
-| **Claude** | Complex code analysis | Deep code understanding |
+| **Veritas** | Research synthesis and verification | Fact-checking, validation |
+
+> **Note**: `claude` and other community subagents are available via the
+> `soothe-plugins` package, not as core subagents.
 
 ### Subagent Workflow
 
@@ -364,9 +366,7 @@ The **daemon** is a long-running background process that:
 
 | Transport | Use Case | Performance |
 |-----------|----------|-------------|
-| **Unix Socket** | Local CLI, highest performance | Fastest |
-| **WebSocket** | Browser clients, remote access | Good |
-| **HTTP REST** | Integration with other services | Moderate |
+| **WebSocket** | CLI, TUI, browser clients, remote access | Good |
 
 ### Daemon Management
 
@@ -509,8 +509,11 @@ router:
   embedding: "openai:text-embedding-3-small"
 
 # Workspace settings
-workspace_dir: "."
-progress_verbosity: normal
+filesystem_middleware:
+  workspace_root: "."
+
+observability:
+  verbosity: normal
 
 # Subagents (core defaults; optional from soothe-plugins)
 subagents:
@@ -534,7 +537,7 @@ Here's how all concepts work together:
 User: "Refactor the authentication module to support OAuth2"
     ↓
 1. CoreAgent receives query
-2. GoalEngine creates goal with subtasks
+2. ContextEngine creates goal with subtasks
 3. StrangeLoop plans execution steps
     ↓
 Step 1: Explore codebase for auth module
@@ -557,7 +560,7 @@ Step 5: Test implementation
     ↓
     Tools: run_command (pytest)
     ↓
-GoalEngine reflects on results
+ContextEngine reflects on results
     ↓
 Returns completed refactoring
 ```
@@ -578,6 +581,6 @@ Now that you understand the basics:
 ## Further Reading
 
 - **[RFC-000: System Conceptual Design](../../specs/RFC-000-system-conceptual-design.md)** - Complete architecture
-- **[RFC-200: Autonomous Goal Management](../../specs/RFC-200-autonomous-goal-management.md)** - GoalEngine details
+- **[RFC-200: Autonomous Goal Management](../../specs/RFC-200-autonomous-goal-management.md)** - ContextEngine details
 - **[RFC-201: StrangeLoop](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - Execution loop details
 - **[Architecture Overview](../architecture/README.md)** - Visual guides and explanations

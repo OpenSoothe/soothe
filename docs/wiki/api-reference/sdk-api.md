@@ -99,181 +99,281 @@ await client.connect()
 await client.close()
 ```
 
-##### `send_query()`
+##### `send()`
 
 ```python
-async def send_query(
-    query: str,
-    *,
-    thread_id: str | None = None,
-    workspace: str | None = None,
-    verbosity: str = "normal",
-    mode: str = "agentic",
-    intent: str | None = None,
-    autopilot_job: dict | None = None,
-) -> str
+async def send(message: dict[str, Any]) -> None
 ```
 
-Send a query to the daemon and return the thread ID.
+Send a raw message dict to the daemon.
 
 **Parameters**:
-- `query`: User query text
-- `thread_id`: Optional thread ID for conversation continuity
-- `workspace`: Optional workspace path for file operations
-- `verbosity`: Verbosity level (`"quiet"`, `"normal"`, `"verbose"`, `"debug"`)
-- `mode`: Execution mode (`"agentic"`, `"stream"`)
-- `intent`: Optional intent hint (`"plan"`, `"act"`, `"ask"`)
-- `autopilot_job`: Optional autopilot job descriptor
-
-**Returns**: Thread ID for the conversation
+- `message`: Message dict to send
 
 **Example**:
 ```python
-# Simple query
-thread_id = await client.send_query("What is the capital of France?")
-
-# Continue conversation
-await client.send_query(
-    "What about Germany?",
-    thread_id=thread_id
-)
-
-# With workspace
-thread_id = await client.send_query(
-    "Read the README.md file",
-    workspace="/home/user/projects/myapp"
-)
+await client.send({"type": "daemon_status"})
 ```
 
-##### `stream_events()`
+##### `read_event()`
 
 ```python
-async def stream_events() -> AsyncGenerator[dict[str, Any], None]
+async def read_event() -> dict[str, Any] | None
 ```
 
-Stream events from the daemon as an async generator.
+Read the next event from the daemon. Returns `None` on EOF.
 
-**Yields**: Event dictionaries with the structure:
-```python
-{
-    "type": "event_type",
-    "namespace": "soothe",
-    "mode": "custom",
-    "data": {...}
-}
-```
+**Returns**: Parsed event dict, or `None` on connection close.
 
 **Example**:
 ```python
-async def process_query(query: str):
-    client = WebSocketClient()
-    await client.connect()
-    
-    thread_id = await client.send_query(query)
-    
-    async for event in client.stream_events():
-        event_type = event.get("type")
-        
-        if event_type == "assistant_output":
-            content = event.get("data", {}).get("content", "")
-            print(content, end="", flush=True)
-        
-        elif event_type == "tool_start":
-            tool_name = event.get("data", {}).get("name")
-            print(f"\n[Tool: {tool_name}]")
-        
-        elif event_type == "loop_complete":
-            print("\n[Done]")
-            break
-    
-    await client.close()
+async for _ in range(100):
+    event = await client.read_event()
+    if event is None:
+        break
+    print(event.get("type"))
 ```
 
-##### `daemon_status()`
+##### `send_input()`
 
 ```python
-async def daemon_status() -> dict[str, Any]
-```
-
-Get the current status of the daemon.
-
-**Returns**: Status dictionary with structure:
-```python
-{
-    "state": "ready" | "starting" | "warming" | "error",
-    "version": "1.2.3",
-    "uptime_seconds": 1234.56,
-    "active_loops": 2,
-    "protocol_statuses": {...},
-}
-```
-
-**Example**:
-```python
-status = await client.daemon_status()
-if status["state"] == "ready":
-    print(f"Daemon ready (v{status['version']})")
-else:
-    print(f"Daemon not ready: {status['state']}")
-```
-
-##### `subscribe_loop()`
-
-```python
-async def subscribe_loop(
-    thread_id: str,
-    loop_id: str | None = None
-) -> str
-```
-
-Subscribe to events for a specific StrangeLoop.
-
-**Parameters**:
-- `thread_id`: Thread ID to subscribe to
-- `loop_id`: Optional loop ID. If not provided, a new one is generated
-
-**Returns**: Loop ID for the subscription
-
-**Example**:
-```python
-loop_id = await client.subscribe_loop(thread_id)
-print(f"Subscribed to loop {loop_id}")
-
-# Stream events for this loop
-async for event in client.stream_events():
-    if event.get("loop_id") == loop_id:
-        # Process event
-        pass
-```
-
-##### `send_control()`
-
-```python
-async def send_control(
-    command: str,
+async def send_input(
+    loop_id: str,
+    text: str,
     *,
-    thread_id: str | None = None,
-    loop_id: str | None = None,
-    params: dict | None = None,
+    autonomous: bool = False,
+    max_iterations: int | None = None,
+    preferred_subagent: str | None = None,
+    model: str | None = None,
+    model_params: dict[str, Any] | None = None,
+    attachments: list[dict[str, str]] | None = None,
+    intent_hint: str | None = None,
+    response_schema: dict[str, Any] | None = None,
+    response_schema_name: str | None = None,
+    response_schema_strict: bool | None = None,
+    clarification_mode: str | None = None,
+    clarification_answer: bool = False,
+    clarification_answers: list[str] | None = None,
 ) -> None
 ```
 
-Send a control message to the daemon.
+Send user input to the daemon for a subscribed loop (`loop_input`).
 
 **Parameters**:
-- `command`: Control command (e.g., `"cancel"`, `"pause"`, `"resume"`)
-- `thread_id`: Optional thread ID
-- `loop_id`: Optional loop ID
-- `params`: Optional command parameters
+- `loop_id`: Loop identifier for the subscribed loop
+- `text`: User input text
+- `autonomous`: Enable autonomous iteration mode
+- `max_iterations`: Maximum iterations for autonomous mode
+- `preferred_subagent`: Preferred subagent hint for routing
+- `model`: Provider:model override string
+- `model_params`: Additional model parameters
+- `attachments`: Image attachments (mime_type + base64 data)
+- `intent_hint`: Suggested intent (e.g. `quiz`, `direct_llm`)
+- `response_schema`: Request strict JSON output
+- `clarification_mode`: RFC-622 clarification relay mode (`"auto"` / `"manual"`)
+- `clarification_answer`: Treat this input as the answer to a pending clarification
 
 **Example**:
 ```python
-# Cancel current execution
-await client.send_control("cancel", loop_id=loop_id)
-
-# Pause execution
-await client.send_control("pause", loop_id=loop_id)
+await client.send_input("loop_abc123", "What is the capital of France?")
 ```
+
+##### `send_loop_subscribe()`
+
+```python
+async def send_loop_subscribe(
+    loop_id: str,
+    *,
+    stream_delivery: str = "adaptive",
+    request_id: str | None = None,
+) -> None
+```
+
+Subscribe client to loop events for real-time event streaming.
+
+**Parameters**:
+- `loop_id`: Loop identifier
+- `stream_delivery`: One of `batch` | `adaptive` (default) | `streaming`
+- `request_id`: Optional request correlation ID
+
+##### `send_loop_new()`
+
+```python
+async def send_loop_new(
+    *,
+    client_workspace: str | None = None,
+    user_id: str | None = None,
+    client_workspace_id: str | None = None,
+    workspace: str | None = None,
+    is_ephemeral: bool = False,
+    request_id: str | None = None,
+) -> None
+```
+
+Create a new loop via daemon RPC.
+
+##### `send_loop_list()`
+
+```python
+async def send_loop_list(
+    filter_dict: dict[str, Any] | None = None,
+    *,
+    limit: int = 20,
+    request_id: str | None = None,
+) -> None
+```
+
+Request StrangeLoop instances via daemon RPC.
+
+##### `send_loop_get()`
+
+```python
+async def send_loop_get(
+    loop_id: str,
+    *,
+    verbose: bool = False,
+    request_id: str | None = None,
+) -> None
+```
+
+Request loop details via daemon RPC.
+
+##### `send_loop_messages()`
+
+```python
+async def send_loop_messages(
+    loop_id: str,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+    include_events: bool = False,
+    request_id: str | None = None,
+) -> None
+```
+
+Request persisted conversation/activity rows.
+
+##### `send_loop_detach()`
+
+```python
+async def send_loop_detach(
+    loop_id: str,
+    *,
+    request_id: str | None = None,
+) -> None
+```
+
+Unsubscribe from loop events while the loop continues running.
+
+##### `send_loop_delete()`
+
+```python
+async def send_loop_delete(
+    loop_id: str,
+    *,
+    request_id: str | None = None,
+) -> None
+```
+
+Request loop deletion via daemon RPC.
+
+##### `fetch_daemon_status()`
+
+```python
+async def fetch_daemon_status(
+    *,
+    timeout: float = 5.0,
+    min_interval_s: float = 1.0,
+) -> dict[str, Any]
+```
+
+Fetch `daemon_status_response` with TTL cache and in-flight coalescing.
+
+**Returns**: Daemon status response dict with `state`, `version`, `uptime_seconds`, `active_loops`, etc.
+
+**Example**:
+```python
+status = await client.fetch_daemon_status()
+if status["state"] == "ready":
+    print(f"Daemon ready (v{status['version']})")
+```
+
+##### `request_response()`
+
+```python
+async def request_response(
+    payload: dict[str, Any],
+    *,
+    response_type: str,
+    timeout: float = 5.0,
+) -> dict[str, Any]
+```
+
+Send a request and wait for a matching response type.
+
+**Parameters**:
+- `payload`: Request payload to send
+- `response_type`: Expected response message type
+- `timeout`: Maximum seconds to wait
+
+**Returns**: Matching response dict
+
+**Raises**:
+- `TimeoutError`: If no matching response is received
+- `RuntimeError`: If the daemon returns an error
+
+##### `send_command()`
+
+```python
+async def send_command(cmd: str) -> None
+```
+
+Send a slash command to the daemon.
+
+**Parameters**:
+- `cmd`: Command string
+
+##### `list_skills()`
+
+```python
+async def list_skills(*, timeout: float = 15.0) -> dict[str, Any]
+```
+
+Request wire-safe skill metadata from the daemon.
+
+##### `invoke_skill()`
+
+```python
+async def invoke_skill(
+    skill: str,
+    args: str = "",
+    *,
+    timeout: float = 120.0,
+    clarification_mode: str | None = None,
+) -> dict[str, Any]
+```
+
+Resolve a skill on the daemon and receive echo before streaming.
+
+##### `wait_for_daemon_ready()`
+
+```python
+async def wait_for_daemon_ready(ready_timeout_s: float = 10.0) -> dict[str, Any]
+```
+
+Wait for a daemon readiness message and require ready state.
+
+**Returns**: The `daemon_ready` event on success.
+
+**Raises**:
+- `RuntimeError`: If daemon reports `error` or `degraded`
+- `TimeoutError`: If timeout expires
+
+##### Properties
+
+- `client_id` (str): Get the client identifier
+- `is_connected` (bool): Check if connected to the daemon
+- `is_connection_alive()` (bool): Check if WebSocket connection is actually alive
 
 ---
 
@@ -307,13 +407,13 @@ class MyPlugin:
 - `priority`: Load priority (higher = earlier)
 
 **Plugin Methods**:
-- `on_load(context: PluginContext) -> None`: Called when plugin is loaded
+- `on_load(context: Context) -> None`: Called when plugin is loaded
 - `on_unload() -> None`: Called when plugin is unloaded
 - `health_check() -> PluginHealth`: Return plugin health status
 
 **Example**:
 ```python
-from soothe_sdk import plugin, tool, PluginContext, Health
+from soothe_sdk import plugin, tool, Context, Health
 
 @plugin(
     name="my-plugin",
@@ -325,10 +425,10 @@ class MyPlugin:
     def __init__(self):
         self.config = None
     
-    async def on_load(self, context: PluginContext):
+    async def on_load(self, context: Context):
         """Initialize plugin with context."""
         self.config = context.config
-        print(f"Loaded {context.plugin_name} v{context.plugin_version}")
+        context.logger.info(f"Loaded my-plugin v1.0.0")
     
     async def on_unload(self):
         """Cleanup when unloading."""
@@ -444,7 +544,7 @@ Decorator for defining a subagent within a plugin.
 async def create_subagent(
     model,
     config: SootheConfigProtocol,
-    context: PluginContext,
+    context: Context,
 ) -> CompiledSubAgent:
     ...
 ```
@@ -459,7 +559,7 @@ async def create_subagent(
 
 **Example**:
 ```python
-from soothe_sdk import plugin, subagent, PluginContext, SootheConfigProtocol
+from soothe_sdk import plugin, subagent, Context, SootheConfigProtocol
 from deepagents import CompiledSubAgent, SubAgent
 
 @plugin(name="research", version="1.0.0")
@@ -474,7 +574,7 @@ class ResearchPlugin:
         self,
         model,
         config: SootheConfigProtocol,
-        context: PluginContext,
+        context: Context,
     ) -> CompiledSubAgent:
         """Create web research subagent.
         
@@ -574,20 +674,24 @@ Base class for all Soothe events.
 
 ```python
 class SootheEvent(BaseModel):
-    """Base event type for all Soothe events."""
+    """Base class for all Soothe progress events."""
     
     type: str
-    """Event type identifier (e.g., 'soothe.tool.started')."""
+    """Event type identifier (e.g., 'soothe.tool.execution.started')."""
     
-    timestamp: float = Field(default_factory=lambda: time.time())
-    """Unix timestamp when event was created."""
+    model_config = ConfigDict(extra="allow")
+    """Allows subclasses to add extra fields."""
     
-    loop_id: str | None = None
-    """StrangeLoop ID if event is loop-scoped."""
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict for wire-format emission."""
+        ...
     
-    thread_id: str | None = None
-    """Thread ID for persistence scope."""
+    def emit(self, logger: logging.Logger) -> None:
+        """Emit this event via the LangGraph stream writer (daemon-side)."""
+        ...
 ```
+
+Event subclasses (e.g. `LifecycleEvent`, `ProtocolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent`) inherit from `SootheEvent` and add their own fields. The `ErrorEvent` subclass adds a required `error: str` field.```
 
 **Example**:
 ```python
@@ -604,8 +708,6 @@ class MyCustomEvent(SootheEvent):
 event = MyCustomEvent(
     data="Hello",
     count=42,
-    loop_id="loop-123",
-    thread_id="thread-456",
 )
 
 # Serialize
@@ -1125,20 +1227,12 @@ except Exception as e:
 Enum for verbosity levels.
 
 ```python
-class VerbosityLevel(str, Enum):
-    """Verbosity levels for event filtering."""
-    
-    QUIET = "quiet"
-    """Minimal output - errors only."""
-    
-    NORMAL = "normal"
-    """Standard output - important events."""
-    
-    VERBOSE = "verbose"
-    """Detailed output - most events."""
-    
-    DEBUG = "debug"
-    """All output - all events including debug."""
+VerbosityLevel = Literal["quiet", "normal", "debug"]
+"""User-configured verbosity level for filtering display content."""
+
+# quiet   - Minimal output (errors only)
+# normal  - Standard output (important events)
+# debug   - All output (all events including debug)
 ```
 
 ---
@@ -1167,7 +1261,7 @@ class VerbosityTier(BaseModel):
 
 ## See Also
 
-- **[REST API Reference](rest-api.md)** - HTTP REST endpoints
 - **[Core API Reference](core-api.md)** - Core framework API
+- **[Daemon API Reference](daemon-api.md)** - Daemon server API
 - **[Capabilities: Extension Patterns](../capabilities/extension-patterns.md)** - Plugin development guide
 - **[RFC-600 Plugin System](../../specs/RFC-600-plugin-extension-system.md)** - Plugin specification

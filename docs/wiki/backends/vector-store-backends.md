@@ -16,14 +16,18 @@ Vector store backends implement `VectorStoreProtocol` for storing and searching 
 
 ```python
 class VectorStoreProtocol(Protocol):
-    """Vector storage and semantic search."""
-    
-    async def upsert(self, record: VectorRecord) -> str: ...
-    async def batch_upsert(self, records: list[VectorRecord]) -> list[str]: ...
-    async def search(self, query_vector: list[float], limit: int = 10, filter: dict | None = None) -> list[VectorRecord]: ...
+    """Async protocol for vector database operations."""
+
+    async def create_collection(self, vector_size: int, distance: str = "cosine") -> None: ...
+    async def insert(self, vectors: list[list[float]], payloads: list[dict] | None = None, ids: list[str] | None = None) -> None: ...
+    async def search(self, query: str, vector: list[float], limit: int = 5, filters: dict | None = None) -> list[VectorRecord]: ...
+    async def delete(self, record_id: str) -> None: ...
+    async def update(self, record_id: str, vector: list[float] | None = None, payload: dict | None = None) -> None: ...
     async def get(self, record_id: str) -> VectorRecord | None: ...
-    async def delete(self, record_id: str) -> bool: ...
-    async def count(self, filter: dict | None = None) -> int: ...
+    async def list_records(self, filters: dict | None = None, limit: int | None = None) -> list[VectorRecord]: ...
+    async def delete_collection(self) -> None: ...
+    async def reset(self) -> None: ...
+    async def close(self) -> None: ...
 ```
 
 ---
@@ -36,13 +40,11 @@ Vector record data structure:
 
 ```python
 class VectorRecord(BaseModel):
-    """Vector record with metadata."""
-    
+    """A stored vector record with metadata."""
+
     id: str                      # Unique identifier
-    vector: list[float]          # Embedding vector
-    metadata: dict[str, Any]     # Associated metadata
-    created_at: datetime         # Creation timestamp
-    updated_at: datetime         # Last update timestamp
+    score: float | None          # Similarity score from search (None for non-search results)
+    payload: dict[str, Any]      # Arbitrary metadata stored alongside the vector
 ```
 
 ---
@@ -109,182 +111,87 @@ PGVectorStore Architecture
 ```python
 class PGVectorStore(VectorStoreProtocol):
     """VectorStoreProtocol implementation using PostgreSQL with pgvector."""
-    
+
     def __init__(
         self,
         collection: str = "soothe_vectors",
         dsn: str = "postgresql://localhost/soothe",
         pool_size: int = 5,
         index_type: str = "hnsw",
-        vector_size: int = 1536
-    ):
-        """Initialize PGVectorStore."""
-        
-        self._collection = collection
-        self._dsn = dsn
-        self._pool_size = pool_size
-        self._index_type = index_type
-        self._vector_size = vector_size
-        self._pool: Any = None
-        
-    async def _ensure_pool(self) -> Any:
-        """Ensure connection pool."""
-        if self._pool is None:
-            from psycopg_pool import AsyncConnectionPool
-            
-            self._pool = AsyncConnectionPool(
-                self._dsn,
-                min_size=1,
-                max_size=self._pool_size,
-                open=False
-            )
-            
-            await self._pool.open()
-            
-            # Create table and index
-            async with self._pool.connection() as conn:
-                await conn.execute("""
-                    CREATE TABLE IF NOT EXISTS {} (
-                        id TEXT PRIMARY KEY,
-                        vector VECTOR({}),
-                        metadata JSONB,
-                        created_at TIMESTAMPTZ DEFAULT NOW(),
-                        updated_at TIMESTAMPTZ DEFAULT NOW()
-                    )
-                """.format(self._collection, self._vector_size))
-                
-                # Create index based on type
-                if self._index_type == "hnsw":
-                    await conn.execute("""
-                        CREATE INDEX IF NOT EXISTS {}_vector_idx ON {}
-                        USING hnsw (vector vector_cosine_ops)
-                    """.format(self._collection, self._collection))
-                    
-                elif self._index_type == "ivfflat":
-                    await conn.execute("""
-                        CREATE INDEX IF NOT EXISTS {}_vector_idx ON {}
-                        USING ivfflat (vector vector_cosine_ops)
-                        WITH (lists = 100)
-                    """.format(self._collection, self._collection))
-        
-        return self._pool
-    
-    async def upsert(self, record: VectorRecord) -> str:
-        """Insert or update vector record."""
-        pool = await self._ensure_pool()
-        
-        async with pool.connection() as conn:
-            await conn.execute("""
-                INSERT INTO {} (id, vector, metadata, updated_at)
-                VALUES (?, ?, ?, NOW())
-                ON CONFLICT (id) DO UPDATE SET vector = ?, metadata = ?, updated_at = NOW()
-            """.format(self._collection),
-                (record.id, record.vector, record.metadata, record.vector, record.metadata)
-            )
-            
-            return record.id
-    
-    async def batch_upsert(self, records: list[VectorRecord]) -> list[str]:
-        """Batch insert or update vector records."""
-        ids = []
-        for record in records:
-            id = await self.upsert(record)
-            ids.append(id)
-        return ids
-    
+        vector_size: int = 1536,
+    ) -> None:
+        """Initialize PGVectorStore.
+
+        Args:
+            collection: Table name for storing vectors.
+            dsn: PostgreSQL connection string.
+            pool_size: Connection pool size.
+            index_type: Index type (hnsw, ivfflat, or none).
+            vector_size: Dimension of vectors (default: 1536).
+        """
+        ...
+
+    async def create_collection(
+        self, vector_size: int | None = None, distance: str = "cosine"
+    ) -> None:
+        """Create or ensure a collection exists."""
+        ...
+
+    async def insert(
+        self,
+        vectors: list[list[float]],
+        payloads: list[dict] | None = None,
+        ids: list[str] | None = None,
+    ) -> None:
+        """Insert vectors with optional payloads and IDs."""
+        ...
+
     async def search(
         self,
-        query_vector: list[float],
-        limit: int = 10,
-        filter: dict | None = None
+        query: str,
+        vector: list[float],
+        limit: int = 5,
+        filters: dict | None = None,
     ) -> list[VectorRecord]:
-        """Search vectors by similarity."""
-        pool = await self._ensure_pool()
-        
-        async with pool.connection() as conn:
-            # Build query with optional filter
-            if filter:
-                filter_clause = " AND metadata @> ?"
-                params = [query_vector, filter, limit]
-            else:
-                filter_clause = ""
-                params = [query_vector, limit]
-            
-            result = await conn.execute("""
-                SELECT id, vector, metadata, created_at, updated_at
-                FROM {}
-                WHERE 1=1 {}
-                ORDER BY vector <=> ?
-                LIMIT ?
-            """.format(self._collection, filter_clause), params)
-            
-            rows = await result.fetchall()
-            
-            # Convert to VectorRecord
-            records = []
-            for row in rows:
-                records.append(VectorRecord(
-                    id=row[0],
-                    vector=list(row[1]),
-                    metadata=row[2],
-                    created_at=row[3],
-                    updated_at=row[4]
-                ))
-            
-            return records
-    
+        """Search for nearest neighbours."""
+        ...
+
+    async def delete(self, record_id: str) -> None:
+        """Delete a record by ID."""
+        ...
+
+    async def update(
+        self,
+        record_id: str,
+        vector: list[float] | None = None,
+        payload: dict | None = None,
+    ) -> None:
+        """Update a record's vector and/or payload."""
+        ...
+
     async def get(self, record_id: str) -> VectorRecord | None:
-        """Get vector record by ID."""
-        pool = await self._ensure_pool()
-        
-        async with pool.connection() as conn:
-            result = await conn.execute("""
-                SELECT id, vector, metadata, created_at, updated_at
-                FROM {}
-                WHERE id = ?
-            """.format(self._collection), (record_id,))
-            
-            row = await result.fetchone()
-            if row is None:
-                return None
-            
-            return VectorRecord(
-                id=row[0],
-                vector=list(row[1]),
-                metadata=row[2],
-                created_at=row[3],
-                updated_at=row[4]
-            )
-    
-    async def delete(self, record_id: str) -> bool:
-        """Delete vector record."""
-        pool = await self._ensure_pool()
-        
-        async with pool.connection() as conn:
-            result = await conn.execute(
-                "DELETE FROM {} WHERE id = ?".format(self._collection),
-                (record_id,)
-            )
-            
-            return result.rowcount > 0
-    
-    async def count(self, filter: dict | None = None) -> int:
-        """Count vector records."""
-        pool = await self._ensure_pool()
-        
-        async with pool.connection() as conn:
-            if filter:
-                result = await conn.execute(
-                    "SELECT COUNT(*) FROM {} WHERE metadata @> ?".format(self._collection),
-                    (filter,)
-                )
-            else:
-                result = await conn.execute(
-                    "SELECT COUNT(*) FROM {}".format(self._collection)
-                )
-            
-            row = await result.fetchone()
-            return row[0]
+        """Retrieve a single record by ID."""
+        ...
+
+    async def list_records(
+        self,
+        filters: dict | None = None,
+        limit: int | None = None,
+    ) -> list[VectorRecord]:
+        """List records matching optional filters."""
+        ...
+
+    async def delete_collection(self) -> None:
+        """Delete the entire collection and its data."""
+        ...
+
+    async def reset(self) -> None:
+        """Clear all records from the collection."""
+        ...
+
+    async def close(self) -> None:
+        """Close connections and release resources."""
+        ...
 ```
 
 #### Configuration
@@ -316,33 +223,41 @@ from soothe.protocols.vector_store import VectorRecord
 store = PGVectorStore(
     dsn="postgresql://localhost/soothe",
     collection="memories",
-    vector_size=1536
+    vector_size=1536,
 )
 
-# Upsert vector
-record = VectorRecord(
-    id="mem_abc123",
-    vector=[0.1, 0.2, ...],  # Embedding vector
-    metadata={"content": "test memory", "tags": ["test"]}
+# Create collection
+await store.create_collection(vector_size=1536, distance="cosine")
+
+# Insert vectors
+await store.insert(
+    vectors=[[0.1, 0.2, ...], [0.3, 0.4, ...]],
+    payloads=[{"content": "test memory"}, {"content": "another"}],
+    ids=["mem_abc123", "mem_def456"],
 )
-await store.upsert(record)
 
 # Search vectors
 results = await store.search(
-    query_vector=[0.1, 0.2, ...],
+    query="test memory",
+    vector=[0.1, 0.2, ...],
     limit=10,
-    filter={"tags": ["test"]}
+    filters={"tags": ["test"]},
 )
 
 # Get vector
 record = await store.get("mem_abc123")
 
+# Update vector
+await store.update("mem_abc123", payload={"tags": ["updated"]})
+
+# List records
+records = await store.list_records(limit=100)
+
 # Delete vector
 await store.delete("mem_abc123")
 
-# Count vectors
-total = await store.count()
-filtered_count = await store.count(filter={"tags": ["test"]})
+# Close connections
+await store.close()
 ```
 
 ---
@@ -386,107 +301,63 @@ SQLiteVecStore Architecture
 
 ```python
 class SQLiteVecStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using sqlite-vec."""
-    
+    """VectorStoreProtocol implementation using sqlite-vec.
+
+    Uses the sqlite-vec extension for vector similarity search.
+    Falls back to Python-side similarity computation if sqlite-vec
+    virtual tables are unavailable.
+
+    Args:
+        collection: Collection name (becomes table name prefix).
+        db_path: Path to SQLite database. Defaults to $SOOTHE_HOME/vector.db.
+        vector_size: Dimension of vectors (default: 1536).
+        distance: Distance metric (cosine, l2, ip).
+        reader_pool_size: Number of reader connections for concurrent reads.
+    """
+
     def __init__(
         self,
-        persist_dir: str,
         collection: str = "soothe_vectors",
+        db_path: str | None = None,
         vector_size: int = 1536,
-        database_file: str = "vector.db"
-    ):
+        distance: str = "cosine",
+        reader_pool_size: int = 8,
+    ) -> None:
         """Initialize SQLiteVecStore."""
-        
-        self._db_path = Path(persist_dir) / database_file
-        self._collection = collection
-        self._vector_size = vector_size
-        self._conn: Any = None
-        
-    async def _ensure_conn(self) -> Any:
-        """Ensure database connection."""
-        if self._conn is None:
-            import aiosqlite
-            import sqlite_vec
-            
-            self._conn = await aiosqlite.connect(str(self._db_path))
-            
-            # Load sqlite-vec extension
-            await sqlite_vec.load(self._conn)
-            
-            # Create table
-            await self._conn.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS {} USING vec0(
-                    id TEXT PRIMARY KEY,
-                    vector FLOAT[{}] HNSW,
-                    metadata JSON,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-            """.format(self._collection, self._vector_size))
-            
-            # Enable WAL mode
-            await self._conn.execute("PRAGMA journal_mode=WAL")
-        
-        return self._conn
-    
-    async def upsert(self, record: VectorRecord) -> str:
-        """Insert or update vector record."""
-        conn = await self._ensure_conn()
-        
-        await conn.execute("""
-            INSERT OR REPLACE INTO {} (id, vector, metadata, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        """.format(self._collection),
-            (record.id, record.vector, json.dumps(record.metadata))
-        )
-        
-        await conn.commit()
-        return record.id
-    
+        ...
+
+    async def create_collection(
+        self, vector_size: int | None = None, distance: str = "cosine"
+    ) -> None:
+        """Create or ensure a collection exists."""
+        ...
+
+    async def insert(
+        self,
+        vectors: list[list[float]],
+        payloads: list[dict] | None = None,
+        ids: list[str] | None = None,
+    ) -> None:
+        """Insert vectors with optional payloads and IDs."""
+        ...
+
     async def search(
         self,
-        query_vector: list[float],
-        limit: int = 10,
-        filter: dict | None = None
+        query: str,
+        vector: list[float],
+        limit: int = 5,
+        filters: dict | None = None,
     ) -> list[VectorRecord]:
-        """Search vectors by similarity."""
-        conn = await self._ensure_conn()
-        
-        # Build query with optional filter
-        if filter:
-            # Manual metadata filtering (sqlite-vec doesn't support JSON filtering)
-            filter_clause = " AND json_extract(metadata, ?) = ?"
-            filter_key = filter.keys()[0]
-            filter_value = filter[filter_key]
-            params = [query_vector, f'$.{filter_key}', filter_value, limit]
-        else:
-            filter_clause = ""
-            params = [query_vector, limit]
-        
-        result = await conn.execute("""
-            SELECT id, vector, metadata, created_at, updated_at
-            FROM {}
-            WHERE vector MATCH ? {}
-            ORDER BY distance
-            LIMIT ?
-        """.format(self._collection, filter_clause), params)
-        
-        rows = await result.fetchall()
-        
-        # Convert to VectorRecord
-        records = []
-        for row in rows:
-            records.append(VectorRecord(
-                id=row[0],
-                vector=row[1],
-                metadata=json.loads(row[2]),
-                created_at=row[3],
-                updated_at=row[4]
-            ))
-        
-        return records
-    
-    # Other methods similar to PGVectorStore
+        """Search for nearest neighbours."""
+        ...
+
+    async def delete(self, record_id: str) -> None: ...
+    async def update(self, record_id: str, vector: list[float] | None = None, payload: dict | None = None) -> None: ...
+    async def get(self, record_id: str) -> VectorRecord | None: ...
+    async def list_records(self, filters: dict | None = None, limit: int | None = None) -> list[VectorRecord]: ...
+    async def delete_collection(self) -> None: ...
+    async def reset(self) -> None: ...
+    async def close(self) -> None: ...
 ```
 
 #### Configuration
@@ -495,14 +366,17 @@ class SQLiteVecStore(VectorStoreProtocol):
 vector_store:
   enabled: true
   provider: sqlite_vec      # SQLiteVecStore backend
-  
+
   # Storage
-  persist_dir: ~/.soothe/vector_store
-  database_file: vector.db
-  
+  db_path: ~/.soothe/vector_store/vector.db
+
   # Collection settings
   collection: soothe_vectors
   vector_size: 1536         # OpenAI embedding dimension
+
+  # Index parameters
+  distance: cosine          # Distance metric (cosine, l2, ip)
+  reader_pool_size: 8       # Concurrent reader connections
 ```
 
 #### Usage Example
@@ -512,22 +386,35 @@ from soothe.backends.vector_store import SQLiteVecStore
 
 # Initialize store
 store = SQLiteVecStore(
-    persist_dir="~/.soothe/vector_store",
     collection="memories",
-    vector_size=1536
+    db_path="~/.soothe/vector_store/vector.db",
+    vector_size=1536,
 )
 
-# All operations same as PGVectorStore
-await store.upsert(record)
-results = await store.search(query_vector, limit=10)
+# Create collection
+await store.create_collection(vector_size=1536)
+
+# Insert vectors
+await store.insert(
+    vectors=[[0.1, 0.2, ...]],
+    payloads=[{"content": "test memory"}],
+    ids=["mem_abc123"],
+)
+
+# Search
+results = await store.search(query="test", vector=[0.1, 0.2, ...], limit=10)
+
+# Get, update, delete, list
 record = await store.get("mem_abc123")
+await store.update("mem_abc123", payload={"tags": ["updated"]})
 await store.delete("mem_abc123")
-total = await store.count()
+records = await store.list_records(limit=100)
+await store.close()
 ```
 
 ---
 
-### WeaviateStore
+### WeaviateVectorStore
 
 Cloud-native vector storage using Weaviate.
 
@@ -543,7 +430,7 @@ Cloud-native vector storage using Weaviate.
 #### Architecture
 
 ```
-WeaviateStore Architecture
+WeaviateVectorStore Architecture
 ├─ Weaviate Server
 │  ├─ GraphQL API
 │  ├─ REST API
@@ -568,134 +455,45 @@ WeaviateStore Architecture
 #### Implementation
 
 ```python
-class WeaviateStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using Weaviate."""
-    
+class WeaviateVectorStore(VectorStoreProtocol):
+    """VectorStoreProtocol implementation using Weaviate v4 async client.
+
+    Uses self-provided vectors (skip vectorizer) so embedding is
+    handled externally by Soothe's embedding model.
+
+    Args:
+        collection: Weaviate collection (class) name.
+        url: Weaviate server URL.
+        api_key: Weaviate API key (for Weaviate Cloud).
+        grpc_port: gRPC port for Weaviate.
+    """
+
     def __init__(
         self,
-        url: str = "http://localhost:8080",
         collection: str = "SootheVectors",
-        vector_size: int = 1536
-    ):
-        """Initialize WeaviateStore."""
-        
-        self._url = url
-        self._collection = collection
-        self._vector_size = vector_size
-        self._client: Any = None
-        
-    async def _ensure_client(self) -> Any:
-        """Ensure Weaviate client."""
-        if self._client is None:
-            import weaviate
-            
-            self._client = weaviate.Client(self._url)
-            
-            # Create collection class if not exists
-            if not self._client.schema.exists(self._collection):
-                class_obj = {
-                    "class": self._collection,
-                    "vectorizer": "none",  # We provide vectors manually
-                    "properties": [
-                        {"name": "metadata", "dataType": ["text"]},
-                        {"name": "created_at", "dataType": ["date"]},
-                        {"name": "updated_at", "dataType": ["date"]}
-                    ]
-                }
-                
-                self._client.schema.create_class(class_obj)
-        
-        return self._client
-    
-    async def upsert(self, record: VectorRecord) -> str:
-        """Insert or update vector record."""
-        client = await self._ensure_client()
-        
-        # Check if object exists
-        exists = client.data_object.exists(
-            class_name=self._collection,
-            uuid=record.id
-        )
-        
-        if exists:
-            # Update existing object
-            client.data_object.update(
-                uuid=record.id,
-                class_name=self._collection,
-                properties={
-                    "metadata": json.dumps(record.metadata),
-                    "updated_at": record.updated_at.isoformat()
-                },
-                vector=record.vector
-            )
-        else:
-            # Create new object
-            client.data_object.create(
-                class_name=self._collection,
-                uuid=record.id,
-                properties={
-                    "metadata": json.dumps(record.metadata),
-                    "created_at": record.created_at.isoformat(),
-                    "updated_at": record.updated_at.isoformat()
-                },
-                vector=record.vector
-            )
-        
-        return record.id
-    
+        url: str = "http://localhost:8080",
+        api_key: str | None = None,
+        grpc_port: int = 50051,
+    ) -> None:
+        """Initialize WeaviateVectorStore."""
+        ...
+
+    async def create_collection(
+        self, vector_size: int | None = None, distance: str = "cosine"
+    ) -> None: ...
+    async def insert(
+        self, vectors: list[list[float]], payloads: list[dict] | None = None, ids: list[str] | None = None
+    ) -> None: ...
     async def search(
-        self,
-        query_vector: list[float],
-        limit: int = 10,
-        filter: dict | None = None
-    ) -> list[VectorRecord]:
-        """Search vectors by similarity."""
-        client = await self._ensure_client()
-        
-        # Build GraphQL query
-        query = client.query.get(self._collection, ["metadata", "created_at", "updated_at"])
-        
-        # Add vector search
-        query = query.with_near_vector({"vector": query_vector})
-        
-        # Add filter if provided
-        if filter:
-            # Convert filter to Weaviate where filter
-            where_filter = self._build_where_filter(filter)
-            query = query.with_where(where_filter)
-        
-        # Add limit
-        query = query.with_limit(limit)
-        
-        # Execute query
-        result = query.do()
-        
-        # Convert to VectorRecord
-        records = []
-        for obj in result["data"]["Get"][self._collection]:
-            records.append(VectorRecord(
-                id=obj["_additional"]["id"],
-                vector=obj["_additional"]["vector"],
-                metadata=json.loads(obj["metadata"]),
-                created_at=obj["created_at"],
-                updated_at=obj["updated_at"]
-            ))
-        
-        return records
-    
-    def _build_where_filter(self, filter: dict) -> dict:
-        """Build Weaviate where filter from metadata filter."""
-        # Simple implementation for single key filter
-        key = list(filter.keys())[0]
-        value = filter[key]
-        
-        return {
-            "path": ["metadata"],
-            "operator": "Contains",
-            "valueString": f'"{key}": "{value}"'
-        }
-    
-    # Other methods similar to PGVectorStore
+        self, query: str, vector: list[float], limit: int = 5, filters: dict | None = None
+    ) -> list[VectorRecord]: ...
+    async def delete(self, record_id: str) -> None: ...
+    async def update(self, record_id: str, vector: list[float] | None = None, payload: dict | None = None) -> None: ...
+    async def get(self, record_id: str) -> VectorRecord | None: ...
+    async def list_records(self, filters: dict | None = None, limit: int | None = None) -> list[VectorRecord]: ...
+    async def delete_collection(self) -> None: ...
+    async def reset(self) -> None: ...
+    async def close(self) -> None: ...
 ```
 
 #### Configuration
@@ -703,37 +501,49 @@ class WeaviateStore(VectorStoreProtocol):
 ```yaml
 vector_store:
   enabled: true
-  provider: weaviate        # WeaviateStore backend
-  
+  provider: weaviate        # WeaviateVectorStore backend
+
   # Weaviate connection
   url: http://localhost:8080
-  
+  grpc_port: 50051
+
   # Collection settings
   collection: SootheVectors
-  vector_size: 1536
-  
+
   # Authentication (optional)
-  api_key: null             # Weaviate API key
+  api_key: null             # Weaviate API key (for Weaviate Cloud)
 ```
 
 #### Usage Example
 
 ```python
-from soothe.backends.vector_store import WeaviateStore
+from soothe.backends.vector_store import WeaviateVectorStore
 
 # Initialize store
-store = WeaviateStore(
-    url="http://localhost:8080",
+store = WeaviateVectorStore(
     collection="Memories",
-    vector_size=1536
+    url="http://localhost:8080",
 )
 
-# All operations same as PGVectorStore
-await store.upsert(record)
-results = await store.search(query_vector, limit=10)
+# Create collection
+await store.create_collection(vector_size=1536)
+
+# Insert vectors
+await store.insert(
+    vectors=[[0.1, 0.2, ...]],
+    payloads=[{"content": "test memory"}],
+    ids=["mem_abc123"],
+)
+
+# Search
+results = await store.search(query="test", vector=[0.1, 0.2, ...], limit=10)
+
+# Get, update, delete, list
 record = await store.get("mem_abc123")
+await store.update("mem_abc123", payload={"tags": ["updated"]})
 await store.delete("mem_abc123")
-total = await store.count()
+records = await store.list_records(limit=100)
+await store.close()
 ```
 
 ---
@@ -744,34 +554,34 @@ total = await store.count()
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
-| `upsert()` | ~20-50ms | Connection pool overhead |
-| `batch_upsert()` | ~100-500ms | Batch size dependent |
+| `create_collection()` | ~50-100ms | DDL with index creation |
+| `insert()` | ~20-50ms | Connection pool overhead |
 | `search()` | ~50-100ms | HNSW index, fast approximate search |
 | `get()` | ~10-30ms | Network overhead |
 | `delete()` | ~20-50ms | Connection pool overhead |
-| `count()` | ~50-200ms | Index scan + network |
+| `list_records()` | ~50-200ms | Filter + network |
 
 ### SQLiteVecStore Performance
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
-| `upsert()` | ~10-20ms | Local, no network |
-| `batch_upsert()` | ~50-200ms | Batch size dependent |
+| `create_collection()` | ~5-10ms | Local DDL |
+| `insert()` | ~10-20ms | Local, no network |
 | `search()` | ~20-50ms | HNSW index, local |
 | `get()` | ~5-10ms | Fast local read |
 | `delete()` | ~10-20ms | Local |
-| `count()` | ~50-100ms | Index scan |
+| `list_records()` | ~50-100ms | Index scan |
 
-### WeaviateStore Performance
+### WeaviateVectorStore Performance
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
-| `upsert()` | ~50-100ms | GraphQL API overhead |
-| `batch_upsert()` | ~200-1000ms | Batch API overhead |
-| `search()` | ~100-200ms | GraphQL query overhead |
+| `create_collection()` | ~100-200ms | Schema creation |
+| `insert()` | ~50-100ms | gRPC API overhead |
+| `search()` | ~100-200ms | gRPC query overhead |
 | `get()` | ~50-100ms | REST API overhead |
 | `delete()` | ~50-100ms | REST API overhead |
-| `count()` | ~100-300ms | GraphQL aggregation |
+| `list_records()` | ~100-300ms | GraphQL aggregation |
 
 ---
 
@@ -779,12 +589,12 @@ total = await store.count()
 
 ### Vector Store Backend Comparison
 
-| Feature | PGVectorStore | SQLiteVecStore | WeaviateStore |
+| Feature | PGVectorStore | SQLiteVecStore | WeaviateVectorStore |
 |---------|---------------|---------------|--------------|
 | Storage Type | PostgreSQL pgvector | sqlite-vec | Weaviate |
 | Index Type | HNSW/IVFFlat | HNSW | HNSW (built-in) |
 | Async Operations | ✅ | ✅ | ✅ |
-| Connection Pooling | ✅ | ❌ | ✅ (via client) |
+| Connection Pooling | ✅ | ✅ (reader pool) | ✅ (via client) |
 | Metadata Filtering | ✅ | ⚠️ (limited) | ✅ |
 | Production Use | ✅ | ⚠️ (local) | ✅ (cloud) |
 | External Dependencies | PostgreSQL, pgvector, psycopg_pool | sqlite-vec | weaviate-client, Weaviate server |
@@ -800,24 +610,26 @@ total = await store.count()
 
 ```python
 try:
-    await vector_store.upsert(record)
+    await store.insert(
+        vectors=[[0.1, 0.2, ...]],
+        payloads=[{"content": "test"}],
+        ids=["mem_abc123"],
+    )
 except VectorStoreBackendError as e:
     logger.error(f"Vector store backend error: {e}")
-    
+
     # Handle specific errors:
     if "connection_failed" in str(e):
         # Retry or fallback
         pass
-    
+
     elif "index_error" in str(e):
         # Reindex
-        await vector_store._reindex()
-    
+        await store.reset()
+
     elif "dimension_mismatch" in str(e):
         # Check vector dimension
-        if len(record.vector) != vector_store._vector_size:
-            # Regenerate embedding with correct dimension
-            pass
+        pass
 ```
 
 ---
@@ -854,31 +666,35 @@ async def test_pgvector_store():
         dsn="postgresql://localhost/test",
         collection="test_vectors"
     )
-    
-    # Test upsert
-    record = VectorRecord(
-        id="test_1",
-        vector=[0.1] * 1536,
-        metadata={"test": "data"}
+
+    # Create collection
+    await store.create_collection(vector_size=1536)
+
+    # Test insert
+    await store.insert(
+        vectors=[[0.1] * 1536],
+        payloads=[{"test": "data"}],
+        ids=["test_1"],
     )
-    await store.upsert(record)
-    
+
     # Test search
-    results = await store.search([0.1] * 1536, limit=10)
+    results = await store.search(query="test", vector=[0.1] * 1536, limit=10)
     assert len(results) > 0
-    
+
     # Test get
     result = await store.get("test_1")
     assert result.id == "test_1"
-    
-    # Test count
-    count = await store.count()
-    assert count > 0
-    
+
+    # Test list
+    records = await store.list_records()
+    assert len(records) > 0
+
     # Test delete
     await store.delete("test_1")
     result = await store.get("test_1")
     assert result is None
+
+    await store.close()
 ```
 
 ---
@@ -891,9 +707,11 @@ async def test_pgvector_store():
 vector_store:
   enabled: true
   provider: sqlite_vec
-  persist_dir: ~/.soothe/vector_store
+  db_path: ~/.soothe/vector_store/vector.db
   collection: soothe_vectors
   vector_size: 1536
+  distance: cosine
+  reader_pool_size: 8
 ```
 
 ### Production PGVector Configuration
@@ -921,14 +739,14 @@ vector_store:
 vector_store:
   enabled: true
   provider: weaviate
-  
+
   # Weaviate connection
   url: https://your-weaviate-instance.weaviate.cloud
+  grpc_port: 443
   api_key: your-api-key
-  
+
   # Collection settings
   collection: SootheVectors
-  vector_size: 1536
 ```
 
 ---
@@ -949,14 +767,14 @@ vector_store:
 ```python
 class PGVectorStore(VectorStoreProtocol):
     """VectorStoreProtocol implementation using PostgreSQL with pgvector."""
-    
+
     def __init__(
         self,
         collection: str = "soothe_vectors",
         dsn: str = "postgresql://localhost/soothe",
         pool_size: int = 5,
         index_type: str = "hnsw",
-        vector_size: int = 1536
+        vector_size: int = 1536,
     ) -> None: ...
 ```
 
@@ -965,27 +783,29 @@ class PGVectorStore(VectorStoreProtocol):
 ```python
 class SQLiteVecStore(VectorStoreProtocol):
     """VectorStoreProtocol implementation using sqlite-vec."""
-    
+
     def __init__(
         self,
-        persist_dir: str,
         collection: str = "soothe_vectors",
+        db_path: str | None = None,
         vector_size: int = 1536,
-        database_file: str = "vector.db"
+        distance: str = "cosine",
+        reader_pool_size: int = 8,
     ) -> None: ...
 ```
 
-### WeaviateStore Class
+### WeaviateVectorStore Class
 
 ```python
-class WeaviateStore(VectorStoreProtocol):
-    """VectorStoreProtocol implementation using Weaviate."""
-    
+class WeaviateVectorStore(VectorStoreProtocol):
+    """VectorStoreProtocol implementation using Weaviate v4 async client."""
+
     def __init__(
         self,
-        url: str = "http://localhost:8080",
         collection: str = "SootheVectors",
-        vector_size: int = 1536
+        url: str = "http://localhost:8080",
+        api_key: str | None = None,
+        grpc_port: int = 50051,
     ) -> None: ...
 ```
 

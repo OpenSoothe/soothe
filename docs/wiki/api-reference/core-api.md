@@ -72,18 +72,15 @@ config = SootheConfig(
     models=ModelRouter(
         default="openai:gpt-4",
         planner="openai:gpt-4o",
-        subagent="openai:gpt-3.5-turbo"
+        subagent="openai:gpt-4o-mini"
     )
 )
 
 # Load from YAML file
-config = SootheConfig.from_yaml("config/config.yml")
+config = SootheConfig.from_yaml_file("config/config.yml")
 
-# Load with environment overrides
-config = SootheConfig.from_yaml(
-    "config/config.yml",
-    env_prefix="SOOTHE"
-)
+# Load with environment interpolation
+config = SootheConfig.from_yaml_file("config/config.yml")
 ```
 
 #### Methods
@@ -149,22 +146,18 @@ config = SootheConfig()
 config.propagate_env()  # Sets OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
 ```
 
-##### `from_yaml(path: str, env_prefix: str = "SOOTHE") -> SootheConfig`
+##### `from_yaml_file(path: str) -> SootheConfig`
 
 Load configuration from YAML file with environment interpolation.
 
 **Parameters**:
 - `path`: Path to YAML configuration file
-- `env_prefix`: Environment variable prefix for overrides
 
 **Returns**: SootheConfig instance
 
 **Example**:
 ```python
-config = SootheConfig.from_yaml(
-    "config/config.yml",
-    env_prefix="SOOTHE"
-)
+config = SootheConfig.from_yaml_file("config/config.yml")
 ```
 
 ---
@@ -352,7 +345,7 @@ class MemoryProtocol(Protocol):
 ```
 
 **Implementations**:
-- `soothe.backends.memory.memu.MemUProtocol` (keyword-based)
+- `soothe.backends.memory.memu_adapter.MemUMemory` (semantic search + keyword indexing)
 
 **Example**:
 ```python
@@ -410,31 +403,6 @@ class DurabilityProtocol(Protocol):
         """
         ...
     
-    async def get_thread(self, thread_id: str) -> ThreadInfo | None:
-        """Get thread by ID.
-        
-        Args:
-            thread_id: Thread ID
-            
-        Returns:
-            ThreadInfo or None if not found
-        """
-        ...
-    
-    async def list_threads(
-        self,
-        filter: ThreadFilter | None = None,
-    ) -> list[ThreadInfo]:
-        """List threads matching filter.
-        
-        Args:
-            filter: Thread filter criteria
-            
-        Returns:
-            List of matching ThreadInfo
-        """
-        ...
-    
     async def suspend_thread(
         self,
         thread_id: str,
@@ -482,11 +450,52 @@ class DurabilityProtocol(Protocol):
             Updated ThreadInfo
         """
         ...
+    
+    async def update_thread_metadata(
+        self,
+        thread_id: str,
+        metadata: dict[str, Any] | ThreadMetadata,
+    ) -> None:
+        """Update thread metadata (partial update).
+        
+        Merges the provided metadata with existing metadata.
+        Only updates fields that are present in the new metadata.
+        
+        Args:
+            thread_id: Thread ID to update
+            metadata: New metadata to merge (dict or ThreadMetadata)
+        """
+        ...
+    
+    async def get_thread(self, thread_id: str) -> ThreadInfo | None:
+        """Get thread by ID.
+        
+        Args:
+            thread_id: Thread ID
+            
+        Returns:
+            ThreadInfo or None if not found
+        """
+        ...
+    
+    async def list_threads(
+        self,
+        thread_filter: ThreadFilter | None = None,
+    ) -> list[ThreadInfo]:
+        """List threads matching filter.
+        
+        Args:
+            thread_filter: Thread filter criteria
+            
+        Returns:
+            List of matching ThreadInfo
+        """
+        ...
 ```
 
 **Implementations**:
-- `soothe.backends.durability.postgres.PostgresDurability`
-- `soothe.backends.durability.sqlite.SqliteDurability`
+- `soothe.backends.durability.postgresql.PostgreSQLDurability`
+- `soothe.backends.durability.sqlite.SQLiteDurability`
 
 **Example**:
 ```python
@@ -498,25 +507,33 @@ async def manage_threads(durability: DurabilityProtocol):
         workspace="/home/user/project",
         metadata=ThreadMetadata(
             tags=["research", "important"],
-            notes="Quantum computing research thread",
+            plan_summary="Quantum computing research thread",
+            priority="high",
+            category="research",
         ),
     )
-    
+
     print(f"Created thread: {thread.thread_id}")
-    
+
     # List threads
     threads = await durability.list_threads()
     for t in threads:
         print(f"Thread {t.thread_id}: {t.status}")
-    
+
     # Suspend thread
     suspended = await durability.suspend_thread(
         thread.thread_id,
         reason="User requested pause",
     )
-    
+
     # Resume later
     resumed = await durability.resume_thread(thread.thread_id)
+
+    # Update metadata
+    await durability.update_thread_metadata(
+        thread.thread_id,
+        {"tags": ["research", "completed"]},
+    )
 ```
 
 ---
@@ -604,40 +621,42 @@ Protocol for policy-based access control (RFC-306).
 ```python
 class PolicyProtocol(Protocol):
     """Policy protocol for permission enforcement."""
-    
-    async def evaluate(
+
+    async def check(
         self,
-        request: ActionRequest,
-        context: PolicyContext | None = None,
+        action: ActionRequest,
+        context: PolicyContext,
     ) -> PolicyDecision:
-        """Evaluate action request against policy.
-        
+        """Check action request against policy.
+
         Args:
-            request: Action request to evaluate
-            context: Optional policy context
-            
+            action: Action request to check
+            context: Policy context with active permissions
+
         Returns:
             PolicyDecision with allowed/denied status
         """
         ...
-    
-    async def get_permissions(
+
+    async def narrow_for_child(
         self,
-        context: PolicyContext | None = None,
+        parent_permissions: PermissionSet,
+        child_name: str,
     ) -> PermissionSet:
-        """Get permission set for context.
-        
+        """Narrow permissions for a child agent.
+
         Args:
-            context: Optional policy context
-            
+            parent_permissions: Parent's permission set
+            child_name: Name of the child agent
+
         Returns:
-            PermissionSet with granted permissions
+            Narrowed PermissionSet for the child
         """
         ...
 ```
 
 **Implementations**:
-- `soothe.backends.policy.config_policy.ConfigDrivenPolicy`
+- `soothe.foundation.core.security.config_policy.ConfigDrivenPolicy`
 
 **Example**:
 ```python
@@ -650,12 +669,14 @@ async def check_permission(policy: PolicyProtocol, workspace: str):
         action="write",
         scope="workspace",
         resource="/home/user/project/config.yml",
+    )
+
+    # Check
+    decision = await policy.check(
+        action=request,
         context=PolicyContext(workspace=workspace),
     )
-    
-    # Evaluate
-    decision = await policy.evaluate(request)
-    
+
     if decision.allowed:
         print(f"Allowed: {decision.reason}")
     else:
@@ -688,7 +709,7 @@ See [SDK API: AsyncPersistStore](sdk-api.md#asyncpersiststore) for full document
 
 ### create_soothe_agent()
 
-**Import**: `from soothe.core.agent import create_soothe_agent`
+**Import**: `from soothe.foundation.core.agent import create_soothe_agent`
 
 Factory function for creating a CoreAgent with protocol properties.
 
@@ -718,16 +739,16 @@ def create_soothe_agent(
 
 **Example**:
 ```python
-from soothe.core.agent import create_soothe_agent
+from soothe.foundation.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
-from soothe.backends.memory.memu import MemUProtocol
-from soothe.backends.durability.sqlite import SqliteDurability
+from soothe.backends.memory.memu_adapter import MemUMemory
+from soothe.backends.durability.sqlite import SQLiteDurability
 
 config = SootheConfig()
 
 # Create protocols
-memory = MemUProtocol(config)
-durability = SqliteDurability(config)
+memory = MemUMemory(config)
+durability = SQLiteDurability(db_path="~/.soothe/metadata.db")
 
 # Create agent
 agent = create_soothe_agent(
@@ -743,7 +764,7 @@ print(f"Agent created with protocols: {agent.protocols}")
 
 ### CoreAgent
 
-**Import**: `from soothe.core.agent import CoreAgent`
+**Import**: `from soothe.foundation.core.agent import CoreAgent`
 
 Typed wrapper around LangGraph CompiledStateGraph with protocol properties.
 
@@ -751,7 +772,7 @@ Typed wrapper around LangGraph CompiledStateGraph with protocol properties.
 
 ```python
 class CoreAgent:
-    """CoreAgent - Layer 1 runtime (RFC-0023).
+    """CoreAgent - foundation runtime (RFC-0023).
     
     Self-contained module wrapping CompiledStateGraph with typed protocol properties.
     Pure execution runtime - NO goal infrastructure.
@@ -818,7 +839,7 @@ class CoreAgent:
 
 **Example**:
 ```python
-from soothe.core.agent import CoreAgent
+from soothe.foundation.core.agent import CoreAgent
 
 async def run_agent(agent: CoreAgent, query: str, thread_id: str):
     # Stream execution
@@ -840,7 +861,7 @@ async def run_agent(agent: CoreAgent, query: str, thread_id: str):
 
 ### AgentBuilder
 
-**Import**: `from soothe.core.agent import AgentBuilder`
+**Import**: `from soothe.foundation.core.agent import AgentBuilder`
 
 Builder for constructing CoreAgent instances with custom middleware.
 
@@ -885,15 +906,18 @@ class AgentBuilder:
 
 **Example**:
 ```python
-from soothe.core.agent import AgentBuilder
+from soothe.foundation.core.agent import AgentBuilder
 from soothe.config import SootheConfig
+from soothe.backends.memory.memu_adapter import MemUMemory
+from soothe.backends.durability.sqlite import SQLiteDurability
+from soothe.foundation.core.security import ConfigDrivenPolicy
 
 config = SootheConfig()
 
 agent = AgentBuilder(config)
-    .with_memory(MemUProtocol(config))
-    .with_durability(SqliteDurability(config))
-    .with_policy(ConfigDrivenPolicy(config))
+    .with_memory(MemUMemory(config))
+    .with_durability(SQLiteDurability(db_path="~/.soothe/metadata.db"))
+    .with_policy(ConfigDrivenPolicy(config=config))
     .build()
 ```
 
@@ -903,7 +927,7 @@ agent = AgentBuilder(config)
 
 ### SootheRunner
 
-**Import**: `from soothe.core.runner import SootheRunner`
+**Import**: `from soothe.runner import SootheRunner`
 
 Protocol-orchestrated agent runner with pre/post processing.
 
@@ -918,7 +942,7 @@ SootheRunner(config: SootheConfig | None = None)
 
 **Example**:
 ```python
-from soothe.core.runner import SootheRunner
+from soothe.runner import SootheRunner
 from soothe.config import SootheConfig
 
 config = SootheConfig()
@@ -977,7 +1001,7 @@ async def run_query(runner: SootheRunner, query: str):
 
 ### StreamChunk
 
-**Import**: `from soothe.core.runner._runner_shared import StreamChunk`
+**Import**: `from soothe.runner._runner_shared import StreamChunk`
 
 Stream chunk data structure.
 
@@ -1007,20 +1031,20 @@ class StreamChunk(BaseModel):
 
 ### Memory Backends
 
-#### MemUProtocol
+#### MemUMemory
 
-**Import**: `from soothe.backends.memory.memu import MemUProtocol`
+**Import**: `from soothe.backends.memory.memu_adapter import MemUMemory`
 
-Keyword-based memory implementation (RFC-301).
+Semantic search + keyword indexing memory implementation (RFC-301).
 
 ```python
-class MemUProtocol(MemoryProtocol):
-    """Keyword-based memory protocol (MemU)."""
-    
+class MemUMemory(MemoryProtocol):
+    """MemU memory backend with semantic search and keyword indexing."""
+
     def __init__(self, config: SootheConfig):
         """Initialize with config."""
         ...
-    
+
     async def remember(
         self,
         content: str,
@@ -1029,9 +1053,9 @@ class MemUProtocol(MemoryProtocol):
         scope: str = "thread",
         thread_id: str | None = None,
     ) -> MemoryItem:
-        """Store memory with keyword indexing."""
+        """Store memory with semantic + keyword indexing."""
         ...
-    
+
     async def recall(
         self,
         query: str,
@@ -1040,75 +1064,82 @@ class MemUProtocol(MemoryProtocol):
         thread_id: str | None = None,
         limit: int = 10,
     ) -> list[MemoryItem]:
-        """Recall memories by keyword search."""
+        """Recall memories by semantic + keyword search."""
         ...
 ```
 
 **Configuration**:
 ```yaml
-protocols:
-  memory:
-    type: memu
-    max_items_per_scope: 100
-    index_keywords: true
+agent:
+  protocols:
+    memory:
+      enabled: true
+      llm_chat_role: think
+      llm_embed_role: embedding
 ```
 
 ---
 
 ### Durability Backends
 
-#### SqliteDurability
+#### SQLiteDurability
 
-**Import**: `from soothe.backends.durability.sqlite import SqliteDurability`
+**Import**: `from soothe.backends.durability.sqlite import SQLiteDurability`
 
 SQLite-based durability implementation (RFC-304).
 
 ```python
-class SqliteDurability(DurabilityProtocol):
+class SQLiteDurability(DurabilityProtocol):
     """SQLite durability protocol."""
-    
-    def __init__(self, config: SootheConfig, db_path: str | None = None):
-        """Initialize with config and optional DB path."""
+
+    def __init__(
+        self,
+        persist_store=None,
+        db_path: str | None = None,
+    ):
+        """Initialize with optional persist store or DB path."""
         ...
 ```
 
 **Configuration**:
 ```yaml
-protocols:
-  durability:
-    type: sqlite
-    db_path: "${SOOTHE_HOME}/threads.db"
+agent:
+  protocols:
+    durability:
+      enabled: true
+      backend: sqlite
+persistence:
+  metadata_sqlite_path: "${SOOTHE_HOME}/metadata.db"
 ```
 
 ---
 
-#### PostgresDurability
+#### PostgreSQLDurability
 
-**Import**: `from soothe.backends.durability.postgres import PostgresDurability`
+**Import**: `from soothe.backends.durability.postgresql import PostgreSQLDurability`
 
 PostgreSQL-based durability implementation (RFC-304).
 
 ```python
-class PostgresDurability(DurabilityProtocol):
+class PostgreSQLDurability(DurabilityProtocol):
     """PostgreSQL durability protocol."""
-    
-    def __init__(
-        self,
-        config: SootheConfig,
-        *,
-        connection_string: str | None = None,
-    ):
-        """Initialize with config and connection string."""
+
+    def __init__(self, persist_store):
+        """Initialize with a PostgreSQL persist store."""
         ...
 ```
 
 **Configuration**:
 ```yaml
-protocols:
-  durability:
-    type: postgres
-    connection_string: "${DATABASE_URL}"
-    pool_size: 5
+agent:
+  protocols:
+    durability:
+      enabled: true
+      backend: postgresql
+persistence:
+  postgres_base_dsn: "${DATABASE_URL}"
+  postgres_databases:
+    metadata: soothe_metadata
 ```
 
 ---
@@ -1117,39 +1148,63 @@ protocols:
 
 #### ConfigDrivenPolicy
 
-**Import**: `from soothe.backends.policy.config_policy import ConfigDrivenPolicy`
+**Import**: `from soothe.foundation.core.security.config_policy import ConfigDrivenPolicy`
 
 Configuration-driven policy implementation (RFC-306).
 
 ```python
 class ConfigDrivenPolicy(PolicyProtocol):
     """Configuration-driven policy protocol."""
-    
-    def __init__(self, config: SootheConfig):
-        """Initialize with config."""
-        ...
-    
-    async def evaluate(
+
+    def __init__(
         self,
-        request: ActionRequest,
-        context: PolicyContext | None = None,
+        profiles: dict | None = None,
+        child_restrictions: dict | None = None,
+        config: SootheConfig | None = None,
+    ):
+        """Initialize with profiles, child restrictions, and config."""
+        ...
+
+    async def check(
+        self,
+        action: ActionRequest,
+        context: PolicyContext,
     ) -> PolicyDecision:
-        """Evaluate against config rules."""
+        """Check action against config rules."""
+        ...
+
+    async def narrow_for_child(
+        self,
+        parent_permissions: PermissionSet,
+        child_name: str,
+    ) -> PermissionSet:
+        """Narrow permissions for a child agent."""
         ...
 ```
 
 **Configuration**:
 ```yaml
-protocols:
-  policy:
-    type: config
-    default_permissions:
-      file:
-        read: ["workspace"]
-        write: ["workspace"]
-      tool:
-        execute: ["safe"]
-    deny_by_default: true
+agent:
+  protocols:
+    policy:
+      enabled: true
+      profile: standard
+security:
+  profiles:
+    readonly:
+      permissions:
+        file: ["read:workspace"]
+      deny_by_default: true
+    standard:
+      permissions:
+        file: ["read:workspace", "write:workspace"]
+        tool: ["execute:safe"]
+      deny_by_default: true
+    privileged:
+      permissions:
+        file: ["read:*", "write:*"]
+        tool: ["execute:*"]
+      deny_by_default: false
 ```
 
 ---
@@ -1199,15 +1254,24 @@ PostgreSQL pgvector implementation (RFC-303).
 ```python
 class PGVectorStore(VectorStoreProtocol):
     """PostgreSQL pgvector store."""
-    
+
     def __init__(
         self,
-        config: SootheConfig,
-        *,
-        connection_string: str | None = None,
-        table_name: str = "vectors",
-    ):
-        """Initialize with config."""
+        collection: str = "soothe_vectors",
+        dsn: str = "postgresql://localhost/soothe",
+        pool_size: int = 5,
+        index_type: str = "hnsw",
+        vector_size: int = 1536,
+    ) -> None:
+        """Initialize PGVectorStore.
+
+        Args:
+            collection: Table name for storing vectors
+            dsn: PostgreSQL connection string
+            pool_size: Connection pool size
+            index_type: Index type (hnsw, ivfflat, or none)
+            vector_size: Dimension of vectors
+        """
         ...
 ```
 
@@ -1224,23 +1288,33 @@ vector_store:
 
 ---
 
-#### SqliteVecStore
+#### SQLiteVecStore
 
-**Import**: `from soothe.backends.vector_store.sqlite_vec import SqliteVecStore`
+**Import**: `from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore`
 
 SQLite-vec implementation (RFC-303).
 
 ```python
-class SqliteVecStore(VectorStoreProtocol):
+class SQLiteVecStore(VectorStoreProtocol):
     """SQLite-vec store."""
-    
+
     def __init__(
         self,
-        config: SootheConfig,
-        *,
+        collection: str = "soothe_vectors",
         db_path: str | None = None,
-    ):
-        """Initialize with config."""
+        vector_size: int = 1536,
+        distance: str = "cosine",
+        reader_pool_size: int = 8,
+    ) -> None:
+        """Initialize SQLiteVecStore.
+
+        Args:
+            collection: Collection name for storing vectors
+            db_path: Path to SQLite database file (defaults to $SOOTHE_HOME/vector.db)
+            vector_size: Dimension of vectors
+            distance: Distance metric (cosine, l2, ip)
+            reader_pool_size: Number of reader connections for concurrent reads
+        """
         ...
 ```
 
@@ -1258,16 +1332,16 @@ vector_store:
 
 ### Persistence Backends
 
-#### SqlitePersistStore
+#### SQLitePersistStore
 
-**Import**: `from soothe.backends.persistence.sqlite import SqlitePersistStore`
+**Import**: `from soothe.backends.persistence.sqlite_store import SQLitePersistStore`
 
 SQLite-based key-value persistence (RFC-302).
 
 ```python
-class SqlitePersistStore(AsyncPersistStore):
+class SQLitePersistStore(AsyncPersistStore):
     """SQLite persistence store."""
-    
+
     def __init__(self, db_path: str | None = None):
         """Initialize with optional DB path."""
         ...
@@ -1275,28 +1349,27 @@ class SqlitePersistStore(AsyncPersistStore):
 
 ---
 
-#### PostgresPersistStore
+#### PostgreSQLPersistStore
 
-**Import**: `from soothe.backends.persistence.postgres import PostgresPersistStore`
+**Import**: `from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore`
 
-PostgreSQL-based key-value persistence (RFC-302).
+PostgreSQL persistence store (RFC-302).
 
 ```python
-class PostgresPersistStore(AsyncPersistStore):
+class PostgreSQLPersistStore(AsyncPersistStore):
     """PostgreSQL persistence store."""
-    
+
     def __init__(self, connection_string: str):
         """Initialize with connection string."""
         ...
 ```
 
----
 
 ## Resolver Functions
 
 ### resolve_durability()
 
-**Import**: `from soothe.core.resolver import resolve_durability`
+**Import**: `from soothe.runner.resolver import resolve_durability`
 
 Resolve durability protocol from configuration.
 
@@ -1317,7 +1390,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 
 ### resolve_memory()
 
-**Import**: `from soothe.core.resolver import resolve_memory`
+**Import**: `from soothe.runner.resolver import resolve_memory`
 
 Resolve memory protocol from configuration.
 
@@ -1331,13 +1404,16 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
 
 ### resolve_planner()
 
-**Import**: `from soothe.core.resolver import resolve_planner`
+**Import**: `from soothe.runner.resolver import resolve_planner`
 
 Resolve planner protocol from configuration.
 
 ```python
-def resolve_planner(config: SootheConfig) -> PlannerProtocol | None:
-    """Resolve planner protocol from config."""
+def resolve_planner(
+    config: SootheConfig,
+    model: BaseChatModel | None,
+) -> PlannerProtocol:
+    """Resolve LLMPlanner as the sole planner implementation."""
     ...
 ```
 
@@ -1345,7 +1421,7 @@ def resolve_planner(config: SootheConfig) -> PlannerProtocol | None:
 
 ### resolve_policy()
 
-**Import**: `from soothe.core.resolver import resolve_policy`
+**Import**: `from soothe.runner.resolver import resolve_policy`
 
 Resolve policy protocol from configuration.
 
@@ -1360,6 +1436,5 @@ def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
 ## See Also
 
 - **[SDK API Reference](sdk-api.md)** - Client and plugin development API
-- **[REST API Reference](rest-api.md)** - HTTP REST endpoints
 - **[Protocols Layer](../protocols/README.md)** - Protocol specifications
 - **[RFC-000 System Design](../../specs/RFC-000-system-conceptual-design.md)** - Overall architecture

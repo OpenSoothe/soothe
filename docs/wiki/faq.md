@@ -34,7 +34,7 @@ Soothe is a **goal-driven orchestration framework** for building 24/7 long-runni
 - **Persistent memory**: MemU semantic memory across sessions
 - **Durability**: Automatic crash recovery and checkpointing
 - **Security policies**: Config-driven least-privilege
-- **Daemon server**: WebSocket/HTTP REST transports
+- **Daemon server**: WebSocket transports
 
 **Built on**:
 - LangGraph for agent runtime (CoreAgent)
@@ -94,7 +94,6 @@ pip install 'soothe[document,github]' soothe-cli soothe-daemon
 
 `soothe-plugins` is a **separate package** (separate repo) with optional delegated agents:
 - `claude` - Anthropic Claude delegation
-- `browser_use` - Browser automation specialist
 - Other community plugins
 
 **Install**:
@@ -106,8 +105,6 @@ pip install soothe-plugins
 ```yaml
 subagents:
   claude:
-    enabled: true
-  browser_use:
     enabled: true
 ```
 
@@ -134,7 +131,7 @@ soothe -p "What is the capital of France?"
 
 Three methods:
 1. **Environment variables**: `export SOOTHE_<FIELD>=<value>`
-2. **YAML config file**: `~/.soothe/config.yml` or `--config path/to/config.yml`
+2. **YAML config file**: `~/.soothe/config/config.yml` or `--config path/to/config.yml`
 3. **CLI arguments**: `soothe --debug --config my.yml`
 
 See [Configuration Guide](configuration-guide/README.md) for complete reference.
@@ -231,7 +228,7 @@ soothe
 **Daemon mode** (background):
 ```bash
 soothed start
-soothe --daemon "Analyze codebase structure"
+soothe -p "Analyze codebase structure"  # CLI auto-connects to running daemon
 ```
 
 ### How do I enable autonomous mode?
@@ -248,7 +245,7 @@ agent:
 
 **Or per-request**:
 ```bash
-soothe --autonomous "Research AI safety papers and summarize findings"
+soothe autopilot run "Research AI safety papers and summarize findings"
 ```
 
 See [Autonomous Mode Guide](autonomous-mode.md).
@@ -257,17 +254,17 @@ See [Autonomous Mode Guide](autonomous-mode.md).
 
 **List threads**:
 ```bash
-soothe thread list
+soothe loop list
 ```
 
 **Continue thread**:
 ```bash
-soothe thread continue <thread-id>
+soothe loop continue <thread-id>
 ```
 
 **Resume last thread**:
 ```bash
-soothe thread continue
+soothe loop continue
 ```
 
 **Thread directory**: `~/.soothe/data/threads/<thread-id>/`
@@ -282,10 +279,11 @@ Subagents are specialized helper agents:
 - `explore` - Targeted filesystem search
 - `plan` - Planning delegate
 - `tacitus` - Deep public-domain research
+- `browser_use` - Browser automation
+- `veritas` - Verification and fact-checking
 
 **Community** (requires `soothe-plugins`):
 - `claude` - Anthropic Claude delegation
-- `browser_use` - Browser automation
 
 **Configure**:
 ```yaml
@@ -332,50 +330,33 @@ See [Daemon Management Guide](daemon-management.md).
 **CLI connects automatically** if daemon is running:
 
 ```bash
-soothe --daemon "your query"
+soothe -p "your query"  # CLI auto-connects to daemon on localhost:8765
 ```
 
-**Or via WebSocket/HTTP** (remote):
+**For a remote daemon**, specify host and port:
 ```bash
-# WebSocket
-soothe --ws-url ws://localhost:8765 "your query"
-
-# HTTP REST
-curl -X POST http://localhost:8766/api/query \
-  -H "Content-Type: application/json" \
-  -d '{"input": "your query"}'
+soothe --daemon-host remote.example.com --daemon-port 8765 -p "your query"
 ```
 
-See [Multi-Transport Guide](multi-transport.md).
+See [Transport Guide](multi-transport.md).
 
-### How do I enable WebSocket/HTTP REST?
+### How do I enable WebSocket?
 
-**Configure transports**:
+**Configure transports** in `~/.soothe/config/daemon.yml`:
 ```yaml
-# In daemon.yml
-daemon:
-  transports:
-    unix_socket:
-      enabled: true
-      path: "~/.soothe/soothe.sock"
-
-    websocket:
-      enabled: true
-      host: "0.0.0.0"
-      port: 8765
-
-    http_rest:
-      enabled: true
-      host: "0.0.0.0"
-      port: 8766
+transports:
+  websocket:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8765
 ```
 
 **Start daemon**:
 ```bash
-soothed --config daemon.yml start
+soothed start
 ```
 
-See [Multi-Transport Guide](multi-transport.md).
+See [Transport Guide](multi-transport.md).
 
 ---
 
@@ -395,7 +376,7 @@ docker compose up -d
 
 **Production components**:
 - PostgreSQL + pgvector (multi-database architecture)
-- Soothe daemon (WebSocket/HTTP REST)
+- Soothe daemon (WebSocket)
 - Reverse proxy (nginx) for authentication and TLS
 - Langfuse for LLM observability
 
@@ -412,7 +393,7 @@ soothed status
 **Logs**:
 ```bash
 # Daemon logs
-tail -f ~/.soothe/logs/daemon.log
+tail -f ~/.soothe/logs/soothed.log
 
 # Thread logs
 tail -f ~/.soothe/data/threads/<thread-id>/thread.log
@@ -484,10 +465,10 @@ soothed start
 
 **WebSocket not enabled**:
 ```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
+# ~/.soothe/config/daemon.yml
+transports:
+  websocket:
+    enabled: true
 ```
 
 **Firewall blocking**:
@@ -512,7 +493,7 @@ subagents:
 pip install soothe-plugins
 ```
 
-**Missing provider key** (for claude/browser_use):
+**Missing provider key** (for claude):
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...  # For claude
 ```
@@ -533,7 +514,7 @@ SOOTHE_LOG_LEVEL=DEBUG soothe "your query"
 
 **Check logs**:
 ```bash
-tail -f ~/.soothe/logs/daemon.log
+tail -f ~/.soothe/logs/soothed.log
 tail -f ~/.soothe/data/threads/<thread-id>/thread.log
 ```
 
@@ -647,7 +628,7 @@ See [Channel Plugin Guide](channel-plugin-guide.md).
 
 ```
 ┌─────────────────────────────────────┐
-│ GoalEngine: Autonomous Goal Mgmt    │  Goal DAGs, multi-goal orchestration
+│ ContextEngine: Autonomous Goal Mgmt  │  Goal DAGs, multi-goal orchestration
 │ Loop: Goal → PLAN → PERFORM → ...   │
 └─────────────────────────────────────┘
               ↓ PERFORM
@@ -715,9 +696,9 @@ See [Architecture Overview - StrangeLoop](core/strangeloop.md).
 ```yaml
 agent:
   loop:
-    limits:
-      llm_rpm_limit: 120          # Requests per minute
-      llm_concurrent_limit: 10    # Concurrent calls
+    llm_rate_limit:
+      rpm_limit: 120            # Requests per minute
+      concurrent_limit: 10      # Concurrent calls
 ```
 
 **Context window management** (RFC-224):

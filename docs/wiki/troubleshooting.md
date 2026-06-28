@@ -63,14 +63,13 @@ subagents:
 soothed status
 ```
 
-2. Ensure WebSocket is enabled in config:
+2. Ensure WebSocket is enabled in `~/.soothe/config/daemon.yml`:
 ```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8765
+transports:
+  websocket:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8765
 ```
 
 3. Restart daemon:
@@ -87,39 +86,6 @@ soothed start
 1. Check firewall settings
 2. Verify host and port are correct
 3. Ensure no other process is using the port
-
-## HTTP REST API Issues
-
-### Error: Connection refused
-
-**Error**: `Connection refused` when accessing REST API
-
-**Solution**: Enable HTTP REST transport:
-
-```yaml
-daemon:
-  transports:
-    http_rest:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8766
-```
-
-Then restart daemon:
-
-```bash
-soothed stop
-soothed start
-```
-
-### Error: 404 Not Found
-
-**Error**: `404 Not Found` for API endpoint
-
-**Solution**:
-1. Check the endpoint URL is correct
-2. Verify API version in path (`/api/v1/...`)
-3. Visit http://localhost:8766/docs for API documentation
 
 ## Authentication Errors
 
@@ -142,7 +108,7 @@ tail -f /var/log/nginx/error.log
 
 # Verify API key in request
 curl -H "X-API-Key: your-api-key" \
-  https://soothe.example.com/api/v1/threads
+  https://soothe.example.com/ws
 ```
 
 **Example with Caddy**:
@@ -152,7 +118,7 @@ journalctl -u caddy -f
 
 # Verify JWT token
 curl -H "Authorization: Bearer your-jwt-token" \
-  https://soothe.example.com/api/v1/threads
+  https://soothe.example.com/ws
 ```
 
 ### Error: CORS policy blocked
@@ -172,7 +138,7 @@ location / {
         return 204;
     }
 
-    proxy_pass http://localhost:8766;
+    proxy_pass http://localhost:8765;
 }
 ```
 
@@ -187,10 +153,6 @@ soothe.example.com {
     handle @websocket {
         reverse_proxy localhost:8765
     }
-
-    handle /api/* {
-        reverse_proxy localhost:8766
-    }
 }
 ```
 
@@ -203,14 +165,14 @@ soothe.example.com {
 **Solution**: Add your origin to allowed CORS origins:
 
 ```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      cors_origins:
-        - "http://localhost:*"
-        - "http://127.0.0.1:*"
-        - "http://myapp.example.com"  # Your origin
+# ~/.soothe/config/daemon.yml
+transports:
+  websocket:
+    enabled: true
+    cors_origins:
+      - "http://localhost:*"
+      - "http://127.0.0.1:*"
+      - "http://myapp.example.com"  # Your origin
 ```
 
 Restart daemon after updating:
@@ -224,12 +186,12 @@ soothed start
 
 ### Error: Address already in use
 
-**Error**: `Address already in use: ~/.soothe/soothe.sock`
+**Error**: `Address already in use: 127.0.0.1:8765`
 
-**Solution**: Socket file exists from previous run
+**Solution**: Port 8765 is in use by a previous daemon instance
 
 ```bash
-rm ~/.soothe/soothe.sock
+soothed stop
 soothed start
 ```
 
@@ -241,7 +203,7 @@ soothed start
 
 1. Check logs:
 ```bash
-tail -f ~/.soothe/logs/daemon.log
+tail -f ~/.soothe/logs/soothed.log
 ```
 
 2. Enable debug mode:
@@ -288,7 +250,7 @@ kill -9 <pid>  # If needed
 
 1. List available threads:
 ```bash
-soothe thread list
+soothe loop list
 ```
 
 2. Check thread ID spelling
@@ -302,12 +264,12 @@ soothe thread list
 
 1. Export thread data if possible:
 ```bash
-soothe thread export abc123 --output backup.json
+soothe loop show abc123
 ```
 
 2. Delete and recreate:
 ```bash
-soothe thread delete abc123
+soothe loop delete abc123
 ```
 
 ## Vector Store Issues
@@ -397,7 +359,7 @@ context:
 
 2. Archive old threads:
 ```bash
-soothe thread archive abc123
+soothe loop prune abc123 --dry-run
 ```
 
 3. Restart daemon periodically
@@ -434,7 +396,7 @@ The debug guide covers:
 - **Enable debug logs**: Environment variables and config files
 - **Monitor logs in real-time**: `tail -f` commands for daemon, CLI, and thread logs
 - **LLM tracing**: Debug model behavior with request/response logging
-- **Verbosity levels**: Understand TUI event filtering (quiet/normal/detailed/debug)
+- **Verbosity levels**: Understand TUI event filtering (quiet/normal/debug)
 - **Common workflows**: Debug agent behavior, LLM issues, connection, subagents, protocols
 - **Performance profiling**: Analyze agent performance from logs
 
@@ -442,7 +404,7 @@ The debug guide covers:
 
 1. Use `/help` in the TUI to see available commands
 2. Check the [Debug Guide](../howto_debug.md) for comprehensive debugging instructions
-3. Check logs: `~/.soothe/logs/daemon.log`, `~/.soothe/logs/soothe.log`, `~/.soothe/logs/soothe-cli.log`
+3. Check logs: `~/.soothe/logs/soothed.log`, `~/.soothe/logs/soothe.log`, `~/.soothe/logs/soothe-cli.log`
 4. Review configuration: `soothe config show`
 5. Check the [documentation](../) for detailed guides
 6. Review RFCs and implementation guides in `docs/specs/` and `docs/impl/`

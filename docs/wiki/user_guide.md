@@ -4,7 +4,7 @@
 
 Soothe is a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interoperability while remaining langchain-ecosystem-friendly.
 
-Soothe can work autonomously on complex tasks, maintain context across long conversations, and leverage specialized subagents for different types of work including filesystem search, planning, research synthesis, skill retrieval, and agent generation. It also supports MCP (Model Context Protocol) servers for extending capabilities with external tools and services.
+Soothe can work autonomously on complex tasks, maintain context across long conversations, and leverage specialized subagents for different types of work including filesystem search, planning, research synthesis, browser automation, and verification. It also supports MCP (Model Context Protocol) servers for extending capabilities with external tools and services.
 
 ## Quick Start
 
@@ -34,18 +34,20 @@ Soothe is organized as a monorepo with multiple packages:
 
 ```
 packages/
-├── soothe/              # Main daemon server package
+├── soothe/              # Agent core (library)
 ├── soothe-cli/          # CLI client (Typer CLI + Textual TUI)
 ├── soothe-daemon/       # Daemon-specific components
-└── soothe-sdk/          # Shared SDK (WebSocket client, protocol, types)
+├── soothe-sdk/          # Shared SDK (WebSocket client, protocol, types)
+└── soothe-plugins/      # Optional delegated agents and community plugins
 ```
 
 | Package | Purpose |
 |---------|---------|
-| `soothe` | Core daemon server with agent runtime, protocols, and backends |
+| `soothe` | Agent core (library) with agent runtime, protocols, and backends |
 | `soothe-cli` | Command-line interface and terminal UI for interacting with the daemon |
 | `soothe-daemon` | Daemon lifecycle management and server components |
 | `soothe-sdk` | Shared SDK for building clients and plugins (WebSocket client, protocol definitions, types, decorators) |
+| `soothe-plugins` | Optional delegated agents and community plugins (separate repo) |
 
 ---
 
@@ -64,16 +66,16 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 📖 User Guides
 
-- [Specialized Subagents](wiki/subagents.md) - Core explore, plan, and research; optional agents from soothe-plugins
+- [Specialized Subagents](wiki/subagents.md) - Core explore, plan, tacitus, browser_use, and veritas; optional agents from soothe-plugins
 - [Autonomous Mode](wiki/autonomous-mode.md) - Enable autonomous iteration for complex tasks
 - [Thread Management](wiki/thread-management.md) - Work with conversation threads and maintain context
 - [MCP Servers](wiki/mcp-servers.md) - Extend capabilities with Model Context Protocol servers
 
 ### 🔧 Configuration & Management
 
-- [Configuration Guide](wiki/configuration.md) - Environment variables, YAML config, and model routing
+- [Configuration Guide](wiki/configuration-guide/README.md) - Environment variables, YAML config, and model routing
 - [Daemon Management](wiki/daemon-management.md) - Manage the Soothe daemon lifecycle
-- [Multi-Transport Setup](wiki/multi-transport.md) - Configure Unix Socket, WebSocket, and HTTP REST
+- [Transport Setup](wiki/multi-transport.md) - Configure WebSocket
 - [Authentication](wiki/authentication.md) - API keys, JWT, and security model
 
 ### 🛠️ Troubleshooting & Advanced
@@ -204,7 +206,7 @@ Technical documentation for developers and system architects.
 
 - Use `/help` in the TUI to see available commands
 - Check the [Troubleshooting Guide](wiki/troubleshooting.md) for common issues
-- Review daemon logs at `~/.soothe/logs/daemon.log`
+- Review daemon logs at `~/.soothe/logs/soothed.log`
 - Browse the [RFC specifications](specs/) for design details
 - Check the [implementation guides](impl/) for technical documentation
 - See the [Event Catalog](specs/event-catalog.md) for all event types and their schemas

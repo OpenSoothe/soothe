@@ -478,7 +478,7 @@ print(f"Plan revised: {revised_plan.status}")
 ### LoopPlanner Usage
 
 ```python
-from soothe.core.loop.state.schemas import LoopState
+from soothe.foundation.loop.state.schemas import LoopState
 from soothe.protocols import LoopPlannerProtocol
 
 loop_planner: LoopPlannerProtocol = resolve_loop_planner(config)
@@ -593,7 +593,7 @@ agent:
 ### Resolution
 
 ```python
-from soothe.core.resolver import resolve_planner, resolve_loop_planner
+from soothe.runner.resolver import resolve_planner, resolve_loop_planner
 
 # Resolve planner protocols
 planner = resolve_planner(config)  # PlannerProtocol
