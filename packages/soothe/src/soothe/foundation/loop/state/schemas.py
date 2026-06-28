@@ -974,7 +974,7 @@ class LoopState(BaseModel):
 
     evidence_ledger: list[EvidenceEntry] = Field(
         default_factory=list,
-        description="Append-only evidence ids for plan validation (RFC-220).",
+        description="Append-only evidence ids for plan validation.",
     )
 
     # RFC-624 Phase 4: CE binding. When set, @property accessors query CE
@@ -1081,7 +1081,7 @@ class LoopState(BaseModel):
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
     routing_classification: Any | None = Field(
         default=None,
-        description="RoutingClassification for Plan + Execute (IG-349, IG-383).",
+        description="RoutingClassification for Plan + Execute.",
     )
 
     # Thread tracking for step isolation (IG-477: message injection, no checkpoint fork)

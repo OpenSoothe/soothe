@@ -190,7 +190,7 @@ class SootheRunner(
                 config=self._config,
                 materialize_hook=lambda _agent: self._ensure_checkpointer_initialized(),
             )
-            logger.info("[Init] LazyCoreAgent configured (IG-506)")
+            logger.info("[Init] LazyCoreAgent configured")
         else:
             self._core_agent = _build_core_agent()
 

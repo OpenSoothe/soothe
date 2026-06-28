@@ -41,7 +41,7 @@ def acquire_worker_runner(
 
     if cached_runner is None and warmup_runner and reuse_runner:
         runner = SootheRunner(config, identity_runtime=identity_runtime)
-        logger.info("[WorkerRunner] Warmed SootheRunner for worker reuse (IG-506)")
+        logger.info("[WorkerRunner] Warmed SootheRunner for worker reuse")
         return runner, runner
 
     runner = SootheRunner(config, identity_runtime=identity_runtime)

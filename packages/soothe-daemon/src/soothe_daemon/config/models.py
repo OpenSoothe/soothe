@@ -198,7 +198,7 @@ class WorkerPoolConfig(BaseModel):
     )
     reuse_runner: bool = Field(
         default=True,
-        description="Reuse one SootheRunner per worker process between requests (IG-506)",
+        description="Reuse one SootheRunner per worker process between requests",
     )
     warmup_runner: bool = Field(
         default=True,
@@ -352,7 +352,7 @@ class ThreadPoolConfig(BaseModel):
     )
     reuse_runner: bool = Field(
         default=True,
-        description="Reuse one SootheRunner per worker thread between requests (IG-506)",
+        description="Reuse one SootheRunner per worker thread between requests",
     )
     warmup_runner: bool = Field(
         default=True,
