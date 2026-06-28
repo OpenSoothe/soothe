@@ -1,105 +1,55 @@
-# API Reference
+# API Knowledge Articles
 
-This directory contains comprehensive API reference documentation for Soothe, organized by module and access method.
+These articles explain the *why* and *how* of each Soothe package — architectural decisions, integration points, workflows, and gotchas. For exhaustive field/method references, consult the source files linked in each article.
 
-## Documentation Structure
+## Articles
 
-### Python API
+| Article | Package | Role | Stability |
+|---------|---------|------|-----------|
+| [Core API](core-api.md) | `soothe` | Layer 1–2: configuration, protocols, agent construction, runner | ⚠️ Beta |
+| [Daemon API](daemon-api.md) | `soothe_daemon` | Layer 3: background server, multi-transport, goal dispatch | ⚠️ Alpha |
+| [SDK API](sdk-api.md) | `soothe_sdk` | Client & plugin development: WebSocket client, decorators, events | ✅ Stable |
 
-- **[SDK API](sdk-api.md)** - Client and plugin development API (`soothe_sdk`)
-  - WebSocket client for daemon communication
-  - Plugin decorators and context
-  - Event system and types
-  - Protocol interfaces
+### Core (`soothe`) — Framework Foundation
 
-- **[Core API](core-api.md)** - Core framework API (`soothe`)
-  - Configuration system
-  - Protocol definitions
-  - CoreAgent and AgentBuilder
-  - SootheRunner
-  - Backend implementations
+The configuration model, protocol abstractions, agent construction pipeline, and execution runner. Defines the three-layer architecture (CoreAgent → SootheRunner → SootheDaemon) and the protocol system that makes every capability pluggable.
 
-- **[Daemon API](daemon-api.md)** - Daemon server API (`soothe_daemon`)
-  - Server lifecycle management
-  - Channel implementations
-  - Bootstrap and configuration
-  - Health checks
+### Daemon (`soothe_daemon`) — Server Infrastructure
 
-## Quick Reference
+Long-running background server hosting `SootheRunner` instances. Manages WebSocket IPC, 16+ messaging platform channels, client sessions, RPC commands, health checks, and daemon-owned autopilot goal dispatch.
 
-### Import Paths
+### SDK (`soothe_sdk`) — Client & Plugin API
 
-**SDK (Client Development)**:
-```python
-from soothe_sdk import WebSocketClient, plugin, tool, subagent
-from soothe_sdk.core.events import SootheEvent
-from soothe_sdk.core.types import VerbosityLevel
-from soothe_sdk.protocols import AsyncPersistStore, VectorStoreProtocol
+Public API for two audiences: client developers connecting to a daemon (WebSocket client, RPC helpers) and plugin authors extending the agent (decorators for tools, subagents, events). Re-exports core protocols so plugins have zero hard dependency on the daemon package.
+
+## Architectural Layering
+
+```
+Layer 3  SootheDaemon    — IPC, transports, background scheduling
+Layer 2  SootheRunner    — goal orchestration, strange-loop, protocols
+Layer 1  CoreAgent       — pure execution: tools, subagents, middleware
 ```
 
-**Core (Framework Development)**:
-```python
-from soothe.config import SootheConfig
-from soothe.foundation.core.agent import CoreAgent, create_soothe_agent
-from soothe.runner import SootheRunner
-from soothe.protocols import MemoryProtocol, DurabilityProtocol
-```
+Each layer has a strict contract: Layer 1 knows nothing about goals; Layer 2 knows nothing about the network; Layer 3 coordinates everything. This enables embedding `CoreAgent` in any async process, using `SootheRunner` for agentic loops without a daemon, and running the full daemon for multi-client deployments.
 
-**Daemon (Server Development)**:
-```python
-from soothe_daemon import SootheDaemon, WebSocketClient
-from soothe_daemon.bootstrap import run_daemon
-```
+## Import Paths
 
-### Version Compatibility
+| Package | Primary Imports |
+|---------|----------------|
+| `soothe` | `from soothe.config import SootheConfig` · `from soothe.foundation.core.agent import CoreAgent, create_soothe_agent` · `from soothe.runner import SootheRunner` · `from soothe.protocols import MemoryProtocol, DurabilityProtocol` |
+| `soothe_daemon` | `from soothe_daemon import SootheDaemon, run_daemon` · `from soothe_daemon.bootstrap import pid_path` |
+| `soothe_sdk` | `from soothe_sdk.client import WebSocketClient` · `from soothe_sdk import plugin, tool, subagent` · `from soothe_sdk.core.events import SootheEvent` · `from soothe_sdk.protocols import AsyncPersistStore, VectorStoreProtocol` |
 
-- **soothe-sdk**: `>=0.5.0,<1.0.0` (see `__soothe_required_version__`)
+## Version Compatibility
+
 - **Python**: `>=3.11`
-- **LangChain**: Compatible with langchain-core, langchain-community
+- **SDK version constraint**: `>=0.5.0,<1.0.0` (see `__soothe_required_version__`)
+- **LangChain**: Compatible with `langchain-core`, `langchain-community`
 
 ## Related Documentation
 
-- **[Architecture Overview](../architecture/README.md)** - System architecture and design
-- **[Protocols Layer](../protocols/README.md)** - Protocol specifications
-- **[Capabilities Layer](../capabilities/README.md)** - Subagents, tools, MCP
-- **[Configuration Guide](../configuration-guide/README.md)** - Configuration reference
-- **[RFC Specifications](../../specs/)** - Detailed RFCs for each component
-
-## API Stability
-
-APIs are versioned according to the following stability tiers:
-
-| Tier | Package | Stability | Compatibility |
-|------|---------|-----------|---------------|
-| **Stable** | `soothe.config` | ✅ Stable | Backward compatible |
-| **Stable** | `soothe.protocols` | ✅ Stable | Backward compatible |
-| **Stable** | `soothe_sdk.client` | ✅ Stable | Backward compatible |
-| **Stable** | `soothe_sdk.plugin` | ✅ Stable | Backward compatible |
-| **Beta** | `soothe.foundation.core.agent` | ⚠️ Beta | Minor breaking changes |
-| **Beta** | `soothe.runner` | ⚠️ Beta | Minor breaking changes |
-| **Alpha** | `soothe_daemon` | ⚠️ Alpha | Breaking changes possible |
-
-## Documentation Conventions
-
-### Function Signatures
-
-All functions are documented with:
-- Full type hints using Python type annotations
-- Google-style docstrings with Args, Returns, Raises sections
-- Example usage where applicable
-- Related RFC references for protocol-level APIs
-
-### Code Examples
-
-Code examples follow these conventions:
-- All imports shown explicitly
-- Type annotations used where helpful
-- Async functions marked with `async`/`await`
-- Error handling demonstrated where relevant
-
-### Versioning
-
-Each API includes:
-- **Since**: Version when the API was introduced
-- **Changed**: Notable changes in version history
-- **Deprecated**: Deprecation notices with migration paths
+- [Architecture Overview](../architecture/README.md) — System architecture and design
+- [Protocols Layer](../protocols/README.md) — Protocol specifications
+- [Capabilities Layer](../capabilities/README.md) — Subagents, tools, MCP
+- [Configuration Guide](../configuration-guide/README.md) — Configuration reference
+- [RFC Specifications](../../specs/) — Detailed RFCs for each component

@@ -1,591 +1,175 @@
 # VectorStoreProtocol & AsyncPersistStore
 
-**RFCs**: RFC-000 Module 8 (VectorStore), RFC-300 (PersistStore)  
+**RFCs**: RFC-000 Module 8 (VectorStore), RFC-300 (PersistStore)
 **Locations**:
 - `packages/soothe-sdk/src/soothe_sdk/protocols/vector_store.py`
 - `packages/soothe-sdk/src/soothe_sdk/protocols/persistence.py`
+**Re-exported from**: `packages/soothe/src/soothe/protocols/`
+**Status**: Implemented
 
-**Re-exported**:
-- `packages/soothe/src/soothe/protocols/vector_store.py`
-- `packages/soothe/src/soothe/protocols/persistence.py`
+## What These Protocols Are
 
-**Status**: Implemented  
+These two protocols form Soothe's **persistence layer**:
 
-## Overview
+1. **`VectorStoreProtocol`** — async vector database abstraction for semantic search (store embeddings, retrieve by similarity).
+2. **`AsyncPersistStore`** — async key-value persistence for structured data (save/load/delete by key, with namespaces).
 
-VectorStoreProtocol and AsyncPersistStore provide the **persistence layer** for Soothe:
-
-1. **VectorStoreProtocol**: Async vector database abstraction for semantic search
-2. **AsyncPersistStore**: Async key-value persistence for context and durability
-
-Both protocols are defined in the SDK package for reusability and implemented by multiple backends in the soothe package.
+Both are defined in the SDK package (`soothe_sdk`) for reusability and implemented by multiple backends in the main `soothe` package. Both are fully async — no synchronous variants exist.
 
 ## VectorStoreProtocol
 
-### Purpose
+### Role
 
-- **Vector storage**: Store embedding vectors with metadata
-- **Semantic search**: Retrieve by similarity, not keywords
-- **Collection management**: Create collections with configurable distance metrics
-- **Async operations**: All methods are async for concurrent access
+VectorStoreProtocol abstracts vector databases. It stores embedding vectors with metadata payloads and retrieves them by similarity. This is the foundation for semantic search: "find items similar to this concept" rather than "find items containing this keyword."
 
-### Protocol Interface
+### Key Operations
 
-```python
-@runtime_checkable
-class VectorStoreProtocol(Protocol):
-    """Async protocol for vector database operations.
-    
-    All methods are async. Implementations must handle connection
-    lifecycle internally (lazy connect, connection pooling, etc.).
-    """
+- **`create_collection(vector_size, distance="cosine")`** — create or ensure a collection exists. Distance metrics: `cosine`, `l2`, `ip` (inner product). The vector size must match the embedding model's output dimension (e.g., 1536 for OpenAI embeddings).
+- **`insert(vectors, payloads?, ids?)`** — insert vectors with optional metadata payloads and IDs. Payloads and IDs must match the vector list length; IDs are auto-generated if omitted.
+- **`search(query, vector, limit=5, filters?)`** — find nearest neighbors by similarity. Takes both the original text query (for hybrid search implementations) and the embedding vector. Returns `VectorRecord`s ordered by descending similarity score.
+- **`delete(record_id)` / `update(record_id, vector?, payload?)` / `get(record_id)`** — standard CRUD for individual records.
 
-    async def create_collection(
-        self, 
-        vector_size: int, 
-        distance: str = "cosine"
-    ) -> None:
-        """Create or ensure a collection exists.
-        
-        Args:
-            vector_size: Dimensionality of vectors in this collection.
-            distance: Distance metric ('cosine', 'l2', 'ip').
-        """
-        ...
+### Design Principle: Connection Lifecycle Internal
 
-    async def insert(
-        self,
-        vectors: list[list[float]],
-        payloads: list[dict[str, Any]] | None = None,
-        ids: list[str] | None = None,
-    ) -> None:
-        """Insert vectors with optional payloads and IDs.
-        
-        Args:
-            vectors: List of embedding vectors.
-            payloads: Per-vector metadata dicts. Must match length of vectors.
-            ids: Per-vector IDs. Auto-generated if not provided.
-        """
-        ...
+The protocol contract states: *"Implementations must handle connection lifecycle internally (lazy connect, connection pooling, etc.)."* Callers never open or close connections. This simplifies usage and lets each backend optimize its own connection strategy — PGVectorStore pools PostgreSQL connections; SQLiteVecStore uses aiosqlite's async wrapper; WeaviateStore manages HTTP connections.
 
-    async def search(
-        self,
-        query: str,
-        vector: list[float],
-        limit: int = 5,
-        filters: dict[str, Any] | None = None,
-    ) -> list[VectorRecord]:
-        """Search for nearest neighbours.
-        
-        Args:
-            query: The original text query (for hybrid search implementations).
-            vector: Query embedding vector.
-            limit: Maximum results to return.
-            filters: Metadata filter conditions.
-            
-        Returns:
-            Records ordered by descending similarity.
-        """
-        ...
+### VectorRecord
 
-    async def delete(self, record_id: str) -> None:
-        """Delete a record by ID.
-        
-        Args:
-            record_id: The record to delete.
-        """
-        ...
-
-    async def update(
-        self,
-        record_id: str,
-        vector: list[float] | None = None,
-        payload: dict[str, Any] | None = None,
-    ) -> None:
-        """Update a record's vector and/or payload.
-        
-        Args:
-            record_id: The record to update.
-            vector: New embedding vector (None to keep existing).
-            payload: New metadata (None to keep existing).
-        """
-        ...
-
-    async def get(self, record_id: str) -> VectorRecord | None:
-        """Retrieve a single record by ID.
-        
-        Args:
-            record_id: The record ID.
-            
-        Returns:
-            VectorRecord if found, None otherwise.
-        """
-        ...
-```
-
-### Data Models
-
-#### VectorRecord
-
-```python
-class VectorRecord(BaseModel):
-    """A stored vector record with metadata.
-    
-    Args:
-        id: Unique record identifier.
-        score: Similarity score from search (None for non-search results).
-        payload: Arbitrary metadata stored alongside the vector.
-    """
-
-    id: str
-    score: float | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
-```
-
-### Backend Implementations
-
-#### PGVectorStore
-
-**Status**: Production implementation  
-**Location**: `packages/soothe/src/soothe/backends/vector_store/pgvector.py`  
-**Dependencies**: PostgreSQL with pgvector extension (RFC-802 vector database)
-
-**Features**:
-- Production-grade vector storage
-- Connection pooling
-- Cosine/L2/IP distance metrics
-- Metadata filtering
-- Dedicated vector database (RFC-802)
-
-**Configuration**:
-```yaml
-persistence:
-  vector_store_backend: pgvector
-  postgres_base_dsn: postgresql://user:pass@host:port
-  postgres_databases:
-    vectors: soothe_vectors  # Dedicated vector database
-```
-
-#### SQLiteVecStore
-
-**Status**: Lightweight implementation  
-**Location**: `packages/soothe/src/soothe/backends/vector_store/sqlite_vec.py`  
-**Dependencies**: sqlite-vec extension
-
-**Features**:
-- Zero-configuration vector storage
-- Single-file database
-- Suitable for development and prototyping
-- Async operations via aiosqlite
-
-**Configuration**:
-```yaml
-persistence:
-  vector_store_backend: sqlite_vec
-  vector_sqlite_path: ~/.soothe/vectors.db
-```
-
-#### WeaviateStore
-
-**Status**: Cloud-ready implementation  
-**Location**: `packages/soothe/src/soothe/backends/vector_store/weaviate.py`  
-**Dependencies**: Weaviate instance (local or cloud)
-
-**Features**:
-- Cloud-ready vector storage
-- GraphQL-based queries
-- Multi-tenancy support
-- Semantic search with hybrid capabilities
-
-**Configuration**:
-```yaml
-persistence:
-  vector_store_backend: weaviate
-  weaviate_url: http://localhost:8080
-  weaviate_api_key: ${WEAVIATE_API_KEY}
-```
+Search results are `VectorRecord` instances carrying `id`, `score` (similarity score, `None` for non-search results), and `payload` (arbitrary metadata stored alongside the vector). The payload is where domain data lives — text content, source thread, memory type, etc.
 
 ## AsyncPersistStore
 
-### Purpose
+### Role
 
-- **Key-value persistence**: Simple save/load/delete operations
-- **Namespace support**: Organized storage with namespaces
-- **Async operations**: Concurrent safe operations
-- **Backend abstraction**: SQLite, PostgreSQL, RocksDB
+AsyncPersistStore is the async key-value persistence interface — the simplest possible storage abstraction. It's used by higher-level protocols (Durability, Context) to persist their structured data without depending on a specific database.
 
-### Protocol Interface
+### Key Operations
 
-```python
-@runtime_checkable
-class AsyncPersistStore(Protocol):
-    """Async key-value persistence interface with concurrent operation support.
-    
-    Implemented by SQLitePersistStore and PostgreSQLPersistStore.
-    Provides a storage-agnostic async interface for context, memory,
-    and durability backends.
-    
-    All methods are async to support concurrent operations and
-    connection pooling.
-    """
+- **`save(key, data)`** — persist JSON-serializable data under a key.
+- **`load(key) → data | None`** — retrieve data by key; `None` if not found.
+- **`delete(key)`** — remove data by key.
+- **`list_keys(namespace?) → list[str]`** — list keys, optionally filtered by namespace.
+- **`close()`** — release resources (connections, file handles).
 
-    async def save(self, key: str, data: Any) -> None:
-        """Persist data under the given key.
-        
-        Args:
-            key: Storage key.
-            data: JSON-serialisable data.
-        """
-        ...
+### Namespace Convention
 
-    async def load(self, key: str) -> Any | None:
-        """Load data for the given key.
-        
-        Args:
-            key: Storage key.
-            
-        Returns:
-            The stored data, or None if not found.
-        """
-        ...
+Namespaces organize keys by purpose: `context:thread_abc123`, `thread:def456`. This is convention, not enforcement — backends implement namespaces via key prefixes or separate tables, but the protocol treats them as opaque strings. The default namespace is used when `namespace=None`.
 
-    async def delete(self, key: str) -> None:
-        """Delete data for the given key.
-        
-        Args:
-            key: Storage key.
-        """
-        ...
+## Multi-Database Architecture (RFC-802)
 
-    async def list_keys(self, namespace: str | None = None) -> list[str]:
-        """List all keys in the namespace.
-        
-        Args:
-            namespace: Optional namespace to list keys from.
-                      If None, uses default namespace.
-            
-        Returns:
-            List of keys in the namespace.
-        """
-        ...
+PostgreSQL deployments use **dedicated databases** per concern:
 
-    async def close(self) -> None:
-        """Release any resources held by the store."""
-        ...
+| Database | Purpose | Protocol |
+|----------|---------|----------|
+| `soothe_metadata` | Thread lifecycle state | DurabilityProtocol |
+| `soothe_context` | Context ledger (future) | ContextProtocol |
+| `soothe_vectors` | Vector storage | VectorStoreProtocol |
+| `soothe_checkpoints` | LangGraph checkpoints | (LangGraph) |
+
+This separation provides:
+- **Isolation** — metadata vs vectors vs checkpoints don't contend for the same tables
+- **Independent scaling** — vector database can scale separately from metadata
+- **Separate backup strategies** — checkpoints can be backed up more frequently
+- **Clear data boundaries** — each database has a single owner
+
+## Backend Implementations
+
+### VectorStore Backends
+
+| Backend | Location | Use Case |
+|---------|----------|----------|
+| `PGVectorStore` | `backends/vector_store/pgvector.py` | Production — PostgreSQL with pgvector extension |
+| `SQLiteVecStore` | `backends/vector_store/sqlite_vec.py` | Development — zero-config, single-file |
+| `WeaviateStore` | `backends/vector_store/weaviate.py` | Cloud — multi-tenancy, hybrid search |
+
+### PersistStore Backends
+
+| Backend | Location | Use Case |
+|---------|----------|----------|
+| `SQLitePersistStore` | `backends/persistence/sqlite_store.py` | Development — single-file, zero dependencies |
+| `PostgreSQLPersistStore` | `backends/persistence/postgres_store.py` | Production — connection pooling, multi-database |
+
+Backends are created via factory functions: `create_persist_store(backend=..., ...)` and `resolve_vector_store(config)`. The backend is selected by configuration, not code — switching from SQLite to PostgreSQL requires only a config change.
+
+## Integration Points
+
+### VectorStore ↔ Memory
+
+Memory backends (currently MemU) use vector search for semantic recall. When `MemoryProtocol.recall(query)` is called, the backend embeds the query and searches the vector store for similar items. The protocol boundary means memory callers never touch vectors directly — they call `recall()`, the backend handles embeddings and search internally.
+
+### PersistStore ↔ Durability
+
+Durability backends use PersistStore for thread metadata storage:
+
+```
+create_thread() → persist_store.save(f"thread:{thread_id}", thread_info.model_dump())
+get_thread()     → persist_store.load(f"thread:{thread_id}") → ThreadInfo.model_validate(data)
 ```
 
-### Backend Implementations
+The key convention (`thread:<id>`) provides namespacing without explicit namespace parameters.
 
-#### SQLitePersistStore
+### PersistStore ↔ Context (Future)
 
-**Status**: Development implementation  
-**Location**: `packages/soothe/src/soothe/backends/persistence/sqlite_store.py`  
+When ContextProtocol is implemented, its ledger will persist via PersistStore:
 
-**Features**:
-- Single-file storage
-- Namespace support via key prefixes
-- Async operations via aiosqlite
-- Zero external dependencies
-
-**Usage**:
-```python
-from soothe.backends.persistence import create_persist_store
-
-store = create_persist_store(
-    backend="sqlite",
-    db_path="~/.soothe/persistence.db",
-    namespace="context"
-)
-
-await store.save("thread:abc123", {"entries": [...]})
-data = await store.load("thread:abc123")
 ```
-
-#### PostgreSQLPersistStore
-
-**Status**: Production implementation  
-**Location**: `packages/soothe/src/soothe/backends/persistence/postgres_store.py`  
-
-**Features**:
-- Production-grade persistence
-- Connection pooling
-- Namespace support
-- Multi-database architecture (RFC-802)
-
-**Usage**:
-```python
-from soothe.backends.persistence import create_persist_store
-
-dsn = config.resolve_postgres_dsn_for_database("context")
-store = create_persist_store(
-    backend="postgresql",
-    dsn=dsn,
-    namespace="context"
-)
-
-await store.save("thread:abc123", {"entries": [...]})
+persist()  → persist_store.save(f"context:{thread_id}", ledger.model_dump())
+restore()  → persist_store.load(f"context:{thread_id}")
 ```
-
-## Usage Patterns
-
-### VectorStore Usage
-
-```python
-from soothe.protocols import VectorStoreProtocol, VectorRecord
-from soothe.config import SootheConfig
-
-# Resolve vector store
-vector_store: VectorStoreProtocol = resolve_vector_store(config)
-
-# Create collection
-await vector_store.create_collection(
-    vector_size=1536,  # OpenAI embedding dimension
-    distance="cosine"
-)
-
-# Insert vectors
-vectors = [
-    [0.1, 0.2, ...],  # Embedding for "database optimization"
-    [0.3, 0.4, ...],  # Embedding for "PostgreSQL tuning"
-]
-payloads = [
-    {"text": "database optimization", "source": "thread_abc"},
-    {"text": "PostgreSQL tuning", "source": "thread_def"},
-]
-
-await vector_store.insert(vectors, payloads)
-
-# Search by similarity
-query_vector = [0.15, 0.25, ...]  # Embedding for "improve database"
-results = await vector_store.search(
-    query="improve database performance",
-    vector=query_vector,
-    limit=5
-)
-
-for result in results:
-    print(f"[score={result.score:.3f}] {result.payload['text']}")
-```
-
-### PersistStore Usage
-
-```python
-from soothe.backends.persistence import create_persist_store
-
-# Create store
-store = create_persist_store(
-    backend="postgresql",
-    dsn="postgresql://user:pass@host:port/database",
-    namespace="context"
-)
-
-# Save context data
-await store.save(
-    "thread:abc123",
-    {
-        "entries": [
-            {"source": "tool", "content": "Found solution"},
-            ...
-        ]
-    }
-)
-
-# Load context data
-data = await store.load("thread:abc123")
-if data:
-    entries = data["entries"]
-    
-# List keys in namespace
-keys = await store.list_keys(namespace="context")
-# ["thread:abc123", "thread:def456", ...]
-
-# Delete key
-await store.delete("thread:abc123")
-
-# Close store (cleanup)
-await store.close()
-```
-
-## Integration with Other Protocols
-
-### VectorStore ↔ Memory Integration
-
-Memory backends use VectorStore for semantic retrieval:
-
-```python
-# Memory recall uses vector search
-memories = await vector_store.search(
-    query="database optimization",
-    vector=query_embedding,
-    limit=10,
-    filters={"memory_type": "knowledge"}
-)
-```
-
-### PersistStore ↔ Durability Integration
-
-Durability backends use PersistStore for thread storage:
-
-```python
-# Thread persistence via PersistStore
-await persist_store.save(
-    f"thread:{thread_id}",
-    thread_info.model_dump()
-)
-
-# Thread retrieval
-data = await persist_store.load(f"thread:{thread_id}")
-thread_info = ThreadInfo.model_validate(data)
-```
-
-### PersistStore ↔ Context Integration
-
-Context backends use PersistStore for ledger persistence:
-
-```python
-# Context ledger persistence
-await persist_store.save(
-    f"context:{thread_id}",
-    context_ledger.model_dump()
-)
-
-# Context ledger restoration
-data = await persist_store.load(f"context:{thread_id}")
-if data:
-    context_ledger.restore_from_dict(data)
-```
-
-## Multi-Database Architecture
-
-### RFC-802 Architecture
-
-PostgreSQL implementations use dedicated databases:
-
-```yaml
-postgres_databases:
-  metadata: soothe_metadata    # DurabilityProtocol
-  context: soothe_context      # ContextProtocol (future)
-  vectors: soothe_vectors      # VectorStoreProtocol
-  checkpoints: soothe_checkpoints  # LangGraph Checkpointer
-```
-
-**Benefits**:
-- Isolation of concerns
-- Independent scaling
-- Separate backup strategies
-- Clear data boundaries
-
-## Configuration
-
-### VectorStore Settings
-
-```yaml
-# config/config.template.yml
-persistence:
-  vector_store_backend: pgvector  # or sqlite_vec, weaviate
-  
-  # PostgreSQL vector storage
-  postgres_base_dsn: postgresql://user:pass@host:port
-  postgres_databases:
-    vectors: soothe_vectors
-    
-  # SQLite vector storage
-  vector_sqlite_path: ~/.soothe/vectors.db
-  
-  # Weaviate configuration
-  weaviate_url: http://localhost:8080
-  weaviate_api_key: ${WEAVIATE_API_KEY}
-```
-
-### PersistStore Settings
-
-```yaml
-persistence:
-  # SQLite persistence
-  metadata_sqlite_path: ~/.soothe/metadata.db
-  context_sqlite_path: ~/.soothe/context.db
-  
-  # PostgreSQL persistence
-  postgres_base_dsn: postgresql://user:pass@host:port
-  postgres_databases:
-    metadata: soothe_metadata
-    context: soothe_context
-```
-
-### Resolution
-
-```python
-from soothe.runner.resolver import (
-    resolve_vector_store,
-    resolve_persist_store
-)
-
-# Resolve protocols
-vector_store = resolve_vector_store(config)
-persist_store = resolve_persist_store(config, namespace="context")
-```
-
-## Testing
-
-### Unit Tests
-
-**Locations**:
-- `packages/soothe/tests/unit/backends/vector_store/`
-- `packages/soothe/tests/unit/backends/persistence/`
-
-Tests verify:
-- Vector insertion and retrieval
-- Similarity search accuracy
-- Metadata filtering
-- Key-value persistence
-- Namespace isolation
-- Connection lifecycle
-
-### Integration Tests
-
-**Locations**:
-- `packages/soothe/tests/integration/backends/persistence/`
-
-Tests verify:
-- PostgreSQL connection handling
-- Multi-database architecture
-- Concurrent operations
-- Large-scale vector storage
 
 ## Design Rationale
 
 ### Why Async-First?
 
-Concurrent operation support:
-- Multiple threads accessing same store
-- Connection pooling for efficiency
-- Non-blocking I/O for performance
+Both protocols are fully async because Soothe's runtime is async. Multiple threads access the same stores concurrently; connection pooling and non-blocking I/O are essential for throughput. Synchronous variants would force callers into thread pools, defeating the async architecture.
 
 ### Why Backend Abstraction?
 
-Swappable implementations:
-- SQLite for development
-- PostgreSQL for production
-- Weaviate for cloud deployments
-- Zero code changes when switching
+Swappable implementations let deployments match their infrastructure:
+- **Development**: SQLite — zero config, single file, no server
+- **Production**: PostgreSQL — connection pooling, multi-database, proven reliability
+- **Cloud**: Weaviate — managed service, multi-tenancy, hybrid search
+
+Switching backends requires only a configuration change — zero code modifications in consumers.
 
 ### Why Multi-Database Architecture?
 
-Isolation benefits (RFC-802):
-- Metadata vs vectors vs checkpoints
-- Independent scaling and backup
-- Clear ownership boundaries
-- Prevents data contamination
+A single database for everything causes contention: vector inserts lock tables that checkpoint reads need. Dedicated databases (RFC-802) isolate concerns, enable independent scaling, and provide clear ownership boundaries. Each database can be backed up, scaled, and migrated independently.
+
+## Gotchas
+
+- **Vector size must match embedding model** — `create_collection(vector_size=1536)` must match your embedding model's output. Mismatched sizes cause insert failures.
+- **`search` takes both query text and vector** — the text query enables hybrid search implementations (keyword + vector). If your backend is pure vector, the text is ignored, but you must still pass it for protocol compliance.
+- **PersistStore `close()` is important** — forgetting to close leaves connections open. In long-running daemons, this causes connection pool exhaustion.
+- **Namespaces are convention, not enforcement** — `list_keys(namespace="context")` filters by prefix, but `save("thread:abc", ...)` works in any namespace. Don't rely on the protocol to enforce namespace isolation.
+- **MemU doesn't use PersistStore** — the current memory backend owns its storage internally, independent of the multi-database architecture. Don't expect memory data in `soothe_metadata` or `soothe_context`.
+
+## Configuration
+
+```yaml
+persistence:
+  vector_store_backend: pgvector  # or sqlite_vec, weaviate
+  postgres_base_dsn: postgresql://user:pass@host:port
+  postgres_databases:
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    checkpoints: soothe_checkpoints
+  # SQLite alternatives:
+  # vector_sqlite_path: ~/.soothe/vectors.db
+  # metadata_sqlite_path: ~/.soothe/metadata.db
+```
+
+Resolved via `resolve_vector_store(config)` and `resolve_persist_store(config, namespace=...)`.
 
 ## Specification Reference
 
-- **RFC-000**: System Conceptual Design (Module 8)
-- **RFC-300**: Context and Memory Architecture Design
-- **RFC-802**: Persistence Architecture Refactor
+- **RFC-000**: System Conceptual Design (Module 8: VectorStore)
+- **RFC-300**: Context and Memory Architecture Design (PersistStore)
+- **RFC-802**: Persistence Architecture Refactor (multi-database)
 - **RFC-801**: SQLite Backend
 
 ## Related Documentation
 
-- [Memory Protocol](memory.md)
-- [Durability Protocol](durability.md)
-- [Backend Implementation Guide](../backends.md)
+- [Memory Protocol](memory.md) — uses VectorStore for semantic recall
+- [Durability Protocol](durability.md) — uses PersistStore for thread storage
+- [Context Protocol](context.md) — future PersistStore consumer

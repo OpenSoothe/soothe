@@ -1,362 +1,141 @@
 # MemoryProtocol
 
 **RFC**: 303 (Protocol Specifications series)
-**Module**: RFC-000 Module 2
 **Location**: `packages/soothe/src/soothe/protocols/memory.py`
 **Status**: Implemented
-**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics  
 
-## Overview
+## What MemoryProtocol Is
 
-MemoryProtocol defines the interface for **cross-thread long-term memory** in Soothe. Unlike ContextProtocol (within-thread) and MemoryMiddleware (static AGENTS.md files), MemoryProtocol provides semantically queryable, explicitly populated long-term knowledge storage that survives beyond individual thread executions.
+MemoryProtocol defines the interface for **cross-thread long-term memory** — knowledge that survives beyond a single thread's execution and can be semantically recalled by future threads. It is Soothe's mechanism for an agent to *learn* across sessions: thread A discovers something, stores it; thread B recalls it when working on a related task.
 
-## Purpose
+This is explicitly distinct from two other "memory" concepts in Soothe:
 
-- **Cross-thread persistence**: Knowledge that should survive beyond a single thread
-- **Semantic retrieval**: Query by relevance using embeddings
-- **Explicit population**: Manually curated, not auto-memorized
-- **Thread-scoped sources**: Track which thread created each memory item
+| Concept | Scope | Population | Retrieval |
+|---------|-------|------------|-----------|
+| **MemoryProtocol** | Cross-thread | Explicit (manual `remember()`) | Semantic + tag-based |
+| **ContextProtocol** (future) | Within-thread | Auto-ingested | Relevance projection |
+| **MemoryMiddleware** | Static files | Authored AGENTS.md | File reads |
 
-## Protocol Interface
+MemoryProtocol is *explicitly populated* — not every tool result gets memorized. Callers decide what's worth remembering, which keeps the store curated and noise-free.
 
-```python
-@runtime_checkable
-class MemoryProtocol(Protocol):
-    """Protocol for cross-thread long-term memory.
-    
-    Memory is explicitly populated (not auto-memorized) and semantically
-    queryable. Separate from ContextProtocol (within-thread) and
-    MemoryMiddleware (static AGENTS.md files).
-    """
+## Why It Exists
 
-    async def remember(self, item: MemoryItem) -> str:
-        """Store a memory item.
-        
-        Args:
-            item: The memory item to persist.
-            
-        Returns:
-            The item's unique ID.
-        """
-        ...
+Without persistent cross-thread memory, every thread starts from scratch. An agent that learned "this project uses PostgreSQL" in thread A would re-discover it in thread B. MemoryProtocol breaks that amnesia by providing:
 
-    async def recall(self, query: str, limit: int = 5) -> list[MemoryItem]:
-        """Retrieve items by semantic relevance.
-        
-        Args:
-            query: The search query.
-            limit: Maximum number of items to return.
-            
-        Returns:
-            Matching items ordered by relevance.
-        """
-        ...
+- **Cross-thread persistence** — knowledge outlives any single thread
+- **Semantic retrieval** — query by meaning, not exact keywords ("database optimization" finds "PostgreSQL tuning")
+- **Traceability** — every item records its `source_thread` for provenance
+- **Curated quality** — explicit population means only important knowledge enters the store
 
-    async def recall_by_tags(self, tags: list[str], limit: int = 10) -> list[MemoryItem]:
-        """Retrieve items matching all specified tags.
-        
-        Args:
-            tags: Tags that items must match (AND logic).
-            limit: Maximum number of items to return.
-            
-        Returns:
-            Matching items ordered by importance.
-        """
-        ...
+## Key Operations
 
-    async def forget(self, item_id: str) -> bool:
-        """Remove a memory item.
-        
-        Args:
-            item_id: The item's unique ID.
-            
-        Returns:
-            True if the item was found and removed.
-        """
-        ...
+- **`remember(item) → id`** — store a memory item, returns its UUID. Items carry `content`, `source_thread`, `tags`, `importance` (0.0–1.0), and arbitrary `metadata`.
+- **`recall(query, limit=5)`** — semantic retrieval by relevance. Uses embeddings to find conceptually related items, not just keyword matches. Results ordered by relevance.
+- **`recall_by_tags(tags, limit=10)`** — tag-based retrieval with AND logic (items must match all specified tags). Results ordered by importance.
+- **`forget(item_id) → bool`** — remove a memory item. Returns `True` if found and removed.
+- **`update(item_id, content)`** — replace an item's content. Raises `KeyError` if the item doesn't exist.
 
-    async def update(self, item_id: str, content: str) -> None:
-        """Update an existing memory item's content.
-        
-        Args:
-            item_id: The item's unique ID.
-            content: New content to replace the existing content.
-            
-        Raises:
-            KeyError: If no item with the given ID exists.
-        """
-        ...
-```
+### The Importance Weight
 
-## Data Models
-
-### MemoryItem
-
-```python
-class MemoryItem(BaseModel):
-    """A unit of long-term knowledge.
-    
-    Args:
-        id: Unique identifier (auto-generated UUID if not provided).
-        content: The knowledge content (text).
-        source_thread: Thread that created this item (for traceability).
-        created_at: Creation timestamp (auto-generated).
-        tags: Categorical tags for filtering and recall.
-        importance: Priority weight from 0.0 to 1.0 (affects retrieval ranking).
-        metadata: Arbitrary key-value metadata.
-    """
-
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    content: str
-    source_thread: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    tags: list[str] = Field(default_factory=list)
-    importance: float = 0.5  # Default medium importance
-    metadata: dict[str, Any] = Field(default_factory=dict)
-```
-
-**Key Fields**:
-- **id**: UUID identifier for retrieval and deletion
-- **content**: The actual knowledge text
-- **source_thread**: Traceability to originating thread
-- **importance**: Retrieval ranking weight (0.0 = low, 1.0 = critical)
-
-## Backend Implementations
-
-### MemUMemory
-
-**Status**: Current implementation  
-**Location**: `packages/soothe/src/soothe/backends/memory/memu_adapter.py`  
-**Dependencies**: MemU internal memory store
-
-MemUMemory adapts the internal MemU memory store to the MemoryProtocol interface. It uses configured chat and embedding model roles for intelligent memory operations.
-
-**Features**:
-- LLM-assisted memory categorization
-- Configurable memory directories
-- Embedding-based semantic search
-- Importance-weighted retrieval
-- Rich metadata support
-
-**Configuration**:
-```yaml
-protocols:
-  memory:
-    enabled: true
-    persist_dir: ~/.soothe/memory
-    llm_chat_role: planner  # Model role for memory operations
-    embedding_role: embedding  # Model role for embeddings
-```
-
-**Implementation Example**:
-```python
-class MemUMemory(MemoryProtocol):
-    """MemoryProtocol implementation wrapping MemuMemoryStore."""
-    
-    def __init__(self, config: SootheConfig) -> None:
-        # Create LLM adapter from LangChain models
-        chat_model = config.create_chat_model(
-            config.agent.protocols.memory.llm_chat_role
-        )
-        embedding_model = config.create_embedding_model()
-        
-        llm_adapter = LangChainLLMAdapter(
-            chat_model=chat_model,
-            embedding_model=embedding_model,
-        )
-        
-        # Resolve memory directory
-        memory_dir = Path(config.agent.protocols.memory.persist_dir)
-        
-        # Create MemuMemoryStore
-        self._store = MemuMemoryStore(
-            memory_dir=str(memory_dir),
-            agent_id=config.agent.name,
-            user_id="default_user",
-            llm_client=llm_adapter,
-            enable_embeddings=True,
-        )
-```
-
-### Historical Backends
-
-**Note**: Earlier implementations included `KeywordMemory` and `VectorMemory` backends. These have been superseded by MemUMemory, which provides a unified, intelligent memory system.
-
-## Usage Patterns
-
-### Storing Memory
-
-```python
-from soothe.protocols import MemoryItem, MemoryProtocol
-
-memory: MemoryProtocol = resolve_memory(config)
-
-# Store important finding from thread
-item = MemoryItem(
-    content="Project uses PostgreSQL for persistence with separate databases",
-    source_thread="thread_abc123",
-    tags=["architecture", "database", "postgresql"],
-    importance=0.8,
-    metadata={"category": "technical", "verified": True}
-)
-
-item_id = await memory.remember(item)
-```
-
-### Semantic Retrieval
-
-```python
-# Retrieve relevant memories for new thread
-memories = await memory.recall(
-    query="database configuration",
-    limit=5
-)
-
-for mem in memories:
-    print(f"[{mem.importance:.2f}] {mem.content}")
-    # Ingest into current thread's context
-```
-
-### Tag-Based Filtering
-
-```python
-# Retrieve all architecture-related memories
-arch_memories = await memory.recall_by_tags(
-    tags=["architecture"],
-    limit=10
-)
-
-# Retrieve PostgreSQL-specific memories
-pg_memories = await memory.recall_by_tags(
-    tags=["postgresql", "database"],
-    limit=5
-)
-```
-
-### Memory Lifecycle
-
-```python
-# Update existing memory
-await memory.update(
-    item_id="mem_xyz789",
-    content="Updated: Project now uses PostgreSQL 15 with connection pooling"
-)
-
-# Remove outdated memory
-await memory.forget(item_id="mem_old123")
-```
-
-## Integration with Other Protocols
-
-### Memory ↔ Context Integration
-
-Memory and Context work together:
-
-```
-Thread A (past):
-  ... work ...
-  → memory.remember(findings)    ← Stored with source_thread="A"
-
-Thread B (new):
-  → memory.recall("related topic")  ← Retrieves findings from A
-  → context.ingest(recalled_items)   ← Merged into current context
-  ... work using recalled knowledge ...
-  → memory.remember(new_findings)    ← Stored with source_thread="B"
-```
-
-**Key Differences**:
-- **Context**: Within-thread, bounded projections, conversation-scoped
-- **Memory**: Cross-thread, persistent indefinitely, knowledge-scoped
-
-### Memory ↔ Durability Integration
-
-Memory is separate from DurabilityProtocol:
-
-- **Durability**: Thread lifecycle state (metadata, status)
-- **Memory**: Knowledge content (findings, learnings)
-
-Memory persists through MemU's own storage system, not via `AsyncPersistStore`.
-
-## Configuration
-
-### Memory Protocol Settings
-
-```yaml
-# config/config.template.yml
-agent:
-  protocols:
-    memory:
-      enabled: true
-      persist_dir: ~/.soothe/memory  # Storage location
-      llm_chat_role: planner  # LLM role for categorization
-      embedding_role: embedding  # Embedding role for semantic search
-```
-
-### Resolution
-
-```python
-from soothe.runner.resolver import resolve_memory
-
-# Resolve memory protocol from config
-memory = resolve_memory(config)
-
-# Returns: MemoryProtocol implementation (MemUMemory)
-```
-
-## Testing
-
-### Unit Tests
-
-**Location**: `packages/soothe/tests/unit/backends/memory/test_memory_memu.py`
-
-Tests verify:
-- MemoryItem creation and storage
-- Semantic recall accuracy
-- Tag-based filtering
-- Update and delete operations
-- Thread-scoped source tracking
-
-### Integration Tests
-
-Memory integration tests verify:
-- Cross-thread knowledge persistence
-- Context ingestion after recall
-- Configuration resolution
-- Backend initialization
+`MemoryItem.importance` (0.0–1.0, default 0.5) affects retrieval ranking. Higher importance surfaces items earlier in recall results. This lets callers signal critical knowledge ("the production database is read-only" → importance 0.9) versus incidental findings ("the test file is large" → 0.3).
 
 ## Design Rationale
 
 ### Why Separate Memory from Context?
 
-**RFC-000 Principle 4**: Unbounded context, bounded projection.
+RFC-000 Principle 4 separates *unbounded context* (within-thread) from *persistent memory* (cross-thread). Different persistence scopes demand different strategies:
 
-- **Context** is thread-scoped and conversation-focused
-- **Memory** is cross-thread and knowledge-focused
-- Different persistence scopes, different retrieval strategies
+- Context is conversation-scoped: bounded projections, summarization-safe
+- Memory is knowledge-scoped: persists indefinitely, semantic recall
+
+Conflating them would force either thread-scoped memory (no cross-thread learning) or unbounded context (token blowup).
 
 ### Why Explicit Population?
 
-Not every tool result should be memorized:
-- Avoid noise from temporary findings
-- Curate important, reusable knowledge
-- Manual selection ensures quality
+Auto-memorizing every tool result would flood the store with noise — temporary file paths, intermediate debug output, transient search results. Explicit population ensures only reusable, curated knowledge enters. The agent (or caller) decides "this finding is worth remembering."
 
 ### Why Semantic Retrieval?
 
-Keyword matching alone misses conceptual relationships:
-- "database optimization" should find "PostgreSQL tuning"
-- Embeddings capture semantic similarity
-- Importance weighting prioritizes critical knowledge
+Keyword matching misses conceptual relationships. "Database optimization" and "PostgreSQL tuning" share no keywords but are semantically identical. Embeddings capture these relationships, making recall far more effective than lexical search for knowledge management.
+
+## Integration Points
+
+### Memory ↔ Context (Cross-Thread Learning)
+
+The canonical cross-thread learning flow:
+
+```
+Thread A (past):
+  → works on a task
+  → memory.remember(findings)     ← stored with source_thread="A"
+
+Thread B (new, related task):
+  → memory.recall("related topic") ← retrieves A's findings
+  → uses recalled knowledge
+  → memory.remember(new_findings)  ← stored with source_thread="B"
+```
+
+When ContextProtocol is implemented, recalled memories would be ingested into the current thread's context ledger. Today, recalled items are injected directly into planning prompts.
+
+### Memory ↔ Durability
+
+Memory and Durability are separate concerns:
+
+- **Durability** manages thread *lifecycle state* (metadata, status, create/suspend/archive)
+- **Memory** manages thread *knowledge content* (findings, learnings)
+
+Archiving a thread triggers memory consolidation — the thread's accumulated knowledge is flushed to MemoryProtocol so it survives the thread's archival.
+
+### Memory ↔ VectorStore
+
+The current backend (MemU) uses embedding-based semantic search internally. Future backends could use `VectorStoreProtocol` directly for vector storage. The protocol abstracts this — callers call `recall(query)` without knowing the retrieval mechanism.
+
+## Backends
+
+### MemUMemory (Current)
+
+The sole production backend, adapting the internal MemU memory store. Key characteristics:
+
+- LLM-assisted memory categorization (intelligently tags and organizes stored items)
+- Embedding-based semantic search
+- Importance-weighted retrieval ranking
+- Owns its own storage system (not via `AsyncPersistStore` — MemU manages persistence internally)
+- Configurable model roles (`llm_chat_role` for categorization, `embedding_role` for embeddings)
+
+### Historical Backends
+
+Earlier implementations included `KeywordMemory` and `VectorMemory`. Both were superseded by MemU, which unifies intelligent categorization and semantic search into a single backend.
+
+## Configuration
+
+```yaml
+agent:
+  protocols:
+    memory:
+      enabled: true
+      persist_dir: ~/.soothe/memory
+      llm_chat_role: planner    # model role for memory operations
+      embedding_role: embedding # model role for embeddings
+```
+
+Resolved via `resolve_memory(config)` → returns a `MemoryProtocol` instance (currently `MemUMemory`).
+
+## Gotchas
+
+- **Memory is a singleton** — shared across all threads. There's no per-thread memory isolation; all threads see all memories (filtered by tags/importance, not by thread).
+- **`recall` is semantic, not exact** — results are ranked by embedding similarity, which means recall can return tangentially related items. Use `recall_by_tags` for precise categorical filtering.
+- **`update` replaces content only** — it swaps the `content` field; tags, importance, and metadata are preserved. To change those, you must `forget` and `remember` a new item.
+- **MemU owns its storage** — unlike Durability/VectorStore, MemU does not use `AsyncPersistStore`. Its storage location (`persist_dir`) is independent of the multi-database architecture.
 
 ## Specification Reference
 
-- **RFC-303**: Memory Protocol Architecture (full specification)
+- **RFC-303**: Memory Protocol Architecture
+- **RFC-000**: System Conceptual Design (Principle 4: unbounded context, bounded projection)
 - **RFC-300**: Context and Memory Architecture Design (superseded)
-- **RFC-000**: System Conceptual Design (protocol philosophy)
 
 ## Related Documentation
 
-- [Context Protocol](context.md) (future, not implemented yet)
-- [Durability Protocol](durability.md)
-- [VectorStore Protocol](vector-store.md)
-- [Backend Implementation Guide](../backends.md)
+- [Context Protocol](context.md) — future within-thread ledger
+- [Durability Protocol](durability.md) — thread lifecycle (archive triggers memory consolidation)
+- [Vector Store & Persistence](vector-store-persistence.md) — underlying vector search
+- [Planner Protocol](planner.md) — consumes recalled memories in planning

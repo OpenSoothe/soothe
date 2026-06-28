@@ -1,261 +1,105 @@
 # ContextProtocol
 
 **RFC**: 302 (Protocol Specifications series)
-**Status**: Draft (Not Yet Implemented)
-**Location**: Planned implementation
-**Supersedes**: RFC-300 (Context and Memory Architecture, archived)
-**Note**: Reclassified from 4xx to 3xx per RFC-900 series semantics  
+**Status**: Draft — not yet implemented
+**Supersedes**: RFC-300 (archived)
 
-## Overview
+> ⚠️ ContextProtocol is defined in RFC-302 (draft) but **not implemented**. This article describes the planned design and explains how context is managed today.
 
-ContextProtocol is **planned** as Soothe's unbounded knowledge accumulator for cognitive context engineering. It serves as StrangeLoop's "consciousness" layer, maintaining complete execution knowledge across threads.
+## What ContextProtocol Is
 
-⚠️ **Implementation Status**: ContextProtocol is defined in RFC-302 (draft status) but **not yet implemented**. The current architecture uses alternative mechanisms for context management. This documentation describes the **planned design**.
+ContextProtocol is planned as Soothe's **unbounded knowledge accumulator** for cognitive context engineering. It serves as StrangeLoop's "consciousness" layer — an append-only ledger that captures complete execution knowledge within a thread, then projects bounded, relevance-ranked views back to the orchestrator when it reasons.
 
-## Planned Purpose
+The core insight: accumulate everything, never discard, but only ever *show* a bounded slice. This separates durable knowledge from the token-constrained window an LLM actually sees.
 
-- **Unbounded ledger**: Append-only knowledge accumulation
-- **Bounded projection**: Token-budget-aware view extraction
-- **Goal-centric retrieval**: Self-contained retrieval module
-- **Thread-scoped persistence**: Per-thread ledger persistence
-- **Subagent briefing**: Scoped projections for delegation
+## Why It Exists
 
-## Planned Protocol Interface
+Current context mechanisms are fragmented across three systems, each with different scopes:
 
-```python
-class ContextProtocol(Protocol):
-    """Unbounded knowledge accumulator for cognitive context engineering.
-    
-    Planned design per RFC-302.
-    """
+| Mechanism | Scope | Limitation |
+|-----------|-------|------------|
+| Conversation history (`SummarizationMiddleware`) | Message thread | Summarization discards detail over time |
+| `LoopWorkingMemoryProtocol` | Single loop's Plan phase | Bounded scratchpad, not persistent |
+| `MemoryProtocol` | Cross-thread knowledge | Explicit population only, not auto-captured |
 
-    async def ingest(self, entry: ContextEntry) -> None:
-        """Append knowledge entry (append-only, never discard).
-        
-        Args:
-            entry: ContextEntry to append to ledger.
-        """
-        ...
+None of these provides an *unbounded, within-thread* knowledge store that survives summarization. ContextProtocol fills that gap — a per-thread ledger that ingests every tool output, subagent result, and reflection, then serves bounded projections to whoever needs context.
 
-    async def project(
-        self, 
-        query: str, 
-        token_budget: int
-    ) -> ContextProjection:
-        """Project bounded view for orchestrator reasoning.
-        
-        Args:
-            query: Relevance query for projection.
-            token_budget: Maximum tokens in projection.
-            
-        Returns:
-            ContextProjection with ranked entries.
-        """
-        ...
+## Planned Design (RFC-302)
 
-    async def project_for_subagent(
-        self, 
-        goal: str, 
-        token_budget: int
-    ) -> ContextProjection:
-        """Project bounded view scoped for subagent briefing.
-        
-        Args:
-            goal: Delegated goal for scoping.
-            token_budget: Maximum tokens in projection.
-            
-        Returns:
-            ContextProjection scoped to goal.
-        """
-        ...
+The protocol defines two fundamental operations and supporting persistence:
 
-    def get_retrieval_module(self) -> ContextRetrievalModule:
-        """Get self-contained retrieval module for goal-centric access.
-        
-        Returns:
-            ContextRetrievalModule with stable API boundary.
-        """
-        ...
+- **`ingest(entry)`** — append a knowledge entry to the thread's ledger. Append-only; entries are never deleted or truncated. The ledger grows unboundedly.
+- **`project(query, token_budget)`** — extract a bounded view ranked by relevance to the query, constrained to `token_budget`. This is the read path: the orchestrator asks for "what's relevant to X in N tokens" and gets back a ranked slice.
+- **`project_for_subagent(goal, token_budget)`** — a purpose-scoped projection for subagent briefings, so delegated agents receive only the context relevant to their goal.
+- **`persist(thread_id)` / `restore(thread_id)`** — save and load the ledger to a durability backend, keyed by thread.
 
-    async def summarize(self, scope: str | None = None) -> str:
-        """Generate summary of context entries.
-        
-        Args:
-            scope: Optional scope filter for summary.
-            
-        Returns:
-            Human-readable context summary.
-        """
-        ...
+### The Retrieval Module
 
-    async def persist(self, thread_id: str) -> None:
-        """Persist context ledger to durability backend.
-        
-        Args:
-            thread_id: Thread ID for persistence key.
-        """
-        ...
+A notable design decision: `get_retrieval_module()` returns a **self-contained retrieval object** with its own stable API (`retrieve_by_goal_relevance(goal_id, query, token_budget)`). This is deliberately decoupled from the protocol interface so the retrieval *algorithm* can evolve (keyword → embedding → hybrid) without breaking the `ContextProtocol` contract. The module carries an internal version tag (`"v1_keyword"`) to signal which algorithm is active.
 
-    async def restore(self, thread_id: str) -> bool:
-        """Restore context ledger from durability backend.
-        
-        Args:
-            thread_id: Thread ID to restore.
-            
-        Returns:
-            True if ledger restored successfully.
-        """
-        ...
-```
-
-## Planned Data Models
-
-### ContextEntry
-
-```python
-class ContextEntry(BaseModel):
-    """Unit of knowledge in context ledger.
-    
-    Args:
-        source: Source identifier (agent, tool, subagent, reflection).
-        content: Knowledge content.
-        timestamp: Entry creation timestamp.
-        tags: Tags for categorization and filtering.
-        importance: Importance score (0.0-1.0) for projection ranking.
-    """
-
-    source: str
-    content: str
-    timestamp: datetime
-    tags: list[str] = []
-    importance: float = 0.5
-```
-
-### ContextProjection
-
-```python
-class ContextProjection(BaseModel):
-    """Bounded view of context ledger.
-    
-    Args:
-        entries: Ranked entries within token budget.
-        summary: Brief summary of projection context.
-        total_entries: Total entries in ledger (projection subset).
-        token_count: Actual token count in projection.
-    """
-
-    entries: list[ContextEntry]
-    summary: str
-    total_entries: int
-    token_count: int
-```
-
-## Design Principles (RFC-302)
+## Design Principles
 
 ### 1. Accumulate, Never Discard
 
-Context ledger is append-only and unbounded:
-- No deletion of entries
-- No truncation of history
-- Knowledge persists indefinitely
-- Only projections bounded by token budgets
+The ledger is append-only. No entry is ever removed. Boundedness applies only to *projections* — the token-budgeted views served to reasoning. This guarantees no knowledge is lost to summarization, while LLM context windows stay manageable.
 
 ### 2. Relevance-Based Projection
 
-Entries ranked by relevance to query:
-- Importance weighting
-- Tag matching
-- Semantic similarity (if embedding-based)
-- Temporal decay (optional)
+Projections rank entries by a composite of importance weighting, tag matching, semantic similarity (when embedding-based), and optional temporal decay. The projection, not the ledger, is what respects token limits.
 
-### 3. Purpose-Scoped Projections
+### 3. Purpose-Scoped Views
 
-Different views for different purposes:
-- **Orchestrator reasoning**: Full context with goal relevance
-- **Subagent briefing**: Scoped to delegated goal
-- **Reflection**: Structured evidence summaries
-- **User summary**: High-level progress overview
+Different consumers need different views of the same ledger:
+
+- **Orchestrator reasoning** — full context with goal relevance
+- **Subagent briefing** — scoped to the delegated goal only (subagents never see the full ledger)
+- **Reflection** — structured evidence summaries
+- **User summary** — high-level progress overview
+
+This is why `project()` and `project_for_subagent()` are separate operations rather than one parameterized call: the scoping logic differs meaningfully per consumer.
 
 ### 4. Subagent Isolation
 
-Subagents receive projections, not full context:
-- Scoped to delegated goal
-- Bounded by token budget
-- Return results only (no context access)
-- Orchestrator ingests subagent results
+Subagents receive projections, not ledger access. They get a bounded, goal-scoped slice and return only results. The orchestrator ingests those results back into the ledger. This enforces a clean information boundary — delegated agents cannot accumulate or leak context beyond their scope.
 
-## ContextRetrievalModule (Planned)
+## Current Context Management (Until Implemented)
 
-Self-contained retrieval module with stable API boundary:
+While ContextProtocol remains in draft, Soothe uses these mechanisms:
 
-```python
-class ContextRetrievalModule:
-    """Self-contained retrieval module for ContextProtocol.
-    
-    Stable API boundary enables algorithm evolution without
-    breaking ContextProtocol interface.
-    """
-
-    def __init__(self, embedding_model: Embeddings) -> None:
-        self._embedding_model = embedding_model
-        self._algorithm_version = "v1_keyword"  # Evolvable
-
-    def retrieve_by_goal_relevance(
-        self,
-        goal_id: str,
-        query: str,
-        token_budget: int,
-    ) -> list[ContextEntry]:
-        """Retrieve entries by goal-centric relevance.
-        
-        Args:
-            goal_id: Goal identifier for context scope.
-            query: Relevance query text.
-            token_budget: Maximum tokens to retrieve.
-            
-        Returns:
-            Ranked entries within budget.
-        """
-        ...
-```
-
-## Current Context Management
-
-Until ContextProtocol is implemented, Soothe uses:
-
-### Current Mechanisms
-
-1. **Conversation History**: Managed by deepagents `SummarizationMiddleware`
-2. **LoopWorkingMemory**: Bounded scratchpad for Plan prompts
-3. **MemoryProtocol**: Cross-thread long-term memory
+1. **Conversation history** — managed by deepagents `SummarizationMiddleware`, which compresses older messages.
+2. **LoopWorkingMemory** — a bounded in-memory scratchpad (`max_entries`, truncated previews) that renders into Plan-phase prompts. See [loop-protocols.md](loop-protocols.md).
+3. **MemoryProtocol** — cross-thread persistent knowledge, explicitly populated. See [memory.md](memory.md).
 
 ### Migration Path
 
-When ContextProtocol is implemented:
+When ContextProtocol ships, it slots in alongside existing mechanisms rather than replacing them:
 
-1. Conversation history → SummarizationMiddleware (unchanged)
-2. Working memory → LoopWorkingMemoryProtocol (unchanged)
-3. **New**: ContextProtocol for unbounded ledger
+- Conversation history → `SummarizationMiddleware` (unchanged)
+- Working memory → `LoopWorkingMemoryProtocol` (unchanged — still the bounded Plan-phase scratchpad)
+- **New**: `ContextProtocol` as the unbounded within-thread ledger
+
+## Gotchas
+
+- **Not implemented** — don't depend on `ContextProtocol` in code yet. Track RFC-302 status.
+- **Retrieval algorithm is pluggable** — the retrieval module's version tag means two deployments could use different ranking strategies. Don't assume a specific ordering guarantee.
+- **Persistence backend undecided** — RFC-302 has not finalized whether the ledger uses `AsyncPersistStore`, a dedicated database, or its own storage. The `persist`/`restore` contract assumes a durability backend exists.
+
+## Relationship to Other Protocols
+
+| Protocol | Relationship |
+|----------|-------------|
+| [MemoryProtocol](memory.md) | Memory is *cross-thread* and explicitly populated; Context is *within-thread* and auto-ingested. Different scopes, different retrieval strategies. |
+| [DurabilityProtocol](durability.md) | Provides thread IDs that key context ledgers. Context persistence piggybacks on the thread lifecycle. |
+| [LoopWorkingMemoryProtocol](loop-protocols.md) | The bounded scratchpad that ContextProtocol would eventually feed richer projections into. |
 
 ## Specification Reference
 
 - **RFC-302**: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval (draft)
-- **RFC-001**: Core Modules Architecture (references RFC-302 for retrieval)
 - **RFC-300**: Context and Memory Architecture Design (superseded by RFC-302)
-
-## Implementation Timeline
-
-ContextProtocol is planned for future implementation. Current blockers:
-
-- RFC-302 is in draft status
-- Retrieval module design needs finalization
-- Backend architecture decisions pending
-
-**Track RFC-302 status** for implementation updates.
 
 ## Related Documentation
 
 - [RFC-302 Draft](../specs/RFC-302-context-protocol-architecture.md)
-- [Memory Protocol](memory.md) - Current cross-thread memory
-- [LoopWorkingMemory Protocol](loop-protocols.md) - Current bounded scratchpad
-- [Planner Protocol](planner.md) - Uses bounded context for planning
+- [Memory Protocol](memory.md) — current cross-thread memory
+- [Loop Protocols](loop-protocols.md) — current bounded scratchpad
+- [Planner Protocol](planner.md) — consumes bounded context for planning

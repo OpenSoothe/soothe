@@ -1,38 +1,20 @@
 # Memory Backends
 
-MemoryProtocol implementations for cross-thread persistent memory.
+Cross-thread long-term memory via `MemoryProtocol`. Unlike context (which is within-thread and ephemeral), memory survives thread boundaries and accumulates knowledge across conversations. Memory backends provide the semantic recall that makes Soothe agents *learn* from past interactions.
 
 ---
 
-## Overview
+## What Memory Backends Do
 
-Memory backends implement `MemoryProtocol` for storing and retrieving knowledge that persists across conversation threads. Unlike context (within-thread), memory survives thread boundaries and provides long-term knowledge accumulation.
+Memory backends store, retrieve, and organize knowledge that persists across conversation threads. The core operations are:
 
----
+- **`remember()`** — Store a memory item with content, tags, importance score, and source thread.
+- **`recall()`** — Retrieve memories by semantic similarity to a query string.
+- **`recall_by_tags()`** — Retrieve memories matching specific tags (faster, no embedding needed).
+- **`update()`** — Modify memory content (triggers re-processing).
+- **`forget()`** — Remove a memory permanently.
 
-## MemoryProtocol Interface
-
-### Core Operations
-
-```python
-class MemoryProtocol(Protocol):
-    """Cross-thread long-term memory."""
-    
-    async def remember(self, item: MemoryItem) -> str:
-        """Store a memory item."""
-        
-    async def recall(self, query: str, limit: int = 5) -> list[MemoryItem]:
-        """Recall memories by query."""
-        
-    async def recall_by_tags(self, tags: list[str], limit: int = 10) -> list[MemoryItem]:
-        """Recall memories by tags."""
-        
-    async def forget(self, item_id: str) -> bool:
-        """Remove a memory."""
-        
-    async def update(self, item_id: str, content: str) -> None:
-        """Update memory content."""
-```
+The critical distinction: memory is *semantic* (query by meaning, not exact keywords) and *persistent* (survives thread completion). When a thread is archived, its significant interactions are consolidated into memory.
 
 ---
 
@@ -40,477 +22,94 @@ class MemoryProtocol(Protocol):
 
 ### MemUMemory
 
-LLM-powered semantic memory with embeddings and intelligent clustering.
+The sole `MemoryProtocol` implementation — an LLM-powered semantic memory store with embeddings, clustering, and theory-of-mind analysis.
 
-#### Features
+**What it does**: Wraps `MemuMemoryStore` (an internal memU implementation) and adapts it to `MemoryProtocol`. Every `remember()` call generates an embedding for the content; every `recall()` computes query embeddings and searches by similarity.
 
-- **Semantic Recall**: Query memories by semantic similarity
-- **LLM Integration**: Uses LLM for memory clustering and suggestions
-- **Embedding Support**: Automatic embedding generation for memories
-- **Tag-based Recall**: Retrieve memories by tags
-- **Theory of Mind**: Advanced memory relationship detection
-- **Auto-memorization**: Automatically stores significant responses
+**Key capabilities**:
+- **Semantic recall**: Queries match by meaning, not keywords. Powered by embedding vectors.
+- **LLM-driven clustering**: Automatically groups related memories into clusters, surfacing common themes and temporal relationships.
+- **Theory of mind**: Analyzes user intent, behavioral patterns, preference evolution, and contextual relationships across memories.
+- **Proactive suggestions**: Generates suggestions for related topics, memory gaps, and tag refinements.
+- **Auto-memorization**: SootheRunner automatically stores significant responses (>50 chars) with computed importance scores.
+- **Tag-based recall**: Fast filtering without embedding computation (~50-100ms vs ~100-200ms for semantic).
 
-#### Architecture
+**When to use**: This is the only memory backend — use it whenever cross-thread memory is enabled. The decision is *whether* to enable memory, not *which* backend to choose.
 
-```
-MemUMemory Backend Architecture
-├─ LLM Adapter
-│  ├─ Chat model for clustering/suggestions
-│  ├─ Embedding model for semantic search
-│  └─ LangChain integration
-│
-├─ Memory Store
-│  ├─ File-based persistence
-│  ├─ Memory agent for management
-│  ├─ Recall agent for retrieval
-│  └─ Embedding cache
-│
-├─ Memory Actions
-│  ├─ Add activity memory
-│  ├─ Cluster memories
-│  ├─ Generate suggestions
-│  ├─ Link related memories
-│  ├─ Theory of mind analysis
-│  └─ Update with suggestions
-│
-└─ Configuration
-   ├─ Memory directory
-   ├─ Agent ID
-   ├─ User ID
-   ├─ LLM client
-   └─ Embedding enable
-```
-
-#### Implementation
-
-```python
-class MemUMemory(MemoryProtocol):
-    """MemoryProtocol implementation wrapping MemuMemoryStore."""
-    
-    def __init__(self, config: SootheConfig):
-        """Initialize MemU memory backend."""
-        
-        # Create LLM adapter from LangChain models
-        chat_model = config.create_chat_model(config.agent.protocols.memory.llm_chat_role)
-        embedding_model = config.create_embedding_model()
-        
-        llm_adapter = LangChainLLMAdapter(
-            chat_model=chat_model,
-            embedding_model=embedding_model,
-        )
-        
-        # Resolve memory directory
-        memory_dir = Path(config.agent.protocols.memory.persist_dir or "~/.soothe/memory")
-        
-        # Create MemuMemoryStore
-        self._store = MemuMemoryStore(
-            memory_dir=str(memory_dir),
-            agent_id=config.agent.name,
-            user_id="default_user",
-            llm_client=llm_adapter,
-            enable_embeddings=True,
-        )
-    
-    async def remember(self, item: MemoryItem) -> str:
-        """Store a memory item."""
-        # Convert to MemU format
-        memu_item = convert_to_memu_format(item)
-        
-        # Store with embeddings
-        item_id = await self._store.add_memory(memu_item)
-        
-        return item_id
-    
-    async def recall(self, query: str, limit: int = 5) -> list[MemoryItem]:
-        """Recall memories by query."""
-        # Semantic search
-        memu_items = await self._store.search_memories(query, limit=limit)
-        
-        # Convert to Soothe format
-        items = [convert_to_soothe_format(item) for item in memu_items]
-        
-        return items
-```
-
-#### Configuration
-
+**Minimal config**:
 ```yaml
 protocols:
   memory:
     enabled: true
-    backend: memu              # MemUMemory backend
-    
-    # Persistence
-    persist_dir: ~/.soothe/memory  # Memory storage directory
-    
-    # LLM integration
-    llm_chat_role: fast        # Chat model for clustering/suggestions
-    llm_embed_role: embedding  # Embedding model for semantic search
-    
-    # Features
-    enable_embeddings: true    # Enable embedding generation
-    enable_clustering: true    # Enable memory clustering
-    enable_suggestions: true   # Enable suggestion generation
+    backend: memu
+    persist_dir: ~/.soothe/memory
+    llm_chat_role: fast        # for clustering/suggestions
+    llm_embed_role: embedding  # for semantic search
 ```
 
-#### Usage Example
-
-```python
-from soothe.backends.memory import MemUMemory
-from soothe.protocols.memory import MemoryItem
-from soothe.config import SootheConfig
-
-config = SootheConfig.from_yaml_file("config.yml")
-memory = MemUMemory(config)
-
-# Remember a memory
-item = MemoryItem(
-    content="User prefers concise responses",
-    tags=["user_preference", "communication"],
-    importance=0.8
-)
-item_id = await memory.remember(item)
-
-# Recall memories
-memories = await memory.recall("user preferences", limit=5)
-
-# Recall by tags
-tagged_memories = await memory.recall_by_tags(["user_preference"], limit=10)
-
-# Update memory
-await memory.update(item_id, "User prefers concise responses with code examples")
-
-# Forget memory
-await memory.forget(item_id)
-```
+Source: `packages/soothe/src/soothe/backends/memory/memu_adapter.py`
 
 ---
 
-## Memory Data Model
+## Architecture & Data Flow
 
-### MemoryItem
+MemUMemory composes three layers:
 
-Memory items store structured knowledge:
+1. **LLM Adapter** (`LangChainLLMAdapter`) — Bridges LangChain chat and embedding models to the memU store. The chat model handles clustering and suggestion generation; the embedding model generates vectors for semantic search.
 
-```python
-class MemoryItem(BaseModel):
-    """Memory item data model."""
-    
-    id: str                          # Unique identifier
-    content: str                     # Memory content
-    source_thread: str               # Origin thread ID
-    created_at: datetime             # Creation timestamp
-    tags: list[str] = []             # Classification tags
-    importance: float = 0.5          # Importance score (0-1)
-    metadata: dict[str, Any] = {}    # Additional metadata
-```
+2. **Memory Store** (`MemuMemoryStore`) — File-based persistence with an embedding cache. Stores memories as JSON files organized by agent ID, with separate directories for memories, embeddings, clusters, and suggestions.
 
----
+3. **Memory Actions** — Background operations: add activity memory, cluster memories, generate suggestions, link related memories, theory-of-mind analysis, and update with suggestions.
 
-## Auto-Memorization
+**Recall flow**: Query → generate embedding → similarity search over stored embeddings → return ranked memories. The embedding cache avoids regenerating embeddings for repeated queries.
 
-### Integration with SootheRunner
-
-SootheRunner automatically stores significant responses:
-
-```python
-async def post_stream_processing(self, response: str):
-    """Post-stream processing."""
-    
-    # Auto-memorize significant responses (>50 chars)
-    if len(response) > 50:
-        item = MemoryItem(
-            content=response,
-            source_thread=self.thread_id,
-            tags=["auto-memorized"],
-            importance=self._calculate_importance(response)
-        )
-        
-        await self.memory.remember(item)
-```
+**Integration with context**: Before each stream, SootheRunner recalls relevant memories (via `recall(goal, limit=5)`) and ingests them into the thread's context as `ContextEntry` objects with source=`memory`.
 
 ---
 
 ## Performance Characteristics
 
-### MemUMemory Performance
-
-| Operation | Performance | Notes |
-|-----------|-------------|-------|
-| `remember()` | ~500-1000ms | LLM calls for clustering, embedding generation |
-| `recall()` | ~100-200ms | Embedding generation + search |
-| `recall_by_tags()` | ~50-100ms | Tag-based filtering |
-| `update()` | ~500-1000ms | LLM processing |
+| Operation | Latency | Bottleneck |
+|-----------|---------|------------|
+| `remember()` | ~500-1000ms | LLM calls (clustering) + embedding generation |
+| `recall()` | ~100-200ms | Embedding generation + similarity search |
+| `recall_by_tags()` | ~50-100ms | Tag filtering only (no embeddings) |
+| `update()` | ~500-1000ms | LLM re-processing |
 | `forget()` | ~10-20ms | File deletion |
 
-### Optimization Tips
-
-- **Batch Operations**: Group multiple `remember()` calls
-- **Embedding Caching**: Cache embeddings for repeated queries
-- **Selective Memorization**: Only memorize significant content
-- **Tag Optimization**: Use meaningful, consistent tags
+**`remember()` is expensive** because it may trigger LLM clustering and suggestion generation. Batch multiple `remember()` calls where possible, and use selective memorization (only significant content).
 
 ---
 
-## Persistence
+## Production Gotchas
 
-### File Structure
+1. **LLM dependency**: Memory operations require both a chat model and an embedding model. If LLM services are unavailable, `remember()` fails. Consider a fallback to simple storage (without clustering) on LLM errors.
 
-Memories are stored in files:
+2. **Latency on first recall**: The first `recall()` after startup may be slower as the embedding cache warms up. Subsequent recalls with similar queries benefit from caching.
 
-```
-~/.soothe/memory/
-├─ agent_id/
-│  ├─ memories/
-│  │  ├─ memory_001.json
-│  │  ├─ memory_002.json
-│  │  └─ ...
-│  ├─ embeddings/
-│  │  ├─ embeddings_cache.json
-│  │  └─ ...
-│  ├─ clusters/
-│  │  ├─ cluster_data.json
-│  │  └─ ...
-│  ├─ suggestions/
-│  │  ├─ suggestions.json
-│  │  └─ ...
-│  └─ index.json         # Memory index
-```
+3. **File-based storage**: Memories persist as JSON files under `persist_dir`. There is no database backend — large memory stores (10,000+ items) may experience degraded listing performance. Monitor the `index.json` size.
 
-### Memory File Format
+4. **User ID scoping**: `MemuMemoryStore` scopes memories by `user_id`, which is set to the thread's `source_thread` on each `remember()` call. Ensure consistent ID usage to avoid fragmenting memories across scopes.
 
-```json
-{
-  "id": "mem_abc123",
-  "content": "User prefers concise responses",
-  "source_thread": "thread_xyz",
-  "created_at": "2026-06-06T10:30:00Z",
-  "tags": ["user_preference", "communication"],
-  "importance": 0.8,
-  "metadata": {
-    "embedding": [0.1, 0.2, ...],
-    "cluster_id": "cluster_001",
-    "related_memories": ["mem_def456"]
-  }
-}
-```
+5. **No built-in memory limits**: Memories accumulate without automatic pruning. Use `forget()` for explicit cleanup, or implement importance-based eviction.
+
+6. **Embedding dimension must match**: The embedding model's vector dimension is fixed at store creation. Switching embedding models requires re-generating all stored embeddings.
 
 ---
 
-## Advanced Features
+## Optimization Tips
 
-### Memory Clustering
-
-Automatic clustering groups related memories:
-
-```python
-await memory._store.cluster_memories()
-
-# Clusters contain:
-# - Related memories by semantic similarity
-# - Common themes and patterns
-# - Temporal relationships
-```
-
-### Theory of Mind
-
-Advanced relationship detection:
-
-```python
-await memory._store.run_theory_of_mind()
-
-# Analysis includes:
-# - User intent understanding
-# - Behavioral patterns
-# - Preference evolution
-# - Contextual relationships
-```
-
-### Suggestion Generation
-
-Proactive memory suggestions:
-
-```python
-await memory._store.generate_suggestions()
-
-# Suggestions include:
-# - Related topics to explore
-# - Memory gaps to fill
-# - Importance updates
-# - Tag refinements
-```
-
----
-
-## Comparison Table
-
-### Memory Backend Comparison
-
-| Feature | MemUMemory |
-|---------|-----------|
-| Storage Type | File-based |
-| Search Type | Semantic + Tag |
-| LLM Integration | ✅ |
-| Embeddings | ✅ |
-| Clustering | ✅ |
-| Suggestions | ✅ |
-| Theory of Mind | ✅ |
-| Async Operations | ✅ |
-| External Dependencies | LLM models, embedding models |
-
----
-
-## Error Handling
-
-### Common Errors
-
-```python
-try:
-    await memory.remember(item)
-except MemoryBackendError as e:
-    logger.error(f"Memory backend error: {e}")
-    
-    # Handle specific errors:
-    if "embedding_failed" in str(e):
-        # Retry without embeddings
-        await memory.remember(item_without_embedding)
-    
-    elif "llm_error" in str(e):
-        # Fallback to simple storage
-        await memory._store.add_memory_simple(item)
-```
-
----
-
-## Integration with Context
-
-### Memory → Context Flow
-
-Memories are automatically ingested into context:
-
-```python
-async def pre_stream_processing(self):
-    """Pre-stream processing."""
-    
-    # Recall relevant memories
-    memories = await self.memory.recall(self.goal, limit=5)
-    
-    # Ingest into context
-    for memory in memories:
-        entry = ContextEntry(
-            source="memory",
-            content=memory.content,
-            tags=memory.tags,
-            importance=memory.importance
-        )
-        await self.context.ingest(entry)
-```
-
----
-
-## Testing
-
-### Unit Testing
-
-```python
-import pytest
-
-@pytest.mark.asyncio
-async def test_memu_memory():
-    """Test MemU memory backend."""
-    config = create_test_config()
-    memory = MemUMemory(config)
-    
-    # Test remember
-    item = MemoryItem(content="test", tags=["test"])
-    item_id = await memory.remember(item)
-    assert item_id is not None
-    
-    # Test recall
-    items = await memory.recall("test", limit=5)
-    assert len(items) > 0
-    
-    # Test recall by tags
-    items = await memory.recall_by_tags(["test"])
-    assert len(items) > 0
-    
-    # Test forget
-    result = await memory.forget(item_id)
-    assert result is True
-```
-
----
-
-## Configuration Examples
-
-### Basic Configuration
-
-```yaml
-protocols:
-  memory:
-    enabled: true
-    backend: memu
-    persist_dir: ~/.soothe/memory
-```
-
-### Advanced Configuration
-
-```yaml
-protocols:
-  memory:
-    enabled: true
-    backend: memu
-    persist_dir: ~/.soothe/memory
-    
-    # LLM settings
-    llm_chat_role: fast
-    llm_embed_role: embedding
-    
-    # Feature flags
-    enable_embeddings: true
-    enable_clustering: true
-    enable_suggestions: true
-    enable_theory_of_mind: true
-    
-    # Performance tuning
-    batch_size: 10
-    embedding_cache_size: 1000
-```
+- **Batch `remember()` calls** to amortize LLM clustering overhead.
+- **Cache embeddings** for repeated queries (built into MemuMemoryStore).
+- **Use `recall_by_tags()`** when you know the category — it's 2-4× faster than semantic recall.
+- **Use meaningful, consistent tags** — they enable fast filtering and cluster organization.
+- **Selective memorization**: Only store content above an importance threshold. SootheRunner auto-memorizes responses >50 chars; tune this threshold for your use case.
 
 ---
 
 ## Related Documentation
 
-- **[Backends Overview](README.md)** - Backend layer introduction
-- **[Durability Backends](durability-backends.md)** - Thread lifecycle
-- **[Vector Store Backends](vector-store-backends.md)** - Semantic search
-- **[Context Protocol](../architecture/protocols.md#context)** - Context integration
-- **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** - Memory protocol spec
-
----
-
-## API Reference
-
-### MemUMemory Class
-
-```python
-class MemUMemory(MemoryProtocol):
-    """MemoryProtocol implementation wrapping MemuMemoryStore."""
-    
-    def __init__(self, config: SootheConfig) -> None: ...
-    
-    async def remember(self, item: MemoryItem) -> str: ...
-    async def recall(self, query: str, limit: int = 5) -> list[MemoryItem]: ...
-    async def recall_by_tags(self, tags: list[str], limit: int = 10) -> list[MemoryItem]: ...
-    async def forget(self, item_id: str) -> bool: ...
-    async def update(self, item_id: str, content: str) -> None: ...
-```
-
----
-
-## See Also
-
-- **[Memory Protocol](../architecture/protocols.md)** - Protocol definition
-- **[Protocol Resolver](../core/resolver.md)** - Backend resolution
-- **[Context System](../core/context.md)** - Context integration
+- **[Backends Overview](README.md)** — Backend layer introduction
+- **[Vector Store Backends](vector-store-backends.md)** — Semantic search engine
+- **[Durability Backends](durability-backends.md)** — Triggers memory consolidation on archive
+- **[Context System](../core/context.md)** — Where recalled memories are ingested

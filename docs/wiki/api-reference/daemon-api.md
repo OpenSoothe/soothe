@@ -1,533 +1,125 @@
-# Daemon API Reference
+# Daemon Server (`soothe_daemon`)
 
-The Soothe Daemon package (`soothe_daemon`) provides the background agent runner with WebSocket IPC and multi-transport communication.
+The `soothe_daemon` package is Layer 3 of the Soothe architecture — a long-running background server that hosts `SootheRunner` instances, manages multi-transport communication, and coordinates goal dispatch. It is the bridge between clients (CLI, SDK, messaging platforms) and the agent runtime.
 
-**Package**: `soothe-daemon`  
-**Import**: `from soothe_daemon import ...`  
-**Python**: `>=3.11`
-
----
-
-## Table of Contents
-
-1. [Server Lifecycle](#server-lifecycle)
-2. [Bootstrap Entrypoint](#bootstrap-entrypoint)
-3. [Channel Management](#channel-management)
-4. [Health Checks](#health-checks)
-5. [RPC Commands](#rpc-commands)
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/`
+> **Package**: `soothe-daemon` (note the hyphen) · **Python**: `>=3.11` · **Stability**: ⚠️ Alpha
 
 ---
 
 ## Server Lifecycle
 
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/server/core.py`
+
 ### SootheDaemon
 
-**Import**: `from soothe_daemon import SootheDaemon`
+`SootheDaemon` is the main server class. It owns the `SootheRunner`, the `ChannelManager`, the `EventBus`, the `ClientSessionManager`, and all background services (autopilot, cron, memory profiler).
 
-Main daemon server class managing the agent runtime and communication channels.
+The daemon follows a strict startup sequence:
 
-#### Constructor
+1. **Config load** — `SootheConfig` (agent core, `config.yml`) + `SootheDaemonConfig` (transports, worker pool, `daemon.yml`) are loaded separately. The `.env` file is loaded *before* any langchain imports so provider keys are available at import time.
+2. **PID lock** — `acquire_pid_lock()` writes `${SOOTHE_HOME}/soothe.pid` to enforce single-instance. This is a file-based lock, not just a PID file — concurrent daemons on the same home directory will fail to start.
+3. **Channel init** — `ChannelManager` initializes all enabled channels from the registry.
+4. **Ready state** — The daemon transitions through `starting` → `warming` → `ready`. Clients connecting during `starting`/`warming` are held with a bounded wait (RFC-450); the daemon does not re-push `daemon_ready` on transition, so clients must re-request status.
 
-```python
-SootheDaemon(
-    config: SootheConfig | None = None,
-    *,
-    transports: list[str] | None = None,
-    enable_autopilot: bool = False,
-)
-```
-
-**Parameters**:
-- `config`: Soothe configuration
-- `transports`: List of transport types to enable (`["websocket"]`)
-- `enable_autopilot`: Enable autopilot autonomous goal execution
-
-**Example**:
-```python
-from soothe_daemon import SootheDaemon
-from soothe.config import SootheConfig
-
-# Create daemon with configuration
-config = SootheConfig.from_yaml_file("config/config.yml")
-
-daemon = SootheDaemon(
-    config=config,
-    transports=["websocket"],
-    enable_autopilot=True,
-)
-```
-
-#### Methods
-
-##### `start()`
+### Minimal Startup
 
 ```python
-async def start() -> None
-```
-
-Start the daemon and all configured transports.
-
-**Raises**:
-- `RuntimeError`: If daemon fails to initialize
-
-**Example**:
-```python
-import asyncio
-
-async def run_daemon():
-    daemon = SootheDaemon()
-    await daemon.start()
-    print("Daemon started")
-    
-    # Keep running
-    try:
-        await asyncio.Future()  # Run forever
-    finally:
-        await daemon.stop()
-
-asyncio.run(run_daemon())
-```
-
-##### `stop()`
-
-```python
-async def stop() -> None
-```
-
-Stop the daemon and cleanup resources.
-
-**Example**:
-```python
-daemon = SootheDaemon()
-await daemon.start()
-
-# ... use daemon ...
-
-await daemon.stop()
-print("Daemon stopped")
-```
-
-##### `wait_ready()`
-
-```python
-async def wait_ready(timeout: float = 30.0) -> None
-```
-
-Wait for daemon to be fully ready.
-
-**Parameters**:
-- `timeout`: Maximum wait time in seconds
-
-**Raises**:
-- `TimeoutError`: If daemon doesn't become ready within timeout
-
-**Example**:
-```python
-daemon = SootheDaemon()
-await daemon.start()
-
-# Wait for readiness
-await daemon.wait_ready(timeout=10.0)
-print("Daemon ready to accept connections")
-```
-
-##### `status()`
-
-```python
-def status() -> dict[str, Any]
-```
-
-Get daemon status dictionary.
-
-**Returns**: Status dictionary with structure:
-```python
-{
-    "state": "ready" | "starting" | "warming" | "error",
-    "uptime_seconds": 123.45,
-    "active_connections": 3,
-    "active_loops": 2,
-    "transports": {
-        "websocket": {"enabled": True, "client_count": 3}
-    },
-    "autopilot": {
-        "enabled": True,
-        "dreaming": False,
-        "active_goals": 2
-    }
-}
-```
-
-**Example**:
-```python
-status = daemon.status()
-print(f"Daemon state: {status['state']}")
-print(f"Active connections: {status['active_connections']}")
-```
-
----
-
-## Bootstrap Entrypoint
-
-### run_daemon()
-
-**Import**: `from soothe_daemon.bootstrap import run_daemon`
-
-Main entrypoint for running the daemon.
-
-#### Signature
-
-```python
-async def run_daemon(
-    config_path: str | None = None,
-    *,
-    transports: list[str] = ["websocket"],
-    enable_autopilot: bool = False,
-    daemon_mode: bool = False,
-) -> None
-```
-
-**Parameters**:
-- `config_path`: Path to configuration YAML file
-- `transports`: List of transport types
-- `enable_autopilot`: Enable autopilot mode
-- `daemon_mode`: Run as background daemon process
-
-**Example**:
-```python
-import asyncio
 from soothe_daemon.bootstrap import run_daemon
 
-# Run daemon in foreground
-asyncio.run(run_daemon(
-    config_path="config/config.yml",
-    transports=["websocket"],
-    enable_autopilot=True,
-))
+run_daemon(config_path="config/config.yml")
 ```
+
+### Key Lifecycle Gotchas
+
+- **`wait_ready(timeout)`** — Use this after `start()` before accepting connections. It raises `TimeoutError` if the daemon doesn't reach `ready` state.
+- **Detached mode** — When `detached=True`, SIGINT shutdown handling is disabled. This is for daemonized background processes where the parent manages lifecycle.
+- **Heartbeat** — The daemon broadcasts a heartbeat every 5 seconds (`_HEARTBEAT_INTERVAL_S`) to all connected clients.
+- **Cleanup timeout** — On `stop()`, the daemon waits up to 8 seconds (`_STOP_TIMEOUT_S`) for graceful shutdown, then 3 seconds (`_CLEANUP_TIMEOUT_S`) for channel cleanup.
+
+### `status()` Return Shape
+
+The `status()` method returns a dict with `state`, `uptime_seconds`, `active_connections`, `active_loops`, per-transport client counts, and autopilot status (`enabled`, `dreaming`, `active_goals`). The `state` field is one of: `ready`, `starting`, `warming`, `error`.
 
 ---
 
-### pid_path()
+## Bootstrap & Process Management
 
-**Import**: `from soothe_daemon.bootstrap import pid_path`
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/bootstrap/`
 
-Get the PID file path for daemon process tracking.
+`run_daemon()` is the canonical entrypoint. It accepts both `SootheConfig` and `SootheDaemonConfig` objects (or paths to their YAML files), constructs a `SootheDaemon`, and blocks on `serve_forever()`.
 
-#### Signature
+The `pid_path()` function returns the PID file location (`${SOOTHE_HOME}/soothe.pid` by default). CLI commands like `soothed status` and `soothed stop` use this file for process discovery.
 
-```python
-def pid_path() -> Path
-```
+### Two Config Files
 
-**Returns**: Path to PID file (default: `${SOOTHE_HOME}/soothe.pid`)
+A common confusion: the daemon uses **two separate config files**:
 
-**Example**:
-```python
-from soothe_daemon.bootstrap import pid_path
-from pathlib import Path
+| File | Config Class | Controls |
+|------|-------------|----------|
+| `config.yml` | `SootheConfig` | Agent core — providers, models, protocols, tools |
+| `daemon.yml` | `SootheDaemonConfig` | Server — transports, worker pool, channels, TLS |
 
-pid_file = pid_path()
-print(f"PID file: {pid_file}")
-
-# Check if daemon is running
-if pid_file.exists():
-    pid = int(pid_file.read_text().strip())
-    print(f"Daemon running with PID {pid}")
-```
+The agent config can be shared across daemon and non-daemon (embedded) deployments. The daemon config is server-specific.
 
 ---
 
-## Channel Management
+## Channel Architecture
+
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/channel_manager.py`, `packages/soothe-daemon/src/soothe_daemon/channels/`
 
 ### ChannelManager
 
-**Import**: `from soothe_daemon.channel_manager import ChannelManager`
+`ChannelManager` (RFC-620) is the coordination hub for all transports. It:
 
-Manager for multi-transport communication channels.
+1. Initializes enabled channels from configuration via the channel registry
+2. Routes inbound messages to `EventBus` loop topics
+3. Subscribes to loop topics, translates events, dispatches outbound messages
+4. Handles streaming: coalesces deltas, buffers for non-streaming channels
+5. Applies retry policy on send failures (exponential backoff: 1s, 2s, 4s)
 
-#### Constructor
+The manager supports `broadcast()` (all clients, with optional exclusion) and `send_to_client()` (targeted delivery).
 
-```python
-ChannelManager(
-    *,
-    message_handler: Callable[[str, dict], None] | None = None,
-)
-```
+### Channel Base Class
 
-**Parameters**:
-- `message_handler`: Callback for inbound messages
+All channels extend `Channel` (ABC) with capability flags:
 
-**Methods**:
+| Flag | Meaning | WebSocket | Telegram | Slack | Email |
+|------|---------|:---------:|:-------:|:-----:|:-----:|
+| `supports_inbound` | Can receive messages | ✅ | ✅ | ✅ | ✅ |
+| `supports_outbound` | Can send messages | ✅ | ✅ | ✅ | ✅ |
+| `supports_streaming` | Incremental deltas | ✅ | ❌ | ❌ | ❌ |
 
-##### `register_channel()`
+Streaming channels receive `send_delta()` and `send_reasoning_delta()` calls; non-streaming channels receive buffered complete messages. This is why a Telegram bot shows the full response at once while a WebSocket client sees token-by-token streaming.
 
-```python
-async def register_channel(
-    channel: Channel,
-    *,
-    runner: SootheRunner | None = None,
-    config: SootheConfig | None = None,
-) -> None
-```
+### WebSocket Channel
 
-Register a communication channel.
+The primary transport. Runs a FastAPI/uvicorn server with WebSocket endpoint. Supports multiple concurrent clients, TLS, CORS, and configurable max frame size (default 10 MiB). Also hosts command handlers for autopilot, cron, and memory profiling.
 
-**Parameters**:
-- `channel`: Channel instance (WebSocket, Telegram, Slack, etc.)
-- `runner`: Optional SootheRunner for agent execution
-- `config`: Optional SootheConfig
-
-**Example**:
-```python
-from soothe_daemon.channel_manager import ChannelManager
-from soothe_daemon.channels.websocket import WebSocketChannel
-
-manager = ChannelManager()
-
-# Register WebSocket channel
-ws_channel = WebSocketChannel(config.ws_config, manager)
-await manager.register_channel(ws_channel, runner=my_runner)
-```
-
-##### `broadcast()`
-
-```python
-async def broadcast(
-    message: dict[str, Any],
-    *,
-    exclude_clients: list[str] | None = None,
-) -> None
-```
-
-Broadcast message to all connected clients.
-
-**Parameters**:
-- `message`: Message dictionary
-- `exclude_clients`: Optional list of client IDs to exclude
-
-**Example**:
-```python
-# Broadcast daemon status update
-await manager.broadcast({
-    "type": "daemon_status",
-    "data": daemon.status()
-})
-```
-
-##### `send_to_client()`
-
-```python
-async def send_to_client(
-    client_id: str,
-    message: dict[str, Any],
-) -> None
-```
-
-Send message to specific client.
-
-**Parameters**:
-- `client_id`: Client identifier
-- `message`: Message dictionary
-
-**Example**:
-```python
-await manager.send_to_client("client-123", {
-    "type": "command_response",
-    "data": {"status": "success"}
-})
-```
-
----
-
-### Channel (Base Class)
-
-**Import**: `from soothe_daemon.channels.base import Channel`
-
-Base class for communication channels.
-
-#### Definition
-
-```python
-class Channel(ABC):
-    """Abstract base class for communication channels."""
-    
-    name: str
-    """Channel name identifier."""
-    
-    display_name: str
-    """Human-readable channel name."""
-    
-    supports_inbound: bool
-    """Whether channel supports inbound messages."""
-    
-    supports_outbound: bool
-    """Whether channel supports outbound messages."""
-    
-    supports_streaming: bool
-    """Whether channel supports streaming."""
-    
-    def __init__(self, config: Any, manager: ChannelManager):
-        """Initialize channel with config and manager."""
-        ...
-    
-    @abstractmethod
-    async def start(self) -> None:
-        """Start the channel."""
-        ...
-    
-    @abstractmethod
-    async def stop(self) -> None:
-        """Stop the channel."""
-        ...
-    
-    @abstractmethod
-    async def send(self, chat_id: str, message: ChannelMessage) -> None:
-        """Send message to specific chat/client."""
-        ...
-    
-    @abstractmethod
-    async def broadcast(self, message: dict[str, Any]) -> None:
-        """Broadcast message to all clients."""
-        ...
-    
-    @property
-    def client_count(self) -> int:
-        """Get number of connected clients."""
-        ...
-    
-    @property
-    def running(self) -> bool:
-        """Check if channel is running."""
-        ...
-```
-
----
-
-### WebSocketChannel
-
-**Import**: `from soothe_daemon.channels.websocket import WebSocketChannel`
-
-WebSocket transport for bidirectional streaming communication.
-
-#### Constructor
-
-```python
-WebSocketChannel(
-    config: WebSocketConfig,
-    manager: ChannelManager,
-    *,
-    runner: SootheRunner | None = None,
-    soothe_config: SootheConfig | None = None,
-    session_manager: ClientSessionManager | None = None,
-)
-```
-
-**Configuration**:
 ```yaml
 transport:
   websocket:
-    enabled: true
     host: "127.0.0.1"
     port: 8765
-    tls_enabled: false
-    tls_cert: null
-    tls_key: null
-    cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
-    max_frame_size: 10485760  # 10 MiB
+    max_frame_size: 10485760  # 10 MiB — match SDK client's setting
 ```
 
-**Example**:
-```python
-from soothe_daemon.channels.websocket import WebSocketChannel
-from soothe_daemon.config.models import WebSocketConfig
+> **Gotcha**: The SDK client's `max_frame_size` must be ≥ the daemon's. The `websockets` library defaults to 1 MiB, which silently closes the connection (code 1009) when the daemon streams larger JSON events.
 
-ws_config = WebSocketConfig(
-    host="localhost",
-    port=8765,
-    max_frame_size=10 * 1024 * 1024,
-)
+### Platform Channels (16+)
 
-ws_channel = WebSocketChannel(
-    ws_config,
-    manager,
-    runner=my_runner,
-    soothe_config=config,
-)
-
-await ws_channel.start()
-print(f"WebSocket listening on ws://{ws_config.host}:{ws_config.port}")
-```
-
----
-
-### Platform Channels
-
-Soothe supports integration with 16+ external messaging platforms via channel plugins. Each channel extends the `Channel` base class:
-
-#### TelegramChannel
-
-**Import**: `from soothe_daemon.channels.telegram import TelegramChannel`
-
-Telegram bot integration for inbound/outbound messages.
-
-**Configuration**:
-```yaml
-channels:
-  telegram:
-    enabled: true
-    bot_token: "${TELEGRAM_BOT_TOKEN}"
-    allowed_chat_ids: [123456789]
-```
-
----
-
-#### SlackChannel
-
-**Import**: `from soothe_daemon.channels.slack import SlackChannel`
-
-Slack bot integration for team collaboration.
-
-**Configuration**:
-```yaml
-channels:
-  slack:
-    enabled: true
-    bot_token: "${SLACK_BOT_TOKEN}"
-    app_token: "${SLACK_APP_TOKEN}"
-    signing_secret: "${SLACK_SIGNING_SECRET}"
-```
-
----
-
-#### DiscordChannel
-
-**Import**: `from soothe_daemon.channels.discord import DiscordChannel`
-
-Discord bot integration for community servers.
-
-**Configuration**:
-```yaml
-channels:
-  discord:
-    enabled: true
-    bot_token: "${DISCORD_BOT_TOKEN}"
-    guild_id: 123456789
-```
-
-#### Full Channel List
-
-All available platform channels (16+):
+Each platform channel is a self-contained plugin following the same `Channel` pattern. They are configured under the top-level `channels:` section:
 
 | Channel | Module | Platform |
 |---------|--------|----------|
 | Telegram | `channels.telegram` | Telegram Bot API |
 | Slack | `channels.slack` | Slack Socket Mode |
 | Discord | `channels.discord` | Discord Bot API |
-| Feishu/Lark | `channels.feishu` | Feishu/Lark WebSocket |
+| Feishu/Lark | `channels.feishu` | Feishu WebSocket |
 | Matrix | `channels.matrix` | Matrix (Element) |
-| WhatsApp | `channels.whatsapp` | WhatsApp (Node.js bridge) |
-| Signal | `channels.signal` | Signal (signal-cli JSON-RPC) |
-| Email | `channels.email` | Email (IMAP/SMTP) |
+| WhatsApp | `channels.whatsapp` | Node.js bridge |
+| Signal | `channels.signal` | signal-cli JSON-RPC |
+| Email | `channels.email` | IMAP/SMTP |
 | MS Teams | `channels.msteams` | Microsoft Teams |
 | WeChat | `channels.weixin` | Personal WeChat |
 | WeCom | `channels.wecom` | Enterprise WeChat |
@@ -535,387 +127,89 @@ All available platform channels (16+):
 | QQ | `channels.qq` | QQ |
 | Mochat | `channels.mochat` | Mochat (Socket.IO) |
 
-Each channel follows the same `Channel` base class pattern and is configured under the `channels:` section of the daemon config.
+Channels are lazily imported — the `soothe_daemon` `__init__.py` uses `__getattr__` lazy loading to avoid the 5+ second import cost of channels/nio/crypto at package load time.
 
 ---
 
-## Health Checks
+## Session Management
 
-### HealthChecker
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/server/session.py`
 
-**Import**: `from soothe_daemon.health.checker import HealthChecker`
+`ClientSessionManager` creates and tracks `ClientSession` objects, each holding a client's `client_id`, current `loop_id`, `thread_id`, `workspace`, and an `asyncio.Queue` for event streaming.
 
-Comprehensive daemon health checker. Invoked by the `soothed doctor` CLI command.
-
-#### Constructor
-
-```python
-HealthChecker(
-    config: SootheConfig | None = None,
-    daemon_config: SootheDaemonConfig | None = None,
-)
-```
-
-**Parameters**:
-- `config`: Soothe configuration
-- `daemon_config`: Daemon-specific configuration
-
-#### Methods
-
-##### `run_all_checks()`
-
-```python
-async def run_all_checks(
-    categories: list[str] | None = None,
-    exclude: list[str] | None = None,
-) -> HealthReport
-```
-
-Run all (or a subset of) health check categories.
-
-**Parameters**:
-- `categories`: Optional list of category names to run (default: all)
-- `exclude`: Optional list of category names to skip
-
-**Returns**: HealthReport with component statuses
-
-**Example**:
-```python
-from soothe_daemon.health.checker import HealthChecker
-
-checker = HealthChecker(config, daemon_config=daemon_cfg)
-report = await checker.run_all_checks()
-
-print(f"Overall status: {report.status}")
-
-# Run specific categories only
-report = await checker.run_all_checks(
-    categories=["config", "protocols", "providers"]
-)
-```
-
-The `HealthChecker` also exposes individual category methods: `check_config()`, `check_daemon()`, `check_persistence()`, `check_protocols()`, `check_vector_stores()`, `check_providers()`, `check_mcp_servers()`, `check_models()`, `check_external_apis()`, `check_observability()`.
-
----
-
-### HealthReport
-
-**Import**: `from soothe_daemon.health import HealthReport`
-
-Health check report data structure.
-
-```python
-class HealthReport(BaseModel):
-    """Daemon health report."""
-    
-    status: str
-    """Overall status: 'healthy', 'degraded', 'unhealthy'."""
-    
-    components: dict[str, str]
-    """Component name -> status mapping."""
-    
-    details: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    """Detailed component information."""
-    
-    timestamp: float
-    """Report timestamp."""
-    
-    uptime_seconds: float
-    """Daemon uptime."""
-```
-
----
-
-### Component Health Checks
-
-Individual check modules live in `soothe_daemon.health.checks`:
-
-#### Protocols Check
-
-**Import**: `from soothe_daemon.health.checks.protocols_check import check_protocols`
-
-Check protocol backend health.
-
-```python
-async def check_protocols(config: SootheConfig) -> dict[str, Any]:
-    """Check all configured protocol backends."""
-    ...
-```
-
----
-
-#### External API Health
-
-**Import**: `from soothe_daemon.health.checks.external_apis_check import check_external_apis`
-
-Check external service connectivity (OpenAI, Anthropic, etc.).
-
-```python
-async def check_external_apis(config: SootheConfig) -> dict[str, Any]:
-    """Check external API connectivity."""
-    ...
-```
-
-Other available check modules include: `config_check`, `daemon_check`, `mcp_check`, `providers_check`, `vector_stores_check`, `embedding_warmup_check`, `observability_check`.
+Key design details:
+- **Event queue with backpressure** — Each client gets a bounded queue (default 10,000 events). If the consumer is too slow, events are dropped with a log throttle (one drop-log per 5 seconds per client).
+- **Priority-aware draining** — During drain settle, the manager peeks the queue for HIGH/CRITICAL priority events and gives them extra settle time (0.15s margin, IG-436).
+- **Sender filtering** — Events originating from a client are not echoed back to that same client (prevents feedback loops), with drop logging throttled to avoid spam.
 
 ---
 
 ## RPC Commands
 
-### Command Handlers
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/server/commands.py`
 
-RPC commands are handled via WebSocket using structured request/response format.
-
-#### Request Format
-
-```python
-{
-    "type": "command_request",
-    "command": "memory",
-    "params": {"action": "clear"},
-    "loop_id": "loop-123",
-    "request_id": "req-abc"
-}
-```
-
-#### Response Format
-
-```python
-{
-    "type": "command_response",
-    "command": "memory",
-    "data": {"cleared": 5},
-    "request_id": "req-abc",
-    "loop_id": "loop-123"
-}
-```
-
----
+The daemon accepts structured RPC commands over WebSocket (RFC-454). Each request has `type: "command_request"`, a `command` name, optional `params`, a `loop_id`, and a `request_id` for correlation.
 
 ### Available Commands
 
-#### `/memory` - Memory Management
+| Command | Actions | Purpose |
+|---------|---------|---------|
+| `/memory` | `clear`, `recall`, `remember` | Manage agent memory for the loop |
+| `/policy` | `check`, `list` | Inspect active permissions |
+| `/thread` | `create`, `list`, `show`, `delete` | Thread lifecycle management |
+| `/history` | — | Fetch conversation history (with limit + metadata flag) |
+| `/clear` | — | Clear current conversation context |
+| `/cancel` | — | Cancel active execution |
+| `/exit` | — | Shut down the daemon |
 
-```python
-{
-    "command": "memory",
-    "params": {
-        "action": "clear" | "recall" | "remember",
-        "query": "optional query for recall",
-        "content": "optional content for remember"
-    }
-}
-```
+### Command Binding
 
----
-
-#### `/policy` - Policy Management
-
-```python
-{
-    "command": "policy",
-    "params": {
-        "action": "check" | "list",
-        "request": "optional action request"
-    }
-}
-```
+A critical implementation detail: commands arrive with a `loop_id` (the StrangeLoop subscription scope), but handlers need a `checkpoint_thread_id` (the LangGraph persistence key). The handler calls `bind_execution_thread_for_loop()` to resolve the loop to its thread. If the runner already has `current_thread_id` set, it's used directly. This binding is why `/thread` and `/memory` commands work correctly even when multiple loops share a workspace.
 
 ---
 
-#### `/thread` - Thread Management
+## Health Checks
 
-```python
-{
-    "command": "thread",
-    "params": {
-        "action": "create" | "list" | "show" | "delete",
-        "thread_id": "optional thread ID"
-    }
-}
-```
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/health/`
 
----
+`HealthChecker` is invoked by the `soothed doctor` CLI command. It runs categorized checks and returns a `HealthReport` with overall status (`healthy` / `degraded` / `unhealthy`) and per-component detail.
 
-#### `/history` - Conversation History
+### Check Categories
 
-```python
-{
-    "command": "history",
-    "params": {
-        "limit": 10,
-        "include_metadata": true
-    }
-}
-```
+| Category | Module | What it validates |
+|----------|--------|-------------------|
+| `config` | `config_check` | Config file validity, env resolution |
+| `daemon` | `daemon_check` | Daemon process, PID file, ports |
+| `persistence` | `persistence_check` | DB connectivity (SQLite/PostgreSQL) |
+| `protocols` | `protocols_check` | Protocol backend health (memory, durability, etc.) |
+| `vector_stores` | `vector_stores_check` | Vector DB connectivity + dimension match |
+| `providers` | `providers_check` | LLM provider API key validity |
+| `mcp_servers` | `mcp_check` | MCP server reachability |
+| `models` | `embedding_warmup_check` | Model instantiation + embedding warmup |
+| `external_apis` | `external_apis_check` | OpenAI/Anthropic/etc. connectivity |
+| `observability` | `observability_check` | Logging, tracing config |
+
+You can run a subset with `categories=["config", "protocols"]` or exclude specific ones with `exclude=["external_apis"]`.
 
 ---
 
-#### `/clear` - Clear Context
+## Daemon Configuration
 
-```python
-{
-    "command": "clear",
-    "params": {}
-}
-```
+> **Source**: `packages/soothe-daemon/src/soothe_daemon/config/models.py`
 
----
+`SootheDaemonConfig` is separate from `SootheConfig`. It holds transport settings (WebSocket host/port/TLS), channel configs, worker pool sizing, and distributed runner settings. The default config path is resolved via `default_daemon_config_path()`.
 
-#### `/cancel` - Cancel Execution
-
-```python
-{
-    "command": "cancel",
-    "params": {}
-}
-```
-
----
-
-#### `/exit` - Exit Daemon
-
-```python
-{
-    "command": "exit",
-    "params": {}
-}
-```
-
----
-
-## ClientSessionManager
-
-**Import**: `from soothe_daemon.server.session import ClientSessionManager`
-
-Manages client sessions and event queues.
-
-#### Constructor
-
-```python
-ClientSessionManager(
-    *,
-    max_queue_size: int = 10000,
-)
-```
-
-**Parameters**:
-- `max_queue_size`: Maximum events per client queue
-
-**Methods**:
-
-##### `create_session()`
-
-```python
-async def create_session(
-    client_id: str,
-    *,
-    loop_id: str | None = None,
-) -> ClientSession
-```
-
-Create a new client session.
-
-**Returns**: ClientSession instance
-
----
-
-##### `get_session()`
-
-```python
-def get_session(client_id: str) -> ClientSession | None
-```
-
-Get existing session by client ID.
-
----
-
-##### `remove_session()`
-
-```python
-async def remove_session(client_id: str) -> None
-```
-
-Remove and cleanup session.
-
----
-
-## ClientSession
-
-**Import**: `from soothe_daemon.server.session import ClientSession`
-
-Client session with event queue and metadata.
-
-```python
-class ClientSession:
-    """Client session with event queue."""
-    
-    client_id: str
-    """Client identifier."""
-    
-    loop_id: str | None
-    """Current loop subscription."""
-    
-    thread_id: str | None
-    """Current thread ID."""
-    
-    workspace: str | None
-    """Current workspace."""
-    
-    event_queue: asyncio.Queue
-    """Event queue for streaming."""
-    
-    created_at: float
-    """Session creation timestamp."""
-    
-    last_activity: float
-    """Last activity timestamp."""
-```
-
----
-
-## Daemon Configuration Models
-
-### WebSocketConfig
-
-**Import**: `from soothe_daemon.config.models import WebSocketConfig`
-
-WebSocket transport configuration.
-
-```python
-class WebSocketConfig(BaseModel):
-    """WebSocket configuration."""
-    
-    enabled: bool = True
-    """Enable WebSocket transport."""
-    
-    host: str = "127.0.0.1"
-    """WebSocket host."""
-    
-    port: int = 8765
-    """WebSocket port."""
-    
-    tls_enabled: bool = False
-    """Enable TLS/SSL."""
-    
-    tls_cert: str | None = None
-    """TLS certificate path."""
-    
-    tls_key: str | None = None
-    """TLS key path."""
-    
-    cors_origins: list[str] = ["http://localhost:*", "http://127.0.0.1:*"]
-    """CORS allowed origins."""
-    
-    max_frame_size: int = 10 * 1024 * 1024  # 10 MiB
-    """Maximum frame size in bytes."""
-```
+`WebSocketConfig` fields worth noting:
+- `cors_origins` defaults to `["http://localhost:*", "http://127.0.0.1:*"]` — browser clients must match
+- `tls_enabled` / `tls_cert` / `tls_key` for secure WebSocket (`wss://`)
+- `max_frame_size` must be coordinated with SDK clients (see gotcha above)
 
 ---
 
 ## See Also
 
-- **[SDK API: WebSocketClient](sdk-api.md#websocket-client)** - WebSocket client usage
-- **[Daemon Management Guide](../daemon-management.md)** - Daemon lifecycle management
-- **[Multi-Transport Communication](../multi-transport.md)** - Transport architecture
-- **[RFC-302 Daemon Communication](../../specs/RFC-302-daemon-communication.md)** - Daemon specification
+- [Core API](core-api.md) — Layer 1/2 agent and runner
+- [SDK API](sdk-api.md) — WebSocket client for connecting to this daemon
+- [Daemon Management Guide](../daemon-management.md) — Operational lifecycle
+- [Multi-Transport Communication](../multi-transport.md) — Channel architecture deep-dive
+- [RFC-302 Daemon Communication](../../specs/RFC-302-daemon-communication.md) — Specification

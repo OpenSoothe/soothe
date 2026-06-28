@@ -2,264 +2,105 @@
 
 The **Capabilities Layer** is Soothe's extensibility framework for adding specialized behaviors through subagents, tools, and MCP integration. It sits between the protocol layer and the backend implementations, providing concrete capabilities that the agent can invoke during execution.
 
-## Architecture Overview
+## Architectural Role
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│  Core Agent Loop                                                    │
-│  (ContextEngine → StrangeLoop → CoreAgent)                           │
-└────────────────────────┬───────────────────────────────────────────┘
-                         │
-                         ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  Capabilities Layer                                                 │
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐ │
-│  │  Subagents   │  │    Tools     │  │       MCP                │  │
-│  │              │  │              │  │                          │  │
-│  │ - explore    │  │ - execution  │  │ - MCPRegistry            │  │
-│  │ - plan       │  │ - file_ops   │  │ - Progressive disclosure │  │
-│  │ - tacitus    │  │ - wizsearch  │  │ - Prompts as slash cmds  │  │
-│  │ - browser_use│  │ - deepxiv    │  │ - Resources as @server   │  │
-│  │ - claude     │  │ - audio/vid  │  │ - Policy-gated access    │  │
-│  │              │  │ - data/http  │  │                          │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘ │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │  Plugin System (RFC-600)                                      │  │
-│  │  - @plugin decorator                                          │  │
-│  │  - @tool decorator                                            │  │
-│  │  - @subagent decorator                                        │  │
-│  │  - Discovery: entry points, config, filesystem               │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  Protocol Layer                                                     │
-│  (OperationSecurity, Policy, Context, Memory, etc.)                │
-└────────────────────────────────────────────────────────────────────┘
-```
+Soothe's core agent loop (ContextEngine → StrangeLoop → CoreAgent) is intentionally agnostic about *what* the agent can do. The Capabilities Layer plugs concrete abilities into that loop: single-shot utilities (tools), multi-step workflows (subagents), and externally-sourced capabilities (MCP). All three share the same plugin-based registration and policy-gated execution infrastructure.
 
-## Key Components
+The key architectural insight is the **capability spectrum**: tools are stateless and immediate, subagents are stateful and long-running, and MCP bridges to external systems. Choosing the right capability type for a given task is the primary design decision — see the comparison below.
 
-### 1. Subagents
+## The Three Capabilities
 
-**Subagents** are specialized autonomous agents that perform multi-step workflows. They differ from tools in several key ways:
+### Subagents — Multi-Step Workflows
 
-| Characteristic | Tool | Subagent |
-|----------------|------|----------|
-| **Operations** | Single-shot | Multi-step workflows |
-| **State** | Stateless | Stateful execution |
-| **Duration** | Immediate | Seconds to minutes |
-| **Complexity** | Simple | Complex orchestration |
-| **Results** | Direct output | Comprehensive reports |
+Subagents are specialized autonomous agents that perform multi-step, stateful workflows lasting seconds to minutes. They use the LLM as an orchestrator, can call tools or even other subagents, and return comprehensive structured reports. Each subagent is a compiled LangGraph `StateGraph` with its own state schema, nodes, and flow control.
 
-**Built-in Subagents**:
-- **explore** (RFC-613): LLM-orchestrated filesystem search
+**Built-in subagents** include:
+- **explore** (RFC-613): LLM-orchestrated iterative filesystem search
 - **plan** (RFC-618): Structured planning with explore delegation
-- **tacitus** (RFC-619): Public-domain research (web, academic, URLs)
-- **browser_use**: Browser automation (included in base `soothe` dependencies)
+- **tacitus** (RFC-619): Public-domain research across web, academic papers, and URLs
+- **browser_use**: Browser automation (included in base dependencies)
+- **veritas** (RFC-622): Intent-grounded clarification auto-answerer
 - **claude**: Claude Code agent (opt-in via `soothe[claude]`)
 
-See [Subagents Architecture](subagents.md) for detailed documentation.
+→ See [Subagents Architecture](subagents.md) for design philosophy and extension patterns.
 
-### 2. Tools
+### Tools — Single-Purpose Utilities
 
-**Tools** are single-purpose utilities that the agent invokes directly. Soothe follows the **single-purpose tool design pattern** (RFC-101):
+Tools are stateless, single-shot utilities the agent invokes for immediate operations. Soothe follows the **single-purpose tool design pattern** (RFC-101): one tool performs exactly one operation, named with `{verb}_{noun}` convention, with no mode/action parameters. This eliminates the cognitive load that unified dispatch tools create for the LLM.
 
-- One tool = one operation
-- Naming convention: `{verb}_{noun}`
-- No mode/action parameters
-- Clear descriptions with type hints
+Tools are organized into domain-specific **toolkits**: execution, file operations, web search, academic search, media analysis, data inspection, HTTP requests, and datetime. The philosophy is to reuse the langchain ecosystem wherever possible and only build custom tools when no equivalent exists.
 
-**Toolkits** (organized by domain):
-- **execution**: `run_command`, `run_python`, `run_background`, `kill_process`
-- **file_ops**: `read_file`, `write_file`, `delete_file`, `glob`, `grep`, `ls`
-- **wizsearch**: Multi-engine web search
-- **deepxiv**: Academic paper search (arXiv, bioRxiv, medRxiv, PMC)
-- **audio/video/image**: Media analysis and transcription
-- **data**: CSV/Excel inspection and quality checks
-- **datetime**: Current date/time utilities
-- **http_requests**: HTTP GET/POST/PATCH/PUT/DELETE
+→ See [Tools System](tools.md) for design rationale and extension patterns.
 
-See [Tools System](tools.md) for detailed documentation.
+### MCP Integration — External Capabilities
 
-### 3. MCP Integration
+MCP (Model Context Protocol) integration provides standardized access to external tools, prompts, and resources. Soothe implements a daemon-singleton MCP subsystem (RFC-412) that wraps `langchain_mcp_adapters.MultiServerMCPClient` with three key additions not found in the base library:
 
-**MCP (Model Context Protocol)** integration provides standardized access to external tools, prompts, and resources (RFC-412):
+1. **Progressive disclosure** — deferred tools are surfaced via search rather than loaded all at once, avoiding context bloat when MCP servers expose hundreds of tools.
+2. **Policy gating** — every MCP operation passes through PolicyProtocol for permission checks.
+3. **Reconnect scheduling** — remote transports auto-reconnect with exponential backoff.
 
-- **MCPRegistry**: Daemon-singleton connection manager
-- **Progressive disclosure**: Deferred tools surfaced via search
-- **Prompts as slash commands**: `/mcp__<server>__<prompt>`
-- **Resources as attachments**: `@server:uri` syntax
-- **Policy-gated access**: Every MCP operation checked via PolicyProtocol
-- **Reconnect scheduling**: Automatic recovery for remote transports
+→ See [MCP Integration](mcp.md) for architecture and configuration patterns.
 
-See [MCP Integration](mcp.md) for detailed documentation.
+## Plugin System
 
-### 4. Plugin System
+All three capability types are extended through the same **Plugin System** (RFC-600), a decorator-based API:
 
-The **Plugin System** (RFC-600) provides a decorator-based API for extending Soothe:
+- `@plugin` marks a class as a plugin with a manifest (name, version, dependencies, trust level)
+- `@tool` registers methods as tools
+- `@subagent` registers methods as subagent factories
+- `@tool_group` marks a class as a collection of related tools
 
-```python
-from soothe_sdk.plugin import plugin, tool, subagent
+Plugins are discovered through three mechanisms: Python entry points (highest priority), config-declared modules, and filesystem plugins in `~/.soothe/plugins/`. Built-in plugins always win and cannot be overridden.
 
-@plugin(name="my-plugin", version="1.0.0", description="My plugin")
-class MyPlugin:
-    async def on_load(self, context):
-        """Initialize resources."""
-        self.api_key = context.config.get("api_key")
+Trust levels (`built-in`, `trusted`, `standard`, `untrusted`) create security boundaries — a plugin's trust level determines what permissions it can request.
 
-    @tool(name="greet", description="Greet someone")
-    def greet(self, name: str) -> str:
-        return f"Hello, {name}!"
+→ See [Extension Patterns](extension-patterns.md) for the full plugin development guide.
 
-    @subagent(name="researcher", description="Custom research agent")
-    async def create_agent(self, model, config, context):
-        # Return CompiledSubAgent
-        return create_research_agent(model, config)
-```
-
-**Discovery mechanisms**:
-- **Entry points**: `[project.entry-points."soothe.plugins"]`
-- **Config-declared**: `plugins:` section in config.yml
-- **Filesystem**: `~/.soothe/plugins/<name>/`
-
-**Trust levels**:
-- **built-in**: Full permissions (core capabilities)
-- **trusted**: Elevated permissions (verified plugins)
-- **standard**: Default permissions (third-party)
-- **untrusted**: Restricted permissions (experimental)
-
-See [Extension Patterns](extension-patterns.md) for detailed documentation.
-
-## Integration with Other Layers
+## Cross-Cutting Concerns
 
 ### Protocol Integration
 
-All capabilities integrate with Soothe's protocol layer:
+Every capability is mediated by the protocol layer:
 
-| Capability | Protocol Integration |
-|------------|---------------------|
-| **Subagents** | PolicyProtocol checks before execution |
-| **Tools** | OperationSecurityProtocol for workspace boundaries |
-| **MCP** | PolicyProtocol gates every tool/resource/prompt call |
+| Capability | Protocol Gate |
+|------------|--------------|
+| Subagents | PolicyProtocol checks before execution (`subagent:invoke:<name>`) |
+| Tools | OperationSecurityProtocol for workspace boundaries |
+| MCP | PolicyProtocol gates every tool/resource/prompt call |
 
 ### Event System
 
-Capabilities emit domain-specific events following RFC-403 naming conventions:
-
-| Namespace | Examples |
-|-----------|----------|
-| `soothe.subagent.*` | `explore.started`, `plan.completed`, `tacitus.gather` |
-| `soothe.tool.*` | `file_ops.read`, `execution.run_command` |
-| `soothe.mcp.*` | `server.connected`, `tool.invoke`, `resource.read` |
+Capabilities emit domain-specific wire events (RFC-403) following namespaced conventions: `soothe.subagent.<name>.*`, `soothe.tool.<component>.*`, and `soothe.mcp.*`. Events are registered via `register_event()` at module load time and provide observability for the daemon's event stream.
 
 ### Configuration
 
-Capabilities are configured via `config.yml`:
-
-```yaml
-# Subagents
-subagents:
-  explore:
-    enabled: true
-    thoroughness: medium
-  plan:
-    enabled: true
-    enable_explore: true
-  tacitus:
-    enabled: true
-    domain: public
-
-# MCP servers
-mcp_servers:
-  - name: filesystem
-    transport: stdio
-    command: ["mcp-server-filesystem", "--root", "/workspace"]
-    defer: true
-    enabled: true
-
-# Plugins
-plugins:
-  - name: my-custom-plugin
-    enabled: true
-    module: "my_package:MyPlugin"
-    config:
-      api_key: "${MY_API_KEY}"
-```
+All capabilities are configured via `config.yml`. Subagents and MCP servers have their own top-level config sections; plugins are declared with module paths and plugin-specific config dicts. Environment variable interpolation (`${ENV_VAR}`) is supported throughout for secrets.
 
 ## Key RFCs
 
-| RFC | Title | Purpose |
-|-----|-------|---------|
-| [RFC-600](../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System | Plugin API, decorators, discovery |
-| [RFC-601](../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents | Built-in subagent architecture |
-| [RFC-613](../specs/RFC-613-explore-agent-llm-orchestrated-search.md) | Explore Agent | LLM-orchestrated search |
-| [RFC-618](../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent | Structured planning |
-| [RFC-619](../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent | Public-domain research |
-| [RFC-101](../specs/RFC-101-tool-interface.md) | Tool Interface | Single-purpose design pattern |
-| [RFC-412](../specs/RFC-412-mcp-management.md) | MCP Management | MCP subsystem architecture |
+| RFC | Title |
+|-----|-------|
+| [RFC-600](../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
+| [RFC-601](../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
+| [RFC-613](../specs/RFC-613-explore-agent-llm-orchestrated-search.md) | Explore Agent |
+| [RFC-618](../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
+| [RFC-619](../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
+| [RFC-622](../specs/RFC-622-veritas-auto-clarification.md) | Veritas Auto-Clarification |
+| [RFC-101](../specs/RFC-101-tool-interface.md) | Tool Interface (single-purpose design) |
+| [RFC-412](../specs/RFC-412-mcp-management.md) | MCP Management |
 
-## Quick Start
+## Decision Guide: When to Use What
 
-### Adding a Built-in Subagent
+| You need to... | Use |
+|----------------|-----|
+| Perform a single, immediate operation | A **tool** |
+| Run a multi-step workflow with LLM orchestration | A **subagent** |
+| Integrate an external service that speaks MCP | An **MCP server** |
+| Add a capability not available in langchain | A custom **tool** via plugin |
+| Compose multiple searches into a research flow | A **subagent** (e.g., tacitus) |
 
-Built-in subagents are automatically registered when their package is imported:
-
-```python
-# Automatic registration via package __init__.py
-from soothe.subagents import explore, plan, tacitus
-```
-
-### Creating a Custom Tool
-
-```python
-from soothe_sdk.plugin import plugin, tool
-
-@plugin(name="my-tools", version="1.0.0")
-class MyToolsPlugin:
-    @tool(name="analyze_data", description="Analyze CSV data")
-    def analyze_data(self, file_path: str) -> dict:
-        """Analyze CSV file and return statistics."""
-        # Implementation
-        return {"rows": 100, "columns": 5}
-```
-
-### Creating a Custom Subagent
-
-```python
-from soothe_sdk.plugin import plugin, subagent
-from deepagents import create_react_agent
-
-@plugin(name="my-agent", version="1.0.0")
-class MyAgentPlugin:
-    @subagent(name="analyzer", description="Data analysis agent")
-    async def create_agent(self, model, config, context):
-        # Create CompiledSubAgent
-        agent = create_react_agent(model, tools=[...])
-        return agent
-```
-
-### Using MCP Tools
-
-MCP tools are surfaced progressively through `mcp_tool_search`:
-
-```
-# First turn: deferred tools listed in <AVAILABLE_MCP_TOOLS>
-# Agent calls: mcp_tool_search("search files", limit=5)
-# Tool promoted to always-available on subsequent turns
-```
-
-## Best Practices
-
-1. **Check langchain ecosystem first** - Don't reinvent if langchain/deepagents already provides it
-2. **Follow naming conventions** - `{verb}_{noun}` for tools, clear domain for subagents
-3. **Register events properly** - Use `register_event()` for domain events
-4. **Respect trust levels** - Use appropriate permissions for plugins
-5. **Test thoroughly** - Run `./scripts/verify_finally.sh` after changes
-6. **Document clearly** - Add docstrings, usage examples, and configuration notes
+The golden rule: **check the langchain ecosystem first**. If langchain or deepagents already provides a tool or agent for your need, use it rather than building a custom one.
 
 ---
 
