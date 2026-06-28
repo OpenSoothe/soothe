@@ -1,890 +1,138 @@
 # Common Configuration Patterns
 
-Real-world configuration examples for typical Soothe use cases.
+Real-world Soothe recipes — and the reasoning behind each one. Use these as starting points, not gospel; the goal is to understand *why* a config looks the way it does so you can adapt it.
 
-## Quick Start Patterns
+## How to Think About Config
 
-### Minimal Configuration
+Soothe config has three axes you tune independently:
 
-**Use case**: Quick start with OpenAI
+- **Capability** — which providers, tools, and subagents are available.
+- **Behavior** — how the agent loops, when it stops, how it parallelizes.
+- **Environment** — where state lives (SQLite vs Postgres), where logs go, how secrets enter.
 
-```yaml
-providers:
-  - name: openai
-    provider_type: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o-mini
+Most patterns below change only one axis. The minimal config changes *capability* (add a provider) and relies on defaults for the other two. Production configs change all three deliberately.
 
-router:
-  default: openai:gpt-4o-mini
+## Minimal to Development
 
-embedding_dims: 1536
-```
-
-**Environment**:
-
-```bash
-export OPENAI_API_KEY=sk-your-key-here
-```
-
-### Development Configuration
-
-**Use case**: Local development with debugging
+The jump from "it runs" to "it's pleasant to develop with" is small: add a second model for reasoning, bump verbosity, and bound the loop so a runaway agent doesn't burn tokens.
 
 ```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o-mini
-      - gpt-4o
-
 router:
   default: openai:gpt-4o-mini
-  think: openai:gpt-4o
-  fast: openai:gpt-4o-mini
+  think: openai:gpt-4o        # reasoning tasks use the bigger model
 
 agent:
-  autonomous:
-    enabled: false
   loop:
-    max_iterations: 10
+    max_iterations: 10        # hard stop during dev
 
 observability:
   verbosity: debug
   console:
     enabled: true
-    level: INFO
-
-debug: true
 ```
 
-## Production Patterns
+`debug: true` at the top level enables LangGraph debug tracing — useful when a loop behaves unexpectedly, noisy otherwise.
 
-### High-Performance Production
+## Production Mindset
 
-**Use case**: Production deployment with PostgreSQL, monitoring
+Production configs differ from dev configs in three ways: state becomes durable (Postgres), cost is bounded (rate limits, cheaper default model), and observability is structured (Langfuse, not console). The essential moves: set `persistence.default_backend: postgresql` with a `postgres_base_dsn`; add `agent.loop.llm_rate_limit.rpm_limit` / `concurrent_limit`; and switch observability from `console` to `langfuse` with `${LANGFUSE_*}` keys.
+
+**Decision points:** Use Postgres when you need thread durability across restarts or multiple workers — SQLite locks under concurrent writers (WAL mode helps but doesn't eliminate it). Set `rpm_limit` below your provider's tier ceiling; Soothe retries on 429 with exponential backoff, but staying under the limit avoids the latency hit.
+
+## Multi-Provider & Hybrid Routing
+
+The router's role-based design exists precisely so you can mix providers without rewriting agent logic. Define an `ollama` provider (local) and an `openai` provider (cloud), then route `default` to the local model and `think`/`image` to cloud models.
+
+**Routing logic:** unset roles fall back to `default`. So a hybrid config can set only `default` (local) and `think` (cloud) — everything else reuses the local model. This is cheaper than it looks: classification, routing, and memory extraction use the `fast` role, which inherits `default`, so they all run locally.
+
+**Gotcha:** `provider_type: openai` with a custom `api_base_url` works for any OpenAI-compatible API (DashScope, OpenRouter, vLLM). Use `limited_openai` only when the endpoint mishandles `tool_choice` or returns structured output in `reasoning_content` — LMStudio and some GLM deployments need it.
+
+## Tool Scoping by Use Case
+
+The `tools` section is where you shape *what the agent can do*. Disabling tools is a security and cost measure, not just a preference.
+
+| Use case | Disable | Enable |
+|----------|---------|--------|
+| Research agent | `execution`, `file_ops` | `wizsearch`, `deepxiv` |
+| Code assistant | `wizsearch`, `http_requests` | `execution`, `file_ops`, `explore` subagent |
+| Safe assistant | `execution`, `http_requests` | `file_ops` (with path policy) |
+
+Each tool group is a block with an `enabled: bool`; set the ones you want off to `false` and configure the ones you keep (e.g. `wizsearch.default_engines: [tavily, duckduckgo]`).
+
+**Why disable rather than restrict:** a disabled tool never enters the model's tool array, so the model never wastes tokens considering it. Path policies (see [Security](security-config.md)) are a *second* layer for tools you keep enabled.
+
+## Autonomous Mode Tradeoffs
+
+Autonomous mode turns Soothe into a 24/7 goal-runner. The knobs are all ceilings — they exist to prevent runaway cost and infinite loops, not to enable features. Set `enabled: true`, then bound `max_iterations` (per goal), `max_parallel_goals`, and `max_loops` (loop pool size). Enable `dreaming_enabled` for long-running agents that should consolidate memory when idle; leave it off for short-lived ones. Raise `protocols.durability.thread_inactivity_timeout_hours` (e.g. 168 for a week) so threads survive between runs.
+
+**Key decisions:**
+- `max_parallel_goals` × `max_iterations` ≈ your worst-case concurrent LLM load. Size `checkpointer_pool_size` accordingly.
+- `dreaming_enabled` runs memory consolidation when goals complete — useful for long-running agents, pure overhead for short-lived ones.
+- Autonomous mode *requires* durable persistence (Postgres). SQLite will bottleneck under parallel goals.
+
+For a "controlled" variant, lower every ceiling and disable dreaming/scheduling — this gives you autonomous *capability* with manual *cadence*.
+
+## Vector Stores by Scale
+
+For pgvector, define a `pgvector` provider with a `dsn` and `index_type: hnsw`, then route via `vector_store_router.default: <name>:<collection>`. See [Provider Setup](provider-setup.md) for the snippet.
+
+**Selection guide:**
+- **SQLite Vec (default):** zero deps, fine for single-user dev and <100k vectors.
+- **pgvector:** production. Use `hnsw` for low-latency queries, `ivfflat` for very large static datasets, `none` only during development.
+- **Weaviate Cloud:** when you want managed vector storage decoupled from your Postgres.
+- **in_memory:** tests and ephemeral sessions only — data is lost on restart.
+
+`embedding_dims` **must** match your embedding model's output (1536 for `text-embedding-3-small`, 3072 for `-large`, 1024 for DashScope). A mismatch causes silent corruption or errors at insert time.
+
+## Subagent Model Assignment
+
+Subagents inherit the `fast` router role by default. Override per-subagent when a role needs different strength:
 
 ```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o
-      - gpt-4o-mini
-      - o3-mini
-      - text-embedding-3-small
-
-router:
-  default: openai:gpt-4o-mini
-  think: openai:o3-mini
-  fast: openai:gpt-4o-mini
-  image: openai:gpt-4o
-  embedding: openai:text-embedding-3-small
-
-embedding_dims: 1536
-
-agent:
-  autonomous:
-    enabled: true
-    max_iterations: 15
-    max_parallel_goals: 5
-    max_loops: 8
-  loop:
-    max_iterations: 20
-    context_window_limit: 200000
-    concurrency:
-      max_parallel_steps: 4
-      global_max_llm_calls: 50
-    llm_rate_limit:
-      concurrent_limit: 20
-
-persistence:
-  default_backend: postgresql
-  postgres_base_dsn: ${POSTGRES_DSN}
-  postgres_pool_min_size: 8
-  checkpointer_pool_size: 32
-  sloop_pool_size: 32
-
-vector_stores:
-  - name: pgvector_prod
-    provider_type: pgvector
-    dsn: ${POSTGRES_VECTOR_DSN}
-    index_type: hnsw
-
-vector_store_router:
-  default: pgvector_prod:soothe_production
-
-observability:
-  verbosity: normal
-  langfuse:
-    enabled: true
-    public_key: ${LANGFUSE_PUBLIC_KEY}
-    secret_key: ${LANGFUSE_SECRET_KEY}
-    environment: production
-    sample_rate: 0.1
-
-security:
-  sandbox: false
-  require_approval_for_outside_paths: false
-```
-
-**Environment**:
-
-```bash
-export OPENAI_API_KEY=sk-prod-xxx
-export POSTGRES_DSN=postgresql://user:pass@db-host:5432
-export POSTGRES_VECTOR_DSN=postgresql://user:pass@db-host:5432/soothe_vectors
-export LANGFUSE_PUBLIC_KEY=pk-prod-xxx
-export LANGFUSE_SECRET_KEY=sk-prod-xxx
-```
-
-### Kubernetes Deployment
-
-**Use case**: Running in Kubernetes with secrets
-
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-
-router:
-  default: openai:gpt-4o-mini
-
-persistence:
-  default_backend: postgresql
-  postgres_base_dsn: ${POSTGRES_DSN}
-  postgres_pool_min_size: 4
-  checkpointer_pool_size: 16
-
-agent:
-  autonomous:
-    max_loops: 10
-
-observability:
-  verbosity: normal
-  langfuse:
-    enabled: true
-    public_key: ${LANGFUSE_PUBLIC_KEY}
-    secret_key: ${LANGFUSE_SECRET_KEY}
-```
-
-**Kubernetes secrets**:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: soothe-secrets
-type: Opaque
-data:
-  openai-api-key: <base64-encoded-key>
-  postgres-dsn: <base64-encoded-dsn>
-  langfuse-public-key: <base64-encoded-key>
-  langfuse-secret-key: <base64-encoded-key>
-```
-
-## Multi-Provider Patterns
-
-### Multiple LLM Providers
-
-**Use case**: Use different providers for different tasks
-
-```yaml
-providers:
-  - name: openai
-    provider_type: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o
-      - gpt-4o-mini
-      - o3-mini
-  
-  - name: anthropic
-    provider_type: anthropic
-    api_key: ${ANTHROPIC_API_KEY}
-    models:
-      - claude-sonnet-4-20250514
-  
-  - name: dashscope
-    provider_type: openai
-    api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key: ${DASHSCOPE_API_KEY}
-    models:
-      - qwen-max
-
-router:
-  default: openai:gpt-4o-mini
-  think: anthropic:claude-sonnet-4-20250514
-  fast: dashscope:qwen-max
-  image: openai:gpt-4o
-  embedding: openai:text-embedding-3-small
-```
-
-**Environment**:
-
-```bash
-export OPENAI_API_KEY=sk-xxx
-export ANTHROPIC_API_KEY=sk-ant-xxx
-export DASHSCOPE_API_KEY=your-dashscope-key
-```
-
-### Local + Cloud Hybrid
-
-**Use case**: Use local models for cheap tasks, cloud for complex reasoning
-
-```yaml
-providers:
-  - name: ollama
-    provider_type: ollama
-    models:
-      - llama3.1:8b
-      - mistral:7b
-  
-  - name: lmstudio
-    provider_type: limited_openai
-    api_base_url: http://localhost:1234/v1
-    api_key: lmstudio
-    models:
-      - gemma-2-9b
-  
-  - name: openai
-    provider_type: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o
-      - o3-mini
-
-router:
-  default: lmstudio:gemma-2-9b
-  fast: ollama:llama3.1:8b
-  think: openai:o3-mini
-  image: openai:gpt-4o
-```
-
-**Environment**:
-
-```bash
-export OPENAI_API_KEY=sk-xxx
-
-# Run local models
-ollama serve
-ollama pull llama3.1:8b
-ollama pull mistral:7b
-```
-
-## Tool Configuration Patterns
-
-### Research Agent
-
-**Use case**: Agent focused on web research and academic papers
-
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o-mini
-      - gpt-4o
-
-router:
-  default: openai:gpt-4o-mini
-  think: openai:gpt-4o
-
-tools:
-  execution:
-    enabled: false  # Disable shell execution
-  file_ops:
-    enabled: false  # Disable file operations
-  wizsearch:
-    enabled: true
-    default_engines:
-      - tavily
-      - duckduckgo
-      - brave
-    max_results_per_engine: 15
-    timeout: 45
-  deepxiv:
-    enabled: true
-    token: ${DEEPXIV_API_KEY}
-    timeout: 90
-    max_retries: 5
-
 subagents:
   explore:
-    enabled: false  # No file exploration
-  plan:
-    enabled: true
+    model: openai:gpt-4o-mini
   tacitus:
-    enabled: true
+    model: anthropic:claude-sonnet-4-20250514
     config:
-      llm_role: think
-      synthesis_role: think
       effort: thorough
 ```
 
-**Environment**:
+**Rule of thumb:** `explore` wants speed (cheap model, medium thoroughness); `tacitus` wants quality (strong model, thorough effort); `plan` wants reasoning (use the `think` role). Disabling all three puts you in single-agent mode — simpler but no parallelism or specialized planning.
 
-```bash
-export OPENAI_API_KEY=sk-xxx
-export TAVILY_API_KEY=tvly-xxx
-export DEEPXIV_API_KEY=your-deepxiv-key
-```
+## MCP Servers
 
-### Code Assistant
+A stdio MCP server entry needs a `name`, `command`, `args`, and (for servers needing auth) an `env` map with `${VAR}`-interpolated tokens. Set `defer: true` (the default) on every entry unless you have a specific reason to eagerly load tools.
 
-**Use case**: Agent focused on code generation and analysis
+`defer` keeps MCP tools out of the model's default tool array — they're loaded on demand. This matters because a server exposing 50 tools would otherwise consume context budget on every turn. Use `tool_filter` (glob allowlist) to further trim noisy servers. See [YAML Reference](yaml-reference.md) for the field list.
 
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o
-      - gpt-4o-mini
+## Logging Levels
 
-router:
-  default: openai:gpt-4o-mini
-  think: openai:gpt-4o
+| Setting | When to use |
+|---------|-------------|
+| `verbosity: debug` + `debug: true` | Tracing a misbehaving loop |
+| `verbosity: normal` | Everyday use |
+| `verbosity: quiet` | Production / headless automation |
+| `thread_logging_enabled: true` | Multi-thread debugging (off in prod to save disk) |
 
-tools:
-  execution:
-    enabled: true
-  file_ops:
-    enabled: true
-  wizsearch:
-    enabled: false  # No web search
-  http_requests:
-    enabled: false  # No HTTP requests
+Rotate logs with `log_file_max_bytes` / `log_file_backup_count`; defaults (5 MB, 3 backups) are reasonable for dev, increase retention for production auditing.
 
-subagents:
-  explore:
-    enabled: true
-    config:
-      thoroughness: thorough
-      max_iterations:
-        thorough: 20
-  plan:
-    enabled: true
-  tacitus:
-    enabled: false  # No deep research
-```
+## Testing Configs
 
-### Safe Assistant
+For unit tests, use a mock provider (`provider_type: openai`, `api_key: mock-key`), route to `mock:gpt-4o-mini`, and point SQLite checkpoints at a `/tmp` path. No network, no real keys.
 
-**Use case**: Agent with strict security policies
+For integration tests, point at a real provider but cap `global_max_llm_calls` to bound cost, and set `langfuse.environment: testing` to keep traces out of production dashboards.
 
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
+## Common Mistakes
 
-router:
-  default: openai:gpt-4o-mini
+- **Mismatched `embedding_dims`** — the most common silent failure. Verify against your embedding model's spec.
+- **Forgetting `think`/`fast`** — leaving them null makes *everything* use `default`, which is often the most expensive model.
+- **SQLite under parallel autonomous goals** — works for one goal, deadlocks under concurrency. Switch to Postgres.
+- **Hardcoding keys in YAML** — use `${VAR}`. See [Environment Variables](environment-variables.md).
+- **Setting `rpm_limit` above provider tier** — you'll hit 429s; Soothe retries, but latency compounds.
 
-security:
-  sandbox: true
-  allow_paths_outside_workspace: false
-  require_approval_for_outside_paths: true
-  denied_paths:
-    - /etc/**
-    - /bin/**
-    - ~/.ssh/**
-    - ~/.aws/**
-    - '**/.env'
-    - '**/secrets.json'
-  allowed_paths:
-    - ~/workspace/**  # Only workspace
-  denied_file_types:
-    - .exe
-    - .sh
-  require_approval_for_file_types:
-    - .env
-    - .pem
-    - .key
+## See Also
 
-tools:
-  execution:
-    enabled: false  # Disable shell execution
-  file_ops:
-    enabled: true
-  http_requests:
-    enabled: false  # No external requests
-```
-
-## Autonomous Mode Patterns
-
-### Background Task Runner
-
-**Use case**: Autonomous agent running scheduled tasks
-
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-
-router:
-  default: openai:gpt-4o-mini
-
-agent:
-  autonomous:
-    enabled: true
-    max_iterations: 20
-    max_retries: 3
-    max_total_goals: 100
-    max_goal_depth: 10
-    max_parallel_goals: 5
-    max_loops: 10
-    loop_idle_timeout: 600
-    
-    dreaming_enabled: true
-    dreaming_consolidation_interval: 600
-    
-    scheduler_enabled: true
-    max_scheduled_tasks: 200
-    
-    webhooks:
-      on_goal_completed: ${WEBHOOK_URL}/goal-completed
-      on_error: ${WEBHOOK_URL}/error
-  
-  protocols:
-    durability:
-      thread_inactivity_timeout_hours: 168  # 7 days
-
-persistence:
-  default_backend: postgresql
-  postgres_base_dsn: ${POSTGRES_DSN}
-
-observability:
-  verbosity: debug
-  langfuse:
-    enabled: true
-```
-
-**Environment**:
-
-```bash
-export OPENAI_API_KEY=sk-xxx
-export POSTGRES_DSN=postgresql://user:pass@db:5432
-export WEBHOOK_URL=https://hooks.example.com/soothe
-export LANGFUSE_PUBLIC_KEY=pk-xxx
-export LANGFUSE_SECRET_KEY=sk-xxx
-```
-
-### Limited Autonomous Mode
-
-**Use case**: Controlled autonomous with strict limits
-
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-
-router:
-  default: openai:gpt-4o-mini
-
-agent:
-  autonomous:
-    enabled: false  # Off by default
-    max_iterations: 5
-    max_retries: 1
-    max_total_goals: 10
-    max_goal_depth: 3
-    max_parallel_goals: 1
-    max_loops: 2
-    
-    dreaming_enabled: false
-    scheduler_enabled: false
-  
-  loop:
-    max_iterations: 10
-    concurrency:
-      max_parallel_steps: 1
-      max_parallel_tools: 5
-      global_max_llm_calls: 10
-    tool_call_limit:
-      global_thread_limit: 50
-      global_run_limit: 20
-```
-
-## Vector Store Patterns
-
-### SQLite Vec (Default)
-
-**Use case**: Lightweight local vector storage
-
-```yaml
-vector_stores:
-  - name: sqlite_vec_default
-    provider_type: sqlite_vec
-
-vector_store_router:
-  default: sqlite_vec_default:soothe_default
-
-embedding_dims: 1536
-```
-
-### PostgreSQL Vector
-
-**Use case**: Production vector storage with pgvector
-
-```yaml
-vector_stores:
-  - name: pgvector_main
-    provider_type: pgvector
-    dsn: ${POSTGRES_VECTOR_DSN}
-    pool_size: 10
-    index_type: hnsw
-
-vector_store_router:
-  default: pgvector_main:soothe_production
-
-embedding_dims: 1536
-
-persistence:
-  postgres_base_dsn: ${POSTGRES_DSN}
-```
-
-**Environment**:
-
-```bash
-export POSTGRES_DSN=postgresql://user:pass@db-host:5432
-export POSTGRES_VECTOR_DSN=postgresql://user:pass@db-host:5432/vectors
-```
-
-### Weaviate Cloud
-
-**Use case**: Weaviate managed service
-
-```yaml
-vector_stores:
-  - name: weaviate_cloud
-    provider_type: weaviate
-    url: ${WEAVIATE_URL}
-    api_key: ${WEAVIATE_API_KEY}
-    grpc_port: 443
-
-vector_store_router:
-  default: weaviate_cloud:soothe_production
-
-embedding_dims: 1536
-```
-
-**Environment**:
-
-```bash
-export WEAVIATE_URL=https://your-cluster.weaviate.cloud
-export WEAVIATE_API_KEY=your-weaviate-key
-```
-
-## Daemon Patterns
-
-### Local Development Daemon
-
-**Use case**: Run daemon locally for development
-
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-
-router:
-  default: openai:gpt-4o-mini
-
-agent:
-  autonomous:
-    max_loops: 4
-    poll_interval: 2
-
-observability:
-  verbosity: debug
-  console:
-    enabled: true
-```
-
-**Start daemon**:
-
-```bash
-soothe daemon start
-soothe status
-```
-
-### Remote Daemon
-
-**Use case**: Connect to remote daemon server
-
-```bash
-# Set remote daemon address
-export SOOTHE_DAEMON_URL=http://daemon-server:8765
-
-# Or use WebSocket
-export SOOTHE_DAEMON_URL=ws://daemon-server:8765
-
-# Connect to remote
-soothe --remote "your prompt"
-```
-
-## Logging Patterns
-
-### Verbose Logging
-
-**Use case**: Maximum logging for debugging
-
-```yaml
-observability:
-  verbosity: debug
-  log_file_level: DEBUG
-  log_file_path: ~/.soothe/logs/debug.log
-  log_file_max_bytes: 10485760  # 10 MB
-  log_file_backup_count: 5
-  
-  console:
-    enabled: true
-    level: DEBUG
-    stream: stderr
-  
-  thread_logging_enabled: true
-  thread_logging_retention_days: 7
-
-debug: true
-```
-
-### Minimal Logging
-
-**Use case**: Production with minimal logs
-
-```yaml
-observability:
-  verbosity: quiet
-  log_file_level: WARNING
-  log_file_max_bytes: 5242880  # 5 MB
-  log_file_backup_count: 3
-  
-  console:
-    enabled: false
-  
-  thread_logging_enabled: false
-
-debug: false
-```
-
-## MCP Server Patterns
-
-### Multiple MCP Servers
-
-**Use case**: Connect to several MCP servers
-
-```yaml
-mcp_servers:
-  - name: filesystem
-    transport: stdio
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-filesystem"
-      - "/workspace"
-    defer: true
-  
-  - name: github
-    transport: stdio
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-github"
-    env:
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
-    defer: true
-  
-  - name: linear
-    transport: streamable_http
-    url: https://mcp.linear.app/sse
-    auth:
-      headers:
-        Authorization: "Bearer ${LINEAR_MCP_TOKEN}"
-    defer: true
-```
-
-**Environment**:
-
-```bash
-export GITHUB_TOKEN=ghp-xxx
-export LINEAR_MCP_TOKEN=your-linear-token
-```
-
-## Memory Patterns
-
-### Enhanced Memory
-
-**Use case**: Agent with sophisticated memory capabilities
-
-```yaml
-agent:
-  protocols:
-    memory:
-      enabled: true
-      persist_dir: ~/.soothe/memory
-      llm_chat_role: fast
-      llm_embed_role: embedding
-      enable_embeddings: true
-      enable_auto_categorization: true
-      enable_category_summaries: true
-      memory_categories:
-        - name: personal_info
-          description: Personal information and identity
-        - name: preferences
-          description: User preferences and interests
-        - name: knowledge
-          description: Facts and learned information
-        - name: experiences
-          description: Past experiences and events
-        - name: goals
-          description: Goals and objectives
-        - name: projects
-          description: Project details and context
-        - name: code_patterns
-          description: Learned coding patterns and best practices
-
-vector_stores:
-  - name: pgvector_memory
-    provider_type: pgvector
-    dsn: ${POSTGRES_DSN}
-
-vector_store_router:
-  default: pgvector_memory:soothe_memory
-```
-
-### Minimal Memory
-
-**Use case**: Disable memory for fresh sessions
-
-```yaml
-agent:
-  protocols:
-    memory:
-      enabled: false
-
-memory: []  # No AGENTS.md files
-```
-
-## Subagent Patterns
-
-### Custom Subagent Models
-
-**Use case**: Use different models for different subagents
-
-```yaml
-subagents:
-  explore:
-    enabled: true
-    model: openai:gpt-4o-mini  # Fast exploration
-    config:
-      thoroughness: medium
-  
-  plan:
-    enabled: true
-    model: openai:o3-mini  # Stronger planning
-  
-  tacitus:
-    enabled: true
-    model: anthropic:claude-sonnet-4-20250514  # Best for research
-    config:
-      llm_role: think
-      synthesis_role: think
-      effort: thorough
-```
-
-### Disabled Subagents
-
-**Use case**: Run without subagents (single agent mode)
-
-```yaml
-subagents:
-  explore:
-    enabled: false
-  plan:
-    enabled: false
-  tacitus:
-    enabled: false
-```
-
-## Testing Patterns
-
-### Unit Testing Configuration
-
-**Use case**: Minimal config for tests
-
-```yaml
-providers:
-  - name: mock
-    provider_type: openai
-    api_key: mock-key
-
-router:
-  default: mock:gpt-4o-mini
-
-agent:
-  autonomous:
-    enabled: false
-  loop:
-    max_iterations: 3
-
-observability:
-  verbosity: quiet
-  langfuse:
-    enabled: false
-
-persistence:
-  default_backend: sqlite
-  checkpoint_sqlite_path: /tmp/test_checkpoints.db
-  metadata_sqlite_path: /tmp/test_metadata.db
-```
-
-### Integration Testing
-
-**Use case**: Full stack testing
-
-```yaml
-providers:
-  - name: openai
-    api_key: ${OPENAI_TEST_API_KEY}
-
-router:
-  default: openai:gpt-4o-mini
-
-agent:
-  autonomous:
-    max_iterations: 5
-  loop:
-    max_iterations: 10
-    concurrency:
-      global_max_llm_calls: 10
-
-persistence:
-  default_backend: sqlite
-  checkpoint_sqlite_path: /tmp/integration_checkpoints.db
-
-observability:
-  verbosity: debug
-  langfuse:
-    enabled: true
-    environment: testing
-```
-
-## Complete Example Configurations
-
-### Full Production Config
-
-See `config/config.template.yml` for the complete production-ready configuration with all options documented.
-
-### Development Config
-
-See `config/develop/config.yml` for development defaults with DashScope/OpenAI examples.
-
----
-
-**See also:**
-
-- [YAML Reference](yaml-reference.md) - Complete field documentation
-- [Environment Variables](environment-variables.md) - Env var reference
-- [Provider Setup](provider-setup.md) - Provider configuration guide
+- [YAML Reference](yaml-reference.md) — condensed schema
+- [Environment Variables](environment-variables.md) — interpolation and `SOOTHE_*` mapping
+- [Provider Setup](provider-setup.md) — provider selection and routing detail

@@ -1,109 +1,37 @@
 # Policy Backends
 
-PolicyProtocol implementations for security and filesystem policies.
+Permission-based access control via `PolicyProtocol`. Policy backends enforce security boundaries, filesystem access rules, and least-privilege delegation across Soothe's execution. They determine whether each action (file read, shell command, network call, subagent spawn) is allowed, denied, or requires interactive approval.
 
 ---
 
-## Overview
+## What Policy Backends Do
 
-Policy backends implement `PolicyProtocol` for managing security policies, filesystem access rules, and least-privilege delegation. They enforce security boundaries and permission checks across Soothe's execution.
+Policy backends answer one question for every action: *should this be allowed?* The two core operations are:
 
----
+- **`check(action, context)`** — Evaluate an `ActionRequest` against the active `PermissionSet` and return a `PolicyDecision` (`allow`, `deny`, or `need_approval`).
+- **`narrow_for_child(parent_permissions, child_name)`** — Compute a narrowed permission set for a subagent, enforcing least-privilege delegation.
 
-## PolicyProtocol Interface
-
-### Core Operations
-
-```python
-class PolicyProtocol(Protocol):
-    """Permission-based access control."""
-
-    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision: ...
-    def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet: ...
-```
+The policy layer is **not optional** — it's enforced via middleware (`PolicyEnforcementMiddleware`) that intercepts tool calls before execution. Every filesystem read, shell command, and network connection passes through policy evaluation.
 
 ---
 
-## Policy Data Model
+## Permission Model
 
-### PolicyContext
+Permissions use a structured `category:action:scope` format with glob and negation support.
 
-Policy evaluation context:
+### Permission Categories
 
-```python
-class PolicyContext(BaseModel):
-    """Context for policy evaluation."""
+| Category | Actions | Scope Examples |
+|----------|---------|----------------|
+| `fs` | `read`, `write` | `*` (all), `/tmp/**` (glob), `/home/user/**` |
+| `shell` | `execute` | `ls` (only ls), `!rm` (anything except rm) |
+| `net` | `outbound` | `*.example.com`, `*` |
+| `mcp` | `connect`, `invoke`, `read_resource` | server name |
+| `subagent` | `spawn` | subagent name |
 
-    model_config = {"arbitrary_types_allowed": True}
+**Matching semantics**: Glob patterns for paths (`/tmp/**` matches all files under `/tmp/`); command names for shell (exact match or negation with `!`); domain globs for network.
 
-    active_permissions: Any  # PermissionSet (the currently granted permissions)
-    scope_id: str | None = None  # Opaque execution scope for audit (e.g. loop id)
-    workspace: str | None = None  # Absolute workspace root (from config)
-```
-
-### Permission
-
-A structured permission with category, action, and scope:
-
-```python
-@dataclass(frozen=True)
-class Permission:
-    """A structured permission."""
-
-    category: str  # Permission category (fs, shell, net, mcp, subagent)
-    action: str    # Action type (read, write, execute, connect, spawn)
-    scope: str = "*"  # Scope qualifier (* for all, glob for paths, name or !name for commands)
-
-    def matches(self, requested: Permission) -> bool: ...
-```
-
-### PermissionSet
-
-Immutable collection of permissions with scope-aware matching:
-
-```python
-class PermissionSet:
-    """Immutable collection of permissions."""
-
-    def __init__(self, permissions: frozenset[Permission] | None = None) -> None: ...
-
-    @property
-    def permissions(self) -> frozenset[Permission]: ...
-
-    def contains(self, requested: Permission) -> bool: ...
-    def narrow(self, allowed: frozenset[Permission]) -> PermissionSet: ...
-```
-
-### PolicyDecision
-
-Result of a policy check:
-
-```python
-class PolicyDecision(BaseModel):
-    """Result of a policy check."""
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    verdict: Literal["allow", "deny", "need_approval"]
-    reason: str
-    matched_permission: Any = None  # Permission | None
-```
-
-### PolicyProfile
-
-A named policy configuration:
-
-```python
-class PolicyProfile(BaseModel):
-    """A named policy configuration."""
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    name: str  # Profile name (e.g., "readonly", "standard", "privileged")
-    permissions: Any  # PermissionSet (granted permissions)
-    approvable: Any = None  # PermissionSet | None (permissions that can be approved interactively)
-    deny_rules: list[Any] = []  # list[Permission] (explicit deny rules that override grants)
-```
+**Permission extraction**: The policy backend automatically extracts the required permission from an `ActionRequest`. For tool calls, it inspects tool metadata to determine category (file_ops → `fs`, execution → `shell`) and extracts the relevant scope (filesystem path, command name).
 
 ---
 
@@ -111,414 +39,25 @@ class PolicyProfile(BaseModel):
 
 ### ConfigDrivenPolicy
 
-Configuration-based policy management with flexible rules.
+The sole `PolicyProtocol` implementation — configuration-driven policy with named profiles, deny rules, and interactive approval.
 
-#### Features
+**Evaluation order** (critical to understand):
 
-- **Config-based**: Policies defined in YAML configuration
-- **Least-privilege**: Fine-grained permission control
-- **Path Whitelisting**: Allow specific paths for file operations
-- **Tool Filtering**: Restrict available tools per context
-- **Sandbox Enforcement**: Execute operations in sandboxed environment
-- **Dynamic Policies**: Policy rules can change based on context
+1. **Operation security check** (for tool calls only) — `WorkspaceToolOperationSecurity` validates filesystem paths and shell commands against workspace boundaries *before* permission checks. If this denies, policy stops here.
+2. **Deny rules** — Explicit deny rules in the profile are checked first. If any deny rule matches, the action is denied immediately (deny overrides grant).
+3. **Granted permissions** — If the active `PermissionSet` contains the required permission, the action is allowed.
+4. **Approvable set** — If the required permission is in the profile's `approvable` set, the verdict is `need_approval` (interactive approval required).
+5. **Default deny** — If none of the above match, the action is denied.
 
-#### Architecture
+**Key characteristics**:
+- **Profile-based**: Policies are named profiles (`readonly`, `standard`, `privileged`) each with a `PermissionSet`, `approvable` set, and `deny_rules`.
+- **Least-privilege delegation**: `narrow_for_child()` intersects parent permissions with per-child restrictions. A child can never have *more* permissions than its parent.
+- **Per-child overrides**: `child_restrictions` map allows further restricting specific subagents (e.g., `explore` gets only `fs:read:*`).
+- **Operation security integration**: Filesystem path validation and shell command extraction happen before permission matching.
 
-```
-ConfigDrivenPolicy Architecture
-├─ Policy Profiles
-│  ├─ Named profiles (readonly, standard, privileged)
-│  ├─ PermissionSet per profile
-│  ├─ Approvable permissions (interactive approval)
-│  └─ Deny rules (explicit overrides)
-│
-├─ Policy Evaluation Engine
-│  ├─ Action → Permission extraction
-│  ├─ Deny-rule check (first priority)
-│  ├─ Permission grant check
-│  ├─ Approvable set check
-│  └─ Default deny
-│
-├─ Least-Privilege Delegation
-│  ├─ narrow_for_child() for subagent spawning
-│  └─ Intersection semantics
-│
-├─ Operation Security
-│  ├─ WorkspaceToolOperationSecurity integration
-│  ├─ Filesystem path extraction
-│  └─ Shell command extraction
-│
-└─ Child Restrictions
-   ├─ Per-child permission overrides
-   └─ Delegation depth tracking
-```
+**When to use**: This is the only policy backend. The decision is *which profile* to use, not *which backend*.
 
-#### Implementation
-
-```python
-class ConfigDrivenPolicy:
-    """PolicyProtocol implementation driven by named policy profiles.
-
-    Evaluation order: (1) deny rules, (2) granted permissions,
-    (3) approvable set, (4) default deny.
-    """
-
-    def __init__(
-        self,
-        profiles: dict[str, PolicyProfile] | None = None,
-        child_restrictions: dict[str, frozenset[Permission]] | None = None,
-        config: Any = None,
-    ):
-        """Initialize the config-driven policy.
-
-        Args:
-            profiles: Mapping of profile name to PolicyProfile.
-                      Defaults to readonly/standard/privileged.
-            child_restrictions: Per-child permission overrides.
-            config: SootheConfig instance for security policy checks.
-        """
-        self._profiles = profiles or dict(DEFAULT_PROFILES)
-        self._child_restrictions = child_restrictions or {}
-        self._config = config
-        self._operation_security = WorkspaceToolOperationSecurity()
-
-    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
-        """Check if an action is permitted under the active profile."""
-
-        # Operation security check for tool calls
-        if action.action_type == "tool_call" and action.tool_name:
-            request = self._build_operation_security_request(action)
-            op_context = OperationSecurityContext(
-                thread_id=context.scope_id,
-                workspace=context.workspace,
-                security_config=getattr(self._config, "security", None),
-            )
-            op_decision = self._operation_security.evaluate(request, op_context)
-            if op_decision.verdict != "allow":
-                return PolicyDecision(verdict=op_decision.verdict, reason=op_decision.reason)
-
-        # Extract required permission from action
-        required = _extract_required_permission(action)
-        if required is None:
-            return PolicyDecision(verdict="allow", reason="No permission required")
-
-        permissions: PermissionSet = context.active_permissions
-        profile = self._find_profile(permissions)
-
-        # (1) Check deny rules first
-        if profile and any(
-            Permission(d.category, d.action, d.scope).matches(required)
-            for d in profile.deny_rules
-        ):
-            return PolicyDecision(verdict="deny", reason=f"Explicitly denied: {required}")
-
-        # (2) Check granted permissions
-        if permissions.contains(required):
-            return PolicyDecision(
-                verdict="allow",
-                reason="Permitted by grant",
-                matched_permission=required,
-            )
-
-        # (3) Check approvable set
-        if profile and profile.approvable and profile.approvable.contains(required):
-            return PolicyDecision(verdict="need_approval", reason=f"Requires approval: {required}")
-
-        # (4) Default deny
-        return PolicyDecision(verdict="deny", reason=f"Not permitted: {required}")
-
-    def narrow_for_child(
-        self, parent_permissions: PermissionSet, child_name: str
-    ) -> PermissionSet:
-        """Compute a narrowed permission set for a child subagent."""
-        allowed = self._child_restrictions.get(child_name)
-        if allowed is not None:
-            return parent_permissions.narrow(allowed)
-        return parent_permissions
-```
-
-#### Configuration
-
-```yaml
-agent:
-  protocols:
-    policy:
-      enabled: true
-      profile: standard          # Default policy profile (readonly, standard, privileged)
-```
-
-Built-in profiles:
-- **readonly**: `fs:read:*`, `net:outbound:*`, `subagent:spawn:*` (write/execute approvable)
-- **standard**: Full read/write/execute/net/mcp/subagent (default)
-- **privileged**: Same as standard (no approvable restrictions)
-
-#### Usage Example
-
-```python
-from soothe.foundation.core.security.config_policy import ConfigDrivenPolicy
-from soothe.protocols.policy import ActionRequest, PolicyContext, PermissionSet, Permission
-from soothe.config import SootheConfig
-
-config = SootheConfig.from_yaml_file("config.yml")
-policy = ConfigDrivenPolicy(config=config)
-
-# Check permission for a tool call
-context = PolicyContext(
-    active_permissions=PermissionSet(frozenset([
-        Permission("fs", "read", "*"),
-        Permission("fs", "write", "/tmp/**"),
-    ])),
-    scope_id="loop_abc",
-    workspace="/path/to/project",
-)
-
-action = ActionRequest(action_type="tool_call", tool_name="read_file", tool_args={"path": "/path/to/src"})
-decision = policy.check(action, context)
-print(f"Verdict: {decision.verdict}")  # "allow"
-
-# Narrow permissions for a child subagent
-child_perms = policy.narrow_for_child(context.active_permissions, "explore")
-```
-
----
-
-## Permission Model
-
-### Permission Categories
-
-Permissions use a structured `category:action:scope` format:
-
-| Category | Actions | Scope Examples |
-|----------|---------|----------------|
-| `fs` | `read`, `write` | `*`, `/tmp/**`, `/home/user/**` |
-| `shell` | `execute` | `ls`, `git`, `!rm` (anything except rm) |
-| `net` | `outbound` | `*.example.com`, `*` |
-| `mcp` | `connect`, `invoke`, `read_resource` | server name |
-| `subagent` | `spawn` | subagent name |
-
-### Built-in Profiles
-
-Three built-in policy profiles are available:
-
-```python
-# readonly: read-only filesystem + network + subagent spawn
-READONLY_PROFILE = PolicyProfile(
-    name="readonly",
-    permissions=PermissionSet(frozenset([
-        Permission("fs", "read", "*"),
-        Permission("net", "outbound", "*"),
-        Permission("subagent", "spawn", "*"),
-    ])),
-    approvable=PermissionSet(frozenset([
-        Permission("fs", "write", "*"),
-        Permission("shell", "execute", "*"),
-    ])),
-)
-
-# standard: full read/write/execute/net/mcp/subagent
-STANDARD_PROFILE = PolicyProfile(name="standard", ...)
-
-# privileged: same as standard, no approvable restrictions
-PRIVILEGED_PROFILE = PolicyProfile(name="privileged", ...)
-```
-
-### Permission Matching
-
-Matching uses glob patterns with negation support:
-
-```python
-Permission("fs", "read", "*")           # Read any file
-Permission("fs", "write", "/tmp/**")     # Write only under /tmp
-Permission("shell", "execute", "ls")     # Execute only ls
-Permission("shell", "execute", "!rm")    # Anything EXCEPT rm
-Permission("net", "outbound", "*.example.com")  # Only example.com
-```
-
----
-
-## Least-Privilege Delegation
-
-### Principle
-
-Soothe enforces least-privilege: subagents receive a narrowed subset of the parent's permissions.
-
-```python
-# Parent has: fs:read:*, fs:write:/tmp/**
-# Child "explore" gets: fs:read:* (intersection)
-child_perms = policy.narrow_for_child(parent_permissions, "explore")
-```
-
-### Child Restrictions
-
-Per-child overrides can restrict further:
-
-```python
-policy = ConfigDrivenPolicy(
-    profiles=dict(DEFAULT_PROFILES),
-    child_restrictions={
-        "explore": frozenset({Permission("fs", "read", "*")}),
-    },
-)
-```
-
----
-
-## Sandbox Enforcement
-
-### Operation Security Integration
-
-ConfigDrivenPolicy integrates with `WorkspaceToolOperationSecurity` for tool-call evaluation:
-
-```python
-# When a tool_call action is checked, ConfigDrivenPolicy first evaluates
-# operation security (filesystem path validation, shell command validation)
-# before checking permissions.
-decision = policy.check(action, context)
-# decision.verdict: "allow", "deny", or "need_approval"
-```
-
-### Integration with FrameworkFilesystem
-
-```python
-class FrameworkFilesystem:
-    """Workspace-aware filesystem backend."""
-
-    async def read_file(self, path: str):
-        # Policy is enforced via middleware, not direct calls
-        # PolicyEnforcementMiddleware intercepts tool calls and
-        # calls policy.check(action, context) before execution
-        ...
-```
-
----
-
-## Performance Characteristics
-
-### ConfigDrivenPolicy Performance
-
-| Operation | Performance | Notes |
-|-----------|-------------|-------|
-| `check()` | ~5-15ms | Permission extraction + matching |
-| `narrow_for_child()` | ~1-5ms | Set intersection |
-| `_find_profile()` | ~1-2ms | Profile lookup |
-
-**Optimization Tips**:
-- Cache policy decisions per context
-- Pre-compile wildcard patterns
-- Minimize rule count for fast evaluation
-- Use specific rules over wildcards
-
----
-
-## Comparison Table
-
-### Policy Backend Comparison
-
-| Feature | ConfigDrivenPolicy |
-|---------|--------------------|
-| Configuration Type | Profile-based (named profiles) |
-| Least-privilege Support | ✅ (narrow_for_child) |
-| Permission Model | Structured (category/action/scope) |
-| Built-in Profiles | readonly, standard, privileged |
-| Custom Profiles | ✅ |
-| Child Restrictions | ✅ (per-subagent overrides) |
-| Deny Rules | ✅ (override grants) |
-| Approvable Permissions | ✅ (interactive approval) |
-| Operation Security | ✅ (WorkspaceToolOperationSecurity) |
-| Context-aware Decisions | ✅ |
-
----
-
-## Error Handling
-
-### Policy Violations
-
-```python
-try:
-    await filesystem.read_file("/etc/passwd")
-except PolicyViolationError as e:
-    logger.warning(f"Policy violation: {e}")
-    
-    # Handle specific violations:
-    if "path_denied" in str(e):
-        # Notify user of denied access
-        pass
-    
-    elif "tool_denied" in str(e):
-        # Suggest alternative tool
-        pass
-    
-    elif "command_denied" in str(e):
-        # Suggest alternative command
-        pass
-```
-
----
-
-## Integration with Security
-
-### Integration with FrameworkFilesystem
-
-```python
-class FrameworkFilesystem:
-    def __init__(self, policy: ConfigDrivenPolicy, context: PolicyContext):
-        self._policy = policy
-        self._context = context
-
-    async def _check_permission(self, action: ActionRequest):
-        """Check permission before operation."""
-        decision = self._policy.check(action, self._context)
-
-        if decision.verdict != "allow":
-            raise PolicyViolationError(
-                f"Access denied: {decision.reason}"
-            )
-```
-
----
-
-## Testing
-
-### Unit Testing
-
-```python
-import pytest
-
-@pytest.mark.asyncio
-async def test_config_driven_policy():
-    """Test ConfigDrivenPolicy backend."""
-    policy = ConfigDrivenPolicy()
-
-    context = PolicyContext(
-        active_permissions=PermissionSet(frozenset([
-            Permission("fs", "read", "*"),
-            Permission("fs", "write", "/tmp/**"),
-        ])),
-        scope_id="test",
-        workspace="/tmp/workspace",
-    )
-
-    # Test allowed read
-    action = ActionRequest(action_type="tool_call", tool_name="read_file", tool_args={"path": "/tmp/workspace/file.txt"})
-    decision = policy.check(action, context)
-    assert decision.verdict == "allow"
-
-    # Test denied write outside /tmp
-    action = ActionRequest(action_type="tool_call", tool_name="write_file", tool_args={"path": "/etc/passwd"})
-    decision = policy.check(action, context)
-    assert decision.verdict == "deny"
-
-    # Test narrow_for_child
-    child_perms = policy.narrow_for_child(context.active_permissions, "explore")
-    assert child_perms.contains(Permission("fs", "read", "*"))
-```
-
----
-
-## Configuration Examples
-
-### Basic Configuration
-
+**Minimal config**:
 ```yaml
 agent:
   protocols:
@@ -527,61 +66,83 @@ agent:
       profile: standard    # readonly, standard, or privileged
 ```
 
-### Advanced Configuration
+Source: `packages/soothe/src/soothe/foundation/core/security/config_policy.py`
 
-```yaml
-agent:
-  protocols:
-    policy:
-      enabled: true
-      profile: standard
+---
 
-agent:
-  security:
-    sandbox: true
-    allow_paths_outside_workspace: false
-    denied_paths:
-      - /etc
-      - /usr
-    denied_file_types:
-      - .env
-      - .pem
-```
+## Built-in Profiles
+
+Three profiles ship with ConfigDrivenPolicy:
+
+| Profile | Granted Permissions | Approvable | Use Case |
+|---------|---------------------|------------|----------|
+| **readonly** | `fs:read:*`, `net:outbound:*`, `subagent:spawn:*` | `fs:write:*`, `shell:execute:*` | Read-only analysis; writes need approval |
+| **standard** | Full read/write/execute/net/mcp/subagent | None (empty set) | Default development profile |
+| **privileged** | Same as standard | None | No approval restrictions |
+
+**Key insight**: `readonly` is the only profile with `approvable` permissions — write and execute actions require interactive approval. `standard` and `privileged` grant everything but differ in whether approval is ever requested (neither has approvable permissions, so the distinction is structural).
+
+**Custom profiles**: You can define custom profiles by passing a `dict[str, PolicyProfile]` to the constructor, overriding `DEFAULT_PROFILES`.
+
+---
+
+## Least-Privilege Delegation
+
+Soothe enforces least-privilege: subagents receive a *narrowed subset* of the parent's permissions.
+
+**How it works**: `narrow_for_child()` intersects the parent's `PermissionSet` with the child's allowed permissions. The child can only retain permissions that exist in *both* sets — it's a strict intersection, never an expansion.
+
+**Per-child restrictions**: The `child_restrictions` map allows specifying a `frozenset[Permission]` per child name. If a child name is in the map, the parent's permissions are narrowed to the intersection with that frozenset. Children not in the map inherit the parent's permissions unchanged.
+
+**Delegation depth**: There is no explicit depth limit, but each narrowing can only reduce permissions. A chain of delegations naturally converges toward an empty permission set.
+
+---
+
+## Sandbox Enforcement
+
+ConfigDrivenPolicy integrates with `WorkspaceToolOperationSecurity` for defense-in-depth:
+
+- **Filesystem path validation**: Extracts paths from tool arguments and validates them against workspace boundaries. Paths outside the workspace root are denied (unless explicitly allowed via `allow_paths_outside_workspace`).
+- **Shell command extraction**: Extracts the command name from tool arguments for permission matching (e.g., `git push` → `shell:execute:git`).
+- **Denied paths/file types**: Configuration-level deny lists (e.g., `/etc`, `*.env`, `*.pem`) are checked during operation security evaluation, before permission matching.
+
+This means policy enforcement happens at two layers: operation security (workspace/path/command validation) and permission matching (category/action/scope). Both must pass for an action to be allowed.
+
+---
+
+## Performance Characteristics
+
+| Operation | Latency | Notes |
+|-----------|---------|-------|
+| `check()` | ~5-15ms | Permission extraction + set matching |
+| `narrow_for_child()` | ~1-5ms | Frozenset intersection |
+| Profile lookup | ~1-2ms | Dict lookup by permission set |
+
+**Policy checks are fast** because they're pure in-memory set operations — no I/O, no network. The main cost is permission extraction (inspecting tool arguments), which varies by action type.
+
+**Optimization**: Cache policy decisions per context (same action + same context → same verdict). Pre-compile wildcard patterns. Minimize rule count — each deny rule adds a matching pass.
+
+---
+
+## Production Gotchas
+
+1. **Deny rules override grants**: A deny rule matching an action *always* denies, even if the permission is explicitly granted. This is by design (safety-first) but can cause confusion if deny rules are too broad.
+
+2. **Operation security runs first**: For tool calls, `WorkspaceToolOperationSecurity` evaluates before permission matching. A path outside the workspace is denied regardless of `fs:write:*` grants. Configure `allow_paths_outside_workspace` if you need writes outside the workspace.
+
+3. **`need_approval` blocks execution**: Actions requiring approval pause execution until approved. In autonomous (non-interactive) mode, these effectively become denials. Ensure the active profile's `approvable` set is empty for autonomous workflows.
+
+4. **Child restriction is intersection, not replacement**: `narrow_for_child()` intersects parent permissions with child restrictions. If the parent doesn't have a permission, the child can't get it via restrictions — restrictions can only *reduce*, never *grant*.
+
+5. **Profile selection by permission set**: `_find_profile()` matches the active `PermissionSet` against known profiles. If no profile matches, deny rules and approvable checks are skipped — only grant-based matching applies. Ensure your custom profiles are discoverable.
+
+6. **Policy is enforced via middleware, not direct calls**: `FrameworkFilesystem` and other tools don't call `policy.check()` directly. The `PolicyEnforcementMiddleware` intercepts tool calls and enforces policy transparently. This means policy applies to *all* tool calls, not just filesystem operations.
 
 ---
 
 ## Related Documentation
 
-- **[Backends Overview](README.md)** - Backend layer introduction
-- **[Workspace Management](../core/workspace.md)** - Workspace security
-- **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** - Security policy spec
-- **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** - Policy protocol spec
-
----
-
-## API Reference
-
-### ConfigDrivenPolicy Class
-
-```python
-class ConfigDrivenPolicy:
-    """PolicyProtocol implementation driven by named policy profiles."""
-
-    def __init__(
-        self,
-        profiles: dict[str, PolicyProfile] | None = None,
-        child_restrictions: dict[str, frozenset[Permission]] | None = None,
-        config: Any = None,
-    ) -> None: ...
-
-    def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision: ...
-    def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet: ...
-```
-
----
-
-## See Also
-
-- **[Policy Protocol](../architecture/protocols.md)** - Protocol definition
-- **[Protocol Resolver](../core/resolver.md)** - Backend resolution
-- **[Workspace Management](../core/workspace.md)** - Workspace security
+- **[Backends Overview](README.md)** — Backend layer introduction
+- **[Workspace Management](../core/workspace.md)** — Workspace security boundaries
+- **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** — Security policy spec
+- **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** — Policy protocol spec

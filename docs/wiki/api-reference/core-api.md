@@ -1,1440 +1,181 @@
-# Core API Reference
+# Core Framework (`soothe`)
 
-The Soothe Core package (`soothe`) provides the framework-level APIs for configuration, protocol definitions, agent construction, and backend implementations.
+The `soothe` package is the heart of the system — it provides the configuration model, the protocol abstractions that define every pluggable capability, the agent construction pipeline, and the execution runner. The daemon and SDK packages build on top of this foundation.
 
-**Package**: `soothe`  
-**Import**: `from soothe import ...`  
-**Python**: `>=3.11`
+> **Source**: `packages/soothe/src/soothe/`
 
 ---
 
-## Table of Contents
+## Architectural Layers
 
-1. [Configuration System](#configuration-system)
-2. [Protocol Definitions](#protocol-definitions)
-3. [Agent Construction](#agent-construction)
-4. [Agent Execution](#agent-execution)
-5. [Backend Implementations](#backend-implementations)
+Soothe separates concerns into three layers, each with a strict contract:
+
+| Layer | Responsibility | Key Class |
+|-------|---------------|-----------|
+| **Layer 1** | Pure agent execution — tools, subagents, middleware, LangGraph runtime | `CoreAgent` |
+| **Layer 2** | Goal-driven orchestration — planning, strange-loop iteration, thread management | `SootheRunner` |
+| **Layer 3** | Daemon infrastructure — IPC, multi-transport, background scheduling | `SootheDaemon` |
+
+Layer 1 knows nothing about goals or the daemon. Layer 2 wraps Layer 1 with protocol orchestration. Layer 3 (documented in [daemon-api.md](daemon-api.md)) hosts Layer 2 as a long-running server.
+
+This separation is intentional: `CoreAgent` can be used standalone for embedding in any async Python process, while `SootheRunner` adds the agentic loop and protocol pre/post-processing.
 
 ---
 
 ## Configuration System
 
-### SootheConfig
+`SootheConfig` (`packages/soothe/src/soothe/config/settings.py`) is a Pydantic `BaseSettings` model that holds the entire agent configuration tree. It is the single entry point for all configuration — providers, models, agent behavior, protocols, persistence, observability, security, subagents, and MCP servers.
 
-**Import**: `from soothe.config import SootheConfig`
+### Key Design Decisions
 
-Declarative configuration for Soothe agents with environment variable support.
+- **Environment variable interpolation**: Every string value supports `${ENV_VAR}` syntax, recursively expanded across the entire config tree (not just leaf values). Unresolved placeholders are left intact rather than raising.
+- **Dual config source**: Values can come from a YAML file (`from_yaml_file`) or environment variables with the `SOOTHE_` prefix. Nested fields use `__` as separator — e.g., `SOOTHE_PROVIDERS__OPENAI__API_KEY`.
+- **`.env` loading happens before imports**: The daemon bootstrap calls `bootstrap_dotenv()` before any langchain imports so provider API keys are visible at import time.
+- **Lazy LLM factory**: The `_llm_factory` is lazily initialized to avoid paying provider import costs until a model is actually requested.
 
-#### Constructor
+### Model Routing
 
-```python
-SootheConfig(
-    *,
-    providers: dict[str, ModelProviderConfig] | None = None,
-    models: ModelRouter | None = None,
-    agent: AgentConfig | None = None,
-    tools: ToolsConfig | None = None,
-    protocols: ProtocolsConfig | None = None,
-    persistence: PersistenceConfig | None = None,
-    observability: ObservabilityConfig | None = None,
-    security: SecurityConfig | None = None,
-    subagents: dict[str, SubagentConfig] | None = None,
-    mcp_servers: dict[str, MCPServerConfig] | None = None,
-    autopilot: AutonomousConfig | None = None,
-)
+`ModelRouter` maps *roles* (not tasks) to `provider:model` strings: `default`, `planner`, `subagent`, `embedding`, `classify`. This indirection lets you swap the planner model without touching agent code. The `resolve_model(role)` and `create_chat_model(role)` methods bridge config to LangChain `BaseChatModel` instances.
+
+The `propagate_env()` method exports resolved API keys into `os.environ` so downstream libraries (openai, anthropic SDKs) pick them up without explicit passing — important when MCP servers or subagents initialize their own clients.
+
+### Minimal Config Example
+
+```yaml
+providers:
+  openai:
+    type: openai
+    api_key: ${OPENAI_API_KEY}
+models:
+  default: openai:gpt-4o
+  planner: openai:gpt-4o
+  subagent: openai:gpt-4o-mini
 ```
 
-**Parameters**: All parameters are optional with sensible defaults.
-
-**Environment Variables**: All configuration values support `${ENV_VAR}` syntax for environment variable interpolation. Environment variables can also be set with `SOOTHE_` prefix (e.g., `SOOTHE_PROVIDERS__OPENAI__API_KEY`).
-
-**Example**:
-```python
-from soothe.config import SootheConfig, ModelProviderConfig, ModelRouter
-
-# Minimal configuration with defaults
-config = SootheConfig()
-
-# Configuration with custom providers
-config = SootheConfig(
-    providers={
-        "openai": ModelProviderConfig(
-            type="openai",
-            api_key="${OPENAI_API_KEY}",
-            model_kwargs={"temperature": 0.7}
-        ),
-        "anthropic": ModelProviderConfig(
-            type="anthropic",
-            api_key="${ANTHROPIC_API_KEY}",
-        )
-    },
-    models=ModelRouter(
-        default="openai:gpt-4",
-        planner="openai:gpt-4o",
-        subagent="openai:gpt-4o-mini"
-    )
-)
-
-# Load from YAML file
-config = SootheConfig.from_yaml_file("config/config.yml")
-
-# Load with environment interpolation
-config = SootheConfig.from_yaml_file("config/config.yml")
-```
-
-#### Methods
-
-##### `resolve_model(role: str) -> str`
-
-Resolve a model role to a provider:model string.
-
-**Parameters**:
-- `role`: Model role (`"default"`, `"planner"`, `"subagent"`, `"embedding"`)
-
-**Returns**: Provider:model string (e.g., `"openai:gpt-4"`)
-
-**Example**:
-```python
-config = SootheConfig()
-model_str = config.resolve_model("planner")  # "openai:gpt-4o"
-```
-
-##### `create_chat_model(role: str) -> BaseChatModel`
-
-Instantiate a langchain chat model for the given role.
-
-**Parameters**:
-- `role`: Model role (`"default"`, `"planner"`, `"subagent"`)
-
-**Returns**: LangChain `BaseChatModel` instance
-
-**Example**:
-```python
-from soothe.config import SootheConfig
-
-config = SootheConfig()
-model = config.create_chat_model("default")
-
-# Use model
-response = await model.ainvoke([{"role": "user", "content": "Hello"}])
-```
-
-##### `create_embedding_model() -> Embeddings`
-
-Instantiate a langchain embedding model.
-
-**Returns**: LangChain `Embeddings` instance
-
-**Example**:
-```python
-config = SootheConfig()
-embeddings = config.create_embedding_model()
-
-# Generate embeddings
-texts = ["Hello world", "How are you?"]
-vectors = await embeddings.aembed_documents(texts)
-```
-
-##### `propagate_env() -> None`
-
-Set environment variables for downstream libraries.
-
-**Example**:
-```python
-config = SootheConfig()
-config.propagate_env()  # Sets OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
-```
-
-##### `from_yaml_file(path: str) -> SootheConfig`
-
-Load configuration from YAML file with environment interpolation.
-
-**Parameters**:
-- `path`: Path to YAML configuration file
-
-**Returns**: SootheConfig instance
-
-**Example**:
-```python
-config = SootheConfig.from_yaml_file("config/config.yml")
-```
-
----
-
-### Configuration Models
-
-#### ModelProviderConfig
-
-**Import**: `from soothe.config import ModelProviderConfig`
-
-Configuration for a model provider.
-
-```python
-class ModelProviderConfig(BaseModel):
-    """Model provider configuration."""
-    
-    type: str
-    """Provider type (e.g., 'openai', 'anthropic', 'google')."""
-    
-    api_key: str | None = None
-    """API key (supports ${ENV_VAR} syntax)."""
-    
-    api_base: str | None = None
-    """API base URL override."""
-    
-    model_kwargs: dict[str, Any] = Field(default_factory=dict)
-    """Additional model parameters."""
-```
-
----
-
-#### ModelRouter
-
-**Import**: `from soothe.config import ModelRouter`
-
-Router for mapping roles to models.
-
-```python
-class ModelRouter(BaseModel):
-    """Model role routing configuration."""
-    
-    default: str = "openai:gpt-4"
-    """Default model for general use."""
-    
-    planner: str | None = None
-    """Model for planning operations."""
-    
-    subagent: str | None = None
-    """Model for subagent execution."""
-    
-    embedding: str | None = None
-    """Model for embeddings."""
-    
-    classify: str | None = None
-    """Model for intent classification."""
-```
-
----
-
-#### AgentConfig
-
-**Import**: `from soothe.config import AgentConfig`
-
-Configuration for agent behavior.
-
-```python
-class AgentConfig(BaseModel):
-    """Agent configuration."""
-    
-    system_prompt: str | None = None
-    """Custom system prompt."""
-    
-    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-    """Maximum iterations per loop (RFC-201)."""
-    
-    execute_timeout: float = DEFAULT_EXECUTE_TIMEOUT
-    """Timeout for tool execution."""
-    
-    parallel_tools: bool = True
-    """Enable parallel tool execution."""
-```
-
----
-
-#### ProtocolsConfig
-
-**Import**: `from soothe.config import ProtocolsConfig`
-
-Configuration for protocol implementations.
-
-```python
-class ProtocolsConfig(BaseModel):
-    """Protocol configuration."""
-    
-    memory: MemUConfig | None = None
-    """Memory protocol config."""
-    
-    durability: DurabilityProtocolConfig | None = None
-    """Durability protocol config."""
-    
-    planner: PlannerProtocolConfig | None = None
-    """Planner protocol config."""
-    
-    policy: PolicyProtocolConfig | None = None
-    """Policy protocol config."""
-    
-    vector_store: VectorStoreRouter | None = None
-    """Vector store router config."""
-```
+> Full field reference: `packages/soothe/src/soothe/config/models.py`
 
 ---
 
 ## Protocol Definitions
 
-### MemoryProtocol
+Protocols are runtime-agnostic `typing.Protocol` interfaces that define *what* a capability does, decoupled from *how* it's implemented. The core package defines them; backends implement them; the runner resolves which implementation to use based on config.
 
-**Import**: `from soothe.protocols import MemoryProtocol`
+> **Source**: `packages/soothe/src/soothe/protocols/`
 
-Protocol for agent memory operations (RFC-301).
+| Protocol | Purpose | RFC | Backends |
+|----------|---------|-----|----------|
+| `MemoryProtocol` | Remember/recall agent memories with scoped search | RFC-301 | `MemUMemory` |
+| `DurabilityProtocol` | Thread lifecycle: create, suspend, resume, archive, list | RFC-304 | `SQLiteDurability`, `PostgreSQLDurability` |
+| `PlannerProtocol` | Goal decomposition into steps + completion assessment | RFC-305 | `LLMPlanner` |
+| `PolicyProtocol` | Permission enforcement + child-agent permission narrowing | RFC-306 | `ConfigDrivenPolicy` |
+| `VectorStoreProtocol` | Vector add/search/delete with metadata filtering | RFC-303 | `PGVectorStore`, `SQLiteVecStore`, `WeaviateStore` |
+| `AsyncPersistStore` | Async key-value persistence (bytes values) | RFC-302 | `SQLitePersistStore`, `PostgreSQLPersistStore` |
+| `IdentityProtocol` | Token issuance, auth, external identity mapping | RFC-307 | (re-exported from SDK) |
 
-#### Definition
+### Why Protocols, Not ABCs?
 
-```python
-class MemoryProtocol(Protocol):
-    """Memory protocol for remember/recall operations."""
-    
-    async def remember(
-        self,
-        content: str,
-        *,
-        metadata: dict[str, Any] | None = None,
-        scope: str = "thread",
-        thread_id: str | None = None,
-    ) -> MemoryItem:
-        """Store a memory.
-        
-        Args:
-            content: Memory content to store
-            metadata: Optional metadata dict
-            scope: Memory scope ('thread', 'workspace', 'user', 'global')
-            thread_id: Thread ID for thread-scoped memories
-            
-        Returns:
-            Stored MemoryItem
-        """
-        ...
-    
-    async def recall(
-        self,
-        query: str,
-        *,
-        scope: str = "thread",
-        thread_id: str | None = None,
-        limit: int = 10,
-    ) -> list[MemoryItem]:
-        """Recall memories by query.
-        
-        Args:
-            query: Search query
-            scope: Memory scope to search
-            thread_id: Thread ID for thread-scoped search
-            limit: Maximum number of results
-            
-        Returns:
-            List of matching MemoryItems
-        """
-        ...
-    
-    async def clear(
-        self,
-        *,
-        scope: str = "thread",
-        thread_id: str | None = None,
-    ) -> int:
-        """Clear memories in scope.
-        
-        Args:
-            scope: Memory scope to clear
-            thread_id: Thread ID
-            
-        Returns:
-            Number of memories cleared
-        """
-        ...
-```
+The protocols use `typing.Protocol` (structural subtyping) rather than `abc.ABC` (nominal subtyping). This means a third-party class can satisfy a protocol *without* importing it — critical for plugin authors who want zero hard dependencies on the core package. The SDK re-exports the same protocol definitions so plugin authors can type-check against them without pulling in daemon code.
 
-**Implementations**:
-- `soothe.backends.memory.memu_adapter.MemUMemory` (semantic search + keyword indexing)
+### Memory Scoping
 
-**Example**:
-```python
-from soothe.protocols import MemoryProtocol
-
-async def save_context(memory: MemoryProtocol, thread_id: str):
-    # Remember important information
-    await memory.remember(
-        "User prefers concise responses",
-        metadata={"type": "preference"},
-        scope="thread",
-        thread_id=thread_id,
-    )
-    
-    # Recall relevant memories
-    memories = await memory.recall(
-        "user preferences",
-        scope="thread",
-        thread_id=thread_id,
-        limit=5,
-    )
-    
-    for mem in memories:
-        print(f"Remembered: {mem.content}")
-```
-
----
-
-### DurabilityProtocol
-
-**Import**: `from soothe.protocols import DurabilityProtocol`
-
-Protocol for thread lifecycle management (RFC-304).
-
-#### Definition
-
-```python
-class DurabilityProtocol(Protocol):
-    """Durability protocol for thread persistence."""
-    
-    async def create_thread(
-        self,
-        *,
-        workspace: str | None = None,
-        metadata: ThreadMetadata | None = None,
-    ) -> ThreadInfo:
-        """Create a new thread.
-        
-        Args:
-            workspace: Workspace path for the thread
-            metadata: Optional thread metadata
-            
-        Returns:
-            Created ThreadInfo
-        """
-        ...
-    
-    async def suspend_thread(
-        self,
-        thread_id: str,
-        *,
-        reason: str | None = None,
-    ) -> ThreadInfo:
-        """Suspend a thread.
-        
-        Args:
-            thread_id: Thread ID
-            reason: Suspension reason
-            
-        Returns:
-            Updated ThreadInfo
-        """
-        ...
-    
-    async def resume_thread(
-        self,
-        thread_id: str,
-    ) -> ThreadInfo:
-        """Resume a suspended thread.
-        
-        Args:
-            thread_id: Thread ID
-            
-        Returns:
-            Updated ThreadInfo
-        """
-        ...
-    
-    async def archive_thread(
-        self,
-        thread_id: str,
-        *,
-        reason: str | None = None,
-    ) -> ThreadInfo:
-        """Archive a thread.
-        
-        Args:
-            thread_id: Thread ID
-            reason: Archive reason
-            
-        Returns:
-            Updated ThreadInfo
-        """
-        ...
-    
-    async def update_thread_metadata(
-        self,
-        thread_id: str,
-        metadata: dict[str, Any] | ThreadMetadata,
-    ) -> None:
-        """Update thread metadata (partial update).
-        
-        Merges the provided metadata with existing metadata.
-        Only updates fields that are present in the new metadata.
-        
-        Args:
-            thread_id: Thread ID to update
-            metadata: New metadata to merge (dict or ThreadMetadata)
-        """
-        ...
-    
-    async def get_thread(self, thread_id: str) -> ThreadInfo | None:
-        """Get thread by ID.
-        
-        Args:
-            thread_id: Thread ID
-            
-        Returns:
-            ThreadInfo or None if not found
-        """
-        ...
-    
-    async def list_threads(
-        self,
-        thread_filter: ThreadFilter | None = None,
-    ) -> list[ThreadInfo]:
-        """List threads matching filter.
-        
-        Args:
-            thread_filter: Thread filter criteria
-            
-        Returns:
-            List of matching ThreadInfo
-        """
-        ...
-```
-
-**Implementations**:
-- `soothe.backends.durability.postgresql.PostgreSQLDurability`
-- `soothe.backends.durability.sqlite.SQLiteDurability`
-
-**Example**:
-```python
-from soothe.protocols import DurabilityProtocol, ThreadMetadata
-
-async def manage_threads(durability: DurabilityProtocol):
-    # Create thread
-    thread = await durability.create_thread(
-        workspace="/home/user/project",
-        metadata=ThreadMetadata(
-            tags=["research", "important"],
-            plan_summary="Quantum computing research thread",
-            priority="high",
-            category="research",
-        ),
-    )
-
-    print(f"Created thread: {thread.thread_id}")
-
-    # List threads
-    threads = await durability.list_threads()
-    for t in threads:
-        print(f"Thread {t.thread_id}: {t.status}")
-
-    # Suspend thread
-    suspended = await durability.suspend_thread(
-        thread.thread_id,
-        reason="User requested pause",
-    )
-
-    # Resume later
-    resumed = await durability.resume_thread(thread.thread_id)
-
-    # Update metadata
-    await durability.update_thread_metadata(
-        thread.thread_id,
-        {"tags": ["research", "completed"]},
-    )
-```
-
----
-
-### PlannerProtocol
-
-**Import**: `from soothe.protocols import PlannerProtocol`
-
-Protocol for goal decomposition and planning (RFC-305).
-
-#### Definition
-
-```python
-class PlannerProtocol(Protocol):
-    """Planner protocol for goal decomposition."""
-    
-    async def plan(
-        self,
-        goal: str,
-        context: PlanContext,
-    ) -> Plan:
-        """Decompose a goal into steps.
-        
-        Args:
-            goal: Goal description
-            context: Planning context
-            
-        Returns:
-            Plan with steps
-        """
-        ...
-    
-    async def assess_goal(
-        self,
-        goal: str,
-        context: PlanContext,
-    ) -> GoalReport:
-        """Assess goal status and completion.
-        
-        Args:
-            goal: Goal description
-            context: Planning context
-            
-        Returns:
-            GoalReport with status
-        """
-        ...
-```
-
-**Implementations**:
-- `soothe.backends.planner.llm_planner.LLMPlanner`
-
-**Example**:
-```python
-from soothe.protocols import PlannerProtocol, PlanContext
-
-async def plan_goal(planner: PlannerProtocol, workspace: str):
-    # Create plan context
-    context = PlanContext(
-        workspace=workspace,
-        available_tools=["file_read", "file_write", "execute"],
-    )
-    
-    # Generate plan
-    plan = await planner.plan(
-        "Create a Python script to analyze CSV data",
-        context,
-    )
-    
-    print(f"Plan has {len(plan.steps)} steps:")
-    for i, step in enumerate(plan.steps, 1):
-        print(f"  {i}. {step.description}")
-```
-
----
-
-### PolicyProtocol
-
-**Import**: `from soothe.protocols import PolicyProtocol`
-
-Protocol for policy-based access control (RFC-306).
-
-#### Definition
-
-```python
-class PolicyProtocol(Protocol):
-    """Policy protocol for permission enforcement."""
-
-    async def check(
-        self,
-        action: ActionRequest,
-        context: PolicyContext,
-    ) -> PolicyDecision:
-        """Check action request against policy.
-
-        Args:
-            action: Action request to check
-            context: Policy context with active permissions
-
-        Returns:
-            PolicyDecision with allowed/denied status
-        """
-        ...
-
-    async def narrow_for_child(
-        self,
-        parent_permissions: PermissionSet,
-        child_name: str,
-    ) -> PermissionSet:
-        """Narrow permissions for a child agent.
-
-        Args:
-            parent_permissions: Parent's permission set
-            child_name: Name of the child agent
-
-        Returns:
-            Narrowed PermissionSet for the child
-        """
-        ...
-```
-
-**Implementations**:
-- `soothe.foundation.core.security.config_policy.ConfigDrivenPolicy`
-
-**Example**:
-```python
-from soothe.protocols import PolicyProtocol, ActionRequest, PolicyContext
-
-async def check_permission(policy: PolicyProtocol, workspace: str):
-    # Create request
-    request = ActionRequest(
-        category="file",
-        action="write",
-        scope="workspace",
-        resource="/home/user/project/config.yml",
-    )
-
-    # Check
-    decision = await policy.check(
-        action=request,
-        context=PolicyContext(workspace=workspace),
-    )
-
-    if decision.allowed:
-        print(f"Allowed: {decision.reason}")
-    else:
-        print(f"Denied: {decision.reason}")
-```
-
----
-
-### VectorStoreProtocol
-
-**Import**: `from soothe.protocols import VectorStoreProtocol`
-
-Protocol for vector database operations (RFC-303).
-
-See [SDK API: VectorStoreProtocol](sdk-api.md#vectorstoreprotocol) for full documentation.
-
----
-
-### AsyncPersistStore
-
-**Import**: `from soothe.protocols import AsyncPersistStore`
-
-Protocol for key-value persistence (RFC-302).
-
-See [SDK API: AsyncPersistStore](sdk-api.md#asyncpersiststore) for full documentation.
+`MemoryProtocol.remember/recall` take a `scope` parameter: `thread`, `workspace`, `user`, or `global`. The scope determines visibility — a thread-scoped memory is invisible to other threads, even in the same workspace. This is the mechanism behind per-conversation context isolation.
 
 ---
 
 ## Agent Construction
 
-### create_soothe_agent()
+> **Source**: `packages/soothe/src/soothe/foundation/core/agent/`
 
-**Import**: `from soothe.foundation.core.agent import create_soothe_agent`
+### CoreAgent (Layer 1)
 
-Factory function for creating a CoreAgent with protocol properties.
+`CoreAgent` is a thin typed wrapper around LangGraph's `CompiledStateGraph`. It exposes protocol instances (memory, planner, policy) as typed properties and provides the `astream()` execution interface. It deliberately contains **no goal infrastructure** — that's Layer 2's job.
 
-#### Signature
+A key design detail: `CoreAgent` can hold a *twin* execute graph (`execute_graph`) compiled without a checkpointer, used for ephemeral execute-phase streaming (IG-477). This avoids checkpoint pollution from the StrangeLoop's ACT phase.
 
-```python
-def create_soothe_agent(
-    config: SootheConfig | None = None,
-    *,
-    memory: MemoryProtocol | None = None,
-    durability: DurabilityProtocol | None = None,
-    planner: PlannerProtocol | None = None,
-    policy: PolicyProtocol | None = None,
-    checkpointer: BaseCheckpointSaver | None = None,
-) -> CoreAgent:
-```
+### AgentBuilder & create_soothe_agent()
 
-**Parameters**:
-- `config`: Soothe configuration
-- `memory`: Memory protocol instance
-- `durability`: Durability protocol instance
-- `planner`: Planner protocol instance
-- `policy`: Policy protocol instance
-- `checkpointer`: LangGraph checkpointer for state persistence
+`AgentBuilder` encapsulates the complex construction pipeline: protocol resolution, middleware stack assembly, backend initialization, plugin loading, and MCP registry integration. The convenience function `create_soothe_agent()` is the standard entry point — it creates an `AgentBuilder`, resolves all protocols from config, and builds the agent.
 
-**Returns**: CoreAgent instance
+The middleware stack (assembled in `build_soothe_middleware_stack`) is ordered:
 
-**Example**:
+1. **PolicyMiddleware** — safety enforcement (runs first, can block)
+2. **SystemPromptMiddleware** — dynamic prompt injection based on classification
+3. **WorkspaceContextMiddleware** — binds thread to a workspace path
+4. **SubagentContextMiddleware** — injects context briefing for delegation
+
+### Minimal Agent Creation
+
 ```python
 from soothe.foundation.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
-from soothe.backends.memory.memu_adapter import MemUMemory
-from soothe.backends.durability.sqlite import SQLiteDurability
 
-config = SootheConfig()
-
-# Create protocols
-memory = MemUMemory(config)
-durability = SQLiteDurability(db_path="~/.soothe/metadata.db")
-
-# Create agent
-agent = create_soothe_agent(
-    config=config,
-    memory=memory,
-    durability=durability,
-)
-
-print(f"Agent created with protocols: {agent.protocols}")
+agent = create_soothe_agent(SootheConfig.from_yaml_file("config.yml"))
 ```
+
+For custom protocol injection (e.g., a test-memory backend), use `AgentBuilder` directly with `.with_memory()`, `.with_policy()`, etc.
 
 ---
 
-### CoreAgent
+## Agent Execution (Layer 2)
 
-**Import**: `from soothe.foundation.core.agent import CoreAgent`
-
-Typed wrapper around LangGraph CompiledStateGraph with protocol properties.
-
-#### Definition
-
-```python
-class CoreAgent:
-    """CoreAgent - foundation runtime (RFC-0023).
-    
-    Self-contained module wrapping CompiledStateGraph with typed protocol properties.
-    Pure execution runtime - NO goal infrastructure.
-    """
-    
-    def __init__(
-        self,
-        graph: CompiledStateGraph,
-        *,
-        memory: MemoryProtocol | None = None,
-        durability: DurabilityProtocol | None = None,
-        planner: PlannerProtocol | None = None,
-        policy: PolicyProtocol | None = None,
-    ):
-        """Initialize CoreAgent with graph and protocols."""
-        ...
-    
-    @property
-    def graph(self) -> CompiledStateGraph:
-        """Get the underlying LangGraph."""
-        ...
-    
-    @property
-    def memory(self) -> MemoryProtocol | None:
-        """Get memory protocol."""
-        ...
-    
-    @property
-    def durability(self) -> DurabilityProtocol | None:
-        """Get durability protocol."""
-        ...
-    
-    @property
-    def planner(self) -> PlannerProtocol | None:
-        """Get planner protocol."""
-        ...
-    
-    @property
-    def policy(self) -> PolicyProtocol | None:
-        """Get policy protocol."""
-        ...
-    
-    async def astream(
-        self,
-        input: dict[str, Any],
-        config: RunnableConfig | None = None,
-        *,
-        stream_mode: list[str] = ["messages", "updates", "custom"],
-        subgraphs: bool = True,
-    ) -> AsyncGenerator[tuple[str, Any], None]:
-        """Stream agent execution.
-        
-        Args:
-            input: Input dict with 'messages' key
-            config: Runnable config with thread_id
-            stream_mode: Stream modes to yield
-            subgraphs: Include subgraph updates
-            
-        Yields:
-            Tuples of (namespace, data)
-        """
-        ...
-```
-
-**Example**:
-```python
-from soothe.foundation.core.agent import CoreAgent
-
-async def run_agent(agent: CoreAgent, query: str, thread_id: str):
-    # Stream execution
-    async for namespace, data in agent.astream(
-        {"messages": [{"role": "user", "content": query}]},
-        config={"configurable": {"thread_id": thread_id}},
-    ):
-        if namespace == "messages":
-            # Handle message chunks
-            print(data.get("content", ""), end="", flush=True)
-        
-        elif namespace == "custom":
-            # Handle custom events
-            event_type = data.get("type")
-            print(f"\n[Event: {event_type}]")
-```
-
----
-
-### AgentBuilder
-
-**Import**: `from soothe.foundation.core.agent import AgentBuilder`
-
-Builder for constructing CoreAgent instances with custom middleware.
-
-#### Definition
-
-```python
-class AgentBuilder:
-    """Builder for CoreAgent construction."""
-    
-    def __init__(self, config: SootheConfig):
-        """Initialize builder with config."""
-        ...
-    
-    def with_memory(self, memory: MemoryProtocol) -> AgentBuilder:
-        """Add memory protocol."""
-        ...
-    
-    def with_durability(self, durability: DurabilityProtocol) -> AgentBuilder:
-        """Add durability protocol."""
-        ...
-    
-    def with_planner(self, planner: PlannerProtocol) -> AgentBuilder:
-        """Add planner protocol."""
-        ...
-    
-    def with_policy(self, policy: PolicyProtocol) -> AgentBuilder:
-        """Add policy protocol."""
-        ...
-    
-    def with_checkpointer(self, checkpointer: BaseCheckpointSaver) -> AgentBuilder:
-        """Add checkpointer."""
-        ...
-    
-    def with_middleware(self, middleware: Middleware) -> AgentBuilder:
-        """Add custom middleware."""
-        ...
-    
-    def build(self) -> CoreAgent:
-        """Build the CoreAgent."""
-        ...
-```
-
-**Example**:
-```python
-from soothe.foundation.core.agent import AgentBuilder
-from soothe.config import SootheConfig
-from soothe.backends.memory.memu_adapter import MemUMemory
-from soothe.backends.durability.sqlite import SQLiteDurability
-from soothe.foundation.core.security import ConfigDrivenPolicy
-
-config = SootheConfig()
-
-agent = AgentBuilder(config)
-    .with_memory(MemUMemory(config))
-    .with_durability(SQLiteDurability(db_path="~/.soothe/metadata.db"))
-    .with_policy(ConfigDrivenPolicy(config=config))
-    .build()
-```
-
----
-
-## Agent Execution
+> **Source**: `packages/soothe/src/soothe/runner/`
 
 ### SootheRunner
 
-**Import**: `from soothe.runner import SootheRunner`
+`SootheRunner` wraps `create_soothe_agent()` with protocol pre/post-processing and the agentic loop. It is decomposed into four mixins:
 
-Protocol-orchestrated agent runner with pre/post processing.
+| Mixin | Phase |
+|-------|-------|
+| `PhasesMixin` | Pre-stream: thread binding, policy setup, memory recall, plan bootstrap |
+| `StrangeLoopMixin` | The Reason→Act iterative loop (RFC-201, RFC-220) |
+| `AutopilotWorkerMixin` | Single-goal worker entry for daemon-dispatched goals (RFC-222) |
+| `CheckpointMixin` | Progressive checkpointing, artifacts, reports (RFC-0010) |
 
-#### Constructor
+The runner's `astream()` method yields `StreamChunk` objects — a normalized `(namespace, mode, data)` tuple that extends the raw LangGraph stream with `soothe.*` custom events for protocol observability. Namespaces include `assistant` (model output), `tool` (tool execution), and `soothe` (protocol-level events like memory recall or policy checks).
 
-```python
-SootheRunner(config: SootheConfig | None = None)
-```
+### Gotcha: Thread ID vs Loop ID
 
-**Parameters**:
-- `config`: Soothe configuration
+There are two distinct identifiers that are easy to confuse:
+- **`thread_id`** — the LangGraph/durability checkpoint key (`configurable.thread_id`). This is what persists conversation state.
+- **`loop_id`** — the StrangeLoop subscription scope for event streaming. A loop *contains* one or more threads.
 
-**Example**:
-```python
-from soothe.runner import SootheRunner
-from soothe.config import SootheConfig
+The daemon's command handlers receive `loop_id` on the wire but internally bind it to a `checkpoint_thread_id` before executing. See `packages/soothe-daemon/src/soothe_daemon/server/commands.py` for the binding logic.
 
-config = SootheConfig()
-runner = SootheRunner(config)
-```
+### Gotcha: Autopilot is Daemon-Owned
 
-#### Methods
-
-##### `astream()`
-
-```python
-async def astream(
-    query: str,
-    *,
-    thread_id: str | None = None,
-    workspace: str | None = None,
-    verbosity: str = "normal",
-    mode: str = "agentic",
-    intent: str | None = None,
-) -> AsyncGenerator[StreamChunk, None]:
-```
-
-Stream agent execution with protocol orchestration.
-
-**Parameters**:
-- `query`: User query
-- `thread_id`: Thread ID for continuity
-- `workspace`: Workspace path
-- `verbosity`: Verbosity level
-- `mode`: Execution mode
-- `intent`: Intent hint
-
-**Yields**: StreamChunk objects
-
-**Example**:
-```python
-async def run_query(runner: SootheRunner, query: str):
-    async for chunk in runner.astream(
-        query,
-        workspace="/home/user/project",
-        verbosity="verbose",
-    ):
-        namespace = chunk.namespace
-        mode = chunk.mode
-        data = chunk.data
-        
-        if namespace == "assistant":
-            print(data.get("content", ""), end="", flush=True)
-        
-        elif namespace == "soothe":
-            event_type = data.get("type")
-            print(f"\n[Protocol event: {event_type}]")
-```
-
----
-
-### StreamChunk
-
-**Import**: `from soothe.runner._runner_shared import StreamChunk`
-
-Stream chunk data structure.
-
-```python
-class StreamChunk(BaseModel):
-    """Stream chunk from runner."""
-    
-    namespace: str
-    """Chunk namespace ('assistant', 'tool', 'soothe', etc.)."""
-    
-    mode: str
-    """Stream mode ('messages', 'updates', 'custom')."""
-    
-    data: dict[str, Any]
-    """Chunk data payload."""
-    
-    thread_id: str | None = None
-    """Thread ID."""
-    
-    loop_id: str | None = None
-    """Loop ID."""
-```
+The legacy in-process autonomous multi-goal loop has been removed (RFC-222 Phase D). Autopilot goals are dispatched *by the daemon* and arrive through `LoopRunRequest.autopilot_job`, routing to the single-goal worker path. You cannot run autopilot from a bare `SootheRunner` — it requires the daemon's goal dispatch infrastructure.
 
 ---
 
 ## Backend Implementations
 
-### Memory Backends
+Backends are concrete protocol implementations. They live in `packages/soothe/src/soothe/backends/` and are resolved by `packages/soothe/src/soothe/runner/resolver/`.
 
-#### MemUMemory
+### Resolution Pattern
 
-**Import**: `from soothe.backends.memory.memu_adapter import MemUMemory`
+The resolver functions (`resolve_memory`, `resolve_durability`, `resolve_planner`, `resolve_policy`, `resolve_checkpointer`) read config flags and instantiate the appropriate backend. Each is a simple factory — if the protocol is disabled in config, it returns `None`. This means a missing backend dependency (e.g., `psycopg` not installed) only matters if you actually enable that backend.
 
-Semantic search + keyword indexing memory implementation (RFC-301).
+### Backend Selection Guide
 
-```python
-class MemUMemory(MemoryProtocol):
-    """MemU memory backend with semantic search and keyword indexing."""
+| Need | Backend | Config Flag |
+|------|---------|-------------|
+| Local dev / single user | `SQLiteDurability` + `SQLitePersistStore` | `backend: sqlite` |
+| Production / multi-agent | `PostgreSQLDurability` + `PostgreSQLPersistStore` | `backend: postgresql` |
+| Semantic memory | `MemUMemory` | `memory.enabled: true` |
+| Vector search (local) | `SQLiteVecStore` | `vector_store.default: sqlite_vec` |
+| Vector search (production) | `PGVectorStore` | `vector_store.default: pgvector` |
+| Policy enforcement | `ConfigDrivenPolicy` | `policy.enabled: true` |
 
-    def __init__(self, config: SootheConfig):
-        """Initialize with config."""
-        ...
+### Policy Profiles
 
-    async def remember(
-        self,
-        content: str,
-        *,
-        metadata: dict | None = None,
-        scope: str = "thread",
-        thread_id: str | None = None,
-    ) -> MemoryItem:
-        """Store memory with semantic + keyword indexing."""
-        ...
-
-    async def recall(
-        self,
-        query: str,
-        *,
-        scope: str = "thread",
-        thread_id: str | None = None,
-        limit: int = 10,
-    ) -> list[MemoryItem]:
-        """Recall memories by semantic + keyword search."""
-        ...
-```
-
-**Configuration**:
-```yaml
-agent:
-  protocols:
-    memory:
-      enabled: true
-      llm_chat_role: think
-      llm_embed_role: embedding
-```
-
----
-
-### Durability Backends
-
-#### SQLiteDurability
-
-**Import**: `from soothe.backends.durability.sqlite import SQLiteDurability`
-
-SQLite-based durability implementation (RFC-304).
-
-```python
-class SQLiteDurability(DurabilityProtocol):
-    """SQLite durability protocol."""
-
-    def __init__(
-        self,
-        persist_store=None,
-        db_path: str | None = None,
-    ):
-        """Initialize with optional persist store or DB path."""
-        ...
-```
-
-**Configuration**:
-```yaml
-agent:
-  protocols:
-    durability:
-      enabled: true
-      backend: sqlite
-persistence:
-  metadata_sqlite_path: "${SOOTHE_HOME}/metadata.db"
-```
-
----
-
-#### PostgreSQLDurability
-
-**Import**: `from soothe.backends.durability.postgresql import PostgreSQLDurability`
-
-PostgreSQL-based durability implementation (RFC-304).
-
-```python
-class PostgreSQLDurability(DurabilityProtocol):
-    """PostgreSQL durability protocol."""
-
-    def __init__(self, persist_store):
-        """Initialize with a PostgreSQL persist store."""
-        ...
-```
-
-**Configuration**:
-```yaml
-agent:
-  protocols:
-    durability:
-      enabled: true
-      backend: postgresql
-persistence:
-  postgres_base_dsn: "${DATABASE_URL}"
-  postgres_databases:
-    metadata: soothe_metadata
-```
-
----
-
-### Policy Backends
-
-#### ConfigDrivenPolicy
-
-**Import**: `from soothe.foundation.core.security.config_policy import ConfigDrivenPolicy`
-
-Configuration-driven policy implementation (RFC-306).
-
-```python
-class ConfigDrivenPolicy(PolicyProtocol):
-    """Configuration-driven policy protocol."""
-
-    def __init__(
-        self,
-        profiles: dict | None = None,
-        child_restrictions: dict | None = None,
-        config: SootheConfig | None = None,
-    ):
-        """Initialize with profiles, child restrictions, and config."""
-        ...
-
-    async def check(
-        self,
-        action: ActionRequest,
-        context: PolicyContext,
-    ) -> PolicyDecision:
-        """Check action against config rules."""
-        ...
-
-    async def narrow_for_child(
-        self,
-        parent_permissions: PermissionSet,
-        child_name: str,
-    ) -> PermissionSet:
-        """Narrow permissions for a child agent."""
-        ...
-```
-
-**Configuration**:
-```yaml
-agent:
-  protocols:
-    policy:
-      enabled: true
-      profile: standard
-security:
-  profiles:
-    readonly:
-      permissions:
-        file: ["read:workspace"]
-      deny_by_default: true
-    standard:
-      permissions:
-        file: ["read:workspace", "write:workspace"]
-        tool: ["execute:safe"]
-      deny_by_default: true
-    privileged:
-      permissions:
-        file: ["read:*", "write:*"]
-        tool: ["execute:*"]
-      deny_by_default: false
-```
-
----
-
-### Planner Backends
-
-#### LLMPlanner
-
-**Import**: `from soothe.backends.planner.llm_planner import LLMPlanner`
-
-LLM-based planner implementation (RFC-305).
-
-```python
-class LLMPlanner(PlannerProtocol):
-    """LLM-based planner protocol."""
-    
-    def __init__(
-        self,
-        config: SootheConfig,
-        *,
-        model_role: str = "planner",
-    ):
-        """Initialize with config and model role."""
-        ...
-```
-
-**Configuration**:
-```yaml
-protocols:
-  planner:
-    type: llm
-    model_role: planner
-    max_steps: 10
-    assess_completion: true
-```
-
----
-
-### Vector Store Backends
-
-#### PGVectorStore
-
-**Import**: `from soothe.backends.vector_store.pgvector import PGVectorStore`
-
-PostgreSQL pgvector implementation (RFC-303).
-
-```python
-class PGVectorStore(VectorStoreProtocol):
-    """PostgreSQL pgvector store."""
-
-    def __init__(
-        self,
-        collection: str = "soothe_vectors",
-        dsn: str = "postgresql://localhost/soothe",
-        pool_size: int = 5,
-        index_type: str = "hnsw",
-        vector_size: int = 1536,
-    ) -> None:
-        """Initialize PGVectorStore.
-
-        Args:
-            collection: Table name for storing vectors
-            dsn: PostgreSQL connection string
-            pool_size: Connection pool size
-            index_type: Index type (hnsw, ivfflat, or none)
-            vector_size: Dimension of vectors
-        """
-        ...
-```
-
-**Configuration**:
-```yaml
-vector_store:
-  default: pgvector
-  providers:
-    pgvector:
-      connection_string: "${DATABASE_URL}"
-      table_name: embeddings
-      dimensions: 1536
-```
-
----
-
-#### SQLiteVecStore
-
-**Import**: `from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore`
-
-SQLite-vec implementation (RFC-303).
-
-```python
-class SQLiteVecStore(VectorStoreProtocol):
-    """SQLite-vec store."""
-
-    def __init__(
-        self,
-        collection: str = "soothe_vectors",
-        db_path: str | None = None,
-        vector_size: int = 1536,
-        distance: str = "cosine",
-        reader_pool_size: int = 8,
-    ) -> None:
-        """Initialize SQLiteVecStore.
-
-        Args:
-            collection: Collection name for storing vectors
-            db_path: Path to SQLite database file (defaults to $SOOTHE_HOME/vector.db)
-            vector_size: Dimension of vectors
-            distance: Distance metric (cosine, l2, ip)
-            reader_pool_size: Number of reader connections for concurrent reads
-        """
-        ...
-```
-
-**Configuration**:
-```yaml
-vector_store:
-  default: sqlite_vec
-  providers:
-    sqlite_vec:
-      db_path: "${SOOTHE_HOME}/vectors.db"
-      dimensions: 1536
-```
-
----
-
-### Persistence Backends
-
-#### SQLitePersistStore
-
-**Import**: `from soothe.backends.persistence.sqlite_store import SQLitePersistStore`
-
-SQLite-based key-value persistence (RFC-302).
-
-```python
-class SQLitePersistStore(AsyncPersistStore):
-    """SQLite persistence store."""
-
-    def __init__(self, db_path: str | None = None):
-        """Initialize with optional DB path."""
-        ...
-```
-
----
-
-#### PostgreSQLPersistStore
-
-**Import**: `from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore`
-
-PostgreSQL persistence store (RFC-302).
-
-```python
-class PostgreSQLPersistStore(AsyncPersistStore):
-    """PostgreSQL persistence store."""
-
-    def __init__(self, connection_string: str):
-        """Initialize with connection string."""
-        ...
-```
-
-
-## Resolver Functions
-
-### resolve_durability()
-
-**Import**: `from soothe.runner.resolver import resolve_durability`
-
-Resolve durability protocol from configuration.
-
-```python
-def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
-    """Resolve durability protocol from config.
-    
-    Args:
-        config: Soothe configuration
-        
-    Returns:
-        DurabilityProtocol instance
-    """
-    ...
-```
-
----
-
-### resolve_memory()
-
-**Import**: `from soothe.runner.resolver import resolve_memory`
-
-Resolve memory protocol from configuration.
-
-```python
-def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
-    """Resolve memory protocol from config."""
-    ...
-```
-
----
-
-### resolve_planner()
-
-**Import**: `from soothe.runner.resolver import resolve_planner`
-
-Resolve planner protocol from configuration.
-
-```python
-def resolve_planner(
-    config: SootheConfig,
-    model: BaseChatModel | None,
-) -> PlannerProtocol:
-    """Resolve LLMPlanner as the sole planner implementation."""
-    ...
-```
-
----
-
-### resolve_policy()
-
-**Import**: `from soothe.runner.resolver import resolve_policy`
-
-Resolve policy protocol from configuration.
-
-```python
-def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
-    """Resolve policy protocol from config."""
-    ...
-```
+`ConfigDrivenPolicy` supports named profiles (`readonly`, `standard`, `privileged`) with permission grants and `deny_by_default` toggles. The `narrow_for_child()` method is critical for subagent security — it derives a restricted permission set for a delegated subagent, ensuring a child agent never has *more* permissions than its parent.
 
 ---
 
 ## See Also
 
-- **[SDK API Reference](sdk-api.md)** - Client and plugin development API
-- **[Protocols Layer](../protocols/README.md)** - Protocol specifications
-- **[RFC-000 System Design](../../specs/RFC-000-system-conceptual-design.md)** - Overall architecture
+- [Daemon API](daemon-api.md) — Layer 3 server infrastructure
+- [SDK API](sdk-api.md) — Client and plugin development
+- [Protocols Layer](../protocols/README.md) — Protocol specifications
+- [Configuration Guide](../configuration-guide/README.md) — Full config reference
+- [RFC-000 System Design](../../specs/RFC-000-system-conceptual-design.md) — Architecture RFCs

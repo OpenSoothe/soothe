@@ -1,655 +1,158 @@
 # StrangeLoop
 
-Plan-Execute loop for single-goal agentic execution.
+Plan-Execute loop for single-goal agentic execution — Layer 2 of the execution model.
 
 ---
 
-## Overview
+## What This Module Is
 
-StrangeLoop (`soothe.foundation.loop`) provides agentic goal execution through iterative refinement, forming the middle tier of Soothe's three-level execution architecture. It uses a Plan → Execute loop where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via CoreAgent.
+StrangeLoop (`soothe.foundation.loop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine (Layer 3) decides *which* goals to pursue, StrangeLoop executes a *single* goal through iterative Plan → Execute refinement. It delegates actual tool execution to CoreAgent (Layer 1).
+
+The name comes from the core insight: the LLM plans, executes, assesses progress, and re-plans in a loop — a "strange loop" of self-referential refinement. The loop is bounded (default max 8 iterations) and converges based on progress assessment.
 
 **RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
+**Source**: `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py`, `state/schemas.py`, `orchestrator/`
 
 ---
 
-## Architecture
+## The Loop Graph — Not a Hand-Rolled Loop
 
-### Plan-Execute Loop
+StrangeLoop is implemented as a **compiled LangGraph** (RFC-220 Loop Graph), not a Python `while` loop. The graph's configurable checkpoint key is `loop_id`, allowing loop state to persist across interruptions and resume from checkpoints.
 
-StrangeLoop operates through iterative Plan → Execute cycles:
+The graph orchestrates a multi-phase iteration:
 
-```
-StrangeLoop.run_with_progress(goal)
-    ↓
-┌─ Loop Iteration (max ~8) ────────────────────────────┐
-│                                                       │
-│  PLAN Phase                                          │
-│  ├─ Goal context assembly                            │
-│  ├─ LLM planning (structured PlanResult)             │
-│  ├─ Evidence accumulation                            │
-│  ├─ Progress assessment                              │
-│  └─ Goal-distance estimation                         │
-│                                                       │
-│  EXECUTE Phase                                       │
-│  ├─ Step decomposition                               │
-│  ├─ CoreAgent execution (per step)                   │
-│  ├─ Result collection                                │
-│  └─ Evidence update                                  │
-│                                                       │
-│  REFLECT Phase                                       │
-│  ├─ Evaluate progress                                │
-│  ├─ Update strategy                                  │
-│  ├─ Decide continue/stop                             │
-│  └─ Progressive checkpoint                           │
-│                                                       │
-└───────────────────────────────────────────────────────┘
-    ↓
-    Return PlanResult
-```
+1. **Plan-Assess** — a quick status check (RFC-604): lightweight schema (~50-80 tokens) that decides whether to continue, replan, or finish.
+2. **Plan-Generate** — if replanning, the LLM generates new steps with structured output.
+3. **Execute** — runs steps via CoreAgent, either in parallel or dependency-ordered waves.
+4. **Record Iteration** — logs evidence, updates progress.
+5. **Goal Completion** — when the plan asserts completion, a final LLM call synthesizes the answer.
+
+The graph nodes live in `orchestrator/nodes/` — each node is a discrete phase (e.g., `plan_assess.py`, `plan_generate.py`, `execute_steps.py`, `iteration_gate.py`).
 
 ---
 
-## Core Concepts
+## PlanResult — The Structured Decision
 
-### PlanResult
+The Plan phase produces a `PlanResult`, which is the central data structure. It combines planning, progress assessment, and goal-distance estimation in a single structured LLM response.
 
-Structured response from LLM planning phase:
+Key fields and their design rationale:
 
-```python
-class PlanResult:
-    """Structured planning response from LLM."""
-    
-    # Status
-    status: Literal["plan", "done", "failed", "need_info"]
-    
-    # Plan components
-    reasoning: str          # Reasoning about current state
-    strategy: str           # Execution strategy
-    steps: list[PlanStep]   # Planned steps
-    
-    # Progress tracking
-    progress: float         # Progress percentage (0-1)
-    goal_distance: float    # Distance to goal (0-1)
-    
-    # Evidence
-    evidence: EvidenceBundle  # Accumulated evidence
-    
-    # Iteration tracking
-    iteration: int          # Current iteration number
-    max_iterations: int     # Maximum allowed iterations
-```
-
-### PlanStep
-
-Individual step to execute:
-
-```python
-class PlanStep:
-    """Single execution step in plan."""
-    
-    id: str                 # Step identifier
-    description: str        # Step description
-    tool: str | None        # Tool to use (optional)
-    prompt: str             # Prompt for execution
-    expected_outcome: str   # Expected outcome
-    priority: int           # Execution priority
-```
-
-### EvidenceBundle
-
-Accumulated evidence from execution:
-
-```python
-class EvidenceBundle:
-    """Accumulated evidence from execution."""
-    
-    entries: list[EvidenceEntry]
-    summary: str
-    confidence: float
-    
-    def add_entry(self, entry: EvidenceEntry):
-        """Add new evidence entry."""
-    
-    def build_summary(self) -> str:
-        """Build evidence summary."""
-```
+- **`status`** — `continue` | `replan` | `done`. Drives the loop graph's routing. Notably, there's no `failed` status here — failure is handled by ContextEngine.
+- **`goal_progress`** — descriptive level (`none` | `low` | `medium` | `high` | `complete`), **not** numeric. IG-399 replaced numeric progress with descriptive levels because LLMs are bad at precise numeric estimation but good at categorical assessment.
+- **`plan_action`** — `keep` | `new`. Whether to reuse the in-flight `AgentDecision` or supply a new one. A validator enforces that `new` requires a `decision` when status isn't `done`.
+- **`require_goal_completion`** — optimization flag. When `False`, the last AIMessage can be used directly, skipping an extra goal-completion LLM call.
+- **`terminal_after_execute`** (RFC-226) — when `True`, the plan asserts its single step IS the goal completion. The graph routes directly from `record_iteration` to `goal_completion`, skipping the next `plan_assess`. Set for bootstrap actions where the first step is obviously the answer.
 
 ---
 
-## Execution Phases
+## The Two-Phase Plan (RFC-604)
 
-### 1. PLAN Phase
+Planning is split into two phases with different token budgets:
 
-LLM-driven planning with structured output:
+1. **StatusAssessment** (~50-80 tokens) — minimal fields: just `status` and `progress`. This is a cheap "are we done?" check. 60% token reduction vs. the old monolithic plan (IG-264).
+2. **PlanGeneration** (full schema) — only runs when assessment says `replan`. Generates `PlanGenerateStep` entries with description, full_description, expected_output, and dependencies.
 
-```python
-async def plan_phase(self, state: LoopState) -> PlanResult:
-    """Execute planning phase."""
-    
-    # Assemble goal context
-    goal_context = await self.assemble_goal_context(state)
-    
-    # Retrieve relevant history
-    history = await self.retrieve_history(state)
-    
-    # LLM planning call
-    plan_result = await self.llm.plan(
-        goal=state.goal_text,
-        context=goal_context,
-        history=history,
-        iteration=state.iteration
-    )
-    
-    # Validate plan
-    if not self.validate_plan(plan_result):
-        raise InvalidPlanError(plan_result)
-    
-    return plan_result
-```
-
-### 2. EXECUTE Phase
-
-Execute planned steps via CoreAgent:
-
-```python
-async def execute_phase(self, plan_result: PlanResult) -> ExecuteResult:
-    """Execute planned steps."""
-    
-    results = []
-    for step in plan_result.steps:
-        # Execute step via CoreAgent
-        step_result = await self.execute_step(step)
-        
-        # Collect evidence
-        evidence = self.extract_evidence(step_result)
-        
-        # Update progress
-        results.append(step_result)
-    
-    return ExecuteResult(
-        steps=results,
-        evidence=self.evidence_builder.build()
-    )
-```
-
-### 3. REFLECT Phase
-
-Evaluate progress and decide continuation:
-
-```python
-async def reflect_phase(
-    self,
-    plan_result: PlanResult,
-    execute_result: ExecuteResult
-) -> ReflectionResult:
-    """Reflect on execution results."""
-    
-    # Evaluate progress
-    progress = self.evaluate_progress(execute_result)
-    
-    # Update evidence
-    self.evidence_builder.add_entries(execute_result.evidence)
-    
-    # Decide continuation
-    should_continue = self.decide_continuation(
-        plan_result,
-        progress
-    )
-    
-    return ReflectionResult(
-        should_continue=should_continue,
-        progress=progress,
-        updated_strategy=self.update_strategy(execute_result)
-    )
-```
+This split means most iterations only pay the cost of the assessment phase. Full planning only happens when the plan needs to change.
 
 ---
 
-## Loop State
+## Step Kinds — Action vs. Ask-User
 
-### LoopState
+Steps have a `kind` field: `action` or `ask_user` (RFC-622, IG-462).
 
-State management for loop execution:
+- **`action`** steps run through CoreAgent — normal tool execution.
+- **`ask_user`** steps do **not** invoke CoreAgent. Instead, they route `questions` through the configured `ClarificationPolicy` and record a synthesized successful step result containing the answers.
 
-```python
-class LoopState:
-    """State for StrangeLoop execution."""
-    
-    # Goal information
-    current_goal_id: str
-    goal_text: str
-    
-    # Thread information
-    thread_id: str
-    
-    # Iteration tracking
-    iteration: int
-    max_iterations: int
-    
-    # Evidence
-    evidence: EvidenceBundle
-    
-    # Context
-    goal_context: dict
-    
-    # Progress
-    progress: float
-    goal_distance: float
-    
-    # Status
-    status: Literal["planning", "executing", "reflecting", "completed", "failed"]
-```
+This lets the loop request clarification mid-execution without breaking the Plan-Execute cycle. The `ask_user` validator enforces that questions are non-empty.
 
 ---
 
 ## Evidence Accumulation
 
-### Evidence Builder
+Evidence is tracked as `EvidenceEntry` rows with a `kind` classification: `tool` (from tool execution), `bootstrap` (initial context), or `ledger` (from history). Each entry has a stable `evidence_id` and a compact `summary` for prompt injection.
 
-Build evidence bundle from execution:
-
-```python
-class EvidenceBundleBuilder:
-    """Builder for evidence bundles."""
-    
-    def __init__(self):
-        self.entries = []
-    
-    def add_tool_result(self, tool: str, result: str):
-        """Add tool execution result."""
-        entry = EvidenceEntry(
-            type="tool_result",
-            tool=tool,
-            result=result,
-            timestamp=now()
-        )
-        self.entries.append(entry)
-    
-    def add_observation(self, observation: str):
-        """Add observation from execution."""
-        entry = EvidenceEntry(
-            type="observation",
-            content=observation,
-            timestamp=now()
-        )
-        self.entries.append(entry)
-    
-    def build(self) -> EvidenceBundle:
-        """Build final evidence bundle."""
-        return EvidenceBundle(
-            entries=self.entries,
-            summary=self.build_summary(),
-            confidence=self.calculate_confidence()
-        )
-```
+Evidence persists across iterations within the loop and is included in the `PlanResult.evidence_summary`. This gives the planner accumulated context about what's been learned, preventing re-exploration of already-answered questions.
 
 ---
 
-## Goal-Directed Evaluation
+## Execution Modes — Parallel vs. Dependency
 
-### Progress Assessment
+Steps can execute in two modes (the `ExecutionMode` literal):
 
-Evaluate progress toward goal:
+- **`parallel`** — all steps in a wave run concurrently (up to concurrency limits).
+- **`dependency`** — steps execute in dependency order; a step waits until its `dependencies` are satisfied.
 
-```python
-def evaluate_progress(self, execute_result: ExecuteResult) -> float:
-    """Evaluate progress toward goal."""
-    
-    # Evidence-based progress
-    evidence_progress = self.calculate_evidence_progress()
-    
-    # Step completion progress
-    step_progress = self.calculate_step_progress(execute_result)
-    
-    # Combined progress
-    return min(evidence_progress, step_progress)
-```
+The `StepScheduler` / `Executor` (inside the execute phase) handles DAG-style multi-step execution. This is **not** a separate runner mixin — DAG execution is internal to StrangeLoop's execute phase.
 
-### Goal-Distance Estimation
+### Dependency Token Expansion
 
-Estimate distance to goal completion:
-
-```python
-def estimate_goal_distance(self, plan_result: PlanResult) -> float:
-    """Estimate distance to goal."""
-    
-    # Based on remaining steps
-    remaining_steps = len(plan_result.steps)
-    
-    # Based on evidence gaps
-    evidence_gaps = self.identify_evidence_gaps()
-    
-    # Combined distance
-    return self.calculate_distance(remaining_steps, evidence_gaps)
-```
-
----
-
-## Adaptive Execution
-
-### Strategy Reuse
-
-Reuse successful strategies:
-
-```python
-def reuse_strategy(self, similar_goals: list[GoalHistory]) -> Strategy:
-    """Reuse strategy from similar goals."""
-    
-    # Find best matching strategy
-    best_match = self.find_best_match(similar_goals)
-    
-    # Adapt strategy for current goal
-    adapted = self.adapt_strategy(best_match, self.current_goal)
-    
-    return adapted
-```
-
-### Strategy Update
-
-Update strategy based on execution:
-
-```python
-def update_strategy(self, execute_result: ExecuteResult) -> str:
-    """Update strategy based on results."""
-    
-    # Analyze results
-    analysis = self.analyze_results(execute_result)
-    
-    # Identify adjustments
-    adjustments = self.identify_adjustments(analysis)
-    
-    # Generate updated strategy
-    return self.generate_updated_strategy(adjustments)
-```
+Step dependencies use the same token expansion as ContextEngine's StepDAG: composite IDs like `KFA-01` can be referenced as `01` or `1`, resolved unambiguously. This handles LLM shorthand.
 
 ---
 
 ## Context Isolation
 
-### Goal Context Assembly
+Each StrangeLoop run assembles goal-specific context before the first iteration:
 
-Assemble context for goal execution:
+- **Context projection** — bounded projection from ContextEngine (goals, steps, ledger, lineage within token limits).
+- **Memory recall** — relevant memories retrieved from the memory protocol.
+- **Goal history** — prior iterations' evidence and reasoning.
 
-```python
-async def assemble_goal_context(self, state: LoopState) -> dict:
-    """Assemble goal-specific context."""
-    
-    # Context projection
-    projection = await self.context.project(
-        query=state.goal_text,
-        token_budget=4000
-    )
-    
-    # Memory recall
-    memory = await self.memory.recall(state.goal_text)
-    
-    # Goal history
-    history = await self.retrieve_goal_history(state.current_goal_id)
-    
-    return {
-        "projection": projection,
-        "memory": memory,
-        "history": history,
-        "goal": state.goal_text
-    }
-```
+This context is injected into the Plan phase prompts, giving the LLM awareness of the broader workflow without unbounded context growth.
 
 ---
 
-## Iteration Management
+## Convergence and Iteration Bounds
 
-### Iteration Bounds
+The loop is bounded by `max_iterations` (default 8, from `DEFAULT_STRANGE_LOOP_MAX_ITERATIONS`). Convergence is detected by the Plan-Assess phase returning `status="done"`.
 
-Maximum iterations (default ~8):
-
-```python
-MAX_ITERATIONS = 8  # Typical for single-goal execution
-
-def check_iteration_limit(self, state: LoopState) -> bool:
-    """Check if within iteration limit."""
-    return state.iteration < state.max_iterations
-```
-
-### Convergence Detection
-
-Detect goal convergence:
-
-```python
-def detect_convergence(self, state: LoopState) -> bool:
-    """Detect if goal has converged."""
-    
-    # Progress threshold
-    if state.progress >= 0.95:
-        return True
-    
-    # Goal distance threshold
-    if state.goal_distance <= 0.05:
-        return True
-    
-    # Evidence completeness
-    if self.evidence_complete(state.evidence):
-        return True
-    
-    return False
-```
-
----
-
-## Usage Patterns
-
-### Basic Execution
-
-```python
-from soothe.foundation.loop import StrangeLoop
-from soothe.config import SootheConfig
-
-config = SootheConfig.from_yaml_file("config.yml")
-loop = StrangeLoop(config)
-
-# Run loop
-result = await loop.run_with_progress(
-    goal="Analyze the codebase structure"
-)
-
-print(result.status)  # "done", "failed", or "need_info"
-print(result.progress)  # Progress percentage
-```
-
-### Thread-Based Execution
-
-```python
-# Run with thread
-result = await loop.run_with_progress(
-    goal="Implement feature",
-    thread_id="thread-123"
-)
-```
-
-### Goal-Based Execution
-
-```python
-# Run with goal ID (ContextEngine integration)
-result = await loop.run_with_progress(
-    goal="Optimize performance",
-    goal_id="goal-456"
-)
-```
+There's no separate convergence threshold — the LLM decides when the goal is achieved based on evidence and progress. The `terminal_after_execute` flag (RFC-226) provides an optimization: when the plan asserts a single step completes the goal, the graph skips the next assessment.
 
 ---
 
 ## Integration Points
 
-### ContextEngine Integration
+- **ContextEngine** — StrangeLoop is instantiated with a `core_agent` and `loop_planner`. ContextEngine activates goals and assigns them to StrangeLoop via `loop_id`. StrangeLoop reports back via `complete_goal`/`fail_goal`.
+- **SootheRunner** — the runner's `StrangeLoopMixin` creates and drives StrangeLoop, passing intent classification, workspace, and routing hints.
+- **CoreAgent** — step execution delegates to `agent.astream()` or `agent.execution_astream()` (the checkpointer-free twin for high-volume streaming).
 
-Report to ContextEngine:
+### Skill Handling
+
+A non-obvious behavior: StrangeLoop parses slash-skill invocations from the goal text (`parse_slash_skill_user_line`). When a skill is addressed, it syncs only that skill to the workspace (targeted sync, not full sync). If no skill is addressed, sync is skipped entirely — skills are synced on-demand via middleware.
+
+---
+
+## Minimal Usage
 
 ```python
-# ContextEngine pull architecture
-context_engine = config.resolve_context_engine()
-current_goal = context_engine.get_next_ready_goal()
+from soothe.foundation.loop.engine.strange_loop import StrangeLoop
 
-# Execute goal
-result = await loop.run_with_progress(
-    goal=current_goal.description,
-    goal_id=current_goal.id
-)
-
-# Report to ContextEngine
-if result.status == "done":
-    await context_engine.complete_goal(current_goal.id)
-elif result.status == "failed":
-    await context_engine.fail_goal(current_goal.id, result.evidence)
+loop = StrangeLoop(core_agent=agent, loop_planner=planner, config=config)
+async for event_type, event_data in loop.run_with_progress(
+    goal="Analyze the codebase structure",
+    thread_id="thread-123",
+):
+    if event_type == "completed":
+        result = event_data["result"]  # PlanResult
 ```
 
-### CoreAgent Integration
-
-Delegate execution to CoreAgent:
-
-```python
-# Execute step via CoreAgent
-async def execute_step(self, step: PlanStep):
-    # Delegate to CoreAgent
-    agent = create_soothe_agent(self.config)
-    
-    async for chunk in agent.astream(
-        step.prompt,
-        config={"thread_id": self.state.thread_id}
-    ):
-        # Process chunk
-        yield chunk
-```
+In practice, you rarely instantiate StrangeLoop directly — the runner handles it. The runner passes `intent`, `routing_classification`, `workspace`, `clarification_policy`, and `proposal_queue` (RFC-204 Group C for Layer 2 tool proposals).
 
 ---
 
-## Event Types
+## Gotchas
 
-### Plan Events
-- `soothe.plan.created` - Plan created
-- `soothe.plan.step.started` - Step started
-- `soothe.plan.step.completed` - Step completed
-- `soothe.plan.iteration.complete` - Iteration complete
-
-### Evidence Events
-- `soothe.evidence.added` - Evidence added
-- `soothe.evidence.bundle.updated` - Bundle updated
-
-### Loop Events
-- `soothe.loop.started` - Loop started
-- `soothe.loop.iteration.started` - Iteration started
-- `soothe.loop.completed` - Loop completed
+- **`run()` vs `run_with_progress()`** — `run()` is a convenience wrapper that consumes `run_with_progress()` and returns the final `PlanResult`. If you need streaming events, use `run_with_progress()`.
+- **Loop state persistence uses `loop_id`** — not `thread_id`. The loop graph checkpoints under `loop_id`, which is separate from the CoreAgent's `thread_id` checkpoint. Both are needed for full resumption.
+- **`status="replan"` with `plan_action="new"` requires a `decision`** — the validator enforces this. If the LLM returns `replan` + `new` without steps, it's a schema error.
+- **Bootstrap actions** — the first iteration may have `terminal_after_execute=True`, meaning the plan asserts its single step is the answer. This skips the second assessment, which is correct for simple goals but wrong if the step fails.
+- **SharedPostgreSQLPool** — for high-concurrency deployments, StrangeLoop accepts a `shared_pool` parameter (IG-406) for state persistence. Without it, each loop creates its own connection.
 
 ---
 
-## Configuration
+## Related
 
-### Loop Settings
-
-```yaml
-loop:
-  max_iterations: 8       # Maximum iterations
-  convergence_threshold: 0.95  # Progress threshold
-  evidence_budget: 4000   # Token budget for evidence
-```
-
-### Planning Settings
-
-```yaml
-planning:
-  model: "openai:o3-mini"  # Model for planning
-  structured_output: true   # Use structured output
-  temperature: 0.7          # Planning temperature
-```
-
----
-
-## Related Documentation
-
-- **[ContextEngine](goal-engine.md)** - Goal management integration
-- **[Agent Factory](agent-factory.md)** - CoreAgent integration
-- **[SootheRunner](runner.md)** - Runner orchestration
-- **[Evidence System](../architecture/evidence-system.md)** - Evidence handling
-- **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - Full specification
-
----
-
-## API Reference
-
-### StrangeLoop Class
-
-```python
-class StrangeLoop:
-    """Plan-Execute loop for single-goal execution."""
-    
-    def __init__(self, config: SootheConfig):
-        """Initialize loop with configuration."""
-    
-    async def run_with_progress(
-        self,
-        goal: str,
-        thread_id: str | None = None,
-        goal_id: str | None = None
-    ) -> PlanResult:
-        """Execute goal with progress tracking."""
-    
-    async def run_iteration(
-        self,
-        state: LoopState
-    ) -> PlanResult:
-        """Execute single iteration."""
-    
-    async def plan_phase(
-        self,
-        state: LoopState
-    ) -> PlanResult:
-        """Execute planning phase."""
-    
-    async def execute_phase(
-        self,
-        plan_result: PlanResult
-    ) -> ExecuteResult:
-        """Execute planned steps."""
-    
-    async def reflect_phase(
-        self,
-        plan_result: PlanResult,
-        execute_result: ExecuteResult
-    ) -> ReflectionResult:
-        """Reflect on execution results."""
-```
-
-### State Classes
-
-```python
-class LoopState:
-    """State for loop execution."""
-    current_goal_id: str
-    goal_text: str
-    thread_id: str
-    iteration: int
-    evidence: EvidenceBundle
-    ...
-
-class PlanResult:
-    """Structured planning result."""
-    status: Literal["plan", "done", "failed", "need_info"]
-    reasoning: str
-    strategy: str
-    steps: list[PlanStep]
-    progress: float
-    ...
-
-class PlanStep:
-    """Single execution step."""
-    id: str
-    description: str
-    prompt: str
-    ...
-```
-
----
-
-## See Also
-
-- **[Autonomous Mode](../user-guide/autonomous-mode.md)** - User guide
-- **[Subagents](../modules/subagents/README.md)** - Built-in subagents
-- **[Plan Subagent](../modules/subagents/plan.md)** - Plan subagent details
+- **[ContextEngine](goal-engine.md)** — Layer 3 goal management
+- **[Agent Factory](agent-factory.md)** — Layer 1 execution
+- **[SootheRunner](runner.md)** — runner that drives StrangeLoop
+- **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** — full specification

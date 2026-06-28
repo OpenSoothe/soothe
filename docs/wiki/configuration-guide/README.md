@@ -1,93 +1,85 @@
 # Configuration Guide
 
-Complete configuration reference for Soothe - YAML settings, environment variables, and common patterns.
+How to configure Soothe — YAML settings, environment variables, and the design decisions behind them.
 
-## Overview
+## Configuration Philosophy
 
-Soothe uses a **layered configuration system** with three methods:
+Soothe is built around **progressive disclosure**: a minimal config is enough to run, and advanced knobs only appear when you need them. Three layers stack on top of sane Pydantic-model defaults:
 
-1. **Environment Variables** - Quick setup, ideal for secrets and overrides
-2. **YAML Configuration File** - Full control, structured settings
-3. **Command-Line Arguments** - Runtime overrides
+1. **YAML file** — the source of truth for structured, version-controllable config.
+2. **Environment variables** — secrets and per-deployment overrides. Two distinct mechanisms: `SOOTHE_*` vars map onto config fields, while `${VAR}` interpolation injects secrets *into* the YAML.
+3. **CLI arguments** — one-off runtime overrides (highest priority).
 
-**Priority**: Command-line args > Environment variables > YAML file > Defaults
+**Priority (highest wins):** CLI args > `SOOTHE_*` env vars > YAML file > built-in defaults.
 
-## Quick Start
+This layering means you should keep *structure* in YAML and *secrets/ephemeral values* in the environment. Never hardcode API keys in config files — use `${VAR}` interpolation (see [Environment Variables](environment-variables.md)).
 
-### Minimal Configuration
+## File Discovery Order
 
-Create `~/.soothe/config/config.yml`:
+Soothe resolves the active config file by searching in this order:
+
+1. `--config PATH` — explicit CLI flag
+2. `SOOTHE_CONFIG_FILE` — environment variable
+3. `~/.soothe/config/config.yml` — user directory
+4. `config/develop/config.yml` — repository development default
+5. Built-in `SootheConfig` Pydantic defaults
+
+The first match wins. This lets CI pin a config via env var while letting local dev fall back to the user directory.
+
+## Minimal Working Config
 
 ```yaml
 providers:
   - name: openai
-    provider_type: openai
     api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o-mini
+    models: [gpt-4o-mini]
 
 router:
   default: openai:gpt-4o-mini
 ```
 
-Set your API key:
+Set the key and run:
 
 ```bash
-export OPENAI_API_KEY=sk-your-key-here
-```
-
-Run Soothe:
-
-```bash
+export OPENAI_API_KEY=sk-...
 soothe "Analyze this codebase"
 ```
 
-### Using the Template
+A template with every option documented ships at `config/config.template.yml` — copy it rather than writing from scratch.
 
-Start from the complete template:
+## Documentation Map
 
-```bash
-cp config/config.template.yml ~/.soothe/config/config.yml
-# Edit the file, set your API keys
-soothe --config ~/.soothe/config/config.yml
-```
+| Article | What you'll learn |
+|---------|-------------------|
+| [Common Patterns](common-patterns.md) | Real-world recipes and the reasoning behind each one |
+| [Environment Variables](environment-variables.md) | `SOOTHE_*` mapping, `${VAR}` interpolation gotchas, secret hygiene |
+| [Provider Setup](provider-setup.md) | Choosing LLM/embedding providers, model routing, persistence & vector stores |
+| [YAML Reference](yaml-reference.md) | Condensed schema quick-reference (full schema lives in source) |
+| [Autonomous Mode](autonomous-config.md) | 24/7 self-running agent tuning |
+| [Daemon Setup](daemon-config.md) | Multi-transport server configuration |
+| [Security](security-config.md) | Sandboxing, path policies, approval flows |
 
-## Documentation Sections
+## Method Comparison
 
-### Core References
-- **[YAML Reference](yaml-reference.md)** - Complete YAML schema with all options
-- **[Environment Variables](environment-variables.md)** - SOOTHE_* variables reference
+| Method | Best for | Mutability |
+|--------|----------|------------|
+| YAML file | Complete, version-controlled config | Low |
+| Env vars | Secrets, CI/CD, per-host overrides | Medium |
+| CLI args | One-off overrides, testing | High |
 
-### Configuration Patterns
-- **[Common Patterns](common-patterns.md)** - Real-world configuration examples
-- **[Provider Setup](provider-setup.md)** - LLM providers, vector stores, persistence
+## Where the Schema Lives
 
-### Feature-Specific
-- **[Autonomous Mode](autonomous-config.md)** - 24/7 self-running agent configuration
-- **[Daemon Setup](daemon-config.md)** - Multi-transport server configuration
-- **[Security](security-config.md)** - Sandboxing, path restrictions, approval flows
+The full, authoritative schema is defined in Pydantic models — not in these docs. When in doubt about a field's type, default, or constraints, read the source:
 
-## Configuration File Locations
+- `packages/soothe/src/soothe/config/models.py` — all nested config models (`ModelProviderConfig`, `AgentConfig`, `PersistenceConfig`, `SecurityConfig`, etc.)
+- `packages/soothe/src/soothe/config/settings.py` — top-level `SootheConfig` (env prefix, YAML loading, model validators)
+- `packages/soothe/src/soothe/config/env.py` — `${VAR}` interpolation implementation
 
-Soothe looks for configuration in this order:
-
-1. `--config PATH` - Explicit command-line path
-2. `SOOTHE_CONFIG_FILE` - Environment variable path
-3. `~/.soothe/config/config.yml` - User directory
-4. `config/develop/config.yml` - Repository default (development)
-5. Built-in defaults (from `SootheConfig` Pydantic model)
-
-## Configuration Methods Comparison
-
-| Method | Best For | Priority |
-|--------|----------|----------|
-| YAML File | Complete configuration, version control | Low |
-| Environment Variables | Secrets, CI/CD, quick overrides | Medium |
-| CLI Arguments | One-off overrides, testing | High |
+These wiki articles capture *knowledge* — design intent, decision guides, and pitfalls — that the source alone doesn't surface. Treat them as a companion to, not a replacement for, the schema.
 
 ## Next Steps
 
-- **New users**: Start with [Common Patterns](common-patterns.md)
-- **Setting up providers**: See [Provider Setup](provider-setup.md)
-- **Full schema reference**: Use [YAML Reference](yaml-reference.md)
-- **Environment variables**: Check [Environment Variables](environment-variables.md)
+- **New here:** start with [Common Patterns](common-patterns.md) for copy-paste recipes.
+- **Picking a provider:** read [Provider Setup](provider-setup.md).
+- **Need a specific field:** jump to [YAML Reference](yaml-reference.md).
+- **Managing secrets:** see [Environment Variables](environment-variables.md).

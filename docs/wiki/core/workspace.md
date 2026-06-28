@@ -1,494 +1,158 @@
 # Workspace Management
 
-Unified workspace resolution, validation, and backend management.
+Unified workspace resolution, path validation, and sandbox boundaries.
 
 ---
 
-## Overview
+## What This Module Is
 
-The workspace module (`soothe.foundation.workspace`) provides unified workspace resolution and validation for Soothe. It manages workspace-aware backends, the FrameworkFilesystem singleton, and workspace resolution for daemon and runner.
+The workspace module (`soothe.foundation.workspace`) resolves, validates, and isolates the directories where Soothe agents operate. It's the security boundary between agent file operations and the host filesystem. Every tool that reads, writes, or lists files goes through workspace-aware resolution.
 
----
+The module provides: daemon workspace resolution (ephemeral fallback), client workspace validation, stream-scoped workspace resolution (RFC-103), the `FrameworkFilesystem` singleton, and a workspace-aware backend wrapper.
 
-## Architecture
-
-### Workspace System Components
-
-```
-Workspace Management Architecture
-├─ Workspace Resolution
-│  ├─ Daemon workspace validation
-│  ├─ Client workspace validation
-│  ├─ Stream workspace resolution
-│  └─ Workspace path normalization
-│
-├─ Workspace Validation
-│  ├─ Path validation
-│  ├─ Permission checks
-│  ├─ Existence verification
-│  └─ Security validation
-│
-├─ Workspace-Aware Backends
-│  ├─ Backend wrapper
-│  ├─ Workspace context injection
-│  └─ Isolated workspace operations
-│
-└─ FrameworkFilesystem
-   ├─ Singleton instance
-   ├─ Unified filesystem operations
-   ├─ Policy enforcement
-   └─ Audit logging
-```
+**Source**: `packages/soothe/src/soothe/foundation/workspace/` (`resolution.py`, `framework_filesystem.py`, `normalized_backend.py`, `loop_workspace.py`, `stream_resolution.py`)
 
 ---
 
-## Core Components
+## The Workspace Resolution Hierarchy
 
-### FrameworkFilesystem
+Workspaces resolve through a priority chain, depending on context:
 
-Singleton filesystem backend for Soothe:
+### Daemon Workspace (Fallback)
 
-```python
-class FrameworkFilesystem:
-    """Singleton filesystem backend for Soothe.
-    
-    Provides unified filesystem operations with:
-    - Policy enforcement
-    - Audit logging
-    - Rate limiting
-    - Workspace isolation
-    """
-    
-    # Singleton instance
-    _instance: FrameworkFilesystem | None = None
-    
-    def __new__(cls):
-        """Singleton pattern."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
-    async def read_file(self, path: str) -> str:
-        """Read file with policy enforcement."""
-        
-    async def write_file(self, path: str, content: str):
-        """Write file with policy enforcement."""
-        
-    async def list_directory(self, path: str) -> list[str]:
-        """List directory with validation."""
-    
-    async def glob(self, pattern: str) -> list[str]:
-        """Glob pattern with validation."""
-```
+`resolve_daemon_workspace()` is the **fallback** when no user workspace is resolved. Priority:
+
+1. `SOOTHE_WORKSPACE` environment variable (absolute override).
+2. TEMP directory: `$TEMP/soothe-daemon-workspace` (ephemeral — **not persisted across restarts**).
+
+This is only for anonymous users without a `client_workspace`. The daemon workspace is intentionally ephemeral to avoid accumulating files from anonymous sessions.
+
+### Client Workspace
+
+Users can specify a `client_workspace` path. This is validated against `INVALID_WORKSPACE_DIRS` — a set of system directories (`/`, `/etc`, `/usr`, `/bin`, `/root`, etc.) that must never be used as a workspace. The validation raises `ValueError` if the resolved path matches a system directory.
+
+### Loop-Scoped Workspace (RFC-103)
+
+For daemon runs, `resolve_persisted_loop_workspace()` resolves `$SOOTHE_HOME/data/workspaces/<user>/ws_<hash>`. The hash is computed from `user_id` and a scope key (`client_workspace_id` or `loop_id`):
+
+- **Anonymous users** (`user_id` is empty/None) → directory segment is `anonymous`, and the hash uses an empty user string.
+- **Named users** → user_id is sanitized (`[^w-.@]+` → `_`) and used in the path and hash.
+
+This creates per-loop isolation: each loop gets its own workspace directory, preventing cross-loop file contamination.
+
+### Stream Workspace
+
+`resolve_workspace_for_stream(stream_id, config)` resolves the workspace for a specific runner stream. This is what the runner calls in its pre-stream phase.
 
 ---
 
-## Workspace Resolution
+## FrameworkFilesystem — The Singleton
 
-### Daemon Workspace Resolution
+`FrameworkFilesystem` is a singleton (`_instance` class variable) initialized once with config and policy. It provides the consistent filesystem backend for:
 
-Resolve workspace for daemon server:
+- **Tool operations** (via middleware)
+- **Framework operations** (reports, checkpoints, manifests)
+- **CLI operations** (final reports, health checks)
 
-```python
-def resolve_daemon_workspace() -> Path:
-    """Resolve daemon fallback workspace (ephemeral TEMP unless overridden).
-    
-    Priority:
-    1. ``SOOTHE_WORKSPACE`` environment variable (absolute override).
-    2. TEMP directory (ephemeral, not persisted across restarts).
-        
-    Returns:
-        Resolved absolute workspace path.
-        
-    Raises:
-        ValueError: If resolved workspace is invalid system directory.
-    """
-```
+### Virtual Mode — The Sandbox Switch
 
-### Stream Workspace Resolution
+The critical design decision: `virtual_mode` controls whether paths are sandboxed.
 
-Resolve workspace for runner stream:
+- **`virtual_mode=True`** (default when `security.allow_paths_outside_workspace` is `False`) — all paths treated as virtual under `root_dir`. A path like `/etc/passwd` becomes `{root}/etc/passwd`. The agent cannot escape the workspace.
+- **`virtual_mode=False`** — absolute paths used as-is. A path like `/etc/passwd` writes to the real `/etc/passwd`. Relative paths resolve under root.
 
-```python
-def resolve_workspace_for_stream(
-    stream_id: str,
-    config: SootheConfig
-) -> str:
-    """Resolve workspace for stream.
-    
-    Args:
-        stream_id: Stream identifier
-        config: Soothe configuration
-        
-    Returns:
-        Resolved workspace path
-    """
-```
-
----
-
-## Workspace Validation
-
-### Path Validation
-
-Validate workspace path:
-
-```python
-def validate_workspace_path(path: str) -> bool:
-    """Validate workspace path.
-    
-    Checks:
-    - Path exists
-    - Is directory
-    - Readable
-    - Writable (if required)
-    
-    Args:
-        path: Workspace path
-        
-    Returns:
-        True if valid
-        
-    Raises:
-        WorkspaceValidationError: If invalid
-    """
-```
-
-### Security Validation
-
-Validate workspace security:
-
-```python
-def validate_workspace_security(path: str, policy: PolicyProtocol):
-    """Validate workspace against security policy.
-    
-    Checks:
-    - Path allowed by policy
-    - No forbidden patterns
-    - Appropriate permissions
-    
-    Args:
-        path: Workspace path
-        policy: Security policy
-        
-    Raises:
-        PolicyViolationError: If policy violation
-    """
-```
-
----
-
-## Workspace-Aware Backend
-
-### Backend Wrapper
-
-Wrap backends with workspace context:
-
-```python
-class WorkspaceAwareBackend:
-    """Workspace-aware backend wrapper.
-    
-    Wraps any backend to inject workspace context
-    and enforce workspace isolation.
-    """
-    
-    def __init__(self, backend: Any, workspace: str):
-        """Initialize with backend and workspace."""
-        self.backend = backend
-        self.workspace = workspace
-    
-    async def operation(self, *args, **kwargs):
-        """Execute operation with workspace context."""
-        
-        # Inject workspace context
-        kwargs["workspace"] = self.workspace
-        
-        # Validate workspace
-        validate_workspace_path(self.workspace)
-        
-        # Execute backend operation
-        return await self.backend.operation(*args, **kwargs)
-```
-
----
-
-## Workspace Isolation
-
-### Thread Isolation
-
-Isolate workspace per thread:
-
-```python
-def isolate_workspace_for_thread(
-    base_workspace: str,
-    thread_id: str
-) -> str:
-    """Isolate workspace for thread.
-    
-    Creates thread-specific workspace directory
-    within base workspace.
-    
-    Args:
-        base_workspace: Base workspace path
-        thread_id: Thread identifier
-        
-    Returns:
-        Thread-isolated workspace path
-    """
-```
-
-### Goal Isolation
-
-Isolate workspace per goal:
-
-```python
-def isolate_workspace_for_goal(
-    base_workspace: str,
-    goal_id: str
-) -> str:
-    """Isolate workspace for goal.
-    
-    Args:
-        base_workspace: Base workspace path
-        goal_id: Goal identifier
-        
-    Returns:
-        Goal-isolated workspace path
-    """
-```
-
----
-
-## Policy Enforcement
-
-### Filesystem Policy
-
-Enforce filesystem policy:
-
-```python
-class FilesystemPolicy:
-    """Filesystem policy enforcement."""
-    
-    def __init__(self, policy: PolicyProtocol):
-        """Initialize with policy."""
-        self.policy = policy
-    
-    def check_read(self, path: str) -> bool:
-        """Check if read allowed."""
-        return self.policy.allow_read(path)
-    
-    def check_write(self, path: str) -> bool:
-        """Check if write allowed."""
-        return self.policy.allow_write(path)
-    
-    def check_execute(self, path: str) -> bool:
-        """Check if execute allowed."""
-        return self.policy.allow_execute(path)
-```
-
-### Audit Logging
-
-Log filesystem operations:
-
-```python
-class AuditLogger:
-    """Filesystem audit logging."""
-    
-    def log_read(self, path: str, result: str):
-        """Log read operation."""
-        
-    def log_write(self, path: str, content_size: int):
-        """Log write operation."""
-        
-    def log_execute(self, path: str, result: str):
-        """Log execute operation."""
-```
-
----
-
-## Rate Limiting
-
-### Filesystem Rate Limiting
-
-Limit filesystem operation rate:
-
-```python
-class RateLimiter:
-    """Filesystem rate limiter."""
-    
-    def __init__(self, max_ops: int, window: int):
-        """Initialize rate limiter."""
-        self.max_ops = max_ops
-        self.window = window
-    
-    async def acquire(self):
-        """Acquire rate limit permit."""
-        await self.wait_for_permit()
-    
-    async def release(self):
-        """Release rate limit permit."""
-```
-
----
-
-## Usage Patterns
-
-### Basic Workspace Resolution
-
-```python
-from soothe.foundation.workspace import resolve_daemon_workspace
-from soothe.config import SootheConfig
-
-config = SootheConfig.from_yaml_file("config.yml")
-
-# Resolve daemon workspace
-workspace = resolve_daemon_workspace()
-print(workspace)  # "/path/to/workspace"
-```
-
-### FrameworkFilesystem Usage
-
-```python
-from soothe.foundation.workspace import FrameworkFilesystem
-
-# Get singleton instance
-fs = FrameworkFilesystem()
-
-# Read file
-content = await fs.read_file("/path/to/file")
-
-# Write file
-await fs.write_file("/path/to/file", "content")
-
-# List directory
-files = await fs.list_directory("/path/to/dir")
-```
+This is not a "bug workaround" — it's the documented sandbox semantics. The default (`True`) ensures agents operate in a sandbox. Setting `allow_paths_outside_workspace=True` disables sandboxing, which is appropriate only for trusted local CLI usage.
 
 ### Workspace-Aware Backend
 
+`FrameworkFilesystem.initialize()` creates a `WorkspaceAwareBackend` that reads the active workspace from a **ContextVar** (RFC-103). This means the workspace can change per-async-task without reinitializing the singleton. The backend reads the ContextVar on each operation, allowing concurrent loops with different workspaces to share the same singleton instance.
+
+---
+
+## Anonymous Workspace Cleanup
+
+`cleanup_anonymous_workspaces()` runs at daemon shutdown. It removes:
+- `$SOOTHE_HOME/data/workspaces/anonymous/` (current layout)
+- Legacy flat `anon_*` directories (pre-migration layout)
+- Old `$SOOTHE_HOME/workspaces/anonymous/` (pre-migration)
+
+This prevents ephemeral anonymous workspaces from accumulating on disk across daemon restarts.
+
+---
+
+## Migration Support
+
+The `migration.py` module handles workspace layout migrations between Soothe versions. The current layout is `$SOOTHE_HOME/data/workspaces/<user>/ws_<hash>`, but older versions used different paths. The migration code moves workspaces to the current layout transparently.
+
+---
+
+## Path Validation
+
+Workspace validation checks:
+- Path exists and is a directory
+- Path is readable (and writable if required)
+- Path is not in `INVALID_WORKSPACE_DIRS` (system directories)
+- Path complies with the security policy (no forbidden patterns, appropriate permissions)
+
+Security validation (`validate_workspace_security`) checks the path against the `PolicyProtocol` — ensuring the policy allows read/write/execute on that path.
+
+---
+
+## Integration Points
+
+- **SootheRunner** — calls `resolve_workspace_for_stream()` in the pre-stream phase; passes workspace to StrangeLoop via `config.configurable`.
+- **CoreAgent** — receives workspace via `config.configurable.workspace`; `WorkspaceContextMiddleware` injects it into tool context.
+- **StrangeLoop** — receives workspace as a parameter; uses it for skill sync and `filesystem_virtual_mode` detection.
+- **Tools** — all filesystem tools operate through `FrameworkFilesystem`, which enforces the workspace boundary.
+
+### Tool Path Resolution
+
+`tool_path_resolution.py` provides `filesystem_virtual_mode_from_soothe_config()` — the function StrangeLoop uses to determine whether paths should be sandboxed. This centralizes the virtual_mode decision so tools and the loop agree on sandboxing semantics.
+
+---
+
+## Minimal Usage
+
 ```python
-from soothe.foundation.workspace import WorkspaceAwareBackend
+from soothe.foundation.workspace import resolve_daemon_workspace, FrameworkFilesystem
+from soothe.config import SootheConfig
 
-# Wrap backend with workspace
-backend = WorkspaceAwareBackend(
-    backend=my_backend,
-    workspace="/path/to/workspace"
-)
-
-# Execute operation with workspace context
-result = await backend.operation()
+config = SootheConfig.from_yaml_file("config.yml")
+workspace = resolve_daemon_workspace()  # SOOTHE_WORKSPACE or TEMP fallback
+FrameworkFilesystem.initialize(config, policy=resolve_policy(config))
+# Singleton is now ready; tools use it via middleware
 ```
 
 ---
 
 ## Configuration
 
-### Workspace Settings
-
 ```yaml
-workspace:
-  dir: "."                # Workspace directory
-  isolation: thread       # Isolation mode (thread/goal/none)
-  validate: true          # Validate workspace
-  
-  policy:
-    read: true            # Allow read operations
-    write: true           # Allow write operations
-    execute: true         # Allow execute operations
-  
-  rate_limit:
-    max_ops: 100          # Max operations per window
-    window: 60            # Window in seconds
+security:
+  allow_paths_outside_workspace: false  # true = disable sandbox (CLI only)
+
+filesystem_middleware:
+  max_file_size_mb: 10  # per-file size cap
 ```
+
+The workspace directory itself is resolved at runtime (not from config) — it comes from the client, the environment, or the loop scope.
 
 ---
 
-## Error Handling
+## Gotchas
 
-### Workspace Validation Errors
-
-Handle validation failures:
-
-```python
-try:
-    workspace = resolve_daemon_workspace()
-except WorkspaceValidationError as e:
-    logger.error(f"Workspace validation failed: {e}")
-    # Fallback or exit
-```
-
-### Policy Violations
-
-Handle policy violations:
-
-```python
-try:
-    await fs.write_file("/restricted/path", "content")
-except PolicyViolationError as e:
-    logger.error(f"Policy violation: {e}")
-    # Handle violation
-```
+- **The daemon workspace is ephemeral** — by default, it's a TEMP directory. Files written there vanish on daemon restart. For persistence, set `SOOTHE_WORKSPACE` or use client workspaces.
+- **`virtual_mode` is a security boundary** — setting `allow_paths_outside_workspace: true` lets agents write anywhere on the host. Only do this for trusted local CLI usage, never for daemon deployments serving multiple users.
+- **The ContextVar is per-async-task** — `WorkspaceAwareBackend` reads the workspace from a ContextVar, so it's scoped to the current async task. If you spawn tasks, they inherit the parent's workspace unless explicitly set.
+- **Anonymous workspaces accumulate** — without `cleanup_anonymous_workspaces()` at shutdown, anonymous workspace directories persist indefinitely. The daemon calls this at shutdown; if you run the runner outside the daemon, you may need to call it yourself.
+- **System directory validation is a blocklist** — `INVALID_WORKSPACE_DIRS` is checked by exact string match on the resolved path. Symlinks to system directories are not detected by this check (though the policy layer may catch them).
 
 ---
 
-## Related Documentation
+## Related
 
-- **[Agent Factory](agent-factory.md)** - Workspace integration
-- **[SootheRunner](runner.md)** - Runner workspace handling
-- **[Security Policy](../architecture/security-policy.md)** - Policy details
-- **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** - Security policy spec
-- **[RFC-103](../../specs/RFC-103-thread-aware-workspace.md)** - Thread workspace spec
-
----
-
-## API Reference
-
-### Core Functions
-
-```python
-def resolve_daemon_workspace() -> Path: ...
-
-def resolve_workspace_for_stream(
-    stream_id: str,
-    config: SootheConfig
-) -> str: ...
-
-def validate_workspace_path(path: str) -> bool: ...
-def validate_workspace_security(path: str, policy: PolicyProtocol): ...
-
-def isolate_workspace_for_thread(base_workspace: str, thread_id: str) -> str: ...
-def isolate_workspace_for_goal(base_workspace: str, goal_id: str) -> str: ...
-```
-
-### FrameworkFilesystem Class
-
-```python
-class FrameworkFilesystem:
-    """Singleton filesystem backend."""
-    
-    async def read_file(self, path: str) -> str: ...
-    async def write_file(self, path: str, content: str): ...
-    async def list_directory(self, path: str) -> list[str]: ...
-    async def glob(self, pattern: str) -> list[str]: ...
-    async def delete_file(self, path: str): ...
-    async def file_info(self, path: str) -> FileInfo: ...
-```
-
-### WorkspaceAwareBackend Class
-
-```python
-class WorkspaceAwareBackend:
-    """Workspace-aware backend wrapper."""
-    
-    def __init__(self, backend: Any, workspace: str): ...
-    
-    async def operation(self, *args, **kwargs): ...
-```
-
----
-
-## See Also
-
-- **[Security Policy](../architecture/security-policy.md)** - Policy enforcement
-- **[Thread Management](../user-guide/thread-management.md)** - Thread handling
-- **[Filesystem Backend](../modules/backends/filesystem.md)** - Backend details
+- **[Agent Factory](agent-factory.md)** — workspace middleware integration
+- **[SootheRunner](runner.md)** — stream workspace resolution
+- **[Security Policy](../architecture/security-policy.md)** — policy enforcement
+- **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** — security policy spec
+- **[RFC-103](../../specs/RFC-103-thread-aware-workspace.md)** — thread workspace spec

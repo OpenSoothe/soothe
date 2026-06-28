@@ -1,86 +1,21 @@
-# Provider Setup Guide
+# Provider Setup
 
-Complete guide for configuring LLM providers, vector stores, and persistence backends.
+Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends — with the decision criteria the schema alone won't tell you.
 
-## Overview
+## Provider Selection Criteria
 
-Soothe supports multiple provider types:
+Soothe supports four `provider_type` values. The choice is driven by **API compatibility**, not brand:
 
-- **LLM Providers**: OpenAI, Anthropic, OpenAI-compatible APIs, Ollama
-- **Embedding Providers**: OpenAI, DashScope, custom embedding models
-- **Vector Stores**: SQLite Vec, PostgreSQL pgvector, Weaviate, in-memory
-- **Persistence**: SQLite, PostgreSQL
-
-## LLM Provider Configuration
-
-### Provider Types
-
-| Type | Description | Compatibility |
-|------|-------------|---------------|
-| `openai` | Standard OpenAI API | Full tool calling, JSON mode, streaming |
-| `limited_openai` | OpenAI-compatible APIs with limitations | Limited tool_choice, structured output in reasoning_content |
+| `provider_type` | When to use | Key limitation |
+|-----------------|-------------|----------------|
+| `openai` | OpenAI itself, or any fully OpenAI-compatible endpoint (DashScope, OpenRouter, vLLM) | None — full `tool_choice`, JSON mode, streaming |
+| `limited_openai` | OpenAI-ish local servers that mishandle tools (LMStudio, MLXServer, some GLM) | String-only `tool_choice` ("none"/"auto"/"required"); structured JSON returned in `reasoning_content` |
 | `anthropic` | Anthropic Claude API | Native Claude tool calling |
-| `ollama` | Ollama local inference | Basic tool calling support |
+| `ollama` | Local Ollama inference | Basic tool calling; depends on model support |
 
-### OpenAI Provider
+**The `limited_openai` distinction matters.** If you point `provider_type: openai` at a server that accepts `json_schema` but returns empty content, or stuffs structured output into `reasoning_content`, tool calling will silently break. `limited_openai` activates wrappers that compensate for these quirks. When in doubt, try `openai` first; switch to `limited_openai` if you see empty tool calls or malformed structured output.
 
-**Full OpenAI API compatibility**:
-
-```yaml
-providers:
-  - name: openai
-    provider_type: openai
-    api_key: ${OPENAI_API_KEY}
-    api_base_url: null  # Optional: custom endpoint
-    models:
-      - gpt-4o          # Latest GPT-4 with vision
-      - gpt-4o-mini     # Fast, cheap GPT-4
-      - o3-mini         # Reasoning model
-```
-
-**Environment**:
-
-```bash
-export OPENAI_API_KEY=sk-proj-your-key-here
-```
-
-**Features supported**:
-- Full tool calling with `tool_choice` (object, string values)
-- JSON schema response format
-- Streaming
-- Vision capabilities
-- Function calling
-
-### OpenAI-Compatible Providers (Limited)
-
-**For APIs that mimic OpenAI but have limitations** (LMStudio, MLXServer, certain GLM deployments):
-
-```yaml
-providers:
-  - name: lmstudio
-    provider_type: limited_openai
-    api_base_url: http://localhost:1234/v1
-    api_key: lmstudio  # Dummy key
-    models:
-      - google/gemma-4-26b-a4b
-      - meta-llama-3.1-8b-instruct
-```
-
-**Limitations handled**:
-- Accept json_schema response_format but return empty content
-- Return structured JSON in reasoning_content field (thinking tokens)
-- Limited tool_choice support (string values only: "none", "auto", "required")
-- No object-level tool_choice
-
-**Common compatible APIs**:
-- LMStudio (`http://localhost:1234/v1`)
-- MLXServer
-- vLLM endpoints
-- Certain GLM/Qwen deployments with OpenAI compatibility
-
-### DashScope (Alibaba Cloud)
-
-**DashScope with OpenAI compatibility**:
+**OpenAI-compatible cloud providers** (DashScope, OpenRouter) all use `provider_type: openai` plus a custom `api_base_url` and an interpolated `api_key`:
 
 ```yaml
 providers:
@@ -88,658 +23,114 @@ providers:
     provider_type: openai
     api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key: ${DASHSCOPE_API_KEY}
-    models:
-      - qwen-max           # Strong reasoning
-      - qwen3.7-plus       # Fast model
-      - qwen3.6-plus       # Balanced, coding-optimized
-      - MiniMax-M2.5       # Alternative
-      - kimi-k2.5          # Moonshot
+    models: [qwen-max]
 ```
 
-**Environment**:
+Self-hosted vLLM is identical — just point `api_base_url` at your server and set a dummy `api_key`.
 
-```bash
-export DASHSCOPE_API_KEY=sk-your-dashscope-key
-```
+## Model Routing: Roles, Not Models
 
-**DashScope API keys**: Get from https://dashscope.console.aliyun.com/
-
-### Anthropic Provider
-
-**Anthropic Claude API**:
-
-```yaml
-providers:
-  - name: anthropic
-    provider_type: anthropic
-    api_key: ${ANTHROPIC_API_KEY}
-    models:
-      - claude-sonnet-4-20250514  # Claude 4 Sonnet
-      - claude-3-5-sonnet-20241022  # Claude 3.5 Sonnet
-      - claude-3-opus-20240229    # Claude 3 Opus
-```
-
-**Environment**:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
-
-**Anthropic API keys**: Get from https://console.anthropic.com/
-
-### Ollama Local Models
-
-**Ollama for local inference**:
-
-```yaml
-providers:
-  - name: ollama
-    provider_type: ollama
-    api_base_url: http://localhost:11434  # Default Ollama port
-    models:
-      - llama3.1:8b
-      - mistral:7b
-      - codellama:7b
-      - gemma2:9b
-```
-
-**Setup**:
-
-```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Start Ollama server
-ollama serve
-
-# Pull models
-ollama pull llama3.1:8b
-ollama pull mistral:7b
-ollama pull codellama:7b
-```
-
-**Ollama models**: Browse at https://ollama.com/models
-
-### OpenRouter
-
-**OpenRouter for multiple providers**:
-
-```yaml
-providers:
-  - name: openrouter
-    provider_type: openai
-    api_base_url: https://openrouter.ai/api/v1
-    api_key: ${OPENROUTER_API_KEY}
-    models:
-      - openai/gpt-4o
-      - anthropic/claude-3.5-sonnet
-      - google/gemini-pro-1.5
-      - meta-llama/llama-3.1-405b-instruct
-```
-
-**Environment**:
-
-```bash
-export OPENROUTER_API_KEY=sk-or-your-key
-```
-
-**OpenRouter**: Get API key from https://openrouter.ai/
-
-### vLLM Server
-
-**Self-hosted vLLM inference server**:
-
-```yaml
-providers:
-  - name: vllm
-    provider_type: openai
-    api_base_url: http://your-vllm-server:8000/v1
-    api_key: dummy  # vLLM doesn't require auth by default
-    models:
-      - your-model-name
-```
-
-**Setup vLLM**:
-
-```bash
-pip install vllm
-
-# Start server
-vllm serve your-model-name --host 0.0.0.0 --port 8000
-```
-
-## Model Router Configuration
-
-### Role-Based Routing
-
-Soothe uses purpose-based roles to select models:
-
-```yaml
-router:
-  default: "provider:model"     # Main orchestrator
-  think: "provider:model"       # Complex reasoning
-  fast: "provider:model"        # Quick operations
-  image: "provider:model"       # Vision tasks
-  embedding: "provider:model"   # Vector embeddings
-```
-
-**Role purposes**:
-
-| Role | Usage | Typical Model |
-|------|-------|---------------|
-| `default` | CoreAgent, orchestrator reasoning | gpt-4o-mini |
-| `think` | Planning, consensus, backoff reasoning | o3-mini, claude-sonnet |
-| `fast` | Classification, routing, subagents | gpt-4o-mini, qwen3.7-plus |
-| `image` | Vision, image analysis | gpt-4o, gemini-pro-vision |
-| `embedding` | Vector search, semantic memory | text-embedding-3-small |
-
-### Router Examples
-
-**Single provider**:
+Soothe never asks for a model by name at runtime. It asks for a **role**, and the router maps roles to `provider:model` pairs. This indirection is the whole point: swap models without touching agent code.
 
 ```yaml
 router:
   default: openai:gpt-4o-mini
   think: openai:o3-mini
-  fast: openai:gpt-4o-mini
-  image: openai:gpt-4o
   embedding: openai:text-embedding-3-small
 ```
 
-**Multi-provider**:
+Each role is a field on the `router` block (`default`, `think`, `fast`, `image`, `embedding`) holding a `"provider:model"` string.
 
-```yaml
-router:
-  default: openai:gpt-4o-mini
-  think: anthropic:claude-sonnet-4-20250514
-  fast: dashscope:qwen3.7-plus
-  image: openai:gpt-4o
-  embedding: dashscope:multimodal-embedding-v1
-```
+The five roles and their typical cost/quality profile:
 
-**Local + cloud hybrid**:
+| Role | Used for | Cheap model OK? |
+|------|----------|-----------------|
+| `default` | CoreAgent reasoning, failure analysis | Yes — it runs most often |
+| `fast` | Classification, subagents, memory | Yes — latency-sensitive |
+| `think` | Planning, consensus validation | No — quality matters |
+| `image` | Vision tasks | Must be vision-capable |
+| `embedding` | Vector search, semantic memory | Must match `embedding_dims` |
 
-```yaml
-router:
-  default: ollama:llama3.1:8b
-  fast: lmstudio:gemma-2-9b
-  think: openai:o3-mini        # Complex tasks → cloud
-  image: openai:gpt-4o         # Vision → cloud
-```
+**Fallback rule:** unset roles inherit `default`. So you can start with only `default` configured and add `think`/`image`/`embedding` as needed. But beware: if `default` is your most expensive model, leaving `fast` unset makes every cheap operation expensive.
 
-### Fallback Behavior
+**Cost strategy:** set `default` and `fast` to a cheap model, reserve `think` for a strong one. The local+cloud hybrid pushes this further — local model for `default`/`fast`, cloud only for `think`/`image` (e.g. `default: ollama:llama3.1:8b`, `think: openai:o3-mini`).
 
-Unset roles fall back to `default`:
+## Embeddings
 
-```yaml
-router:
-  default: openai:gpt-4o-mini
-  think: null   # Falls back to default
-  fast: null    # Falls back to default
-```
+The `embedding` role and the top-level `embedding_dims` field are coupled — the dimension *must* match the model's output vector size or inserts fail silently or noisily.
 
-## Embedding Configuration
+| Model | Dimensions |
+|-------|------------|
+| OpenAI `text-embedding-3-small` | 1536 |
+| OpenAI `text-embedding-3-large` | 3072 |
+| DashScope `multimodal-embedding-v1` | 1024 |
+| Ollama `nomic-embed-text` | 768 |
 
-### OpenAI Embeddings
+**Mistake to avoid:** changing the embedding model without updating `embedding_dims` (or vice versa) corrupts the vector store — existing vectors have the old dimensionality and queries fail. When migrating, drop and re-index the collection.
 
-```yaml
-router:
-  embedding: openai:text-embedding-3-small
+## Vector Stores
 
-embedding_dims: 1536  # text-embedding-3-small
-# or
-embedding_dims: 3072  # text-embedding-3-large
-```
+| Backend | When | Notes |
+|---------|------|-------|
+| `sqlite_vec` (default) | Dev, single-user, <100k vectors | Zero deps, file-based under `~/.soothe/data/` |
+| `pgvector` | Production, shared with Postgres persistence | `hnsw` for speed, `ivfflat` for huge static sets |
+| `weaviate` | Managed vector DB decoupled from Postgres | Cloud or self-hosted |
+| `in_memory` | Tests, ephemeral sessions | Lost on restart |
 
-**OpenAI embedding models**:
+The router format is `provider_name:collection_name`. Unset roles fall back to `default` — same pattern as the model router. If you use pgvector, Soothe can auto-resolve the vectors database from `persistence.postgres_base_dsn` (RFC-612) when no explicit `dsn` is set.
 
-| Model | Dimensions | Cost |
-|-------|------------|------|
-| `text-embedding-3-small` | 1536 | Cheapest |
-| `text-embedding-3-large` | 3072 | Higher quality |
-| `text-embedding-ada-002` | 1536 | Legacy |
+## Persistence Backends
 
-### DashScope Embeddings
+| Backend | When | Concurrency |
+|---------|------|-------------|
+| `sqlite` (default) | Dev, testing, single-process | WAL mode helps, but writers still serialize |
+| `postgresql` | Production, parallel autonomous goals, multi-worker | Pool-based, handles concurrent writers |
 
-```yaml
-router:
-  embedding: dashscope:multimodal-embedding-v1
+**RFC-612 multi-database architecture:** when `postgres_base_dsn` is set, Soothe splits state across four databases (checkpoints, metadata, vectors, memory) for lifecycle isolation and backup granularity. Define them in the `postgres_databases` map. If `postgres_base_dsn` is unset, it falls back to a single `soothe_postgres_dsn` database. The multi-database layout is strongly recommended for production — it lets you back up/restore components independently.
 
-embedding_dims: 1024  # DashScope default
-```
+**Pool sizing (from source docstrings):**
+- `postgres_pool_min_size` (default 4): warm connections kept ready.
+- `checkpointer_pool_size` (default 24): LangGraph checkpoint pool. In thread-pool mode it's a daemon-level singleton shared across threads; in worker-pool mode each worker gets its own (so `workers × pool_size` total connections — lower it).
+- `sloop_pool_size` (default 24): StrangeLoop pool, same sharing semantics.
 
-### Local Embeddings (Ollama)
+Rule of thumb: for thread-pool mode keep defaults; for worker-pool mode divide by your worker count to avoid exhausting Postgres `max_connections`.
 
-```yaml
-router:
-  embedding: ollama:nomic-embed-text
+## Rate Limits & Timeouts
 
-embedding_dims: 768  # nomic-embed-text
-```
+Provider APIs have their own limits; Soothe's `agent.loop.llm_rate_limit` keeps you under them with retry/backoff. Set `rpm_limit` and `concurrent_limit` on that block; `retry_on_timeout` and `retry_on_rate_limit` default to `true`.
 
-**Setup**:
-
-```bash
-ollama pull nomic-embed-text
-```
-
-## Vector Store Configuration
-
-### SQLite Vec (Default)
-
-**Lightweight embedded vector storage**:
-
-```yaml
-vector_stores:
-  - name: sqlite_vec_default
-    provider_type: sqlite_vec
-
-vector_store_router:
-  default: sqlite_vec_default:soothe_default
-
-embedding_dims: 1536
-```
-
-**Features**:
-- No external dependencies
-- File-based storage (portable)
-- Suitable for development and small deployments
-- Auto-creates database files under `~/.soothe/data/`
-
-### PostgreSQL pgvector
-
-**Production vector storage**:
-
-```yaml
-vector_stores:
-  - name: pgvector_main
-    provider_type: pgvector
-    dsn: ${POSTGRES_VECTOR_DSN}
-    pool_size: 10
-    index_type: hnsw  # hnsw | ivfflat | none
-
-vector_store_router:
-  default: pgvector_main:soothe_production
-
-embedding_dims: 1536
-```
-
-**Environment**:
-
-```bash
-export POSTGRES_VECTOR_DSN=postgresql://user:pass@db-host:5432/vectors
-```
-
-**PostgreSQL setup**:
-
-```sql
--- Enable pgvector extension
-CREATE EXTENSION vector;
-
--- Create database
-CREATE DATABASE soothe_vectors;
-```
-
-**Index types**:
-
-| Type | Description | When to Use |
-|------|-------------|-------------|
-| `hnsw` | Hierarchical navigable small world | Production, fast queries |
-| `ivfflat` | Inverted file flat | Large datasets, batch queries |
-| `none` | No index | Development, small data |
-
-### Weaviate
-
-**Managed Weaviate service**:
-
-```yaml
-vector_stores:
-  - name: weaviate_cloud
-    provider_type: weaviate
-    url: ${WEAVIATE_URL}
-    api_key: ${WEAVIATE_API_KEY}
-    grpc_port: 443
-
-vector_store_router:
-  default: weaviate_cloud:soothe_production
-
-embedding_dims: 1536
-```
-
-**Environment**:
-
-```bash
-export WEAVIATE_URL=https://your-cluster.weaviate.cloud
-export WEAVIATE_API_KEY=your-weaviate-key
-```
-
-**Weaviate Cloud**: https://weaviate.io/
-
-### In-Memory (Testing)
-
-**Transient in-memory vector store**:
-
-```yaml
-vector_stores:
-  - name: in_memory_test
-    provider_type: in_memory
-
-vector_store_router:
-  default: in_memory_test:test_collection
-```
-
-**Use case**: Testing, ephemeral sessions, no persistence needed.
-
-## Persistence Configuration
-
-### SQLite Persistence (Default)
-
-**File-based persistence**:
-
-```yaml
-persistence:
-  default_backend: sqlite
-  metadata_sqlite_path: ~/.soothe/data/metadata.db
-  checkpoint_sqlite_path: ~/.soothe/data/soothe_checkpoints.db
-```
-
-**Default paths**:
-- Metadata: `~/.soothe/data/metadata.db`
-- Checkpoints: `~/.soothe/data/soothe_checkpoints.db`
-
-**Features**:
-- No external dependencies
-- Portable file storage
-- Suitable for development and small deployments
-
-### PostgreSQL Persistence
-
-**Production persistence** (RFC-802 multi-database):
-
-```yaml
-persistence:
-  default_backend: postgresql
-  postgres_base_dsn: ${POSTGRES_DSN}
-  postgres_databases:
-    checkpoints: soothe_checkpoints
-    metadata: soothe_metadata
-    vectors: soothe_vectors
-    memory: soothe_memory
-  
-  postgres_pool_min_size: 8
-  checkpointer_pool_size: 32
-  sloop_pool_size: 32
-  postgres_pool_max_idle_seconds: 120
-  postgres_pool_max_lifetime_seconds: 1800
-```
-
-**Environment**:
-
-```bash
-export POSTGRES_DSN=postgresql://user:pass@db-host:5432
-```
-
-**PostgreSQL setup**:
-
-```sql
--- Create databases
-CREATE DATABASE soothe_checkpoints;
-CREATE DATABASE soothe_metadata;
-CREATE DATABASE soothe_vectors;
-CREATE DATABASE soothe_memory;
-
--- Enable pgvector (for vectors database)
-\c soothe_vectors
-CREATE EXTENSION vector;
-```
-
-**Pool sizing**:
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `postgres_pool_min_size` | 4 | Min connections per pool |
-| `checkpointer_pool_size` | 24 | LangGraph checkpoint pool |
-| `sloop_pool_size` | 24 | StrangeLoop pool |
-| `postgres_pool_max_idle_seconds` | 120 | Idle connection timeout |
-| `postgres_pool_max_lifetime_seconds` | 1800 | Connection lifetime |
-
-## Provider-Specific Considerations
-
-### Rate Limits
-
-Configure rate limits for provider APIs:
-
-```yaml
-agent:
-  loop:
-    llm_rate_limit:
-      rpm_limit: 120           # Requests per minute
-      concurrent_limit: 10     # Concurrent requests
-```
-
-**Provider-specific limits**:
-
-| Provider | Default RPM Limit | Concurrent Limit |
-|----------|------------------|------------------|
-| OpenAI | 500 (tier-dependent) | 10-100 |
-| Anthropic | 60 | 5-10 |
+| Provider | Typical RPM | Concurrency |
+|----------|-------------|-------------|
+| OpenAI | 500 (tier 2+) | 10–100 |
+| Anthropic | 60 | 5–10 |
 | DashScope | 60 | 5 |
-| Local (Ollama) | Unlimited | Hardware-dependent |
+| Ollama (local) | Unlimited | GPU-bound |
 
-### Timeout Configuration
+Set `rpm_limit` *below* your tier's ceiling. On 429, Soothe retries with exponential backoff (base 2s, max 60s) and respects `Retry-After` headers. On timeout, it escalates the timeout by `timeout_retry_multiplier` (1.2×) up to `call_timeout_max_seconds`. These defaults (600s base, 10 retries) are tuned for robust step execution — lower them only if you're confident your provider is fast.
 
-```yaml
-agent:
-  loop:
-    llm_rate_limit:
-      call_timeout_seconds: 600
-      call_timeout_max_seconds: 900
-      retry_on_timeout: true
-      max_timeout_retries: 10
-      timeout_retry_multiplier: 1.2
-```
+## Secret Management
 
-**Timeout fields**:
+**Always interpolate, never hardcode.** Use `api_key: ${OPENAI_API_KEY}` — a literal key (`sk-proj-xxx`) leaks into version control and is the single most common security mistake. For Docker, use `secrets:` in compose or env files. For Kubernetes, mount `Secret` resources as env vars. See [Environment Variables](environment-variables.md) for the full interpolation guide.
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `call_timeout_seconds` | 600 | Base timeout per call |
-| `call_timeout_max_seconds` | 900 | Timeout ceiling for retries |
-| `retry_on_timeout` | true | Retry with timeout escalation |
-| `max_timeout_retries` | 10 | Max retry attempts after timeout |
+## Verifying Your Setup
 
-### Cost Optimization
+Run `soothed doctor` to validate config and connectivity, `soothe --debug "test"` to print the resolved config and model routing, and `soothe --model openai:gpt-4o "test"` to override a role for one run. Validate YAML syntax before debugging Soothe: `python -c "import yaml; yaml.safe_load(open('config.yml'))"`.
 
-**Use cheaper models for simple tasks**:
+## Troubleshooting Guide
 
-```yaml
-router:
-  default: openai:gpt-4o-mini     # Cheap for orchestrator
-  think: openai:o3-mini           # Strong reasoning when needed
-  fast: openai:gpt-4o-mini        # Fast classification
-```
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `Provider 'xxx' not found` | Provider `name` in `providers[]` doesn't match the router's prefix | Ensure `router.default: <name>:<model>` uses the exact `name` |
+| `Invalid API key` | Env var unset or wrong format | `echo $OPENAI_API_KEY`; verify key prefix matches provider |
+| `Rate limit exceeded` | `rpm_limit` above provider tier, or too much concurrency | Lower `rpm_limit` and `concurrent_limit` |
+| `Timeout waiting for LLM response` | Provider slow or down | Raise `call_timeout_seconds`; check provider status |
+| `Model 'xxx' not available` | Model not listed in `providers[].models` or misspelled | Add it to the `models` list; check provider's model catalog |
+| Empty tool calls on local server | Used `openai` type for a limited server | Switch to `provider_type: limited_openai` |
+| Vector insert errors | `embedding_dims` ≠ model output | Align the two; re-index existing collections |
 
-**Or use local models**:
+## See Also
 
-```yaml
-router:
-  default: ollama:llama3.1:8b     # Free local model
-  think: openai:o3-mini           # Pay for complex reasoning
-```
-
-## Environment Variable Best Practices
-
-### Secret Management
-
-**Don't hardcode API keys in config files**:
-
-```yaml
-# ✅ Good: Use environment variable interpolation
-providers:
-  - name: openai
-    api_key: ${OPENAI_API_KEY}
-
-# ❌ Bad: Hardcoded key (security risk)
-providers:
-  - name: openai
-    api_key: sk-xxx
-```
-
-### Shell Profile Setup
-
-Add to `~/.bashrc` or `~/.zshrc`:
-
-```bash
-# Provider keys
-export OPENAI_API_KEY=sk-xxx
-export ANTHROPIC_API_KEY=sk-ant-xxx
-export DASHSCOPE_API_KEY=your-key
-
-# Optional tools
-export TAVILY_API_KEY=tvly-xxx
-export DEEPXIV_API_KEY=your-key
-
-# Config file location
-export SOOTHE_CONFIG_FILE=~/.soothe/config/config.yml
-```
-
-### Docker Secrets
-
-Use Docker secrets or environment files:
-
-```yaml
-# docker-compose.yml
-services:
-  soothe:
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    secrets:
-      - openai_api_key
-
-secrets:
-  openai_api_key:
-    file: ./secrets/openai_api_key.txt
-```
-
-### Kubernetes Secrets
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: soothe-provider-keys
-type: Opaque
-stringData:
-  openai-api-key: sk-xxx
-  anthropic-api-key: sk-ant-xxx
-```
-
-## Testing Provider Configuration
-
-### Verify Provider Setup
-
-```bash
-# Test provider connection
-soothe --debug "test prompt"
-
-# Check resolved config
-soothed doctor
-
-# View model resolution
-export SOOTHE_DEBUG=true
-soothe "simple test" | grep -i model
-```
-
-### Test Specific Model
-
-```bash
-# Test with specific model via CLI override
-soothe --model openai:gpt-4o "test prompt"
-
-# Test embedding model
-soothe "embed this text" --debug
-# Check logs for embedding model usage
-```
-
-### Validate Configuration
-
-```bash
-# Validate YAML syntax
-python -c "import yaml; yaml.safe_load(open('config.yml'))"
-
-# Validate Soothe config
-python -c "from soothe.config import SootheConfig; cfg = SootheConfig.from_yaml_file('config.yml'); print(cfg)"
-```
-
-## Troubleshooting
-
-### Provider Not Found
-
-**Error**: `Provider 'xxx' not found`
-
-**Solution**: Ensure provider name matches router configuration:
-
-```yaml
-providers:
-  - name: openai  # This name
-    api_key: ${OPENAI_API_KEY}
-
-router:
-  default: openai:gpt-4o-mini  # Must match provider name
-```
-
-### API Key Invalid
-
-**Error**: `Invalid API key`
-
-**Solution**:
-
-1. Check environment variable is set: `echo $OPENAI_API_KEY`
-2. Verify key format matches provider requirements
-3. Test key with provider's API directly
-
-### Rate Limit Exceeded
-
-**Error**: `Rate limit exceeded`
-
-**Solution**: Reduce `rpm_limit` or `concurrent_limit`:
-
-```yaml
-agent:
-  loop:
-    llm_rate_limit:
-      rpm_limit: 60            # Lower RPM
-      concurrent_limit: 5      # Lower concurrency
-```
-
-### Timeout Errors
-
-**Error**: `Timeout waiting for LLM response`
-
-**Solution**: Increase timeout:
-
-```yaml
-agent:
-  loop:
-    llm_rate_limit:
-      call_timeout_seconds: 300  # Increase timeout
-      call_timeout_max_seconds: 600
-```
-
-### Model Not Available
-
-**Error**: `Model 'xxx' not available from provider 'yyy'`
-
-**Solution**:
-
-1. Check model name spelling
-2. Verify model is supported by provider
-3. Ensure model is listed in `providers[].models`
-
----
-
-**See also:**
-
-- [YAML Reference](yaml-reference.md) - Complete field documentation
-- [Environment Variables](environment-variables.md) - Env var reference
-- [Common Patterns](common-patterns.md) - Real-world configuration examples
+- [YAML Reference](yaml-reference.md) — full field schema
+- [Environment Variables](environment-variables.md) — `${VAR}` interpolation and `SOOTHE_*` mapping
+- [Common Patterns](common-patterns.md) — multi-provider and hybrid routing recipes
+- Source: `packages/soothe/src/soothe/config/models.py` (`ModelProviderConfig`, `PersistenceConfig`, `VectorStoreProviderConfig`)
