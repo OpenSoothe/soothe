@@ -49,8 +49,8 @@ async def test_loop_subscribe_responds_before_background_reattach() -> None:
             {"type": "loop_subscribe", "loop_id": "loop-1", "request_id": "req-1"},
         )
 
-    assert sent[-1]["type"] == "loop_subscribe_response"
-    assert sent[-1]["success"] is True
+    assert sent[-1]["type"] == "next"
+    assert sent[-1]["payload"]["success"] is True
     assert not gate.is_set()
 
     gate.set()

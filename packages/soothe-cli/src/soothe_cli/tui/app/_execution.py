@@ -157,7 +157,7 @@ class _ExecutionMixin:
         from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE
 
         if mode == "command" and value.lower().strip() in ALWAYS_IMMEDIATE:
-            self.exit()
+            self._detach_or_exit()
             return
 
         # Prevent message handling while a loop switch is in-flight.
@@ -489,7 +489,7 @@ class _ExecutionMixin:
         cmd = command.lower().strip()
 
         if cmd in {"/quit", "/q"}:
-            self.exit()
+            self._detach_or_exit()
         elif cmd == "/help":
             await self._mount_message(UserMessage(command))
             help_body = (
@@ -922,6 +922,7 @@ class _ExecutionMixin:
                 turn_stats=turn_stats,
                 skip_daemon_send_turn=skip_daemon_send_turn,
                 clarification_mode=getattr(self, "_clarification_mode", None),
+                is_shutting_down=lambda: getattr(self, "_exit", False),
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")
@@ -949,7 +950,11 @@ class _ExecutionMixin:
             if self._inflight_turn_stats is not None:
                 self._session_stats.merge(turn_stats)
                 self._inflight_turn_stats = None
-            await self._cleanup_agent_task()
+            if getattr(self, "_exit", False):
+                self._agent_running = False
+                self._agent_worker = None
+            else:
+                await self._cleanup_agent_task()
 
     async def _process_next_from_queue(self) -> None:
         """Process the next message from the queue if any exist.

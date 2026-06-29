@@ -390,18 +390,6 @@ class SootheConfig(BaseSettings):
         """Maps CLI-style logging fields to ``observability`` and ``agent.loop.report_output``."""
         return SootheConfigLoggingView(self)
 
-    @property
-    def workspace_dir(self) -> str | None:
-        """Backward compatibility shim for third-party plugins.
-
-        Maps to ``filesystem_middleware.workspace_root``. New code should use
-        ``filesystem_middleware.workspace_root`` directly.
-
-        Returns:
-            Workspace root directory or None.
-        """
-        return self.filesystem_middleware.workspace_root
-
     # --- Persistence helpers ---
 
     def resolve_postgres_dsn_for_database(self, db_key: str) -> str:

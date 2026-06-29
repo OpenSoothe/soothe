@@ -427,6 +427,35 @@ check_linting() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ASYNCAPI SPEC DRIFT CHECK (RFC-450 §11.3)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+check_asyncapi_drift() {
+    print_header "AsyncAPI Spec Drift Check"
+
+    cd "$WORKSPACE_ROOT"
+
+    if [ ! -f "scripts/check_asyncapi_drift.py" ]; then
+        print_warning "AsyncAPI drift checker not found, skipping"
+        return 0
+    fi
+
+    print_info "Checking AsyncAPI spec ↔ Pydantic model drift (RFC-450 §11.3)..."
+    local output
+    local exit_code
+    output=$(uv run python scripts/check_asyncapi_drift.py --strict 2>&1) && exit_code=0 || exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        print_success "AsyncAPI spec and Pydantic models in sync"
+    else
+        print_failure "AsyncAPI spec drift detected"
+        record_failure_log "AsyncAPI drift" "$output"
+        return 1
+    fi
+
+    return 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # UNIT TESTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -510,6 +539,7 @@ fi
 validate_package_dependencies || true
 check_formatting || true
 check_linting || true
+check_asyncapi_drift || true
 run_tests || true
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

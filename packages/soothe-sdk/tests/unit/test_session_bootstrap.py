@@ -1,4 +1,4 @@
-"""Tests for daemon loop session bootstrap."""
+"""Tests for daemon loop session bootstrap (protocol-1 flow, IG-522 Phase 7)."""
 
 from __future__ import annotations
 
@@ -8,38 +8,61 @@ from typing import Any
 import pytest
 
 from soothe_sdk.client.session import bootstrap_loop_session
+from soothe_sdk.client.wire import ProtocolError
 
 
 class _FakeClient:
-    def __init__(self) -> None:
+    """Fake WebSocketClient recording protocol-1 method calls.
+
+    Mimics the real ``WebSocketClient`` API surface used by
+    ``bootstrap_loop_session``: ``request_connection_init``,
+    ``wait_for_connection_ack``, ``request``, and ``subscribe``.
+    """
+
+    def __init__(self, *, loop_id: str = "loop-created") -> None:
         self.calls: list[tuple[str, Any]] = []
+        self._loop_id = loop_id
 
-    async def request_daemon_ready(self) -> None:
-        self.calls.append(("request_daemon_ready", None))
+    async def request_connection_init(self) -> None:
+        self.calls.append(("request_connection_init", None))
 
-    async def wait_for_daemon_ready(self, *, ready_timeout_s: float) -> None:
-        self.calls.append(("wait_for_daemon_ready", ready_timeout_s))
+    async def wait_for_connection_ack(self, *, ack_timeout_s: float) -> dict[str, Any]:
+        self.calls.append(("wait_for_connection_ack", ack_timeout_s))
+        return {
+            "proto": "1",
+            "type": "connection_ack",
+            "result": {"readiness_state": "ready", "protocol_version": "1"},
+        }
 
-    async def request_response(
+    async def request(
         self,
-        payload: dict[str, Any],
+        method: str,
+        params: dict[str, Any] | None = None,
         *,
-        response_type: str,
-        timeout: float,
+        timeout: float = 5.0,
     ) -> dict[str, Any]:
-        self.calls.append(("request_response", dict(payload), response_type, timeout))
-        req_id = payload.get("request_id")
-        if payload.get("type") == "loop_new":
-            return {"type": "loop_new_response", "loop_id": "loop-created", "request_id": req_id}
-        if payload.get("type") == "loop_subscribe":
-            return {"type": "loop_subscribe_response", "success": True, "request_id": req_id}
-        msg = f"unexpected request {payload.get('type')}"
+        self.calls.append(("request", method, dict(params or {}), timeout))
+        if method == "loop_new":
+            return {"loop_id": self._loop_id, "autopilot_mode": "solo"}
+        if method == "loop_reattach":
+            return {"autopilot_mode": "autopilot"}
+        msg = f"unexpected request method {method}"
         raise AssertionError(msg)
+
+    async def subscribe(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 5.0,
+    ) -> str:
+        self.calls.append(("subscribe", method, dict(params or {}), timeout))
+        return "sub-1"
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> None:
-    """Fresh session issues ``loop_new`` then ``loop_subscribe``."""
+async def test_bootstrap_new_loop_uses_protocol1_request_and_subscribe(tmp_path: Path) -> None:
+    """Fresh session issues ``request('loop_new')`` then ``subscribe('loop_events')``."""
     client = _FakeClient()
     workspace = (tmp_path / "workspace").resolve()
     workspace.mkdir()
@@ -52,18 +75,30 @@ async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> No
 
     assert result.get("loop_id") == "loop-created"
     assert result.get("success") is True
-    rr = [c for c in client.calls if c[0] == "request_response"]
-    assert len(rr) == 2
-    assert rr[0][1]["type"] == "loop_new"
-    # IG-409: client workspace must be forwarded to the daemon on loop_new so the
-    # agent's filesystem tools default to the user's CWD, not the per-loop scratch dir.
-    assert rr[0][1]["client_workspace"] == str(workspace)
-    assert rr[1][1]["type"] == "loop_subscribe"
-    assert rr[1][1]["loop_id"] == "loop-created"
+
+    # Handshake
+    assert ("request_connection_init", None) in client.calls
+    assert any(c[0] == "wait_for_connection_ack" for c in client.calls)
+
+    # loop_new via request()
+    reqs = [c for c in client.calls if c[0] == "request"]
+    assert len(reqs) == 1
+    assert reqs[0][1] == "loop_new"
+    # RFC-450 §10.1: field renamed from ``client_workspace`` to ``workspace``.
+    assert reqs[0][2].get("workspace") == str(workspace)
+    assert "client_workspace" not in reqs[0][2]
+
+    # subscribe via subscribe() — not request_response()
+    subs = [c for c in client.calls if c[0] == "subscribe"]
+    assert len(subs) == 1
+    assert subs[0][1] == "loop_events"
+    assert subs[0][2].get("loop_id") == "loop-created"
     # Verbosity is owned by the daemon — clients never send it.
-    assert "verbosity" not in rr[1][1]
+    assert "verbosity" not in subs[0][2]
     # IG-441: ``adaptive`` is the bootstrap default — best UX for most clients.
-    assert rr[1][1]["stream_delivery"] == "adaptive"
+    assert subs[0][2].get("stream_delivery") == "adaptive"
+    # Protocol-1 includes ``wire_tier`` in the subscription params.
+    assert subs[0][2].get("wire_tier") == "full"
 
 
 @pytest.mark.asyncio
@@ -78,31 +113,134 @@ async def test_bootstrap_new_loop_omits_workspace_when_none() -> None:
     )
 
     assert result.get("loop_id") == "loop-created"
-    rr = [c for c in client.calls if c[0] == "request_response"]
-    loop_new_payload = rr[0][1]
-    assert loop_new_payload["type"] == "loop_new"
-    assert "client_workspace" not in loop_new_payload
+    reqs = [c for c in client.calls if c[0] == "request"]
+    assert len(reqs) == 1
+    assert reqs[0][1] == "loop_new"
+    assert "workspace" not in reqs[0][2]
+    assert "client_workspace" not in reqs[0][2]
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
-    """Resuming an existing loop skips ``loop_new``."""
+async def test_bootstrap_resume_loop_uses_reattach_then_subscribe(tmp_path: Path) -> None:
+    """Resuming an existing loop issues ``request('loop_reattach')`` then ``subscribe``."""
     client = _FakeClient()
-    workspace = (tmp_path / "workspace").resolve()
-    workspace.mkdir()
 
     result = await bootstrap_loop_session(
         client,
         resume_loop_id="loop-existing",
-        workspace=str(workspace),
+        workspace=str(tmp_path),
     )
 
     assert result.get("loop_id") == "loop-existing"
-    rr = [c for c in client.calls if c[0] == "request_response"]
-    assert len(rr) == 1
-    assert rr[0][1]["type"] == "loop_subscribe"
-    assert rr[0][1]["loop_id"] == "loop-existing"
-    # Verbosity is owned by the daemon — clients never send it.
-    assert "verbosity" not in rr[0][1]
-    # IG-441: ``adaptive`` is the bootstrap default.
-    assert rr[0][1]["stream_delivery"] == "adaptive"
+
+    # Should NOT call request('loop_new')
+    reqs = [c for c in client.calls if c[0] == "request"]
+    assert len(reqs) == 1
+    assert reqs[0][1] == "loop_reattach"
+    assert reqs[0][2].get("loop_id") == "loop-existing"
+
+    # Should still subscribe
+    subs = [c for c in client.calls if c[0] == "subscribe"]
+    assert len(subs) == 1
+    assert subs[0][1] == "loop_events"
+    assert subs[0][2].get("loop_id") == "loop-existing"
+    assert subs[0][2].get("stream_delivery") == "adaptive"
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_loop_new_protocol_error_propagates() -> None:
+    """A ``ProtocolError`` from ``loop_new`` must propagate (bootstrap fails)."""
+
+    class _ErrorClient(_FakeClient):
+        async def request(
+            self, method: str, params: Any = None, *, timeout: float = 5.0
+        ) -> dict[str, Any]:
+            if method == "loop_new":
+                raise ProtocolError(code=-32602, message="invalid params")
+            return await super().request(method, params, timeout=timeout)
+
+    client = _ErrorClient()
+    with pytest.raises(ProtocolError):
+        await bootstrap_loop_session(client, resume_loop_id=None)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_subscribe_protocol_error_propagates() -> None:
+    """A ``ProtocolError`` from ``subscribe`` must propagate (bootstrap fails)."""
+
+    class _ErrorClient(_FakeClient):
+        async def subscribe(self, method: str, params: Any = None, *, timeout: float = 5.0) -> str:
+            raise ProtocolError(code=-32602, message="subscription rejected")
+
+    client = _ErrorClient()
+    with pytest.raises(ProtocolError):
+        await bootstrap_loop_session(client, resume_loop_id=None)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_reattach_failure_is_non_fatal() -> None:
+    """A ``ProtocolError`` from ``loop_reattach`` logs and continues (graceful degrade)."""
+
+    class _ReattachErrorClient(_FakeClient):
+        async def request(
+            self, method: str, params: Any = None, *, timeout: float = 5.0
+        ) -> dict[str, Any]:
+            if method == "loop_reattach":
+                raise ProtocolError(code=-32601, message="loop not found")
+            return await super().request(method, params, timeout=timeout)
+
+    client = _ReattachErrorClient()
+    # Should NOT raise — reattach failure is non-fatal.
+    result = await bootstrap_loop_session(client, resume_loop_id="loop-gone")
+    assert result.get("loop_id") == "loop-gone"
+    # Subscription should still proceed.
+    subs = [c for c in client.calls if c[0] == "subscribe"]
+    assert len(subs) == 1
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_forwards_user_id_and_ephemeral() -> None:
+    """``user_id`` and ``is_ephemeral`` are forwarded in ``loop_new`` params."""
+    client = _FakeClient()
+
+    await bootstrap_loop_session(
+        client,
+        resume_loop_id=None,
+        user_id="alice",
+        is_ephemeral=True,
+    )
+
+    reqs = [c for c in client.calls if c[0] == "request"]
+    assert len(reqs) == 1
+    assert reqs[0][2].get("user_id") == "alice"
+    assert reqs[0][2].get("is_ephemeral") is True
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_workspace_mapping_stored_on_client(tmp_path: Path) -> None:
+    """RFC-621: workspace mapping from ``loop_new`` is stored on the client."""
+
+    class _MappingClient(_FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.workspace_mapping = None  # type: ignore[assignment]
+
+        async def request(
+            self, method: str, params: Any = None, *, timeout: float = 5.0
+        ) -> dict[str, Any]:
+            if method == "loop_new":
+                return {
+                    "loop_id": "loop-mapped",
+                    "workspace_mapping": {
+                        "host_root": "/host",
+                        "container_root": "/container",
+                    },
+                }
+            return await super().request(method, params, timeout=timeout)
+
+    client = _MappingClient()
+    result = await bootstrap_loop_session(client, resume_loop_id=None)
+
+    assert result.get("loop_id") == "loop-mapped"
+    assert result.get("workspace_mapping", {}).get("host_root") == "/host"
+    assert client.workspace_mapping is not None

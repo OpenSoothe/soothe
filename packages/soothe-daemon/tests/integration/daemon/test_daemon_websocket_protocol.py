@@ -22,6 +22,7 @@ from tests.integration.daemon_fixtures import (
     await_event_type,
     build_daemon_config,
     force_isolated_home,
+    unwrap_next,
 )
 
 
@@ -97,9 +98,14 @@ async def test_websocket_protocol_message_validation_returns_error() -> None:
     try:
         await client.connect()
         await asyncio.sleep(0.1)
-        await client.send({"type": "command"})
+        # Without a connection_init handshake, the channel rejects any
+        # non-exempt message with a protocol-1 error envelope
+        # {type:"error", error:{code:-32600, message, data?}} (RFC-450 §8.2).
+        await client.send({"proto": "1", "type": "command"})
         event = await await_event_type(client.read_event, "error")
-        assert event["code"] == "INVALID_MESSAGE"
+        err = event.get("error") or {}
+        assert err.get("code") == -32600
+        assert "Handshake" in err.get("message", "")
     finally:
         if client.is_connected:
             await client.close()
@@ -116,21 +122,16 @@ async def test_websocket_daemon_rpc_endpoints(
     _ = daemon
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
-        status = await client.request_response(
-            {"type": "daemon_status"},
-            response_type="daemon_status_response",
-        )
+        status = await client.request("daemon_status", {})
         assert status["running"] is True
         assert status["port_live"] is True
         assert isinstance(status["daemon_pid"], int)
 
-        providers = await client.request_response(
-            {"type": "config_get", "section": "providers"},
-            response_type="config_get_response",
-        )
+        providers = await client.request("config_get", {"section": "providers"})
         assert "providers" in providers
         assert isinstance(providers["providers"], (dict, list))
     finally:
@@ -151,12 +152,10 @@ async def test_websocket_daemon_shutdown_rpc_stops_server(tmp_path: Path) -> Non
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
-        ack = await client.request_response(
-            {"type": "daemon_shutdown"},
-            response_type="shutdown_ack",
-        )
+        ack = await client.request("daemon_shutdown", {})
         assert ack["status"] == "acknowledged"
 
         for _ in range(20):
@@ -243,26 +242,28 @@ async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
     daemon, port = websocket_daemon
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
-        created = await client.request_response(
-            {"type": "loop_new"},
-            response_type="loop_new_response",
-        )
+        created = await client.request("loop_new", {})
         loop_id = created["loop_id"]
         daemon._runner.set_current_thread_id(loop_id)
         daemon._query_running = True
-        await client.send_loop_subscribe(loop_id)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=5.0)
+        await client.subscribe("loop_events", {"loop_id": loop_id})
 
         try:
             async with asyncio.timeout(3.0):
                 while True:
                     event = await client.read_event()
-                    if event is None or event.get("type") != "event":
+                    if event is None:
                         continue
-                    data = event.get("data")
+                    # Protocol-1 wraps streamed events in ``next`` envelopes;
+                    # unwrap to the inner ``data`` frame (legacy ``type:"event"``).
+                    frame = unwrap_next(event)
+                    if not isinstance(frame, dict) or frame.get("type") != "event":
+                        continue
+                    data = frame.get("data")
                     if isinstance(data, dict) and str(data.get("type", "")).startswith(
                         "soothe.internal."
                     ):

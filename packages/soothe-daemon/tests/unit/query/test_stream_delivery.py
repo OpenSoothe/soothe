@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from soothe_daemon.query.stream_delivery import (
     STRANGE_LOOP_COMPLETED,
     StreamDeliveryCoalescer,
@@ -151,6 +153,61 @@ def test_tool_batch_flushes_immediately_without_waiting_for_tool_result() -> Non
     )
     # Simulate a long tool run with no further stream chunks until the result.
     assert coalescer.ingest(*_tool_chunk()) == [((), "messages", _tool_chunk()[2])]
+
+
+def test_tool_batch_merges_later_displayable_args_for_same_id() -> None:
+    """Buffered updates for the same tool_call_id must upgrade in place before flush."""
+    coalescer = StreamDeliveryCoalescer("adaptive", tool_batch_interval_ms=10_000)
+    ns = ("execute:abc", "tools:sub")
+    now = time.monotonic()
+    placeholder = {
+        "type": "soothe.stream.tool_call.update",
+        "tool_call_id": "LWZ_01:t0:read_file:0",
+        "name": "read_file",
+        "args": {"_subgraph_tool": True},
+    }
+    enriched = {
+        "type": "soothe.stream.tool_call.update",
+        "tool_call_id": "LWZ_01:t0:read_file:0",
+        "name": "read_file",
+        "args": {"path": "/docs/specs/RFC-450.md"},
+    }
+    assert coalescer._accumulate_tool_batch(ns, [placeholder], now) is True
+    assert coalescer._accumulate_tool_batch(ns, [enriched], now) is True
+
+    flushed = coalescer._flush_tool_batch(ns, force=True)
+    assert flushed
+    batch = flushed[0][2]
+    assert batch["updates"][0]["args"] == {"path": "/docs/specs/RFC-450.md"}
+
+
+def test_custom_tool_update_not_suppressed_when_batch_has_placeholder() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive", tool_batch_interval_ms=10_000)
+    ns = ("execute:abc", "tools:sub")
+    placeholder_wire = (
+        {
+            "type": "ai",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "LWZ_01:t0:glob:1",
+                    "name": "glob",
+                    "args": {},
+                },
+            ],
+        },
+        {},
+    )
+    coalescer.ingest(ns, "messages", placeholder_wire)
+
+    enriched = {
+        "type": "soothe.stream.tool_call.update",
+        "tool_call_id": "LWZ_01:t0:glob:1",
+        "name": "glob",
+        "args": {"glob_pattern": "**/*.py"},
+    }
+    out = coalescer.ingest(ns, "custom", enriched)
+    assert any(item[1] == "custom" and item[2] == enriched for item in out)
 
 
 def test_strip_tool_metadata_for_batch() -> None:

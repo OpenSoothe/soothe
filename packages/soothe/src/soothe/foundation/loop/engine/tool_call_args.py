@@ -142,6 +142,18 @@ def _record_from_ai_message(
             _store(dest, tid, args, aliases=tuple(aliases))
 
 
+def _stream_update_has_displayable_args(args: Any) -> bool:
+    """True when wire kwargs are real invocation parameters (not placeholders)."""
+    if not isinstance(args, dict) or not args:
+        return False
+    if args.get("_subgraph_tool") is True:
+        from soothe_sdk.display.message_processing import extract_tool_args_dict
+
+        remainder = {k: v for k, v in args.items() if k != "_subgraph_tool"}
+        return bool(extract_tool_args_dict(remainder))
+    return True
+
+
 def filter_redundant_stream_tool_updates(
     updates: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -149,14 +161,19 @@ def filter_redundant_stream_tool_updates(
 
     Daemon ``tool_call_updates_batch`` carries the same kwargs; keep partial-arg updates
     for providers that stream tool JSON incrementally.
+
+    Task delegations and ``_subgraph_tool`` placeholders are never treated as complete —
+    the TUI needs those wire events for subagent card labels and later arg hydration.
     """
     if not updates:
         return []
     for upd in updates:
         if not isinstance(upd, dict):
             return updates
+        if str(upd.get("name") or "").strip() == "task":
+            return updates
         args = upd.get("args")
-        if not isinstance(args, dict) or not args:
+        if not _stream_update_has_displayable_args(args):
             return updates
     return []
 

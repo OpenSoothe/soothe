@@ -100,11 +100,11 @@ def latest_preview_rows(
 
 
 def stats_title_suffix(index: StepRowIndex) -> str:
-    """Step status suffix: total tool count plus task delegation count."""
+    """Step status suffix: main-graph tool count plus task delegation count."""
     parts: list[str] = []
-    if index.total_tool_count:
+    if index.main_tool_count:
         parts.append(
-            format_tool_count_label(index.total_tool_count, singular="tool", plural="tools")
+            format_tool_count_label(index.main_tool_count, singular="tool", plural="tools")
         )
     if index.task_delegation_count:
         parts.append(
@@ -247,7 +247,9 @@ def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
 def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
     """True for rows that belong in the step-card footer tool total (RFC-628).
 
-    Subgraph tools (type ``t``) belong on SubAgent cards only and are excluded.
+    Subgraph tools (type ``t``) and rows parented under a task belong on SubAgent
+    cards only and are excluded. Unified main-graph rows use type ``s``; legacy
+    opaque ids count only when they are not task-scoped.
     """
     if row.is_task_row:
         return False
@@ -255,11 +257,17 @@ def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
         return False
     if not row_belongs_to_step(row, step_id):
         return False
+    if row.parent_tool_call_id:
+        return False
     tcid = str(row.tool_call_id).strip()
     if not tcid:
         return False
     _, type_code, _, _ = parse_unified_tool_call_id(tcid)
-    return type_code != "t"
+    if type_code == "t":
+        return False
+    if type_code == "s":
+        return True
+    return True
 
 
 def normalized_task_note_key(step_id: str, task_tool_call_id: str) -> str:

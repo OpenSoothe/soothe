@@ -12,25 +12,28 @@ from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,
     force_isolated_home,
+    unwrap_next,
     websocket_bootstrap_loop_session,
     websocket_create_loop_only,
 )
 
 
 async def _connect_and_drain_handshake(client: WebSocketClient) -> None:
-    """Connect and wait until daemon handshake is complete (RFC-0013)."""
+    """Connect and complete the protocol-1 handshake (RFC-450 §8.2)."""
     await client.connect()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
 
 async def _first_event_with_client_id(client: WebSocketClient, *, timeout_s: float = 10.0) -> dict:
     """Read until a wire frame carries a ``client_id`` field.
 
-    The daemon emits ``client_id`` on its ``subscription_confirmed`` frame
-    (not on generic ``status`` frames); accept any wire shape so the helper
-    stays robust to protocol changes. Per-read timeout ensures the deadline
-    fires even if no events arrive (otherwise ``read_event`` would block
-    forever).
+    Under protocol-1 (RFC-450 §9.3) the daemon confirms a ``loop_events``
+    subscription with a ``next`` envelope whose ``payload`` carries
+    ``client_id``; generic status frames do not. The helper unwraps ``next``
+    envelopes and accepts any wire shape so it stays robust to protocol
+    changes. Per-read timeout ensures the deadline fires even if no events
+    arrive (otherwise ``read_event`` would block forever).
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout_s
@@ -44,7 +47,15 @@ async def _first_event_with_client_id(client: WebSocketClient, *, timeout_s: flo
         except TimeoutError as exc:
             msg = "Timed out waiting for wire frame with client_id"
             raise TimeoutError(msg) from exc
-        if isinstance(ev, dict) and ev.get("client_id"):
+        if not isinstance(ev, dict):
+            continue
+        # ``next`` envelopes carry client_id on ``payload``; raw frames carry
+        # it at top level. Check both.
+        if ev.get("type") == "next":
+            payload = ev.get("payload") or {}
+            if isinstance(payload, dict) and payload.get("client_id"):
+                return payload
+        if ev.get("client_id"):
             return ev
 
 
@@ -71,8 +82,14 @@ async def test_two_clients_isolated(tmp_path: Path):
         assert loop2 != loop1
 
         # Clear pending events only for client2 before isolation check
-        # Client2 should not receive loop1 events
+        # Client2 should not receive loop1 events. Drain any lingering loop2
+        # reattach-replay frames first so they don't trip the isolation check.
         client2.clear_pending_events()
+        try:
+            while True:
+                await asyncio.wait_for(client2.read_event(), timeout=0.3)
+        except (TimeoutError, asyncio.CancelledError):
+            pass
 
         await client1.send_input(loop1, "Test query from client 1")
 
@@ -84,8 +101,22 @@ async def test_two_clients_isolated(tmp_path: Path):
         # control-frame set here would be brittle as the protocol grows.
         # The real isolation guarantee is the assertion below.
 
-        with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
-            await asyncio.wait_for(client2.read_event(), timeout=0.5)
+        # Client2 must not receive any loop1-scoped frame. It may still get
+        # its own loop2 reattach replay or a heartbeat ping — filter those by
+        # loop_id so the isolation guarantee is precise.
+        deadline = asyncio.get_running_loop().time() + 0.5
+        leaked = None
+        while asyncio.get_running_loop().time() < deadline:
+            try:
+                ev = await asyncio.wait_for(client2.read_event(), timeout=0.1)
+            except (TimeoutError, asyncio.CancelledError):
+                break
+            if ev is None:
+                break
+            if ev.get("loop_id") == loop1:
+                leaked = ev
+                break
+        assert leaked is None, f"client2 received loop1 event: {leaked}"
 
         await client1.close()
         await client2.close()
@@ -207,8 +238,11 @@ async def test_event_message_includes_thread_and_loop_id(tmp_path: Path):
 
         for _ in range(10):
             event = await asyncio.wait_for(client.read_event(), timeout=10.0)
-            if event and event.get("type") == "event":
-                assert event.get("loop_id") == loop_id
+            # Protocol-1 wraps streamed events in ``next`` envelopes; unwrap to
+            # the inner ``data`` frame which carries the legacy ``type``/``loop_id``.
+            frame = unwrap_next(event)
+            if isinstance(frame, dict) and frame.get("type") == "event":
+                assert frame.get("loop_id") == loop_id
                 break
         else:
             pytest.fail("expected at least one streamed event")
@@ -235,23 +269,14 @@ async def test_switching_loop_subscription_replaces_prior(tmp_path: Path):
         await _connect_and_drain_handshake(client)
         loop1 = await websocket_bootstrap_loop_session(client)
 
-        new_resp = await client.request_response(
-            {"type": "loop_new"},
-            response_type="loop_new_response",
-            timeout=5.0,
-        )
+        new_resp = await client.request("loop_new", {}, timeout=5.0)
         loop2 = str(new_resp.get("loop_id") or "").strip()
         assert loop2 and loop2 != loop1
 
-        sub2 = await client.request_response(
-            {
-                "type": "loop_subscribe",
-                "loop_id": loop2,
-            },
-            response_type="loop_subscribe_response",
-            timeout=5.0,
-        )
-        assert sub2.get("success", True)
+        # Protocol-1 subscribe (loop_events target). subscribe() returns the
+        # subscription id; the daemon sends subscription_confirmed as a next event.
+        sub2 = await client.subscribe("loop_events", {"loop_id": loop2}, timeout=5.0)
+        assert sub2
 
         await client.close()
     finally:

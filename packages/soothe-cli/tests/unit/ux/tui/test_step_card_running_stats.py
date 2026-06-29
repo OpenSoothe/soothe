@@ -54,11 +54,12 @@ def test_status_tool_stats_suffix_prefers_tracked_when_server_count_lower() -> N
     assert "1 tool" not in suffix
 
 
-def test_status_tool_stats_suffix_uses_server_count_when_higher_on_main_only_step() -> None:
+def test_status_tool_stats_suffix_ignores_inflated_server_count_when_tracked() -> None:
+    """Server fallback may include subgraph tools; tracked main-only rows win."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-server")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
     suffix = card._status_tool_stats_suffix(fallback_count=5)
-    assert suffix == " · 5 tools"
+    assert suffix == " · 1 tool"
 
 
 def test_status_tool_stats_suffix_ignores_server_count_for_task_delegated_step() -> None:

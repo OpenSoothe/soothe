@@ -52,6 +52,10 @@ async def test_goal_record_round_trip_through_sqlite(temp_state_manager) -> None
 
     await sm.save(checkpoint)
 
+    # RFC-803 Phase 6: close() cancels async worker, force_flushes, and releases DB connections
+    # before cold reload. Production contract: close() is called at run boundary (strange_loop.py:627).
+    await sm.close()
+
     # Cold load via fresh manager pointing at the same DB.
     with patch(
         "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",

@@ -106,6 +106,8 @@ async def test_websocket_input_with_image_runs_turn(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
@@ -140,6 +142,8 @@ async def test_websocket_input_invalid_attachment_returns_error(
     await asyncio.sleep(0.2)
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
@@ -149,8 +153,12 @@ async def test_websocket_input_invalid_attachment_returns_error(
             "x",
             attachments=[{"mime_type": "image/png", "data": "!!!"}],
         )
-        err = await await_event_type(client.read_event, "error", timeout=5.0)
-        assert err.get("code") == "INVALID_MESSAGE"
+        err_ev = await await_event_type(client.read_event, "error", timeout=5.0)
+        err = err_ev.get("error") or {}
+        # RFC-450 §7.3: an invalid parameter value (here, malformed base64
+        # attachment data) is reported as INVALID_PARAMS (-32602), not the
+        # structural INVALID_REQUEST (-32600) used for malformed envelopes.
+        assert err.get("code") == -32602  # INVALID_PARAMS
     finally:
         if client.is_connected:
             await client.close()
@@ -171,6 +179,8 @@ async def test_websocket_input_with_real_image_attachment(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
@@ -209,6 +219,8 @@ async def test_websocket_input_with_multi_image_attachments(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)

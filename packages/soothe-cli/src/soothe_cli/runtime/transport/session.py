@@ -28,6 +28,42 @@ logger = logging.getLogger(__name__)
 # that arrive slightly after status are not dropped (``cli/execution/daemon.py``).
 _POST_IDLE_DRAIN_DEADLINE_S = 2.5
 
+# Align with ``bootstrap_loop_session`` daemon-ready wait (RFC-450 §8.2).
+_RPC_HANDSHAKE_TIMEOUT_S = 20.0
+
+# Brief close handshake on TUI exit — the daemon cleans up on disconnect anyway.
+TUI_EXIT_HANDSHAKE_TIMEOUT_S = 0.3
+
+
+def _unwrap_next(event: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Unwrap a protocol-1 ``next`` envelope to its inner streaming frame.
+
+    Under protocol-1 (RFC-450 §9.3) the daemon wraps free-form streaming
+    frames (``event``/``command_response``/card replay) in a
+    ``{proto, type:"next", payload:{namespace, mode, data}}`` envelope. This
+    helper returns the inner ``data`` dict (the legacy frame carrying
+    ``type``/``mode``/``namespace``/``data``/``loop_id``) so the turn loop can
+    branch on the same fields it consumed before the migration. ``status``
+    frames and other protocol-1 messages (``response``/``error``/``complete``)
+    are sent raw and pass through unchanged.
+
+    Args:
+        event: A raw wire frame as returned by ``client.read_event()``.
+
+    Returns:
+        The inner ``payload.data`` dict for ``next`` envelopes, the original
+        frame otherwise, or ``None`` if ``event`` is ``None``.
+    """
+    if not isinstance(event, dict):
+        return event
+    if event.get("type") != "next":
+        return event
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        return event
+    data = payload.get("data")
+    return data if isinstance(data, dict) else event
+
 
 class TuiDaemonSession:
     """Own the daemon websocket session used by the TUI."""
@@ -51,6 +87,7 @@ class TuiDaemonSession:
         self._rpc_connected = False
         self._streaming = False
         self._post_idle_drain_deadline = post_idle_drain_deadline
+        self._closed = False
         self.turn_event_stats = TurnEventStats()
 
     @property
@@ -141,15 +178,28 @@ class TuiDaemonSession:
         await connect_websocket_with_retries(self._client)
         await self._bootstrap_loop(resume_loop_id=resume_loop_id)
 
-    async def close(self) -> None:
-        """Close the daemon websocket."""
-        await self._client.close()
-        await self._rpc_client.close()
+    async def close(self, *, handshake_timeout: float = 2.0) -> None:
+        """Close the daemon websocket(s).
+
+        Idempotent: safe to call from both quit handlers and ``run_textual_app``
+        teardown. Closes stream and RPC sockets in parallel.
+
+        Args:
+            handshake_timeout: Per-socket WebSocket close-handshake budget.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        await asyncio.gather(
+            self._client.close(handshake_timeout=handshake_timeout),
+            self._rpc_client.close(handshake_timeout=handshake_timeout),
+            return_exceptions=True,
+        )
         self._rpc_connected = False
 
     async def detach(self) -> None:
         """Detach this client from the daemon."""
-        await self._client.send_detach()
+        await self._client.notify("disconnect", {})
 
     async def send_turn(
         self,
@@ -184,7 +234,7 @@ class TuiDaemonSession:
 
     async def cancel_remote_query(self) -> None:
         """Ask the daemon to cancel the in-flight query (same wire path as ``/cancel``)."""
-        await self._client.send_command("/cancel")
+        await self._client.notify("slash_command", {"cmd": "/cancel"})
 
     async def _drain_stream_events_after_idle(
         self,
@@ -205,6 +255,11 @@ class TuiDaemonSession:
             if not event:
                 break
             event_type = event.get("type", "")
+            # Unwrap protocol-1 ``next`` envelopes to the inner streaming frame
+            # (RFC-450 §9.3); ``status``/``error`` arrive raw and pass through.
+            if event_type == "next":
+                event = _unwrap_next(event) or event
+                event_type = event.get("type", "")
             event_loop_id = event.get("loop_id")
             if exp and isinstance(event_loop_id, str) and event_loop_id and event_loop_id != exp:
                 logger.debug(
@@ -215,7 +270,10 @@ class TuiDaemonSession:
                 )
                 continue
             if event_type == "error":
-                raise RuntimeError(str(event.get("message", "daemon error")))
+                # Protocol-1 error envelope: {type:'error', error:{code, message, data}}
+                err_obj = event.get("error") or {}
+                err_msg = str(err_obj.get("message") or event.get("message") or "daemon error")
+                raise RuntimeError(err_msg)
             if event_type == "status":
                 loop_ev = event.get("loop_id")
                 if isinstance(loop_ev, str) and loop_ev:
@@ -236,14 +294,10 @@ class TuiDaemonSession:
                 continue
 
     async def list_loops(self, *, limit: int = 20) -> dict[str, Any]:
-        """Return ``loop_list_response`` from the daemon (RPC socket, not stream socket)."""
+        """Return the ``loop_list`` result from the daemon (RPC socket, not stream socket)."""
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
-            return await self._rpc_client.request_response(
-                {"type": "loop_list", "limit": limit},
-                response_type="loop_list_response",
-                timeout=15.0,
-            )
+            return await self._rpc_client.request("loop_list", {"limit": limit}, timeout=15.0)
 
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
@@ -288,6 +342,16 @@ class TuiDaemonSession:
                         break
 
                     event_type = event.get("type", "")
+
+                    # Protocol-1 wraps free-form streaming frames (event/
+                    # command_response/card replay) in ``next`` envelopes; unwrap
+                    # to the inner frame so the legacy ``type``/``data``/``mode``
+                    # branches below keep working. ``status``/``error`` are sent
+                    # raw and pass through unchanged.
+                    if event_type == "next":
+                        event = _unwrap_next(event) or event
+                        event_type = event.get("type", "")
+
                     event_loop_id = event.get("loop_id")
 
                     if (
@@ -305,7 +369,12 @@ class TuiDaemonSession:
                         continue
 
                     if event_type == "error":
-                        raise RuntimeError(str(event.get("message", "daemon error")))
+                        # Protocol-1 error envelope: {type:'error', error:{code, message, data}}
+                        err_obj = event.get("error") or {}
+                        err_msg = str(
+                            err_obj.get("message") or event.get("message") or "daemon error"
+                        )
+                        raise RuntimeError(err_msg)
 
                     if event_type == "status":
                         loop_ev = event.get("loop_id")
@@ -354,13 +423,13 @@ class TuiDaemonSession:
         return [s for s in skills if isinstance(s, dict)]
 
     async def list_models(self) -> dict[str, Any]:
-        """Return daemon ``models_list_response`` (models + default_model from server config)."""
+        """Return daemon ``models_list`` result (models + default_model from server config)."""
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
             return await self._rpc_client.list_models(timeout=15.0)
 
     async def get_mcp_status(self) -> dict[str, Any]:
-        """Return daemon ``mcp_status_response`` (MCP server info for TUI viewer)."""
+        """Return daemon ``mcp_status`` result (MCP server info for TUI viewer)."""
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
             return await self._rpc_client.get_mcp_status(timeout=15.0)
@@ -392,10 +461,12 @@ class TuiDaemonSession:
             )
 
     async def _ensure_rpc_connected(self) -> None:
-        """Ensure dedicated RPC client is connected."""
+        """Ensure dedicated RPC client is connected and handshake-complete."""
         if self._rpc_connected:
             return
         await connect_websocket_with_retries(self._rpc_client)
+        await self._rpc_client.request_connection_init()
+        await self._rpc_client.wait_for_connection_ack(ack_timeout_s=_RPC_HANDSHAKE_TIMEOUT_S)
         self._rpc_connected = True
 
     async def fetch_loop_cards(self, loop_id: str) -> SimpleNamespace:
@@ -420,9 +491,9 @@ class TuiDaemonSession:
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
             try:
-                resp = await self._rpc_client.request_response(
-                    {"type": "loop_cards_fetch", "loop_id": lid},
-                    response_type="loop_cards_fetch_response",
+                resp = await self._rpc_client.request(
+                    "loop_cards_fetch",
+                    {"loop_id": lid},
                     timeout=30.0,
                 )
             except Exception:
@@ -469,9 +540,9 @@ class TuiDaemonSession:
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
             try:
-                resp = await self._rpc_client.request_response(
-                    {"type": "loop_state_get", "loop_id": lid},
-                    response_type="loop_state_get_response",
+                resp = await self._rpc_client.request(
+                    "loop_state_get",
+                    {"loop_id": lid},
                     timeout=30.0,
                 )
             except Exception:
@@ -512,19 +583,18 @@ class TuiDaemonSession:
         if not isinstance(payload_values, dict):
             return
 
-        payload: dict[str, Any] = {
-            "type": "loop_state_update",
+        params: dict[str, Any] = {
             "loop_id": lid,
             "values": payload_values,
         }
         if as_node:
-            payload["as_node"] = as_node
+            params["as_node"] = as_node
 
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
-            await self._rpc_client.request_response(
-                payload,
-                response_type="loop_state_update_response",
+            await self._rpc_client.request(
+                "loop_state_update",
+                params,
                 timeout=timeout,
             )
 
@@ -543,15 +613,14 @@ class TuiDaemonSession:
 
         async with self._rpc_lock:
             await self._ensure_rpc_connected()
-            resp = await self._rpc_client.request_response(
+            resp = await self._rpc_client.request(
+                "loop_messages",
                 {
-                    "type": "loop_messages",
                     "loop_id": lid,
                     "limit": limit,
                     "offset": offset,
                     "include_events": include_events,
                 },
-                response_type="loop_messages_response",
                 timeout=10.0,
             )
 

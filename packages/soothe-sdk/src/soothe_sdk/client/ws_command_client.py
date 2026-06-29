@@ -8,11 +8,18 @@ and memory profiling operations.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any
+from uuid import uuid4
 
 from soothe_sdk.client.helpers import websocket_url_from_config
+from soothe_sdk.client.wire import (
+    ErrorEnvelope,
+    MessageType,
+    WireEnvelope,
+    decode_envelope,
+    encode_envelope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,62 +70,78 @@ class WsCommandClient:
     def __init__(self, ws_url: str, *, timeout: float = 30.0) -> None:
         self._ws_url = ws_url.rstrip("/")
         self._timeout = timeout
-        self._request_id = 0
 
     async def _send_command(
         self, command_type: str, payload: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Send command and wait for response.
+        """Send a protocol-1 request envelope and wait for the response.
+
+        Builds a ``WireEnvelope`` with ``type='request'``, ``method=command_type``,
+        ``params=payload``, and a UUID4 correlation ``id`` (RFC-450 §5, IG-522
+        Phase 6). The envelope is serialized with :func:`encode_envelope` and the
+        reply is parsed with :func:`decode_envelope`. Responses are matched by
+        ``id``; ``response`` envelopes return their ``result`` and ``error``
+        envelopes raise :class:`RuntimeError` carrying the daemon's code/message.
 
         Args:
-            command_type: Command type string.
-            payload: Command payload dict.
+            command_type: RPC method name (e.g. ``"autopilot_status"``).
+            payload: Structured parameters object for the method.
 
         Returns:
-            Response dict from daemon.
+            The ``result`` dict from the matching ``response`` envelope.
 
         Raises:
-            RuntimeError: If command fails or times out.
+            RuntimeError: If the daemon replies with an ``error`` envelope, the
+                connection fails, or the command times out.
         """
         import websockets
 
-        self._request_id += 1
-        request_id = f"cmd_{self._request_id}"
-
-        message = {
-            "type": "command",
-            "command": command_type,
-            "request_id": request_id,
-            "payload": payload or {},
-        }
+        req_id = str(uuid4())
+        envelope = WireEnvelope(
+            type=MessageType.REQUEST.value,
+            method=command_type,
+            params=payload or {},
+            id=req_id,
+        )
 
         try:
             async with websockets.connect(self._ws_url, open_timeout=self._timeout) as ws:
-                # Send command
-                await ws.send(json.dumps(message))
+                # Send the protocol-1 request envelope.
+                await ws.send(encode_envelope(envelope))
 
-                # Wait for response
-                response_str = await asyncio.wait_for(ws.recv(), timeout=self._timeout)
-                response = json.loads(response_str)
+                # Wait for the matching response/error envelope.
+                while True:
+                    response_str = await asyncio.wait_for(ws.recv(), timeout=self._timeout)
+                    response = decode_envelope(response_str)
+                    if not isinstance(response, dict):
+                        raise RuntimeError(f"Unexpected response: {response_str!r}")
 
-                # Validate response
-                if response.get("type") != "command_response":
-                    raise RuntimeError(f"Unexpected response type: {response.get('type')}")
+                    msg_type = response.get("type")
 
-                if response.get("request_id") != request_id:
-                    raise RuntimeError(
-                        f"Response request_id mismatch: {response.get('request_id')}"
-                    )
+                    # Error envelope: raise with the daemon's code/message.
+                    if msg_type == MessageType.ERROR.value:
+                        err = ErrorEnvelope.from_wire_dict(response)
+                        raise RuntimeError(
+                            f"[{err.code}] {err.message}" + (f" ({err.data})" if err.data else "")
+                        )
 
-                if response.get("error"):
-                    raise RuntimeError(response.get("error"))
+                    # Success: return the result payload.
+                    if msg_type == MessageType.RESPONSE.value:
+                        if response.get("id") != req_id:
+                            # Not our response; keep waiting for the match.
+                            continue
+                        return response.get("result") or {}
 
-                return response.get("result", {})
+                    # Other message types (next/complete/etc.) are unexpected
+                    # for a blocking request; keep reading.
+                    continue
 
         except TimeoutError:
             raise RuntimeError(f"Command timeout after {self._timeout}s") from None
         except websockets.exceptions.ConnectionClosedError as exc:
             raise RuntimeError(f"WebSocket connection closed: {exc}") from exc
+        except RuntimeError:
+            raise
         except Exception as exc:
             raise RuntimeError(f"Command failed: {exc}") from exc
 

@@ -21,21 +21,33 @@ providers:
       - MiniMax-M2.5
       - multimodal-embedding-v1
 
-  - name: mlxserver
-    provider_type: limited_openai
-    api_base_url: "http://100.75.70.86:9271/v1"
-    api_key: "fakeapikey"
+  - name: local-omlx
+    provider_type: openai
+    api_base_url: "http://100.75.70.86:9642/v1"
+    api_key: "mirasoth"
     models:
-      - glm-4.7-flash
-      - glm-4.6v-flash
-      - nomic-embed
+      - gemma-4-12b-coder-fable5-composer2.5
+      - GLM-4.6V-Flash-8bit
+      - nomicai-modernbert-embed-base-bf16
 
+# Active router — local oMLX (:9642): gemma coder for LLM, GLM-4.6V for vision
 router:
-  default: "dashscope:glm-5.2"
-  fast: "dashscope:kimi-k2.5"
-  think: "dashscope:glm-5.2"
-  image: "dashscope:kimi-k2.5"
-  embedding: "dashscope:multimodal-embedding-v1"
+  default: "local-omlx:gemma-4-12b-coder-fable5-composer2.5"
+  fast: "local-omlx:gemma-4-12b-coder-fable5-composer2.5"
+  think: "local-omlx:gemma-4-12b-coder-fable5-composer2.5"
+  image: "local-omlx:GLM-4.6V-Flash-8bit"
+  embedding: "local-omlx:nomicai-modernbert-embed-base-bf16"
+
+# --- DashScope router (commented; original develop defaults — swap in when using cloud) ---
+# Requires: export DASHSCOPE_BASE_URL, DASHSCOPE_API_KEY
+# Uses models from providers.dashscope above (glm-5, glm-5.2, qwen3.x, kimi-k2.5, etc.)
+#
+# router:
+#   default: "dashscope:glm-5.2"
+#   fast: "dashscope:kimi-k2.5"
+#   think: "dashscope:glm-5.2"
+#   image: "dashscope:kimi-k2.5"
+#   embedding: "dashscope:multimodal-embedding-v1"
 
 # ============================================================
 # AGENT

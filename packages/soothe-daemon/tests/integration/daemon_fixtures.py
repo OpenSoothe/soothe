@@ -116,16 +116,12 @@ async def websocket_bootstrap_loop_session(
 
 async def websocket_create_loop_only(client: Any, *, timeout: float = 10.0) -> str:
     """Allocate a new ``loop_id`` without ``loop_subscribe`` (unsubscribed client tests)."""
-    await client.request_daemon_ready()
-    await client.wait_for_daemon_ready()
-    resp = await client.request_response(
-        {"type": "loop_new"},
-        response_type="loop_new_response",
-        timeout=timeout,
-    )
+    await client.request_connection_init()
+    await client.wait_for_connection_ack(ack_timeout_s=timeout)
+    resp = await client.request("loop_new", {}, timeout=timeout)
     lid = str(resp.get("loop_id") or "").strip()
     if not lid:
-        raise RuntimeError("loop_new_response missing loop_id")
+        raise RuntimeError("loop_new response missing loop_id")
     return lid
 
 
@@ -317,8 +313,128 @@ async def await_event_type(readable, expected_type: str, timeout: float = 3.0) -
             msg = f"Timed out waiting for event type: {expected_type}"
             raise TimeoutError(msg)
         event = await asyncio.wait_for(readable(), timeout=remaining)
-        if event is not None and event.get("type") == expected_type:
-            return event
+        if event is None:
+            continue
+        # Protocol-1 wraps legacy streaming frames (status/event/card.*/…)
+        # in ``next`` envelopes; unwrap to the inner ``data`` so callers can
+        # match on the originating frame ``type``. Pure protocol-1 frames
+        # (error/response/complete) pass through unchanged.
+        frame = unwrap_next(event)
+        if isinstance(frame, dict) and frame.get("type") == expected_type:
+            return frame
+
+
+def unwrap_next(event: dict | None) -> dict | None:
+    """Unwrap a protocol-1 ``next`` envelope to its ``payload.data`` frame.
+
+    Under protocol-1 (RFC-450 §9.3) the daemon wraps every legacy streaming
+    frame (status/event/command_response/subscription ack) in a
+    ``{proto, type:"next", payload:{namespace, mode, data}}`` envelope. This
+    helper returns the inner ``data`` dict (the original frame) so tests can
+    branch on the legacy ``type``/``state``/``loop_id`` fields as before.
+    Non-``next`` frames (response/error/complete/etc.) are returned unchanged.
+
+    Args:
+        event: A raw wire frame as returned by ``client.read_event()``.
+
+    Returns:
+        The inner ``payload.data`` dict for ``next`` envelopes, the original
+        frame otherwise, or ``None`` if ``event`` is ``None``.
+    """
+    if not isinstance(event, dict):
+        return event
+    if event.get("type") != "next":
+        return event
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        return event
+    data = payload.get("data")
+    return data if isinstance(data, dict) else event
+
+
+async def await_next_mode(
+    readable,
+    expected_mode: str | set[str] | tuple[str, ...],
+    timeout: float = 5.0,
+) -> dict:
+    """Read until a protocol-1 ``next`` envelope with the expected ``mode`` arrives.
+
+    ``mode`` is the originating legacy frame type (``status``/``event``/
+    ``command_response``/...), carried on ``payload.mode``. Returns the inner
+    ``payload.data`` frame (see :func:`unwrap_next`).
+
+    Args:
+        readable: Async callable returning the next wire frame.
+        expected_mode: Mode string or set of strings to wait for.
+        timeout: Maximum wait time in seconds.
+
+    Returns:
+        The inner ``data`` dict of the matching ``next`` envelope.
+
+    Raises:
+        TimeoutError: If no matching frame arrives in time.
+    """
+    modes = {expected_mode} if isinstance(expected_mode, str) else set(expected_mode)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            msg = f"Timed out waiting for next mode: {', '.join(sorted(modes))}"
+            raise TimeoutError(msg)
+        event = await asyncio.wait_for(readable(), timeout=remaining)
+        if event is None:
+            continue
+        if event.get("type") != "next":
+            continue
+        payload = event.get("payload")
+        if isinstance(payload, dict) and payload.get("mode") in modes:
+            data = payload.get("data")
+            return data if isinstance(data, dict) else {}
+
+
+async def await_subscribe_ack(
+    readable,
+    loop_id: str,
+    *,
+    timeout: float = 5.0,
+) -> dict:
+    """Wait for the protocol-1 subscribe-ack ``next`` envelope for ``loop_id``.
+
+    Under protocol-1 (RFC-450 §9.3) the daemon confirms a ``loop_events``
+    subscription with a ``next`` envelope whose ``payload.event == "subscribed"``
+    and ``payload.loop_id`` matches. Returns the ``payload`` dict.
+
+    Args:
+        readable: Async callable returning the next wire frame.
+        loop_id: Loop id the subscribe-ack must reference.
+        timeout: Maximum wait time in seconds.
+
+    Returns:
+        The subscribe-ack ``payload`` dict.
+
+    Raises:
+        TimeoutError: If no matching ack arrives in time.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            msg = f"Timed out waiting for subscribe-ack for loop {loop_id!r}"
+            raise TimeoutError(msg)
+        event = await asyncio.wait_for(readable(), timeout=remaining)
+        if event is None:
+            continue
+        if event.get("type") != "next":
+            continue
+        payload = event.get("payload")
+        if (
+            isinstance(payload, dict)
+            and payload.get("event") == "subscribed"
+            and str(payload.get("loop_id") or "") == str(loop_id)
+        ):
+            return payload
 
 
 async def await_status_state(
@@ -351,8 +467,16 @@ async def await_status_state(
             msg = f"Timed out waiting for status state: {states}"
             raise TimeoutError(msg)
         event = await asyncio.wait_for(readable(), timeout=remaining)
-        if event is not None and event.get("type") == "status" and event.get("state") in expected:
-            return event
+        # Under protocol-1 (RFC-450 §9.3) status frames arrive wrapped in a
+        # ``next`` envelope; unwrap to the inner ``data`` so callers see the
+        # legacy ``{type:"status", state, loop_id}`` shape.
+        frame = unwrap_next(event)
+        if (
+            isinstance(frame, dict)
+            and frame.get("type") == "status"
+            and frame.get("state") in expected
+        ):
+            return frame
 
 
 # ---------------------------------------------------------------------------

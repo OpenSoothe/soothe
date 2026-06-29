@@ -17,7 +17,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
-from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_from_config
+from soothe_sdk.client import (
+    ProtocolError,
+    WebSocketClient,
+    is_daemon_live,
+    websocket_url_from_config,
+)
 
 from soothe_cli.runtime import load_config
 
@@ -44,37 +49,50 @@ async def _check_daemon(ws_url: str) -> bool:
 
 async def _rpc(
     ws_url: str,
-    send_fn: str,
-    send_args: dict[str, Any],
-    response_type: str,
+    method: str,
+    params: dict[str, Any] | None = None,
+    *,
+    mode: str = "request",
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Send an RPC request and wait for a matching response.
+    """Send a protocol-1 RPC to the daemon and return the response.
+
+    Uses the protocol-1 client API (RFC-450): ``request()`` for RPC,
+    ``notify()`` for fire-and-forget, ``subscribe()`` for event streams.
+    The wrapper preserves the dict-based error contract used by command
+    handlers — callers check ``if "error" in response``.
 
     Args:
         ws_url: WebSocket URL.
-        send_fn: Name of the WebSocketClient method to call.
-        send_args: Keyword arguments for the send method.
-        response_type: Expected response message type.
+        method: RPC method / notification target / subscription target
+            (e.g. ``"loop_get"``, ``"loop_input"``, ``"loop_events"``).
+        params: Structured parameters object.
+        mode: One of ``"request"`` (blocking RPC), ``"notify"``
+            (fire-and-forget), or ``"subscribe"`` (start a stream).
         timeout: Maximum seconds to wait.
 
     Returns:
-        Response dict from daemon.
+        Response dict from daemon, or ``{"error": ...}`` on failure. For
+        ``notify`` mode returns ``{}``; for ``subscribe`` mode returns
+        ``{"subscription_id": <id>}``.
     """
     client = WebSocketClient(url=ws_url)
     try:
         await client.connect()
-        method = getattr(client, send_fn)
-        await method(**send_args)
-        async with asyncio.timeout(timeout):
-            while True:
-                event = await client.read_event()
-                if not event:
-                    return {"error": "Connection closed"}
-                if event.get("type") == response_type:
-                    return event
+        if mode == "notify":
+            await asyncio.wait_for(client.notify(method, params or {}), timeout=timeout)
+            return {}
+        if mode == "subscribe":
+            sub_id = await asyncio.wait_for(client.subscribe(method, params or {}), timeout=timeout)
+            return {"subscription_id": sub_id}
+        result = await asyncio.wait_for(client.request(method, params or {}), timeout=timeout)
+        return result if isinstance(result, dict) else {"result": result}
     except TimeoutError:
         return {"error": "Timed out waiting for daemon response"}
+    except ProtocolError as exc:
+        return {"error": str(exc)}
+    except (ConnectionError, OSError) as exc:
+        return {"error": f"Connection error: {exc}"}
     finally:
         await client.close()
 
@@ -91,9 +109,8 @@ def _resolve_continue_loop_id(ws_url: str, loop_id: str | None) -> str:
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_list",
-            {"filter_dict": None, "limit": 20},
-            "loop_list_response",
+            "loop_list",
+            {"limit": 20},
         )
     )
     if "error" in response:
@@ -153,9 +170,8 @@ def list_loops(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_list",
-            {"filter_dict": {"status": status} if status else None, "limit": limit},
-            "loop_list_response",
+            "loop_list",
+            {"filter": {"status": status} if status else None, "limit": limit},
         )
     )
 
@@ -211,9 +227,8 @@ def describe_loop(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_get",
+            "loop_get",
             {"loop_id": loop_id, "verbose": verbose},
-            "loop_get_response",
         )
     )
 
@@ -327,9 +342,8 @@ def visualize_loop_tree(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_tree",
+            "loop_tree",
             {"loop_id": loop_id, "format": format},
-            "loop_tree_response",
         )
     )
 
@@ -384,9 +398,8 @@ def prune_loop_branches(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_prune",
+            "loop_prune",
             {"loop_id": loop_id, "retention_days": retention_days, "dry_run": dry_run},
-            "loop_prune_response",
         )
     )
 
@@ -394,10 +407,13 @@ def prune_loop_branches(
         typer.echo(f"Error: {response['error']}", err=True)
         sys.exit(1)
 
-    result = response.get("result", {})
+    # Protocol-1: request() returns the result dict directly (e.g.
+    # {"pruned": N, "remaining": N, "dry_run": bool}), not wrapped in {"result": ...}.
+    pruned = response.get("pruned", 0)
+    remaining = response.get("remaining", 0)
     console.print("[green]Summary:[/green]")
-    console.print(f"  Branches pruned: {result.get('pruned', 0)}")
-    console.print(f"  Remaining: {result.get('remaining', 0)}")
+    console.print(f"  Branches pruned: {pruned}")
+    console.print(f"  Remaining: {remaining}")
 
 
 @loop_app.command("delete")
@@ -424,9 +440,8 @@ def delete_loop(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_get",
+            "loop_get",
             {"loop_id": loop_id, "verbose": False},
-            "loop_get_response",
         )
     )
 
@@ -456,9 +471,8 @@ def delete_loop(
     delete_response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_delete",
+            "loop_delete",
             {"loop_id": loop_id},
-            "loop_delete_response",
         )
     )
 
@@ -728,9 +742,9 @@ def detach_loop(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_detach",
+            "loop_detach",
             {"loop_id": loop_id},
-            "loop_detach_response",
+            mode="notify",
         )
     )
 
@@ -766,9 +780,9 @@ def attach_loop(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_subscribe",
+            "loop_events",
             {"loop_id": loop_id},
-            "loop_subscribe_response",
+            mode="subscribe",
         )
     )
 
@@ -782,9 +796,8 @@ def attach_loop(
     status_response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_get",
+            "loop_get",
             {"loop_id": loop_id, "verbose": False},
-            "loop_get_response",
         )
     )
 
@@ -824,9 +837,8 @@ def new_loop(
     response = asyncio.run(
         _rpc(
             ws_url,
-            "send_loop_new",
+            "loop_new",
             {},
-            "loop_new_response",
         )
     )
 
@@ -842,9 +854,9 @@ def new_loop(
         input_response = asyncio.run(
             _rpc(
                 ws_url,
-                "send_loop_input",
+                "loop_input",
                 {"loop_id": loop_id, "content": prompt},
-                "loop_input_response",
+                mode="notify",
             )
         )
         if "error" in input_response:

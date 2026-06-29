@@ -15,13 +15,11 @@ def test_workspace_root_tilde_expansion():
     }
     config = SootheConfig(**config_dict)
 
-    # Verify the workspace_root is stored correctly (accessed via property)
+    # Verify the workspace_root is stored correctly
     assert config.filesystem_middleware.workspace_root == "~/.soothe/test"
-    # Property backward compat should also work
-    assert config.workspace_dir == "~/.soothe/test"
 
     # Verify that expand_path resolves it correctly
-    expanded = expand_path(config.workspace_dir)
+    expanded = expand_path(config.filesystem_middleware.workspace_root)
 
     # Should not contain literal tilde
     assert "~" not in str(expanded)
@@ -45,7 +43,7 @@ def test_workspace_dir_expansion_in_resolver():
 
     # The resolved_cwd should expand the tilde
     # We can't directly test resolve_planner without a model, but we can test the path expansion
-    expanded = expand_path(config.workspace_dir)
+    expanded = expand_path(config.filesystem_middleware.workspace_root)
 
     # Verify it doesn't use the wrong home directory (e.g., /Users/dan instead of /Users/xiamingchen)
     import os
@@ -64,7 +62,7 @@ def test_workspace_dir_absolute_path_unchanged():
     }
     config = SootheConfig(**config_dict)
 
-    expanded = expand_path(config.workspace_dir)
+    expanded = expand_path(config.filesystem_middleware.workspace_root)
     assert expanded == Path("/absolute/path/to/workspace").resolve()
 
 
@@ -80,19 +78,18 @@ def test_workspace_dir_env_var_expansion():
     }
     config = SootheConfig(**config_dict)
 
-    expanded = expand_path(config.workspace_dir)
+    expanded = expand_path(config.filesystem_middleware.workspace_root)
     assert str(expanded).startswith("/test/workspace/project")
 
     del os.environ["TEST_WORKSPACE"]
 
 
-def test_workspace_dir_backward_compat_property():
-    """Test that workspace_dir property maps to filesystem_middleware.workspace_root."""
+def test_workspace_root_property():
+    """Test that filesystem_middleware.workspace_root is accessible."""
     config = SootheConfig()
 
     # Default should be None
     assert config.filesystem_middleware.workspace_root is None
-    assert config.workspace_dir is None
 
     # Set via filesystem_middleware
     config_dict = {
@@ -101,4 +98,4 @@ def test_workspace_dir_backward_compat_property():
         },
     }
     config = SootheConfig(**config_dict)
-    assert config.workspace_dir == "/test/workspace"
+    assert config.filesystem_middleware.workspace_root == "/test/workspace"

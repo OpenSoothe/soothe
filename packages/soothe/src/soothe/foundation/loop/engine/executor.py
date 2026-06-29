@@ -78,7 +78,7 @@ from soothe.foundation.loop.engine.step_wave_types import (
 )
 from soothe.foundation.loop.engine.thread_selection import (
     _select_thread_for_step,
-    _wire_subagent_from_routing,
+    resolve_wire_subagent_for_step,
 )
 from soothe.foundation.loop.engine.tool_call_args import (
     ToolCallArgsCollector,
@@ -375,10 +375,11 @@ class Executor:
         clarification_enabled = (
             detector is not None and capture is not None and loop_state_view is not None
         )
-        try:
-            graph_state = await self.core_agent.execution_aget_state(config=graph_config)
-        except Exception:  # noqa: BLE001
-            logger.debug("Failed to read graph state for interrupt detection", exc_info=True)
+        if getattr(self.core_agent, "can_read_graph_state", True) is False:
+            return pending_interrupts, False, False
+
+        graph_state = await self.core_agent.execution_aget_state(config=graph_config)
+        if graph_state is None:
             return pending_interrupts, False, False
 
         interrupts: tuple[Interrupt, ...] = ()
@@ -1434,7 +1435,7 @@ class Executor:
         init_tool_call_args_registry()
 
         try:
-            wire_subagent = _wire_subagent_from_routing(routing_classification)
+            wire_subagent = resolve_wire_subagent_for_step(step, routing_classification)
 
             logger.debug(
                 "execute step: id=%s desc=%s hints: wire_subagent=%s",
@@ -1543,6 +1544,12 @@ class Executor:
             hints_lines: list[str] = []
             if wire_subagent:
                 hints_lines.append(f"Suggested subagent: {wire_subagent}")
+            if wire_subagent == "explore" and workspace:
+                hints_lines.append(
+                    f"Workspace root: {workspace}\n"
+                    "Use paths relative to this workspace (e.g. packages/..., docs/...). "
+                    "Do not use absolute paths like /packages/."
+                )
             if step.expected_output:
                 # IG-508: Format expected output as list item
                 hints_lines.append(f"Expected output:\n- {step.expected_output}")
@@ -1593,7 +1600,8 @@ class Executor:
             )
 
             # Stream events and collect outcome metadata (RFC-211)
-            tool_call_count = 0
+            main_tool_call_count = 0
+            subgraph_tool_call_count = 0
             messages: list[BaseMessage] = []
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
@@ -1606,6 +1614,7 @@ class Executor:
                 df,
                 chunk_outcomes,
                 stream_has_error,
+                tc_subgraph_count,
             ) in self._stream_and_collect(
                 stream,
                 budget=budget,
@@ -1617,7 +1626,8 @@ class Executor:
                     _append_parallel_stream_event(events, event, live_event_queue)
                 elif final_output is not None:
                     output = final_output
-                    tool_call_count = tc_count
+                    main_tool_call_count = tc_count
+                    subgraph_tool_call_count = tc_subgraph_count
                     messages = msg_list
                     delegate_final = df
                     stream_outcomes = chunk_outcomes
@@ -1628,17 +1638,14 @@ class Executor:
             # RFC-105: Snapshot skill_activation from graph state back into LoopState
             # IG-519: Only call aget_state when checkpointer is configured.
             # Without checkpointer, skill_activation lives in LoopState via middleware hooks.
-            if loop_state is not None and self.core_agent.checkpointer is not None:
-                try:
-                    graph_state = await self.core_agent.aget_state(
-                        config={"configurable": {"thread_id": fork_thread_id}},
-                    )
-                    if graph_state and graph_state.values:
-                        self._snapshot_skill_activation(graph_state.values, loop_state)
-                        self._snapshot_mcp_state(graph_state.values, loop_state)
-                        self._snapshot_tool_activation(graph_state.values, loop_state)
-                except Exception:  # noqa: BLE001
-                    logger.debug("[Skill] Failed to snapshot skill_activation from graph state")
+            if loop_state is not None and self.core_agent.can_read_graph_state:
+                graph_state = await self.core_agent.aget_state(
+                    config={"configurable": {"thread_id": fork_thread_id}},
+                )
+                if graph_state and graph_state.values:
+                    self._snapshot_skill_activation(graph_state.values, loop_state)
+                    self._snapshot_mcp_state(graph_state.values, loop_state)
+                    self._snapshot_tool_activation(graph_state.values, loop_state)
 
                 # Clear skill_context after first execute wave — body now lives in
                 # system prompt <SKILL_CONTEXT> via progressive loading (RFC-105).
@@ -1665,10 +1672,11 @@ class Executor:
 
             if step_success:
                 logger.info(
-                    "Step %s completed successfully in %dms (tool_calls: %d, subagent_cap_hit=%s, tool_budget_hit=%s)",
+                    "Step %s completed successfully in %dms (main_tools=%d, subgraph_tools=%d, subagent_cap_hit=%s, tool_budget_hit=%s)",
                     step.id,
                     duration_ms,
-                    tool_call_count,
+                    main_tool_call_count,
+                    subgraph_tool_call_count,
                     budget.hit_subagent_cap,
                     budget.hit_tool_budget,
                 )
@@ -1676,10 +1684,11 @@ class Executor:
                 # Include error info in outcome for planner visibility
                 primary_outcome["has_tool_error"] = True
                 logger.warning(
-                    "Step %s completed with tool errors in %dms (tool_calls: %d)",
+                    "Step %s completed with tool errors in %dms (main_tools=%d, subgraph_tools=%d)",
                     step.id,
                     duration_ms,
-                    tool_call_count,
+                    main_tool_call_count,
+                    subgraph_tool_call_count,
                 )
 
             return _ExecuteStepResult(
@@ -1691,7 +1700,8 @@ class Executor:
                     error=step_error,
                     duration_ms=duration_ms,
                     thread_id=thread_id,
-                    tool_call_count=tool_call_count,
+                    tool_call_count=main_tool_call_count,
+                    subgraph_tool_call_count=subgraph_tool_call_count,
                     subagent_task_completions=budget.subagent_task_completions,
                     hit_subagent_cap=budget.hit_subagent_cap,
                     hit_tool_budget=budget.hit_tool_budget,
@@ -1759,7 +1769,14 @@ class Executor:
         step_subagent: str | None = None,
     ) -> AsyncGenerator[
         tuple[
-            str | None, StreamEvent | None, int, list[BaseMessage], str, list[dict[str, Any]], bool
+            str | None,
+            StreamEvent | None,
+            int,
+            list[BaseMessage],
+            str,
+            list[dict[str, Any]],
+            bool,
+            int,
         ],
         None,
     ]:
@@ -1787,12 +1804,11 @@ class Executor:
             step_subagent: Optional planner subagent hint for ``subagent_type``.
 
         Yields:
-            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, outcomes, has_error)``:
-            - When event is not None: immediate display chunk (outcomes empty, has_error False).
-            - At end: combined_output, ``tool_call_count`` (root graph plus namespaced
-              subgraph ``ToolMessage`` totals), root AIMessages list, joined ``task``
-              tool bodies (ordered, capped), RFC-211 outcome metadata per tool, and
-              ``has_error`` flag True if any ToolMessage had status="error".
+            Tuple of ``(output, event, main_tool_count, messages, delegate_final_text, outcomes, has_error, subgraph_tool_count)``:
+            - When event is not None: immediate display chunk (counts zero, has_error False).
+            - At end: combined_output, main-graph tool count (excludes subgraph),
+              root AIMessages list, joined ``task`` tool bodies (ordered, capped),
+              RFC-211 outcome metadata per main-graph tool, ``has_error``, and subgraph tool count.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk
 
@@ -1905,9 +1921,9 @@ class Executor:
                         )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
-                yield None, emit_chunk, 0, [], "", [], False
+                yield None, emit_chunk, 0, [], "", [], False, 0
                 for tool_ev in tool_update_events:
-                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], "", [], False
+                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], "", [], False, 0
                 chunk = emit_chunk
 
             stop_act_stream = False
@@ -2160,19 +2176,16 @@ class Executor:
             if len(delegate_final_text) > DELEGATE_FINAL_WAVE_CAP:
                 delegate_final_text = delegate_final_text[:DELEGATE_FINAL_WAVE_CAP]
 
-        total_tool_calls = tool_call_count + subgraph_tool_call_count
         has_tool_error = any(o.get("has_error") for o in outcomes)
-        # Final yield with combined output and tool call count
-        # IG-416: No longer return tool_call_ids set - IDs are now in unified format in messages
-        # IG-454: Include has_tool_error flag for StepResult.success detection
         yield (
             join_text_fragments(chunks),
             None,
-            total_tool_calls,
+            tool_call_count,
             messages,
             delegate_final_text,
             outcomes,
             has_tool_error,
+            subgraph_tool_call_count,
         )
 
     async def _build_batch_human_messages(
@@ -2197,16 +2210,24 @@ class Executor:
 
         _batch_builder = UserMessageBuilder()
 
-        wire_subagent = _wire_subagent_from_routing(getattr(state, "routing_classification", None))
+        routing = getattr(state, "routing_classification", None)
+        workspace = state.workspace
         messages = []
         for step_index, step in enumerate(steps):
             # IG-508: Build EXECUTION HINTS with merged task instructions
             # Use full_description for execution context, fallback to description
             step_goal_text = step.full_description or step.description
 
+            wire_subagent = resolve_wire_subagent_for_step(step, routing)
             hints_lines: list[str] = []
             if wire_subagent:
                 hints_lines.append(f"Suggested subagent: {wire_subagent}")
+            if wire_subagent == "explore" and workspace:
+                hints_lines.append(
+                    f"Workspace root: {workspace}\n"
+                    "Use paths relative to this workspace (e.g. packages/..., docs/...). "
+                    "Do not use absolute paths like /packages/."
+                )
             if step.expected_output:
                 # IG-508: Format expected output as list item
                 hints_lines.append(f"Expected output:\n- {step.expected_output}")

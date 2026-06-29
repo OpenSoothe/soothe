@@ -167,6 +167,11 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
         subscribe_loop=lambda *_args, **_kwargs: True,
         get_stream_delivery=lambda *_args, **_kwargs: "batch",
         await_loop_delivery_drained=AsyncMock(return_value=True),
+        get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
+        get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
+    )
+    daemon._message_router = SimpleNamespace(  # type: ignore[attr-defined]
+        _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
     )
     daemon._query_state_lock = asyncio.Lock()  # type: ignore[attr-defined]
     daemon._persistence_manager = SimpleNamespace(get_loop_metadata=AsyncMock(return_value=None))  # type: ignore[attr-defined]
@@ -202,7 +207,9 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
         sent.append(msg)
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
-    await daemon._run_query("download skills", loop_id="loop-u", autonomous=True, max_iterations=42)
+    await daemon._query_engine.run_query(
+        "download skills", loop_id="loop-u", autonomous=True, max_iterations=42
+    )
 
     # IG-054: run_query now creates background task, wait for it to complete
     if daemon._active_threads:
@@ -242,11 +249,16 @@ async def test_loop_input_enqueues_options(monkeypatch: pytest.MonkeyPatch) -> N
     await daemon._handle_client_message(
         "client-1",
         {
-            "type": "loop_input",
-            "loop_id": loop_id,
-            "content": "crawl",
-            "autonomous": True,
-            "max_iterations": 12,
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "crawl",
+                "autonomous": True,
+                "max_iterations": 12,
+            },
+            "id": "r-loop-input-1",
         },
     )
 
@@ -272,7 +284,15 @@ async def test_cancel_command_bypasses_input_queue() -> None:
         get_session=AsyncMock(return_value=session),
     )  # type: ignore[attr-defined]
 
-    await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/cancel "})
+    await daemon._handle_client_message(
+        "client-1",
+        {
+            "proto": "1",
+            "type": "notification",
+            "method": "slash_command",
+            "params": {"cmd": "/cancel "},
+        },
+    )
 
     cancel_mock.assert_awaited_once_with(loop_id)
     assert daemon._loop_input_dispatcher.total_queued() == 0
@@ -292,7 +312,15 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
 
     daemon._send_client_message = _fake_send_client_message  # type: ignore[method-assign]
 
-    await daemon._handle_client_message("client-1", {"type": "command", "cmd": " /exit "})
+    await daemon._handle_client_message(
+        "client-1",
+        {
+            "proto": "1",
+            "type": "notification",
+            "method": "slash_command",
+            "params": {"cmd": " /exit "},
+        },
+    )
     assert daemon._loop_input_dispatcher.total_queued() == 0
     # IG-248: Direct send to client (no thread_id, deprecated legacy socket)
     assert sent_to_client == [
@@ -300,7 +328,15 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
     ]
 
     sent_to_client.clear()
-    await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/QUIT"})
+    await daemon._handle_client_message(
+        "client-1",
+        {
+            "proto": "1",
+            "type": "notification",
+            "method": "slash_command",
+            "params": {"cmd": "/QUIT"},
+        },
+    )
     assert daemon._loop_input_dispatcher.total_queued() == 0
     assert sent_to_client == [
         {"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}
@@ -319,10 +355,20 @@ async def test_non_cancel_command_still_enqueues() -> None:
     daemon._loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
-    await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/help"})
+    await daemon._handle_client_message(
+        "client-1",
+        {
+            "proto": "1",
+            "type": "notification",
+            "method": "slash_command",
+            "params": {"cmd": "/help"},
+        },
+    )
 
     enqueue.assert_awaited_once()
     assert enqueue.call_args[0][0] == loop_id
+    # The slash_command handler builds a fresh queue payload with type "command"
+    # (not the flattened envelope method name).
     assert enqueue.call_args[0][1]["type"] == "command"
     assert enqueue.call_args[0][1]["cmd"] == "/help"
 
@@ -339,15 +385,17 @@ async def test_websocket_client_send_input_includes_options() -> None:
     client.send = _fake_send  # type: ignore[method-assign]
     await client.send_input("loop-1", "run task", autonomous=True, max_iterations=9)
 
-    assert captured == [
-        {
-            "type": "loop_input",
-            "loop_id": "loop-1",
-            "content": "run task",
-            "autonomous": True,
-            "max_iterations": 9,
-        }
-    ]
+    # Under protocol-1, send_input delegates to notify("loop_input", params).
+    assert len(captured) == 1
+    msg = captured[0]
+    assert msg["proto"] == "1"
+    assert msg["type"] == "notification"
+    assert msg["method"] == "loop_input"
+    params = msg["params"]
+    assert params["loop_id"] == "loop-1"
+    assert params["content"] == "run task"
+    assert params["autonomous"] is True
+    assert params["max_iterations"] == 9
 
 
 @pytest.mark.asyncio
@@ -365,6 +413,11 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
         subscribe_loop=lambda *_args, **_kwargs: True,
         get_stream_delivery=lambda *_args, **_kwargs: "batch",
         await_loop_delivery_drained=AsyncMock(return_value=True),
+        get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
+        get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
+    )
+    daemon._message_router = SimpleNamespace(  # type: ignore[attr-defined]
+        _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
     )
     daemon._thread_registry = _FakeThreadRegistry()  # type: ignore[attr-defined]
 
@@ -380,7 +433,7 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     daemon._thread_logger = thread_logger
 
     # Run a query
-    await daemon._run_query("Hello, assistant", loop_id="loop-u")
+    await daemon._query_engine.run_query("Hello, assistant", loop_id="loop-u")
 
     # IG-054: run_query now creates background task, wait for it to complete
     if daemon._active_threads:
@@ -505,11 +558,15 @@ async def test_connect_with_retries_raises_after_exhaustion(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_websocket_client_wait_for_daemon_ready_returns_ready_event() -> None:
+async def test_websocket_client_wait_for_connection_ack_returns_ready() -> None:
     seq = _SequencedClient(
         events=[
             {"type": "status", "state": "idle", "thread_id": ""},
-            {"type": "daemon_ready", "state": "ready"},
+            {
+                "proto": "1",
+                "type": "connection_ack",
+                "result": {"readiness_state": "ready", "protocol_version": "1"},
+            },
         ]
     )
     client = WebSocketClient()
@@ -517,32 +574,49 @@ async def test_websocket_client_wait_for_daemon_ready_returns_ready_event() -> N
     client._read_inbound_event = seq._read_inbound_event  # type: ignore[method-assign]
     client.is_connection_alive = seq.is_connection_alive  # type: ignore[method-assign]
 
-    event = await client.wait_for_daemon_ready(ready_timeout_s=0.5)
+    event = await client.wait_for_connection_ack(ack_timeout_s=0.5)
 
-    assert event == {"type": "daemon_ready", "state": "ready"}
+    assert event["result"]["readiness_state"] == "ready"
 
 
 @pytest.mark.asyncio
-async def test_websocket_client_wait_for_daemon_ready_raises_on_error_state() -> None:
+async def test_websocket_client_wait_for_connection_ack_raises_on_error_state() -> None:
     seq = _SequencedClient(
-        events=[{"type": "daemon_ready", "state": "error", "message": "startup failed"}]
+        events=[
+            {
+                "proto": "1",
+                "type": "connection_ack",
+                "result": {
+                    "readiness_state": "error",
+                    "server_version": "0.5.0",
+                },
+            }
+        ]
     )
     client = WebSocketClient()
     client._connected = True
     client._read_inbound_event = seq._read_inbound_event  # type: ignore[method-assign]
     client.is_connection_alive = seq.is_connection_alive  # type: ignore[method-assign]
 
-    with pytest.raises(RuntimeError, match="startup failed"):
-        await client.wait_for_daemon_ready(ready_timeout_s=0.5)
+    with pytest.raises(RuntimeError):
+        await client.wait_for_connection_ack(ack_timeout_s=0.5)
 
 
 @pytest.mark.asyncio
-async def test_websocket_client_wait_for_daemon_ready_waits_through_warming(monkeypatch) -> None:
+async def test_websocket_client_wait_for_connection_ack_waits_through_warming(monkeypatch) -> None:
     """RFC-450: retry while daemon reports starting/warming instead of failing immediately."""
     seq = _SequencedClient(
         events=[
-            {"type": "daemon_ready", "state": "warming"},
-            {"type": "daemon_ready", "state": "ready"},
+            {
+                "proto": "1",
+                "type": "connection_ack",
+                "result": {"readiness_state": "warming", "protocol_version": "1"},
+            },
+            {
+                "proto": "1",
+                "type": "connection_ack",
+                "result": {"readiness_state": "ready", "protocol_version": "1"},
+            },
         ]
     )
     client = WebSocketClient()
@@ -551,19 +625,19 @@ async def test_websocket_client_wait_for_daemon_ready_waits_through_warming(monk
     client.is_connection_alive = seq.is_connection_alive  # type: ignore[method-assign]
     repoll_calls = {"n": 0}
 
-    async def _request_daemon_ready() -> None:
+    async def _request_connection_init() -> None:
         repoll_calls["n"] += 1
 
-    client.request_daemon_ready = _request_daemon_ready  # type: ignore[method-assign]
+    client.request_connection_init = _request_connection_init  # type: ignore[method-assign]
 
     async def _no_sleep(_delay: float) -> None:
         return None
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
 
-    event = await client.wait_for_daemon_ready(ready_timeout_s=0.5)
+    event = await client.wait_for_connection_ack(ack_timeout_s=0.5)
 
-    assert event == {"type": "daemon_ready", "state": "ready"}
+    assert event["result"]["readiness_state"] == "ready"
     assert repoll_calls["n"] == 1
 
 
@@ -632,7 +706,7 @@ async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
         sent.append(msg)
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
-    await daemon._run_query("analyze project structure", loop_id="loop-u")
+    await daemon._query_engine.run_query("analyze project structure", loop_id="loop-u")
 
     # IG-054: run_query now creates background task, wait for it to complete
     if daemon._active_threads:
@@ -656,11 +730,11 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
         async def connect(self) -> None:
             return None
 
-        async def request_daemon_ready(self) -> None:
+        async def request_connection_init(self) -> None:
             return None
 
-        async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
-            return {"type": "daemon_ready", "state": "ready"}
+        async def wait_for_connection_ack(self, ack_timeout_s: float = 10.0) -> dict[str, Any]:
+            return {"type": "connection_ack", "result": {"readiness_state": "ready"}}
 
         async def request_response(
             self,
@@ -676,6 +750,39 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
                 return {"type": "loop_subscribe_response", "success": True, "request_id": req_id}
             msg = f"unexpected request_response payload {payload!r}"
             raise AssertionError(msg)
+
+        async def request(
+            self,
+            method: str,
+            params: dict[str, Any],
+            *,
+            timeout: float = 5.0,
+        ) -> dict[str, Any]:
+            # Protocol-1 request returns the result dict directly (not wrapped).
+            if method == "loop_new":
+                return {"loop_id": "loop-123"}
+            if method == "loop_reattach":
+                return {"loop_id": params.get("loop_id", "loop-123")}
+            msg = f"unexpected request method {method!r}"
+            raise AssertionError(msg)
+
+        async def subscribe(
+            self,
+            method: str,
+            params: dict[str, Any],
+            *,
+            timeout: float = 5.0,
+        ) -> str:
+            return "sub-1"
+
+        async def notify(
+            self,
+            method: str,
+            params: dict[str, Any],
+            *,
+            receipt: str | None = None,
+        ) -> None:
+            return None
 
         async def send_input(
             self,
@@ -801,9 +908,24 @@ async def test_daemon_ready_request_replies_without_session() -> None:
     daemon._readiness_message = None
 
     client = _ClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
-    await daemon._handle_client_message(client, {"type": "daemon_ready"})
+    # Protocol-1 handshake: connection_init → connection_ack (RFC-450 §8.2)
+    await daemon._handle_client_message(
+        client,
+        {
+            "proto": "1",
+            "type": "connection_init",
+            "params": {
+                "client_version": "test",
+                "accept_proto": ["1"],
+                "capabilities": ["streaming", "batch", "heartbeat"],
+            },
+        },
+    )
 
-    assert sent == [{"type": "daemon_ready", "state": "ready", "message": None}]
+    assert len(sent) == 1
+    ack = sent[0]
+    assert ack["type"] == "connection_ack"
+    assert ack["result"]["readiness_state"] == "ready"
 
 
 @pytest.mark.asyncio
@@ -821,6 +943,14 @@ async def test_detach_ignores_connection_loss_for_transport_session() -> None:
         send_to_client=_send_to_client,
     )  # type: ignore[attr-defined]
 
-    await daemon._handle_client_message("client-1", {"type": "detach"})
+    await daemon._handle_client_message(
+        "client-1",
+        {
+            "proto": "1",
+            "type": "notification",
+            "method": "disconnect",
+            "params": {},
+        },
+    )
 
     transport.send.assert_awaited_once()

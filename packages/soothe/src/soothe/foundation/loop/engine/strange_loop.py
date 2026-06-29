@@ -454,6 +454,7 @@ class StrangeLoop:
             )
 
             loop_dir = PersistenceDirectoryManager.get_loop_directory(state_manager.loop_id)
+            loop_dir.mkdir(parents=True, exist_ok=True)
             db_path = loop_dir / "ce_state.db"
             persistence = SqliteContextPersistence(
                 loop_id=state_manager.loop_id,

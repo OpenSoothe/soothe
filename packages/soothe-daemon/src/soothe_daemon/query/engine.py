@@ -254,6 +254,13 @@ class QueryEngine:
         self._active_runners: dict[str, Any] = {}
         # Async cancel orchestrator for guaranteed cancellation
         self._cancel_orchestrator: AsyncCancelOrchestrator | None = None
+        # Loop ids cancelled before their query task was registered. The early
+        # ``running`` broadcast (server/handlers.py) can let a ``/cancel`` arrive
+        # before ``run_query`` creates the asyncio task; without this set the
+        # cancel would be lost. ``_run_stream`` checks membership at start and
+        # aborts immediately, emitting ``idle`` so the client observes the
+        # cancellation.
+        self._pending_cancels: set[str] = set()
 
     @staticmethod
     def _loop_scoped_client_message(loop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -604,13 +611,11 @@ class QueryEngine:
                     effective_loop_id[:8],
                 )
 
-        if effective_loop_id:
-            await d._broadcast(
-                self._loop_scoped_client_message(
-                    effective_loop_id,
-                    {"type": "status", "state": "running"},
-                )
-            )
+        # Note: the ``running`` status is broadcast *after* the query task is
+        # registered below, so a concurrent ``/cancel`` arriving right after
+        # ``running`` can still resolve the task via ``_active_threads`` /
+        # ``_current_query_task`` and interrupt the stream. Broadcasting here
+        # (before the task exists) opened a race where cancel was a no-op.
 
         full_response: list[str] = []
         full_response_chars: int = 0  # Track total characters for bounded accumulation
@@ -633,6 +638,45 @@ class QueryEngine:
                 d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
             m_clean = model.strip() if isinstance(model, str) and model.strip() else None
             override_token = attach_stream_model_override(m_clean, model_params)
+
+            # Observe a pending cancel that arrived during the early-``running``
+            # race window (before this task was registered). Abort immediately
+            # so the client observes ``idle`` instead of a full stream run.
+            if effective_loop_id and effective_loop_id in self._pending_cancels:
+                logger.info(
+                    "Query for loop %s cancelled before stream start",
+                    effective_loop_id[:16],
+                )
+                reset_stream_model_override(override_token)
+                if effective_loop_id:
+                    d._active_stream_loop_ids.discard(effective_loop_id)
+                    subscribed_clients = await d._session_manager.get_clients_for_loop(
+                        effective_loop_id
+                    )
+                    router = d._message_router
+                    for cid in subscribed_clients:
+                        subscription_id = await d._session_manager.get_loop_subscription_id(
+                            cid, effective_loop_id
+                        )
+                        await router._send_complete(
+                            cid, subscription_id, reason="cancelled_before_start"
+                        )
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {"type": "status", "state": "idle"},
+                        )
+                    )
+                if client_id:
+                    await d._session_manager.release_loop_ownership(client_id)
+                d._query_running = False
+                self._pending_cancels.discard(effective_loop_id)
+                return
+
+            # Once the stream has started (past the race window), a recorded
+            # pending cancel is obsolete — the orchestrator will cancel the
+            # now-registered asyncio task directly.
+            self._pending_cancels.discard(effective_loop_id)
 
             chunk_count = 0
             timeout_minutes = d._daemon_config.max_query_duration_minutes
@@ -944,6 +988,23 @@ class QueryEngine:
                         effective_loop_id,
                         batch_timeout_s=drain_cfg.get("streaming_interval_ms", 300) / 1000.0,
                     )
+                    # RFC-450 §9.4: Send complete message to terminate the subscription
+                    # stream. Clients subscribed via loop_subscribe expect an explicit
+                    # complete when the stream ends (goal finished, cancelled, etc.).
+                    # Get all clients subscribed to this loop and send complete to each.
+                    subscribed_clients = await d._session_manager.get_clients_for_loop(
+                        effective_loop_id
+                    )
+                    router = d._message_router
+                    for cid in subscribed_clients:
+                        subscription_id = await d._session_manager.get_loop_subscription_id(
+                            cid, effective_loop_id
+                        )
+                        await router._send_complete(
+                            cid,
+                            subscription_id,
+                            reason="stream_end",
+                        )
                     await d._broadcast(
                         self._loop_scoped_client_message(
                             effective_loop_id,
@@ -959,6 +1020,15 @@ class QueryEngine:
             task = asyncio.create_task(_run_stream())
             d._current_query_task = task
             d._active_threads[thread_id] = task
+            # Broadcast ``running`` only after the task is registered so a
+            # concurrent ``/cancel`` can resolve it (RFC-221 cancel race fix).
+            if effective_loop_id:
+                await d._broadcast(
+                    self._loop_scoped_client_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "running"},
+                    )
+                )
             # Yield once so _run_stream begins before run_query returns; otherwise /cancel
             # can run before the coroutine starts and skip finally cleanup.
             await asyncio.sleep(0)
@@ -1130,6 +1200,14 @@ class QueryEngine:
                 thread_logger.flush()
             except Exception:
                 logger.debug("ThreadLogger flush failed in direct turn finally", exc_info=True)
+            # RFC-450 §9.4: Send complete message to terminate subscription stream
+            subscribed_clients = await d._session_manager.get_clients_for_loop(effective_loop_id)
+            router = d._message_router
+            for cid in subscribed_clients:
+                subscription_id = await d._session_manager.get_loop_subscription_id(
+                    cid, effective_loop_id
+                )
+                await router._send_complete(cid, subscription_id, reason="direct_llm_end")
             await d._broadcast(
                 self._loop_scoped_client_message(
                     effective_loop_id,
@@ -1223,6 +1301,12 @@ class QueryEngine:
         if not lidq:
             logger.warning("cancel_loop called with empty loop_id; ignoring (no cancellation)")
             return
+
+        # Record the cancel so a query task that has not been registered yet
+        # (the early-``running`` race window) aborts when ``_run_stream`` starts.
+        # Cleared by ``_run_stream`` once it has observed the pending cancel or
+        # successfully registered itself.
+        self._pending_cancels.add(lidq)
 
         # RFC-221: signal the pool/local subprocess runner *before* return.
         # This ensures cooperative cancellation starts immediately, even though

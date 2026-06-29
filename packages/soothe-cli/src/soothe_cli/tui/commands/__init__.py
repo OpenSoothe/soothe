@@ -16,10 +16,6 @@ from soothe_cli.tui.commands.subagent_routing import (
     parse_subagent_from_input,
 )
 
-# Backward-compatible names
-route_command = route_slash_command
-parse_subagent_command = parse_subagent_from_input
-
 __all__ = [
     "BUILTIN_SUBAGENT_NAMES",
     "SUBAGENT_DISPLAY_NAMES",
@@ -29,9 +25,7 @@ __all__ = [
     "handle_routing_command",
     "parse_command_params",
     "parse_slash_command",
-    "parse_subagent_command",
     "parse_subagent_from_input",
-    "route_command",
     "route_slash_command",
     "validate_command",
 ]

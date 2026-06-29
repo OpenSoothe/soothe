@@ -575,12 +575,15 @@ def _rehome_subgraph_rows_to_subagent(
         _, type_code, idx, _ = parse_unified_tool_call_id(str(row.tool_call_id).strip())
         if type_code == "t" and idx == task_idx:
             moved = True
+            row_args = dict(row.args or {})
+            raw_args = str(row_args.pop("_raw", "") or "").strip()
             _ingest_tool_on_subagent_card(
                 adapter,
                 subagent_card,
                 display_key=str(row.tool_call_id),
                 tool_name=str(row.tool_name or "tool"),
-                args=dict(row.args or {}),
+                args=row_args,
+                raw_args=raw_args,
             )
             if row.phase not in ("pending",):
                 phase = str(row.phase or "pending")
@@ -1659,6 +1662,7 @@ async def _handle_interrupt_cleanup(
     captured_output_tokens: int,
     turn_stats: SessionStats,
     start_time: float,
+    app_exiting: bool = False,
 ) -> None:
     """Shared cleanup for CancelledError and KeyboardInterrupt.
 
@@ -1672,6 +1676,8 @@ async def _handle_interrupt_cleanup(
         captured_output_tokens: Output tokens captured before interrupt.
         turn_stats: Stats for the current turn.
         start_time: Monotonic timestamp when the turn began.
+        app_exiting: When ``True`` (TUI quit), skip daemon RPC — disconnect
+            cleanup runs immediately afterward.
     """
     import time
 
@@ -1686,38 +1692,40 @@ async def _handle_interrupt_cleanup(
     if adapter._set_spinner:
         await adapter._set_spinner(None)
 
-    await adapter._mount_message(AppMessage("Interrupted by user"))
+    if not app_exiting:
+        await adapter._mount_message(AppMessage("Interrupted by user"))
 
     interrupted_msg = _build_interrupted_ai_message(pending_text_by_namespace, adapter)
 
     # Save accumulated state before marking tools as rejected (best-effort).
     # State update failures shouldn't prevent cleanup.
     # Use shorter timeout (2s) during interrupt cleanup to avoid blocking cancel.
-    try:
-        cancellation_msg = HumanMessage(
-            content="[SYSTEM] Task interrupted by user. Previous operation was cancelled."
-        )
-        loop_id = _loop_id_for_remote_state(config, daemon_session)
-        if loop_id:
-            # Attribute the write to the deepagents ``model`` node — the owner of
-            # the ``messages`` channel — so LangGraph does not raise
-            # ``Ambiguous update, specify as_node`` when multiple nodes have
-            # checkpointed at the current version (e.g. tool node + model node).
-            if interrupted_msg:
+    if not app_exiting:
+        try:
+            cancellation_msg = HumanMessage(
+                content="[SYSTEM] Task interrupted by user. Previous operation was cancelled."
+            )
+            loop_id = _loop_id_for_remote_state(config, daemon_session)
+            if loop_id:
+                # Attribute the write to the deepagents ``model`` node — the owner of
+                # the ``messages`` channel — so LangGraph does not raise
+                # ``Ambiguous update, specify as_node`` when multiple nodes have
+                # checkpointed at the current version (e.g. tool node + model node).
+                if interrupted_msg:
+                    await daemon_session.aupdate_loop_state(
+                        loop_id,
+                        {"messages": [interrupted_msg.model_dump()]},
+                        timeout=2.0,
+                        as_node="model",
+                    )
                 await daemon_session.aupdate_loop_state(
                     loop_id,
-                    {"messages": [interrupted_msg.model_dump()]},
+                    {"messages": [cancellation_msg.model_dump()]},
                     timeout=2.0,
                     as_node="model",
                 )
-            await daemon_session.aupdate_loop_state(
-                loop_id,
-                {"messages": [cancellation_msg.model_dump()]},
-                timeout=2.0,
-                as_node="model",
-            )
-    except Exception:
-        logger.warning("Failed to save interrupted state", exc_info=True)
+        except Exception:
+            logger.warning("Failed to save interrupted state", exc_info=True)
 
     # Mark tools as rejected AFTER saving state
     _reject_step_tool_rows(adapter)
@@ -1738,31 +1746,33 @@ async def _handle_interrupt_cleanup(
     approximate = interrupted_msg is not None
 
     turn_stats.wall_time_seconds = time.monotonic() - start_time
-    await _report_and_persist_tokens(
-        adapter,
-        config,
-        captured_input_tokens,
-        captured_output_tokens,
-        shield=True,
-        approximate=approximate,
-        daemon_session=daemon_session,
-    )
+    if not app_exiting:
+        await _report_and_persist_tokens(
+            adapter,
+            config,
+            captured_input_tokens,
+            captured_output_tokens,
+            shield=True,
+            approximate=approximate,
+            daemon_session=daemon_session,
+        )
 
     # Ensure the daemon-side query is cancelled, not detached (detach is quit-only).
-    client = getattr(daemon_session, "_client", None)
-    if client is not None and not client.is_connected:
-        logger.debug("Skipping daemon cancel — connection already closed")
-    else:
-        try:
-            await daemon_session.cancel_remote_query()
-            logger.info("Sent cancel to daemon during interrupt cleanup")
-        except ConnectionError:
-            logger.debug("Daemon connection closed before cancel during interrupt cleanup")
-        except Exception:
-            logger.warning(
-                "Failed to send cancel to daemon during interrupt cleanup",
-                exc_info=True,
-            )
+    if not app_exiting:
+        client = getattr(daemon_session, "_client", None)
+        if client is not None and not client.is_connected:
+            logger.debug("Skipping daemon cancel — connection already closed")
+        else:
+            try:
+                await daemon_session.cancel_remote_query()
+                logger.info("Sent cancel to daemon during interrupt cleanup")
+            except ConnectionError:
+                logger.debug("Daemon connection closed before cancel during interrupt cleanup")
+            except Exception:
+                logger.warning(
+                    "Failed to send cancel to daemon during interrupt cleanup",
+                    exc_info=True,
+                )
 
 
 async def _persist_context_tokens(
@@ -1945,6 +1955,7 @@ async def execute_task_textual(
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
     clarification_mode: str | None = None,
+    is_shutting_down: Callable[[], bool] | None = None,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
 
@@ -3378,6 +3389,7 @@ async def execute_task_textual(
         await dispatch_hook("task.complete", {"loop_id": loop_id})
 
     except (asyncio.CancelledError, KeyboardInterrupt):
+        app_exiting = bool(is_shutting_down()) if is_shutting_down is not None else False
         await _handle_interrupt_cleanup(
             adapter=adapter,
             config=config,
@@ -3387,6 +3399,7 @@ async def execute_task_textual(
             captured_output_tokens=captured_output_tokens,
             turn_stats=turn_stats,
             start_time=start_time,
+            app_exiting=app_exiting,
         )
         _log_turn_event_stats(ev_stats, turn_stats, daemon_session)
         return turn_stats

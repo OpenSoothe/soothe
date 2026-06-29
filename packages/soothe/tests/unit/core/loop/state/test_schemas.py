@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
+from soothe.foundation.loop.engine.thread_selection import resolve_wire_subagent_for_step
 from soothe.foundation.loop.state import schemas as schemas_mod
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
@@ -17,11 +18,14 @@ from soothe.foundation.loop.state.schemas import (
     StepAction,
     StepResult,
     allocate_plan_id,
+    apply_step_wire_subagents,
     assign_plan_step_ids,
     composite_step_id,
     max_goal_step_numeric_suffix,
     next_goal_local_step_id_start,
+    plan_generate_steps_to_step_actions,
     renumber_decision_local_step_ids_for_goal_continuation,
+    resolve_step_wire_subagent,
     trailing_numeric_suffix_from_step_id,
 )
 
@@ -387,15 +391,21 @@ class TestPlanResult:
 class TestPlanGeneration:
     """Tests for flattened PlanGeneration schema."""
 
-    def test_plan_generate_step_schema_omits_subagent_and_evidence_refs(self) -> None:
+    def test_plan_generate_step_schema_includes_execution_routing(self) -> None:
         from soothe.foundation.loop.state.schemas import plan_generation_model_for_iteration
 
         props = plan_generation_model_for_iteration(0).model_json_schema()["$defs"][
             "PlanGenerateStep"
         ]["properties"]
-        assert "subagent" not in props
         assert "evidence_refs" not in props
-        assert {"id", "description", "expected_output", "dependencies"} <= set(props.keys())
+        assert {
+            "id",
+            "description",
+            "expected_output",
+            "dependencies",
+            "execution_hint",
+            "subagent",
+        } <= set(props.keys())
 
     def test_plan_generation_schema_execution_mode_excludes_sequential(self) -> None:
         """Structured plan-generate output must not offer sequential to the LLM."""
@@ -419,21 +429,57 @@ class TestPlanGeneration:
         assert set(agent_em) == {"parallel", "dependency"}
 
     def test_plan_generate_steps_convert_to_step_actions(self) -> None:
-        from soothe.foundation.loop.state.schemas import plan_generate_steps_to_step_actions
-
         steps = [
             PlanGenerateStep(
                 id="01",
                 description="Search papers",
                 expected_output="List",
                 dependencies=None,
+                execution_hint="subagent",
+                subagent="explore",
             )
         ]
         out = plan_generate_steps_to_step_actions(steps)
         assert len(out) == 1
         assert out[0].description == "Search papers"
-        assert "subagent" not in out[0].model_fields
-        assert "evidence_refs" not in out[0].model_fields
+        assert out[0].wire_subagent == "explore"
+        assert "evidence_refs" not in StepAction.model_fields
+
+    def test_resolve_step_wire_subagent(self) -> None:
+        assert resolve_step_wire_subagent(execution_hint="auto") is None
+        assert resolve_step_wire_subagent(execution_hint="subagent") == "explore"
+        assert (
+            resolve_step_wire_subagent(execution_hint="subagent", subagent="explore") == "explore"
+        )
+
+    def test_apply_step_wire_subagents(self) -> None:
+        steps = [
+            StepAction(
+                id="s1",
+                description="Recon",
+                expected_output="map",
+                execution_hint="subagent",
+                subagent="explore",
+            )
+        ]
+        wired = apply_step_wire_subagents(steps)
+        assert wired[0].wire_subagent == "explore"
+
+    def test_resolve_wire_subagent_for_step_prefers_planner_hint(self) -> None:
+        step = StepAction(
+            id="s1",
+            description="Recon",
+            expected_output="map",
+            wire_subagent="explore",
+        )
+        routing = {"routing_hint": "subagent", "preferred_subagent": "tacitus"}
+        assert resolve_wire_subagent_for_step(step, routing) == "explore"
+        assert resolve_wire_subagent_for_step(step, None) == "explore"
+
+    def test_resolve_wire_subagent_falls_back_to_routing(self) -> None:
+        step = StepAction(id="s1", description="Recon", expected_output="map")
+        routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
+        assert resolve_wire_subagent_for_step(step, routing) == "explore"
 
     def test_new_requires_flattened_fields(self) -> None:
         """plan_action=new requires top-level decision fields."""

@@ -14,9 +14,12 @@ from soothe.config import SootheConfig
 from soothe.foundation.core.agent._execute_filter import (
     without_execute_tool_when_sandbox_disabled,
 )
-
-# Import and apply runtime patches
-from soothe.foundation.core.agent._patch import *  # noqa: F403
+from soothe.foundation.core.agent._patch_summarization import (
+    apply_summarization_patches,
+)
+from soothe.foundation.core.agent._patch_task_tool import (
+    apply_task_tool_patch,
+)
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.runner.resolver import (
     resolve_memory,
@@ -42,10 +45,15 @@ if TYPE_CHECKING:
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
 
-# Runtime imports (used in isinstance checks)
-from langchain_core.language_models import BaseChatModel
+# Runtime imports placed after TYPE_CHECKING block to avoid circular imports
+# (CoreAgent pulls in the loop engine + protocols chain).
+from langchain_core.language_models import BaseChatModel  # noqa: E402
 
-from soothe.foundation.core.agent._core import CoreAgent
+from soothe.foundation.core.agent._core import CoreAgent  # noqa: E402
+
+# Apply all patches at module import time (after all imports complete)
+apply_summarization_patches()
+apply_task_tool_patch()
 
 logger = logging.getLogger(__name__)
 
@@ -290,13 +298,12 @@ class AgentBuilder:
 
         execute_graph = None
         execute_graph_compiler = None
-        if checkpointer is not None:
-            from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
+        from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
 
-            if ephemeral_execute_stream_enabled():
+        if ephemeral_execute_stream_enabled():
 
-                def execute_graph_compiler() -> Any:
-                    return _compile_deep_agent(None)
+            def execute_graph_compiler() -> Any:
+                return _compile_deep_agent(None)
 
         # Wrap graph in CoreAgent with typed protocol properties
         agent = CoreAgent(

@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import fnmatch
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -22,7 +23,7 @@ from websockets.frames import Close
 from soothe_daemon.channels.base import Channel
 from soothe_daemon.channels.message import ChannelMessage
 from soothe_daemon.config.models import WebSocketConfig
-from soothe_daemon.protocol import create_error_response, validate_message
+from soothe_daemon.protocol import ErrorCode, build_error_response, validate_message
 
 logger = logging.getLogger(__name__)
 
@@ -394,6 +395,10 @@ class WebSocketChannel(Channel):
             else None,
             "origin": origin,
             "client_id": client_id,
+            "handshake_complete": False,
+            "proto_version": None,
+            "negotiated_capabilities": [],
+            "last_pong_time": 0.0,
         }
 
         self._clients[websocket] = client_info
@@ -401,6 +406,9 @@ class WebSocketChannel(Channel):
         logger.info("[WS] Client connected from %s (%d active)", remote, len(self._clients))
 
         try:
+            # Send the initial status message (handshake_callback now returns
+            # only the status message — the ack is sent by the router when it
+            # processes connection_init).
             if self._handshake_callback:
                 try:
                     handshake_msgs = self._handshake_callback(websocket)
@@ -426,55 +434,143 @@ class WebSocketChannel(Channel):
                     if websocket.client_state != WebSocketState.CONNECTED:
                         return
 
-            while self._running:
-                try:
-                    message_str = await websocket.receive_text()
-                except WebSocketDisconnect:
-                    break
-                except RuntimeError as e:
-                    # Starlette raises RuntimeError when WebSocket is not connected
-                    # (e.g., client disconnected before accept completed)
-                    if "not connected" in str(e).lower():
-                        logger.debug("[WS] Client disconnected before receive: %s", e)
+            # Start server-side heartbeat ping task (RFC-450 §8.3)
+            heartbeat_task: asyncio.Task[None] | None = None
+            if self._ws_config.heartbeat_interval_ms > 0:
+                heartbeat_task = asyncio.create_task(
+                    self._heartbeat_pinger(websocket, client_id, client_info),
+                    name=f"ws-heartbeat-{client_id}",
+                )
+
+            try:
+                while self._running:
+                    try:
+                        message_str = await websocket.receive_text()
+                    except WebSocketDisconnect:
                         break
-                    raise
+                    except RuntimeError as e:
+                        # Starlette raises RuntimeError when WebSocket is not connected
+                        # (e.g., client disconnected before accept completed)
+                        if "not connected" in str(e).lower():
+                            logger.debug("[WS] Client disconnected before receive: %s", e)
+                            break
+                        raise
 
-                try:
-                    msg_dict = decode_websocket_text(message_str)
-                    if msg_dict is None:
+                    try:
+                        msg_dict = decode_websocket_text(message_str)
+                        if msg_dict is None:
+                            continue
+
+                        # -- Handshake enforcement (RFC-450 §8.2) ----------------
+                        msg_type = msg_dict.get("type", "")
+                        if msg_type == "connection_init":
+                            # Route through the router which builds connection_ack
+                            if self._message_handler:
+                                self._message_handler(client_id, msg_dict)
+                            continue
+
+                        if msg_type not in ("ping", "pong"):
+                            # Any pre-handshake message (except connection_init/ping/pong)
+                            # is rejected with -32600 INVALID_REQUEST.
+                            if not client_info.get("handshake_complete"):
+                                err_msg = {
+                                    "proto": "1",
+                                    "type": "error",
+                                    "error": {
+                                        "code": -32600,
+                                        "message": "Handshake must complete before sending messages",
+                                        "data": {"type": msg_type},
+                                    },
+                                }
+                                session = (
+                                    await self._session_manager.get_session(client_id)
+                                    if client_id and self._session_manager
+                                    else None
+                                )
+                                if session is not None:
+                                    await self._session_manager.send_to_client(session, err_msg)
+                                else:
+                                    await websocket.send_text(encode_websocket_text(err_msg))
+                                continue
+
+                        # -- Heartbeat ping/pong (RFC-450 §8.3) ------------------
+                        if msg_type == "ping":
+                            pong_msg = {"proto": "1", "type": "pong"}
+                            session = (
+                                await self._session_manager.get_session(client_id)
+                                if client_id and self._session_manager
+                                else None
+                            )
+                            if session is not None:
+                                await self._session_manager.send_to_client(session, pong_msg)
+                            else:
+                                await websocket.send_text(encode_websocket_text(pong_msg))
+                            continue
+
+                        if msg_type == "pong":
+                            client_info["last_pong_time"] = time.monotonic()
+                            continue
+
+                        errors = validate_message(msg_dict)
+                        if errors:
+                            error_msg = build_error_response(
+                                ErrorCode.INVALID_PARAMS,
+                                "Invalid params",
+                                request_id=msg_dict.get("id") or msg_dict.get("request_id"),
+                                data={"errors": errors},
+                            )
+                            session = (
+                                await self._session_manager.get_session(client_id)
+                                if client_id and self._session_manager
+                                else None
+                            )
+                            if session is not None:
+                                await self._session_manager.send_to_client(session, error_msg)
+                            else:
+                                await websocket.send_text(encode_websocket_text(error_msg))
+                            continue
+
+                        if self._message_handler:
+                            try:
+                                self._message_handler(client_id, msg_dict)
+                            except Exception:
+                                logger.exception("Error handling WebSocket message")
+
+                        # -- Receipt mechanism (RFC-450 §5.7) -------------------------
+                        # If the message carried a `receipt` field and the client
+                        # declared `receipts` capability, send receipt_response.
+                        receipt_id = msg_dict.get("receipt")
+                        if receipt_id is not None and isinstance(receipt_id, str):
+                            # Check if client declared receipts capability
+                            caps = client_info.get("negotiated_capabilities", [])
+                            if "receipts" in caps:
+                                receipt_msg = {
+                                    "proto": "1",
+                                    "type": "receipt_response",
+                                    "receipt": receipt_id,
+                                }
+                                session = (
+                                    await self._session_manager.get_session(client_id)
+                                    if client_id and self._session_manager
+                                    else None
+                                )
+                                if session is not None:
+                                    await self._session_manager.send_to_client(session, receipt_msg)
+                                else:
+                                    await websocket.send_text(encode_websocket_text(receipt_msg))
+
+                        # Handle command messages (WebSocket command client)
+                        if msg_dict.get("type") == "command":
+                            await self._handle_command_message(websocket, msg_dict, client_id)
+
+                    except Exception:
+                        logger.exception("Error processing WebSocket message")
                         continue
-
-                    errors = validate_message(msg_dict)
-                    if errors:
-                        error_msg = create_error_response(
-                            "INVALID_MESSAGE",
-                            errors[0],
-                            {"errors": errors},
-                        )
-                        session = (
-                            await self._session_manager.get_session(client_id)
-                            if client_id and self._session_manager
-                            else None
-                        )
-                        if session is not None:
-                            await self._session_manager.send_to_client(session, error_msg)
-                        else:
-                            await websocket.send_text(encode_websocket_text(error_msg))
-                        continue
-
-                    if self._message_handler:
-                        try:
-                            self._message_handler(client_id, msg_dict)
-                        except Exception:
-                            logger.exception("Error handling WebSocket message")
-
-                    # Handle command messages (WebSocket command client)
-                    if msg_dict.get("type") == "command":
-                        await self._handle_command_message(websocket, msg_dict, client_id)
-
-                except Exception:
-                    logger.exception("Error processing WebSocket message")
-                    continue
+            finally:
+                if heartbeat_task is not None and not heartbeat_task.done():
+                    heartbeat_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await heartbeat_task
 
         except WebSocketDisconnect:
             pass
@@ -489,6 +585,82 @@ class WebSocketChannel(Channel):
                 remote,
                 len(self._clients),
             )
+
+    async def _heartbeat_pinger(
+        self,
+        websocket: WebSocket,
+        client_id: str | None,
+        client_info: dict[str, Any],
+    ) -> None:
+        """Periodically send protocol-level ping frames (RFC-450 §8.3).
+
+        If no pong is received within ``heartbeat_timeout_ms``, the connection
+        is considered dead and closed with code 1001.
+
+        Args:
+            websocket: The WebSocket connection to ping.
+            client_id: Client identifier for logging.
+            client_info: Per-connection info dict tracking ``last_pong_time``.
+        """
+        interval_s = self._ws_config.heartbeat_interval_ms / 1000.0
+        timeout_s = self._ws_config.heartbeat_timeout_ms / 1000.0
+        client_info["last_pong_time"] = time.monotonic()
+
+        try:
+            while self._running and websocket.client_state == WebSocketState.CONNECTED:
+                await asyncio.sleep(interval_s)
+                if not self._running or websocket.client_state != WebSocketState.CONNECTED:
+                    break
+
+                # Check for liveness: if we haven't received a pong since the
+                # last interval, send a ping. If we sent a ping and no pong
+                # arrived within the timeout, close the connection.
+                now = time.monotonic()
+                last_pong = client_info.get("last_pong_time", 0.0)
+                if now - last_pong > interval_s + timeout_s:
+                    logger.warning(
+                        "[WS] Heartbeat timeout for client %s (no pong in %.1fs), closing",
+                        client_id,
+                        now - last_pong,
+                    )
+                    with contextlib.suppress(Exception):
+                        await websocket.close(code=1001, reason="Heartbeat timeout")
+                    return
+
+                ping_msg = {"proto": "1", "type": "ping"}
+                session = (
+                    await self._session_manager.get_session(client_id)
+                    if client_id and self._session_manager
+                    else None
+                )
+                try:
+                    if session is not None:
+                        await self._session_manager.send_to_client(session, ping_msg)
+                    else:
+                        await websocket.send_text(encode_websocket_text(ping_msg))
+                except (
+                    WebSocketDisconnect,
+                    websockets.exceptions.ConnectionClosedOK,
+                    websockets.exceptions.ConnectionClosed,
+                    websockets.exceptions.ConnectionClosedError,
+                ):
+                    return
+                except Exception:
+                    logger.debug("[WS] Failed to send ping to client %s", client_id)
+                    return
+        except asyncio.CancelledError:
+            raise
+
+    def _mark_pong_received(self, client_id: Any) -> None:
+        """Mark that a pong was received from a client (heartbeat liveness).
+
+        Args:
+            client_id: Client identifier to look up in ``_clients``.
+        """
+        for ws, info in self._clients.items():
+            if info.get("client_id") == client_id:
+                info["last_pong_time"] = time.monotonic()
+                return
 
     @property
     def client_count(self) -> int:

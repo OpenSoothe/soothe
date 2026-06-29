@@ -46,14 +46,6 @@ class GoalDispatchEnvelope:
     attempt: int = 1
 
 
-# Backward-compatible alias for gradual migration (deprecated)
-AutopilotJob = GoalDispatchEnvelope
-"""Deprecated alias for GoalDispatchEnvelope.
-
-Will be removed in a future release. Use GoalDispatchEnvelope instead.
-"""
-
-
 @dataclass
 class LoopRunRequest:
     """All parameters needed to run one agent loop in a subprocess.
@@ -142,7 +134,6 @@ class LoopRunnerProtocol(Protocol):
 
 __all__ = [
     "GoalDispatchEnvelope",
-    "AutopilotJob",
     "LoopRunRequest",
     "LoopRunnerProtocol",
     "StreamChunk",

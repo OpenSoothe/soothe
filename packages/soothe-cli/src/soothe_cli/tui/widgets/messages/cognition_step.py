@@ -508,9 +508,11 @@ class CognitionStepMessage(Vertical):
         SubAgent cards always use their own row index.
         """
         index = self._build_row_index()
-        tool_count = index.total_tool_count
+        tool_count = index.main_tool_count
         is_subagent = bool(getattr(self, "_parent_step_id", ""))
-        if is_subagent or index.task_delegation_count > 0:
+        if is_subagent:
+            tool_count = index.total_tool_count
+        elif index.task_delegation_count > 0 or index.main_tool_count > 0:
             pass
         elif fallback_count > tool_count:
             tool_count = fallback_count

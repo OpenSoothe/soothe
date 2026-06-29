@@ -131,9 +131,6 @@ ERROR = "soothe.error.general.failed"
 # LLM retry events (IG-504)
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
-# Deprecated alias (use REPLAY_COMPLETE wire envelope)
-HISTORY_REPLAY_COMPLETE = REPLAY_COMPLETE
-
 __all__ = [
     "STRANGE_LOOP_COMPLETED",
     "STRANGE_LOOP_CONTEXT_COMPACTED",
@@ -171,7 +168,6 @@ __all__ = [
     "GOAL_DIRECTIVES_APPLIED",
     "GOAL_FAILED",
     "GOAL_REPORT",
-    "HISTORY_REPLAY_COMPLETE",
     "ITERATION_COMPLETED",
     "ITERATION_STARTED",
     "LLM_RETRY_ATTEMPT",

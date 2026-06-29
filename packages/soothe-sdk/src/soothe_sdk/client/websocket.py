@@ -28,6 +28,12 @@ _DEFAULT_MAX_FRAME_SIZE = 10 * 1024 * 1024
 _TRANSITIONAL_DAEMON_READY_STATES = frozenset({"starting", "warming"})
 _DAEMON_READY_POLL_INTERVAL_S = 0.05
 
+# Client version reported in the connection_init handshake (RFC-450 §8.2).
+try:
+    from soothe_sdk import __version__ as client_version  # noqa: N812
+except Exception:  # pragma: no cover
+    client_version = "0.0.0"  # noqa: N812
+
 
 class WebSocketClient:
     """WebSocket client for communicating with Soothe daemon.
@@ -76,6 +82,14 @@ class WebSocketClient:
         self._daemon_status_cache: tuple[float, dict[str, Any]] | None = None
         self._daemon_status_lock = asyncio.Lock()
         self._daemon_status_inflight: asyncio.Task[dict[str, Any]] | None = None
+        # Protocol-1 handshake state (RFC-450 §8.2)
+        self._negotiated_capabilities: set[str] = set()
+        self._protocol_version: str | None = None
+        self._handshake_complete: bool = False
+        self._heartbeat_interval_ms: int = 0
+        self._heartbeat_timeout_ms: int = 10000
+        self._heartbeat_task: asyncio.Task[None] | None = None
+        self._last_pong_monotonic: float = 0.0
 
     async def connect(self) -> None:
         """Connect to the daemon.
@@ -129,6 +143,15 @@ class WebSocketClient:
                 if event is None:
                     await self._enqueue_inbound(None)
                     break
+                # Intercept heartbeat frames (RFC-450 §8.3): respond to ping
+                # with pong and swallow pong (liveness tracked by heartbeat loop).
+                etype = event.get("type")
+                if etype == "ping":
+                    await self._respond_pong()
+                    continue
+                if etype == "pong":
+                    self._handle_pong()
+                    continue
                 await self._enqueue_inbound(event)
         except asyncio.CancelledError:
             raise
@@ -141,6 +164,17 @@ class WebSocketClient:
                 await self._enqueue_inbound(None)
         finally:
             self._connected = False
+
+    async def _respond_pong(self) -> None:
+        """Respond to a daemon ``ping`` with ``pong`` (RFC-450 §8.3)."""
+        if not self._ws or not self._connected:
+            return
+        try:
+            await self._ws.send(encode_websocket_text({"proto": "1", "type": "pong"}))
+        except websockets.exceptions.ConnectionClosed:
+            self._connected = False
+        except Exception:
+            logger.debug("[Client:%s] Failed to send pong", self._client_id)
 
     async def _enqueue_inbound(self, event: dict[str, Any] | None) -> None:
         """Queue one or more inbound wire messages (expands ``event_batch``)."""
@@ -169,8 +203,21 @@ class WebSocketClient:
                 )
         await self._inbound_queue.put(event)
 
-    async def close(self) -> None:
-        """Close the connection with timeout to prevent exit hangs."""
+    async def close(self, *, handshake_timeout: float = 2.0) -> None:
+        """Close the connection with timeout to prevent exit hangs.
+
+        Args:
+            handshake_timeout: Seconds to wait for the WebSocket close handshake.
+                Use a small value (e.g. 0.3) on interactive client exit.
+        """
+        # Cancel heartbeat task
+        hb_task = self._heartbeat_task
+        self._heartbeat_task = None
+        if hb_task is not None and not hb_task.done():
+            hb_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await hb_task
+
         await self._stop_reader()
         inflight: asyncio.Task[dict[str, Any]] | None = None
         async with self._daemon_status_lock:
@@ -185,11 +232,13 @@ class WebSocketClient:
 
         if self._ws:
             try:
-                # Wait up to 2s for close handshake to prevent indefinite hangs
-                await asyncio.wait_for(self._ws.close(), timeout=2.0)
+                await asyncio.wait_for(self._ws.close(), timeout=handshake_timeout)
             except TimeoutError:
                 # Force close on timeout - daemon will handle graceful cleanup
-                logger.debug("WebSocket close timed out after 2s, forcing closure")
+                logger.debug(
+                    "WebSocket close timed out after %.1fs, forcing closure",
+                    handshake_timeout,
+                )
             except Exception:
                 # Suppress other errors (connection closed, network issues)
                 logger.debug("WebSocket close error (connection likely already closed)")
@@ -282,6 +331,267 @@ class WebSocketClient:
 
         return self._ws is not None and self._ws.state == State.OPEN
 
+    # -----------------------------------------------------------------------
+    # Protocol-1 client API (RFC-450 §5/§9, IG-522 Phase 5)
+    # -----------------------------------------------------------------------
+
+    def _next_request_id(self) -> str:
+        """Generate a unique request correlation ID (RFC-450 §5.2).
+
+        Uses :func:`uuid.uuid4` to produce a globally unique hex string. The
+        same ID space serves ``request`` and ``subscribe`` operations.
+
+        Returns:
+            32-character hex string.
+        """
+        return uuid.uuid4().hex
+
+    async def request(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 5.0,
+        proto: str = "1",
+    ) -> dict[str, Any]:
+        """Send a blocking RPC request and await the matching response (RFC-450 §5/§9).
+
+        Constructs a ``WireEnvelope`` with ``type='request'``, sends it over
+        the transport, and waits for a ``response`` or ``error`` message
+        whose ``id`` matches the generated correlation ID.
+
+        Args:
+            method: RPC method name (e.g. ``"loop_get"``, ``"daemon_status"``).
+            params: Structured parameters object for the method.
+            timeout: Maximum seconds to wait for a response.
+            proto: Protocol version string (default ``"1"``).
+
+        Returns:
+            The ``result`` dict from the matching ``response`` envelope.
+
+        Raises:
+            ConnectionError: If not connected or the connection closes while
+                waiting.
+            ProtocolError: If the daemon returns an ``error`` envelope with a
+                matching ``id``.
+            TimeoutError: If no matching response arrives within ``timeout``.
+        """
+        from soothe_sdk.client.wire import MessageType, ProtocolError, WireEnvelope
+
+        req_id = self._next_request_id()
+        envelope = WireEnvelope(
+            proto=proto,
+            type=MessageType.REQUEST.value,
+            method=method,
+            params=params or {},
+            id=req_id,
+        )
+        await self.send(envelope.to_wire_dict())
+
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    event = await self._read_inbound_event()
+                    if not event:
+                        if not self.is_connection_alive():
+                            self._connected = False
+                            raise ConnectionError("Connection closed")
+                        raise TimeoutError(
+                            f"WebSocket closed while waiting for response to {method} (id={req_id})"
+                        )
+                    event_id = event.get("id")
+                    event_type = event.get("type")
+                    # Route responses/errors by id; queue non-matching for later.
+                    if event_id != req_id:
+                        self._pending_events.append(event)
+                        continue
+                    if event_type == MessageType.ERROR.value:
+                        err_obj = event.get("error") or {}
+                        raise ProtocolError(
+                            code=int(err_obj.get("code", -32603)),
+                            message=str(err_obj.get("message", "daemon error")),
+                            data=err_obj.get("data"),
+                        )
+                    if event_type == MessageType.RESPONSE.value:
+                        return event.get("result") or {}
+                    # complete/unsubscribe/etc with same id — unexpected for
+                    # a blocking request; keep waiting.
+                    continue
+        except TimeoutError:
+            raise TimeoutError(
+                f"Daemon did not respond to {method} within {timeout}s (id={req_id})"
+            ) from None
+
+    async def notify(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        proto: str = "1",
+    ) -> None:
+        """Send a fire-and-forget notification (RFC-450 §5/§9).
+
+        Notifications carry no ``id`` and the daemon does not reply. Use for
+        operations like ``loop_input`` (fire-and-forget) and ``disconnect``.
+
+        Args:
+            method: Notification method name (e.g. ``"loop_input"``).
+            params: Structured parameters object.
+            proto: Protocol version string (default ``"1"``).
+
+        Raises:
+            ConnectionError: If not connected or send fails.
+        """
+        from soothe_sdk.client.wire import MessageType, WireEnvelope
+
+        envelope = WireEnvelope(
+            proto=proto,
+            type=MessageType.NOTIFICATION.value,
+            method=method,
+            params=params or {},
+        )
+        await self.send(envelope.to_wire_dict())
+
+    async def subscribe(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 5.0,
+        proto: str = "1",
+    ) -> str:
+        """Start a subscription stream (RFC-450 §5/§9).
+
+        Sends a ``subscribe`` envelope with a generated correlation ``id``.
+        The daemon delivers stream events as ``next`` messages carrying the
+        same ``id``; the stream terminates with ``complete`` or ``error``.
+        Subscription confirmation is implicit — if the daemon cannot honour
+        the subscription it sends an ``error`` with the subscription ``id``.
+
+        Args:
+            method: Subscription target (e.g. ``"loop_events"``).
+            params: Subscription parameters (e.g. ``{"loop_id": "abc"}``).
+            timeout: Maximum seconds to wait for an initial error if the
+                daemon rejects the subscription. If no error arrives within
+                this window the subscription is assumed accepted.
+            proto: Protocol version string (default ``"1"``).
+
+        Returns:
+            The subscription ``id`` for later correlation and ``unsubscribe()``.
+
+        Raises:
+            ConnectionError: If not connected.
+            ProtocolError: If the daemon sends an ``error`` with the matching
+                ``id`` within the ``timeout`` window.
+        """
+        from soothe_sdk.client.wire import MessageType, ProtocolError, WireEnvelope
+
+        sub_id = self._next_request_id()
+        envelope = WireEnvelope(
+            proto=proto,
+            type=MessageType.SUBSCRIBE.value,
+            method=method,
+            params=params or {},
+            id=sub_id,
+        )
+        await self.send(envelope.to_wire_dict())
+
+        # Check for an immediate rejection (error with matching id). We poll
+        # inbound events with a short timeout; if no error arrives we assume
+        # the subscription was accepted and return the id for stream reading.
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    event = await self._read_inbound_event()
+                    if not event:
+                        # Connection closed before any response — assume
+                        # accepted; caller will discover closure via next().
+                        break
+                    event_id = event.get("id")
+                    event_type = event.get("type")
+                    if event_id == sub_id and event_type == MessageType.ERROR.value:
+                        err_obj = event.get("error") or {}
+                        raise ProtocolError(
+                            code=int(err_obj.get("code", -32603)),
+                            message=str(err_obj.get("message", "subscription rejected")),
+                            data=err_obj.get("data"),
+                        )
+                    # Re-queue: a next/complete or unrelated event.
+                    self._pending_events.append(event)
+                    # If we already got a next or complete, subscription is live.
+                    if event_id == sub_id and event_type in (
+                        MessageType.NEXT.value,
+                        MessageType.COMPLETE.value,
+                    ):
+                        break
+        except TimeoutError:
+            pass  # No error within timeout — subscription assumed accepted.
+
+        return sub_id
+
+    async def unsubscribe(
+        self,
+        subscription_id: str,
+        *,
+        proto: str = "1",
+    ) -> None:
+        """Cancel an active subscription (RFC-450 §5/§9).
+
+        Sends an ``unsubscribe`` envelope carrying the subscription ``id``.
+        The daemon stops delivering ``next`` events for that ``id`` and may
+        send a final ``complete``.
+
+        Args:
+            subscription_id: The ``id`` returned by :meth:`subscribe`.
+            proto: Protocol version string (default ``"1"``).
+
+        Raises:
+            ConnectionError: If not connected.
+        """
+        from soothe_sdk.client.wire import MessageType, WireEnvelope
+
+        envelope = WireEnvelope(
+            proto=proto,
+            type=MessageType.UNSUBSCRIBE.value,
+            id=subscription_id,
+        )
+        await self.send(envelope.to_wire_dict())
+
+    async def next(self) -> dict[str, Any] | None:
+        """Read the next protocol-1 stream event from the daemon (RFC-450 §5/§9).
+
+        This is the primary stream-event reader for protocol-1 messages. It
+        replaces :meth:`read_event` for protocol-1 consumers. For ``next``
+        messages (subscription stream events) the ``payload`` is returned.
+        For ``complete`` and ``error`` messages the full envelope is returned
+        so the caller can inspect the ``id`` and error details. For all other
+        messages (e.g. ``response``, ``connection_ack``) the full envelope
+        is returned.
+
+        Returns:
+            The event ``payload`` for ``next`` messages, or the full envelope
+            dict for other message types. Returns ``None`` on EOF (connection
+            closed).
+
+        Raises:
+            ConnectionError: If not connected (only when no reader task is
+                active; the background reader returns ``None`` on EOF).
+        """
+        from soothe_sdk.client.wire import MessageType
+
+        if self._pending_events:
+            event = self._pending_events.popleft()
+        else:
+            event = await self._read_inbound_event()
+
+        if not event:
+            return None
+
+        event_type = event.get("type")
+        if event_type == MessageType.NEXT.value:
+            return event.get("payload") or {}
+        return event
+
     async def send_input(
         self,
         loop_id: str,
@@ -336,465 +646,49 @@ class WebSocketClient:
                 what the user typed — instead of a single concatenated string
                 being broadcast to every question.
         """
-        payload: dict[str, Any] = {
-            "type": "loop_input",
+        params: dict[str, Any] = {
             "loop_id": loop_id,
             "content": text,
         }
         if autonomous:
-            payload["autonomous"] = True
+            params["autonomous"] = True
             if max_iterations is not None:
-                payload["max_iterations"] = max_iterations
+                params["max_iterations"] = max_iterations
         if preferred_subagent is not None:
-            payload["preferred_subagent"] = preferred_subagent
+            params["preferred_subagent"] = preferred_subagent
         if model:
-            payload["model"] = model
+            params["model"] = model
         if model_params:
-            payload["model_params"] = model_params
+            params["model_params"] = model_params
         if attachments:
-            payload["attachments"] = attachments
+            params["attachments"] = attachments
         if intent_hint:
-            payload["intent_hint"] = intent_hint
+            params["intent_hint"] = intent_hint
         if response_schema:
-            payload["response_schema"] = response_schema
+            params["response_schema"] = response_schema
         if response_schema_name:
-            payload["response_schema_name"] = response_schema_name
+            params["response_schema_name"] = response_schema_name
         if response_schema_strict is not None:
-            payload["response_schema_strict"] = response_schema_strict
+            params["response_schema_strict"] = response_schema_strict
         if clarification_mode is not None:
-            payload["clarification_mode"] = clarification_mode
+            params["clarification_mode"] = clarification_mode
         if clarification_answer:
-            payload["clarification_answer"] = True
+            params["clarification_answer"] = True
         if clarification_answers is not None:
-            payload["clarification_answers"] = list(clarification_answers)
-        await self.send(payload)
-
-    async def send_command(self, cmd: str) -> None:
-        """Send a slash command to the daemon.
-
-        Args:
-            cmd: Command string.
-        """
-        await self.send({"type": "command", "cmd": cmd})
-
-    # ---------------------------------------------------------------------------
-    # Loop RPC Methods (RFC-504 Loop Management CLI Commands)
-    # ---------------------------------------------------------------------------
-
-    async def send_loop_list(
-        self,
-        filter_dict: dict[str, Any] | None = None,
-        *,
-        limit: int = 20,
-        request_id: str | None = None,
-    ) -> None:
-        """Request StrangeLoop instances via daemon RPC (RFC-504 ``loop_list``).
-
-        Args:
-            filter_dict: Optional filter (e.g., {"status": "running"}).
-            limit: Maximum number of results.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "loop_list", "limit": limit}
-        if filter_dict:
-            payload["filter"] = filter_dict
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_get(
-        self,
-        loop_id: str,
-        *,
-        verbose: bool = False,
-        request_id: str | None = None,
-    ) -> None:
-        """Request loop details via daemon RPC (RFC-504 ``loop_get``).
-
-        Args:
-            loop_id: Loop identifier.
-            verbose: Show detailed branch analysis.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_get",
-            "loop_id": loop_id,
-            "verbose": verbose,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_tree(
-        self,
-        loop_id: str,
-        *,
-        format: str = "ascii",
-        request_id: str | None = None,
-    ) -> None:
-        """Request checkpoint tree visualization via daemon RPC (RFC-504 ``loop_tree``).
-
-        Args:
-            loop_id: Loop identifier.
-            format: Visualization format (ascii, json, dot).
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_tree",
-            "loop_id": loop_id,
-            "format": format,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_prune(
-        self,
-        loop_id: str,
-        *,
-        retention_days: int = 30,
-        dry_run: bool = False,
-        request_id: str | None = None,
-    ) -> None:
-        """Request branch pruning via daemon RPC (RFC-504 ``loop_prune``).
-
-        Args:
-            loop_id: Loop identifier.
-            retention_days: Retention period in days.
-            dry_run: Show what would be pruned without making changes.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_prune",
-            "loop_id": loop_id,
-            "retention_days": retention_days,
-            "dry_run": dry_run,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_delete(
-        self,
-        loop_id: str,
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Request loop deletion via daemon RPC (RFC-504 ``loop_delete``).
-
-        Args:
-            loop_id: Loop identifier.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "loop_delete", "loop_id": loop_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_reattach(
-        self,
-        loop_id: str,
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Request loop reattachment via daemon RPC (RFC-411 ``loop_reattach``).
-
-        Reconstructs event history and replays to client for loop reattachment.
-
-        Args:
-            loop_id: Loop identifier.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "loop_reattach", "loop_id": loop_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_subscribe(
-        self,
-        loop_id: str,
-        *,
-        stream_delivery: str = "adaptive",
-        request_id: str | None = None,
-    ) -> None:
-        """Subscribe client to loop events via daemon RPC (RFC-503 ``loop_subscribe``).
-
-        Subscribes client to loop topic for real-time event streaming.
-        Used by loop continue and loop attach commands. Verbosity is owned by
-        the daemon (`observability.verbosity`); clients always receive the
-        daemon's NORMAL projection.
-
-        Args:
-            loop_id: Loop identifier.
-            stream_delivery: One of ``batch`` | ``adaptive`` (default) | ``streaming``
-                (IG-441). Unknown values fall back to ``adaptive``.
-            request_id: Optional request correlation ID.
-        """
-        delivery = (
-            stream_delivery if stream_delivery in ("batch", "adaptive", "streaming") else "adaptive"
-        )
-        payload: dict[str, Any] = {
-            "type": "loop_subscribe",
-            "loop_id": loop_id,
-            "stream_delivery": delivery,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_detach(
-        self,
-        loop_id: str,
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Detach loop via daemon RPC (RFC-503 ``loop_detach``).
-
-        Unsubscribes client from loop events while loop continues running.
-        Saves detachment checkpoint for later reattachment.
-
-        Args:
-            loop_id: Loop identifier.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "loop_detach", "loop_id": loop_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_new(
-        self,
-        *,
-        client_workspace: str | None = None,
-        user_id: str | None = None,
-        client_workspace_id: str | None = None,
-        workspace: str | None = None,
-        is_ephemeral: bool = False,
-        request_id: str | None = None,
-    ) -> None:
-        """Create new loop via daemon RPC (RFC-503 ``loop_new``).
-
-        Creates fresh loop with new loop_id for new query/conversation.
-
-        Args:
-            client_workspace: Optional project directory (used directly when set).
-            user_id: Optional user segment under ``$SOOTHE_HOME/workspaces/``.
-            client_workspace_id: Optional stable scope when ``client_workspace`` is unset.
-            workspace: Deprecated alias for ``client_workspace``.
-            is_ephemeral: When True, execution data is GC'd after idle period.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "loop_new"}
-        cw = (client_workspace or workspace or "").strip()
-        if cw:
-            payload["client_workspace"] = cw
-        if user_id and str(user_id).strip():
-            payload["user_id"] = str(user_id).strip()
-        if client_workspace_id and str(client_workspace_id).strip():
-            payload["client_workspace_id"] = str(client_workspace_id).strip()
-        if is_ephemeral:
-            payload["is_ephemeral"] = True
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_input(
-        self,
-        loop_id: str,
-        content: str,
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Send input to loop via daemon RPC (RFC-503 ``loop_input``).
-
-        Sends user prompt/input to active loop for processing.
-
-        Args:
-            loop_id: Loop identifier.
-            content: User input/prompt content.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_input",
-            "loop_id": loop_id,
-            "content": content,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_messages(
-        self,
-        loop_id: str,
-        *,
-        limit: int = 20,
-        offset: int = 0,
-        include_events: bool = False,
-        request_id: str | None = None,
-    ) -> None:
-        """Request persisted conversation/activity rows (RFC-503 ``loop_messages``).
-
-        Args:
-            loop_id: Loop identifier.
-            limit: Maximum number of messages to return.
-            offset: Offset for pagination.
-            include_events: Include event records alongside messages.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_messages",
-            "loop_id": loop_id,
-            "limit": limit,
-            "offset": offset,
-        }
-        if include_events:
-            payload["include_events"] = True
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_state_get(
-        self,
-        loop_id: str,
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Request LangGraph checkpoint channel values (RFC-503 ``loop_state_get``).
-
-        Args:
-            loop_id: Loop identifier.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_state_get",
-            "loop_id": loop_id,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_state_update(
-        self,
-        loop_id: str,
-        values: dict[str, Any],
-        *,
-        as_node: str | None = None,
-        request_id: str | None = None,
-    ) -> None:
-        """Apply partial checkpoint values (RFC-503 ``loop_state_update``).
-
-        Args:
-            loop_id: Loop identifier.
-            values: Values to update in checkpoint state.
-            as_node: Optional node name for the update.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_state_update",
-            "loop_id": loop_id,
-            "values": values,
-        }
-        if as_node is not None:
-            payload["as_node"] = as_node
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_loop_cards_fetch(
-        self,
-        loop_id: str,
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Request display card ledger snapshot (RFC-413 ``loop_cards_fetch``).
-
-        Args:
-            loop_id: Loop identifier.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {
-            "type": "loop_cards_fetch",
-            "loop_id": loop_id,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def request_response(
-        self,
-        payload: dict[str, Any],
-        *,
-        response_type: str,
-        timeout: float = 5.0,
-    ) -> dict[str, Any]:
-        """Send a request and wait for a matching response type.
-
-        Args:
-            payload: Request payload to send.
-            response_type: Expected response message type.
-            timeout: Maximum seconds to wait.
-
-        Returns:
-            Matching response dict.
-
-        Raises:
-            TimeoutError: If no matching response is received.
-            RuntimeError: If the daemon returns an error for this request.
-        """
-        request_id = uuid.uuid4().hex
-        payload = dict(payload)
-        payload["request_id"] = request_id
-        await self.send(payload)
-
-        try:
-            async with asyncio.timeout(timeout):
-                while True:
-                    event = await self._read_inbound_event()
-                    if not event:
-                        raise TimeoutError(
-                            f"WebSocket closed while waiting for {response_type} "
-                            f"(request_id={request_id})"
-                        )
-                    if event.get("request_id") != request_id:
-                        self._pending_events.append(event)
-                        continue
-                    if event.get("type") == "error":
-                        raise RuntimeError(str(event.get("message", "daemon error")))
-                    if event.get("type") == response_type:
-                        return event
-        except TimeoutError:
-            raise TimeoutError(
-                f"Daemon did not respond to {payload.get('type', 'unknown')} "
-                f"within {timeout}s (request_id={request_id}, expected={response_type})"
-            ) from None
-
-    async def send_detach(self) -> None:
-        """Notify the daemon that this client is detaching."""
-        await self.send({"type": "detach"})
+            params["clarification_answers"] = list(clarification_answers)
+        await self.notify("loop_input", params)
 
     async def list_skills(self, *, timeout: float = 15.0) -> dict[str, Any]:
         """Request wire-safe skill metadata from the daemon (RFC-400 ``skills_list``)."""
-        return await self.request_response(
-            {"type": "skills_list"},
-            response_type="skills_list_response",
-            timeout=timeout,
-        )
+        return await self.request("skills_list", {}, timeout=timeout)
 
     async def list_models(self, *, timeout: float = 15.0) -> dict[str, Any]:
         """Request model catalog rows from the daemon host ``SootheConfig`` (RFC-400 ``models_list``)."""
-        return await self.request_response(
-            {"type": "models_list"},
-            response_type="models_list_response",
-            timeout=timeout,
-        )
+        return await self.request("models_list", {}, timeout=timeout)
 
     async def get_mcp_status(self, *, timeout: float = 15.0) -> dict[str, Any]:
         """Request MCP server status from the daemon."""
-        return await self.request_response(
-            {"type": "mcp_status"},
-            response_type="mcp_status_response",
-            timeout=timeout,
-        )
+        return await self.request("mcp_status", {}, timeout=timeout)
 
     async def invoke_skill(
         self,
@@ -817,14 +711,10 @@ class WebSocketClient:
                 the client's Manual badge and always defer to the config
                 default — typically ``"auto"`` (veritas).
         """
-        payload: dict[str, Any] = {"type": "invoke_skill", "skill": skill, "args": args}
+        params: dict[str, Any] = {"skill": skill, "args": args}
         if clarification_mode is not None:
-            payload["clarification_mode"] = clarification_mode
-        return await self.request_response(
-            payload,
-            response_type="invoke_skill_response",
-            timeout=timeout,
-        )
+            params["clarification_mode"] = clarification_mode
+        return await self.request("invoke_skill", params, timeout=timeout)
 
     async def fetch_daemon_status(
         self,
@@ -839,7 +729,7 @@ class WebSocketClient:
         request.
 
         Args:
-            timeout: Per-request timeout passed to ``request_response``.
+            timeout: Per-request timeout passed to :meth:`request`.
             min_interval_s: Minimum seconds between real RPCs. Use ``0`` to
                 disable caching and always hit the daemon.
 
@@ -847,14 +737,10 @@ class WebSocketClient:
             Parsed daemon status response dict.
 
         Raises:
-            Same as ``request_response`` (timeout, connection errors, etc.).
+            Same as :meth:`request` (timeout, connection errors, etc.).
         """
         if min_interval_s <= 0:
-            return await self.request_response(
-                {"type": "daemon_status"},
-                response_type="daemon_status_response",
-                timeout=timeout,
-            )
+            return await self.request("daemon_status", {}, timeout=timeout)
 
         async with self._daemon_status_lock:
             now = time.monotonic()
@@ -865,11 +751,7 @@ class WebSocketClient:
 
             if self._daemon_status_inflight is None:
                 self._daemon_status_inflight = asyncio.create_task(
-                    self.request_response(
-                        {"type": "daemon_status"},
-                        response_type="daemon_status_response",
-                        timeout=timeout,
-                    )
+                    self.request("daemon_status", {}, timeout=timeout)
                 )
             inflight = self._daemon_status_inflight
 
@@ -888,99 +770,161 @@ class WebSocketClient:
                 self._daemon_status_cache = (time.monotonic(), dict(result))
         return dict(result)
 
-    async def send_daemon_status(self, request_id: str | None = None) -> None:
-        """Request daemon status check (IG-174 Phase 0).
+    async def request_connection_init(self) -> None:
+        """Send ``connection_init`` to the daemon (RFC-450 §8.2).
 
-        Args:
-            request_id: Optional request correlation ID.
-        """
-        await self.send({"type": "daemon_status", "request_id": request_id or uuid.uuid4().hex})
-
-    async def send_daemon_shutdown(self, request_id: str | None = None) -> None:
-        """Request daemon shutdown (IG-174 Phase 0).
-
-        Args:
-            request_id: Optional request correlation ID.
-        """
-        await self.send({"type": "daemon_shutdown", "request_id": request_id or uuid.uuid4().hex})
-
-    async def send_config_get(self, section: str, request_id: str | None = None) -> None:
-        """Request config section from daemon (IG-174 Phase 0).
-
-        Args:
-            section: Config section name (e.g., "providers", "defaults", "all").
-            request_id: Optional request correlation ID.
-        """
-        await self.send(
-            {"type": "config_get", "section": section, "request_id": request_id or uuid.uuid4().hex}
-        )
-
-    async def request_daemon_ready(self) -> None:
-        """Request the daemon's readiness state.
+        This is the first message the client sends after the WebSocket upgrade.
+        The daemon responds with ``connection_ack`` containing readiness state,
+        negotiated protocol version, and capabilities.
 
         This method is safe to call even if the connection may be closed.
-        The daemon typically sends daemon_ready during handshake, so this
-        request may be redundant. If the connection is closed, this method
-        silently succeeds - `wait_for_daemon_ready()` will either find a
-        pending handshake event or timeout.
+        If the connection is closed, this method silently succeeds —
+        ``wait_for_connection_ack()`` will either find a pending ack or timeout.
         """
+        from soothe_sdk.client.wire import ConnectionInitEnvelope, ConnectionInitParams
+
+        envelope = ConnectionInitEnvelope(
+            params=ConnectionInitParams(
+                client_version=client_version,
+                client_name="soothe-sdk",
+                accept_proto=["1"],
+                capabilities=["streaming", "batch", "heartbeat"],
+            )
+        )
         try:
-            await self.send({"type": "daemon_ready"})
+            await self.send(envelope.to_wire_dict())
         except ConnectionError:
-            # Connection may be closed after handshake; daemon_ready may already
-            # be in pending events queue. Let wait_for_daemon_ready handle it.
             logger.debug(
-                "[Client:%s] request_daemon_ready failed (connection closed), "
+                "[Client:%s] request_connection_init failed (connection closed), "
                 "will check pending events",
                 self._client_id,
             )
 
-    async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
-        """Wait for a daemon readiness message and require ready state.
+    async def wait_for_connection_ack(self, ack_timeout_s: float = 10.0) -> dict[str, Any]:
+        """Wait for ``connection_ack`` and require ready state (RFC-450 §8.2).
 
         Args:
-            ready_timeout_s: Maximum seconds to wait.
+            ack_timeout_s: Maximum seconds to wait for the ack.
 
         Returns:
-            The daemon_ready event on success.
+            The ``connection_ack`` result dict on success.
 
         Raises:
-            RuntimeError: If daemon reports ``error``, ``degraded``, or another non-ready
-                terminal state.
+            ConnectionError: If protocol version is incompatible.
+            RuntimeError: If daemon reports ``error``, ``degraded``, or another
+                non-ready terminal state.
             TimeoutError: If timeout expires.
         """
-        async with asyncio.timeout(ready_timeout_s):
+        async with asyncio.timeout(ack_timeout_s):
             while True:
-                event = self._pop_pending_event_by_type("daemon_ready")
+                event = self._pop_pending_event_by_type("connection_ack")
                 if event is None:
                     event = await self._read_inbound_event()
                 if not event:
                     if not self.is_connection_alive():
                         self._connected = False
                         raise ConnectionError("Connection closed")
-                    raise TimeoutError("No daemon_ready event received")
-                if event.get("type") != "daemon_ready":
-                    # Discard handshake ``status`` — keeping it in ``_pending_events`` would
-                    # make ``read_event()`` spin forever and block ``daemon_ready`` in the
-                    # inbound queue (CLI hang after daemon restart).
+                    raise TimeoutError("No connection_ack received")
+                if event.get("type") != "connection_ack":
+                    # Discard the initial ``status`` frame — keeping it in
+                    # ``_pending_events`` would block ``connection_ack`` in
+                    # the inbound queue.
                     if event.get("type") != "status":
                         self._pending_events.append(event)
                     continue
-                state = event.get("state")
+
+                result = event.get("result") or {}
+                state = result.get("readiness_state")
+                proto_ver = result.get("protocol_version")
+                caps = result.get("capabilities", [])
+                hb_interval = result.get("heartbeat_interval_ms", 0)
+
+                # Store negotiated values
+                self._protocol_version = proto_ver
+                self._negotiated_capabilities = set(caps)
+                self._heartbeat_interval_ms = int(hb_interval) if hb_interval else 0
+                self._handshake_complete = True
+
+                if state == "incompatible":
+                    raise ConnectionError(
+                        f"Protocol version incompatible: daemon returned {proto_ver!r}"
+                    )
                 if state == "ready":
+                    # Start heartbeat if negotiated
+                    if (
+                        "heartbeat" in self._negotiated_capabilities
+                        and self._heartbeat_interval_ms > 0
+                    ):
+                        self._start_heartbeat()
                     return event
                 if state == "error":
-                    message = event.get("message") or "Daemon startup failed"
-                    raise RuntimeError(str(message))
+                    raise RuntimeError("Daemon startup failed")
                 if state == "degraded":
-                    message = event.get("message") or "Daemon is degraded"
-                    raise RuntimeError(str(message))
+                    raise RuntimeError("Daemon is degraded")
                 if state in _TRANSITIONAL_DAEMON_READY_STATES:
                     await asyncio.sleep(_DAEMON_READY_POLL_INTERVAL_S)
-                    await self.request_daemon_ready()
+                    await self.request_connection_init()
                     continue
-                message = event.get("message") or f"Daemon state is {state}"
-                raise RuntimeError(str(message))
+                raise RuntimeError(f"Daemon state is {state}")
+
+    def _start_heartbeat(self) -> None:
+        """Start the client-side heartbeat ping sender (RFC-450 §8.3).
+
+        Sends ``ping`` frames at the negotiated interval. If no ``pong`` is
+        received within the timeout window, the connection is considered dead.
+        """
+        if self._heartbeat_task is not None and not self._heartbeat_task.done():
+            return
+        interval_s = self._heartbeat_interval_ms / 1000.0
+        if interval_s <= 0:
+            return
+        self._heartbeat_task = asyncio.create_task(
+            self._heartbeat_loop(interval_s),
+            name=f"soothe-ws-heartbeat-{self._client_id}",
+        )
+
+    async def _heartbeat_loop(self, interval_s: float) -> None:
+        """Send periodic ping frames and detect dead connections (RFC-450 §8.3).
+
+        Args:
+            interval_s: Ping interval in seconds.
+        """
+        import time
+
+        timeout_s = max(self._heartbeat_timeout_ms / 1000.0, interval_s * 2)
+        try:
+            while self._connected and self._ws is not None:
+                await asyncio.sleep(interval_s)
+                if not self._connected or self._ws is None:
+                    break
+                now = time.monotonic()
+                last_pong = self._last_pong_monotonic or now
+                if now - last_pong > interval_s + timeout_s:
+                    logger.warning(
+                        "[Client:%s] Heartbeat timeout (no pong in %.1fs), closing",
+                        self._client_id,
+                        now - last_pong,
+                    )
+                    self._connected = False
+                    with contextlib.suppress(Exception):
+                        await self._ws.close()
+                    return
+                try:
+                    await self._ws.send(encode_websocket_text({"proto": "1", "type": "ping"}))
+                except websockets.exceptions.ConnectionClosed:
+                    self._connected = False
+                    return
+                except Exception:
+                    logger.debug("[Client:%s] Failed to send heartbeat ping", self._client_id)
+                    return
+        except asyncio.CancelledError:
+            raise
+
+    def _handle_pong(self) -> None:
+        """Mark that a pong was received from the daemon (heartbeat liveness)."""
+        import time
+
+        self._last_pong_monotonic = time.monotonic()
 
     def _pop_pending_event_by_type(self, event_type: str) -> dict[str, Any] | None:
         """Pop the first pending event of ``event_type`` while preserving queue order."""
@@ -1034,34 +978,27 @@ class WebSocketClient:
     # ``card.replay_*`` / ``card.created`` are emitted by the daemon during
     # ``loop_subscribe`` for non-TUI clients (RFC-413). The TUI consumes its
     # cards via the synchronous ``loop_cards_fetch`` RPC so these frames are
-    # peeled silently here. Legacy ``history_replay`` / ``loop_reattached`` /
-    # ``replay_complete`` were removed when RFC-411 was superseded.
+    # peeled silently here. Under protocol-1, RPC responses arrive as
+    # ``type:"response"`` correlated by ``id`` (peeled by the reader loop), so
+    # the legacy ``*_response`` type entries are gone. Under protocol-1 (RFC-450
+    # §9.3) card replay frames arrive wrapped in ``next`` envelopes with
+    # ``payload.mode`` set to the originating frame type; the peel logic below
+    # inspects both the raw ``type`` and the wrapped ``payload.mode``.
     _STALE_TURN_PENDING_TYPES = frozenset(
         {
-            "daemon_ready",
-            "subscription_confirmed",
+            "connection_ack",
             "card.replay_begin",
             "card.replay_end",
             "card.created",
-            "loop_new_response",
-            "loop_subscribe_response",
-            "loop_input_response",
-            "loop_list_response",
-            "loop_cards_fetch_response",
-            "skills_list_response",
-            "models_list_response",
-            "invoke_skill_response",
-            "daemon_status_response",
-            "command_response",
         }
     )
 
     def peel_stale_pending_control_events(self) -> list[str]:
         """Remove stale handshake/RPC frames left in ``_pending_events`` before a turn.
 
-        ``request_response`` queues unrelated inbound frames while waiting for a
-        matching ``request_id``. If a ``daemon_ready`` frame remains at turn start,
-        the TUI can mistake it for live progress and never log a stalled stream.
+        ``request`` queues unrelated inbound frames while waiting for a matching
+        ``id``. If a handshake/control frame remains at turn start, the TUI can
+        mistake it for live progress and never log a stalled stream.
 
         Returns:
             List of removed frame types (in order).
@@ -1074,8 +1011,19 @@ class WebSocketClient:
         while self._pending_events:
             event = self._pending_events.popleft()
             event_type = str(event.get("type") or "")
+            # Protocol-1 wraps card replay frames in ``next`` envelopes; peel
+            # them by inspecting ``payload.mode`` so they don't masquerade as
+            # live progress at turn start.
+            stale_mode = ""
+            if event_type == "next":
+                payload = event.get("payload")
+                if isinstance(payload, dict):
+                    stale_mode = str(payload.get("mode") or "")
             if event_type in self._STALE_TURN_PENDING_TYPES:
                 removed.append(event_type)
+                continue
+            if stale_mode and stale_mode in self._STALE_TURN_PENDING_TYPES:
+                removed.append(stale_mode)
                 continue
             kept.append(event)
         self._pending_events = kept

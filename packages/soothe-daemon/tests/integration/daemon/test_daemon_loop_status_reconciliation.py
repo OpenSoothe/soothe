@@ -23,8 +23,8 @@ from tests.integration.ws_loop_client import loop_new
 async def _connect_client(port: int) -> WebSocketClient:
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
-    await client.request_daemon_ready()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     return client
 
 

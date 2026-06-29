@@ -16,6 +16,7 @@ from soothe.foundation.events import ERROR
 from soothe_sdk.client.protocol import decode, encode
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
+from soothe_daemon.protocol import ErrorCode, build_error_response, validate_message
 from soothe_daemon.protocol.router import (
     _coerce_loop_input_text,
     _queue_options_from_daemon_message,
@@ -115,13 +116,13 @@ class DaemonHandlersMixin:
                 "running" if self._query_running else ("idle" if self._running else "stopped")
             )
             initial_msg = {
+                "proto": "1",
                 "type": "status",
                 "state": initial_state,
                 "input_history": [],
             }
 
             client.writer.write(encode(initial_msg))
-            client.writer.write(encode(self.daemon_ready_message()))
             await client.writer.drain()
         except Exception:
             logger.exception("Failed to send initial status to client")
@@ -134,6 +135,19 @@ class DaemonHandlersMixin:
                 msg = decode(line)
                 if msg is None:
                     continue
+                # Validate message at transport boundary (RFC-450 §6.4).
+                # All transport paths must call validate_message() before
+                # router dispatch.
+                errors = validate_message(msg)
+                if errors:
+                    error_msg = build_error_response(
+                        ErrorCode.INVALID_PARAMS,
+                        "Invalid params",
+                        request_id=msg.get("request_id") or msg.get("id"),
+                        data={"errors": errors},
+                    )
+                    await self._send_client_message(f"legacy:{id(client)}", error_msg)
+                    continue
                 await self._message_router.dispatch(f"legacy:{id(client)}", msg)
         except (asyncio.CancelledError, ConnectionError):
             pass
@@ -145,7 +159,21 @@ class DaemonHandlersMixin:
             logger.info("Client disconnected (total=%d)", len(self._clients))
 
     async def _handle_client_message(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Handle a message from a client (WebSocket / HTTP transports)."""
+        """Handle a message from a client (WebSocket / HTTP transports).
+
+        Validates the message at the transport boundary (RFC-450 §6.4) before
+        dispatching to the router.
+        """
+        errors = validate_message(msg)
+        if errors:
+            error_msg = build_error_response(
+                ErrorCode.INVALID_PARAMS,
+                "Invalid params",
+                request_id=msg.get("request_id") or msg.get("id"),
+                data={"errors": errors},
+            )
+            await self._send_client_message(client_id, error_msg)
+            return
         await self._message_router.dispatch(client_id, msg)
 
     async def _process_loop_input_message(self, loop_id: str, msg: dict[str, Any]) -> None:
@@ -282,31 +310,3 @@ class DaemonHandlersMixin:
                 await self._broadcast(
                     qe._loop_scoped_client_message(lid, {"type": "status", "state": "idle"})
                 )
-
-    async def _run_query(
-        self,
-        text: str,
-        *,
-        loop_id: str | None = None,
-        autonomous: bool = False,
-        max_iterations: int | None = None,
-        preferred_subagent: str | None = None,
-        client_id: str | None = None,
-        model: str | None = None,
-        model_params: dict | None = None,
-        attachments: list[dict[str, str]] | None = None,
-        checkpoint_thread_id: str | None = None,
-    ) -> None:
-        """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
-        await self._query_engine.run_query(
-            text,
-            loop_id=loop_id,
-            autonomous=autonomous,
-            max_iterations=max_iterations,
-            preferred_subagent=preferred_subagent,
-            client_id=client_id,
-            model=model,
-            model_params=model_params,
-            attachments=attachments,
-            checkpoint_thread_id=checkpoint_thread_id,
-        )

@@ -59,7 +59,7 @@ class StrangeLoopStateManager:
         self,
         loop_id: str | None = None,
         workspace: Path | None = None,
-        reader_pool_size: int = 5,
+        reader_pool_size: int = 2,
         config: SootheConfig | None = None,
         shared_pool: SharedPostgreSQLPool | None = None,
     ) -> None:  # noqa: ARG002
@@ -112,6 +112,7 @@ class StrangeLoopStateManager:
         self._reader_pool_size = reader_pool_size
         self._writer_conn: sqlite3.Connection | None = None
         self._reader_pool: list[sqlite3.Connection] = []
+        self._reader_pool_index = 0
         self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
         self._init_lock = asyncio.Lock()
 
@@ -221,24 +222,25 @@ class StrangeLoopStateManager:
         """Get reader connection from pool (Phase 2).
 
         Uses semaphore to limit concurrent reads to pool size.
+        Connections are leased round-robin and remain in the pool (no pop/leak).
 
         Returns:
             Reader connection from pool.
         """
         async with self._init_lock:
             if not self._reader_pool:
-                # Initialize reader pool
                 await asyncio.to_thread(self._init_reader_pool_sync)
 
-            # Return connection from pool (or create new if pool empty)
-            return (
-                self._reader_pool.pop() if self._reader_pool else await self._create_reader_conn()
-            )
+        async with self._pool_semaphore:
+            index = self._reader_pool_index % len(self._reader_pool)
+            self._reader_pool_index += 1
+            return self._reader_pool[index]
 
     def _init_reader_pool_sync(self) -> None:
         """Sync reader pool initialization executed in thread pool."""
         db_path = Path(self.db_path)
-        for i in range(self._reader_pool_size):
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        for _i in range(self._reader_pool_size):
             conn = sqlite3.connect(
                 str(db_path),
                 check_same_thread=False,

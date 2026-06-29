@@ -15,7 +15,12 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_from_config
+from soothe_sdk.client import (
+    WebSocketClient,
+    check_daemon_status,
+    is_daemon_live,
+    websocket_url_from_config,
+)
 
 from soothe_cli.config.loader import load_config
 
@@ -38,8 +43,7 @@ async def _fetch_status(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
     client = WebSocketClient(url=ws_url)
     try:
         await client.connect()
-        status = await client.fetch_daemon_status(timeout=timeout)
-        return status
+        return await check_daemon_status(client, timeout=timeout)
     except Exception as e:
         return {"error": str(e)}
     finally:
@@ -47,28 +51,41 @@ async def _fetch_status(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
 
 
 async def _fetch_ready_state(ws_url: str, timeout: float = 5.0) -> dict[str, Any] | None:
-    """Fetch daemon readiness state via WebSocket handshake.
+    """Fetch daemon readiness state via WebSocket connection_init/ack handshake.
 
-    The daemon sends a daemon_ready message on connect with its state.
+    Sends ``connection_init`` and waits for ``connection_ack`` which carries
+    the daemon's ``readiness_state``.
 
     Args:
         ws_url: WebSocket URL.
         timeout: Timeout for handshake.
 
     Returns:
-        daemon_ready message dict or None.
+        ``connection_ack`` result dict (containing ``readiness_state``) or None.
     """
     import websockets
+
+    init_msg = json.dumps(
+        {
+            "proto": "1",
+            "type": "connection_init",
+            "params": {
+                "client_version": "0.5.0",
+                "accept_proto": ["1"],
+                "capabilities": ["streaming"],
+            },
+        }
+    )
 
     try:
         async with asyncio.timeout(timeout):
             async with websockets.connect(ws_url) as ws:
-                # Read initial messages - daemon sends status then daemon_ready
+                await ws.send(init_msg)
                 for _ in range(3):
                     msg = await ws.recv()
                     data = json.loads(msg)
-                    if data.get("type") == "daemon_ready":
-                        return data
+                    if data.get("type") == "connection_ack":
+                        return data.get("result", data)
     except Exception:
         pass
     return None

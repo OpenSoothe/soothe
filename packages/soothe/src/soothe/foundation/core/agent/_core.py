@@ -30,6 +30,36 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _persisted_checkpointer(graph: Any) -> Any:
+    """Return the graph checkpointer when it can persist thread state."""
+    from langgraph.checkpoint.base import BaseCheckpointSaver
+
+    cp = getattr(graph, "checkpointer", None)
+    return cp if isinstance(cp, BaseCheckpointSaver) else None
+
+
+def _state_retrieval_config(config: RunnableConfig | None) -> dict[str, Any]:
+    """Build RunnableConfig safe for ``aget_state`` after ephemeral execute streams.
+
+    Ephemeral twin graphs (IG-477) can leave ``__pregel_checkpointer: None`` on the
+    shared config dict. LangGraph then refuses to read state even when the primary
+    graph has a checkpointer attached.
+    """
+    from langgraph._internal._constants import CONFIG_KEY_CHECKPOINTER
+
+    if not config:
+        return {}
+    out: dict[str, Any] = dict(config)
+    conf = dict(out.get("configurable") or {})
+    if conf.get(CONFIG_KEY_CHECKPOINTER) is None:
+        conf.pop(CONFIG_KEY_CHECKPOINTER, None)
+    if conf:
+        out["configurable"] = conf
+    elif "configurable" in out:
+        del out["configurable"]
+    return out
+
+
 def _normalize_layer1_input(input_arg: str | dict) -> dict:
     """Coerce a bare user string to LangGraph state with one HumanMessage.
 
@@ -175,7 +205,12 @@ class CoreAgent:
         Returns the checkpointer attached to the underlying graph, or None
         if checkpointing is not configured.
         """
-        return getattr(self._graph, "checkpointer", None)
+        return _persisted_checkpointer(self._graph)
+
+    @property
+    def can_read_graph_state(self) -> bool:
+        """Whether ``aget_state`` can read persisted graph state for a thread."""
+        return self.checkpointer is not None
 
     @property
     def config(self) -> SootheConfig:
@@ -292,10 +327,15 @@ class CoreAgent:
             State snapshot from LangGraph aget_state(), or None if no checkpointer
             is configured (avoids ValueError from LangGraph).
         """
-        if self.checkpointer is None:
-            logger.debug("[Exec] Cannot get state: no checkpointer configured")
+        if not self.can_read_graph_state:
             return None
-        return await self._graph.aget_state(config=config or {})
+        try:
+            return await self._graph.aget_state(config=_state_retrieval_config(config))
+        except ValueError as exc:
+            if "No checkpointer set" in str(exc):
+                logger.debug("[Exec] Cannot get state: no checkpointer configured")
+                return None
+            raise
 
     async def ainvoke(
         self,
@@ -361,10 +401,15 @@ class CoreAgent:
             State snapshot from LangGraph aget_state(), or None if no checkpointer
             is configured (avoids ValueError from LangGraph).
         """
-        if self.checkpointer is None:
-            logger.debug("[Exec] Cannot get state: no checkpointer configured")
+        if not self.can_read_graph_state:
             return None
-        return await self._graph.aget_state(config=config or {})
+        try:
+            return await self._graph.aget_state(config=_state_retrieval_config(config))
+        except ValueError as exc:
+            if "No checkpointer set" in str(exc):
+                logger.debug("[Exec] Cannot get state: no checkpointer configured")
+                return None
+            raise
 
     async def execution_ainvoke(
         self,

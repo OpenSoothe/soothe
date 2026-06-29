@@ -257,6 +257,463 @@ def messages_from_wire_dicts(messages: list[Any]) -> list[Any]:
     return messages_from_dict(prepared)
 
 
+# ---------------------------------------------------------------------------
+# Protocol-1 wire envelope models (RFC-450 §5, IG-522 Phase 1)
+# ---------------------------------------------------------------------------
+# The unified `{proto, type, method, params, id}` envelope combines JSON-RPC
+# 2.0's `method`/`params`/`id` structure with graphql-ws's `type` semantics
+# for message class distinction. See RFC-450 §5 for the full specification.
+
+from enum import StrEnum  # noqa: E402
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+DEFAULT_PROTO = "1"
+"""Protocol version string for protocol-1 messages (RFC-450 §8.1)."""
+
+
+class MessageType(StrEnum):
+    """Message class values for the envelope ``type`` field (RFC-450 §9.1).
+
+    Each value is the literal wire string sent on the transport.
+    """
+
+    CONNECTION_INIT = "connection_init"
+    CONNECTION_ACK = "connection_ack"
+    REQUEST = "request"
+    RESPONSE = "response"
+    NOTIFICATION = "notification"
+    SUBSCRIBE = "subscribe"
+    NEXT = "next"
+    ERROR = "error"
+    COMPLETE = "complete"
+    UNSUBSCRIBE = "unsubscribe"
+    PING = "ping"
+    PONG = "pong"
+    RECEIPT_RESPONSE = "receipt_response"
+    DISCONNECT = "disconnect"
+
+
+class WireEnvelope(BaseModel):
+    """Base protocol-1 wire envelope (RFC-450 §5.2).
+
+    All messages share the unified ``{proto, type, method, params, id}``
+    structure. Subclasses constrain ``type`` to a specific message class and
+    add class-specific fields.
+
+    Attributes:
+        proto: Protocol version string (default ``"1"``). Mandatory on every
+            message; messages without it are rejected at validation.
+        type: Message class (one of the values in :class:`MessageType`).
+        method: RPC method or subscription target name. Conditional — present
+            on request/notification/subscribe messages.
+        params: Structured parameters object. All operation-specific fields
+            MUST reside here.
+        id: Operation correlation ID. Present = response expected; absent =
+            fire-and-forget.
+    """
+
+    proto: str = Field(default=DEFAULT_PROTO, description="Protocol version string.")
+    type: str = Field(description="Message class (see MessageType).")
+    method: str | None = Field(default=None, description="RPC method or subscription target.")
+    params: dict[str, Any] | None = Field(default=None, description="Structured parameters object.")
+    id: str | None = Field(
+        default=None, description="Operation correlation ID (absent = fire-and-forget)."
+    )
+
+    model_config = {"extra": "allow"}
+
+    def to_wire_dict(self) -> dict[str, Any]:
+        """Serialize this envelope to an RFC-450 compliant wire dict.
+
+        Omits fields that are ``None`` so the wire form is compact and matches
+        the RFC-450 §5 examples. Subclasses may override to remap fields.
+        """
+        return _dump_envelope(self)
+
+    def to_wire_json(self) -> str:
+        """Serialize this envelope to RFC-450 compliant JSON text."""
+        return json.dumps(self.to_wire_dict(), separators=(",", ":"))
+
+
+def _dump_envelope(model: BaseModel) -> dict[str, Any]:
+    """Build a compact wire dict from an envelope model, dropping ``None`` values."""
+    out: dict[str, Any] = {}
+    for k, v in model.model_dump().items():
+        if v is None:
+            continue
+        if isinstance(v, dict) and not v:
+            continue
+        out[k] = v
+    return out
+
+
+class ResponseEnvelope(WireEnvelope):
+    """Response envelope for successful RPC results (RFC-450 §5.5).
+
+    The server sends this in reply to a ``request`` that carried an ``id``.
+
+    Attributes:
+        result: The result data object.
+        id: Correlation ID echoed from the originating request.
+    """
+
+    type: str = Field(default=MessageType.RESPONSE.value)
+    result: dict[str, Any] | None = Field(
+        default=None, description="The result data object for a successful response."
+    )
+
+    def to_wire_dict(self) -> dict[str, Any]:
+        out = _dump_envelope(self)
+        # RFC-450 §5.5: ``result`` is a top-level field on responses.
+        return out
+
+
+class ErrorEnvelope(WireEnvelope):
+    """Error envelope for failed operations (RFC-450 §7.1).
+
+    On the wire the structured error is nested under an ``error`` key:
+    ``{"error": {"code", "message", "data"}}``. The model exposes ``code``,
+    ``message``, and ``data`` as flat fields per the structured error object
+    (RFC-450 §7.1); :meth:`to_wire_dict` nests them under ``error`` for
+    transport, and :meth:`from_wire_dict` accepts both nested and flat forms.
+
+    Attributes:
+        code: Integer error code (see RFC-450 §7.3 registry).
+        message: Human-readable summary string.
+        data: Optional machine-parseable details (field errors, context).
+        id: Correlation ID echoed from the originating request, if any.
+    """
+
+    type: str = Field(default=MessageType.ERROR.value)
+    code: int = Field(description="Numeric error code (RFC-450 §7.3 registry).")
+    message: str = Field(description="Human-readable error summary.")
+    data: dict[str, Any] | None = Field(
+        default=None, description="Optional machine-parseable error details."
+    )
+
+    # Hide the inherited ``params``/``method``/``result`` from the error form.
+    method: str | None = Field(default=None, exclude=True)
+    params: dict[str, Any] | None = Field(default=None, exclude=True)
+
+    def to_wire_dict(self) -> dict[str, Any]:
+        """Build the RFC-450 §7.1 wire dict with the nested ``error`` object."""
+        out: dict[str, Any] = {
+            "proto": self.proto,
+            "type": self.type,
+        }
+        error_obj: dict[str, Any] = {"code": self.code, "message": self.message}
+        if self.data:
+            error_obj["data"] = self.data
+        out["error"] = error_obj
+        if self.id is not None:
+            out["id"] = self.id
+        return out
+
+    @classmethod
+    def from_wire_dict(cls, data: dict[str, Any]) -> ErrorEnvelope:
+        """Construct an ErrorEnvelope from an RFC-450 wire dict.
+
+        Expects the nested form ``{"error": {"code", "message", "data?"},
+        "id"?}`` (RFC-450 §7.1). The flat top-level form is no longer accepted.
+        """
+        nested = data.get("error")
+        if not isinstance(nested, dict):
+            raise ValueError("error envelope missing nested 'error' object")
+        flat: dict[str, Any] = {
+            "code": nested["code"],
+            "message": nested["message"],
+        }
+        if "data" in nested:
+            flat["data"] = nested["data"]
+        if "id" in data:
+            flat["id"] = data["id"]
+        return cls.model_validate(flat)
+
+
+class ConnectionInitParams(BaseModel):
+    """Parameters for the ``connection_init`` handshake message (RFC-450 §8.2).
+
+    Sent by the client as the first message after the WebSocket upgrade.
+
+    Attributes:
+        client_version: Client software version string.
+        client_name: Optional client identifier (e.g. ``"soothe-cli"``).
+        accept_proto: Protocol versions the client supports (e.g. ``["1"]``).
+        capabilities: Client-declared capabilities (e.g. ``["streaming",
+            "batch", "receipts"]``).
+    """
+
+    client_version: str = Field(description="Client software version.")
+    client_name: str | None = Field(default=None, description="Optional client identifier.")
+    accept_proto: list[str] = Field(
+        default_factory=lambda: [DEFAULT_PROTO],
+        description="Protocol versions the client supports.",
+    )
+    capabilities: list[str] = Field(
+        default_factory=list, description="Client-declared capabilities."
+    )
+
+    model_config = {"extra": "allow"}
+
+
+class ConnectionAckResult(BaseModel):
+    """Result payload for the ``connection_ack`` handshake message (RFC-450 §8.2).
+
+    Sent by the server in reply to ``connection_init``.
+
+    Attributes:
+        server_version: Server software version string.
+        protocol_version: Negotiated protocol version (highest both support).
+        capabilities: Server-declared capabilities (intersected with client's).
+        readiness_state: Daemon readiness state (``"ready"`` / ``"starting"`` /
+            ``"warming"`` / ``"incompatible"``).
+        heartbeat_interval_ms: Heartbeat interval in milliseconds (default 30000).
+    """
+
+    server_version: str = Field(description="Server software version.")
+    protocol_version: str = Field(default=DEFAULT_PROTO, description="Negotiated protocol version.")
+    capabilities: list[str] = Field(
+        default_factory=list, description="Server-declared capabilities."
+    )
+    readiness_state: str = Field(default="ready", description="Daemon readiness state.")
+    heartbeat_interval_ms: int = Field(
+        default=30000, description="Heartbeat interval in milliseconds."
+    )
+
+    model_config = {"extra": "allow"}
+
+
+class ConnectionInitEnvelope(WireEnvelope):
+    """``connection_init`` handshake message (RFC-450 §8.2).
+
+    The first message the client sends after the WebSocket upgrade.
+
+    Attributes:
+        params: Connection initialization parameters.
+    """
+
+    type: str = Field(default=MessageType.CONNECTION_INIT.value)
+    params: ConnectionInitParams | None = Field(  # type: ignore[assignment]
+        default=None, description="Connection initialization parameters."
+    )
+
+    def to_wire_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"proto": self.proto, "type": self.type}
+        if self.params is not None:
+            out["params"] = self.params.model_dump(exclude_none=True)
+        return out
+
+
+class ConnectionAckEnvelope(WireEnvelope):
+    """``connection_ack`` handshake message (RFC-450 §8.2).
+
+    Sent by the server in reply to ``connection_init``.
+
+    Attributes:
+        result: Connection acknowledgment result payload.
+    """
+
+    type: str = Field(default=MessageType.CONNECTION_ACK.value)
+    result: ConnectionAckResult | None = Field(  # type: ignore[assignment]
+        default=None, description="Connection acknowledgment result."
+    )
+
+    def to_wire_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"proto": self.proto, "type": self.type}
+        if self.result is not None:
+            out["result"] = self.result.model_dump(exclude_none=True)
+        return out
+
+
+class PingEnvelope(WireEnvelope):
+    """``ping`` heartbeat message (RFC-450 §8.3).
+
+    Either party MAY send ``ping``; the receiver MUST respond with ``pong``
+    within ``heartbeat_timeout_ms``.
+    """
+
+    type: str = Field(default=MessageType.PING.value)
+    method: str | None = Field(default=None, exclude=True)
+    params: dict[str, Any] | None = Field(default=None, exclude=True)
+
+
+class PongEnvelope(WireEnvelope):
+    """``pong`` heartbeat response (RFC-450 §8.3)."""
+
+    type: str = Field(default=MessageType.PONG.value)
+    method: str | None = Field(default=None, exclude=True)
+    params: dict[str, Any] | None = Field(default=None, exclude=True)
+
+
+class BatchRequest(BaseModel):
+    """A single item in a batch request array (RFC-450 §5.6).
+
+    A batch is a JSON array of valid protocol-1 messages. Each item is either
+    a request (carries ``id`` → expects a response) or a notification (no
+    ``id`` → fire-and-forget).
+    """
+
+    proto: str = Field(default=DEFAULT_PROTO)
+    type: str = Field(default=MessageType.REQUEST.value)
+    method: str = Field(description="RPC method name.")
+    params: dict[str, Any] | None = Field(default=None)
+    id: str | None = Field(default=None, description="Correlation ID; absent = notification.")
+
+    model_config = {"extra": "allow"}
+
+
+class BatchRequestEnvelope(BaseModel):
+    """Batch request envelope — a JSON array of protocol-1 messages (RFC-450 §5.6).
+
+    The wire form is a bare JSON array (not wrapped in an object). This model
+    holds the list of batch items and provides encode/decode helpers.
+    """
+
+    items: list[BatchRequest] = Field(default_factory=list, description="Batch message items.")
+
+    def to_wire_dict(self) -> list[dict[str, Any]]:
+        """Serialize to a JSON array of wire dicts (RFC-450 §5.6 wire form)."""
+        return [_dump_envelope(item) for item in self.items]
+
+    def to_wire_json(self) -> str:
+        """Serialize to a JSON array text frame."""
+        return json.dumps(self.to_wire_dict(), separators=(",", ":"))
+
+    @classmethod
+    def from_wire_dict(cls, data: list[Any]) -> BatchRequestEnvelope:
+        """Construct from a parsed JSON array (the batch wire form)."""
+        if not isinstance(data, list):
+            raise TypeError("BatchRequestEnvelope expects a JSON array")
+        items = [
+            BatchRequest.model_validate(item) if isinstance(item, dict) else item for item in data
+        ]
+        return cls(items=items)
+
+
+class BatchResponseEnvelope(BaseModel):
+    """Batch response envelope — a JSON array of response/error messages (RFC-450 §5.6).
+
+    The server returns an array of responses, one per batch item that carried
+    an ``id`` (notifications produce no response entry).
+    """
+
+    items: list[ResponseEnvelope | ErrorEnvelope] = Field(
+        default_factory=list, description="Batch response items."
+    )
+
+    def to_wire_dict(self) -> list[dict[str, Any]]:
+        """Serialize to a JSON array of wire dicts (RFC-450 §5.6 wire form)."""
+        return [item.to_wire_dict() for item in self.items]
+
+    def to_wire_json(self) -> str:
+        """Serialize to a JSON array text frame."""
+        return json.dumps(self.to_wire_dict(), separators=(",", ":"))
+
+    @classmethod
+    def from_wire_dict(cls, data: list[Any]) -> BatchResponseEnvelope:
+        """Construct from a parsed JSON array of response/error messages."""
+        if not isinstance(data, list):
+            raise TypeError("BatchResponseEnvelope expects a JSON array")
+        items: list[ResponseEnvelope | ErrorEnvelope] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            msg_type = item.get("type")
+            if msg_type == MessageType.ERROR.value:
+                items.append(ErrorEnvelope.from_wire_dict(item))
+            else:
+                items.append(ResponseEnvelope.model_validate(item))
+        return cls(items=items)
+
+
+# ---------------------------------------------------------------------------
+# Envelope encode / decode helpers (RFC-450 §5, IG-522 Phase 1 task 4)
+# ---------------------------------------------------------------------------
+
+
+def encode_envelope(envelope: BaseModel) -> str:
+    """Serialize an envelope model to JSON text for a WebSocket text frame.
+
+    Uses the model's :meth:`to_wire_dict` when available so subclasses can
+    produce RFC-450 compliant nested forms (e.g. :class:`ErrorEnvelope`).
+    Otherwise falls back to a compact ``model_dump``.
+
+    Args:
+        envelope: A Pydantic envelope model instance.
+
+    Returns:
+        Compact JSON text suitable for ``Connection.send`` as a text frame.
+    """
+    if hasattr(envelope, "to_wire_dict"):
+        payload: Any = envelope.to_wire_dict()  # type: ignore[attr-defined]
+    else:
+        dumped = envelope.model_dump(exclude_none=True)
+        payload = dumped
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def decode_envelope(text: str) -> dict[str, Any] | list[Any] | None:
+    """Parse JSON text from a WebSocket frame into a raw dict or list.
+
+    Validation against a specific envelope model happens separately (the
+    caller selects the model by message ``type``). Returns ``None`` for empty
+    or invalid JSON. A JSON array is returned as-is (batch form, RFC-450 §5.6).
+
+    Args:
+        text: Raw frame payload.
+
+    Returns:
+        Parsed message dict, parsed list (batch), or ``None``.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return None
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+
+
+class ProtocolError(Exception):
+    """Client-side protocol error from a daemon error response (RFC-450 §7).
+
+    Raised by `WebSocketClient.request()` when the daemon replies with an
+    ``error`` envelope matching the request ``id``. Carries the numeric
+    ``code``, human-readable ``message``, and optional ``data`` from the
+    structured error object.
+
+    Attributes:
+        code: Numeric error code from the RFC-450 §7.3 registry.
+        message: Human-readable error summary.
+        data: Optional machine-parseable details (empty dict when unset).
+    """
+
+    def __init__(
+        self,
+        code: int,
+        message: str,
+        *,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize a client-side protocol error.
+
+        Args:
+            code: Numeric error code from the daemon's error envelope.
+            message: Human-readable error summary.
+            data: Optional machine-parseable details.
+        """
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.data = data or {}
+
+    def __str__(self) -> str:
+        if self.data:
+            return f"[{self.code}] {self.message} ({self.data})"
+        return f"[{self.code}] {self.message}"
+
+
 __all__ = [
     "coerce_tool_call_chunk_args_for_wire",
     "deserialize_langchain_message_from_wire",
@@ -266,4 +723,22 @@ __all__ = [
     "prepare_stream_data_for_wire",
     "prepare_stream_message_for_wire",
     "serialize_langchain_message_for_wire",
+    # Protocol-1 wire envelope models (RFC-450 §5, IG-522 Phase 1)
+    "DEFAULT_PROTO",
+    "MessageType",
+    "WireEnvelope",
+    "ResponseEnvelope",
+    "ErrorEnvelope",
+    "ConnectionInitParams",
+    "ConnectionAckResult",
+    "ConnectionInitEnvelope",
+    "ConnectionAckEnvelope",
+    "PingEnvelope",
+    "PongEnvelope",
+    "BatchRequest",
+    "BatchRequestEnvelope",
+    "BatchResponseEnvelope",
+    "ProtocolError",
+    "encode_envelope",
+    "decode_envelope",
 ]

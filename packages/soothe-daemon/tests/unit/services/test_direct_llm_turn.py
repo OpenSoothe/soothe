@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
+from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
 
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 ATTACHMENTS = [{"mime_type": "image/png", "data": TINY_PNG_B64}]
@@ -65,14 +65,14 @@ async def test_run_direct_llm_turn_rejects_response_schema_with_attachments() ->
 
 
 @pytest.mark.asyncio
-async def test_run_image_to_text_turn_delegates_to_direct_llm() -> None:
+async def test_run_direct_llm_turn_with_attachments_delegates_to_image_model() -> None:
     fake_model = MagicMock()
     fake_model.ainvoke = AsyncMock(return_value=AIMessage(content="legacy path"))
 
     cfg = MagicMock()
     cfg.create_chat_model = MagicMock(return_value=fake_model)
 
-    out = await run_image_to_text_turn(
+    out = await run_direct_llm_turn(
         cfg,
         user_text="",
         attachments=ATTACHMENTS,
