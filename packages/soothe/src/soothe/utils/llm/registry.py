@@ -70,11 +70,49 @@ class ProviderRegistry:
             )
             return ProviderType.CUSTOM
 
+    @staticmethod
+    def _is_standard_openai_endpoint(api_base_url: str | None) -> bool:
+        """Return True when the URL is unset or points at the official OpenAI API."""
+        if not api_base_url:
+            return True
+        normalized = api_base_url.rstrip("/")
+        return normalized.startswith("https://api.openai.com")
+
+    def requires_openai_compat_wrapper(self, name: str) -> bool:
+        """Whether to apply ``LimitedProviderModelWrapper`` for this provider.
+
+        Local OpenAI-compatible servers (oMLX, LMStudio, vLLM) often return
+        structured output in ``reasoning_content`` and reject object-form
+        ``tool_choice``. We auto-detect them via ``provider_type: openai`` plus
+        a non-standard ``api_base_url``.
+
+        Args:
+            name: Provider name from config.
+
+        Returns:
+            True when compatibility wrappers should be applied.
+        """
+        provider = self.get_provider(name)
+        if provider is None or provider.provider_type != "openai":
+            return False
+
+        if not provider.api_base_url:
+            return False
+
+        resolved = _resolve_provider_env(
+            provider.api_base_url,
+            provider_name=provider.name,
+            field_name="api_base_url",
+        )
+        if not resolved:
+            return False
+
+        return not self._is_standard_openai_endpoint(resolved)
+
     def get_provider_kwargs(self, name: str) -> tuple[str, dict[str, Any]]:
         """Build ``init_chat_model`` kwargs for a provider.
 
         Resolves ``${ENV_VAR}`` in ``api_base_url`` and ``api_key``.
-        For ``LIMITED_OPENAI``, returns ``("openai", kwargs)`` since LangChain uses OpenAI API.
 
         Args:
             name: Provider name from config.
@@ -90,8 +128,7 @@ class ProviderRegistry:
 
         if provider:
             provider_type_str = provider.provider_type
-            # LIMITED_OPENAI uses OpenAI API format, but needs special handling later
-            actual_type = "openai" if provider_type_str == "limited_openai" else provider_type_str
+            actual_type = provider_type_str
 
             if provider.api_base_url:
                 resolved = _resolve_provider_env(

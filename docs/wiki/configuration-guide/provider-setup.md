@@ -4,16 +4,15 @@ Choosing and configuring LLM providers, embedding models, vector stores, and per
 
 ## Provider Selection Criteria
 
-Soothe supports four `provider_type` values. The choice is driven by **API compatibility**, not brand:
+Soothe supports three `provider_type` values. The choice is driven by **API compatibility**, not brand:
 
 | `provider_type` | When to use | Key limitation |
 |-----------------|-------------|----------------|
-| `openai` | OpenAI itself, or any fully OpenAI-compatible endpoint (DashScope, OpenRouter, vLLM) | None — full `tool_choice`, JSON mode, streaming |
-| `limited_openai` | OpenAI-ish local servers that mishandle tools (LMStudio, MLXServer, some GLM) | String-only `tool_choice` ("none"/"auto"/"required"); structured JSON returned in `reasoning_content` |
+| `openai` | OpenAI itself, or any OpenAI-compatible endpoint (DashScope, OpenRouter, vLLM, local oMLX/LMStudio) | None for official OpenAI; local endpoints auto-receive compatibility wrappers (see below) |
 | `anthropic` | Anthropic Claude API | Native Claude tool calling |
 | `ollama` | Local Ollama inference | Basic tool calling; depends on model support |
 
-**The `limited_openai` distinction matters.** If you point `provider_type: openai` at a server that accepts `json_schema` but returns empty content, or stuffs structured output into `reasoning_content`, tool calling will silently break. `limited_openai` activates wrappers that compensate for these quirks. When in doubt, try `openai` first; switch to `limited_openai` if you see empty tool calls or malformed structured output.
+**Custom `api_base_url` on `openai` providers.** When the URL is not `https://api.openai.com`, Soothe automatically applies compatibility wrappers for local servers (oMLX, LMStudio, vLLM) that return structured JSON in `reasoning_content` or only accept string `tool_choice` values. Use `provider_type: openai` plus your local `api_base_url` — no separate provider type is required.
 
 **OpenAI-compatible cloud providers** (DashScope, OpenRouter) all use `provider_type: openai` plus a custom `api_base_url` and an interpolated `api_key`:
 
@@ -125,7 +124,7 @@ Run `soothed doctor` to validate config and connectivity, `soothe --debug "test"
 | `Rate limit exceeded` | `rpm_limit` above provider tier, or too much concurrency | Lower `rpm_limit` and `concurrent_limit` |
 | `Timeout waiting for LLM response` | Provider slow or down | Raise `call_timeout_seconds`; check provider status |
 | `Model 'xxx' not available` | Model not listed in `providers[].models` or misspelled | Add it to the `models` list; check provider's model catalog |
-| Empty tool calls on local server | Used `openai` type for a limited server | Switch to `provider_type: limited_openai` |
+| Empty tool calls on local server | Missing `api_base_url` or wrapper not applied | Ensure `provider_type: openai` with explicit local `api_base_url`; restart daemon after config change |
 | Vector insert errors | `embedding_dims` ≠ model output | Align the two; re-index existing collections |
 
 ## See Also

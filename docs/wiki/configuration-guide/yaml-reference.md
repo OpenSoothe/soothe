@@ -39,12 +39,12 @@ YAML loading runs two pre-validation passes: `${VAR}` interpolation (see [Enviro
 
 ## Providers
 
-Each entry is a `ModelProviderConfig` with `name` (referenced by the router), `provider_type` (`openai` | `limited_openai` | `anthropic` | `ollama`), `api_key` (supports `${VAR}`), `api_base_url` (override for compatible APIs), and `models` (documentation list, not enforced).
+Each entry is a `ModelProviderConfig` with `name` (referenced by the router), `provider_type` (`openai` | `anthropic` | `ollama`), `api_key` (supports `${VAR}`), `api_base_url` (override for compatible APIs), and `models` (documentation list, not enforced).
 
 | Field | Purpose |
 |-------|---------|
 | `name` | Identifier referenced by the router |
-| `provider_type` | LangChain provider type; `limited_openai` compensates for broken tool APIs |
+| `provider_type` | LangChain provider type; custom `api_base_url` on `openai` auto-enables local-server wrappers |
 | `api_key` | Supports `${VAR}` interpolation |
 | `api_base_url` | Override for compatible APIs (DashScope, OpenRouter, vLLM, LMStudio) |
 | `models` | Available model names (documentation; not enforced) |
