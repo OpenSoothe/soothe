@@ -1,7 +1,14 @@
-"""Loop-scoped WebSocket helpers for integration tests (RFC-503).
+"""Loop-scoped WebSocket helpers for integration tests (RFC-503, RFC-450).
 
-These wrap ``request_response`` / subscribe flows so tests use the daemon's
-``loop_*`` RPC types directly—no production backward-compat layer.
+These wrap the protocol-1 ``request`` / ``subscribe`` / ``notify`` flows so
+tests use the daemon's ``loop_*`` RPC methods directly — no legacy
+backward-compat layer.
+
+Under protocol-1, the daemon's ``MessageRouter`` sends response envelopes of
+the form ``{proto: "1", type: "response", result: {...}, id: request_id}``.
+The SDK's ``request()`` returns ``event.get("result")`` — the ``result`` dict
+from the envelope — so every helper here returns the *result* dict, not the
+full envelope.
 """
 
 from __future__ import annotations
@@ -19,17 +26,13 @@ async def loop_new(
     is_ephemeral: bool = False,
     timeout: float = 60.0,
 ) -> str:
-    """Create a loop and return ``loop_id`` (waits for ``loop_new_response``)."""
-    payload: dict[str, Any] = {"type": "loop_new"}
+    """Create a loop and return ``loop_id`` (waits for the protocol-1 response)."""
+    params: dict[str, Any] = {}
     if workspace:
-        payload["workspace"] = workspace
+        params["workspace"] = workspace
     if is_ephemeral:
-        payload["is_ephemeral"] = True
-    resp = await client.request_response(
-        payload,
-        response_type="loop_new_response",
-        timeout=timeout,
-    )
+        params["is_ephemeral"] = True
+    resp = await client.request("loop_new", params, timeout=timeout)
     return str(resp["loop_id"])
 
 
@@ -39,10 +42,16 @@ async def loop_new_with_initial_input(
     initial_message: str | None = None,
     workspace: str | None = None,
 ) -> str:
-    """Create a loop and optionally send the first ``loop_input``."""
+    """Create a loop, subscribe for events, and optionally send the first ``loop_input``.
+
+    Subscription is required so the daemon accepts ``loop_input`` (it rejects
+    input from unsubscribed clients with ``LOOP_NOT_SUBSCRIBED``) and so the
+    caller receives the turn's stream events.
+    """
     loop_id = await loop_new(client, workspace=workspace)
+    await subscribe_loop_stream(client, loop_id)
     if initial_message:
-        await client.send_loop_input(loop_id, initial_message)
+        await client.notify("loop_input", {"loop_id": loop_id, "content": initial_message})
     return loop_id
 
 
@@ -52,10 +61,21 @@ async def subscribe_loop_stream(
     *,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Subscribe and wait until ``subscription_confirmed`` matches ``loop_id``."""
-    await client.send_loop_subscribe(loop_id)
+    """Subscribe to a loop stream and return the protocol-1 subscribe-ack.
+
+    Under protocol-1 (RFC-450 §9.3) the daemon confirms a ``loop_events``
+    subscription with a ``next`` envelope carrying ``payload.event == "subscribed"``
+    and the subscription ``id``. The SDK ``subscribe()`` already waits for that
+    ack (or an error); this helper drains it from the inbound queue so callers
+    start a turn with a clean event stream.
+    """
+    sub_id = await client.subscribe(
+        "loop_events",
+        {"loop_id": loop_id},
+        timeout=timeout,
+    )
     deadline = asyncio.get_running_loop().time() + timeout
-    msg = f"Timed out waiting for subscription_confirmed for loop {loop_id!r}"
+    msg = f"Timed out waiting for subscribe-ack for loop {loop_id!r}"
     while True:
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
@@ -69,7 +89,12 @@ async def subscribe_loop_stream(
             raise TimeoutError(msg) from e
         if ev is None:
             continue
-        if ev.get("type") == "subscription_confirmed" and ev.get("loop_id") == loop_id:
+        if ev.get("type") == "next" and ev.get("id") == sub_id:
+            payload = ev.get("payload") or {}
+            if payload.get("event") == "subscribed":
+                return ev
+        # Tolerate the first streamed frame arriving before the ack was drained.
+        if ev.get("type") == "next":
             return ev
 
 
@@ -80,10 +105,10 @@ async def request_loop_list(
     exclude_empty: bool = False,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Return ``loop_list_response``."""
-    return await client.request_response(
-        {"type": "loop_list", "limit": limit, "filter": {"exclude_empty": exclude_empty}},
-        response_type="loop_list_response",
+    """Return the ``loop_list`` result dict (protocol-1 response ``result``)."""
+    return await client.request(
+        "loop_list",
+        {"limit": limit, "filter": {"exclude_empty": exclude_empty}},
         timeout=timeout,
     )
 
@@ -95,10 +120,10 @@ async def request_loop_get(
     verbose: bool = False,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Return ``loop_get_response``."""
-    return await client.request_response(
-        {"type": "loop_get", "loop_id": loop_id, "verbose": verbose},
-        response_type="loop_get_response",
+    """Return the ``loop_get`` result dict (protocol-1 response ``result``)."""
+    return await client.request(
+        "loop_get",
+        {"loop_id": loop_id, "verbose": verbose},
         timeout=timeout,
     )
 
@@ -109,9 +134,9 @@ async def request_loop_delete(
     *,
     timeout: float = 120.0,
 ) -> dict[str, Any]:
-    """Return ``loop_delete_response``."""
-    return await client.request_response(
-        {"type": "loop_delete", "loop_id": loop_id},
-        response_type="loop_delete_response",
+    """Return the ``loop_delete`` result dict (protocol-1 response ``result``)."""
+    return await client.request(
+        "loop_delete",
+        {"loop_id": loop_id},
         timeout=timeout,
     )

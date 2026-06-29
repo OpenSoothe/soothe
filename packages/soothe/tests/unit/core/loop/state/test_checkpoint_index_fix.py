@@ -9,6 +9,7 @@ Tests verify that:
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -17,19 +18,25 @@ from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 
 @pytest.fixture
 def temp_state_manager():
-    """Create temporary state manager for testing."""
+    """Create temporary state manager for testing.
+
+    RFC-803 Phase 6: async_write=False for sync writes in tests that
+    need immediate persistence verification without manager close.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
-        # Override the global db_path to use temp directory for isolation
-        from unittest.mock import patch
-
         db_path = workspace / "test_loop_checkpoints.db"
 
         with patch(
             "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            state_manager = StrangeLoopStateManager(loop_id="test_loop_001", workspace=workspace)
+            state_manager = StrangeLoopStateManager(
+                loop_id="test_loop_001",
+                workspace=workspace,
+            )
+            # RFC-803 Phase 6: disable async writes for tests needing sync persistence
+            state_manager._async_write_enabled = False
             yield state_manager
 
 
@@ -299,6 +306,9 @@ class TestDatabaseConsistency:
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
             await sm.save(checkpoint)
+
+            # RFC-803 Phase 6: async_write=False in fixture ensures sync writes for tests
+            # that need immediate persistence verification without closing manager.
 
             # Verify index in database
             import aiosqlite

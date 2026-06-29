@@ -132,6 +132,34 @@ class ContextEngine:
             scheduler=self._scheduler,
         )
 
+    def _rebind_planning_subengines(self) -> None:
+        """Rebind planning sub-engines to the current DAG instance.
+
+        Called after ``load()`` replaces ``self._dag`` with a persisted instance.
+        The sub-engines hold a reference to the DAG at construction time;
+        replacing ``self._dag`` without rebinding leaves them pointing to an
+        orphan DAG that doesn't contain newly created goals.
+        """
+        from soothe.foundation.context.planning import (
+            GoalPlanningSubengine,
+            GoalScheduler,
+            PlanningFacade,
+            StepPlanningSubengine,
+        )
+
+        self._step_planner = StepPlanningSubengine(self._dag)
+        self._goal_planner = GoalPlanningSubengine(self._dag)
+        self._scheduler = GoalScheduler(self._dag)
+        self._planning_facade = PlanningFacade(
+            step=self._step_planner,
+            goal=self._goal_planner,
+            scheduler=self._scheduler,
+        )
+        logger.debug(
+            "Rebound planning sub-engines to DAG (goals=%d)",
+            len(self._dag.goals),
+        )
+
     # ── Callback mechanism ────────────────────────────────────────
 
     def on(self, event: EngineEvent, callback: Callable) -> None:
@@ -963,6 +991,10 @@ class ContextEngine:
             dag = await self._persistence.load_dag()
             if dag is not None:
                 self._dag = dag
+                # Rebind planning sub-engines to the new DAG instance.
+                # The sub-engines hold a reference to the old DAG at construction;
+                # without rebinding, they would look up goals in an orphan DAG.
+                self._rebind_planning_subengines()
             ledger_data = await self._persistence.load_ledger()
             if ledger_data:
                 self._ledger.clear()

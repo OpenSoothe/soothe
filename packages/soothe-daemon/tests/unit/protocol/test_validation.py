@@ -27,12 +27,25 @@ async def test_models_list_response_shape() -> None:
             sent.append((client_id, msg))
 
     router = MessageRouter(_FakeDaemon())
-    await router.dispatch("client-m", {"type": "models_list", "request_id": "rid-models"})
+    # Bypass handshake enforcement for unit tests.
+    router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
+    await router.dispatch(
+        "client-m",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "models_list",
+            "params": {},
+            "id": "rid-models",
+        },
+    )
 
     assert sent
     payload = sent[-1][1]
-    assert payload["type"] == "models_list_response"
-    assert payload["request_id"] == "rid-models"
-    models = payload.get("models", [])
+    assert payload["type"] == "response"
+    assert payload["id"] == "rid-models"
+    models = payload["result"].get("models", [])
     assert isinstance(models, list)
-    assert payload.get("default_model") is None or isinstance(payload["default_model"], str)
+    assert payload["result"].get("default_model") is None or isinstance(
+        payload["result"]["default_model"], str
+    )

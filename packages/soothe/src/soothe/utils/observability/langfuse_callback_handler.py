@@ -449,7 +449,3 @@ else:
         """Placeholder when langfuse is not installed."""
 
         pass
-
-
-# Backward-compatible alias used by tests
-_ensure_system_in_message_batches = _apply_effective_system_prompt_to_batches

@@ -42,9 +42,11 @@ Fix the implementation, not test expectations. "Passing tests" ≠ "Working corr
 
 ```
 packages/
-├── soothe-sdk/    # WebSocket client, protocol, types
-├── soothe-cli/    # Typer CLI + Textual TUI
-└── soothe/        # Daemon server (core, protocols, backends, middleware)
+├── soothe/          # Core framework: GoalEngine/StrangeLoop/CoreAgent, protocols, backends, middleware
+├── soothe-daemon/   # Daemon server (soothed): WebSocket/HTTP transports, event bus, client sessions
+├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)
+├── soothe-sdk/      # WebSocket client, protocol params, plugin decorators (@plugin/@tool/@subagent)
+└── soothe-plugins/  # Community plugins (delegated subagents)
 ```
 
 **Key docs**: [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) for architecture, [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) for plugins.

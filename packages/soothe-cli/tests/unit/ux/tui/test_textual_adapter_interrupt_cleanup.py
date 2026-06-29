@@ -110,3 +110,33 @@ async def test_interrupt_cleanup_daemon_falls_back_to_session_loop_id() -> None:
 
     assert daemon_session.aupdate_loop_state.await_count >= 1
     assert daemon_session.aupdate_loop_state.await_args_list[0].args[0] == "sess-loop-9"
+
+
+@pytest.mark.asyncio
+async def test_interrupt_cleanup_skips_daemon_rpc_when_app_exiting() -> None:
+    """Quit during a turn must not block on loop_state_update or cancel RPC."""
+    adapter = TextualUIAdapter(
+        mount_message=AsyncMock(),
+        update_status=lambda _s: None,
+        set_spinner=AsyncMock(),
+        set_active_message=MagicMock(),
+    )
+    daemon_session = MagicMock()
+    daemon_session.cancel_remote_query = AsyncMock()
+    daemon_session.aupdate_loop_state = AsyncMock()
+
+    await _handle_interrupt_cleanup(
+        adapter=adapter,
+        config={"configurable": {"thread_id": "loop-1"}},
+        daemon_session=daemon_session,
+        pending_text_by_namespace={(): "partial"},
+        captured_input_tokens=100,
+        captured_output_tokens=0,
+        turn_stats=SessionStats(),
+        start_time=0.0,
+        app_exiting=True,
+    )
+
+    adapter._mount_message.assert_not_awaited()
+    daemon_session.aupdate_loop_state.assert_not_awaited()
+    daemon_session.cancel_remote_query.assert_not_awaited()

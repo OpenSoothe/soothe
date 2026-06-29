@@ -42,13 +42,22 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
             sent.append((client_id, msg))
 
     router = MessageRouter(_FakeDaemon())
-    await router.dispatch("client-a", {"type": "skills_list", "request_id": "rid-skills"})
+    await router.dispatch(
+        "client-a",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "skills_list",
+            "params": {},
+            "id": "rid-skills",
+        },
+    )
 
     assert sent
     payload = sent[-1][1]
-    assert payload["type"] == "skills_list_response"
-    assert payload["request_id"] == "rid-skills"
-    skills = payload.get("skills", [])
+    assert payload["type"] == "response"
+    assert payload["id"] == "rid-skills"
+    skills = payload["result"].get("skills", [])
     assert isinstance(skills, list)
     match = next(
         (s for s in skills if isinstance(s, dict) and s.get("name") == "router_skill"), None
@@ -94,14 +103,20 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
     router = MessageRouter(_FakeDaemon())
     await router.dispatch(
         "client-b",
-        {"type": "invoke_skill", "skill": "invoke_rpc", "args": "go", "request_id": "rid-inv"},
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "invoke_skill",
+            "params": {"skill": "invoke_rpc", "args": "go"},
+            "id": "rid-inv",
+        },
     )
 
     types_in_order = [m[1].get("type") for m in sent]
-    assert "invoke_skill_response" in types_in_order
-    resp = next(m[1] for m in sent if m[1].get("type") == "invoke_skill_response")
-    assert resp.get("request_id") == "rid-inv"
-    echo = resp.get("echo")
+    assert "response" in types_in_order
+    resp = next(m[1] for m in sent if m[1].get("type") == "response")
+    assert resp.get("id") == "rid-inv"
+    echo = resp["result"].get("echo")
     assert isinstance(echo, dict)
     assert echo.get("skill_name") == "invoke_rpc"
     assert echo.get("args") == "go"
@@ -168,10 +183,14 @@ async def test_invoke_skill_forwards_clarification_mode(
     await router.dispatch(
         "client-c",
         {
-            "type": "invoke_skill",
-            "skill": "mode_skill",
-            "args": "",
-            "clarification_mode": incoming_mode,
+            "proto": "1",
+            "type": "request",
+            "method": "invoke_skill",
+            "params": {
+                "skill": "mode_skill",
+                "args": "",
+                "clarification_mode": incoming_mode,
+            },
         },
     )
 

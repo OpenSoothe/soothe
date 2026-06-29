@@ -1,7 +1,7 @@
 """Tests for daemon WebSocket message normalization in the TUI."""
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
@@ -104,10 +104,10 @@ def test_normalize_lc_stream_message_restores_ai_message() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_conversation_log_uses_request_response_and_filters_rows() -> None:
+async def test_fetch_conversation_log_uses_request_and_filters_rows() -> None:
     """Conversation log RPC should run under RPC lock and return only dict rows."""
     session = object.__new__(TuiDaemonSession)
-    request_response = AsyncMock(
+    request = AsyncMock(
         return_value={
             "messages": [
                 {"kind": "event", "content": "x"},
@@ -116,7 +116,7 @@ async def test_fetch_conversation_log_uses_request_response_and_filters_rows() -
             ]
         }
     )
-    session._rpc_client = type("StubClient", (), {"request_response": request_response})()
+    session._rpc_client = type("StubClient", (), {"request": request})()
     session._rpc_lock = asyncio.Lock()
     session._rpc_connected = True
     session._ensure_rpc_connected = AsyncMock()
@@ -128,15 +128,14 @@ async def test_fetch_conversation_log_uses_request_response_and_filters_rows() -
         include_events=True,
     )
 
-    request_response.assert_awaited_once_with(
+    request.assert_awaited_once_with(
+        "loop_messages",
         {
-            "type": "loop_messages",
             "loop_id": "thread-123",
             "limit": 50,
             "offset": 3,
             "include_events": True,
         },
-        response_type="loop_messages_response",
         timeout=10.0,
     )
     assert result == [
@@ -149,12 +148,12 @@ async def test_fetch_conversation_log_uses_request_response_and_filters_rows() -
 async def test_fetch_conversation_log_returns_empty_without_id() -> None:
     """Empty conversation ids should short-circuit without RPC."""
     session = object.__new__(TuiDaemonSession)
-    request_response = AsyncMock()
-    session._rpc_client = type("StubClient", (), {"request_response": request_response})()
+    request = AsyncMock()
+    session._rpc_client = type("StubClient", (), {"request": request})()
     session._rpc_lock = asyncio.Lock()
 
     assert await session.fetch_conversation_log("", include_events=True) == []
-    request_response.assert_not_awaited()
+    request.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -246,3 +245,58 @@ async def test_iter_turn_chunks_drains_events_after_idle() -> None:
     chunks = [chunk async for chunk in session.iter_turn_chunks()]
 
     assert chunks == [((), "messages", ("late", {}))]
+
+
+@pytest.mark.asyncio
+async def test_ensure_rpc_connected_completes_protocol_handshake() -> None:
+    """Metadata RPC socket must handshake before skills_list and similar calls."""
+    session = object.__new__(TuiDaemonSession)
+    session._rpc_connected = False
+    session._rpc_client = AsyncMock()
+
+    with patch(
+        "soothe_cli.runtime.transport.session.connect_websocket_with_retries",
+        new_callable=AsyncMock,
+    ) as connect_mock:
+        await session._ensure_rpc_connected()
+
+    connect_mock.assert_awaited_once_with(session._rpc_client)
+    session._rpc_client.request_connection_init.assert_awaited_once()
+    session._rpc_client.wait_for_connection_ack.assert_awaited_once_with(ack_timeout_s=20.0)
+    assert session._rpc_connected is True
+
+
+@pytest.mark.asyncio
+async def test_close_is_idempotent_and_closes_both_sockets_in_parallel() -> None:
+    """TUI teardown may call close twice; both clients should close once each."""
+    session = object.__new__(TuiDaemonSession)
+    session._closed = False
+    session._client = AsyncMock()
+    session._rpc_client = AsyncMock()
+    session._rpc_connected = True
+
+    await session.close(handshake_timeout=0.3)
+    await session.close(handshake_timeout=0.3)
+
+    session._client.close.assert_awaited_once_with(handshake_timeout=0.3)
+    session._rpc_client.close.assert_awaited_once_with(handshake_timeout=0.3)
+    assert session._closed is True
+    assert session._rpc_connected is False
+
+
+@pytest.mark.asyncio
+async def test_ensure_rpc_connected_skips_when_already_connected() -> None:
+    """Second RPC call should not repeat connect or handshake."""
+    session = object.__new__(TuiDaemonSession)
+    session._rpc_connected = True
+    session._rpc_client = AsyncMock()
+
+    with patch(
+        "soothe_cli.runtime.transport.session.connect_websocket_with_retries",
+        new_callable=AsyncMock,
+    ) as connect_mock:
+        await session._ensure_rpc_connected()
+
+    connect_mock.assert_not_awaited()
+    session._rpc_client.request_connection_init.assert_not_awaited()
+    session._rpc_client.wait_for_connection_ack.assert_not_awaited()

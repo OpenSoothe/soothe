@@ -14,11 +14,34 @@ WORD_REPLY_SCHEMA: dict[str, Any] = {
 }
 
 
+def _unwrap_next(event: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Unwrap a protocol-1 ``next`` envelope to its inner ``data`` frame.
+
+    Under protocol-1 (RFC-450 §9.3) streamed ``event`` frames arrive wrapped as
+    ``{proto, type:"next", payload:{namespace, mode, data}}``. This helper
+    returns the inner ``data`` dict (the legacy ``{type:"event", mode, data}``
+    frame) so the extraction helpers can branch on the legacy shape. Non-``next``
+    frames pass through unchanged.
+    """
+    if not isinstance(event, dict):
+        return event
+    if event.get("type") != "next":
+        return event
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        return event
+    data = payload.get("data")
+    return data if isinstance(data, dict) else event
+
+
 def extract_messages_assistant_content(event: dict[str, Any]) -> str | None:
     """Parse assistant text from a daemon ``mode=messages`` event."""
-    if event.get("type") != "event" or event.get("mode") != "messages":
+    frame = _unwrap_next(event)
+    if not isinstance(frame, dict) or frame.get("type") != "event":
         return None
-    data = event.get("data")
+    if frame.get("mode") != "messages":
+        return None
+    data = frame.get("data")
     msg: Any
     if isinstance(data, (list, tuple)) and data:
         msg = data[0]
@@ -52,8 +75,9 @@ async def await_messages_assistant_content(
         if not event:
             continue
         if event.get("type") == "error":
-            code = event.get("code", "")
-            message = event.get("message", "")
+            err = event.get("error") or {}
+            code = err.get("code", event.get("code", ""))
+            message = err.get("message", event.get("message", ""))
             raise AssertionError(f"daemon error {code}: {message}")
         content = extract_messages_assistant_content(event)
         if content:

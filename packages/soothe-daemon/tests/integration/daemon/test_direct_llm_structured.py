@@ -53,17 +53,23 @@ async def test_loop_input_rejects_response_schema_without_direct_llm(
     _daemon, port, _cfg = websocket_daemon_llm
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
 
         await client.send(
             {
-                "type": "loop_input",
-                "loop_id": loop_id,
-                "content": "hello",
-                "intent_hint": "quiz",
-                "response_schema": WORD_REPLY_SCHEMA,
+                "proto": "1",
+                "type": "notification",
+                "method": "loop_input",
+                "params": {
+                    "loop_id": loop_id,
+                    "content": "hello",
+                    "intent_hint": "quiz",
+                    "response_schema": WORD_REPLY_SCHEMA,
+                },
             }
         )
 
@@ -74,13 +80,10 @@ async def test_loop_input_rejects_response_schema_without_direct_llm(
             if not ev:
                 continue
             if ev.get("type") == "error":
-                assert ev.get("code") == "INVALID_REQUEST"
-                assert "direct_llm" in str(ev.get("message", "")).lower()
+                err = ev.get("error") or {}
+                assert err.get("code") == -32600  # INVALID_REQUEST
+                assert "direct_llm" in str(err.get("message", "")).lower()
                 return
-            if ev.get("type") == "loop_input_response" and ev.get("success"):
-                pytest.skip(
-                    "daemon accepted response_schema without direct_llm; upgrade soothe-daemon"
-                )
         raise AssertionError("expected INVALID_REQUEST for response_schema with intent_hint=quiz")
     finally:
         if client.is_connected:
@@ -115,6 +118,8 @@ async def test_websocket_direct_llm_structured_json_reply(
     _daemon, port, _cfg = websocket_daemon_llm
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)
@@ -150,6 +155,8 @@ async def test_websocket_direct_llm_plain_text_without_schema(
     _daemon, port, _cfg = websocket_daemon_llm
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     try:
         loop_id = await loop_new(client)
         await subscribe_loop_stream(client, loop_id)

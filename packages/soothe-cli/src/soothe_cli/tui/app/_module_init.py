@@ -406,7 +406,9 @@ async def run_textual_app(
         await app.run_async()
     finally:
         if app._daemon_session is not None:
-            await app._daemon_session.close()
+            from soothe_cli.runtime.transport.session import TUI_EXIT_HANDSHAKE_TIMEOUT_S
+
+            await app._daemon_session.close(handshake_timeout=TUI_EXIT_HANDSHAKE_TIMEOUT_S)
 
     return AppResult(
         return_code=app.return_code or 0,

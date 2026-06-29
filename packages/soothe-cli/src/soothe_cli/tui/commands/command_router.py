@@ -189,24 +189,18 @@ async def handle_rpc_command(
     """
     daemon_command = entry["daemon_command"]
 
-    # Build request
-    request: dict[str, Any] = {
-        "type": "command_request",
-        "command": daemon_command,
-    }
+    # Build protocol-1 rpc_command params (RFC-450 §9.4). The wire method is
+    # ``rpc_command``; ``command`` carries the daemon RPC name and ``payload``
+    # carries the parsed args.
+    rpc_params: dict[str, Any] = {"command": daemon_command}
     if loop_id:
-        request["loop_id"] = loop_id
-
-    # Parse params if schema exists
+        rpc_params["loop_id"] = loop_id
     if entry.get("params_schema") and query:
-        params = parse_command_params(entry, query)
-        request["params"] = params
+        rpc_params["payload"] = parse_command_params(entry, query)
 
     # Send request and wait for response
     try:
-        response = await client.request_response(
-            request, response_type="command_response", timeout=5.0
-        )
+        response = await client.request("rpc_command", rpc_params, timeout=5.0)
 
         # Handle response
         if response.get("error"):

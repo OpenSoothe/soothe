@@ -180,6 +180,7 @@ async def _record_and_emit_step_completed(
         "error": result.error or None,
         "duration_ms": result.duration_ms,
         "tool_call_count": result.tool_call_count,
+        "subgraph_tool_call_count": result.subgraph_tool_call_count,
     }
     # Surface ask_user Q&A on the event so the TUI can render the resolved
     # question/answer pair on the step card.
@@ -248,7 +249,6 @@ async def _persist_planner_ask_step_outcome(
 async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> dict[str, Any]:
     """Run ready steps, stream events, apply step results to ``LoopState``."""
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias for backward compat
     state = ctx.loop_state
     state_manager = ctx.state_manager
     goal_context_manager = ctx.goal_context_manager

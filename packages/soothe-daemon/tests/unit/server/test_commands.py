@@ -33,15 +33,23 @@ async def test_command_request_enqueued_for_loop_dispatcher() -> None:
 
     router = MessageRouter(_FakeDaemon())
     req = {
-        "type": "command_request",
-        "command": "memory",
-        "params": {},
-        "request_id": "rid-cmd-404",
+        "proto": "1",
+        "type": "request",
+        "method": "rpc_command",
+        "params": {
+            "command": "memory",
+            "params": {},
+        },
+        "id": "rid-cmd-404",
     }
     await router.dispatch("client-ws", req)
 
     got_loop, queued = await asyncio.wait_for(q.get(), timeout=2.0)
     assert got_loop == loop_id
-    assert queued["type"] == "command_request"
+    # Flattened envelope: ``type`` is the method name (rpc_command), and the
+    # envelope ``id`` is carried as ``request_id``. Operation fields
+    # (``command``/``params``) are spread to the top level from envelope params.
+    assert queued["type"] == "rpc_command"
     assert queued["request_id"] == "rid-cmd-404"
     assert queued["client_id"] == "client-ws"
+    assert queued["command"] == "memory"

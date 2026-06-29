@@ -33,7 +33,6 @@ from soothe_daemon.display.loop_card_ledger import LoopCardLedger
 from soothe_daemon.display.loop_history_probe import (
     filter_derivable_log_events,
     langgraph_checkpoint_exists,
-    normalize_log_row,
 )
 
 if TYPE_CHECKING:
@@ -285,11 +284,6 @@ class LoopCardManager:
             return await asyncio.to_thread(card_binder.convert_loop_events_to_data, log_events)
 
         return []
-
-    @staticmethod
-    def _normalize_log_row(row: Any) -> dict[str, Any]:
-        """Backward-compatible wrapper around ``normalize_log_row``."""
-        return normalize_log_row(row)
 
     # ------------------------------------------------------------------
     # Reattach replay

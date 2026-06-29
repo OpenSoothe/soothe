@@ -65,10 +65,12 @@ async def test_websocket_cors_validation(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         response = await request_loop_list(client)
-        assert response["type"] == "loop_list_response"
+        assert "loops" in response
 
     finally:
         await client.close()
@@ -87,12 +89,14 @@ async def test_message_size_limit(tmp_path: Path) -> None:
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         try:
             small_message = "x" * (1 * 1024 * 1024)
             loop_id = await loop_new(client)
             await subscribe_loop_stream(client, loop_id)
-            await client.send_loop_input(loop_id, small_message)
+            await client.notify("loop_input", {"loop_id": loop_id, "content": small_message})
             assert loop_id
 
         finally:
@@ -118,11 +122,13 @@ async def test_rate_limiting(tmp_path: Path) -> None:
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         try:
             for _ in range(5):
                 response = await request_loop_list(client)
-                assert response["type"] == "loop_list_response"
+                assert "loops" in response
 
         finally:
             await client.close()
@@ -148,10 +154,12 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
     try:
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
+        await client1.request_connection_init()
+        await client1.wait_for_connection_ack()
 
         try:
             response = await request_loop_list(client1)
-            assert response["type"] == "loop_list_response"
+            assert "loops" in response
         finally:
             await client1.close()
 
@@ -163,9 +171,11 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
             client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             try:
                 await client2.connect()
+                await client2.request_connection_init()
+                await client2.wait_for_connection_ack()
 
                 response2 = await request_loop_list(client2)
-                assert response2["type"] == "loop_list_response"
+                assert "loops" in response2
 
             finally:
                 await client2.close()

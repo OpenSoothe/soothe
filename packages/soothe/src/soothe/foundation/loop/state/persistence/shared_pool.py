@@ -4,6 +4,10 @@ Provides a singleton pool at daemon level for high-concurrency scenarios
 (200+ threads). Each StrangeLoopStateManager reuses this shared pool instead
 of creating its own, preventing connection exhaustion.
 
+SQLite mode uses a ref-counted singleton ``SQLitePersistenceBackend`` so each
+loop's anchor manager does not open another writer + reader pool on
+``soothe_checkpoints.db``.
+
 Architecture:
     Daemon → SootheRunner → SharedPostgreSQLPool
                       ↓
@@ -14,12 +18,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from typing import TYPE_CHECKING, Any
 
 from psycopg_pool import AsyncConnectionPool
 
+from soothe.foundation.loop.state.persistence.directory_manager import (
+    PersistenceDirectoryManager,
+)
 from soothe.foundation.loop.state.persistence.postgres_schema import (
     initialize_agentloop_postgres_schema,
+)
+from soothe.foundation.loop.state.persistence.sqlite_backend import (
+    SQLitePersistenceBackend,
 )
 from soothe.foundation.persistence.postgres_pool_lifecycle import (
     apply_row_factory,
@@ -32,6 +43,14 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
+
+# SQLite singleton (ref-counted; closed when last manager releases)
+_shared_sqlite_backend: SQLitePersistenceBackend | None = None
+_shared_sqlite_refcount: int = 0
+_sqlite_thread_lock = threading.Lock()
+
+# Cap SQLite reader pool size — file DB does not benefit from large pools.
+_SQLITE_POOL_SIZE = 3
 
 # Singleton instance for daemon-level shared pool
 _shared_pool: SharedPostgreSQLPool | None = None
@@ -226,4 +245,66 @@ class SharedPostgreSQLPool:
                 logger.info("Reset singleton shared PostgreSQL pool for recovery")
 
 
-__all__ = ["SharedPostgreSQLPool"]
+def acquire_shared_sqlite_backend_sync() -> SQLitePersistenceBackend:
+    """Return the process-wide SQLite backend; increment ref count (sync).
+
+    Safe in ``__init__`` because ``SQLitePersistenceBackend`` opens connections lazily.
+    """
+    global _shared_sqlite_backend, _shared_sqlite_refcount
+
+    with _sqlite_thread_lock:
+        if _shared_sqlite_backend is None:
+            db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            SQLitePersistenceBackend.initialize_database_sync(db_path)
+            _shared_sqlite_backend = SQLitePersistenceBackend(
+                db_path=db_path,
+                pool_size=_SQLITE_POOL_SIZE,
+            )
+            logger.info(
+                "Shared SQLite persistence backend opened at %s (pool=%d)",
+                db_path,
+                _SQLITE_POOL_SIZE,
+            )
+        _shared_sqlite_refcount += 1
+        return _shared_sqlite_backend
+
+
+async def release_shared_sqlite_backend() -> None:
+    """Release one reference; close the shared backend when the last ref drops."""
+    global _shared_sqlite_backend, _shared_sqlite_refcount
+
+    backend_to_close: SQLitePersistenceBackend | None = None
+    with _sqlite_thread_lock:
+        if _shared_sqlite_refcount <= 0:
+            return
+        _shared_sqlite_refcount -= 1
+        if _shared_sqlite_refcount == 0 and _shared_sqlite_backend is not None:
+            backend_to_close = _shared_sqlite_backend
+            _shared_sqlite_backend = None
+    if backend_to_close is not None:
+        await backend_to_close.close()
+        logger.info("Shared SQLite persistence backend closed")
+
+
+async def close_shared_sqlite_backend_instance() -> None:
+    """Force-close the shared SQLite backend (daemon shutdown)."""
+    global _shared_sqlite_backend, _shared_sqlite_refcount
+
+    backend_to_close: SQLitePersistenceBackend | None = None
+    with _sqlite_thread_lock:
+        _shared_sqlite_refcount = 0
+        if _shared_sqlite_backend is not None:
+            backend_to_close = _shared_sqlite_backend
+            _shared_sqlite_backend = None
+    if backend_to_close is not None:
+        await backend_to_close.close()
+        logger.info("Shared SQLite persistence backend closed (shutdown)")
+
+
+__all__ = [
+    "SharedPostgreSQLPool",
+    "acquire_shared_sqlite_backend_sync",
+    "close_shared_sqlite_backend_instance",
+    "release_shared_sqlite_backend",
+]

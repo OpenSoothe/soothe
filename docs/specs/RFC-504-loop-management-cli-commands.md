@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Implementation Interface Design
 **Created**: 2026-04-22
-**Dependencies**: RFC-503 (Loop-First UX), RFC-218 (Checkpoint Tree), RFC-454 (Slash Commands)
+**Dependencies**: RFC-503 (Loop-First UX), RFC-218 (Checkpoint Tree), RFC-454 (Slash Commands), RFC-450 (Daemon Communication Protocol)
 **Author**: Soothe contributors
 
 ---

@@ -11,7 +11,7 @@ from soothe_cli.tui import app as app_module
 
 
 def test_run_textual_tui_uses_caller_cwd(monkeypatch) -> None:
-    """run_textual_tui passes caller's cwd (os.getcwd()), not config.workspace_dir.
+    """run_textual_tui passes caller's cwd (os.getcwd()), not config workspace.
 
     Per IG-344, the TUI uses the caller's actual cwd for thread isolation,
     not the daemon-level default workspace (~/.soothe/Workspace).
@@ -25,8 +25,10 @@ def test_run_textual_tui_uses_caller_cwd(monkeypatch) -> None:
     # Patch source module (where run_textual_tui calls run_textual_app locally)
     monkeypatch.setattr(source_module, "run_textual_app", fake_run_textual_app)
 
-    # config.workspace_dir is ignored - cwd comes from os.getcwd()
-    cfg = SimpleNamespace(workspace_dir="/some/ignored/path")
+    # config workspace is ignored - cwd comes from os.getcwd()
+    cfg = SimpleNamespace(
+        filesystem_middleware=SimpleNamespace(workspace_root="/some/ignored/path")
+    )
     expected_cwd = os.getcwd()
 
     app_module.run_textual_tui(cfg)

@@ -186,11 +186,6 @@ CARD_ERROR_DARK = "#F7768E"
 CARD_ERROR_LIGHT = "#BE185D"
 """Error state in light theme — deeper red."""
 
-# Legacy aliases for backward compatibility
-# (cognition colors now map to card colors for unified styling)
-LC_COGNITION = CARD_BORDER_DARK
-"""Legacy alias — now uses unified card border color."""
-
 
 # ---------------------------------------------------------------------------
 # Brand palette — light

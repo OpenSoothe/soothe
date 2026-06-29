@@ -187,6 +187,52 @@ class TestCoreAgentClass:
         assert not hasattr(agent, "soothe_goal_engine")
 
 
+class TestCoreAgentStateRetrieval:
+    """Tests for checkpointer-aware graph state reads (IG-477 / IG-519)."""
+
+    @pytest.mark.asyncio
+    async def test_aget_state_returns_none_without_checkpointer(self) -> None:
+        """No checkpointer → None without raising or noisy logs."""
+        from soothe.foundation.core.agent import CoreAgent
+
+        mock_graph = _mock_graph()
+        mock_graph.checkpointer = None
+        agent = CoreAgent(graph=mock_graph, config=MagicMock())
+
+        assert agent.can_read_graph_state is False
+        assert await agent.aget_state({"configurable": {"thread_id": "t1"}}) is None
+        assert await agent.execution_aget_state({"configurable": {"thread_id": "t1"}}) is None
+
+    @pytest.mark.asyncio
+    async def test_execution_aget_state_strips_null_pregel_checkpointer_override(self) -> None:
+        """Ephemeral stream config pollution must not block main-graph state reads."""
+        from unittest.mock import AsyncMock
+
+        from langgraph._internal._constants import CONFIG_KEY_CHECKPOINTER
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from soothe.foundation.core.agent import CoreAgent
+
+        mock_graph = _mock_graph()
+        mock_graph.checkpointer = MemorySaver()
+        expected = MagicMock(name="state_snapshot")
+        mock_graph.aget_state = AsyncMock(return_value=expected)
+
+        agent = CoreAgent(graph=mock_graph, config=MagicMock())
+        polluted = {
+            "configurable": {
+                "thread_id": "t1",
+                CONFIG_KEY_CHECKPOINTER: None,
+            },
+        }
+
+        result = await agent.execution_aget_state(polluted)
+
+        assert result is expected
+        call_config = mock_graph.aget_state.await_args.kwargs["config"]
+        assert CONFIG_KEY_CHECKPOINTER not in call_config.get("configurable", {})
+
+
 class TestCoreAgentModuleExports:
     """Tests for module exports."""
 

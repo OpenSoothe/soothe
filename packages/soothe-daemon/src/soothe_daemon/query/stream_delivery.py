@@ -85,6 +85,47 @@ class _ToolBatchBuffer:
     last_activity_monotonic: float = 0.0
 
 
+def _wire_update_args_displayable(args: Any) -> bool:
+    """True when batched/custom wire kwargs are real tool parameters."""
+    from soothe_sdk.display.message_processing import extract_tool_args_dict
+
+    if not isinstance(args, dict) or not args:
+        return False
+    if args.get("_subgraph_tool") is True:
+        remainder = {k: v for k, v in args.items() if k != "_subgraph_tool"}
+        return bool(extract_tool_args_dict(remainder))
+    return bool(extract_tool_args_dict(args))
+
+
+def _find_batched_tool_update(
+    buf: _ToolBatchBuffer,
+    tool_call_id: str,
+) -> dict[str, Any] | None:
+    """Return the buffered update for ``tool_call_id``, if any."""
+    tid = str(tool_call_id or "").strip()
+    if not tid:
+        return None
+    for upd in buf.updates:
+        if str(upd.get("tool_call_id") or "").strip() == tid:
+            return upd
+    return None
+
+
+def _merge_tool_batch_update(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    """Upgrade batched args when a later chunk carries displayable kwargs."""
+    if not _wire_update_args_displayable(incoming.get("args")):
+        return False
+    if _wire_update_args_displayable(existing.get("args")) and existing.get("args") == incoming.get(
+        "args"
+    ):
+        return False
+    existing["args"] = dict(incoming.get("args") or {})
+    name = str(incoming.get("name") or "").strip()
+    if name:
+        existing["name"] = name
+    return True
+
+
 def _msg_to_wire_dict(msg: Any) -> dict[str, Any] | None:
     """Best-effort flat dict for coalescer logic."""
     if isinstance(msg, dict):
@@ -450,6 +491,9 @@ class StreamDeliveryCoalescer:
                 continue
             tid = str(upd.get("tool_call_id") or "").strip()
             if tid and tid in buf.seen_ids:
+                existing = _find_batched_tool_update(buf, tid)
+                if existing is not None and _merge_tool_batch_update(existing, upd):
+                    added_new = True
                 continue
             if tid:
                 buf.seen_ids.add(tid)
@@ -474,7 +518,16 @@ class StreamDeliveryCoalescer:
         buf = self._tool_batches.get(namespace)
         if buf is None:
             return False
-        return tid in buf.seen_ids
+        if tid not in buf.seen_ids:
+            return False
+        existing = _find_batched_tool_update(buf, tid)
+        if existing is None:
+            return True
+        if _wire_update_args_displayable(data.get("args")) and not _wire_update_args_displayable(
+            existing.get("args")
+        ):
+            return False
+        return True
 
     def _maybe_flush_tool_batch(
         self,

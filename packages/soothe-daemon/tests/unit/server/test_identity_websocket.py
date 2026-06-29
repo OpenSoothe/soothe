@@ -393,6 +393,20 @@ class TestRouterAuthDispatch:
     ``TestAuthFlowRoundTrip`` tests above.
     """
 
+    @staticmethod
+    def _make_router(daemon: _FakeDaemon) -> MessageRouter:
+        """Build a router that bypasses the protocol-1 handshake enforcement.
+
+        These tests dispatch auth/auth_refresh envelopes directly (no
+        ``connection_init``), so the handshake-complete gate must be skipped.
+        The ``_FakeDaemon`` exposes no ``_clients``/``_channel_manager``, so
+        ``_is_handshake_complete`` already returns ``True`` — the stub keeps
+        that explicit and resilient to future router changes.
+        """
+        router = MessageRouter(daemon)
+        router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
+        return router
+
     @pytest.mark.asyncio
     async def test_router_auth_success(self) -> None:
         from soothe_sdk.protocols.identity import AuthResult
@@ -406,72 +420,97 @@ class TestRouterAuthDispatch:
         identity = _MockIdentity(auth_result=auth_result)
         handler = AuthHandler(identity)
         daemon = _FakeDaemon(auth_handler=handler)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
         await router.dispatch(
             "client-1",
-            {"type": "auth", "access_key": KNOWN_ACCESS_KEY, "secret_key": KNOWN_SECRET_KEY},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "auth",
+                "params": {"access_key": KNOWN_ACCESS_KEY, "secret_key": KNOWN_SECRET_KEY},
+                "id": "r1",
+            },
         )
 
         assert len(daemon.sent) == 1
         client_id, msg = daemon.sent[0]
         assert client_id == "client-1"
-        assert msg["type"] == "auth_response"
-        assert msg["success"] is True
-        assert msg["access_token"] == "access-jwt"
-        assert msg["refresh_token"] == "refresh-jwt"
-        assert msg["user_id"] == "alice"
-        assert msg["expires_in"] == 3600
+        assert msg["type"] == "response"
+        assert msg["id"] == "r1"
+        assert msg["result"]["success"] is True
+        assert msg["result"]["access_token"] == "access-jwt"
+        assert msg["result"]["refresh_token"] == "refresh-jwt"
+        assert msg["result"]["user_id"] == "alice"
+        assert msg["result"]["expires_in"] == 3600
 
     @pytest.mark.asyncio
     async def test_router_auth_invalid_credentials(self) -> None:
         identity = _MockIdentity(auth_result=None)
         handler = AuthHandler(identity)
         daemon = _FakeDaemon(auth_handler=handler)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
         await router.dispatch(
             "client-2",
-            {"type": "auth", "access_key": "AK-wrongkey00000000", "secret_key": "SK-wrong"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "auth",
+                "params": {"access_key": "AK-wrongkey00000000", "secret_key": "SK-wrong"},
+                "id": "r2",
+            },
         )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_response"
-        assert msg["success"] is False
-        assert msg["error"] == "invalid_credentials"
+        assert msg["type"] == "response"
+        assert msg["id"] == "r2"
+        assert msg["result"]["success"] is False
+        assert msg["result"]["error"] == "invalid_credentials"
 
     @pytest.mark.asyncio
     async def test_router_auth_missing_credentials(self) -> None:
         identity = _MockIdentity()
         handler = AuthHandler(identity)
         daemon = _FakeDaemon(auth_handler=handler)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
-        await router.dispatch("client-3", {"type": "auth"})
+        await router.dispatch(
+            "client-3",
+            {"proto": "1", "type": "request", "method": "auth", "params": {}, "id": "r3"},
+        )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_response"
-        assert msg["success"] is False
-        assert msg["error"] == "missing_credentials"
+        assert msg["type"] == "response"
+        assert msg["id"] == "r3"
+        assert msg["result"]["success"] is False
+        assert msg["result"]["error"] == "missing_credentials"
 
     @pytest.mark.asyncio
     async def test_router_auth_identity_disabled(self) -> None:
         """When identity is disabled, router returns identity_disabled error."""
         daemon = _FakeDaemon(auth_handler=None)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
         await router.dispatch(
             "client-4",
-            {"type": "auth", "access_key": "AK-test", "secret_key": "SK-test"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "auth",
+                "params": {"access_key": "AK-test", "secret_key": "SK-test"},
+                "id": "r4",
+            },
         )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_response"
-        assert msg["success"] is False
-        assert msg["error"] == "identity_disabled"
+        assert msg["type"] == "response"
+        assert msg["id"] == "r4"
+        assert msg["result"]["success"] is False
+        assert msg["result"]["error"] == "identity_disabled"
 
     @pytest.mark.asyncio
     async def test_router_auth_refresh_success(self) -> None:
@@ -485,69 +524,94 @@ class TestRouterAuthDispatch:
         identity = _MockIdentity(refresh_result=refresh_result)
         handler = AuthHandler(identity)
         daemon = _FakeDaemon(auth_handler=handler)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
         await router.dispatch(
             "client-5",
-            {"type": "auth_refresh", "refresh_token": "old-refresh-jwt"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "auth_refresh",
+                "params": {"refresh_token": "old-refresh-jwt"},
+                "id": "r5",
+            },
         )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_refresh_response"
-        assert msg["success"] is True
-        assert msg["access_token"] == "new-access-jwt"
-        assert msg["refresh_token"] == "new-refresh-jwt"
-        assert msg["expires_in"] == 3600
+        assert msg["type"] == "response"
+        assert msg["id"] == "r5"
+        assert msg["result"]["success"] is True
+        assert msg["result"]["access_token"] == "new-access-jwt"
+        assert msg["result"]["refresh_token"] == "new-refresh-jwt"
+        assert msg["result"]["expires_in"] == 3600
 
     @pytest.mark.asyncio
     async def test_router_auth_refresh_missing_token(self) -> None:
         identity = _MockIdentity()
         handler = AuthHandler(identity)
         daemon = _FakeDaemon(auth_handler=handler)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
-        await router.dispatch("client-6", {"type": "auth_refresh"})
+        await router.dispatch(
+            "client-6",
+            {"proto": "1", "type": "request", "method": "auth_refresh", "params": {}, "id": "r6"},
+        )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_refresh_response"
-        assert msg["success"] is False
-        assert msg["error"] == "missing_refresh_token"
+        assert msg["type"] == "response"
+        assert msg["id"] == "r6"
+        assert msg["result"]["success"] is False
+        assert msg["result"]["error"] == "missing_refresh_token"
 
     @pytest.mark.asyncio
     async def test_router_auth_refresh_invalid_token(self) -> None:
         identity = _MockIdentity(refresh_result=None)
         handler = AuthHandler(identity)
         daemon = _FakeDaemon(auth_handler=handler)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
         await router.dispatch(
             "client-7",
-            {"type": "auth_refresh", "refresh_token": "invalid.jwt.token"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "auth_refresh",
+                "params": {"refresh_token": "invalid.jwt.token"},
+                "id": "r7",
+            },
         )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_refresh_response"
-        assert msg["success"] is False
-        assert msg["error"] == "invalid_refresh_token"
+        assert msg["type"] == "response"
+        assert msg["id"] == "r7"
+        assert msg["result"]["success"] is False
+        assert msg["result"]["error"] == "invalid_refresh_token"
 
     @pytest.mark.asyncio
     async def test_router_auth_refresh_identity_disabled(self) -> None:
         daemon = _FakeDaemon(auth_handler=None)
-        router = MessageRouter(daemon)
+        router = self._make_router(daemon)
 
         await router.dispatch(
             "client-8",
-            {"type": "auth_refresh", "refresh_token": "some-token"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "auth_refresh",
+                "params": {"refresh_token": "some-token"},
+                "id": "r8",
+            },
         )
 
         assert len(daemon.sent) == 1
         _, msg = daemon.sent[0]
-        assert msg["type"] == "auth_refresh_response"
-        assert msg["success"] is False
-        assert msg["error"] == "identity_disabled"
+        assert msg["type"] == "response"
+        assert msg["id"] == "r8"
+        assert msg["result"]["success"] is False
+        assert msg["result"]["error"] == "identity_disabled"
 
 
 # ---------------------------------------------------------------------------

@@ -9,19 +9,6 @@ import pytest
 from soothe_sdk.client import helpers
 
 
-def test_daemon_status_indicates_live_prefers_running_key() -> None:
-    """Explicit ``running`` wins when both fields are present."""
-    assert helpers._daemon_status_indicates_live({"running": True, "port_live": False}) is True
-    assert helpers._daemon_status_indicates_live({"running": False, "port_live": True}) is False
-
-
-def test_daemon_status_indicates_live_missing_running_falls_back() -> None:
-    """Missing ``running`` must not imply dead (regression: default False was wrong)."""
-    assert helpers._daemon_status_indicates_live({"port_live": True}) is True
-    assert helpers._daemon_status_indicates_live({"port_live": False}) is False
-    assert helpers._daemon_status_indicates_live({}) is True
-
-
 def test_daemon_status_indicates_live_readiness_state_ready() -> None:
     """Daemon with readiness_state 'ready' is live."""
     assert (
@@ -65,16 +52,43 @@ def test_daemon_status_indicates_live_readiness_state_terminal_error() -> None:
     )
 
 
-def test_daemon_status_indicates_live_readiness_state_unknown_falls_back() -> None:
-    """Unknown readiness_state falls back to legacy check."""
-    assert (
-        helpers._daemon_status_indicates_live({"readiness_state": "unknown", "running": True})
-        is True
-    )
-    assert (
-        helpers._daemon_status_indicates_live({"readiness_state": "unknown", "running": False})
-        is False
-    )
+def test_daemon_status_indicates_live_missing_readiness_state_is_not_live() -> None:
+    """Without readiness_state the daemon is not considered live (clear cut)."""
+    assert helpers._daemon_status_indicates_live({"running": True, "port_live": False}) is False
+    assert helpers._daemon_status_indicates_live({"port_live": True}) is False
+    assert helpers._daemon_status_indicates_live({}) is False
+
+
+@pytest.mark.asyncio
+async def test_check_daemon_status_performs_handshake() -> None:
+    """check_daemon_status must handshake before daemon_status RPC (RFC-450 §8.2)."""
+    mock_client = AsyncMock()
+    mock_client._handshake_complete = False
+    mock_client.request_connection_init = AsyncMock()
+    mock_client.wait_for_connection_ack = AsyncMock()
+    mock_client.fetch_daemon_status = AsyncMock(return_value={"readiness_state": "ready"})
+
+    result = await helpers.check_daemon_status(mock_client, timeout=3.0)
+
+    mock_client.request_connection_init.assert_awaited_once()
+    mock_client.wait_for_connection_ack.assert_awaited_once_with(ack_timeout_s=3.0)
+    mock_client.fetch_daemon_status.assert_awaited_once_with(timeout=3.0, min_interval_s=1.0)
+    assert result["readiness_state"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_check_daemon_status_skips_handshake_when_complete() -> None:
+    """An already-handshaked client should not repeat connection_init."""
+    mock_client = AsyncMock()
+    mock_client._handshake_complete = True
+    mock_client.request_connection_init = AsyncMock()
+    mock_client.wait_for_connection_ack = AsyncMock()
+    mock_client.fetch_daemon_status = AsyncMock(return_value={"readiness_state": "ready"})
+
+    await helpers.check_daemon_status(mock_client, timeout=2.0)
+
+    mock_client.request_connection_init.assert_not_awaited()
+    mock_client.wait_for_connection_ack.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -89,7 +103,7 @@ async def test_is_daemon_live_retries_on_transient_failure() -> None:
         patch.object(
             helpers,
             "check_daemon_status",
-            new=AsyncMock(return_value={"running": True}),
+            new=AsyncMock(return_value={"readiness_state": "ready"}),
         ),
     ):
         assert await helpers.is_daemon_live("ws://127.0.0.1:9", timeout=1.0) is True

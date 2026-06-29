@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from textual.widgets import Static
     from textual.worker import Worker
 
+from textual.app import App
 from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
 
@@ -439,9 +440,9 @@ class _MessagesMixin:
             self._quit_pending = False
             return
 
-        # Double Ctrl+C to quit
+        # Double Ctrl+C to quit (same detach path as Ctrl+D and /quit)
         if self._quit_pending:
-            self.exit()
+            self._detach_or_exit()
         else:
             self._arm_quit_pending("Ctrl+C")
 
@@ -528,19 +529,46 @@ class _MessagesMixin:
         self._detaching = True
         try:
             if self._daemon_session is not None:
+                from soothe_cli.runtime.transport.session import TUI_EXIT_HANDSHAKE_TIMEOUT_S
+
                 await self._daemon_session.detach()
-                await self._daemon_session.close()
+                await self._daemon_session.close(
+                    handshake_timeout=TUI_EXIT_HANDSHAKE_TIMEOUT_S,
+                )
             self.exit()
         finally:
             self._detaching = False
 
     def _detach_or_exit(self) -> None:
-        """Exit immediately, or detach first when daemon-backed."""
+        """Gracefully detach from the daemon when connected, then exit."""
         if self._daemon_session is None:
             self.exit()
             return
+        self._prepare_shutdown()
         self.notify("Detaching from daemon...", severity="info")
         self.run_worker(self._detach_then_exit(), exclusive=False, group="daemon-detach")
+
+    def _prepare_shutdown(self) -> None:
+        """One-shot pre-exit cleanup: flag workers, merge stats, cancel tasks."""
+        if self._shutdown_prepared:
+            return
+        self._shutdown_prepared = True
+        # Set before cancelling workers so interrupt cleanup can skip slow RPC.
+        self._exit = True
+
+        inflight = self._inflight_turn_stats
+        if inflight is not None:
+            self._inflight_turn_stats = None
+            if not inflight.wall_time_seconds:
+                inflight.wall_time_seconds = time.monotonic() - self._inflight_turn_start
+            self._session_stats.merge(inflight)
+
+        self._discard_queue()
+
+        if self._shell_running and self._shell_worker:
+            self._shell_worker.cancel()
+        if self._agent_running and self._agent_worker:
+            self._agent_worker.cancel()
 
     def exit(
         self,
@@ -559,30 +587,9 @@ class _MessagesMixin:
             return_code: Exit code (non-zero for errors).
             message: Optional message to display on exit.
         """
-        # Merge in-flight turn stats before any cleanup that might raise.
-        # When the agent worker is cancelled (e.g. Ctrl+D during a pending tool
-        # call), the worker's finally block will see _inflight_turn_stats is
-        # already None and skip the merge.
-        inflight = self._inflight_turn_stats
-        if inflight is not None:
-            self._inflight_turn_stats = None
-            if not inflight.wall_time_seconds:
-                inflight.wall_time_seconds = time.monotonic() - self._inflight_turn_start
-            self._session_stats.merge(inflight)
-
-        # Discard queued messages so _cleanup_agent_task won't try to
-        # process them after the event loop is torn down, and cancel
-        # active workers so their subprocesses are terminated
-        # (SIGTERM → SIGKILL) instead of being orphaned.
-        self._discard_queue()
-
-        if self._shell_running and self._shell_worker:
-            self._shell_worker.cancel()
-        if self._agent_running and self._agent_worker:
-            self._agent_worker.cancel()
-
+        self._prepare_shutdown()
         _write_iterm_escape(_ITERM_CURSOR_GUIDE_ON)
-        super().exit(result=result, return_code=return_code, message=message)
+        App.exit(self, result=result, return_code=return_code, message=message)
 
     def action_shift_tab(self) -> None:
         """Shift+Tab: navigate loop selector when active, otherwise flip relay mode.

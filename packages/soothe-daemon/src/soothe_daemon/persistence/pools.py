@@ -51,17 +51,22 @@ async def release_idle_shared_postgres_pools() -> None:
 async def close_shared_postgres_pools() -> None:
     """Close shared StrangeLoop and checkpointer pools at daemon shutdown."""
     try:
-        from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+        from soothe.foundation.loop.state.persistence.shared_pool import (
+            SharedPostgreSQLPool,
+            close_shared_sqlite_backend_instance,
+        )
         from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
         await SharedPostgreSQLPool.close_shared_instance()
         logger.info("Shared StrangeLoop PostgreSQL pool closed")
         await SharedCheckpointerPool.close_shared_instance()
         logger.info("Shared checkpointer PostgreSQL pool closed")
+        await close_shared_sqlite_backend_instance()
+        logger.info("Shared StrangeLoop SQLite backend closed")
     except ImportError:
         pass
     except Exception:
-        logger.debug("Failed to close shared PostgreSQL pools", exc_info=True)
+        logger.debug("Failed to close shared persistence pools", exc_info=True)
 
 
 async def periodic_postgres_pool_maintenance(

@@ -90,6 +90,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         with self._writer_thread_lock:
             if self._writer_conn is not None:
                 return
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
             # Ensure database schema
             self.initialize_database_sync(self.db_path)
 
@@ -117,6 +118,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     def _init_reader_pool_sync(self) -> None:
         """Initialize reader connection pool."""
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         for i in range(self._pool_size):
             conn = sqlite3.connect(
                 str(self.db_path),

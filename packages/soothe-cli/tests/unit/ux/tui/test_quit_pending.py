@@ -204,7 +204,7 @@ def test_ctrl_c_clears_input_when_completion_active() -> None:
 
 
 def test_double_ctrl_c_quits_when_idle() -> None:
-    """Double Ctrl+C when idle should quit the app."""
+    """Double Ctrl+C when idle should quit via the unified detach path."""
 
     class _AppStub(_MessagesMixin):
         def __init__(self) -> None:
@@ -219,11 +219,11 @@ def test_double_ctrl_c_quits_when_idle() -> None:
             self._shell_worker = None
             self.notify = MagicMock()
             self.set_timer = MagicMock()
-            self.exit = MagicMock()
+            self._detach_or_exit = MagicMock()
 
     app = _AppStub()
     app.action_quit_or_interrupt()
 
-    # Should exit, not clear input again
-    app.exit.assert_called_once()
+    # Should use unified quit path, not clear input again
+    app._detach_or_exit.assert_called_once()
     app._chat_input.clear_input.assert_not_called()

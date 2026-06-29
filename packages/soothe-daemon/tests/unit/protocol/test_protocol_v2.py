@@ -6,33 +6,37 @@ Legacy global "input" message type was removed in favor of loop_input.
 from __future__ import annotations
 
 from soothe_daemon.protocol import (
-    ERROR_INVALID_MESSAGE,
-    ERROR_RATE_LIMITED,
+    ErrorCode,
     ProtocolError,
-    create_error_response,
+    build_error_response,
     validate_message,
     validate_message_size,
 )
 
 
 def test_validate_message_command_valid() -> None:
-    """Test valid command message validation."""
-    msg = {"type": "command", "cmd": "/exit"}
+    """Test valid slash_command notification validation."""
+    msg = {
+        "proto": "1",
+        "type": "notification",
+        "method": "slash_command",
+        "params": {"cmd": "/exit"},
+    }
     errors = validate_message(msg)
     assert errors == []
 
 
 def test_validate_message_command_missing_cmd() -> None:
-    """Test command message missing required cmd field."""
-    msg = {"type": "command"}
+    """Test slash_command notification missing required cmd field."""
+    msg = {"proto": "1", "type": "notification", "method": "slash_command", "params": {}}
     errors = validate_message(msg)
     assert len(errors) == 1
     assert "cmd" in errors[0]
 
 
 def test_validate_message_detach_valid() -> None:
-    """Test valid detach message validation."""
-    msg = {"type": "detach"}
+    """Test valid disconnect notification validation."""
+    msg = {"proto": "1", "type": "notification", "method": "disconnect", "params": {}}
     errors = validate_message(msg)
     assert errors == []
 
@@ -46,30 +50,51 @@ def test_validate_message_missing_type() -> None:
 
 
 def test_validate_message_skills_list_valid() -> None:
-    errors = validate_message({"type": "skills_list"})
+    errors = validate_message(
+        {"proto": "1", "type": "request", "method": "skills_list", "params": {}, "id": "r1"}
+    )
     assert errors == []
 
 
 def test_validate_message_models_list_valid() -> None:
-    errors = validate_message({"type": "models_list"})
+    errors = validate_message(
+        {"proto": "1", "type": "request", "method": "models_list", "params": {}, "id": "r1"}
+    )
     assert errors == []
 
 
 def test_validate_message_invoke_skill_valid() -> None:
-    errors = validate_message({"type": "invoke_skill", "skill": "my-skill", "args": "x"})
+    errors = validate_message(
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "invoke_skill",
+            "params": {"skill": "my-skill", "args": "x"},
+            "id": "r1",
+        }
+    )
     assert errors == []
 
 
 def test_validate_message_invoke_skill_missing_skill() -> None:
-    errors = validate_message({"type": "invoke_skill", "args": ""})
+    errors = validate_message(
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "invoke_skill",
+            "params": {"args": ""},
+            "id": "r1",
+        }
+    )
     assert errors
 
 
 def test_validate_message_unknown_type() -> None:
-    """Test message with unknown type is allowed."""
+    """Test message with unknown type is rejected (RFC-450 §6.3)."""
     msg = {"type": "custom", "data": "test"}
     errors = validate_message(msg)
-    assert errors == []  # Unknown types are allowed for forward compatibility
+    assert len(errors) == 1
+    assert "Unknown message type" in errors[0]
 
 
 def test_validate_message_size_small() -> None:
@@ -86,57 +111,75 @@ def test_validate_message_size_large() -> None:
 
 
 def test_protocol_error_creation() -> None:
-    """Test ProtocolError creation."""
+    """Test ProtocolError creation with numeric code (RFC-450 §7.4)."""
     error = ProtocolError(
-        code=ERROR_INVALID_MESSAGE,
-        message="Invalid message structure",
-        details={"field": "type"},
+        ErrorCode.INVALID_REQUEST,
+        "Invalid message structure",
+        data={"field": "type"},
     )
 
-    assert error.code == ERROR_INVALID_MESSAGE
+    assert error.code == ErrorCode.INVALID_REQUEST
+    assert error.code == -32600
     assert error.message == "Invalid message structure"
-    assert error.details == {"field": "type"}
+    assert error.data == {"field": "type"}
 
 
 def test_protocol_error_to_dict() -> None:
-    """Test ProtocolError to_dict conversion."""
+    """Test ProtocolError to_dict conversion produces wire envelope."""
     error = ProtocolError(
-        code=ERROR_RATE_LIMITED,
-        message="Rate limit exceeded",
-        details={"retry_after_ms": 100},
+        ErrorCode.RATE_LIMITED,
+        "Rate limit exceeded",
+        data={"retry_after_ms": 100},
     )
 
     error_dict = error.to_dict()
 
     assert error_dict["type"] == "error"
-    assert error_dict["code"] == ERROR_RATE_LIMITED
-    assert error_dict["message"] == "Rate limit exceeded"
-    assert error_dict["details"]["retry_after_ms"] == 100
+    assert error_dict["error"]["code"] == -32000
+    assert error_dict["error"]["message"] == "Rate limit exceeded"
+    assert error_dict["error"]["data"]["retry_after_ms"] == 100
 
 
-def test_protocol_error_to_dict_no_details() -> None:
-    """Test ProtocolError to_dict without details."""
+def test_protocol_error_to_dict_no_data() -> None:
+    """Test ProtocolError to_dict omits data when empty."""
     error = ProtocolError(
-        code=ERROR_INVALID_MESSAGE,
-        message="Invalid message",
+        ErrorCode.INVALID_REQUEST,
+        "Invalid message",
     )
 
     error_dict = error.to_dict()
 
     assert error_dict["type"] == "error"
-    assert error_dict["code"] == ERROR_INVALID_MESSAGE
-    assert "details" not in error_dict
+    assert error_dict["error"]["code"] == -32600
+    assert "data" not in error_dict["error"]
 
 
-def test_create_error_response() -> None:
-    """Test create_error_response helper function."""
-    response = create_error_response(
-        code=ERROR_INVALID_MESSAGE,
-        message="Invalid message",
-        details={"field": "text"},
+def test_build_error_response() -> None:
+    """Test build_error_response helper produces wire envelope (RFC-450 §7.1)."""
+    response = build_error_response(
+        ErrorCode.INVALID_REQUEST,
+        "Invalid message",
+        request_id="req_42",
+        data={"field": "text"},
     )
 
+    assert response["proto"] == "1"
     assert response["type"] == "error"
-    assert response["code"] == ERROR_INVALID_MESSAGE
-    assert response["message"] == "Invalid message"
-    assert response["details"]["field"] == "text"
+    assert response["error"]["code"] == -32600
+    assert response["error"]["message"] == "Invalid message"
+    assert response["error"]["data"]["field"] == "text"
+    assert response["id"] == "req_42"
+
+
+def test_build_error_response_no_id_no_data() -> None:
+    """build_error_response omits id and data when not provided."""
+    response = build_error_response(
+        ErrorCode.PARSE_ERROR,
+        "Invalid JSON",
+    )
+
+    assert response["proto"] == "1"
+    assert response["type"] == "error"
+    assert response["error"]["code"] == -32700
+    assert "data" not in response["error"]
+    assert "id" not in response

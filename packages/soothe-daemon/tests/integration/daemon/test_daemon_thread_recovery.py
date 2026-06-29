@@ -75,6 +75,8 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
     try:
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
+        await client1.request_connection_init()
+        await client1.wait_for_connection_ack()
 
         try:
             loop_id = await loop_new(client1)
@@ -104,13 +106,15 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
     try:
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
+        await client2.request_connection_init()
+        await client2.wait_for_connection_ack()
 
         try:
             list_response = await request_loop_list(client2)
             loop_ids = {row["loop_id"] for row in (list_response.get("loops") or [])}
             assert loop_id is not None and loop_id in loop_ids
 
-            await client2.send_loop_reattach(loop_id)
+            await client2.request("loop_reattach", {"loop_id": loop_id})
             # RFC-413 card-based replay: reattach emits card.replay_begin →
             # card.created × N → card.replay_end.  Wait for the terminal frame.
             resume_status = await await_event_type(
@@ -148,6 +152,8 @@ async def test_thread_recovery_missing_metadata(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new(client)
@@ -181,6 +187,8 @@ async def test_concurrent_thread_execution(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_ids: list[str] = []
@@ -193,7 +201,7 @@ async def test_concurrent_thread_execution(
         for lid in loop_ids:
             assert lid in listed
 
-        await client.send_loop_reattach(loop_ids[0])
+        await client.request("loop_reattach", {"loop_id": loop_ids[0]})
         # RFC-413 card-based replay: wait for terminal card.replay_end frame.
         await await_event_type(client.read_event, "card.replay_end", timeout=10.0)
 
@@ -224,6 +232,8 @@ async def test_thread_cancellation(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new(client)
@@ -236,7 +246,7 @@ async def test_thread_cancellation(
                 client.read_event, "running", timeout=integration_llm_idle_timeout()
             )
 
-            await client.send_command("/cancel")
+            await client.notify("slash_command", {"cmd": "/cancel"})
 
             cancel_status = await await_status_state(
                 client.read_event, "idle", timeout=integration_llm_idle_timeout()
@@ -279,6 +289,8 @@ async def test_loop_isolation_distinct_ids(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_a = await loop_new(client)

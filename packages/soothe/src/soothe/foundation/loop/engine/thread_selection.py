@@ -35,6 +35,17 @@ def _wire_subagent_from_routing(routing_classification: Any | None) -> str | Non
     return str(preferred) if preferred is not None else None
 
 
+def resolve_wire_subagent_for_step(
+    step: Any,
+    routing_classification: Any | None,
+) -> str | None:
+    """Resolve subagent wiring for execute: planner step hint wins over wire routing."""
+    wire = getattr(step, "wire_subagent", None)
+    if isinstance(wire, str) and wire.strip():
+        return wire.strip()
+    return _wire_subagent_from_routing(routing_classification)
+
+
 def _count_dependents(predecessor_id: str, decision: AgentDecision) -> int:
     """Count how many steps in ``decision`` directly depend on ``predecessor_id``.
 
@@ -113,4 +124,5 @@ __all__ = [
     "_count_dependents",
     "_select_thread_for_step",
     "_wire_subagent_from_routing",
+    "resolve_wire_subagent_for_step",
 ]

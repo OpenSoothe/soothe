@@ -87,6 +87,10 @@ class LazyCoreAgent:
         return self.materialize().checkpointer
 
     @property
+    def can_read_graph_state(self) -> bool:
+        return self.materialize().can_read_graph_state
+
+    @property
     def config(self) -> SootheConfig:
         if self._config is not None:
             return self._config
@@ -161,7 +165,8 @@ class LazyCoreAgent:
         )
 
     async def execution_aget_state(self, config: RunnableConfig | None = None) -> Any:
-        return await self.materialize().execution_aget_state(config=config)
+        agent = await self.amaterialize()
+        return await agent.execution_aget_state(config=config)
 
     async def execution_ainvoke(
         self,

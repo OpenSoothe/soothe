@@ -61,6 +61,8 @@ class PlanGenerateStep(BaseModel):
         dependencies: Step IDs this depends on (for DAG execution).
         kind: ``action`` (normal) or ``ask_user`` (clarification relay).
         questions: Questions for ``ask_user`` steps.
+        execution_hint: Preferred execution routing from the planner.
+        subagent: Subagent name when ``execution_hint='subagent'`` (e.g. ``explore``).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -76,6 +78,8 @@ class PlanGenerateStep(BaseModel):
     dependencies: list[str] | None = None
     kind: StepKind = "action"
     questions: list[str] | None = None
+    execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
+    subagent: str | None = None
 
     @model_validator(mode="after")
     def _validate_ask_user(self) -> PlanGenerateStep:
@@ -85,20 +89,55 @@ class PlanGenerateStep(BaseModel):
         return self
 
 
+def resolve_step_wire_subagent(
+    *,
+    execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto",
+    subagent: str | None = None,
+) -> str | None:
+    """Map planner execution hints to executor subagent wiring (explore default)."""
+    if execution_hint != "subagent":
+        return None
+    name = (subagent or "explore").strip()
+    return name or "explore"
+
+
+def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:
+    """Attach ``wire_subagent`` on steps that delegate via the planner."""
+    out: list[StepAction] = []
+    for step in steps:
+        wire = resolve_step_wire_subagent(
+            execution_hint=step.execution_hint,
+            subagent=step.subagent,
+        )
+        if wire == step.wire_subagent:
+            out.append(step)
+        else:
+            out.append(step.model_copy(update={"wire_subagent": wire}))
+    return out
+
+
 def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[StepAction]:
     """Convert plan-generate steps into runtime ``StepAction`` rows."""
-    return [
-        StepAction(
-            id=s.id,
-            description=s.description,
-            full_description=s.full_description,
-            expected_output=s.expected_output,
-            dependencies=s.dependencies,
-            kind=s.kind,
-            questions=list(s.questions) if s.questions else None,
-        )
-        for s in steps
-    ]
+    return apply_step_wire_subagents(
+        [
+            StepAction(
+                id=s.id,
+                description=s.description,
+                full_description=s.full_description,
+                expected_output=s.expected_output,
+                dependencies=s.dependencies,
+                kind=s.kind,
+                questions=list(s.questions) if s.questions else None,
+                execution_hint=s.execution_hint,
+                subagent=s.subagent,
+                wire_subagent=resolve_step_wire_subagent(
+                    execution_hint=s.execution_hint,
+                    subagent=s.subagent,
+                ),
+            )
+            for s in steps
+        ]
+    )
 
 
 def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGenerateStep]:
@@ -112,6 +151,8 @@ def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGen
             dependencies=s.dependencies,
             kind=s.kind,
             questions=list(s.questions) if s.questions else None,
+            execution_hint=s.execution_hint,
+            subagent=s.subagent,
         )
         for s in steps
     ]
@@ -136,6 +177,9 @@ class StepAction(BaseModel):
             (clarification relay short-circuit).
         questions: When ``kind == "ask_user"``, the questions to surface to
             the user (TUI manual mode) or veritas (auto mode).
+        execution_hint: Planner routing hint (``subagent`` → delegate via ``task``).
+        subagent: Named subagent when ``execution_hint='subagent'``.
+        wire_subagent: Resolved executor hint (from planner or wire routing).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -151,6 +195,9 @@ class StepAction(BaseModel):
     dependencies: list[str] | None = None
     kind: StepKind = "action"
     questions: list[str] | None = None
+    execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
+    subagent: str | None = None
+    wire_subagent: str | None = None
 
     @model_validator(mode="after")
     def _validate_ask_user(self) -> StepAction:
@@ -767,7 +814,8 @@ class StepResult(BaseModel):
         error_type: Error classification
         duration_ms: Execution duration in milliseconds
         thread_id: Thread used for execution
-        tool_call_count: Number of tool calls made during execution
+        tool_call_count: Main-graph tool calls during execution (excludes subgraph).
+        subgraph_tool_call_count: Namespaced subagent tool calls during execution.
         subagent_task_completions: Completed ``task`` tool results at graph root (IG-130).
         hit_subagent_cap: True when streaming stopped early due to subagent task cap (IG-130).
         hit_tool_budget: True when streaming stopped early due to per-step tool call cap.
@@ -781,6 +829,7 @@ class StepResult(BaseModel):
     duration_ms: int
     thread_id: str
     tool_call_count: int = 0
+    subgraph_tool_call_count: int = 0
     subagent_task_completions: int = 0
     hit_subagent_cap: bool = False
     hit_tool_budget: bool = False

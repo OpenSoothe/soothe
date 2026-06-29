@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import OrderedDict
 from typing import TYPE_CHECKING
@@ -60,15 +59,3 @@ async def discover_skills_async(
         return []
 
     return list(by_name.values())
-
-
-def discover_skills(
-    daemon_config: CLIConfig | None = None,
-) -> list[ExtendedSkillMetadata]:
-    """Backward-compatible sync wrapper for async skills discovery."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(discover_skills_async(daemon_config=daemon_config))
-    msg = "discover_skills() cannot be called from a running event loop; use discover_skills_async() instead."
-    raise RuntimeError(msg)

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from soothe.config import SootheConfig
 
-from soothe_daemon.protocol import MessageRouter
+from soothe_daemon.protocol import ErrorCode, MessageRouter
 from soothe_daemon.protocol.router import (
     _coerce_loop_input_text,
     _queue_options_from_daemon_message,
@@ -174,10 +174,14 @@ async def test_loop_input_image_to_text_without_attachments_returns_error(
     await router.dispatch(
         "client-go-parity",
         {
-            "type": "loop_input",
-            "loop_id": loop_id,
-            "content": "text without image",
-            "intent_hint": "image_to_text",
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "text without image",
+                "intent_hint": "image_to_text",
+            },
         },
     )
 
@@ -185,8 +189,8 @@ async def test_loop_input_image_to_text_without_attachments_returns_error(
     assert sent
     err = sent[-1][1]
     assert err["type"] == "error"
-    assert err["code"] == "INVALID_REQUEST"
-    assert "attachment" in err["message"].lower()
+    assert err["error"]["code"] == ErrorCode.INVALID_REQUEST.value
+    assert "attachment" in err["error"]["message"].lower()
 
 
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
@@ -232,11 +236,15 @@ async def test_loop_input_direct_llm_attachments_only_enqueues(
     await router.dispatch(
         "client-go-parity",
         {
-            "type": "loop_input",
-            "loop_id": loop_id,
-            "content": "",
-            "intent_hint": "direct_llm",
-            "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "",
+                "intent_hint": "direct_llm",
+                "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+            },
         },
     )
 
@@ -244,7 +252,7 @@ async def test_loop_input_direct_llm_attachments_only_enqueues(
     payload = enqueue.await_args.args[1]
     assert payload["intent_hint"] == "direct_llm"
     assert payload["attachments"]
-    assert sent[-1][1]["type"] == "loop_input_response"
+    assert sent[-1][1]["type"] == "response"
 
 
 @pytest.mark.asyncio
@@ -256,18 +264,22 @@ async def test_loop_input_direct_llm_without_content_or_attachments_returns_erro
     await router.dispatch(
         "client-go-parity",
         {
-            "type": "loop_input",
-            "loop_id": loop_id,
-            "content": "",
-            "intent_hint": "direct_llm",
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "",
+                "intent_hint": "direct_llm",
+            },
         },
     )
 
     enqueue.assert_not_awaited()
     err = sent[-1][1]
     assert err["type"] == "error"
-    assert err["code"] == "INVALID_REQUEST"
-    assert "content or attachments" in err["message"].lower()
+    assert err["error"]["code"] == ErrorCode.INVALID_REQUEST.value
+    assert "content or attachments" in err["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -279,11 +291,15 @@ async def test_loop_input_image_to_text_normalizes_intent_hint(
     await router.dispatch(
         "client-go-parity",
         {
-            "type": "loop_input",
-            "loop_id": loop_id,
-            "content": "describe",
-            "intent_hint": "image_to_text",
-            "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "describe",
+                "intent_hint": "image_to_text",
+                "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+            },
         },
     )
 
