@@ -36,19 +36,10 @@ class ProviderType(Enum):
 
     Supports all structured output methods (function_calling, json_schema, json_mode).
     Accepts object and string tool_choice formats.
-    """
 
-    LIMITED_OPENAI = "limited_openai"
-    """Limited OpenAI-compatible APIs (LMStudio, MLXServer, SGLang, vLLM).
-
-    Providers with partial OpenAI API compatibility:
-
-    - Accept ``json_schema`` response_format but may return empty ``content`` field
-    - Return structured JSON in ``reasoning_content`` field (thinking tokens)
-    - Only accept string ``tool_choice`` values: ``"none"``, ``"auto"``, ``"required"``
-    - Reject object-form ``tool_choice`` (e.g., ``{"type": "function", "name": "..."}``)
-
-    LLMFactory applies ``LimitedProviderModelWrapper`` for compatibility.
+    When ``api_base_url`` points at a non-standard endpoint (local oMLX, LMStudio, vLLM),
+    ``LLMFactory`` auto-applies ``LimitedProviderModelWrapper`` for ``reasoning_content``
+    and ``tool_choice`` compatibility.
     """
 
     ANTHROPIC = "anthropic"

@@ -78,13 +78,13 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
-        # Use config if available (ensures LimitedProviderModelWrapper applied)
+        # Use config if available (applies OpenAI-compat wrappers for custom endpoints)
         if config:
             model = config.create_chat_model("fast")
         else:
             from langchain.chat_models import init_chat_model
 
-            logger.warning("No config provided, limited_openai wrapper NOT applied")
+            logger.warning("No config provided, OpenAI compatibility wrapper NOT applied")
             model = init_chat_model(
                 model=model_name or "gpt-4o-mini",
                 model_provider="openai",

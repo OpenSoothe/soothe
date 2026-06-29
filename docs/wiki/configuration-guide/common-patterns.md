@@ -45,7 +45,7 @@ The router's role-based design exists precisely so you can mix providers without
 
 **Routing logic:** unset roles fall back to `default`. So a hybrid config can set only `default` (local) and `think` (cloud) — everything else reuses the local model. This is cheaper than it looks: classification, routing, and memory extraction use the `fast` role, which inherits `default`, so they all run locally.
 
-**Gotcha:** `provider_type: openai` with a custom `api_base_url` works for any OpenAI-compatible API (DashScope, OpenRouter, vLLM). Use `limited_openai` only when the endpoint mishandles `tool_choice` or returns structured output in `reasoning_content` — LMStudio and some GLM deployments need it.
+**Gotcha:** `provider_type: openai` with a custom `api_base_url` works for any OpenAI-compatible API (DashScope, OpenRouter, vLLM, local oMLX). Non-OpenAI endpoints automatically receive compatibility wrappers for `reasoning_content` and `tool_choice` quirks.
 
 ## Tool Scoping by Use Case
 

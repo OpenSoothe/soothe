@@ -49,12 +49,8 @@ class ModelProviderConfig(BaseModel):
         api_key: API key. Supports ``${ENV_VAR}`` syntax for env var references.
         provider_type: langchain provider type for ``init_chat_model`` /
             ``init_embeddings``. Supported values:
-            - ``openai``: Standard OpenAI API (full compatibility)
-            - ``limited_openai``: Limited OpenAI-compatible APIs with:
-              * Accept json_schema response_format but return empty content field
-              * Return structured JSON in reasoning_content field (thinking tokens)
-              * Limited tool_choice support (string values: "none", "auto", "required")
-              Examples: LMStudio, MLXServer, certain GLM deployments
+            - ``openai``: OpenAI API (official or compatible). Custom ``api_base_url``
+              endpoints (oMLX, LMStudio, vLLM) auto-receive compatibility wrappers.
             - ``anthropic``: Anthropic Claude API
             - ``ollama``: Ollama local inference
         models: Model names available from this provider (for documentation).

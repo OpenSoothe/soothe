@@ -735,7 +735,7 @@ class SootheConfig(BaseSettings):
         for provider in self.providers:
             # Limited OpenAI providers use OpenAI API format
             provider_type = provider.provider_type
-            if provider_type in ("openai", "limited_openai") and provider.api_key:
+            if provider_type == "openai" and provider.api_key:
                 # Resolve api_base_url first to check if this is a custom endpoint
                 api_base_url = None
                 if provider.api_base_url:
