@@ -180,7 +180,7 @@ class LLMFactory:
         """Apply provider-specific wrappers in order.
 
         Wrapper chain:
-        - LIMITED_OPENAI: LimitedProviderModelWrapper → SootheTokenUsageChatModel
+        - Custom OpenAI-compatible endpoints: LimitedProviderModelWrapper → SootheTokenUsageChatModel
         - All others: SootheTokenUsageChatModel only
 
         Args:
@@ -191,9 +191,9 @@ class LLMFactory:
         Returns:
             Wrapped model ready for use.
         """
-        if provider_type == ProviderType.LIMITED_OPENAI:
+        if self._registry.requires_openai_compat_wrapper(provider_name):
             logger.info(
-                "Provider '%s' is limited_openai, applying compatibility wrapper",
+                "Provider '%s' uses a custom OpenAI-compatible endpoint, applying compatibility wrapper",
                 provider_name,
             )
             model = LimitedProviderModelWrapper(model, provider_name)

@@ -5,8 +5,7 @@ These wrappers handle providers with limited OpenAI API compatibility:
 - Require json_schema format, not json_object format
 - May return structured output in alternative fields (reasoning_content)
 
-Limited OpenAI providers (provider_type='limited_openai'):
-- LMStudio, MLXServer, certain GLM deployments
+Custom OpenAI-compatible providers (local oMLX, LMStudio, MLXServer):
 - Return structured JSON in reasoning_content field (thinking tokens)
 - Accept json_schema response_format but may return empty content field
 """
@@ -223,8 +222,7 @@ class LimitedProviderModelWrapper(BaseChatModel):
     - Accepts response_format={"type": "json_schema", ...}
     - Only accepts string tool_choice values: "none", "auto", "required"
 
-    Limited OpenAI providers (provider_type='limited_openai'):
-    - LMStudio, MLXServer, GLM deployments with thinking tokens
+    Custom OpenAI-compatible providers (local oMLX, LMStudio):
     - Return structured JSON in reasoning_content field
 
     Args:
@@ -271,7 +269,7 @@ class LimitedProviderModelWrapper(BaseChatModel):
             self._provider_name,
         )
 
-        # ALWAYS use JsonSchemaModelWrapper for limited_openai providers
+        # ALWAYS use JsonSchemaModelWrapper for custom OpenAI-compatible providers
         # This ensures we check additional_kwargs["reasoning_content"] field
         try:
             if isinstance(schema, dict):

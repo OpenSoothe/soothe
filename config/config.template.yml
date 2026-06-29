@@ -23,9 +23,10 @@ providers:
     #   api_key: "${DASHSCOPE_API_KEY}"
     #   models: [qwen-max]
 
-    # LMStudio / Ollama — use provider_type: limited_openai
+    # LMStudio / local oMLX — provider_type: openai + custom api_base_url
+    # (compatibility wrappers apply automatically for non-OpenAI endpoints)
     # - name: lmstudio
-    #   provider_type: limited_openai
+    #   provider_type: openai
     #   api_base_url: http://localhost:1234/v1
     #   api_key: "lmstudio"
     #   models: [google/gemma-4-26b-a4b]
