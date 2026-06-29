@@ -25,8 +25,10 @@ class _CancelRecordingClient:
     async def send_input(self, *_args: Any, **_kwargs: Any) -> None:
         return None
 
-    async def send_command(self, cmd: str) -> None:
-        self.cancel_commands.append(cmd)
+    async def notify(self, method: str, params: dict[str, Any] | None = None) -> None:
+        """Protocol-1 notify — records slash_command notifications."""
+        if method == "slash_command" and params:
+            self.cancel_commands.append(params.get("cmd", ""))
 
     async def read_event(self) -> dict[str, Any] | None:
         if not self._events:
@@ -79,13 +81,13 @@ async def test_send_cancel_to_daemon_sends_command() -> None:
 
 @pytest.mark.asyncio
 async def test_send_cancel_to_daemon_is_tolerant_of_errors() -> None:
-    """_send_cancel_to_daemon should not raise even if send_command fails."""
+    """_send_cancel_to_daemon should not raise even if notify fails."""
     stub_client = _CancelRecordingClient()
 
-    async def _failing_send(cmd: str) -> None:
+    async def _failing_notify(method: str, params: dict[str, Any] | None = None) -> None:
         raise ConnectionError("boom")
 
-    stub_client.send_command = _failing_send
+    stub_client.notify = _failing_notify
     # Should not raise.
     await daemon_exec._send_cancel_to_daemon(stub_client)
     assert stub_client.cancel_commands == []

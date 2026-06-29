@@ -1,106 +1,130 @@
-"""Transport-agnostic message validation (RFC-0013).
+"""Transport-agnostic message validation (RFC-450 §6).
 
-This module provides message validation for the unified daemon protocol.
-It validates message structure without transport-specific concerns.
+Provides Pydantic-based schema validation at the transport boundary.  Every
+incoming message is validated against a params model from ``PARAMS_REGISTRY``
+*before* router dispatch, so handlers receive pre-validated, typed params and
+do not need inline ``if not loop_id:`` checks.
+
+Public API:
+    validate_message      -- validate a decoded message dict; returns list of
+                             error strings (empty = valid)
+    validate_message_size -- check encoded message size is within the limit
+    VALID_TYPES           -- frozenset of all protocol-1 ``type`` values
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
 
-class ProtocolError(Exception):
-    """Base exception for protocol errors."""
+from soothe_daemon.protocol.schemas import PARAMS_REGISTRY
 
-    def __init__(self, code: str, message: str, details: dict[str, Any] | None = None) -> None:
-        """Initialize protocol error.
+__all__ = [
+    "validate_message",
+    "validate_message_size",
+    "VALID_TYPES",
+]
 
-        Args:
-            code: Error code (e.g., "INVALID_MESSAGE").
-            message: Human-readable error message.
-            details: Optional additional error details.
-        """
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.details = details or {}
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert error to message dict.
+# All valid ``type`` field values per RFC-450 §9.1.
+VALID_TYPES: frozenset[str] = frozenset(
+    {
+        # Protocol-1 envelope message classes (RFC-450 §9.1).
+        "connection_init",
+        "connection_ack",
+        "request",
+        "response",
+        "notification",
+        "subscribe",
+        "next",
+        "error",
+        "complete",
+        "unsubscribe",
+        "ping",
+        "pong",
+        "receipt_response",
+        "disconnect",
+    }
+)
 
-        Returns:
-            Error message dict suitable for sending to clients.
-        """
-        result: dict[str, Any] = {
-            "type": "error",
-            "code": self.code,
-            "message": self.message,
-        }
-        if self.details:
-            result["details"] = self.details
-        return result
+# Envelope message classes that require ``proto == "1"`` (RFC-450 §8.1).
+# Legacy flat types are exempt during the migration window.
+_ENVELOPE_TYPES: frozenset[str] = frozenset(
+    {
+        "connection_init",
+        "connection_ack",
+        "request",
+        "response",
+        "notification",
+        "subscribe",
+        "next",
+        "error",
+        "complete",
+        "unsubscribe",
+        "receipt_response",
+        "disconnect",
+    }
+)
 
 
 def validate_message(msg: dict[str, Any]) -> list[str]:
-    """Validate message structure according to RFC-0013 protocol.
+    """Validate a wire message against the schema registry (RFC-450 §6.3).
 
-    This function performs structural validation only. It checks that
-    required fields are present and have the correct types.
+    Performs three checks:
+    1. Envelope: ``type`` field is present and known.
+    2. Schema lookup: a Pydantic model exists for ``(type, method)``.
+    3. Params validation: ``model_validate`` succeeds.
+
+    The daemon accepts protocol-1 envelopes (``{proto, type, method, params,
+    id}``) plus the three non-envelope control types (``connection_init``,
+    ``ping``, ``pong``). Legacy flat-form messages are rejected.
 
     Args:
-        msg: Message dict to validate.
+        msg: Raw decoded message dict.
 
     Returns:
-        List of validation error messages. Empty list if valid.
+        List of validation error strings.  Empty list if the message is
+        valid.  Each string is of the form ``"field: message"`` for params
+        errors, or a descriptive sentence for envelope / lookup errors.
     """
-    errors = []
+    # 1. Envelope validation ------------------------------------------------
+    msg_type = msg.get("type")
+    if not msg_type:
+        return ["Missing required field: type"]
 
-    # All messages must have a "type" field
-    if "type" not in msg:
-        errors.append("Missing required field: type")
-        return errors
+    if msg_type not in VALID_TYPES:
+        return [f"Unknown message type: {msg_type!r}"]
 
-    msg_type = msg["type"]
+    # Protocol-version check (RFC-450 §8.1).  Enforced for envelope message
+    # types; the three control types (connection_init/ping/pong) carry proto
+    # but are validated leniently.
+    if msg_type in _ENVELOPE_TYPES:
+        proto = msg.get("proto")
+        if proto != "1":
+            return [f"Unsupported or missing protocol version: {proto!r}. Expected '1'."]
 
-    # Validate based on message type
-    if msg_type == "command":
-        if "cmd" not in msg:
-            errors.append("Command message missing required field: cmd")
-        elif not isinstance(msg.get("cmd"), str):
-            errors.append("Command cmd must be a string")
+    # 2. Look up params schema by (type, method) ---------------------------
+    method = msg.get("method")
+    schema = PARAMS_REGISTRY.get((msg_type, method))
 
-    elif msg_type == "daemon_ready":
-        # No additional fields required
-        pass
+    if schema is None:
+        # Unknown (type, method) — return METHOD_NOT_FOUND-style error.
+        return [f"Unknown method {method!r} for type {msg_type!r}"]
 
-    elif msg_type == "detach":
-        # No additional fields required
-        pass
+    # 3. Validate params ----------------------------------------------------
+    # In the protocol-1 envelope, operation fields live under ``params``;
+    # the three control types carry fields at the top level. Validate
+    # whichever dict carries the data (models use ``extra = "allow"``).
+    params = msg.get("params")
+    validation_target = params if isinstance(params, dict) else msg
 
-    elif msg_type == "skills_list":
-        # Optional request_id is validated elsewhere; no extra fields required.
-        pass
+    try:
+        schema.model_validate(validation_target)
+    except ValidationError as exc:
+        return [f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()]
 
-    elif msg_type == "models_list":
-        # Optional request_id only; catalog is derived from daemon SootheConfig.
-        pass
-
-    elif msg_type == "invoke_skill":
-        if "skill" not in msg:
-            errors.append("invoke_skill message missing required field: skill")
-        elif not isinstance(msg.get("skill"), str):
-            errors.append("invoke_skill skill must be a string")
-        if "args" in msg and not isinstance(msg["args"], str):
-            errors.append("invoke_skill args must be a string")
-        if "clarification_mode" in msg and not isinstance(msg["clarification_mode"], str):
-            errors.append("invoke_skill clarification_mode must be a string")
-
-    else:
-        # Unknown message type - allow but log warning
-        # This provides forward compatibility for new message types
-        pass
-
-    return errors
+    return []
 
 
 def validate_message_size(msg: dict[str, Any], max_size_bytes: int = 10 * 1024 * 1024) -> bool:
@@ -116,33 +140,7 @@ def validate_message_size(msg: dict[str, Any], max_size_bytes: int = 10 * 1024 *
     import json
 
     try:
-        # Estimate size by encoding to JSON
         encoded = json.dumps(msg, ensure_ascii=False)
         return len(encoded.encode("utf-8")) <= max_size_bytes
     except (TypeError, ValueError):
         return False
-
-
-# Error code constants per RFC-0013
-ERROR_INVALID_MESSAGE = "INVALID_MESSAGE"
-ERROR_INVALID_JSON = "INVALID_JSON"
-ERROR_RATE_LIMITED = "RATE_LIMITED"
-ERROR_INTERNAL_ERROR = "INTERNAL_ERROR"
-ERROR_UNKNOWN_MESSAGE_TYPE = "UNKNOWN_MESSAGE_TYPE"
-
-
-def create_error_response(
-    code: str, message: str, details: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    """Create an error message response.
-
-    Args:
-        code: Error code.
-        message: Error message.
-        details: Optional error details.
-
-    Returns:
-        Error message dict.
-    """
-    error = ProtocolError(code, message, details)
-    return error.to_dict()

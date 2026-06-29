@@ -25,6 +25,7 @@ from soothe_daemon.protocol.error_codes import (
     build_error_response,
 )
 from soothe_daemon.protocol.schemas import PARAMS_REGISTRY
+from soothe_daemon.protocol.validation import validate_message
 from soothe_daemon.services.image_understanding import validate_and_normalize_image_attachments
 
 logger = logging.getLogger(__name__)
@@ -85,34 +86,33 @@ def _peek_loop_prompt(loop_id: str) -> str | None:
 
 
 # Client messages logged at DEBUG on every dispatch; skip types that poll frequently.
-_SKIP_PER_MESSAGE_DEBUG_TYPES = frozenset({"daemon_ready", "daemon_status", "ping", "pong"})
+_SKIP_PER_MESSAGE_DEBUG_TYPES = frozenset({"daemon_status", "ping", "pong"})
 
 # Daemon-supported capabilities for connection_ack negotiation (RFC-450 §8.2).
-_DAEMON_CAPABILITIES = ["streaming", "batch", "heartbeat"]
+_DAEMON_CAPABILITIES = ["streaming", "batch", "heartbeat", "receipts"]
 
 # Messages exempt from handshake-complete enforcement (RFC-450 §8.2 §8.3).
 # connection_init is the handshake itself; ping/pong must work even before the
 # handshake completes so a slow client can keep the connection alive.
 _HANDSHAKE_EXEMPT_TYPES = frozenset({"connection_init", "ping", "pong"})
 
-# Protocol-1 envelope message classes (RFC-450 §5/§9).  When ``msg["type"]`` is
-# one of these, ``dispatch()`` unwraps the envelope into the legacy flat format
-# the handlers expect before the registry lookup.
+# Protocol-1 envelope message classes (RFC-450 §5/§9). Messages of these types
+# carry ``method``/``params``/``id`` and are dispatched to handlers by method.
 _ENVELOPE_TYPES = frozenset({"request", "notification", "subscribe", "unsubscribe"})
 
-# Method-name overrides for envelope → flat-type translation.  The SDK uses
-# different method names in the protocol-1 envelope than the legacy flat ``type``
-# values in HANDLER_REGISTRY.  This table maps the SDK method to the flat type.
-# Methods not listed here pass through unchanged (e.g. ``loop_list`` → ``loop_list``).
-_METHOD_TO_FLAT_TYPE: dict[str, str] = {
+# Method-name → handler method name for envelope dispatch (RFC-450 §5/§9). The
+# daemon accepts protocol-1 envelopes only; the five method names below map to
+# handlers whose internal names predate the envelope method naming. All other
+# methods (``loop_list``, ``job_create``, …) map to ``_handle_<method>``.
+_METHOD_TO_HANDLER: dict[str, str] = {
     # notification methods
-    "slash_command": "command",  # SDK notify("slash_command") → _handle_command
-    "disconnect": "detach",  # SDK notify("disconnect") → _handle_detach
+    "slash_command": "_handle_command",
+    "disconnect": "_handle_detach",
     # subscribe methods
-    "loop_events": "loop_subscribe",  # SDK subscribe("loop_events") → _handle_loop_subscribe
-    "autopilot_events": "autopilot_subscribe",  # → _handle_autopilot_subscribe
+    "loop_events": "_handle_loop_subscribe",
+    "autopilot_events": "_handle_autopilot_subscribe",
     # request methods
-    "rpc_command": "command_request",  # SDK request("rpc_command") → _handle_command_request
+    "rpc_command": "_handle_command_request",
 }
 
 
@@ -232,50 +232,34 @@ class MessageRouter:
     (-32602).
     """
 
-    # Maps message ``type`` → handler method name (bound on the instance).
-    # ``daemon_ready`` is a legacy alias retained for backwards compatibility;
-    # it replies with the daemon readiness message.
+    # Maps message ``type`` → handler method name for the non-envelope control
+    # types (connection_init, ping, pong). All RPC/notification/subscribe
+    # methods are dispatched by envelope ``method`` via :data:`_METHOD_TO_HANDLER`
+    # (for the five method-name overrides) or the ``_handle_<method>`` convention.
     HANDLER_REGISTRY: dict[str, str] = {
         "connection_init": "_handle_connection_init",
         "ping": "_handle_ping",
         "pong": "_handle_pong",
-        "command": "_handle_command",
-        "command_request": "_handle_command_request",
-        "detach": "_handle_detach",
-        "daemon_ready": "_handle_daemon_ready",
-        "auth": "_handle_auth",
-        "auth_refresh": "_handle_auth_refresh",
-        "loop_list": "_handle_loop_list",
-        "loop_get": "_handle_loop_get",
-        "loop_tree": "_handle_loop_tree",
-        "loop_prune": "_handle_loop_prune",
-        "loop_delete": "_handle_loop_delete",
-        "loop_reattach": "_handle_loop_reattach",
-        "loop_subscribe": "_handle_loop_subscribe",
-        "loop_detach": "_handle_loop_detach",
-        "loop_new": "_handle_loop_new",
-        "loop_input": "_handle_loop_input",
-        "loop_messages": "_handle_loop_messages",
-        "loop_state_get": "_handle_loop_state_get",
-        "loop_state_update": "_handle_loop_state_update",
-        "loop_cards_fetch": "_handle_loop_cards_fetch",
-        "skills_list": "_handle_skills_list",
-        "invoke_skill": "_handle_invoke_skill",
-        "models_list": "_handle_models_list",
-        "mcp_status": "_handle_mcp_status",
-        "daemon_status": "_handle_daemon_status",
-        "daemon_shutdown": "_handle_daemon_shutdown",
-        "config_get": "_handle_config_get",
-        "job_create": "_handle_job_create",
-        "job_status": "_handle_job_status",
-        "job_pause": "_handle_job_pause",
-        "job_resume": "_handle_job_resume",
-        "job_cancel": "_handle_job_cancel",
-        "job_dag": "_handle_job_dag",
-        "job_guidance": "_handle_job_guidance",
-        "autopilot_subscribe": "_handle_autopilot_subscribe",
-        "autopilot_unsubscribe": "_handle_autopilot_unsubscribe",
     }
+
+    @classmethod
+    def _resolve_handler(cls, flat_type: str) -> str | None:
+        """Return the handler method name for a flattened envelope method.
+
+        ``flat_type`` is the envelope ``method`` (or the unsubscribe-inferred
+        key). The five method-name overrides in :data:`_METHOD_TO_HANDLER` map
+        to their handlers; every other method maps to ``_handle_<method>``.
+
+        Args:
+            flat_type: Flattened method/handler key.
+
+        Returns:
+            Handler method name, or ``None`` if no handler exists.
+        """
+        if flat_type in _METHOD_TO_HANDLER:
+            return _METHOD_TO_HANDLER[flat_type]
+        handler = f"_handle_{flat_type}"
+        return handler if hasattr(cls, handler) else None
 
     def __init__(self, daemon: Any) -> None:
         """Keep a reference to the daemon for config, runner, and session access."""
@@ -284,6 +268,108 @@ class MessageRouter:
         # (proto_version, capabilities). Legacy _ClientConn objects also carry
         # the flag on the object itself.
         self._handshake_state: dict[Any, tuple[str, list[str]]] = {}
+
+    async def _send_response(
+        self,
+        client_id: Any,
+        request_id: str | None,
+        result: dict[str, Any],
+        *,
+        proto: str = "1",
+    ) -> None:
+        """Send a protocol-1 response envelope to a client (RFC-450 §9.1).
+
+        Wraps ``result`` in the standard ``{proto, type:'response', result, id}``
+        envelope and dispatches via ``d._send_client_message``. When
+        ``request_id`` is ``None`` the ``id`` field is omitted (notification-
+        style responses, though this is unusual).
+
+        Args:
+            client_id: Client connection identifier.
+            request_id: The originating request's correlation id, or ``None``.
+            result: The result payload dict (method-specific return value).
+            proto: Protocol version string (default ``"1"``).
+        """
+        d = self._daemon
+        envelope: dict[str, Any] = {
+            "proto": proto,
+            "type": "response",
+            "result": result,
+        }
+        if request_id is not None:
+            envelope["id"] = request_id
+        await d._send_client_message(client_id, envelope)
+
+    async def _send_next(
+        self,
+        client_id: Any,
+        subscription_id: str | None,
+        payload: dict[str, Any],
+        *,
+        proto: str = "1",
+    ) -> None:
+        """Send a protocol-1 ``next`` event for an active subscription (RFC-450 §9.4).
+
+        Streaming/subscription events use ``{proto, type:'next', payload, id}``
+        where ``id`` matches the original subscription request's id. The stream
+        terminates with a separate ``complete`` message (not sent here).
+
+        Args:
+            client_id: Client connection identifier.
+            subscription_id: The subscription correlation id from the original
+                ``subscribe`` request.
+            payload: The event payload dict.
+            proto: Protocol version string (default ``"1"``).
+        """
+        d = self._daemon
+        envelope: dict[str, Any] = {
+            "proto": proto,
+            "type": "next",
+            "payload": payload,
+        }
+        if subscription_id is not None:
+            envelope["id"] = subscription_id
+        await d._send_client_message(client_id, envelope)
+
+    async def _send_complete(
+        self,
+        client_id: Any,
+        subscription_id: str | None,
+        *,
+        proto: str = "1",
+        reason: str | None = None,
+    ) -> None:
+        """Send a protocol-1 ``complete`` message to terminate a subscription (RFC-450 §9.4).
+
+        Subscriptions MUST end with an explicit ``complete`` message so clients
+        can distinguish "stream paused" from "stream ended". Call this when:
+        - A goal completes (normal termination)
+        - A goal is cancelled (user cancellation)
+        - Reattachment history replay finishes
+        - An error terminates the stream (sent after error message)
+
+        Args:
+            client_id: Client connection identifier.
+            subscription_id: The subscription correlation id from the original
+                ``subscribe`` request.
+            proto: Protocol version string (default ``"1"``).
+            reason: Optional reason string for logging (not sent on wire).
+        """
+        d = self._daemon
+        envelope: dict[str, Any] = {
+            "proto": proto,
+            "type": "complete",
+        }
+        if subscription_id is not None:
+            envelope["id"] = subscription_id
+        await d._send_client_message(client_id, envelope)
+        log_reason = reason or "stream_complete"
+        logger.debug(
+            "[MsgRouter] Sent complete to client %s (subscription=%s, reason=%s)",
+            client_id,
+            subscription_id,
+            log_reason,
+        )
 
     async def _client_subscribed_loop_id(self, client_id: Any) -> str | None:
         """Return the ``loop_id`` this client receives loop-scoped events for (IG-408).
@@ -311,21 +397,23 @@ class MessageRouter:
 
     @staticmethod
     def _unwrap_envelope(msg_type: str, msg: dict[str, Any]) -> dict[str, Any] | None:
-        """Translate a protocol-1 envelope to the legacy flat handler format.
+        """Flatten a protocol-1 envelope into the handler-facing message dict.
 
-        The handlers expect messages keyed by ``type`` with operation fields at
-        the top level (e.g. ``{"type": "loop_list", "verbose": True}``).  The
-        protocol-1 envelope wraps these as ``{"type": "request", "method":
-        "loop_list", "params": {"verbose": True}, "id": "..."}``.
+        Handlers consume a flat dict with operation fields at the top level
+        (e.g. ``{"type": "loop_list", "verbose": True, "request_id": "..."}``).
+        The protocol-1 envelope wraps these as
+        ``{"type": "request", "method": "loop_list", "params": {"verbose": True},
+        "id": "..."}``. This internal adapter extracts ``method``/``params`` and
+        builds that flat dict so handlers stay agnostic to the envelope shape.
 
-        This method extracts ``method`` and ``params`` from the envelope and
-        builds a flat dict whose ``type`` is the mapped method name (see
-        ``_METHOD_TO_FLAT_TYPE`` for overrides like ``slash_command`` →
-        ``command``).  The envelope ``id`` is carried as both ``request_id``
-        and ``id`` so handlers and error responses can correlate it.
+        The flat ``type`` is the envelope ``method`` (the handler-name key in
+        :data:`_METHOD_TO_HANDLER`). ``unsubscribe`` carries no ``method``;
+        its target is inferred from ``params`` (``loop_id`` → loop detach,
+        otherwise autopilot unsubscribe).
 
-        ``params is None`` is treated as ``{}`` because the SDK drops empty
-        params dicts to keep the wire form compact.
+        The envelope ``id`` is carried as both ``request_id`` and ``id`` so
+        handlers and error responses can correlate it. ``params is None`` is
+        treated as ``{}`` because the SDK drops empty params dicts.
 
         Args:
             msg_type: The envelope ``type`` (request/notification/subscribe/
@@ -334,7 +422,8 @@ class MessageRouter:
 
         Returns:
             A flat message dict ready for handler dispatch, or ``None`` if the
-            envelope is malformed (missing ``method``).
+            envelope is malformed (missing ``method`` on a non-unsubscribe
+            envelope).
         """
         method = msg.get("method")
         # unsubscribe carries no method — the target is inferred from params.
@@ -349,10 +438,10 @@ class MessageRouter:
         envelope_id = msg.get("id")
 
         if msg_type == "unsubscribe":
-            # No method field: infer the flat type from params content.
+            # No method field: infer the handler key from params content.
             flat_type = "loop_detach" if "loop_id" in params else "autopilot_unsubscribe"
         else:
-            flat_type = _METHOD_TO_FLAT_TYPE.get(method, method)
+            flat_type = method
 
         flat: dict[str, Any] = {
             "proto": proto,
@@ -365,8 +454,144 @@ class MessageRouter:
         flat.update(params)
         return flat
 
-    async def dispatch(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle a single client message via the ``HANDLER_REGISTRY`` dispatch table.
+    async def _dispatch_batch(self, client_id: Any, batch: list[Any]) -> None:
+        """Process a batch request array (RFC-450 §5.6).
+
+        Each item is dispatched independently. Responses are collected for items
+        with an ``id`` field (notifications produce no response). Empty or invalid
+        arrays return a single ``-32600 INVALID_REQUEST`` error.
+
+        Args:
+            client_id: Client connection identifier.
+            batch: JSON array of protocol-1 messages.
+        """
+        d = self._daemon
+
+        # Empty array → single error response
+        if not batch:
+            err = build_error_response(
+                ErrorCode.INVALID_REQUEST,
+                "Batch array is empty",
+            )
+            await d._send_client_message(client_id, err)
+            return
+
+        # Check batch capability (RFC-450 §5.6)
+        caps = self._get_negotiated_capabilities(client_id)
+        if "batch" not in caps:
+            err = build_error_response(
+                ErrorCode.INVALID_REQUEST,
+                "Batch requests require 'batch' capability in connection_init",
+            )
+            await d._send_client_message(client_id, err)
+            return
+
+        responses: list[dict[str, Any]] = []
+
+        for item in batch:
+            # Skip non-dict items
+            if not isinstance(item, dict):
+                err = build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "Batch item must be a valid message object",
+                )
+                responses.append(err)
+                continue
+
+            # Process item via single-message dispatch logic
+            # (handshake check, envelope unwrap, registry dispatch)
+            item_type = item.get("type", "")
+
+            # Handshake enforcement
+            if item_type not in _HANDSHAKE_EXEMPT_TYPES:
+                if not self._is_handshake_complete(client_id):
+                    err = build_error_response(
+                        ErrorCode.INVALID_REQUEST,
+                        "Handshake must complete before sending messages",
+                        request_id=item.get("id"),
+                        data={"type": item_type},
+                    )
+                    responses.append(err)
+                    continue
+
+            # Validation (on the raw envelope, before unwrapping)
+            errors = validate_message(item)
+            if errors:
+                err = build_error_response(
+                    ErrorCode.INVALID_PARAMS,
+                    "Invalid params",
+                    request_id=item.get("id"),
+                    data={"errors": errors},
+                )
+                responses.append(err)
+                continue
+
+            # Envelope unwrapping
+            if item_type in _ENVELOPE_TYPES:
+                unwrapped = self._unwrap_envelope(item_type, item)
+                if unwrapped is None:
+                    err = build_error_response(
+                        ErrorCode.INVALID_REQUEST,
+                        f"Invalid envelope: missing 'method' for type={item_type}",
+                        request_id=item.get("id"),
+                        data={"type": item_type},
+                    )
+                    responses.append(err)
+                    continue
+                item = unwrapped
+                item_type = item.get("type", "")
+                handler_name = self._resolve_handler(item_type)
+            else:
+                handler_name = self.HANDLER_REGISTRY.get(item_type)
+
+            # Registry dispatch
+            if handler_name is None:
+                err = build_error_response(
+                    ErrorCode.METHOD_NOT_FOUND,
+                    f"Method not found: {item_type}",
+                    request_id=item.get("request_id") or item.get("id"),
+                    data={"method": item_type},
+                )
+                responses.append(err)
+                continue
+
+            # Invoke handler
+            handler = getattr(self, handler_name)
+            request_id = item.get("request_id") or item.get("id")
+            try:
+                await handler(client_id, item)
+                # Handler sends its own response via _send_response
+                # For batch, we don't collect responses here since handlers
+                # send directly to client. The batch array return is for
+                # synchronous batch semantics only (not currently used).
+                # Notifications have no id and produce no response entry.
+                if request_id is not None:
+                    # Handler already sent response; nothing to collect
+                    pass
+            except ProtocolError as exc:
+                err = build_error_response(
+                    exc.code,
+                    exc.message,
+                    request_id=request_id,
+                    data=exc.data if exc.data else None,
+                )
+                if request_id is not None:
+                    responses.append(err)
+                # Send error directly for items with id
+                await d._send_client_message(client_id, err)
+
+        # Batch response: only sent if there were items with id that produced
+        # responses. Since handlers send responses directly, we don't send a
+        # batch array here unless all items failed validation before dispatch.
+        # Per RFC-450 §5.6, the caller may not expect a batch response if
+        # handlers sent individual responses.
+        if responses:
+            # Items that failed validation before handler dispatch
+            # These need to be sent as a batch since handler didn't send them
+            await d._send_client_message(client_id, responses)
+
+    async def dispatch(self, client_id: Any, msg: dict[str, Any] | list[Any]) -> None:
+        """Handle a single client message or batch via the ``HANDLER_REGISTRY`` dispatch table.
 
         Performs a dict lookup by ``msg.get("type")`` instead of a linear
         if-chain.  Unknown types receive ``-32601 METHOD_NOT_FOUND``; param
@@ -374,14 +599,26 @@ class MessageRouter:
         ``ProtocolError`` exceptions are serialized to the standard error
         envelope.
 
+        RFC-450 §5.6: Batch requests (JSON arrays) are processed by dispatching
+        each item independently and collecting responses into an array.
+
         Args:
             client_id: Client connection identifier.
-            msg: Decoded message dict.
+            msg: Decoded message dict or batch array.
         """
         # Set client_id in logging context for full ID in daemon.log
         if isinstance(client_id, str):
             set_client_id(client_id)
         d = self._daemon
+
+        # -- Batch dispatch (RFC-450 §5.6) --------------------------------------
+        # A batch is a JSON array of protocol-1 messages. Process each item
+        # and collect responses for items with id. Empty/invalid arrays return
+        # a single error.
+        if isinstance(msg, list):
+            await self._dispatch_batch(client_id, msg)
+            return
+
         msg_type = msg.get("type", "")
         if msg_type not in _SKIP_PER_MESSAGE_DEBUG_TYPES:
             logger.debug(
@@ -404,12 +641,12 @@ class MessageRouter:
                 await d._send_client_message(client_id, err)
                 return
 
-        # -- Protocol-1 envelope unwrapping (RFC-450 §5/§9) -------------------
-        # When the message is a protocol-1 envelope (type is request/notification/
-        # subscribe/unsubscribe), translate it to the legacy flat format the
-        # handlers expect: type=method (with method-name overrides), params
-        # spread to the top level, request_id/id carried from the envelope id.
-        # Treat missing params as {} since the SDK drops empty params dicts.
+        # -- Protocol-1 envelope dispatch (RFC-450 §5/§9) ---------------------
+        # The daemon accepts protocol-1 envelopes (request/notification/
+        # subscribe/unsubscribe) plus the three control types in
+        # HANDLER_REGISTRY (connection_init/ping/pong). Legacy flat-form
+        # messages (e.g. ``{type:"loop_get", loop_id:...}``) are rejected with
+        # METHOD_NOT_FOUND — clients MUST use the envelope form.
         if msg_type in _ENVELOPE_TYPES:
             unwrapped = self._unwrap_envelope(msg_type, msg)
             if unwrapped is None:
@@ -423,16 +660,17 @@ class MessageRouter:
                 return
             msg = unwrapped
             msg_type = msg.get("type", "")
+            handler_name = self._resolve_handler(msg_type)
+        else:
+            handler_name = self.HANDLER_REGISTRY.get(msg_type)
 
         # -- Registry dispatch -------------------------------------------------
-        handler_name = self.HANDLER_REGISTRY.get(msg_type)
         if handler_name is None:
-            # Unknown message type → -32601 METHOD_NOT_FOUND (replaces the
-            # previous silent debug log).
+            # Unknown message type / method → -32601 METHOD_NOT_FOUND.
             err = build_error_response(
                 ErrorCode.METHOD_NOT_FOUND,
                 f"Method not found: {msg_type}",
-                request_id=msg.get("request_id"),
+                request_id=msg.get("request_id") or msg.get("id"),
                 data={"method": msg_type},
             )
             await d._send_client_message(client_id, err)
@@ -440,21 +678,17 @@ class MessageRouter:
             return
 
         # -- Param validation (RFC-450 §6) -------------------------------------
-        # Look up the params model by (type, method) for the envelope format,
-        # falling back to (type, None) for legacy flat messages.
-        method = msg.get("method")
-        params_model = PARAMS_REGISTRY.get((msg_type, method))
-        if params_model is None and method is not None:
-            params_model = PARAMS_REGISTRY.get((msg_type, None))
+        # Validate the envelope ``params`` against the (type, method) model.
+        # ``msg`` here is the flattened envelope: operation fields live at the
+        # top level (spread from params), so validate ``msg`` itself.
+        params_model = PARAMS_REGISTRY.get(("request", msg_type))
+        if params_model is None:
+            params_model = PARAMS_REGISTRY.get(("notification", msg_type))
+        if params_model is None:
+            params_model = PARAMS_REGISTRY.get(("subscribe", msg_type))
         if params_model is not None:
             try:
-                # In the envelope format, operation fields live under
-                # ``params``.  In the legacy flat format, they live at the
-                # top level of ``msg``.  Validate whichever carries the data.
-                # All models use ``extra = "allow"`` so envelope keys pass.
-                params = msg.get("params")
-                target = params if isinstance(params, dict) else msg
-                params_model.model_validate(target)
+                params_model.model_validate(msg)
             except ValidationError as exc:
                 errors = [
                     f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
@@ -481,7 +715,7 @@ class MessageRouter:
             err = build_error_response(
                 exc.code,
                 exc.message,
-                request_id=msg.get("request_id"),
+                request_id=msg.get("request_id") or msg.get("id"),
                 data=exc.data if exc.data else None,
             )
             await d._send_client_message(client_id, err)
@@ -818,16 +1052,6 @@ class MessageRouter:
         req["client_id"] = client_id
         await d._loop_input_dispatcher.enqueue(active_loop, req)
 
-    async def _handle_daemon_ready(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle legacy ``daemon_ready`` message — reply with readiness info.
-
-        Args:
-            client_id: Client connection identifier.
-            msg: Message dict.
-        """
-        d = self._daemon
-        await d._send_client_message(client_id, d.daemon_ready_message())
-
     async def _handle_auth(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle ``auth`` WebSocket message (RFC-307 §WebSocket AKSK Flow).
 
@@ -838,26 +1062,28 @@ class MessageRouter:
         d = self._daemon
         from soothe_daemon.server.auth_handler import build_auth_response_error
 
+        request_id = msg.get("request_id")
+
         auth_handler = getattr(d, "_auth_handler", None)
         if auth_handler is None:
-            await d._send_client_message(
-                client_id,
-                build_auth_response_error("identity_disabled"),
-            )
+            result = build_auth_response_error("identity_disabled")
+            result.pop("type", None)
+            await self._send_response(client_id, request_id, result)
             return
 
         access_key = msg.get("access_key", "")
         secret_key = msg.get("secret_key", "")
 
         if not access_key or not secret_key:
-            await d._send_client_message(
-                client_id,
-                build_auth_response_error("missing_credentials"),
-            )
+            result = build_auth_response_error("missing_credentials")
+            result.pop("type", None)
+            await self._send_response(client_id, request_id, result)
             return
 
         response = auth_handler.handle_auth(access_key, secret_key)
-        await d._send_client_message(client_id, response)
+        result = dict(response)
+        result.pop("type", None)
+        await self._send_response(client_id, request_id, result)
 
     async def _handle_auth_refresh(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle ``auth_refresh`` WebSocket message (RFC-307 §Token Refresh Flow).
@@ -869,24 +1095,26 @@ class MessageRouter:
         d = self._daemon
         from soothe_daemon.server.auth_handler import build_refresh_response_error
 
+        request_id = msg.get("request_id")
+
         auth_handler = getattr(d, "_auth_handler", None)
         if auth_handler is None:
-            await d._send_client_message(
-                client_id,
-                build_refresh_response_error("identity_disabled"),
-            )
+            result = build_refresh_response_error("identity_disabled")
+            result.pop("type", None)
+            await self._send_response(client_id, request_id, result)
             return
 
         refresh_token = msg.get("refresh_token", "")
         if not refresh_token:
-            await d._send_client_message(
-                client_id,
-                build_refresh_response_error("missing_refresh_token"),
-            )
+            result = build_refresh_response_error("missing_refresh_token")
+            result.pop("type", None)
+            await self._send_response(client_id, request_id, result)
             return
 
         response = auth_handler.handle_refresh(refresh_token)
-        await d._send_client_message(client_id, response)
+        result = dict(response)
+        result.pop("type", None)
+        await self._send_response(client_id, request_id, result)
 
     async def _handle_skills_list(self, client_id: str, msg: dict[str, Any]) -> None:
         """Return wire-safe skill metadata for the daemon's agent config."""
@@ -911,13 +1139,10 @@ class MessageRouter:
                         workspace = raw_ws.strip()
 
         skills = wire_entries_for_agent_config(d._config, workspace, skill_index=d._skill_index)
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "skills_list_response",
-                "skills": skills,
-                "request_id": msg.get("request_id"),
-            },
+            msg.get("request_id"),
+            {"skills": skills},
         )
 
     async def _handle_models_list(self, client_id: str, msg: dict[str, Any]) -> None:
@@ -926,13 +1151,12 @@ class MessageRouter:
         from soothe.config.models_catalog import build_models_list_payload
 
         payload = build_models_list_payload(d._config)
-        await d._send_client_message(
+        await self._send_response(
             client_id,
+            msg.get("request_id"),
             {
-                "type": "models_list_response",
                 "models": payload["models"],
                 "default_model": payload.get("default_model"),
-                "request_id": msg.get("request_id"),
             },
         )
 
@@ -941,13 +1165,10 @@ class MessageRouter:
         d = self._daemon
         registry = d._mcp_registry
         if registry is None:
-            await d._send_client_message(
+            await self._send_response(
                 client_id,
-                {
-                    "type": "mcp_status_response",
-                    "servers": [],
-                    "request_id": msg.get("request_id"),
-                },
+                msg.get("request_id"),
+                {"servers": []},
             )
             return
 
@@ -970,13 +1191,10 @@ class MessageRouter:
         except Exception:  # noqa: BLE001
             pass
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "mcp_status_response",
-                "servers": servers,
-                "request_id": msg.get("request_id"),
-            },
+            msg.get("request_id"),
+            {"servers": servers},
         )
 
     async def _handle_invoke_skill(self, client_id: str, msg: dict[str, Any]) -> None:
@@ -1060,13 +1278,10 @@ class MessageRouter:
             "args": args,
         }
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "invoke_skill_response",
-                "request_id": msg.get("request_id"),
-                "echo": echo,
-            },
+            msg.get("request_id"),
+            {"echo": echo},
         )
 
         # Honor the client's RFC-622 mode for slash-skill turns too. Without
@@ -1111,20 +1326,20 @@ class MessageRouter:
         # Count active threads
         active_threads = len(d._active_threads) if hasattr(d, "_active_threads") else 0
 
-        response = {
-            "type": "daemon_status_response",
-            "request_id": request_id,
-            "running": running,
-            "port_live": port_live,
-            "active_threads": active_threads,
-            "daemon_pid": os.getpid() if running else None,
-            "readiness_state": d._readiness_state,
-            "readiness_message": d._readiness_message,
-            "daemon_version": daemon_version,
-            "core_version": core_version,
-        }
-
-        await d._send_client_message(client_id, response)
+        await self._send_response(
+            client_id,
+            request_id,
+            {
+                "running": running,
+                "port_live": port_live,
+                "active_threads": active_threads,
+                "daemon_pid": os.getpid() if running else None,
+                "readiness_state": d._readiness_state,
+                "readiness_message": d._readiness_message,
+                "daemon_version": daemon_version,
+                "core_version": core_version,
+            },
+        )
 
     async def _handle_daemon_shutdown(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle daemon_shutdown RPC request (IG-174 Phase 0).
@@ -1139,12 +1354,11 @@ class MessageRouter:
         request_id = msg.get("request_id")
 
         # Send acknowledgment
-        ack = {
-            "type": "shutdown_ack",
-            "request_id": request_id,
-            "status": "acknowledged",
-        }
-        await d._send_client_message(client_id, ack)
+        await self._send_response(
+            client_id,
+            request_id,
+            {"status": "acknowledged"},
+        )
 
         # Schedule shutdown after brief delay
         await asyncio.sleep(0.5)
@@ -1172,13 +1386,8 @@ class MessageRouter:
         else:
             section_data = config_dict.get(section, {})
 
-        response = {
-            "type": "config_get_response",
-            "request_id": request_id,
-            section: section_data,
-        }
-
-        await d._send_client_message(client_id, response)
+        result: dict[str, Any] = {section: section_data}
+        await self._send_response(client_id, request_id, result)
 
     # ---------------------------------------------------------------------------
     # Loop RPC Helpers (IG-246: Self-healing metadata sync)
@@ -1261,14 +1470,11 @@ class MessageRouter:
                 entry["prompt"] = prompt
             loops.append(entry)
 
-        response = {
-            "type": "loop_list_response",
-            "request_id": request_id,
-            "loops": loops,
-            "total": len(loops),
-        }
-
-        await d._send_client_message(client_id, response)
+        await self._send_response(
+            client_id,
+            request_id,
+            {"loops": loops, "total": len(loops)},
+        )
 
     async def _handle_loop_get(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_get RPC request (RFC-504).
@@ -1330,13 +1536,11 @@ class MessageRouter:
             "checkpoint_anchors": anchors,
         }
 
-        response = {
-            "type": "loop_get_response",
-            "request_id": request_id,
-            "loop": loop_data,
-        }
-
-        await d._send_client_message(client_id, response)
+        await self._send_response(
+            client_id,
+            request_id,
+            {"loop": loop_data},
+        )
 
     async def _handle_loop_tree(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_tree RPC request (RFC-504).
@@ -1425,13 +1629,11 @@ class MessageRouter:
                 }
             )
 
-        response = {
-            "type": "loop_tree_response",
-            "request_id": request_id,
-            "tree": tree_data,
-        }
-
-        await d._send_client_message(client_id, response)
+        await self._send_response(
+            client_id,
+            request_id,
+            {"tree": tree_data},
+        )
 
     async def _handle_loop_prune(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_prune RPC request (RFC-504).
@@ -1481,19 +1683,11 @@ class MessageRouter:
             pruned = await persistence_manager.prune_old_branches(loop_id, retention_days)
             remaining = len(await persistence_manager.get_failed_branches_for_loop(loop_id))
 
-        result_data = {
-            "pruned": pruned,
-            "remaining": remaining,
-            "dry_run": dry_run,
-        }
-
-        response = {
-            "type": "loop_prune_response",
-            "request_id": request_id,
-            "result": result_data,
-        }
-
-        await d._send_client_message(client_id, response)
+        await self._send_response(
+            client_id,
+            request_id,
+            {"pruned": pruned, "remaining": remaining, "dry_run": dry_run},
+        )
 
     async def _handle_loop_delete(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_delete RPC request (RFC-504).
@@ -1521,11 +1715,10 @@ class MessageRouter:
 
         metadata = await d._persistence_manager.get_loop_metadata(loop_id)
         if metadata is None:
-            await d._send_client_message(
+            await self._send_response(
                 client_id,
+                request_id,
                 {
-                    "type": "loop_delete_response",
-                    "request_id": request_id,
                     "success": True,
                     "message": f"Loop {loop_id} not found (already deleted)",
                 },
@@ -1534,20 +1727,20 @@ class MessageRouter:
 
         try:
             await purge_loop_fully(d, loop_id, metadata)
-            response = {
-                "type": "loop_delete_response",
-                "request_id": request_id,
-                "success": True,
-                "message": f"Loop {loop_id} deleted successfully",
-            }
-            await d._send_client_message(client_id, response)
+            await self._send_response(
+                client_id,
+                request_id,
+                {
+                    "success": True,
+                    "message": f"Loop {loop_id} deleted successfully",
+                },
+            )
         except Exception as e:
             logger.error("Failed to delete loop %s: %s", loop_id, str(e))
-            await d._send_client_message(
+            await self._send_response(
                 client_id,
+                request_id,
                 {
-                    "type": "loop_delete_response",
-                    "request_id": request_id,
                     "success": False,
                     "message": f"Failed to delete loop: {str(e)}",
                 },
@@ -1579,7 +1772,27 @@ class MessageRouter:
             )
             return
 
-        # Execute reattachment handler
+        if not await self._ensure_loop_exists(loop_id):
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.LOOP_NOT_FOUND,
+                    f"Loop {loop_id} not found",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        # Acknowledge the request before streaming the replay. Per RFC-450
+        # §5.2 a ``request`` with an ``id`` MUST receive a ``response``; the
+        # replay itself is streamed as card.replay_* / history frames, not as
+        # the response payload.
+        await self._send_response(
+            client_id,
+            request_id,
+            {"loop_id": loop_id, "success": True},
+        )
+        # Execute reattachment handler (schedules the background replay task)
         await handle_loop_reattach(loop_id, d, client_id)
 
     async def _handle_loop_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -1637,26 +1850,20 @@ class MessageRouter:
             loop_id,
             stream_delivery=stream_delivery,
             wire_tier=wire_tier,
+            subscription_id=request_id,  # RFC-450 §9.4: track for complete messages
         )
-        session = await d._session_manager.get_session(client_id)
-        if session:
-            await d._session_manager.send_to_client(
-                session,
-                {
-                    "type": "subscription_confirmed",
-                    "loop_id": loop_id,
-                    "client_id": client_id,
-                },
-            )
 
-        await d._send_client_message(
+        # Per RFC-450 §9.4, subscription confirmation is a ``next`` event
+        # carrying the subscription id (the request's correlation id).
+        await self._send_next(
             client_id,
+            request_id,
             {
-                "type": "loop_subscribe_response",
                 "loop_id": loop_id,
+                "event": "subscribed",
                 "success": True,
                 "autopilot_mode": autopilot_mode,
-                "request_id": request_id,
+                "client_id": client_id,
             },
         )
 
@@ -1714,14 +1921,10 @@ class MessageRouter:
         await d._session_manager.unsubscribe_loop(client_id, loop_id)
 
         # Send detach response
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "loop_detach_response",
-                "loop_id": loop_id,
-                "success": True,
-                "request_id": request_id,
-            },
+            request_id,
+            {"loop_id": loop_id, "success": True},
         )
 
     async def _handle_loop_new(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -1870,22 +2073,20 @@ class MessageRouter:
         )
 
         # Send response
-        response_msg: dict[str, Any] = {
-            "type": "loop_new_response",
+        result: dict[str, Any] = {
             "loop_id": loop_id,
             "success": True,
             "is_ephemeral": is_ephemeral,
             "autopilot_mode": autopilot_mode,
-            "request_id": request_id,
         }
         if host_root is not None:
-            response_msg["workspace_mapping"] = {
+            result["workspace_mapping"] = {
                 "host_root": host_root,
                 "container_root": container_root,
                 "client_workspace": client_workspace,
                 "container_workspace": str(effective_workspace),
             }
-        await d._send_client_message(client_id, response_msg)
+        await self._send_response(client_id, request_id, result)
 
     async def _handle_loop_input(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_input RPC: authorize, then enqueue to the loop's isolated input queue."""
@@ -2050,14 +2251,10 @@ class MessageRouter:
                 "Failed to increment human_message_count for loop %s", loop_id, exc_info=True
             )
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "loop_input_response",
-                "loop_id": loop_id,
-                "success": True,
-                "request_id": request_id,
-            },
+            request_id,
+            {"loop_id": loop_id, "success": True},
         )
 
     async def _handle_loop_messages(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -2135,13 +2332,10 @@ class MessageRouter:
             else:
                 serialized.append(_serialize_for_json(r))
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "loop_messages_response",
-                "request_id": request_id,
-                "messages": serialized,
-            },
+            request_id,
+            {"messages": serialized},
         )
 
     async def _handle_loop_state_get(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -2188,13 +2382,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "loop_state_get_response",
-                "request_id": request_id,
-                "values": _serialize_for_json(values),
-            },
+            request_id,
+            {"values": _serialize_for_json(values)},
         )
 
     async def _handle_loop_state_update(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -2250,13 +2441,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "loop_state_update_response",
-                "request_id": request_id,
-                "success": True,
-            },
+            request_id,
+            {"success": True},
         )
 
     async def _handle_loop_cards_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -2323,11 +2511,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
+            request_id,
             {
-                "type": "loop_cards_fetch_response",
-                "request_id": request_id,
                 "loop_id": str(loop_id),
                 "cards": wire_cards,
                 "seq": latest_seq,
@@ -2450,14 +2637,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "job_create_response",
-                "job_id": goal.id,
-                "status": goal.status,
-                "request_id": request_id,
-            },
+            request_id,
+            {"job_id": goal.id, "status": goal.status},
         )
         logger.info("[JobCreate] Created job %s with goal: %s", goal.id, goal_text[:50])
 
@@ -2531,10 +2714,10 @@ class MessageRouter:
                     last_error = g.error
                     break
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
+            request_id,
             {
-                "type": "job_status_response",
                 "job_id": job_id,
                 "status": root_goal.status,
                 "active_goals": active_count,
@@ -2544,7 +2727,6 @@ class MessageRouter:
                 "total_goals": total_count,
                 "workers": workers,
                 "last_error": last_error,
-                "request_id": request_id,
             },
         )
 
@@ -2628,14 +2810,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "job_pause_response",
-                "job_id": job_id,
-                "status": "suspended",
-                "request_id": request_id,
-            },
+            request_id,
+            {"job_id": job_id, "status": "suspended"},
         )
         logger.info("[JobPause] Paused job %s", job_id)
 
@@ -2708,14 +2886,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "job_resume_response",
-                "job_id": job_id,
-                "status": "pending",  # After reactivation, goal goes to pending
-                "request_id": request_id,
-            },
+            request_id,
+            {"job_id": job_id, "status": "pending"},
         )
         logger.info("[JobResume] Resumed job %s", job_id)
 
@@ -2773,14 +2947,10 @@ class MessageRouter:
             )
             return
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "job_cancel_response",
-                "job_id": job_id,
-                "status": cancelled.status,
-                "request_id": request_id,
-            },
+            request_id,
+            {"job_id": job_id, "status": cancelled.status},
         )
         logger.info("[JobCancel] Cancelled job %s", job_id)
 
@@ -2828,14 +2998,10 @@ class MessageRouter:
         # Use AutopilotService.dag_snapshot() for visualization (RFC-228)
         dag = await service.dag_snapshot(job_id)
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "job_dag_response",
-                "job_id": job_id,
-                "dag": dag,
-                "request_id": request_id,
-            },
+            request_id,
+            {"job_id": job_id, "dag": dag},
         )
 
     async def _handle_job_guidance(self, client_id: Any, msg: dict[str, Any]) -> None:
@@ -2845,13 +3011,13 @@ class MessageRouter:
 
         Args:
             client_id: Client connection identifier.
-            msg: Request with job_id, goal_id (optional), text, request_id.
+            msg: Request with job_id, goal_id (optional), content, request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
         job_id = msg.get("job_id")
         goal_id = msg.get("goal_id")  # Optional - specific goal or root
-        text = msg.get("text")
+        content = msg.get("content")
 
         if not isinstance(job_id, str) or not job_id.strip():
             await d._send_client_message(
@@ -2864,12 +3030,12 @@ class MessageRouter:
             )
             return
 
-        if not isinstance(text, str) or not text.strip():
+        if not isinstance(content, str) or not content.strip():
             await d._send_client_message(
                 client_id,
                 build_error_response(
                     ErrorCode.INVALID_REQUEST,
-                    "text (non-empty string) is required",
+                    "content (non-empty string) is required",
                     request_id=request_id,
                 ),
             )
@@ -2897,24 +3063,23 @@ class MessageRouter:
 
         # Absorb guidance via GoalEngine (RFC-228)
         scope = "goal" if goal_id else "job"
-        absorbed = await goal_engine.absorb_guidance(target_id, text.strip(), scope=scope)
+        absorbed = await goal_engine.absorb_guidance(target_id, content.strip(), scope=scope)
 
         logger.info(
             "[JobGuidance] Guidance for job=%s goal=%s absorbed=%s: %s",
             job_id,
             target_id,
             absorbed,
-            text[:50],
+            content[:50],
         )
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
+            request_id,
             {
-                "type": "job_guidance_response",
                 "job_id": job_id,
                 "goal_id": target_id,
                 "absorbed": absorbed,
-                "request_id": request_id,
             },
         )
 
@@ -2949,14 +3114,12 @@ class MessageRouter:
         # Subscribe to autopilot topic for client-visible events (RFC-228)
         await d._event_bus.subscribe("autopilot", session.event_queue)
 
-        await d._send_client_message(
+        # Per RFC-450 §9.4, subscription confirmation is a ``next`` event
+        # carrying the subscription id (the request's correlation id).
+        await self._send_next(
             client_id,
-            {
-                "type": "autopilot_subscribe_response",
-                "client_id": client_id,
-                "subscribed": True,
-                "request_id": request_id,
-            },
+            request_id,
+            {"client_id": client_id, "event": "subscribed", "subscribed": True},
         )
         logger.info("[AutopilotSubscribe] Client %s subscribed to autopilot events", client_id)
 
@@ -2991,14 +3154,10 @@ class MessageRouter:
         # Unsubscribe from autopilot topic (RFC-228)
         await d._event_bus.unsubscribe("autopilot", session.event_queue)
 
-        await d._send_client_message(
+        await self._send_response(
             client_id,
-            {
-                "type": "autopilot_unsubscribe_response",
-                "client_id": client_id,
-                "subscribed": False,
-                "request_id": request_id,
-            },
+            request_id,
+            {"client_id": client_id, "subscribed": False},
         )
         logger.info(
             "[AutopilotUnsubscribe] Client %s unsubscribed from autopilot events", client_id

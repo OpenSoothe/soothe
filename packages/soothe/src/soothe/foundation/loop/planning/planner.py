@@ -529,7 +529,8 @@ class LLMPlanner:
             '      "description": "<brief summary, under 20 words for TUI display>",',
             '      "full_description": "<detailed execution prompt with file paths, identifiers, key inputs (50-150 words)>",',
             '      "expected_output": "<expected result>",',
-            '      "execution_hint": "tool"',
+            '      "execution_hint": "tool",',
+            '      "subagent": null',
             "    }",
             "  ]",
             "}",
@@ -540,12 +541,13 @@ class LLMPlanner:
             "- description: Brief summary for TUI display (under 20 words)",
             "- full_description: Detailed execution context (50-150 words) including key file paths, identifiers, parameters, and context needed to execute without referencing the original goal",
             "- execution_hint: 'tool' (direct tool), 'subagent' (delegate), 'auto' (LLM reasoning)",
-            "- If user requests specific subagent, set execution_hint='subagent'",
+            "- When execution_hint='subagent', set subagent to a capability name (usually 'explore' for readonly repo search)",
+            "- If user requests specific subagent, set execution_hint='subagent' and subagent accordingly",
             "- Return ONLY valid JSON (no markdown blocks)",
             "</PLANNING_RULES>",
             "",
             "<EFFICIENCY_RULES>",
-            "- Trivial local skim: one step (list_files + selective read_file); heavy readonly recon: prefer subagent explore (scoped target per step)",
+            "- Trivial local skim: one step (list_files + selective read_file); heavy readonly recon: set execution_hint='subagent' and subagent='explore' (scoped target per step)",
             "- For project structure: single step listing top-level directories",
             "- Avoid duplicate paths; combine related reads in one step when safe—independent readonly probes may stay separate steps",
             "- explore subagent steps: name likely subtrees (e.g. docs/, packages/, benchmarks/) in the step text so search stays scoped; avoid vague whole-repo recon without directory hints",
@@ -643,6 +645,9 @@ class LLMPlanner:
                         "description": LLMPlanner._preferred_subagent_step_description(
                             step.description, subagent_name
                         ),
+                        "execution_hint": "subagent",
+                        "subagent": subagent_name,
+                        "wire_subagent": subagent_name,
                     }
                 )
             )
@@ -1183,6 +1188,14 @@ class LLMPlanner:
             )
 
         if result is not None and result.decision is not None:
+            from soothe.foundation.loop.state.schemas import apply_step_wire_subagents
+
+            wired_steps = apply_step_wire_subagents(result.decision.steps)
+            result = result.model_copy(
+                update={
+                    "decision": result.decision.model_copy(update={"steps": wired_steps}),
+                }
+            )
             preferred = (
                 getattr(context.routing_classification, "preferred_subagent", None)
                 if context.routing_classification

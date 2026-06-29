@@ -87,8 +87,8 @@ async def test_loop_new_persists_client_workspace(
 
         assert daemon.sent, "Daemon must respond to loop_new"
         response = daemon.sent[-1]
-        assert response["type"] == "loop_new_response"
-        loop_id = response["loop_id"]
+        assert response["type"] == "response"
+        loop_id = response["result"]["loop_id"]
         assert loop_id
 
         metadata = await _read_metadata(loop_id, config)
@@ -117,8 +117,8 @@ async def test_loop_new_persists_is_ephemeral(
         )
 
         response = daemon.sent[-1]
-        assert response.get("is_ephemeral") is True
-        loop_id = response["loop_id"]
+        assert response["result"].get("is_ephemeral") is True
+        loop_id = response["result"]["loop_id"]
         metadata = await _read_metadata(loop_id, config)
         assert metadata.get("is_ephemeral") is True
         assert metadata.get("current_workspace")
@@ -151,7 +151,7 @@ async def test_loop_new_omits_client_workspace_when_invalid(
         )
 
         response = daemon.sent[-1]
-        loop_id = response["loop_id"]
+        loop_id = response["result"]["loop_id"]
         metadata = await _read_metadata(loop_id, config)
         assert metadata.get("client_workspace") is None
     finally:
@@ -178,7 +178,7 @@ async def test_loop_new_omits_client_workspace_when_missing(
         )
 
         response = daemon.sent[-1]
-        loop_id = response["loop_id"]
+        loop_id = response["result"]["loop_id"]
         metadata = await _read_metadata(loop_id, config)
         assert metadata.get("client_workspace") is None
     finally:
@@ -207,7 +207,7 @@ async def test_bind_execution_thread_prefers_client_workspace(
             client_id="client-1",
             msg={"type": "loop_new", "workspace": str(project), "request_id": "rid-1"},
         )
-        loop_id = daemon.sent[-1]["loop_id"]
+        loop_id = daemon.sent[-1]["result"]["loop_id"]
 
         # Stub the runtime daemon surfaces touched during bind.
         set_workspace_calls: list[Path] = []
@@ -261,7 +261,7 @@ async def test_bind_execution_thread_uses_loop_id_as_checkpoint_thread(
             client_id="client-1",
             msg={"type": "loop_new", "request_id": "rid-1"},
         )
-        loop_id = daemon.sent[-1]["loop_id"]
+        loop_id = daemon.sent[-1]["result"]["loop_id"]
 
         class _ThreadRegistry:
             def ensure(self, _thread_id: str, *, is_draft: bool) -> None:
@@ -315,7 +315,7 @@ async def test_bind_execution_thread_preserves_existing_loop_id_binding(
             client_id="client-1",
             msg={"type": "loop_new", "request_id": "rid-1"},
         )
-        loop_id = daemon.sent[-1]["loop_id"]
+        loop_id = daemon.sent[-1]["result"]["loop_id"]
         await daemon._persistence_manager.update_loop_metadata(
             loop_id,
             current_thread_id=loop_id,
@@ -367,7 +367,7 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
             client_id="client-1",
             msg={"type": "loop_new", "request_id": "rid-1"},
         )
-        loop_id = daemon.sent[-1]["loop_id"]
+        loop_id = daemon.sent[-1]["result"]["loop_id"]
 
         set_workspace_calls: list[Path] = []
 

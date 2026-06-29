@@ -67,6 +67,10 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     clobbered.status = "running"
     await sm.save(clobbered)
 
+    # RFC-803 Phase 6: close() cancels async worker, force_flushes, and releases DB connections
+    # before cold reload. Production contract: close() is called at run boundary.
+    await sm.close()
+
     # Cold reload — mimics strange_loop.load() at the start of a new query.
     with patch(
         "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
@@ -98,6 +102,9 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     # RFC-624 Phase 4 Stage 2: seed_loop_ledger_from_prior_goal deleted.
     # CE ledger spans all goals — prior context available via ce.load().
     await sm2.save(loaded)
+
+    # RFC-803 Phase 6: close() ensures persistence before final cold reload
+    await sm2.close()
 
     # ── Assertions: history preserved, new goal appended ──
     assert len(loaded.goal_history) == 2

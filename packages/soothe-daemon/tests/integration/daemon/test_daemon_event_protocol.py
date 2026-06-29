@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
+from soothe_sdk.client import ProtocolError
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.config import SootheDaemonConfig
@@ -22,6 +23,7 @@ from tests.integration.daemon_fixtures import (
     await_event_type,
     build_daemon_config,
     force_isolated_home,
+    unwrap_next,
 )
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
@@ -53,12 +55,20 @@ async def _collect_events_during_query(
         try:
             while not collection_done.is_set():
                 event = await asyncio.wait_for(client.read_event(), timeout=0.3)
-                if event is not None:
-                    events.append(event)
-                    # Check for idle status indicating completion
-                    if event.get("type") == "status" and event.get("state") == "idle":
-                        collection_done.set()
-                        break
+                if event is None:
+                    continue
+                # Protocol-1 wraps legacy streaming frames (status/event/...)
+                # in ``next`` envelopes; unwrap to the inner ``data`` frame so
+                # callers can match on the originating frame ``type``/``state``,
+                # mirroring ``await_event_type``.
+                frame = unwrap_next(event)
+                if frame is None:
+                    continue
+                events.append(frame)
+                # Check for idle status indicating completion
+                if frame.get("type") == "status" and frame.get("state") == "idle":
+                    collection_done.set()
+                    break
         except TimeoutError:
             collection_done.set()
 
@@ -106,6 +116,8 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, int]) -> Non
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new_with_initial_input(
@@ -114,12 +126,11 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, int]) -> Non
         )
         assert loop_id
 
-        await client.send_loop_reattach(loop_id)
+        await client.request("loop_reattach", {"loop_id": loop_id})
         status_event = await await_event_type(client.read_event, "status", timeout=3.0)
         assert status_event["type"] == "status"
 
         archive_resp = await request_loop_delete(client, loop_id)
-        assert archive_resp["type"] == "loop_delete_response"
         assert archive_resp.get("success") is True
 
     finally:
@@ -135,6 +146,8 @@ async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, int]) -> None
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new_with_initial_input(client, initial_message="test protocol events")
@@ -164,6 +177,8 @@ async def test_tool_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new_with_initial_input(client, initial_message="test tool events")
@@ -191,6 +206,8 @@ async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, int]) -> None
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new_with_initial_input(client, initial_message="test subagent events")
@@ -218,18 +235,22 @@ async def test_error_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         await loop_new_with_initial_input(client, initial_message="test error events")
 
         fake_loop_id = f"non-existent-{uuid.uuid4().hex}"
-        await client.send_loop_get(fake_loop_id)
-
-        response = await asyncio.wait_for(client.read_event(), timeout=3.0)
-        assert response is not None
+        # loop_get on a missing loop returns a protocol-1 error envelope
+        # {type:"error", error:{code:-32200, message}}; request() raises
+        # ProtocolError carrying the numeric code and message.
+        with pytest.raises(ProtocolError, match="not found") as exc_info:
+            await client.request("loop_get", {"loop_id": fake_loop_id})
+        assert exc_info.value.code == -32200
 
         list_response = await request_loop_list(client)
-        assert list_response["type"] == "loop_list_response"
+        assert "loops" in list_response
 
     finally:
         await client.close()
@@ -246,6 +267,8 @@ async def test_event_registry_dispatch(
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
     try:
         loop_id = await loop_new_with_initial_input(client, initial_message="test registry")

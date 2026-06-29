@@ -17,10 +17,31 @@ from tests.integration.daemon_fixtures import (
 )
 
 
-async def _drain_handshake(ws) -> None:
-    """Consume the two handshake messages (status + daemon_ready) sent on connect."""
-    for _ in range(2):
-        await asyncio.wait_for(ws.recv(), timeout=5.0)
+async def _handshake(ws) -> None:
+    """Complete the protocol-1 handshake (RFC-450).
+
+    The daemon sends one unsolicited ``status`` preamble on connect, then waits
+    for ``connection_init`` and replies with a single ``connection_ack``.
+    """
+    # Drain the initial status preamble.
+    preamble = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+    assert preamble.get("type") == "status", f"expected status preamble, got {preamble}"
+    # Initiate the protocol-1 handshake.
+    await ws.send(
+        json.dumps(
+            {
+                "proto": "1",
+                "type": "connection_init",
+                "params": {
+                    "client_version": "test",
+                    "accept_proto": ["1"],
+                    "capabilities": ["streaming", "batch", "heartbeat", "receipts"],
+                },
+            }
+        )
+    )
+    ack = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+    assert ack.get("type") == "connection_ack", f"expected connection_ack, got {ack}"
 
 
 class _FakeGoal:
@@ -108,14 +129,16 @@ async def test_job_create_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # Send job_create
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_create",
-                    "goal": "Build integration test feature",
-                    "request_id": "req-create-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_create",
+                    "params": {"goal": "Build integration test feature"},
+                    "id": "req-create-1",
                 }
             )
         )
@@ -124,10 +147,10 @@ async def test_job_create_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_create_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["status"] == "pending"
-        assert msg["request_id"] == "req-create-1"
+        assert msg["type"] == "response"
+        assert msg["id"] == "req-create-1"
+        assert msg["result"]["job_id"] == "abc12345"
+        assert msg["result"]["status"] == "pending"
 
         # Verify AutopilotService.submit_task was called
         daemon._autopilot_service.submit_task.assert_awaited_once()
@@ -144,14 +167,16 @@ async def test_job_status_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # Send job_status
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_status",
-                    "job_id": "abc12345",
-                    "request_id": "req-status-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_status",
+                    "params": {"job_id": "abc12345"},
+                    "id": "req-status-1",
                 }
             )
         )
@@ -160,14 +185,15 @@ async def test_job_status_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_status_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["status"] == "pending"
-        assert msg["active_goals"] == 1  # child-1 is active
-        assert msg["completed_goals"] == 0
-        assert msg["total_goals"] == 2
-        assert len(msg["workers"]) == 1
-        assert msg["workers"][0]["goal_id"] == "child-1"
+        assert msg["type"] == "response"
+        result = msg["result"]
+        assert result["job_id"] == "abc12345"
+        assert result["status"] == "pending"
+        assert result["active_goals"] == 1  # child-1 is active
+        assert result["completed_goals"] == 0
+        assert result["total_goals"] == 2
+        assert len(result["workers"]) == 1
+        assert result["workers"][0]["goal_id"] == "child-1"
 
 
 @pytest.mark.asyncio
@@ -182,7 +208,7 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # Update goal status to active for pause test (handler uses goal_engine.get_goal)
         active_goal = _FakeGoal(goal_id="abc12345", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
@@ -192,9 +218,11 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_pause",
-                    "job_id": "abc12345",
-                    "request_id": "req-pause-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_pause",
+                    "params": {"job_id": "abc12345"},
+                    "id": "req-pause-1",
                 }
             )
         )
@@ -202,9 +230,9 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_pause_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["status"] == "suspended"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "abc12345"
+        assert msg["result"]["status"] == "suspended"
 
         # Update goal status to suspended for resume test (handler uses goal_engine.get_goal)
         suspended_goal = _FakeGoal(goal_id="abc12345", status="suspended")
@@ -215,9 +243,11 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_resume",
-                    "job_id": "abc12345",
-                    "request_id": "req-resume-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_resume",
+                    "params": {"job_id": "abc12345"},
+                    "id": "req-resume-1",
                 }
             )
         )
@@ -225,9 +255,9 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_resume_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["status"] == "pending"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "abc12345"
+        assert msg["result"]["status"] == "pending"
 
         # Verify GoalEngine methods called
         daemon._autopilot_service._ce.suspend_goal.assert_awaited()
@@ -246,14 +276,16 @@ async def test_job_cancel_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # Send job_cancel
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_cancel",
-                    "job_id": "abc12345",
-                    "request_id": "req-cancel-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_cancel",
+                    "params": {"job_id": "abc12345"},
+                    "id": "req-cancel-1",
                 }
             )
         )
@@ -261,9 +293,9 @@ async def test_job_cancel_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_cancel_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["status"] == "cancelled"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "abc12345"
+        assert msg["result"]["status"] == "cancelled"
 
         # Verify AutopilotService.cancel_goal was called
         daemon._autopilot_service.cancel_goal.assert_awaited_once()
@@ -280,14 +312,16 @@ async def test_job_dag_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # Send job_dag
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_dag",
-                    "job_id": "abc12345",
-                    "request_id": "req-dag-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_dag",
+                    "params": {"job_id": "abc12345"},
+                    "id": "req-dag-1",
                 }
             )
         )
@@ -295,12 +329,13 @@ async def test_job_dag_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_dag_response"
-        assert msg["job_id"] == "abc12345"
-        assert "dag" in msg
-        assert "nodes" in msg["dag"]
-        assert "edges" in msg["dag"]
-        assert len(msg["dag"]["nodes"]) == 2
+        assert msg["type"] == "response"
+        result = msg["result"]
+        assert result["job_id"] == "abc12345"
+        assert "dag" in result
+        assert "nodes" in result["dag"]
+        assert "edges" in result["dag"]
+        assert len(result["dag"]["nodes"]) == 2
 
 
 @pytest.mark.asyncio
@@ -315,15 +350,19 @@ async def test_job_guidance_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # Send job_guidance
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_guidance",
-                    "job_id": "abc12345",
-                    "text": "Focus on integration tests",
-                    "request_id": "req-guid-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_guidance",
+                    "params": {
+                        "job_id": "abc12345",
+                        "content": "Focus on integration tests",
+                    },
+                    "id": "req-guid-1",
                 }
             )
         )
@@ -331,10 +370,11 @@ async def test_job_guidance_via_websocket(daemon_with_autopilot_ws) -> None:
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "job_guidance_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["goal_id"] == "abc12345"  # Defaults to job_id
-        assert msg["absorbed"] is True
+        assert msg["type"] == "response"
+        result = msg["result"]
+        assert result["job_id"] == "abc12345"
+        assert result["goal_id"] == "abc12345"  # Defaults to job_id
+        assert result["absorbed"] is True
 
         # Verify GoalEngine.absorb_guidance was called
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited()
@@ -351,13 +391,16 @@ async def test_autopilot_subscribe_unsubscribe_via_websocket(daemon_with_autopil
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
-        # Send autopilot_subscribe
+        await _handshake(ws)
+        # Send autopilot_subscribe (subscribe method on autopilot_events)
         await ws.send(
             json.dumps(
                 {
-                    "type": "autopilot_subscribe",
-                    "request_id": "req-sub-1",
+                    "proto": "1",
+                    "type": "subscribe",
+                    "method": "autopilot_events",
+                    "params": {},
+                    "id": "req-sub-1",
                 }
             )
         )
@@ -365,16 +408,18 @@ async def test_autopilot_subscribe_unsubscribe_via_websocket(daemon_with_autopil
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "autopilot_subscribe_response"
-        assert "client_id" in msg
-        assert msg["subscribed"] is True
+        assert msg["type"] == "next"
+        assert msg["id"] == "req-sub-1"
+        assert "client_id" in msg["payload"]
+        assert msg["payload"]["subscribed"] is True
 
         # Send autopilot_unsubscribe
         await ws.send(
             json.dumps(
                 {
-                    "type": "autopilot_unsubscribe",
-                    "request_id": "req-unsub-1",
+                    "proto": "1",
+                    "type": "unsubscribe",
+                    "id": "req-unsub-1",
                 }
             )
         )
@@ -382,8 +427,9 @@ async def test_autopilot_subscribe_unsubscribe_via_websocket(daemon_with_autopil
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
 
-        assert msg["type"] == "autopilot_unsubscribe_response"
-        assert msg["subscribed"] is False
+        assert msg["type"] == "response"
+        assert msg["id"] == "req-unsub-1"
+        assert msg["result"]["subscribed"] is False
 
 
 @pytest.mark.asyncio
@@ -397,13 +443,16 @@ async def test_error_handling_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
-        # Test INVALID_REQUEST (missing job_id)
+        await _handshake(ws)
+        # Test INVALID_PARAMS (missing job_id — schema enforces)
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_status",
-                    "request_id": "req-err-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_status",
+                    "params": {},
+                    "id": "req-err-1",
                 }
             )
         )
@@ -412,16 +461,18 @@ async def test_error_handling_via_websocket(daemon_with_autopilot_ws) -> None:
         msg = json.loads(response)
 
         assert msg["type"] == "error"
-        assert msg["code"] == "INVALID_REQUEST"
-        assert msg["request_id"] == "req-err-1"
+        assert msg["error"]["code"] == -32602  # INVALID_PARAMS (schema requires job_id)
+        assert msg["id"] == "req-err-1"
 
         # Test JOB_NOT_FOUND
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_status",
-                    "job_id": "nonexistent",
-                    "request_id": "req-err-2",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_status",
+                    "params": {"job_id": "nonexistent"},
+                    "id": "req-err-2",
                 }
             )
         )
@@ -433,13 +484,13 @@ async def test_error_handling_via_websocket(daemon_with_autopilot_ws) -> None:
         msg = json.loads(response)
 
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_NOT_FOUND"
+        assert msg["error"]["code"] == -32201  # JOB_NOT_FOUND
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_request_id_propagation_via_websocket(daemon_with_autopilot_ws) -> None:
-    """All WebSocket responses preserve request_id."""
+    """All WebSocket responses preserve request id."""
     ws_port = daemon_with_autopilot_ws["ws_port"]
 
     import websockets
@@ -447,22 +498,32 @@ async def test_request_id_propagation_via_websocket(daemon_with_autopilot_ws) ->
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
-        # Test multiple handlers preserve request_id
+        await _handshake(ws)
+        # Test multiple handlers preserve request id
         handlers_to_test = [
             ("job_create", {"goal": "test"}, "req-1"),
             ("job_status", {"job_id": "abc12345"}, "req-2"),
             ("job_dag", {"job_id": "abc12345"}, "req-3"),
         ]
 
-        for handler_type, extra_fields, req_id in handlers_to_test:
-            msg_dict = {"type": handler_type, **extra_fields, "request_id": req_id}
-            await ws.send(json.dumps(msg_dict))
+        for method, params, req_id in handlers_to_test:
+            await ws.send(
+                json.dumps(
+                    {
+                        "proto": "1",
+                        "type": "request",
+                        "method": method,
+                        "params": params,
+                        "id": req_id,
+                    }
+                )
+            )
 
             response = await asyncio.wait_for(ws.recv(), timeout=5.0)
             msg = json.loads(response)
 
-            assert msg.get("request_id") == req_id, f"{handler_type} response missing request_id"
+            assert msg.get("id") == req_id, f"{method} response missing id"
+            assert msg["type"] == "response", f"{method} did not return response"
 
 
 @pytest.mark.asyncio
@@ -477,37 +538,41 @@ async def test_job_sequence_via_websocket(daemon_with_autopilot_ws) -> None:
     uri = f"ws://127.0.0.1:{ws_port}"
 
     async with websockets.connect(uri) as ws:
-        await _drain_handshake(ws)
+        await _handshake(ws)
         # 1. Create job
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_create",
-                    "goal": "Lifecycle test",
-                    "request_id": "seq-1",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_create",
+                    "params": {"goal": "Lifecycle test"},
+                    "id": "seq-1",
                 }
             )
         )
 
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
-        assert msg["type"] == "job_create_response"
-        job_id = msg["job_id"]
+        assert msg["type"] == "response"
+        job_id = msg["result"]["job_id"]
 
         # 2. Check status
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_status",
-                    "job_id": job_id,
-                    "request_id": "seq-2",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_status",
+                    "params": {"job_id": job_id},
+                    "id": "seq-2",
                 }
             )
         )
 
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
-        assert msg["type"] == "job_status_response"
+        assert msg["type"] == "response"
 
         # 3. Pause job (update status to active first)
         active_goal = _FakeGoal(goal_id=job_id, status="active")
@@ -517,16 +582,18 @@ async def test_job_sequence_via_websocket(daemon_with_autopilot_ws) -> None:
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_pause",
-                    "job_id": job_id,
-                    "request_id": "seq-3",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_pause",
+                    "params": {"job_id": job_id},
+                    "id": "seq-3",
                 }
             )
         )
 
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
-        assert msg["type"] == "job_pause_response"
+        assert msg["type"] == "response"
 
         # 4. Resume job (update status to suspended)
         suspended_goal = _FakeGoal(goal_id=job_id, status="suspended")
@@ -536,31 +603,35 @@ async def test_job_sequence_via_websocket(daemon_with_autopilot_ws) -> None:
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_resume",
-                    "job_id": job_id,
-                    "request_id": "seq-4",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_resume",
+                    "params": {"job_id": job_id},
+                    "id": "seq-4",
                 }
             )
         )
 
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
-        assert msg["type"] == "job_resume_response"
+        assert msg["type"] == "response"
 
         # 5. Cancel job
         await ws.send(
             json.dumps(
                 {
-                    "type": "job_cancel",
-                    "job_id": job_id,
-                    "request_id": "seq-5",
+                    "proto": "1",
+                    "type": "request",
+                    "method": "job_cancel",
+                    "params": {"job_id": job_id},
+                    "id": "seq-5",
                 }
             )
         )
 
         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
         msg = json.loads(response)
-        assert msg["type"] == "job_cancel_response"
+        assert msg["type"] == "response"
 
         # Verify all operations completed
         daemon._autopilot_service.submit_task.assert_awaited()

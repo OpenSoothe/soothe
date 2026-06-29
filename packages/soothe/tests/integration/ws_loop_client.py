@@ -1,7 +1,8 @@
-"""Loop-scoped WebSocket helpers for integration tests (RFC-503).
+"""Loop-scoped WebSocket helpers for integration tests (RFC-503, RFC-450).
 
-These wrap ``request_response`` / subscribe flows so tests use the daemon's
-``loop_*`` RPC types directly—no production backward-compat layer.
+These wrap the protocol-1 ``request`` / ``subscribe`` / ``notify`` flows so
+tests use the daemon's ``loop_*`` RPC methods directly — no legacy
+backward-compat layer.
 """
 
 from __future__ import annotations
@@ -18,15 +19,11 @@ async def loop_new(
     workspace: str | None = None,
     timeout: float = 60.0,
 ) -> str:
-    """Create a loop and return ``loop_id`` (waits for ``loop_new_response``)."""
-    payload: dict[str, Any] = {"type": "loop_new"}
+    """Create a loop and return ``loop_id`` (waits for the protocol-1 response)."""
+    params: dict[str, Any] = {}
     if workspace:
-        payload["workspace"] = workspace
-    resp = await client.request_response(
-        payload,
-        response_type="loop_new_response",
-        timeout=timeout,
-    )
+        params["workspace"] = workspace
+    resp = await client.request("loop_new", params, timeout=timeout)
     return str(resp["loop_id"])
 
 
@@ -36,10 +33,16 @@ async def loop_new_with_initial_input(
     initial_message: str | None = None,
     workspace: str | None = None,
 ) -> str:
-    """Create a loop and optionally send the first ``loop_input``."""
+    """Create a loop, subscribe for events, and optionally send the first ``loop_input``.
+
+    Subscription is required so the daemon accepts ``loop_input`` (it rejects
+    input from unsubscribed clients with ``LOOP_NOT_SUBSCRIBED``) and so the
+    caller receives the turn's stream events.
+    """
     loop_id = await loop_new(client, workspace=workspace)
+    await subscribe_loop_stream(client, loop_id)
     if initial_message:
-        await client.send_loop_input(loop_id, initial_message)
+        await client.notify("loop_input", {"loop_id": loop_id, "content": initial_message})
     return loop_id
 
 
@@ -50,7 +53,11 @@ async def subscribe_loop_stream(
     timeout: float = 30.0,
 ) -> dict[str, Any]:
     """Subscribe and wait until ``subscription_confirmed`` matches ``loop_id``."""
-    await client.send_loop_subscribe(loop_id)
+    await client.subscribe(
+        "loop_events",
+        {"loop_id": loop_id},
+        timeout=timeout,
+    )
     deadline = asyncio.get_running_loop().time() + timeout
     msg = f"Timed out waiting for subscription_confirmed for loop {loop_id!r}"
     while True:
@@ -76,12 +83,8 @@ async def request_loop_list(
     limit: int = 20,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Return ``loop_list_response``."""
-    return await client.request_response(
-        {"type": "loop_list", "limit": limit},
-        response_type="loop_list_response",
-        timeout=timeout,
-    )
+    """Return the ``loop_list`` result dict (protocol-1 response ``result``)."""
+    return await client.request("loop_list", {"limit": limit}, timeout=timeout)
 
 
 async def request_loop_get(
@@ -91,10 +94,10 @@ async def request_loop_get(
     verbose: bool = False,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Return ``loop_get_response``."""
-    return await client.request_response(
-        {"type": "loop_get", "loop_id": loop_id, "verbose": verbose},
-        response_type="loop_get_response",
+    """Return the ``loop_get`` result dict (protocol-1 response ``result``)."""
+    return await client.request(
+        "loop_get",
+        {"loop_id": loop_id, "verbose": verbose},
         timeout=timeout,
     )
 
@@ -105,9 +108,5 @@ async def request_loop_delete(
     *,
     timeout: float = 120.0,
 ) -> dict[str, Any]:
-    """Return ``loop_delete_response``."""
-    return await client.request_response(
-        {"type": "loop_delete", "loop_id": loop_id},
-        response_type="loop_delete_response",
-        timeout=timeout,
-    )
+    """Return the ``loop_delete`` result dict (protocol-1 response ``result``)."""
+    return await client.request("loop_delete", {"loop_id": loop_id}, timeout=timeout)

@@ -162,6 +162,11 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
             await_loop_delivery_drained=AsyncMock(return_value=True),
+            get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
+            get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
+        ),
+        _message_router=SimpleNamespace(
+            _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
         ),
         _persistence_manager=_FakePersistenceManager(),
     )
@@ -249,6 +254,11 @@ def _daemon_factory(
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
             await_loop_delivery_drained=AsyncMock(return_value=True),
+            get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
+            get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
+        ),
+        _message_router=SimpleNamespace(
+            _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
         ),
         _persistence_manager=_FakePersistenceManager(),
     )
@@ -399,6 +409,11 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
             await_loop_delivery_drained=AsyncMock(return_value=True),
+            get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
+            get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
+        ),
+        _message_router=SimpleNamespace(
+            _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
         ),
         _persistence_manager=_FakePersistenceManager(),
     )

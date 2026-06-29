@@ -19,13 +19,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from soothe_sdk.client import ProtocolError
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.event import EventBus
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
-    await_event_type,
     await_status_state,
+    await_subscribe_ack,
     build_daemon_config,
     force_isolated_home,
     integration_llm_idle_timeout,
@@ -222,6 +223,8 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
         for i in range(3):
             client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
+            await client.request_connection_init()
+            await client.wait_for_connection_ack()
             loop_id = await loop_new_with_initial_input(client, initial_message=f"Client {i}")
             thread_ids.append(loop_id)
 
@@ -270,15 +273,15 @@ async def test_client_subscription_after_thread_creation(tmp_path: Path, require
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         # Create loop first (without immediate subscription)
         loop_id = await loop_new_with_initial_input(client, initial_message="Test thread")
 
         # Subscribe to the loop AFTER creation
-        await client.send_loop_subscribe(loop_id)
-        confirmation = await await_event_type(
-            client.read_event, "subscription_confirmed", timeout=3.0
-        )
+        await client.subscribe("loop_events", {"loop_id": loop_id})
+        confirmation = await await_subscribe_ack(client.read_event, loop_id, timeout=3.0)
         assert confirmation["loop_id"] == loop_id
 
         # Send input and verify events are received
@@ -308,6 +311,8 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         # Create 3 loops and subscribe to all
         thread_ids = []
@@ -315,10 +320,8 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm
             loop_id = await loop_new_with_initial_input(client, initial_message=f"Thread {i}")
             thread_ids.append(loop_id)
 
-            await client.send_loop_subscribe(loop_id)
-            confirmation = await await_event_type(
-                client.read_event, "subscription_confirmed", timeout=3.0
-            )
+            await client.subscribe("loop_events", {"loop_id": loop_id})
+            confirmation = await await_subscribe_ack(client.read_event, loop_id, timeout=3.0)
             assert confirmation["loop_id"] == loop_id
 
         # Verify client receives events for all subscribed threads
@@ -356,6 +359,8 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
             # Connect
             client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
+            await client.request_connection_init()
+            await client.wait_for_connection_ack()
 
             # Create loop
             loop_id = await loop_new_with_initial_input(
@@ -378,8 +383,10 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
         # Verify daemon is still stable
         test_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await test_client.connect()
+        await test_client.request_connection_init()
+        await test_client.wait_for_connection_ack()
         response = await request_loop_list(test_client)
-        assert response["type"] == "loop_list_response"
+        assert "loops" in response
         await test_client.close()
 
     finally:
@@ -405,6 +412,8 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         # Create loop and subscribe
         loop_id = await loop_new_with_initial_input(client, initial_message="Throughput test")
@@ -440,6 +449,8 @@ async def test_large_message_handling(tmp_path: Path, requires_llm_api) -> None:
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         # Create loop with moderately large initial message (1KB)
         large_message = "x" * 1024
@@ -474,6 +485,8 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path, requires
         # Connect client
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
         loop_id = await loop_new_with_initial_input(client, initial_message="Test")
         await subscribe_loop_stream(client, loop_id)
 
@@ -509,6 +522,8 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
         # First connection
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
         loop_id1 = await loop_new_with_initial_input(client, initial_message="First session")
         await subscribe_loop_stream(client, loop_id1)
 
@@ -519,6 +534,8 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
         # Reconnect
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
+        await client2.request_connection_init()
+        await client2.wait_for_connection_ack()
         loop_id2 = await loop_new_with_initial_input(client2, initial_message="Second session")
         await subscribe_loop_stream(client2, loop_id2)
 
@@ -550,6 +567,8 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         loop_id = await loop_new_with_initial_input(
             client, initial_message="Test thread_id in events"
@@ -608,9 +627,11 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         # Connect first client
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
+        await client1.request_connection_init()
+        await client1.wait_for_connection_ack()
         loop_id1 = await loop_new_with_initial_input(client1, initial_message="Client 1")
-        await client1.send_loop_subscribe(loop_id1)
-        sub1 = await await_event_type(client1.read_event, "subscription_confirmed", timeout=3.0)
+        await client1.subscribe("loop_events", {"loop_id": loop_id1})
+        sub1 = await await_subscribe_ack(client1.read_event, loop_id1, timeout=3.0)
 
         client_id1 = sub1.get("client_id")
         assert client_id1 is not None
@@ -619,9 +640,11 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         # Connect second client
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
+        await client2.request_connection_init()
+        await client2.wait_for_connection_ack()
         loop_id2 = await loop_new_with_initial_input(client2, initial_message="Client 2")
-        await client2.send_loop_subscribe(loop_id2)
-        sub2 = await await_event_type(client2.read_event, "subscription_confirmed", timeout=3.0)
+        await client2.subscribe("loop_events", {"loop_id": loop_id2})
+        sub2 = await await_subscribe_ack(client2.read_event, loop_id2, timeout=3.0)
 
         client_id2 = sub2.get("client_id")
         assert client_id2 is not None
@@ -704,6 +727,8 @@ async def test_event_delivery_latency(tmp_path: Path, requires_llm_api) -> None:
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
         loop_id = await loop_new_with_initial_input(client, initial_message="Latency test")
         await subscribe_loop_stream(client, loop_id)
@@ -751,14 +776,17 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path, require
         # Connect client and send problematic messages
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
-        # Try to access non-existent thread
+        # Try to access non-existent thread. Under protocol-1 the daemon
+        # returns a structured error envelope {type:"error",
+        # error:{code:-32200, message:"... not found"}}; request() raises
+        # ProtocolError carrying that code (should not crash the daemon).
         fake_loop_id = f"non-existent-{uuid.uuid4().hex}"
-        await client.send_loop_get(fake_loop_id)
-
-        # Read response (should not crash daemon)
-        response = await asyncio.wait_for(client.read_event(), timeout=3.0)
-        assert response is not None
+        with pytest.raises(ProtocolError, match="not found") as exc_info:
+            await client.request("loop_get", {"loop_id": fake_loop_id})
+        assert exc_info.value.code == -32200
 
         # Verify daemon still works with valid operations
         loop_id = await loop_new_with_initial_input(client, initial_message="Valid thread")
@@ -796,18 +824,20 @@ async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> Non
     try:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
+        await client.request_connection_init()
+        await client.wait_for_connection_ack()
 
-        # Try to subscribe to non-existent thread
+        # Try to subscribe to non-existent thread. Under protocol-1 the daemon
+        # rejects the subscription with an error envelope carrying the
+        # subscription id; subscribe() raises ProtocolError (code=-32200).
         fake_loop_id = f"fake-loop-{uuid.uuid4().hex}"
-        await client.send_loop_subscribe(fake_loop_id)
-
-        # Should receive error response
-        response = await asyncio.wait_for(client.read_event(), timeout=3.0)
-        assert response is not None
+        with pytest.raises(ProtocolError, match="not found") as exc_info:
+            await client.subscribe("loop_events", {"loop_id": fake_loop_id})
+        assert exc_info.value.code == -32200
 
         # Client should still be connected
         list_response = await request_loop_list(client)
-        assert list_response["type"] == "loop_list_response"
+        assert "loops" in list_response
 
         await client.close()
 
@@ -836,11 +866,15 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
         # Create two clients with different threads
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
+        await client1.request_connection_init()
+        await client1.wait_for_connection_ack()
         loop1 = await loop_new_with_initial_input(client1, initial_message="Thread 1")
         await subscribe_loop_stream(client1, loop1)
 
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
+        await client2.request_connection_init()
+        await client2.wait_for_connection_ack()
         loop2 = await loop_new_with_initial_input(client2, initial_message="Thread 2")
         await subscribe_loop_stream(client2, loop2)
 

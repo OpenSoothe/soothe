@@ -8,6 +8,7 @@ from soothe_cli.tui.widgets.messages.cognition_step_activity import (
     count_distinct_tool_call_ids,
     has_task_activity_body,
     row_counts_for_main_tools,
+    row_counts_for_step_tool_total,
     stats_title_suffix,
     task_delegation_dedupe_key,
 )
@@ -55,16 +56,26 @@ def test_classifier_splits_main_and_task_delegations() -> None:
     assert key  # Key exists but children_by_task removed (IG-513)
 
 
-def test_stats_title_suffix_uses_total_tool_count() -> None:
+def test_stats_title_suffix_uses_main_tool_count() -> None:
     rows = [
         _row("ABC_01:s:grep:0"),
         _row("ABC_01:s:task:0", tool_name="task", is_task_row=True),
         _row("ABC_01:t0:glob:1", tool_name="glob", parent="ABC_01:s:task:0"),
     ]
     index = StepRowClassifier.build("ABC-01", rows)
+    assert index.main_tool_count == 1
     assert index.total_tool_count == 1
     assert index.task_delegation_count == 1
     assert stats_title_suffix(index) == " · 1 tool, 1 task"
+
+
+def test_row_counts_for_step_tool_total_excludes_task_parented_fallback() -> None:
+    fallback_subgraph = _row(
+        "call_opaque_1",
+        tool_name="grep",
+        parent="ABC_01:s:task:0",
+    )
+    assert row_counts_for_step_tool_total(fallback_subgraph, "ABC-01") is False
 
 
 def test_row_counts_for_main_tools_excludes_subgraph() -> None:

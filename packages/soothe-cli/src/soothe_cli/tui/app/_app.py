@@ -273,6 +273,7 @@ class SootheApp(
 
         self._model_switching = False
         self._detaching = False
+        self._shutdown_prepared = False
 
         self._deferred_actions: list[DeferredAction] = []
         """Deferred actions executed after the current busy state resolves."""
@@ -311,6 +312,20 @@ class SootheApp(
         from soothe_cli.tui.input import MediaTracker
 
         self._image_tracker = MediaTracker()
+
+    def exit(
+        self,
+        result: Any = None,
+        return_code: int = 0,
+        message: Any = None,
+    ) -> None:
+        """Exit with Soothe shutdown prep.
+
+        ``App.exit`` appears before ``_MessagesMixin`` in the MRO, so this
+        delegate ensures custom teardown (worker cancel, stats merge, iTerm2
+        restore) runs for every quit path.
+        """
+        _MessagesMixin.exit(self, result=result, return_code=return_code, message=message)
 
     def _runtime_backend_ready(self) -> bool:
         """Return whether the app has a connected daemon session."""

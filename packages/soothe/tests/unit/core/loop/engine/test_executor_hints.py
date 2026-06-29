@@ -77,6 +77,30 @@ class TestExecutorHints:
         assert "soothe_step_tools" not in configurable
 
     @pytest.mark.asyncio
+    async def test_executor_passes_step_wire_subagent_from_planner(self):
+        """Planner execution_hint=subagent flows to soothe_step_subagent."""
+        mock_agent = MagicMock()
+        mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
+        mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
+        mock_agent.aget_state = AsyncMock(return_value=MagicMock())
+
+        executor = Executor(mock_agent)
+
+        step = StepAction(
+            id="step-1",
+            description="Map repository layout",
+            expected_output="Matching paths",
+            execution_hint="subagent",
+            subagent="explore",
+            wire_subagent="explore",
+        )
+
+        await executor._execute_step_collecting_events(step, "thread-456")
+
+        configurable = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
+        assert configurable["soothe_step_subagent"] == "explore"
+
+    @pytest.mark.asyncio
     async def test_executor_passes_expected_output(self):
         """Test Executor passes expected_output hint via config."""
         mock_agent = MagicMock()

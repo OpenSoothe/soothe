@@ -86,36 +86,6 @@ async def _run_direct_vision_turn(
     return out
 
 
-async def run_image_to_text_turn(
-    config: Any,
-    *,
-    user_text: str,
-    attachments: list[dict[str, str]],
-    session_id: str | None = None,
-) -> str:
-    """Deprecated alias for ``run_direct_llm_turn`` with ``attachments``.
-
-    Args:
-        config: ``SootheConfig`` instance.
-        user_text: User instructions (may be empty; images are still required upstream).
-        attachments: Normalized ``{"mime_type", "data"}`` entries (base64 ``data``).
-        session_id: Optional LangGraph checkpoint id for Langfuse session correlation.
-
-    Returns:
-        Model response text (non-empty; falls back to a short placeholder if the model
-        returns only whitespace).
-
-    Raises:
-        Exception: Propagated from the underlying model provider.
-    """
-    return await run_direct_llm_turn(
-        config,
-        user_text=user_text,
-        attachments=attachments,
-        session_id=session_id,
-    )
-
-
 async def run_direct_llm_turn(
     config: Any,
     *,

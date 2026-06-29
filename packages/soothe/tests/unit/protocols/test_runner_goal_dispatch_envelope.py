@@ -52,17 +52,13 @@ class TestGoalDispatchEnvelope:
             job.attempt = 5  # type: ignore[misc]
 
     def test_backward_compat_alias(self) -> None:
-        """AutopilotJob alias still works for gradual migration."""
-        from soothe.protocols.runner import AutopilotJob
-
-        job = AutopilotJob(
+        """GoalDispatchEnvelope is the canonical dispatch envelope type."""
+        job = GoalDispatchEnvelope(
             goal_id="g1",
             goal_description="do thing",
             merged_context=GoalDispatchContextBundle(),
         )
         assert job.goal_id == "g1"
-        # Verify it's the same class
-        assert AutopilotJob is GoalDispatchEnvelope
 
 
 class TestLoopRunRequestAutopilotJob:

@@ -34,22 +34,39 @@ from tests.integration.daemon_fixtures import (
 
 
 async def _connect_and_drain_handshake(client: WebSocketClient) -> None:
-    """Connect and wait until daemon handshake is complete."""
+    """Connect and complete the protocol-1 handshake (RFC-450 §8.2)."""
     await client.connect()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
 
 
 async def _clear_pending_and_subscribe(client: WebSocketClient, loop_id: str) -> None:
     """Clear pending events from setup phase, then verify subscription."""
     # The WebSocketClient accumulates pending events during setup (daemon_ready,
-    # status, loop_new_response, etc.). Clear them before isolation checks.
+    # status, protocol-1 responses, etc.). Clear them before isolation checks.
     client.clear_pending_events()
     # Wait for subscription confirmation to ensure clean state
-    await client.request_response(
-        {"type": "loop_subscribe", "loop_id": loop_id},
-        response_type="loop_subscribe_response",
-        timeout=5.0,
-    )
+    await client.subscribe("loop_events", {"loop_id": loop_id}, timeout=5.0)
+
+
+async def _received_loop_event(client: WebSocketClient, loop_id: str, *, window_s: float) -> bool:
+    """Return True if ``client`` receives any frame scoped to ``loop_id`` within ``window_s``.
+
+    Used for isolation checks: the client may still get its own loop's
+    reattach replay or a heartbeat ping, so we filter by ``loop_id`` to test
+    the precise cross-loop leakage guarantee.
+    """
+    deadline = asyncio.get_running_loop().time() + window_s
+    while asyncio.get_running_loop().time() < deadline:
+        try:
+            ev = await asyncio.wait_for(client.read_event(), timeout=0.1)
+        except (TimeoutError, asyncio.CancelledError):
+            return False
+        if ev is None:
+            return False
+        if ev.get("loop_id") == loop_id:
+            return True
+    return False
 
 
 async def _create_client_with_loop(ws_port: int) -> tuple[WebSocketClient, str]:
@@ -149,8 +166,15 @@ class TestLoopIsolation:
             client2, loop2 = await _create_client_with_loop(ws_port)
 
             # Clear pending events only for client2 before isolation check
-            # Client2 should not receive any loop1 events during execution
+            # Client2 should not receive any loop1 events during execution.
+            # Drain lingering loop2 reattach-replay frames first so they don't
+            # trip the isolation check.
             client2.clear_pending_events()
+            try:
+                while True:
+                    await asyncio.wait_for(client2.read_event(), timeout=0.3)
+            except (TimeoutError, asyncio.CancelledError):
+                pass
 
             idle_timeout = integration_llm_idle_timeout()
 
@@ -164,10 +188,22 @@ class TestLoopIsolation:
             if st.get("state") == "running":
                 await await_status_state(client1.read_event, "idle", timeout=idle_timeout)
 
-            # Verify loop2 client receives NO events from loop1 (isolation)
-            with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
-                # Try to read from client2 - should timeout (no events)
-                await asyncio.wait_for(client2.read_event(), timeout=0.5)
+            # Verify loop2 client receives NO loop1-scoped events (isolation).
+            # It may still get its own loop2 reattach replay or a heartbeat
+            # ping — filter those by loop_id so the check is precise.
+            deadline = asyncio.get_running_loop().time() + 0.5
+            leaked = None
+            while asyncio.get_running_loop().time() < deadline:
+                try:
+                    ev = await asyncio.wait_for(client2.read_event(), timeout=0.1)
+                except (TimeoutError, asyncio.CancelledError):
+                    break
+                if ev is None:
+                    break
+                if ev.get("loop_id") == loop1:
+                    leaked = ev
+                    break
+            assert leaked is None, f"client2 received loop1 event: {leaked}"
 
             await client1.close()
             await client2.close()
@@ -199,7 +235,7 @@ class TestLoopIsolation:
             await await_status_state(client1.read_event, "running", timeout=10.0)
 
             # Cancel loop1 via /cancel (handled in message_router; no cancel_response RPC)
-            await client1.send_command("/cancel")
+            await client1.notify("slash_command", {"cmd": "/cancel"})
 
             # Verify loop1 execution stops (goes to idle/cancelled)
             await await_status_state(
@@ -248,17 +284,9 @@ class TestLoopIsolation:
             await asyncio.wait_for(client2.read_event(), timeout=2.0)
 
             # Get loop_tree for each loop
-            tree1_resp = await client1.request_response(
-                {"type": "loop_tree", "loop_id": loop1},
-                response_type="loop_tree_response",
-                timeout=5.0,
-            )
+            tree1_resp = await client1.request("loop_tree", {"loop_id": loop1}, timeout=5.0)
 
-            tree2_resp = await client2.request_response(
-                {"type": "loop_tree", "loop_id": loop2},
-                response_type="loop_tree_response",
-                timeout=5.0,
-            )
+            tree2_resp = await client2.request("loop_tree", {"loop_id": loop2}, timeout=5.0)
 
             # Verify loop1 tree contains only loop1 threads
             tree1_threads = tree1_resp.get("threads", [])
@@ -319,21 +347,13 @@ class TestLoopIsolation:
             # Create two more clients and subscribe to SAME loop
             client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client2)
-            sub2_resp = await client2.request_response(
-                {"type": "loop_subscribe", "loop_id": loop_id},
-                response_type="loop_subscribe_response",
-                timeout=5.0,
-            )
-            assert sub2_resp.get("success", True), "Client2 should subscribe to loop"
+            sub2 = await client2.subscribe("loop_events", {"loop_id": loop_id}, timeout=5.0)
+            assert sub2, "Client2 should subscribe to loop"
 
             client3 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client3)
-            sub3_resp = await client3.request_response(
-                {"type": "loop_subscribe", "loop_id": loop_id},
-                response_type="loop_subscribe_response",
-                timeout=5.0,
-            )
-            assert sub3_resp.get("success", True), "Client3 should subscribe to loop"
+            sub3 = await client3.subscribe("loop_events", {"loop_id": loop_id}, timeout=5.0)
+            assert sub3, "Client3 should subscribe to loop"
 
             # Send input to that loop from any client
             await client1.send_input(loop_id, "Test message to shared loop")
@@ -386,22 +406,14 @@ class TestLoopIsolation:
             client1, loop_id = await _create_client_with_loop(ws_port)
             client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await _connect_and_drain_handshake(client2)
-            await client2.request_response(
-                {"type": "loop_subscribe", "loop_id": loop_id},
-                response_type="loop_subscribe_response",
-                timeout=5.0,
-            )
+            await client2.subscribe("loop_events", {"loop_id": loop_id}, timeout=5.0)
 
             # Clear pending events from setup phase before detach test
             client1.clear_pending_events()
             client2.clear_pending_events()
 
             # Client1 detaches from loop
-            detach_resp = await client1.request_response(
-                {"type": "loop_detach", "loop_id": loop_id},
-                response_type="loop_detach_response",
-                timeout=5.0,
-            )
+            detach_resp = await client1.request("loop_detach", {"loop_id": loop_id}, timeout=5.0)
             assert detach_resp.get("success", True), "Detach should succeed"
 
             # Clear any events from detach response handling
@@ -461,22 +473,24 @@ class TestLoopIsolation:
             _ = loop2  # second loop id for isolation context; not driven in this scenario
 
             # Clear handshake/setup events; client2 was not connected during loop1's turn.
+            # Drain lingering loop2 reattach-replay frames so they don't trip
+            # the isolation check.
             client2.clear_pending_events()
+            try:
+                while True:
+                    await asyncio.wait_for(client2.read_event(), timeout=0.3)
+            except (TimeoutError, asyncio.CancelledError):
+                pass
 
             # No backlog delivered to client2 for loop1's history
-            with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
-                await asyncio.wait_for(client2.read_event(), timeout=0.5)
+            assert not await _received_loop_event(client2, loop1, window_s=0.5)
 
             # Client1 detaches from loop1
-            await client1.request_response(
-                {"type": "loop_detach", "loop_id": loop1},
-                response_type="loop_detach_response",
-                timeout=5.0,
-            )
+            await client1.request("loop_detach", {"loop_id": loop1}, timeout=5.0)
 
             # Client1 reattaches to loop1 with replay (RFC-413 card-based replay)
             client1.clear_pending_events()
-            await client1.send_loop_reattach(loop1)
+            await client1.request("loop_reattach", {"loop_id": loop1})
             await await_event_type(
                 client1.read_event, "card.replay_begin", timeout=integration_llm_idle_timeout()
             )
@@ -485,8 +499,7 @@ class TestLoopIsolation:
             # Verify replay events go only to client1 (already consumed above)
 
             # Verify client2 never receives loop1 replay events
-            with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):
-                await asyncio.wait_for(client2.read_event(), timeout=1.0)
+            assert not await _received_loop_event(client2, loop1, window_s=1.0)
 
             await client1.close()
             await client2.close()
@@ -572,15 +585,15 @@ class TestLoopIsolation:
             loop2a = await websocket_create_loop_only(client2)
 
             # Both clients call loop_list (exclude_empty=false to include fresh loops)
-            list1_resp = await client1.request_response(
-                {"type": "loop_list", "limit": 20, "filter": {"exclude_empty": False}},
-                response_type="loop_list_response",
+            list1_resp = await client1.request(
+                "loop_list",
+                {"limit": 20, "filter": {"exclude_empty": False}},
                 timeout=5.0,
             )
 
-            list2_resp = await client2.request_response(
-                {"type": "loop_list", "limit": 20, "filter": {"exclude_empty": False}},
-                response_type="loop_list_response",
+            list2_resp = await client2.request(
+                "loop_list",
+                {"limit": 20, "filter": {"exclude_empty": False}},
                 timeout=5.0,
             )
 
@@ -627,11 +640,7 @@ class TestLoopIsolation:
             assert metadata2 is not None and metadata2.get("loop_id") == loop2
 
             # Delete loop1
-            delete_resp = await client1.request_response(
-                {"type": "loop_delete", "loop_id": loop1},
-                response_type="loop_delete_response",
-                timeout=10.0,
-            )
+            delete_resp = await client1.request("loop_delete", {"loop_id": loop1}, timeout=10.0)
             assert delete_resp.get("success", True), "Delete should succeed"
 
             # Verify loop1 directory removed

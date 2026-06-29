@@ -1,0 +1,1465 @@
+asyncapi: 3.0.0
+info:
+  title: Soothe Daemon WebSocket API
+  version: 1.0.0
+  description: |
+    Bidirectional WebSocket protocol for daemon communication.
+    Hybrid RPC + streaming subscription model.
+
+    Protocol version 1 — see RFC-450 for design rationale.
+
+servers:
+  daemon:
+    host: 127.0.0.1:8765
+    pathname: /
+    protocol: ws
+    protocolVersion: '1'
+    description: Local daemon WebSocket endpoint
+
+channels:
+  main:
+    address: /
+    title: Main bidirectional channel
+    bindings:
+      ws:
+        method: GET
+    operations:
+      send:
+        action: send
+        title: Server-to-client messages
+        channel:
+          $ref: '#/channels/main'
+        messages:
+          - $ref: '#/components/messages/connectionAck'
+          - $ref: '#/components/messages/response'
+          - $ref: '#/components/messages/next'
+          - $ref: '#/components/messages/error'
+          - $ref: '#/components/messages/complete'
+          - $ref: '#/components/messages/receiptResponse'
+          - $ref: '#/components/messages/pong'
+          - $ref: '#/components/messages/status'
+      receive:
+        action: receive
+        title: Client-to-server messages
+        channel:
+          $ref: '#/channels/main'
+        messages:
+          - $ref: '#/components/messages/connectionInit'
+          # Loop RPC requests
+          - $ref: '#/components/messages/loopListRequest'
+          - $ref: '#/components/messages/loopGetRequest'
+          - $ref: '#/components/messages/loopTreeRequest'
+          - $ref: '#/components/messages/loopPruneRequest'
+          - $ref: '#/components/messages/loopDeleteRequest'
+          - $ref: '#/components/messages/loopNewRequest'
+          - $ref: '#/components/messages/loopReattachRequest'
+          - $ref: '#/components/messages/loopDetachRequest'
+          - $ref: '#/components/messages/loopInputRequest'
+          - $ref: '#/components/messages/loopMessagesRequest'
+          - $ref: '#/components/messages/loopStateGetRequest'
+          - $ref: '#/components/messages/loopStateUpdateRequest'
+          - $ref: '#/components/messages/loopCardsFetchRequest'
+          # Job RPC requests
+          - $ref: '#/components/messages/jobCreateRequest'
+          - $ref: '#/components/messages/jobStatusRequest'
+          - $ref: '#/components/messages/jobPauseRequest'
+          - $ref: '#/components/messages/jobResumeRequest'
+          - $ref: '#/components/messages/jobCancelRequest'
+          - $ref: '#/components/messages/jobDagRequest'
+          - $ref: '#/components/messages/jobGuidanceRequest'
+          # Daemon & config requests
+          - $ref: '#/components/messages/daemonStatusRequest'
+          - $ref: '#/components/messages/daemonShutdownRequest'
+          - $ref: '#/components/messages/configGetRequest'
+          # Skills & models requests
+          - $ref: '#/components/messages/skillsListRequest'
+          - $ref: '#/components/messages/modelsListRequest'
+          - $ref: '#/components/messages/invokeSkillRequest'
+          - $ref: '#/components/messages/mcpStatusRequest'
+          # Auth requests
+          - $ref: '#/components/messages/authRequest'
+          - $ref: '#/components/messages/authRefreshRequest'
+          - $ref: '#/components/messages/rpcCommandRequest'
+          # Notifications
+          - $ref: '#/components/messages/loopInputNotification'
+          - $ref: '#/components/messages/slashCommandNotification'
+          - $ref: '#/components/messages/disconnectNotification'
+          # Subscriptions
+          - $ref: '#/components/messages/loopEventsSubscribe'
+          - $ref: '#/components/messages/autopilotEventsSubscribe'
+          # Control messages
+          - $ref: '#/components/messages/unsubscribe'
+          - $ref: '#/components/messages/ping'
+
+components:
+  correlationIds:
+    operationId:
+      location: $message.payload#/id
+      description: Operation correlation ID
+
+  schemas:
+    # Base envelope schemas
+    baseEnvelope:
+      type: object
+      required: [proto, type]
+      properties:
+        proto:
+          type: string
+          const: "1"
+          description: Protocol version string
+        type:
+          type: string
+          description: Message class (request, response, notification, etc.)
+
+    # Connection handshake schemas
+    connectionInitParams:
+      type: object
+      properties:
+        client_version:
+          type: string
+          description: Client software version
+        client_name:
+          type: string
+          description: Optional client identifier
+        accept_proto:
+          type: array
+          items:
+            type: string
+          default: ["1"]
+          description: Protocol versions the client supports
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: Client-declared capabilities
+
+    connectionAckResult:
+      type: object
+      properties:
+        server_version:
+          type: string
+          description: Server software version
+        protocol_version:
+          type: string
+          default: "1"
+          description: Negotiated protocol version
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: Server-declared capabilities
+        readiness_state:
+          type: string
+          enum: [ready, starting, warming, incompatible, error]
+          default: ready
+          description: Daemon readiness state
+        heartbeat_interval_ms:
+          type: integer
+          default: 30000
+          description: Heartbeat interval in milliseconds
+
+    # Error schema
+    errorObject:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: Numeric error code (see RFC-450 §7.3 registry)
+        message:
+          type: string
+          description: Human-readable error summary
+        data:
+          type: object
+          description: Optional machine-parseable details
+
+    # Loop RPC params
+    loopGetParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        verbose:
+          type: boolean
+          default: false
+          description: Include verbose details
+        tree:
+          type: boolean
+          default: false
+          description: Include checkpoint tree
+
+    loopListParams:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Filter by loop status
+        limit:
+          type: integer
+          description: Maximum number of results
+
+    loopNewParams:
+      type: object
+      properties:
+        workspace:
+          type: string
+          description: Optional client workspace path
+        user_id:
+          type: string
+          description: Optional user identifier
+        is_ephemeral:
+          type: boolean
+          default: false
+          description: Create ephemeral loop
+
+    loopInputParams:
+      type: object
+      required: [loop_id, content]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        content:
+          oneOf:
+            - type: string
+            - type: object
+          description: User input text or structured content
+        autonomous:
+          type: boolean
+          default: false
+          description: Enable autonomous mode
+        max_iterations:
+          type: integer
+          exclusiveMinimum: 0
+          description: Maximum iterations for autonomous mode
+        model:
+          type: string
+          description: Optional model override
+        model_params:
+          type: object
+          description: Optional model parameters
+
+    subscribeParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop to subscribe to
+        stream_delivery:
+          type: string
+          enum: [batch, adaptive, streaming]
+          default: adaptive
+          description: Stream delivery mode
+        wire_tier:
+          type: string
+          enum: [full, compact]
+          default: full
+          description: Wire filter tier
+
+    # Loop management params (RFC-450 §9.2)
+    loopTreeParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+
+    loopPruneParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        keep_latest:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Number of recent branches to keep
+
+    loopDeleteParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+
+    loopReattachParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop to reattach
+
+    loopDetachParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop to detach from
+
+    loopMessagesParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        limit:
+          type: integer
+          minimum: 1
+          default: 100
+          description: Maximum messages to return
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Pagination offset
+        include_events:
+          type: boolean
+          default: false
+          description: Include tool events in response
+
+    loopStateGetParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        keys:
+          type: array
+          items:
+            type: string
+          description: Specific channel keys to fetch
+
+    loopStateUpdateParams:
+      type: object
+      required: [loop_id, values]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        values:
+          type: object
+          description: Channel values to apply
+        as_node:
+          type: string
+          description: Node to apply update as
+
+    loopCardsFetchParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+        since:
+          type: string
+          description: Fetch cards after this sequence
+
+    # Job RPC params (RFC-450 §9.2)
+    jobCreateParams:
+      type: object
+      required: [goal]
+      properties:
+        goal:
+          type: string
+          minLength: 1
+          description: Root goal description
+        workspace:
+          type: string
+          description: Optional workspace path
+        user_id:
+          type: string
+          description: Optional user identifier
+        autonomous:
+          type: boolean
+          default: false
+          description: Enable autonomous mode
+        max_iterations:
+          type: integer
+          exclusiveMinimum: 0
+          description: Max iterations limit
+        guidance:
+          type: string
+          description: Initial guidance text
+        intent_hint:
+          type: string
+          description: Intent hint for execution
+
+    jobStatusParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Job identifier
+
+    jobPauseParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Job to pause
+
+    jobResumeParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Job to resume
+
+    jobCancelParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Job to cancel
+
+    jobDagParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Job identifier
+
+    jobGuidanceParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Target job
+        content:
+          type: string
+          minLength: 1
+          description: Guidance text (canonical field)
+        goal_id:
+          type: string
+          description: Optional specific goal target
+
+    # Daemon & config params (RFC-450 §9.2)
+    daemonStatusParams:
+      type: object
+      description: No required fields
+
+    daemonShutdownParams:
+      type: object
+      description: No required fields
+
+    configGetParams:
+      type: object
+      properties:
+        section:
+          type: string
+          description: Config section to fetch
+
+    # Skills & models params (RFC-450 §9.2)
+    skillsListParams:
+      type: object
+      description: No required fields
+
+    modelsListParams:
+      type: object
+      description: No required fields
+
+    invokeSkillParams:
+      type: object
+      required: [skill]
+      properties:
+        skill:
+          type: string
+          minLength: 1
+          description: Skill name to invoke
+        args:
+          type: string
+          default: ""
+          description: Skill arguments
+        clarification_mode:
+          type: string
+          enum: [auto, manual]
+          description: Clarification handling mode
+
+    mcpStatusParams:
+      type: object
+      description: No required fields
+
+    # Auth params (RFC-450 §9.2)
+    authParams:
+      type: object
+      properties:
+        access_key:
+          type: string
+          description: Access key credential
+        secret_key:
+          type: string
+          description: Secret key credential
+
+    authRefreshParams:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: Token to refresh
+
+    # Command params (RFC-450 §9.4)
+    slashCommandParams:
+      type: object
+      required: [cmd]
+      properties:
+        cmd:
+          type: string
+          minLength: 1
+          description: Slash command string (e.g. /exit, /cancel)
+
+    rpcCommandParams:
+      type: object
+      properties:
+        command:
+          type: string
+          description: RPC command name
+        payload:
+          type: object
+          description: Command payload
+
+    # Autopilot subscription params
+    autopilotSubscribeParams:
+      type: object
+      properties:
+        job_id:
+          type: string
+          description: Optional job filter
+        filters:
+          type: object
+          description: Event filter criteria
+
+    # Disconnect params
+    disconnectParams:
+      type: object
+      description: No required fields
+
+    # Stream event payload
+    streamEventPayload:
+      type: object
+      properties:
+        namespace:
+          type: array
+          items:
+            type: string
+          description: Event namespace path
+        mode:
+          type: string
+          description: Event mode (messages, custom, etc.)
+        data:
+          type: object
+          description: Event data payload
+
+    # Status message
+    statusPayload:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [idle, running, stopped, detached]
+          description: Daemon or loop state
+        input_history:
+          type: array
+          items:
+            type: object
+          description: Optional input history
+
+  messages:
+    # Connection handshake messages
+    connectionInit:
+      title: Connection initialization
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: connection_init
+              params:
+                $ref: '#/components/schemas/connectionInitParams'
+
+    connectionAck:
+      title: Connection acknowledgment
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: connection_ack
+              result:
+                $ref: '#/components/schemas/connectionAckResult'
+
+    # Heartbeat messages
+    ping:
+      title: Heartbeat ping
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: ping
+
+    pong:
+      title: Heartbeat response
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: pong
+
+    # Loop RPC request messages (method-specific schemas per RFC-450 §11.2)
+    loopListRequest:
+      title: List loops
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_list
+              params:
+                $ref: '#/components/schemas/loopListParams'
+              id:
+                type: string
+
+    loopGetRequest:
+      title: Get loop details
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_get
+              params:
+                $ref: '#/components/schemas/loopGetParams'
+              id:
+                type: string
+
+    loopTreeRequest:
+      title: Get checkpoint tree
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_tree
+              params:
+                $ref: '#/components/schemas/loopTreeParams'
+              id:
+                type: string
+
+    loopPruneRequest:
+      title: Prune loop branches
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_prune
+              params:
+                $ref: '#/components/schemas/loopPruneParams'
+              id:
+                type: string
+
+    loopDeleteRequest:
+      title: Delete loop
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_delete
+              params:
+                $ref: '#/components/schemas/loopDeleteParams'
+              id:
+                type: string
+
+    loopNewRequest:
+      title: Create new loop
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_new
+              params:
+                $ref: '#/components/schemas/loopNewParams'
+              id:
+                type: string
+
+    loopReattachRequest:
+      title: Reattach to loop
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_reattach
+              params:
+                $ref: '#/components/schemas/loopReattachParams'
+              id:
+                type: string
+
+    loopDetachRequest:
+      title: Detach from loop
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_detach
+              params:
+                $ref: '#/components/schemas/loopDetachParams'
+              id:
+                type: string
+
+    loopInputRequest:
+      title: Submit user input (request mode)
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_input
+              params:
+                $ref: '#/components/schemas/loopInputParams'
+              id:
+                type: string
+
+    loopMessagesRequest:
+      title: Fetch persisted messages
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_messages
+              params:
+                $ref: '#/components/schemas/loopMessagesParams'
+              id:
+                type: string
+
+    loopStateGetRequest:
+      title: Get checkpoint state
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_state_get
+              params:
+                $ref: '#/components/schemas/loopStateGetParams'
+              id:
+                type: string
+
+    loopStateUpdateRequest:
+      title: Update checkpoint state
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_state_update
+              params:
+                $ref: '#/components/schemas/loopStateUpdateParams'
+              id:
+                type: string
+
+    loopCardsFetchRequest:
+      title: Fetch display cards
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_cards_fetch
+              params:
+                $ref: '#/components/schemas/loopCardsFetchParams'
+              id:
+                type: string
+
+    # Job RPC request messages
+    jobCreateRequest:
+      title: Create autopilot job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_create
+              params:
+                $ref: '#/components/schemas/jobCreateParams'
+              id:
+                type: string
+
+    jobStatusRequest:
+      title: Query job status
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_status
+              params:
+                $ref: '#/components/schemas/jobStatusParams'
+              id:
+                type: string
+
+    jobPauseRequest:
+      title: Pause job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_pause
+              params:
+                $ref: '#/components/schemas/jobPauseParams'
+              id:
+                type: string
+
+    jobResumeRequest:
+      title: Resume job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_resume
+              params:
+                $ref: '#/components/schemas/jobResumeParams'
+              id:
+                type: string
+
+    jobCancelRequest:
+      title: Cancel job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_cancel
+              params:
+                $ref: '#/components/schemas/jobCancelParams'
+              id:
+                type: string
+
+    jobDagRequest:
+      title: Get job DAG
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_dag
+              params:
+                $ref: '#/components/schemas/jobDagParams'
+              id:
+                type: string
+
+    jobGuidanceRequest:
+      title: Send job guidance
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: job_guidance
+              params:
+                $ref: '#/components/schemas/jobGuidanceParams'
+              id:
+                type: string
+
+    # Daemon & config request messages
+    daemonStatusRequest:
+      title: Query daemon status
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: daemon_status
+              params:
+                $ref: '#/components/schemas/daemonStatusParams'
+              id:
+                type: string
+
+    daemonShutdownRequest:
+      title: Request daemon shutdown
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: daemon_shutdown
+              params:
+                $ref: '#/components/schemas/daemonShutdownParams'
+              id:
+                type: string
+
+    configGetRequest:
+      title: Get config section
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: config_get
+              params:
+                $ref: '#/components/schemas/configGetParams'
+              id:
+                type: string
+
+    # Skills & models request messages
+    skillsListRequest:
+      title: List available skills
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: skills_list
+              params:
+                $ref: '#/components/schemas/skillsListParams'
+              id:
+                type: string
+
+    modelsListRequest:
+      title: List available models
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: models_list
+              params:
+                $ref: '#/components/schemas/modelsListParams'
+              id:
+                type: string
+
+    invokeSkillRequest:
+      title: Invoke a skill
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: invoke_skill
+              params:
+                $ref: '#/components/schemas/invokeSkillParams'
+              id:
+                type: string
+
+    mcpStatusRequest:
+      title: Get MCP server status
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: mcp_status
+              params:
+                $ref: '#/components/schemas/mcpStatusParams'
+              id:
+                type: string
+
+    # Auth request messages
+    authRequest:
+      title: AKSK authentication
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: auth
+              params:
+                $ref: '#/components/schemas/authParams'
+              id:
+                type: string
+
+    authRefreshRequest:
+      title: Refresh auth token
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: auth_refresh
+              params:
+                $ref: '#/components/schemas/authRefreshParams'
+              id:
+                type: string
+
+    rpcCommandRequest:
+      title: Structured RPC command
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: rpc_command
+              params:
+                $ref: '#/components/schemas/rpcCommandParams'
+              id:
+                type: string
+
+    # Notification messages
+    loopInputNotification:
+      title: Submit user input (notification mode)
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: notification
+              method:
+                const: loop_input
+              params:
+                $ref: '#/components/schemas/loopInputParams'
+              receipt:
+                type: string
+
+    slashCommandNotification:
+      title: Slash command
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: notification
+              method:
+                const: slash_command
+              params:
+                $ref: '#/components/schemas/slashCommandParams'
+              receipt:
+                type: string
+
+    disconnectNotification:
+      title: Clean disconnect notification
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: notification
+              method:
+                const: disconnect
+              params:
+                $ref: '#/components/schemas/disconnectParams'
+
+    # Subscription request messages
+    loopEventsSubscribe:
+      title: Subscribe to loop events
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: subscribe
+              method:
+                const: loop_events
+              params:
+                $ref: '#/components/schemas/subscribeParams'
+              id:
+                type: string
+
+    autopilotEventsSubscribe:
+      title: Subscribe to autopilot events
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: subscribe
+              method:
+                const: autopilot_events
+              params:
+                $ref: '#/components/schemas/autopilotSubscribeParams'
+              id:
+                type: string
+
+    # Generic request (for methods not explicitly defined)
+    request:
+      title: RPC request
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                type: string
+                description: RPC method name
+              params:
+                type: object
+                description: Method parameters
+              id:
+                type: string
+                description: Correlation ID
+
+    response:
+      title: RPC response
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: response
+              result:
+                type: object
+                description: Result data
+              id:
+                type: string
+                description: Correlation ID
+
+    # Notification message
+    notification:
+      title: Fire-and-forget notification
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: notification
+              method:
+                type: string
+                description: Notification target name
+              params:
+                type: object
+                description: Notification parameters
+              receipt:
+                type: string
+                description: Optional receipt ID for delivery confirmation
+
+    # Receipt response
+    receiptResponse:
+      title: Delivery confirmation
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: receipt_response
+              receipt:
+                type: string
+                description: Receipt ID being confirmed
+
+    # Subscription messages
+    subscribe:
+      title: Subscription start
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: subscribe
+              method:
+                type: string
+                enum: [loop_events, autopilot_events]
+                description: Subscription target
+              params:
+                $ref: '#/components/schemas/subscribeParams'
+              id:
+                type: string
+                description: Subscription correlation ID
+
+    next:
+      title: Stream event
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: next
+              payload:
+                $ref: '#/components/schemas/streamEventPayload'
+              id:
+                type: string
+                description: Subscription correlation ID
+
+    complete:
+      title: Stream complete
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: complete
+              id:
+                type: string
+                description: Subscription correlation ID
+
+    unsubscribe:
+      title: Cancel subscription
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: unsubscribe
+              id:
+                type: string
+                description: Subscription correlation ID
+
+    # Error message
+    error:
+      title: Error response
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: error
+              error:
+                $ref: '#/components/schemas/errorObject'
+              id:
+                type: string
+                description: Request correlation ID
+
+    # Disconnect message
+    disconnect:
+      title: Clean disconnect
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: disconnect
+
+    # Status message (legacy, still used)
+    status:
+      title: Daemon/loop status
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: status
+              loop_id:
+                type: string
+                description: Loop ID for loop-scoped status
+              state:
+                type: string
+                enum: [idle, running, stopped, detached]
+                description: Current state

@@ -13,7 +13,10 @@ from typing import TYPE_CHECKING, Any
 from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
-from soothe.foundation.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.foundation.loop.state.persistence.shared_pool import (
+    acquire_shared_sqlite_backend_sync,
+    release_shared_sqlite_backend,
+)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -40,6 +43,7 @@ class StrangeLoopCheckpointPersistenceManager:
             backend_type = "postgresql"
 
         # Initialize backend instance
+        self._uses_shared_sqlite = False
         if backend_type == "postgresql":
             try:
                 from soothe.foundation.loop.state.persistence.postgres_backend import (
@@ -53,8 +57,8 @@ class StrangeLoopCheckpointPersistenceManager:
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
             self._backend = PostgreSQLPersistenceBackend(dsn=dsn, pool_size=10)
         else:
-            db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-            self._backend = SQLitePersistenceBackend(db_path=db_path, pool_size=5)
+            self._backend = acquire_shared_sqlite_backend_sync()
+            self._uses_shared_sqlite = True
 
         logger.info("StrangeLoop persistence manager initialized: backend=%s", backend_type)
 
@@ -559,6 +563,10 @@ class StrangeLoopCheckpointPersistenceManager:
         Must be called when manager is no longer needed to release database connections.
         Critical for concurrent execution where multiple managers may exist.
         """
+        if self._uses_shared_sqlite:
+            await release_shared_sqlite_backend()
+            logger.debug("Released shared SQLite persistence backend reference")
+            return
         if hasattr(self._backend, "close"):
             await self._backend.close()
             logger.debug("Closed persistence backend pool")

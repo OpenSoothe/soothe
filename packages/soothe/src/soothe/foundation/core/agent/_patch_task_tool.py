@@ -184,6 +184,9 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             if subagent_type not in subagent_graphs:
                 allowed_types = ", ".join([f"`{k}`" for k in subagent_graphs])
                 return f"We cannot invoke subagent {subagent_type} because it does not exist, the only allowed types are {allowed_types}"
+            if subagent_type == "general-purpose" and "explore" in subagent_graphs:
+                logger.debug("[Task Tool] remapped subagent_type general-purpose -> explore")
+                subagent_type = "explore"
             if not runtime.tool_call_id:
                 value_error_msg = "Tool call ID is required for subagent invocation"
                 raise ValueError(value_error_msg)
@@ -207,6 +210,9 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             if subagent_type not in subagent_graphs:
                 allowed_types = ", ".join([f"`{k}`" for k in subagent_graphs])
                 return f"We cannot invoke subagent {subagent_type} because it does not exist, the only allowed types are {allowed_types}"
+            if subagent_type == "general-purpose" and "explore" in subagent_graphs:
+                logger.debug("[Task Tool] remapped subagent_type general-purpose -> explore")
+                subagent_type = "explore"
             if not runtime.tool_call_id:
                 value_error_msg = "Tool call ID is required for subagent invocation"
                 raise ValueError(value_error_msg)

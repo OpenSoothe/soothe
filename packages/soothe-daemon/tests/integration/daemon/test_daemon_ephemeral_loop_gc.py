@@ -12,7 +12,7 @@ import pytest_asyncio
 from soothe.foundation.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
-from soothe_sdk.client import WebSocketClient
+from soothe_sdk.client import ProtocolError, WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
@@ -27,8 +27,8 @@ from tests.integration.ws_loop_client import loop_new, request_loop_get
 async def _connect_client(port: int) -> WebSocketClient:
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
-    await client.request_daemon_ready()
-    await client.wait_for_daemon_ready()
+    await client.request_connection_init()
+    await client.wait_for_connection_ack()
     return client
 
 
@@ -122,8 +122,12 @@ async def test_ephemeral_loop_gc_purges_idle_loop_keeps_workspace(
         assert not loop_dir.exists()
         assert workspace_path.exists()
 
-        with pytest.raises(RuntimeError, match="not found"):
+        # After GC, the loop is gone; loop_get returns a protocol-1 error
+        # envelope {type:"error", error:{code:-32200, message:"... not found"}}
+        # and request() raises ProtocolError carrying that code.
+        with pytest.raises(ProtocolError, match="not found") as exc_info:
             await request_loop_get(client, loop_id)
+        assert exc_info.value.code == -32200
     finally:
         if client.is_connected:
             await client.close()

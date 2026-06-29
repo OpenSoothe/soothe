@@ -21,15 +21,15 @@ def test_loop_continue_without_loop_id_uses_most_recent_loop(monkeypatch) -> Non
 
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.run_impl", fake_run_impl)
 
-    async def fake_rpc(_ws_url, send_fn, send_args, _response_type, timeout=30.0):  # noqa: ARG001
-        if send_fn == "send_loop_list":
+    async def fake_rpc(_ws_url, method, params=None, *, mode="request", timeout=30.0):  # noqa: ARG001
+        if method == "loop_list":
             return {
                 "loops": [
                     {"loop_id": "loop_running", "status": "running"},
                     {"loop_id": "loop_completed", "status": "completed"},
                 ]
             }
-        raise AssertionError(f"Unexpected send_fn: {send_fn}")
+        raise AssertionError(f"Unexpected method: {method}")
 
     monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd._rpc", fake_rpc)
 
@@ -50,10 +50,10 @@ def test_loop_continue_without_loop_id_errors_when_no_loops(monkeypatch) -> None
     )
     monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd._require_daemon", lambda _ws_url: None)
 
-    async def fake_rpc(_ws_url, send_fn, _send_args, _response_type, timeout=30.0):  # noqa: ARG001
-        if send_fn == "send_loop_list":
+    async def fake_rpc(_ws_url, method, params=None, *, mode="request", timeout=30.0):  # noqa: ARG001
+        if method == "loop_list":
             return {"loops": []}
-        raise AssertionError(f"Unexpected send_fn: {send_fn}")
+        raise AssertionError(f"Unexpected method: {method}")
 
     monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd._rpc", fake_rpc)
 

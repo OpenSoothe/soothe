@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_daemon.protocol import MessageRouter
+from soothe_daemon.protocol import ErrorCode, MessageRouter
 
 
 def _make_fake_goal(
@@ -94,16 +94,22 @@ class TestJobCreate:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "goal": "Build feature X", "request_id": "req-1"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "Build feature X"},
+                "id": "req-1",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert client_id == "client-1"
-        assert msg["type"] == "job_create_response"
-        assert msg["job_id"] == "abc12345"
-        assert msg["status"] == "pending"
-        assert msg["request_id"] == "req-1"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "abc12345"
+        assert msg["result"]["status"] == "pending"
+        assert msg["id"] == "req-1"
 
         daemon._autopilot_service.submit_task.assert_awaited_once_with(
             description="Build feature X",
@@ -119,15 +125,14 @@ class TestJobCreate:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "request_id": "req-2"},
+            {"proto": "1", "type": "request", "method": "job_create", "params": {}, "id": "req-2"},
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "INVALID_REQUEST"
-        assert "goal" in msg["message"].lower()
-        assert msg["request_id"] == "req-2"
+        assert msg["error"]["code"] == ErrorCode.INVALID_PARAMS.value
+        assert msg["id"] == "req-2"
 
         daemon._autopilot_service.submit_task.assert_not_awaited()
 
@@ -139,13 +144,19 @@ class TestJobCreate:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "goal": "   ", "request_id": "req-3"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "   "},
+                "id": "req-3",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "INVALID_REQUEST"
+        assert msg["error"]["code"] == ErrorCode.INVALID_REQUEST.value
 
     @pytest.mark.asyncio
     async def test_job_create_autopilot_not_ready(self) -> None:
@@ -164,13 +175,19 @@ class TestJobCreate:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "goal": "Test goal", "request_id": "req-4"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "Test goal"},
+                "id": "req-4",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "AUTOPILOT_NOT_READY"
+        assert msg["error"]["code"] == ErrorCode.AUTOPILOT_NOT_READY.value
 
     @pytest.mark.asyncio
     async def test_job_create_submit_task_exception(self) -> None:
@@ -182,14 +199,20 @@ class TestJobCreate:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "goal": "Test goal", "request_id": "req-5"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "Test goal"},
+                "id": "req-5",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_CREATE_FAILED"
-        assert "Database error" in msg["message"]
+        assert msg["error"]["code"] == ErrorCode.JOB_CREATE_FAILED.value
+        assert "Database error" in msg["error"]["message"]
 
 
 class TestJobStatus:
@@ -217,21 +240,27 @@ class TestJobStatus:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_status", "job_id": "job-1", "request_id": "req-status"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {"job_id": "job-1"},
+                "id": "req-status",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_status_response"
-        assert msg["job_id"] == "job-1"
-        assert msg["status"] == "active"
-        assert msg["active_goals"] == 2
-        assert msg["completed_goals"] == 1
-        assert msg["failed_goals"] == 1
-        assert msg["total_goals"] == 4
-        assert len(msg["workers"]) == 1
-        assert msg["workers"][0]["goal_id"] == "goal-2"
-        assert msg["workers"][0]["loop_id"] == "loop-w1"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-1"
+        assert msg["result"]["status"] == "active"
+        assert msg["result"]["active_goals"] == 2
+        assert msg["result"]["completed_goals"] == 1
+        assert msg["result"]["failed_goals"] == 1
+        assert msg["result"]["total_goals"] == 4
+        assert len(msg["result"]["workers"]) == 1
+        assert msg["result"]["workers"][0]["goal_id"] == "goal-2"
+        assert msg["result"]["workers"][0]["loop_id"] == "loop-w1"
 
     @pytest.mark.asyncio
     async def test_job_status_missing_job_id(self) -> None:
@@ -239,12 +268,21 @@ class TestJobStatus:
         daemon, sent = _make_fake_daemon_with_autopilot()
         router = MessageRouter(daemon)
 
-        await router.dispatch("client-1", {"type": "job_status", "request_id": "req-missing"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {},
+                "id": "req-missing",
+            },
+        )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "INVALID_REQUEST"
+        assert msg["error"]["code"] == ErrorCode.INVALID_PARAMS.value
 
     @pytest.mark.asyncio
     async def test_job_status_not_found(self) -> None:
@@ -256,13 +294,19 @@ class TestJobStatus:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_status", "job_id": "nonexistent", "request_id": "req-nf"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {"job_id": "nonexistent"},
+                "id": "req-nf",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_NOT_FOUND"
+        assert msg["error"]["code"] == ErrorCode.JOB_NOT_FOUND.value
 
 
 class TestJobPause:
@@ -282,14 +326,20 @@ class TestJobPause:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_pause", "job_id": "job-p1", "request_id": "req-pause"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_pause",
+                "params": {"job_id": "job-p1"},
+                "id": "req-pause",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_pause_response"
-        assert msg["job_id"] == "job-p1"
-        assert msg["status"] == "suspended"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-p1"
+        assert msg["result"]["status"] == "suspended"
 
         daemon._autopilot_service._ce.suspend_goal.assert_awaited_once_with(
             "job-p1", reason="user_pause"
@@ -306,14 +356,20 @@ class TestJobPause:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_pause", "job_id": "job-p2", "request_id": "req-already"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_pause",
+                "params": {"job_id": "job-p2"},
+                "id": "req-already",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_ALREADY_PAUSED"
-        assert msg["code"] == "JOB_ALREADY_PAUSED"
+        assert msg["error"]["code"] == ErrorCode.JOB_ALREADY_PAUSED.value
+        assert msg["error"]["code"] == ErrorCode.JOB_ALREADY_PAUSED.value
 
         daemon._autopilot_service._ce.suspend_goal.assert_not_awaited()
 
@@ -328,14 +384,20 @@ class TestJobPause:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_pause", "job_id": "job-p3", "request_id": "req-completed"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_pause",
+                "params": {"job_id": "job-p3"},
+                "id": "req-completed",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_COMPLETED"
-        assert msg["code"] == "JOB_COMPLETED"
+        assert msg["error"]["code"] == ErrorCode.JOB_COMPLETED.value
+        assert msg["error"]["code"] == ErrorCode.JOB_COMPLETED.value
 
 
 class TestJobResume:
@@ -355,14 +417,20 @@ class TestJobResume:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_resume", "job_id": "job-r1", "request_id": "req-resume"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_resume",
+                "params": {"job_id": "job-r1"},
+                "id": "req-resume",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_resume_response"
-        assert msg["job_id"] == "job-r1"
-        assert msg["status"] == "pending"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-r1"
+        assert msg["result"]["status"] == "pending"
 
         daemon._autopilot_service._ce.reactivate_goal.assert_awaited_once_with("job-r1")
 
@@ -379,13 +447,19 @@ class TestJobResume:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_resume", "job_id": "job-r2", "request_id": "req-not-susp"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_resume",
+                "params": {"job_id": "job-r2"},
+                "id": "req-not-susp",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_NOT_PAUSED"
+        assert msg["error"]["code"] == ErrorCode.JOB_NOT_PAUSED.value
 
 
 class TestJobCancel:
@@ -402,14 +476,20 @@ class TestJobCancel:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_cancel", "job_id": "job-c1", "request_id": "req-cancel"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_cancel",
+                "params": {"job_id": "job-c1"},
+                "id": "req-cancel",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_cancel_response"
-        assert msg["job_id"] == "job-c1"
-        assert msg["status"] == "cancelled"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-c1"
+        assert msg["result"]["status"] == "cancelled"
 
         daemon._autopilot_service.cancel_goal.assert_awaited_once_with(
             "job-c1", reason="user_cancel"
@@ -425,13 +505,19 @@ class TestJobCancel:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_cancel", "job_id": "nonexistent", "request_id": "req-cnf"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_cancel",
+                "params": {"job_id": "nonexistent"},
+                "id": "req-cnf",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_NOT_FOUND"
+        assert msg["error"]["code"] == ErrorCode.JOB_NOT_FOUND.value
 
 
 class TestJobDag:
@@ -457,14 +543,20 @@ class TestJobDag:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_dag", "job_id": "job-d1", "request_id": "req-dag"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_dag",
+                "params": {"job_id": "job-d1"},
+                "id": "req-dag",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_dag_response"
-        assert msg["job_id"] == "job-d1"
-        assert msg["dag"] == dag_data
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-d1"
+        assert msg["result"]["dag"] == dag_data
 
     @pytest.mark.asyncio
     async def test_job_dag_not_found(self) -> None:
@@ -476,13 +568,19 @@ class TestJobDag:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_dag", "job_id": "nonexistent", "request_id": "req-dag-nf"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_dag",
+                "params": {"job_id": "nonexistent"},
+                "id": "req-dag-nf",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "JOB_NOT_FOUND"
+        assert msg["error"]["code"] == ErrorCode.JOB_NOT_FOUND.value
 
 
 class TestJobGuidance:
@@ -500,19 +598,20 @@ class TestJobGuidance:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_guidance",
-                "job_id": "job-g1",
-                "text": "Focus on testing first",
-                "request_id": "req-guid",
+                "proto": "1",
+                "type": "request",
+                "method": "job_guidance",
+                "params": {"job_id": "job-g1", "content": "Focus on testing first"},
+                "id": "req-guid",
             },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_guidance_response"
-        assert msg["job_id"] == "job-g1"
-        assert msg["goal_id"] == "job-g1"  # Defaults to job_id when goal_id not specified
-        assert msg["absorbed"] is True
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-g1"
+        assert msg["result"]["goal_id"] == "job-g1"  # Defaults to job_id when goal_id not specified
+        assert msg["result"]["absorbed"] is True
 
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once_with(
             "job-g1", "Focus on testing first", scope="job"
@@ -530,18 +629,22 @@ class TestJobGuidance:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_guidance",
-                "job_id": "job-g2",
-                "goal_id": "child-g2",
-                "text": "Complete this subtask",
-                "request_id": "req-guid-child",
+                "proto": "1",
+                "type": "request",
+                "method": "job_guidance",
+                "params": {
+                    "job_id": "job-g2",
+                    "goal_id": "child-g2",
+                    "content": "Complete this subtask",
+                },
+                "id": "req-guid-child",
             },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_guidance_response"
-        assert msg["goal_id"] == "child-g2"
+        assert msg["type"] == "response"
+        assert msg["result"]["goal_id"] == "child-g2"
 
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once_with(
             "child-g2", "Complete this subtask", scope="goal"
@@ -555,13 +658,19 @@ class TestJobGuidance:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_guidance", "job_id": "job-g3", "request_id": "req-no-text"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_guidance",
+                "params": {"job_id": "job-g3"},
+                "id": "req-no-text",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "INVALID_REQUEST"
+        assert msg["error"]["code"] == ErrorCode.INVALID_PARAMS.value
 
     @pytest.mark.asyncio
     async def test_job_guidance_goal_not_found(self) -> None:
@@ -574,18 +683,18 @@ class TestJobGuidance:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_guidance",
-                "job_id": "job-g4",
-                "goal_id": "missing",
-                "text": "Try harder",
-                "request_id": "req-nf-guid",
+                "proto": "1",
+                "type": "request",
+                "method": "job_guidance",
+                "params": {"job_id": "job-g4", "goal_id": "missing", "content": "Try harder"},
+                "id": "req-nf-guid",
             },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
         assert msg["type"] == "error"
-        assert msg["code"] == "GOAL_NOT_FOUND"
+        assert msg["error"]["code"] == ErrorCode.GOAL_NOT_FOUND.value
 
 
 class TestAutopilotSubscribe:
@@ -603,14 +712,20 @@ class TestAutopilotSubscribe:
 
         await router.dispatch(
             "client-1",
-            {"type": "autopilot_subscribe", "request_id": "req-sub"},
+            {
+                "proto": "1",
+                "type": "subscribe",
+                "method": "autopilot_events",
+                "params": {},
+                "id": "req-sub",
+            },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "autopilot_subscribe_response"
-        assert msg["client_id"] == "client-1"
-        assert msg["subscribed"] is True
+        assert msg["type"] == "next"
+        assert msg["payload"]["client_id"] == "client-1"
+        assert msg["payload"]["subscribed"] is True
 
         # Verify session flag set after dispatch
         assert session.autopilot_subscribed is True
@@ -625,19 +740,22 @@ class TestAutopilotSubscribe:
         router = MessageRouter(daemon)
 
         # First subscribe
-        await router.dispatch("client-1", {"type": "autopilot_subscribe"})
+        await router.dispatch(
+            "client-1",
+            {"proto": "1", "type": "subscribe", "method": "autopilot_events", "params": {}},
+        )
         sent.clear()
 
         # Then unsubscribe
         await router.dispatch(
             "client-1",
-            {"type": "autopilot_unsubscribe", "request_id": "req-unsub"},
+            {"proto": "1", "type": "unsubscribe", "params": {}, "id": "req-unsub"},
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "autopilot_unsubscribe_response"
-        assert msg["subscribed"] is False
+        assert msg["type"] == "response"
+        assert msg["result"]["subscribed"] is False
 
         # Verify session flag cleared
         session = await daemon._session_manager.get_session("client-1")
@@ -662,18 +780,22 @@ class TestJobCreateOptionalFields:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_create",
-                "goal": "Build OAuth2.0 support",
-                "verification_rules": "All tests pass. No type errors.",
-                "request_id": "req-verify",
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {
+                    "goal": "Build OAuth2.0 support",
+                    "verification_rules": "All tests pass. No type errors.",
+                },
+                "id": "req-verify",
             },
         )
 
         assert len(sent) == 1
         client_id, msg = sent[0]
-        assert msg["type"] == "job_create_response"
-        assert msg["job_id"] == "test-verification"
-        assert msg["request_id"] == "req-verify"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "test-verification"
+        assert msg["id"] == "req-verify"
 
     @pytest.mark.asyncio
     async def test_job_create_with_custom_priority(self) -> None:
@@ -687,17 +809,18 @@ class TestJobCreateOptionalFields:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_create",
-                "goal": "Critical security fix",
-                "priority": 95,
-                "request_id": "req-priority",
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "Critical security fix", "priority": 95},
+                "id": "req-priority",
             },
         )
 
         # Verify the job was created
         assert len(sent) == 1
-        assert sent[0][1]["type"] == "job_create_response"
-        assert sent[0][1]["job_id"] == "high-priority"
+        assert sent[0][1]["type"] == "response"
+        assert sent[0][1]["result"]["job_id"] == "high-priority"
 
     @pytest.mark.asyncio
     async def test_job_create_default_priority_is_50(self) -> None:
@@ -710,7 +833,12 @@ class TestJobCreateOptionalFields:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "goal": "Normal task"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "Normal task"},
+            },
         )
 
         daemon._autopilot_service.submit_task.assert_awaited_once_with(
@@ -738,13 +866,19 @@ class TestJobStatusMultipleWorkers:
 
         await router.dispatch(
             "client-2",
-            {"type": "job_status", "job_id": "job-multi", "request_id": "req-multi"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {"job_id": "job-multi"},
+                "id": "req-multi",
+            },
         )
 
         assert len(sent) == 1
         msg = sent[0][1]
-        assert msg["type"] == "job_status_response"
-        assert msg["job_id"] == "job-multi"
+        assert msg["type"] == "response"
+        assert msg["result"]["job_id"] == "job-multi"
         # Implementation may or may not include workers field
         # Per RFC-228 §78, workers is optional
 
@@ -761,9 +895,17 @@ class TestJobStatusMultipleWorkers:
             return_value={"active": 0, "completed": 0, "total": 1},
         )
 
-        await router.dispatch("client-1", {"type": "job_status", "job_id": "no-workers"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {"job_id": "no-workers"},
+            },
+        )
 
-        assert sent[0][1]["workers"] == []
+        assert sent[0][1]["result"]["workers"] == []
 
 
 class TestJobDagVisualization:
@@ -824,17 +966,23 @@ class TestJobDagVisualization:
 
         await router.dispatch(
             "client-vis",
-            {"type": "job_dag", "job_id": "root-dag", "request_id": "req-dag-complex"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_dag",
+                "params": {"job_id": "root-dag"},
+                "id": "req-dag-complex",
+            },
         )
 
         msg = sent[0][1]
-        assert msg["type"] == "job_dag_response"
-        assert len(msg["dag"]["nodes"]) == 3
-        assert len(msg["dag"]["edges"]) == 2
+        assert msg["type"] == "response"
+        assert len(msg["result"]["dag"]["nodes"]) == 3
+        assert len(msg["result"]["dag"]["edges"]) == 2
         # Verify React Flow visualization fields
-        assert msg["dag"]["nodes"][1]["assigned_loop_id"] == "autopilot__w001"
-        assert msg["dag"]["nodes"][1]["steps_completed"] == 2
-        assert msg["dag"]["nodes"][1]["tool_calls"] == 8
+        assert msg["result"]["dag"]["nodes"][1]["assigned_loop_id"] == "autopilot__w001"
+        assert msg["result"]["dag"]["nodes"][1]["steps_completed"] == 2
+        assert msg["result"]["dag"]["nodes"][1]["tool_calls"] == 8
 
     @pytest.mark.asyncio
     async def test_job_dag_with_completed_goal_fields(self) -> None:
@@ -865,9 +1013,17 @@ class TestJobDagVisualization:
         }
         daemon._autopilot_service.dag_snapshot.return_value = dag_with_completed
 
-        await router.dispatch("client-1", {"type": "job_dag", "job_id": "completed-job"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_dag",
+                "params": {"job_id": "completed-job"},
+            },
+        )
 
-        node = sent[0][1]["dag"]["nodes"][0]
+        node = sent[0][1]["result"]["dag"]["nodes"][0]
         assert node["summary"] == "OAuth2.0 integration complete"
         assert len(node["findings"]) == 2
         assert "Token refresh working" in node["findings"]
@@ -888,19 +1044,23 @@ class TestJobGuidanceEdgeCases:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_guidance",
-                "job_id": "job-guidance",
-                "text": "Invalid directive: skip all tests",
-                "request_id": "req-reject",
+                "proto": "1",
+                "type": "request",
+                "method": "job_guidance",
+                "params": {
+                    "job_id": "job-guidance",
+                    "content": "Invalid directive: skip all tests",
+                },
+                "id": "req-reject",
             },
         )
 
         assert len(sent) == 1
         msg = sent[0][1]
         # Implementation returns response with absorbed=false, not error
-        assert msg["type"] == "job_guidance_response"
-        assert msg["absorbed"] is False
-        assert msg["request_id"] == "req-reject"
+        assert msg["type"] == "response"
+        assert msg["result"]["absorbed"] is False
+        assert msg["id"] == "req-reject"
 
     @pytest.mark.asyncio
     async def test_job_guidance_whitespace_preserved(self) -> None:
@@ -917,18 +1077,22 @@ class TestJobGuidanceEdgeCases:
         await router.dispatch(
             "client-1",
             {
-                "type": "job_guidance",
-                "job_id": "job-guidance-ws",
-                "goal_id": "sub-goal-1",
-                "text": guidance_text,
+                "proto": "1",
+                "type": "request",
+                "method": "job_guidance",
+                "params": {
+                    "job_id": "job-guidance-ws",
+                    "goal_id": "sub-goal-1",
+                    "content": guidance_text,
+                },
             },
         )
 
         # Verify guidance was sent with goal_id target
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited_once()
-        assert sent[0][1]["type"] == "job_guidance_response"
-        assert sent[0][1]["absorbed"] is True
-        assert sent[0][1]["goal_id"] == "sub-goal-1"
+        assert sent[0][1]["type"] == "response"
+        assert sent[0][1]["result"]["absorbed"] is True
+        assert sent[0][1]["result"]["goal_id"] == "sub-goal-1"
 
 
 class TestJobFailedEdgeCases:
@@ -947,10 +1111,18 @@ class TestJobFailedEdgeCases:
         )
         daemon._autopilot_service.get_goal.return_value = failed_goal
 
-        await router.dispatch("client-1", {"type": "job_pause", "job_id": "failed-job"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_pause",
+                "params": {"job_id": "failed-job"},
+            },
+        )
 
         # Implementation returns response, error handling may vary
-        assert sent[0][1]["type"] in ("error", "job_pause_response")
+        assert sent[0][1]["type"] in ("error", "response")
 
     @pytest.mark.asyncio
     async def test_job_resume_on_failed_job(self) -> None:
@@ -963,12 +1135,20 @@ class TestJobFailedEdgeCases:
         )
         daemon._autopilot_service.get_goal.return_value = failed_goal
 
-        await router.dispatch("client-1", {"type": "job_resume", "job_id": "failed-resume"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_resume",
+                "params": {"job_id": "failed-resume"},
+            },
+        )
 
         # Implementation-specific error handling
-        assert sent[0][1]["type"] in ("error", "job_resume_response")
+        assert sent[0][1]["type"] in ("error", "response")
         if sent[0][1]["type"] == "error":
-            assert sent[0][1]["code"] in ("JOB_FAILED", "JOB_NOT_PAUSED")
+            assert sent[0][1]["error"]["code"] in (ErrorCode.JOB_NOT_PAUSED.value,)
 
 
 class TestJobAlreadyRunningEdgeCase:
@@ -983,11 +1163,19 @@ class TestJobAlreadyRunningEdgeCase:
         active_goal = _make_fake_goal(goal_id="active-job", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
 
-        await router.dispatch("client-1", {"type": "job_resume", "job_id": "active-job"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_resume",
+                "params": {"job_id": "active-job"},
+            },
+        )
 
         # Implementation returns specific error code
         assert sent[0][1]["type"] == "error"
-        assert sent[0][1]["code"] in ("JOB_ALREADY_RUNNING", "JOB_NOT_PAUSED")
+        assert sent[0][1]["error"]["code"] in (ErrorCode.JOB_NOT_PAUSED.value,)
 
 
 class TestJobLifecycleIntegration:
@@ -1003,9 +1191,17 @@ class TestJobLifecycleIntegration:
         goal = _make_fake_goal(goal_id="lifecycle-test", status="pending")
         daemon._autopilot_service.submit_task.return_value = goal
 
-        await router.dispatch("client-1", {"type": "job_create", "goal": "Test lifecycle"})
-        assert sent[0][1]["type"] == "job_create_response"
-        assert sent[0][1]["job_id"] == "lifecycle-test"
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "Test lifecycle"},
+            },
+        )
+        assert sent[0][1]["type"] == "response"
+        assert sent[0][1]["result"]["job_id"] == "lifecycle-test"
 
         sent.clear()
 
@@ -1016,8 +1212,16 @@ class TestJobLifecycleIntegration:
             return_value={"active": 0, "completed": 0, "total": 1},
         )
 
-        await router.dispatch("client-1", {"type": "job_status", "job_id": "lifecycle-test"})
-        assert sent[0][1]["status"] == "pending"
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {"job_id": "lifecycle-test"},
+            },
+        )
+        assert sent[0][1]["result"]["status"] == "pending"
 
         sent.clear()
 
@@ -1025,9 +1229,17 @@ class TestJobLifecycleIntegration:
         active_goal = _make_fake_goal(goal_id="lifecycle-test", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
 
-        await router.dispatch("client-1", {"type": "job_pause", "job_id": "lifecycle-test"})
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_pause",
+                "params": {"job_id": "lifecycle-test"},
+            },
+        )
         # RFC-228 §207: pause sets status to "suspended", response returns "suspended"
-        assert sent[0][1]["status"] == "suspended"
+        assert sent[0][1]["result"]["status"] == "suspended"
 
         sent.clear()
 
@@ -1037,10 +1249,18 @@ class TestJobLifecycleIntegration:
         reactivated_goal = _make_fake_goal(goal_id="lifecycle-test", status="pending")
         daemon._autopilot_service._ce.reactivate_goal.return_value = reactivated_goal
 
-        await router.dispatch("client-1", {"type": "job_resume", "job_id": "lifecycle-test"})
-        assert sent[0][1]["type"] == "job_resume_response"
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_resume",
+                "params": {"job_id": "lifecycle-test"},
+            },
+        )
+        assert sent[0][1]["type"] == "response"
         # Response status is implementation-specific (pending or running)
-        assert sent[0][1].get("status") in ("pending", "running", None)
+        assert sent[0][1]["result"].get("status") in ("pending", "running", None)
 
         sent.clear()
 
@@ -1048,9 +1268,17 @@ class TestJobLifecycleIntegration:
         cancelled_goal = _make_fake_goal(goal_id="lifecycle-test", status="cancelled")
         daemon._autopilot_service.cancel_goal.return_value = cancelled_goal
 
-        await router.dispatch("client-1", {"type": "job_cancel", "job_id": "lifecycle-test"})
-        assert sent[0][1]["type"] == "job_cancel_response"
-        assert sent[0][1]["job_id"] == "lifecycle-test"
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_cancel",
+                "params": {"job_id": "lifecycle-test"},
+            },
+        )
+        assert sent[0][1]["type"] == "response"
+        assert sent[0][1]["result"]["job_id"] == "lifecycle-test"
 
 
 class TestAutopilotSubscriptionMultipleClients:
@@ -1063,14 +1291,32 @@ class TestAutopilotSubscriptionMultipleClients:
         router = MessageRouter(daemon)
 
         # Client 1 subscribes
-        await router.dispatch("client-1", {"type": "autopilot_subscribe", "request_id": "req-1"})
-        assert sent[0][1]["subscribed"] is True
+        await router.dispatch(
+            "client-1",
+            {
+                "proto": "1",
+                "type": "subscribe",
+                "method": "autopilot_events",
+                "params": {},
+                "id": "req-1",
+            },
+        )
+        assert sent[0][1]["payload"]["subscribed"] is True
 
         sent.clear()
 
         # Client 2 subscribes
-        await router.dispatch("client-2", {"type": "autopilot_subscribe", "request_id": "req-2"})
-        assert sent[0][1]["subscribed"] is True
+        await router.dispatch(
+            "client-2",
+            {
+                "proto": "1",
+                "type": "subscribe",
+                "method": "autopilot_events",
+                "params": {},
+                "id": "req-2",
+            },
+        )
+        assert sent[0][1]["payload"]["subscribed"] is True
 
         # Both sessions have autopilot_subscribed flag set
         session1 = await daemon._session_manager.get_session("client-1")
@@ -1085,7 +1331,10 @@ class TestAutopilotSubscriptionMultipleClients:
         router = MessageRouter(daemon)
 
         # Client 1 subscribes
-        await router.dispatch("client-1", {"type": "autopilot_subscribe"})
+        await router.dispatch(
+            "client-1",
+            {"proto": "1", "type": "subscribe", "method": "autopilot_events", "params": {}},
+        )
 
         # Client 2 doesn't subscribe - should not have autopilot flag
         session2 = await daemon._session_manager.get_session("client-2")
@@ -1093,7 +1342,10 @@ class TestAutopilotSubscriptionMultipleClients:
 
         # Client 1 unsubscribes - should not affect client 2
         sent.clear()
-        await router.dispatch("client-1", {"type": "autopilot_unsubscribe"})
+        await router.dispatch(
+            "client-1",
+            {"proto": "1", "type": "unsubscribe", "params": {}},
+        )
 
         session1 = await daemon._session_manager.get_session("client-1")
         session2 = await daemon._session_manager.get_session("client-2")
@@ -1111,20 +1363,30 @@ class TestParameterValidation:
         router = MessageRouter(daemon)
 
         # Test job_status with numeric job_id
-        await router.dispatch("client-1", {"type": "job_status", "job_id": 12345})
-        assert sent[-1][1]["code"] == "INVALID_REQUEST"
+        await router.dispatch(
+            "client-1",
+            {"proto": "1", "type": "request", "method": "job_status", "params": {"job_id": 12345}},
+        )
+        assert sent[-1][1]["error"]["code"] == ErrorCode.INVALID_PARAMS.value
 
         sent.clear()
 
         # Test job_pause with None job_id
-        await router.dispatch("client-1", {"type": "job_pause", "job_id": None})
-        assert sent[-1][1]["code"] == "INVALID_REQUEST"
+        await router.dispatch(
+            "client-1",
+            {"proto": "1", "type": "request", "method": "job_pause", "params": {"job_id": None}},
+        )
+        assert sent[-1][1]["error"]["code"] == ErrorCode.INVALID_PARAMS.value
 
         sent.clear()
 
-        # Test job_cancel with empty string
-        await router.dispatch("client-1", {"type": "job_cancel", "job_id": ""})
-        assert sent[-1][1]["code"] == "INVALID_REQUEST"
+        # Test job_cancel with empty string — schema catches this with
+        # INVALID_PARAMS (min_length=1) before the handler sees it.
+        await router.dispatch(
+            "client-1",
+            {"proto": "1", "type": "request", "method": "job_cancel", "params": {"job_id": ""}},
+        )
+        assert sent[-1][1]["error"]["code"] == ErrorCode.INVALID_PARAMS.value
 
     @pytest.mark.asyncio
     async def test_job_create_strips_whitespace_from_goal(self) -> None:
@@ -1137,7 +1399,13 @@ class TestParameterValidation:
 
         await router.dispatch(
             "client-1",
-            {"type": "job_create", "goal": "  Build feature X  ", "request_id": "req-strip"},
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "  Build feature X  "},
+                "id": "req-strip",
+            },
         )
 
         daemon._autopilot_service.submit_task.assert_awaited_once_with(
@@ -1158,17 +1426,44 @@ class TestParameterValidation:
         daemon._autopilot_service.dag_snapshot.return_value = {"nodes": [], "edges": []}
 
         # Test job_create
-        await router.dispatch("c1", {"type": "job_create", "goal": "test", "request_id": "r1"})
-        assert sent[-1][1]["request_id"] == "r1"
+        await router.dispatch(
+            "c1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_create",
+                "params": {"goal": "test"},
+                "id": "r1",
+            },
+        )
+        assert sent[-1][1]["id"] == "r1"
 
         sent.clear()
 
         # Test job_status
-        await router.dispatch("c1", {"type": "job_status", "job_id": "test-id", "request_id": "r2"})
-        assert sent[-1][1]["request_id"] == "r2"
+        await router.dispatch(
+            "c1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_status",
+                "params": {"job_id": "test-id"},
+                "id": "r2",
+            },
+        )
+        assert sent[-1][1]["id"] == "r2"
 
         sent.clear()
 
         # Test job_dag
-        await router.dispatch("c1", {"type": "job_dag", "job_id": "test-id", "request_id": "r3"})
-        assert sent[-1][1]["request_id"] == "r3"
+        await router.dispatch(
+            "c1",
+            {
+                "proto": "1",
+                "type": "request",
+                "method": "job_dag",
+                "params": {"job_id": "test-id"},
+                "id": "r3",
+            },
+        )
+        assert sent[-1][1]["id"] == "r3"

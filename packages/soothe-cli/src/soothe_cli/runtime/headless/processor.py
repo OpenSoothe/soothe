@@ -465,9 +465,20 @@ class EventProcessor:
             self._handle_custom_event(data, namespace)
 
     def _handle_error_event(self, event: dict[str, Any]) -> None:
-        """Handle error events."""
-        error = event.get("message", event.get("error", "Unknown error"))
-        context = event.get("code")
+        """Handle error events.
+
+        Supports both legacy flat errors (``{type:'error', message:...}``) and
+        protocol-1 error envelopes (``{type:'error', error:{code, message, data}}``).
+        """
+        err_obj = event.get("error")
+        if isinstance(err_obj, dict):
+            # Protocol-1 error envelope.
+            error = str(err_obj.get("message", "Unknown error"))
+            context = err_obj.get("code")
+        else:
+            # Legacy flat error or bare string.
+            error = str(event.get("message", err_obj or "Unknown error"))
+            context = event.get("code")
         self._renderer.on_error(error, context=context)
 
     def _handle_messages(

@@ -61,22 +61,44 @@ def websocket_url_from_config(cfg: Any) -> str:
     )
 
 
+async def _ensure_handshake(client: WebSocketClient, *, timeout: float) -> None:
+    """Complete the protocol-1 readiness handshake when not already done (RFC-450 §8.2).
+
+    Args:
+        client: Connected WebSocketClient.
+        timeout: Maximum seconds to wait for ``connection_ack``.
+
+    Raises:
+        ConnectionError: If the WebSocket is closed or protocol is incompatible.
+        RuntimeError: If the daemon reports a non-ready terminal state.
+        TimeoutError: If ``connection_ack`` does not arrive in time.
+    """
+    if client._handshake_complete:
+        return
+    await client.request_connection_init()
+    await client.wait_for_connection_ack(ack_timeout_s=timeout)
+
+
 async def check_daemon_status(
     client: WebSocketClient,
     timeout: float = 5.0,
     *,
     min_interval_s: float = 1.0,
+    handshake_timeout: float | None = None,
 ) -> dict:
     """Check daemon status via RPC.
 
-    Uses ``WebSocketClient.fetch_daemon_status`` so rapid or overlapping polls
-    on the same connection coalesce into one wire request per ``min_interval_s``.
+    Performs ``connection_init`` / ``connection_ack`` when needed, then uses
+    ``WebSocketClient.fetch_daemon_status`` so rapid or overlapping polls on the
+    same connection coalesce into one wire request per ``min_interval_s``.
 
     Args:
         client: Connected WebSocketClient
-        timeout: Request timeout in seconds
+        timeout: Request timeout in seconds for ``daemon_status`` RPC
         min_interval_s: Minimum seconds between real ``daemon_status`` RPCs; ``0``
             always queries the daemon.
+        handshake_timeout: Seconds to wait for ``connection_ack``; defaults to
+            ``timeout``.
 
     Returns:
         Parsed `daemon_status_response` payload (typically includes `running`,
@@ -85,15 +107,18 @@ async def check_daemon_status(
     Raises:
         ConnectionError: If daemon not reachable
     """
+    ack_timeout = handshake_timeout if handshake_timeout is not None else timeout
+    await _ensure_handshake(client, timeout=ack_timeout)
     return await client.fetch_daemon_status(timeout=timeout, min_interval_s=min_interval_s)
 
 
 def _daemon_status_indicates_live(status: dict) -> bool:
-    """Infer liveness from a ``daemon_status_response`` payload.
+    """Infer liveness from a ``daemon_status`` response payload.
 
-    Checks readiness_state first (IG-489): transitional states (starting, warming)
-    indicate the daemon is not yet ready to handle loops. Falls back to legacy
-    ``running``/``port_live`` check for older daemons without this field.
+    Uses ``readiness_state`` (RFC-450 §8.2): transitional states (``starting``,
+    ``warming``) mean the daemon is not yet ready for loops; terminal states
+    (``error``, ``degraded``, ``stopped``) mean it cannot serve loops; only
+    ``ready`` is live for loop operations.
 
     Args:
         status: Daemon status response dict.
@@ -101,24 +126,12 @@ def _daemon_status_indicates_live(status: dict) -> bool:
     Returns:
         True if daemon is live and ready for loop operations, False otherwise.
     """
-    # Check readiness_state first (new field, IG-489)
     readiness_state = status.get("readiness_state")
-    if readiness_state:
-        # Transitional states mean daemon is not ready for loops
-        if readiness_state in {"starting", "warming"}:
-            return False
-        # Terminal error/degraded/stopped states
-        if readiness_state in {"error", "degraded", "stopped"}:
-            return False
-        # Only "ready" is truly live for loop operations
-        if readiness_state == "ready":
-            return True
-        # Unknown state - fall through to legacy check
-
-    # Legacy check (for older daemons without readiness_state)
-    if "running" in status:
-        return bool(status["running"])
-    return bool(status.get("port_live", True))
+    if readiness_state in {"starting", "warming"}:
+        return False
+    if readiness_state in {"error", "degraded", "stopped"}:
+        return False
+    return readiness_state == "ready"
 
 
 async def is_daemon_live(
@@ -160,7 +173,17 @@ async def is_daemon_live(
                 try:
                     client = WebSocketClient(url=ws_url)
                     await client.connect()
-                    status = await check_daemon_status(client, timeout=timeout)
+                    try:
+                        loop = asyncio.get_running_loop()
+                        elapsed = loop.time() - start_time
+                    except RuntimeError:
+                        elapsed = 0.0
+                    remaining = max(0.1, ready_timeout - elapsed)
+                    status = await check_daemon_status(
+                        client,
+                        timeout=timeout,
+                        handshake_timeout=min(timeout, remaining),
+                    )
 
                     # Check if daemon is ready
                     readiness_state = status.get("readiness_state")
@@ -245,9 +268,7 @@ async def request_daemon_shutdown(client: WebSocketClient, timeout: float = 10.0
         RuntimeError: If shutdown fails
     """
     try:
-        response = await client.request_response(
-            {"type": "daemon_shutdown"}, response_type="shutdown_ack", timeout=timeout
-        )
+        response = await client.request("daemon_shutdown", {}, timeout=timeout)
         if response.get("status") != "acknowledged":
             raise RuntimeError(f"Shutdown failed: {response}")
     except Exception as e:
@@ -267,9 +288,7 @@ async def fetch_skills_catalog(client: WebSocketClient, timeout: float = 15.0) -
     Raises:
         ConnectionError: If daemon not reachable
     """
-    response = await client.request_response(
-        {"type": "skills_list"}, response_type="skills_list_response", timeout=timeout
-    )
+    response = await client.request("skills_list", {}, timeout=timeout)
     return response.get("skills", [])
 
 
@@ -287,9 +306,5 @@ async def fetch_config_section(client: WebSocketClient, section: str, timeout: f
     Raises:
         ConnectionError: If daemon not reachable
     """
-    response = await client.request_response(
-        {"type": "config_get", "section": section},
-        response_type="config_get_response",
-        timeout=timeout,
-    )
+    response = await client.request("config_get", {"section": section}, timeout=timeout)
     return response.get(section, {})

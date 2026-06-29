@@ -110,21 +110,31 @@ def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
     try:
 
         async def handshake() -> dict | None:
-            """Perform WebSocket handshake and receive daemon_ready message."""
+            """Perform WebSocket handshake and receive connection_ack message."""
             import websockets
 
             async with websockets.connect(ws_url, timeout=2.0) as ws:
-                # Receive initial handshake messages (status + daemon_ready)
-                for _ in range(2):
-                    message = await asyncio.wait_for(ws.recv(), timeout=2.0)
-                    data = json.loads(message)
-                    if data.get("type") == "daemon_ready":
-                        return data
+                # Send connection_init (RFC-450 §8.2)
+                init_msg = {
+                    "proto": "1",
+                    "type": "connection_init",
+                    "params": {
+                        "client_version": "health-check",
+                        "accept_proto": ["1"],
+                        "capabilities": ["streaming", "heartbeat"],
+                    },
+                }
+                await ws.send(json.dumps(init_msg))
+                # Wait for connection_ack
+                message = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                data = json.loads(message)
+                if data.get("type") == "connection_ack":
+                    return data.get("result") or {}
             return None
 
-        ready_msg = asyncio.run(handshake())
-        if ready_msg:
-            state = ready_msg.get("state", "unknown")
+        ack_result = asyncio.run(handshake())
+        if ack_result:
+            state = ack_result.get("readiness_state", "unknown")
             status_map = {
                 "ready": CheckStatus.OK,
                 "degraded": CheckStatus.WARNING,
@@ -132,19 +142,24 @@ def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
                 "starting": CheckStatus.INFO,
                 "warming": CheckStatus.INFO,
                 "stopped": CheckStatus.INFO,
+                "incompatible": CheckStatus.ERROR,
             }
 
             return CheckResult(
                 name="daemon_readiness",
                 status=status_map.get(state, CheckStatus.WARNING),
                 message=f"Daemon readiness state: {state}",
-                details={"state": state, "message": ready_msg.get("message")},
+                details={
+                    "state": state,
+                    "protocol_version": ack_result.get("protocol_version"),
+                    "server_version": ack_result.get("server_version"),
+                },
             )
 
         return CheckResult(
             name="daemon_readiness",
             status=CheckStatus.WARNING,
-            message="No daemon_ready message received",
+            message="No connection_ack received",
         )
 
     except Exception as e:

@@ -255,7 +255,8 @@ class TestLLMPlanner:
 
         assert "<FORBIDDEN_ACTIONS>" in prompt
         assert "explore for writes" in prompt
-        assert "prefer subagent explore" in prompt
+        assert "execution_hint='subagent'" in prompt
+        assert "subagent='explore'" in prompt
         assert "<EFFICIENCY_RULES>" in prompt
 
     def test_build_plan_prompt_with_capabilities(self) -> None:

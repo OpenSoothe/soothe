@@ -71,11 +71,26 @@ def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
 
 @dataclass
 class _ClientConn:
-    """Internal client connection state."""
+    """Internal client connection state.
+
+    Attributes:
+        reader: asyncio stream reader (legacy TCP path).
+        writer: asyncio stream writer (legacy TCP path).
+        can_input: Whether the client may submit loop input.
+        handshake_complete: Whether the protocol-1 connection_init/ack handshake
+            has completed for this connection (RFC-450 §8.2).
+        proto_version: Negotiated protocol version string (e.g. ``"1"``),
+            set when ``connection_ack`` is sent.
+        negotiated_capabilities: Capabilities active for this connection
+            (intersection of client-declared and server-supported).
+    """
 
     reader: asyncio.StreamReader
     writer: asyncio.StreamWriter
     can_input: bool = True
+    handshake_complete: bool = False
+    proto_version: str | None = None
+    negotiated_capabilities: list[str] | None = None
 
 
 class SootheDaemon(DaemonHandlersMixin):
@@ -664,33 +679,79 @@ class SootheDaemon(DaemonHandlersMixin):
 
             raise
 
-    def daemon_ready_message(self) -> dict[str, Any]:
-        """Return the current daemon readiness message for client handshakes."""
-        return {
-            "type": "daemon_ready",
-            "state": self._readiness_state,
-            "message": self._readiness_message,
-        }
+    def build_connection_ack(
+        self,
+        *,
+        accept_proto: list[str] | None = None,
+        client_capabilities: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Build a ``connection_ack`` message per RFC-450 §8.2.
+
+        Negotiates protocol version and capabilities, then returns the
+        ack envelope with daemon readiness state and heartbeat interval.
+
+        Args:
+            accept_proto: Protocol versions the client supports.
+            client_capabilities: Capabilities the client declared.
+
+        Returns:
+            Wire-ready ``connection_ack`` message dict.
+        """
+        from soothe_daemon import __version__
+
+        # Daemon-supported capabilities (RFC-450 §8.2)
+        daemon_caps = ["streaming", "batch", "heartbeat", "receipts"]
+        client_caps = client_capabilities or []
+        negotiated_caps = [c for c in daemon_caps if c in client_caps]
+
+        # Protocol version negotiation: pick highest both support
+        supported = ["1"]
+        accept = accept_proto if accept_proto is not None else ["1"]
+        proto_version = next((v for v in supported if v in accept), None)
+
+        if proto_version is None:
+            result: dict[str, Any] = {
+                "server_version": __version__,
+                "protocol_version": "1",
+                "capabilities": [],
+                "readiness_state": "incompatible",
+                "heartbeat_interval_ms": self._daemon_config.transports.websocket.heartbeat_interval_ms,
+            }
+        else:
+            result = {
+                "server_version": __version__,
+                "protocol_version": proto_version,
+                "capabilities": negotiated_caps,
+                "readiness_state": self._readiness_state,
+                "heartbeat_interval_ms": self._daemon_config.transports.websocket.heartbeat_interval_ms,
+            }
+
+        return {"proto": "1", "type": "connection_ack", "result": result}
 
     def _get_handshake_messages(self, _transport_client: Any) -> list[dict[str, Any]]:
-        """Get initial handshake messages for a new client connection.
+        """Get initial messages for a new client connection.
+
+        The protocol-1 handshake is client-initiated: the daemon waits for
+        ``connection_init`` before sending ``connection_ack``. This method
+        returns only the initial ``status`` message; the ack is sent by the
+        router when it processes ``connection_init``.
 
         Args:
             _transport_client: Transport-specific client object (unused).
 
         Returns:
-            List of initial messages to send to the client.
+            List containing the initial status message.
         """
-        # Check both _active_threads and _query_running for reliable state detection
         has_active_threads = hasattr(self, "_active_threads") and bool(self._active_threads)
         has_active_query = has_active_threads or self._query_running
         initial_state = "running" if has_active_query else ("idle" if self._running else "stopped")
-        initial_msg = {
+        initial_msg: dict[str, Any] = {
+            "proto": "1",
             "type": "status",
             "state": initial_state,
             "input_history": [],
         }
-        return [initial_msg, self.daemon_ready_message()]
+        return [initial_msg]
 
     @staticmethod
     def _is_port_live(host: str, port: int) -> bool:
@@ -1457,12 +1518,32 @@ class SootheDaemon(DaemonHandlersMixin):
     async def _dispatch_with_semaphore(self, client_id: str, msg: dict[str, Any]) -> None:
         """Dispatch message with semaphore control and proper cleanup (IG-258).
 
+        Validates the message at the transport boundary (RFC-450 §6.4) before
+        dispatching to the router.  This is the final defense-in-depth check;
+        transport paths (WebSocket channel, asyncio TCP) also validate before
+        reaching this method.
+
         Args:
             client_id: Unique client identifier
             msg: Message dict from a transport client.
         """
         async with self._dispatch_semaphore:
             try:
+                # Defense-in-depth: validate before dispatch (RFC-450 §6.4).
+                # Transport paths already validate, but this ensures no path
+                # skips validation.
+                from soothe_daemon.protocol import ErrorCode, build_error_response, validate_message
+
+                errors = validate_message(msg)
+                if errors:
+                    error_msg = build_error_response(
+                        ErrorCode.INVALID_PARAMS,
+                        "Invalid params",
+                        request_id=msg.get("request_id") or msg.get("id"),
+                        data={"errors": errors},
+                    )
+                    await self._send_client_message(client_id, error_msg)
+                    return
                 await self._message_router.dispatch(client_id, msg)
             except asyncio.CancelledError:
                 logger.debug("Dispatch cancelled for client %s", client_id)

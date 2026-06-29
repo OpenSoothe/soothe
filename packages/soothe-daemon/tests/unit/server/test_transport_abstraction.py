@@ -11,8 +11,8 @@ from soothe_daemon.channels.websocket import WebSocketChannel
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import TransportConfig, WebSocketConfig
 from soothe_daemon.protocol import (
-    ERROR_INVALID_MESSAGE,
-    create_error_response,
+    ErrorCode,
+    build_error_response,
     validate_message,
     validate_message_size,
 )
@@ -25,35 +25,48 @@ class TestProtocolV2:
     """
 
     def test_validate_command_message_valid(self) -> None:
-        """Valid command message passes validation."""
-        msg = {"type": "command", "cmd": "/help"}
+        """Valid slash_command notification passes validation."""
+        msg = {
+            "proto": "1",
+            "type": "notification",
+            "method": "slash_command",
+            "params": {"cmd": "/help"},
+        }
         errors = validate_message(msg)
         assert errors == []
 
     def test_validate_command_message_missing_cmd(self) -> None:
-        """Command message missing cmd field fails validation."""
-        msg = {"type": "command"}
+        """slash_command notification missing cmd fails validation."""
+        msg = {"proto": "1", "type": "notification", "method": "slash_command", "params": {}}
         errors = validate_message(msg)
         assert len(errors) == 1
         assert "cmd" in errors[0]
 
-    def test_validate_resume_thread_message_valid(self) -> None:
-        """Valid resume_thread message passes validation."""
+    def test_validate_resume_thread_message_rejected(self) -> None:
+        """resume_thread is not a known protocol-1 type — rejected (RFC-450 §6.3)."""
         msg = {"type": "resume_thread", "thread_id": "abc123"}
         errors = validate_message(msg)
-        assert errors == []
+        assert len(errors) == 1
+        assert "Unknown message type" in errors[0]
 
     def test_validate_auth_message_valid(self) -> None:
-        """Valid auth message passes validation."""
-        msg = {"type": "auth", "token": "sk_live_abc123"}
+        """Valid auth request passes validation."""
+        msg = {
+            "proto": "1",
+            "type": "request",
+            "method": "auth",
+            "params": {"access_key": "sk_live_abc123"},
+            "id": "r1",
+        }
         errors = validate_message(msg)
         assert errors == []
 
-    def test_validate_unknown_message_type(self) -> None:
-        """Unknown message types are allowed (forward compatibility)."""
+    def test_validate_unknown_message_type_rejected(self) -> None:
+        """Unknown message types are rejected per RFC-450 §6.3."""
         msg = {"type": "future_message_type", "data": "value"}
         errors = validate_message(msg)
-        assert errors == []
+        assert len(errors) == 1
+        assert "Unknown message type" in errors[0]
 
     def test_validate_message_missing_type(self) -> None:
         """Message missing type field fails validation."""
@@ -74,18 +87,21 @@ class TestProtocolV2:
         is_valid = validate_message_size(msg)
         assert is_valid is False
 
-    def test_create_error_response(self) -> None:
-        """Error response is created correctly."""
-        error_dict = create_error_response(
-            ERROR_INVALID_MESSAGE,
+    def test_build_error_response(self) -> None:
+        """Error response is created correctly (numeric envelope)."""
+        error_dict = build_error_response(
+            ErrorCode.INVALID_REQUEST,
             "Test error message",
-            {"key": "value"},
+            request_id="r-err",
+            data={"key": "value"},
         )
 
+        assert error_dict["proto"] == "1"
         assert error_dict["type"] == "error"
-        assert error_dict["code"] == "INVALID_MESSAGE"
-        assert error_dict["message"] == "Test error message"
-        assert error_dict["details"]["key"] == "value"
+        assert error_dict["error"]["code"] == -32600
+        assert error_dict["error"]["message"] == "Test error message"
+        assert error_dict["error"]["data"]["key"] == "value"
+        assert error_dict["id"] == "r-err"
 
 
 class TestTransportConfig:

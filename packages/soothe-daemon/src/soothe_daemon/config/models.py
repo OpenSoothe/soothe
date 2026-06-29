@@ -35,6 +35,10 @@ class WebSocketConfig(BaseModel):
         tls_key: TLS key path.
         cors_origins: Allowed CORS origins.
         max_frame_size: Maximum WebSocket frame size in bytes.
+        heartbeat_interval_ms: Interval (ms) for protocol-level ping/pong heartbeat
+            declared in the connection_ack handshake (RFC-450 §8.3). Default 30000.
+        heartbeat_timeout_ms: If no pong is received within this window (ms), the
+            connection is considered dead and closed. Default 10000.
     """
 
     enabled: bool = True
@@ -48,6 +52,14 @@ class WebSocketConfig(BaseModel):
     )
     max_frame_size: int = Field(
         default=10485760, description="Maximum WebSocket frame size in bytes (default: 10MB)"
+    )
+    heartbeat_interval_ms: int = Field(
+        default=30000,
+        description="Protocol-level heartbeat interval in milliseconds (RFC-450 §8.3).",
+    )
+    heartbeat_timeout_ms: int = Field(
+        default=10000,
+        description="Pong response timeout in milliseconds before closing a dead connection.",
     )
 
 

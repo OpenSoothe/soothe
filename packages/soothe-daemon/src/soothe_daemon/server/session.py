@@ -32,6 +32,72 @@ _SENDER_FILTER_DROP_LOG_LAST: dict[str, float] = {}
 _SENDER_FILTER_DROP_LOG_INTERVAL_SEC = 5.0
 _HIGH_PRIORITY_SETTLE_MARGIN_S = 0.15  # IG-436: Extra settle for HIGH events
 
+# Wire-frame types that are already protocol-1 envelopes and must pass through
+# the legacy→``next`` translator unchanged (RFC-450 §5/§9). ``status`` is a
+# defined top-level protocol-1 message type (RFC-450 §9.1), so status frames
+# are kept raw — only free-form streaming events become ``next`` payloads.
+_PROTO1_WIRE_TYPES: frozenset[str] = frozenset(
+    {
+        "response",
+        "error",
+        "next",
+        "complete",
+        "connection_ack",
+        "receipt_response",
+        "ping",
+        "pong",
+        "status",
+        "disconnect",
+    }
+)
+
+
+def _to_next_envelope(event: dict[str, Any], subscription_id: str | None) -> dict[str, Any]:
+    """Wrap a legacy streaming frame as a protocol-1 ``next`` envelope (RFC-450 §9.3).
+
+    Free-form streaming frames (``event``, ``command_response``, card replay
+    frames, ``autopilot_mode_changed``) are translated into the unified
+    ``{proto, type:"next", payload:{namespace, mode, data}, id?}`` shape. The
+    original frame type becomes ``payload.mode``; ``payload.data`` carries the
+    frame body (with ``loop_id`` preserved). ``status`` frames and pure
+    protocol-1 frames (``response``, ``error``, ``next``, ``complete``, …) are
+    returned unchanged — ``status`` is a defined top-level protocol-1 message
+    type, not a subscription stream event.
+
+    Args:
+        event: Raw wire frame dict as produced by the daemon broadcast path.
+        subscription_id: The subscriber's correlation id for the loop this
+            frame is scoped to, or ``None`` for daemon-global frames (in which
+            case the envelope ``id`` is omitted).
+
+    Returns:
+        A protocol-1 ``next`` envelope dict, or the original dict if it is
+        already a protocol-1 frame or a ``status`` frame.
+    """
+    msg_type = event.get("type")
+    if not isinstance(msg_type, str) or msg_type in _PROTO1_WIRE_TYPES:
+        return event
+
+    namespace = event.get("namespace")
+    if not isinstance(namespace, list):
+        namespace = []
+
+    # Preserve the originating frame type as ``mode`` so protocol-1 consumers
+    # can branch on the same discriminator the legacy clients used.
+    payload: dict[str, Any] = {
+        "namespace": namespace,
+        "mode": msg_type,
+        "data": event,
+    }
+    envelope: dict[str, Any] = {
+        "proto": "1",
+        "type": "next",
+        "payload": payload,
+    }
+    if subscription_id:
+        envelope["id"] = subscription_id
+    return envelope
+
 
 def _queue_has_high_priority(queue: asyncio.Queue) -> bool:
     """Peek queue to check if any HIGH/CRITICAL priority events pending (IG-436).
@@ -89,6 +155,7 @@ class ClientSession:
         wire_tier: Client wire filter tier (``full`` or ``progress``, IG-435)
         detach_requested: Whether client explicitly requested detach (RFC-0013)
         config: Optional SootheConfig for effective streaming config (RFC-614)
+        loop_subscription_ids: Maps loop_id → subscription correlation id (RFC-450 §9.4)
     """
 
     client_id: str
@@ -105,6 +172,8 @@ class ClientSession:
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
     autopilot_subscribed: bool = False  # RFC-228: receives autopilot__* worker events
     config: SootheConfig | None = None  # RFC-614: daemon config reference
+    # RFC-450 §9.4: subscription_id tracking for complete messages
+    loop_subscription_ids: dict[str, str] = field(default_factory=dict)  # loop_id → subscription_id
 
     def get_effective_streaming_config(
         self, cli_overrides: dict[str, Any] | None = None
@@ -205,6 +274,7 @@ class ClientSessionManager:
         *,
         stream_delivery: StreamDeliveryMode | None = None,
         wire_tier: str = "full",
+        subscription_id: str | None = None,  # RFC-450 §9.4: correlation id for complete
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
@@ -277,6 +347,9 @@ class ClientSessionManager:
         topic = loop_event_topic(loop_id)
         await self._event_bus.subscribe(topic, session.event_queue)
         session.subscriptions.add(loop_id)
+        # RFC-450 §9.4: store subscription_id for sending complete messages
+        if subscription_id is not None:
+            session.loop_subscription_ids[loop_id] = subscription_id
 
         # Unsubscribe from global for strict loop isolation (IG-408)
         # Loop-scoped clients should only receive events from their subscribed loop
@@ -308,12 +381,49 @@ class ClientSessionManager:
         topic = loop_event_topic(loop_id)
         await self._event_bus.unsubscribe(topic, session.event_queue)
         session.subscriptions.discard(loop_id)
+        # RFC-450 §9.4: remove subscription_id tracking
+        session.loop_subscription_ids.pop(loop_id, None)
 
         # Set logging context for full IDs
         set_client_id(client_id)
         set_loop_id(loop_id)
         logger.info("[Session] Client %s ← loop %s", client_id, loop_id)
         return True
+
+    async def get_loop_subscription_id(self, client_id: str, loop_id: str) -> str | None:
+        """Get the subscription correlation id for a loop (RFC-450 §9.4).
+
+        Args:
+            client_id: Client identifier.
+            loop_id: Loop identifier.
+
+        Returns:
+            The subscription_id if the client has an active subscription,
+            None otherwise.
+        """
+        async with self._lock:
+            session = self._sessions.get(client_id)
+        if session is None:
+            return None
+        return session.loop_subscription_ids.get(loop_id)
+
+    async def get_clients_for_loop(self, loop_id: str) -> list[str]:
+        """Get all client_ids subscribed to a specific loop (RFC-450 §9.4).
+
+        Used to send complete messages to all subscribers when a stream ends.
+
+        Args:
+            loop_id: Loop identifier.
+
+        Returns:
+            List of client_ids that have an active subscription to this loop.
+        """
+        async with self._lock:
+            clients: list[str] = []
+            for client_id, session in self._sessions.items():
+                if loop_id in session.subscriptions:
+                    clients.append(client_id)
+            return clients
 
     async def remove_session(self, client_id: str) -> None:
         """Remove client session and cleanup."""
@@ -457,9 +567,51 @@ class ClientSessionManager:
             return self._client_loop_ownership.get(client_id)
 
     async def send_to_client(self, session: ClientSession, message: dict[str, Any]) -> None:
-        """Send a wire message to one client (serialized per WebSocket connection)."""
+        """Send a wire message to one client (serialized per WebSocket connection).
+
+        Legacy streaming frames are translated to protocol-1 ``next`` envelopes
+        at this boundary (RFC-450 §9.3) so every client receives the unified
+        wire shape regardless of which daemon code path produced the frame.
+        """
+        wire = self._translate_for_client(session, message)
         async with session.send_lock:
-            await session.transport.send(session.transport_client, message)
+            await session.transport.send(session.transport_client, wire)
+
+    def _translate_for_client(
+        self, session: ClientSession, message: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Translate a legacy frame to a protocol-1 envelope for this session.
+
+        ``event_batch`` wrappers are preserved as a transport-level optimization;
+        each sub-event is individually wrapped as a ``next`` envelope. The SDK
+        client expands ``event_batch`` on receive, so downstream ``next()``
+        readers see one ``next`` payload per sub-event.
+        """
+        if not isinstance(message, dict):
+            return message
+        if message.get("type") == "event_batch":
+            sub_events = message.get("events")
+            if isinstance(sub_events, list):
+                wrapped: list[dict[str, Any]] = []
+                for sub in sub_events:
+                    if isinstance(sub, dict):
+                        wrapped.append(
+                            _to_next_envelope(sub, self._subscription_id_for(session, sub))
+                        )
+                    else:
+                        wrapped.append(sub)  # type: ignore[arg-type]
+                return {"type": "event_batch", "events": wrapped}
+            return message
+        return _to_next_envelope(message, self._subscription_id_for(session, message))
+
+    @staticmethod
+    def _subscription_id_for(session: ClientSession, message: dict[str, Any]) -> str | None:
+        """Return this session's subscription id for the frame's loop, if any."""
+        lid = str(message.get("loop_id") or "").strip()
+        if not lid:
+            return None
+        sub_id = session.loop_subscription_ids.get(lid)
+        return sub_id if isinstance(sub_id, str) and sub_id else None
 
     async def wake_senders_for_loop(self, loop_id: str) -> None:
         """Ensure sender tasks are running for clients subscribed to a loop."""

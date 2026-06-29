@@ -170,10 +170,14 @@ async def test_sender_loop_sends_events():
     # Wait for sender loop to process
     await asyncio.sleep(0.2)
 
-    # Transport.send should have been called
+    # Transport.send should have been called with a protocol-1 ``next`` envelope
+    # wrapping the legacy event frame (RFC-450 §9.3).
     transport.send.assert_called_once()
     call_args = transport.send.call_args
-    assert call_args[0][1] == event  # Second argument is the event
+    wire = call_args[0][1]
+    assert wire["type"] == "next"
+    assert wire["payload"]["mode"] == "event"
+    assert wire["payload"]["data"] == event
 
     # Cleanup
     await manager.remove_session(client_id)
@@ -543,7 +547,11 @@ async def test_sender_loop_flushes_high_priority_immediately() -> None:
     transport.send.assert_called_once()
     call_args = transport.send.call_args
     sent_event = call_args[0][1]
-    assert sent_event["data"]["type"] == "soothe.cognition.strange_loop.completed"
+    # Protocol-1 wraps the event in a ``next`` envelope (RFC-450 §9.3).
+    assert sent_event["type"] == "next"
+    assert (
+        sent_event["payload"]["data"]["data"]["type"] == "soothe.cognition.strange_loop.completed"
+    )
 
     await manager.remove_session(client_id)
 
