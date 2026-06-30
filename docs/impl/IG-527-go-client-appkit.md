@@ -3,13 +3,13 @@
 **Guide**: IG-527
 **Title**: Upgrade `client/go` core `Client` and extract `appkit` package from triarch
 **Created**: 2026-06-30
-**Related RFCs**: RFC-629 (Go Client Library — Core Upgrade and Appkit Architecture), RFC-450 (Daemon Communication Protocol), RFC-614 (Unified Streaming Messaging), RFC-403 (Unified Event Naming)
+**Related RFCs**: RFC-629 (Client Library — Core Upgrade and Appkit Architecture), RFC-450 (Daemon Communication Protocol), RFC-614 (Unified Streaming Messaging), RFC-403 (Unified Event Naming)
 **Scope**: `client/go/**` (core upgrades) + new `client/go/appkit/` package; triarch `internal/agent/` migrates to consume both.
 **Status**: In Progress — Phase 1 (core `Client` upgrades) complete 2026-06-30; Phase 2 (`appkit` package) complete 2026-06-30; Phases 3–4 blocked on a client-library publish (see Phase 3 notes).
 
 ## Overview
 
-This guide implements RFC-629. It folds triarch's hand-rolled transport/lifecycle layer down into the core `Client` (Layer 0) and extracts triarch's reusable application mechanics into a new `client/go/appkit` package (Layer 1). Product-specific code stays in triarch (Layer 2).
+This guide implements the Go half of RFC-629 (the TypeScript half is IG-531). It folds triarch's hand-rolled transport/lifecycle layer down into the core `Client` (Layer 0) and extracts triarch's reusable application mechanics into a new `client/go/appkit` package (Layer 1). Product-specific code stays in triarch (Layer 2).
 
 The work is sequenced core-first because `appkit` depends on a safe, concurrent, reconnect-aware `Client`. The multiplexer is the highest-risk piece; it changes the read loop's event-routing contract and must preserve the existing `ReceiveMessages` semantics for unsolicited frames.
 
@@ -415,7 +415,7 @@ type fakeClient struct {
 
 ## Related Documents
 
-- [RFC-629](../specs/RFC-629-go-client-appkit-architecture.md) — Go Client Library Core Upgrade and Appkit Architecture
+- [RFC-629](../specs/RFC-629-client-appkit-architecture.md) — Client Library Core Upgrade and Appkit Architecture (Go + TypeScript)
 - [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) — Daemon Communication Protocol
 - [RFC-614](../specs/RFC-614-unified-streaming-messaging.md) — Unified Streaming Messaging
 - [RFC-403](../specs/RFC-403-unified-event-naming.md) — Unified Event Naming

@@ -211,12 +211,12 @@ This document defines the terminology and naming conventions used in this projec
 | `invoke_structured_chat` | Veritas helper that calls the model with `VeritasAnswerSchema` to check confidence. Returns structured `can_answer` decision. | RFC-623 |
 | `build_veritas_response_schema(n)` | Constructor for Veritas schema with configurable `max_defer_attempts` N. | RFC-623 |
 
-### Go Client Library Terms (RFC-629)
+### Client Library Terms (RFC-629)
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| `Client` (Go) | The `client/go` core WebSocket client for the protocol-1 daemon. Owns transport, handshake, envelope codec, RPC, streaming, control-frame handling, heartbeat, reconnect/reattach, and concurrent request/subscription multiplexing on a single connection. | RFC-629 |
-| `appkit` | The `client/go/appkit` sibling package holding the reusable application-architecture layer over `Client`: connection pooling, single-flight query gating, turn execution, event classification, and SSE fan-out. Product decisions are supplied via configuration and interfaces. | RFC-629 |
+| `Client` | The core WebSocket client (`client/go` in Go, `client/typescript` in TypeScript) for the protocol-1 daemon. Owns transport, handshake, envelope codec, RPC, streaming, control-frame handling, heartbeat, reconnect/reattach, and concurrent request/subscription multiplexing on a single connection. | RFC-629 |
+| `appkit` | The sibling package (`client/go/appkit` in Go, `client/typescript/src/appkit` in TypeScript) holding the reusable application-architecture layer over `Client`: connection pooling, single-flight query gating, turn execution, event classification, and SSE fan-out. Product decisions are supplied via configuration and interfaces. | RFC-629 |
 | `ConnectionPool` | `appkit` component that acquires/releases/health-checks/reuses a `Client` per logical session, delegating bootstrap (`loop_new` + `subscribe`) or reattach (`loop_reattach` + `ReattachAndProbe`) to the core `Client`. | RFC-629 |
 | `QueryGate` | `appkit` component enforcing single-flight query execution per session (`ErrQueryBusy`) and the cancel-before-context ordering (daemon `cancel` before local context cancel, on a detached timeout). | RFC-629 |
 | `TurnRunner` | `appkit` component executing a timeout-bounded turn: send `loop_input`, consume the multiplexed event stream, classify events, resolve the deliverable, then persist/broadcast. | RFC-629 |
@@ -225,6 +225,8 @@ This document defines the terminology and naming conventions used in this projec
 | `SSEBroadcaster` | `appkit` string-keyed pub/sub fan-out for SSE-style event delivery to subscribers; rekeyed from any application domain key type to `string`. | RFC-629 |
 | `SessionStore` | `appkit` interface abstracting per-application persistence: session↔loop-id mapping, message append, last-used/reset tracking. Triarch's Postgres `ChatRegistryStore` is one implementation. | RFC-629 |
 | `StaleLoopError` | Typed error returned by `ReattachAndProbe` when a loop accepts the reattach handshake but fails the `loop_get` liveness probe; signals the caller to fall back to a fresh `loop_new` bootstrap. | RFC-629 |
+| `DisconnectCause` | Enum distinguishing clean vs unclean connection loss (Go: `DisconnectClean`/`DisconnectUnclean`; TypeScript: `DisconnectCause.Clean`/`DisconnectCause.Unclean`). Clean follows a `disconnect` notification; unclean is a read/write error or missed pong. | RFC-629 |
+| `Multiplexer` | Core `Client` component that routes inbound protocol-1 frames to the correct waiter by `(type, id)` instead of discarding non-matching events, enabling concurrent RPCs and subscription streams. | RFC-629 |
 
 ### Code Naming
 

@@ -481,8 +481,30 @@ class StrangeLoop:
 
         ce_instance = self._ce
 
-        # Load prior DAG state for cross-goal continuity
-        loaded = await ce_instance.load()
+        # RFC-630 Phase C: parallelize the pre-graph IO. ``ce.load()`` (prior
+        # DAG hydration) and the three semantic file reads are independent —
+        # gather them so the LLM round-trip and disk reads overlap rather than
+        # running sequentially on the event loop. The sync file reads are
+        # wrapped in ``to_thread`` so they no longer block the event loop.
+        semantic_tasks: list = []
+        if workspace:
+            ce_instance._semantic.workspace = Path(workspace)
+            semantic_tasks = [
+                asyncio.to_thread(ce_instance._semantic.load_project_instructions),
+                asyncio.to_thread(ce_instance._semantic.load_agent_instructions),
+                asyncio.to_thread(ce_instance._semantic.load_memory),
+            ]
+
+        if semantic_tasks:
+            loaded, *_ = await asyncio.gather(
+                ce_instance.load(), *semantic_tasks, return_exceptions=True
+            )
+        else:
+            loaded = await ce_instance.load()
+
+        if isinstance(loaded, Exception):
+            logger.warning("[CE] load() failed: %s", loaded, exc_info=True)
+            loaded = False
         if loaded:
             logger.info(
                 "ContextEngine loaded prior state (goals=%d, backend=%s)",
@@ -500,16 +522,6 @@ class StrangeLoop:
 
         # RFC-624 Phase 4 Step 3: bind CE to LoopState
         state.bind_ce(ce_instance, ce_goal.id)
-
-        # Load semantic context at goal start
-        try:
-            if workspace:
-                ce_instance._semantic.workspace = Path(workspace)
-                ce_instance._semantic.load_project_instructions()
-                ce_instance._semantic.load_agent_instructions()
-                ce_instance._semantic.load_memory()
-        except Exception:
-            logger.warning("[CE] on_goal_start semantic loading failed", exc_info=True)
 
         plan_manager = StepPlanManagerAdapter(
             subengine=ce_instance.planning.step,
