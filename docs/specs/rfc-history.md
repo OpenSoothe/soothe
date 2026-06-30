@@ -40,6 +40,15 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### Major Changes - 2026-06-30
 
+**RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) — absorbs triarch's hand-rolled adaptation layer into the Go and TypeScript client libraries
+
+- Generalizes the prior Go-only RFC to a cross-language client architecture: Layer 0 (core `Client` transport/lifecycle upgrades), Layer 1 (`appkit` package: `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`SessionStore`), Layer 2 (application product code)
+- Layer 0 folds drop detection, `Reconnect`/`ReattachAndProbe`, readiness retry, and concurrent `(type, id)` multiplexing into the core `Client` so every application gets a safe, reconnect-aware client for free
+- Layer 1 extracts the reusable application mechanics (pool, single-flight query gate with cancel-before-context ordering, timeout turn loop, event→deliverable classification keyed on `(namespace, mode, phase)`, SSE fan-out, persistence seam) into a new sibling package per client
+- Product decisions (deliverable phase sets, persistence, chat modes, error copy) stay pluggable via configuration and interfaces; the libraries import no application domain types
+- Defines language-specific adaptations (Go channels/`context.Context` vs TypeScript `EventEmitter`/`AsyncGenerator`/`AbortSignal`) while holding the contract identical across both
+- Extends RFC-450 (client-side transport/lifecycle) and RFC-610 (SDK module structure); implemented by IG-527 (Go) and IG-528 (TypeScript)
+
 **RFC-630**: Start-Phase LLM Intake and Branch Routing — replaces heuristic intent judgment with LLM intake + branch routing
 
 - Replaces the binary `IntentClassifier` LLM + its `_is_likely_agentic` heuristic bypass (len>80 / words>15 / newlines≥2) with a single 4-class intake LLM (`quiz | trivial | simple | complex`)
@@ -92,6 +101,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 ### 2026-06
 
 - **2026-06-30**: RFC-630 - Start-Phase LLM Intake and Branch Routing
+- **2026-06-30**: RFC-629 - Client Library Core Upgrade and Appkit Architecture (Go + TypeScript)
 - **2026-06-26**: RFC-628 - Cognition Step Card Display
   - Status: Implemented
   - Kind: Implementation Interface Design

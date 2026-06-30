@@ -10,10 +10,6 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
-from soothe.foundation.loop.planning.simple_bypass import (
-    SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
-    format_simple_query_direct_next_action,
-)
 from soothe.foundation.loop.state.schemas import (
     FIRST_WAVE_MAX_STEPS,
     AgentDecision,
@@ -1343,42 +1339,11 @@ class LLMPlanner:
                 full_output=state.last_execute_assistant_text,
             )
 
-        task_complexity = ""
-        if state.intent is not None:
-            task_complexity = str(getattr(state.intent, "task_complexity", "") or "")
-        elif context.routing_classification is not None:
-            task_complexity = str(
-                getattr(context.routing_classification, "task_complexity", "") or ""
-            )
-
-        if task_complexity == "simple" and state.iteration == 0 and not state.step_results:
-            direct_instruction = format_simple_query_direct_next_action(goal)
-            result = PlanResult(
-                status=assessment.status,
-                goal_progress=assessment.goal_progress,
-                assessment_reasoning="",
-                plan_reasoning="",
-                plan_action="new",
-                decision=AgentDecision(
-                    type="execute_steps",
-                    execution_mode="parallel",
-                    reasoning="Simple-query bypass: skip plan-generate.",
-                    steps=[
-                        StepAction(
-                            description=goal,
-                            expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
-                        )
-                    ],
-                ),
-                next_action=direct_instruction[:300],
-                require_goal_completion=assessment.require_goal_completion,
-            )
-            return self._finalize_generated_plan_result(
-                result=result,
-                state=state,
-                context=context,
-                goal=goal,
-            )
+        # RFC-630: the legacy simple-query bypass (prefixed 1-step plan) is
+        # removed. The ``trivial`` intake label now handles single-step goals
+        # via ``build_trivial_plan`` in init_or_resume (no plan_generate call);
+        # the ``simple`` label uses ``generate_lightweight``. Neither produces
+        # the "I will complete this goal directly:" prefix.
 
         # Build DAG context for progressive planning (IG-400)
         dag_context = None
@@ -1627,74 +1592,43 @@ class LLMPlanner:
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
-                    task_complexity = ""
-                    if state.intent is not None:
-                        task_complexity = str(getattr(state.intent, "task_complexity", "") or "")
-                    elif context.routing_classification is not None:
-                        task_complexity = str(
-                            getattr(context.routing_classification, "task_complexity", "") or ""
-                        )
+                    # RFC-630: the legacy simple-query bypass (prefixed 1-step
+                    # plan) is removed. Single-step goals are handled by the
+                    # ``trivial`` intake label via ``build_trivial_plan`` in
+                    # init_or_resume; the ``simple`` label uses
+                    # ``generate_lightweight``. Neither produces the
+                    # "I will complete this goal directly:" prefix.
+                    # Build DAG context for progressive planning (IG-400)
+                    dag_context = None
+                    if plan_manager is not None:
+                        dag_ctx = plan_manager.get_planning_context()
+                        if dag_ctx.has_prior_state:
+                            from soothe.foundation.loop.prompts.builder import (
+                                _format_dag_context,
+                            )
 
-                    # Simple-query fast lane: skip plan-generate on first planning cycle and
-                    # execute one focused step directly.
-                    if (
-                        task_complexity == "simple"
-                        and state.iteration == 0
-                        and not state.step_results
-                    ):
-                        direct_instruction = format_simple_query_direct_next_action(goal)
-                        result = PlanResult(
-                            status=assessment.status,
-                            goal_progress=assessment.goal_progress,
-                            assessment_reasoning="",
-                            plan_reasoning="",
-                            plan_action="new",
-                            decision=AgentDecision(
-                                type="execute_steps",
-                                execution_mode="parallel",
-                                reasoning="Simple-query bypass: skip plan-generate.",
-                                steps=[
-                                    StepAction(
-                                        description=goal,
-                                        expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
-                                    )
-                                ],
-                            ),
-                            next_action=direct_instruction[:300],
-                            require_goal_completion=assessment.require_goal_completion,
-                        )
-                    else:
-                        # Build DAG context for progressive planning (IG-400)
-                        dag_context = None
-                        if plan_manager is not None:
-                            dag_ctx = plan_manager.get_planning_context()
-                            if dag_ctx.has_prior_state:
-                                from soothe.foundation.loop.prompts.builder import (
-                                    _format_dag_context,
-                                )
+                            dag_context = _format_dag_context(dag_ctx)
 
-                                dag_context = _format_dag_context(dag_ctx)
-
-                        generate_messages = self._prompt_builder.build_plan_messages(
-                            goal,
-                            state,
-                            context,
-                            plan_phase="generate",
-                            dag_context=dag_context,
-                            context_bundle=context_bundle,
-                        )
-                        messages_for_retry = generate_messages
-                        t_plan = time.perf_counter()
-                        plan_result = await self._generate_plan(
-                            generate_messages,
-                            assessment,
-                            goal,
-                            state.iteration,
-                            thread_id=state.thread_id,
-                        )
-                        plan_gen_ms = (time.perf_counter() - t_plan) * 1000
-                        llm_calls = 2
-                        result = self._combine_results(assessment, plan_result)
+                    generate_messages = self._prompt_builder.build_plan_messages(
+                        goal,
+                        state,
+                        context,
+                        plan_phase="generate",
+                        dag_context=dag_context,
+                        context_bundle=context_bundle,
+                    )
+                    messages_for_retry = generate_messages
+                    t_plan = time.perf_counter()
+                    plan_result = await self._generate_plan(
+                        generate_messages,
+                        assessment,
+                        goal,
+                        state.iteration,
+                        thread_id=state.thread_id,
+                    )
+                    plan_gen_ms = (time.perf_counter() - t_plan) * 1000
+                    llm_calls = 2
+                    result = self._combine_results(assessment, plan_result)
 
                 decision_info = ""
                 if result.decision:
