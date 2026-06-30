@@ -531,7 +531,10 @@ class _MessagesMixin:
             if self._daemon_session is not None:
                 from soothe_cli.runtime.transport.session import TUI_EXIT_HANDSHAKE_TIMEOUT_S
 
-                await self._daemon_session.detach()
+                try:
+                    await self._daemon_session.detach()
+                except ConnectionError:
+                    logger.debug("Daemon connection closed before detach during exit")
                 await self._daemon_session.close(
                     handshake_timeout=TUI_EXIT_HANDSHAKE_TIMEOUT_S,
                 )

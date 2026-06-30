@@ -162,7 +162,7 @@ def convert_messages_to_data(
             # Track tool calls for later matching
             for tc in normalize_tool_calls_list(getattr(msg, "tool_calls", [])):
                 tc_id = tc.get("id")
-                name = tc.get("name", "unknown")
+                name = str(tc.get("name") or "").strip() or "unknown"
                 args = extract_tool_args_dict(tc)
                 data = MessageData(
                     type=MessageType.TOOL,

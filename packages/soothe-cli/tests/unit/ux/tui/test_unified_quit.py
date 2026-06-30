@@ -70,6 +70,22 @@ async def test_detach_then_exit_sends_disconnect_and_closes() -> None:
     app_exit.assert_called_once()
 
 
+@pytest.mark.asyncio
+async def test_detach_then_exit_still_closes_and_exits_when_detach_raises() -> None:
+    """Quit must complete even if detach fails on a dead connection."""
+    app = _QuitAppStub()
+    app._daemon_session = MagicMock()
+    app._daemon_session.detach = AsyncMock(side_effect=ConnectionError("Not connected to daemon"))
+    app._daemon_session.close = AsyncMock()
+
+    with patch.object(App, "exit", autospec=True) as app_exit:
+        await app._detach_then_exit()
+
+    app._daemon_session.detach.assert_awaited_once()
+    app._daemon_session.close.assert_awaited_once_with(handshake_timeout=0.3)
+    app_exit.assert_called_once()
+
+
 def test_soothe_app_exit_delegates_to_mixin() -> None:
     """``SootheApp.exit`` must invoke mixin teardown (MRO fix)."""
     from soothe_cli.tui.app._app import SootheApp

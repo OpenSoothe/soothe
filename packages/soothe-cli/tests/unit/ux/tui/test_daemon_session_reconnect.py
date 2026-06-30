@@ -98,3 +98,31 @@ async def test_iter_turn_chunks_raises_when_connection_drops_mid_query() -> None
     with pytest.raises(ConnectionError, match="Daemon connection lost"):
         async for _chunk in session.iter_turn_chunks():
             pass
+
+
+@pytest.mark.asyncio
+async def test_detach_skips_when_not_connected() -> None:
+    """detach should not raise when the stream socket is already closed."""
+    session = TuiDaemonSession.__new__(TuiDaemonSession)
+    client = MagicMock()
+    client.is_connected = False
+    client.notify = AsyncMock()
+    session._client = client  # noqa: SLF001
+
+    await session.detach()
+
+    client.notify.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_detach_swallows_connection_error_from_notify() -> None:
+    """detach should tolerate a race where the socket dies before notify."""
+    session = TuiDaemonSession.__new__(TuiDaemonSession)
+    client = MagicMock()
+    client.is_connected = True
+    client.notify = AsyncMock(side_effect=ConnectionError("Connection closed"))
+    session._client = client  # noqa: SLF001
+
+    await session.detach()
+
+    client.notify.assert_awaited_once_with("disconnect", {})

@@ -60,6 +60,22 @@ def test_convert_messages_to_data_marks_unmatched_tool_call_rejected() -> None:
     assert tools[0].tool_status == ToolStatus.REJECTED
 
 
+def test_convert_messages_to_data_empty_tool_name_falls_back_to_unknown() -> None:
+    """Tool calls with missing/blank names must not break card binding."""
+    messages = [
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "tc1", "name": "", "args": {"cmd": "ls"}}],
+        ),
+        ToolMessage(content="ok", tool_call_id="tc1", name="", status="success"),
+    ]
+    data = card_binder.convert_messages_to_data(messages)
+    tools = [m for m in data if m.type == MessageType.TOOL]
+    assert len(tools) == 1
+    assert tools[0].tool_name == "unknown"
+    assert tools[0].tool_status == ToolStatus.SUCCESS
+
+
 def test_convert_event_to_message_data_user_conversation_row() -> None:
     event = {
         "kind": "conversation",

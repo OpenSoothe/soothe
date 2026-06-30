@@ -102,7 +102,7 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
         ),
         patch("soothe.foundation.context.planning.StepPlanManagerAdapter"),
         patch("soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager") as sm_cls,
-        patch("soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager"),
+        patch("soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
         patch("soothe.foundation.loop.engine.strange_loop.LoopRuntimeContext"),
         patch("soothe.foundation.loop.engine.strange_loop.asyncio.Queue"),
         patch.object(sl, "plan_phase"),
@@ -121,7 +121,12 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
         )
         sm.start_new_goal = MagicMock(return_value=MagicMock(goal_id="g1", iteration=0))
         sm.save = AsyncMock()
+        sm.close = AsyncMock()  # Fix: must be AsyncMock for cleanup path
         sm_cls.return_value = sm
+
+        am = MagicMock()
+        am.close = AsyncMock()  # Fix: must be AsyncMock for cleanup path
+        am_cls.return_value = am
 
         # Drive run_with_progress one step: it yields events; we just need the
         # gather block to run. Consume the generator briefly.
@@ -141,7 +146,7 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
 
         try:
             await asyncio.wait_for(_step(), timeout=2.0)
-        except (TimeoutError, StopAsyncIteration):
+        except (TimeoutError, StopAsyncIteration, asyncio.CancelledError):
             pass
 
         # All four calls should have started (concurrency proof): if they were
