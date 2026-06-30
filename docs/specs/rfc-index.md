@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-06-28
-**Total RFCs**: 80 (6 archived, 7 reclassified, 1 process specification)
+**Last Updated**: 2026-06-30
+**Total RFCs**: 81 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -9,7 +9,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 51 |
+| Draft | 52 |
 | Implemented | 15 |
 | Implemented (Partially Superseded) | 1 |
 | Implemented — runtime architecture refined | 1 |
@@ -21,7 +21,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 52 |
+| Architecture Design | 53 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
@@ -527,6 +527,14 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Implemented by: IG-512, IG-513, IG-514, IG-515
   - Authors: Xiaming Chen
 
+- **RFC-629**: [Go Client Library — Core Upgrade and Appkit Architecture](RFC-629-go-client-appkit-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-30
+  - Depends on: RFC-450, RFC-614, RFC-403
+  - Extends: RFC-450 (client-side transport/lifecycle), RFC-610 (SDK module structure)
+  - Authors: Xiaming Chen
+
 ---
 
 ### Product & Applications (7xx)
@@ -696,6 +704,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-629**: Go Client Library — Core Upgrade and Appkit Architecture (2026-06-30, Draft)
 - **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)
 - **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)
 - **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
