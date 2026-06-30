@@ -37,7 +37,10 @@ def temp_state_manager():
             "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            yield StrangeLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
+            state_manager = StrangeLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
+            # RFC-803 Phase 6: disable async writes for tests needing sync persistence
+            state_manager._async_write_enabled = False
+            yield state_manager
 
 
 @pytest.mark.asyncio
@@ -77,6 +80,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
         return_value=sm.db_path,
     ):
         sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm2._async_write_enabled = False
         loaded = await sm2.load()
 
     assert loaded is not None
@@ -118,6 +122,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
         return_value=sm.db_path,
     ):
         sm3 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm3._async_write_enabled = False
         final = await sm3.load()
     assert final is not None
     assert len(final.goal_history) == 2

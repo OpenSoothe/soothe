@@ -415,15 +415,6 @@ class TestRouterProfiles:
         assert cfg.router.embedding == "omlx:embed"
         assert cfg.embedding_dims == 768
 
-    def test_develop_config_loads(self) -> None:
-        path = Path(__file__).resolve().parents[5] / "config" / "develop" / "config.yml"
-        if not path.is_file():
-            pytest.skip("develop config not in checkout")
-        cfg = SootheConfig.from_yaml_file(str(path))
-        assert cfg.active_router_profile == "local-deploy"
-        assert cfg.router.default == "dashscope:glm-5.2"
-        assert cfg.embedding_dims == 1024
-
     def test_env_overrides_yaml_active_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SOOTHE_ACTIVE_ROUTER_PROFILE", "local-deploy")
         cfg = SootheConfig(

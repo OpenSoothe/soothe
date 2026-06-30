@@ -129,66 +129,33 @@ class _StartupMixin:
         # Focus the input immediately so the cursor is visible on first paint
         self._chat_input.focus_input()
 
-        # Prewarm heavy imports in a thread while the first frame renders.
-        # The user can't type yet, so GIL contention is harmless.  By the
-        # time _post_paint_init fires its inline imports are dict lookups.
-        self.run_worker(
-            asyncio.to_thread(self._prewarm_deferred_imports),
-            exclusive=True,
-            group="startup-import-prewarm",
-        )
+        # Run import prewarm off the UI thread before post-paint init so adapter
+        # construction does not cold-load heavy modules on the Textual message loop.
+        self._startup_task = asyncio.create_task(self._run_deferred_startup())
 
-        # Start branch resolution immediately — the thread launches now
-        # (during on_mount) so by the time the first frame finishes painting
-        # the subprocess is already done. _post_paint_init fires the heavier
-        # workers (server, model creation) afterward.
-        self._startup_task = asyncio.create_task(self._resolve_git_branch_and_continue())
+    async def _run_deferred_startup(self) -> None:
+        """Prewarm imports in a worker thread, then schedule post-paint workers.
 
-    async def _resolve_git_branch_and_continue(self) -> None:
-        """Resolve git branch, then schedule remaining init workers.
-
-        Launched via `asyncio.create_task()` during `on_mount` so the subprocess
-        runs concurrently with first-paint rendering. `_post_paint_init` is
-        scheduled via `call_after_refresh` regardless of whether branch
-        resolution succeeds.
+        Post-paint init is scheduled only after prewarm completes so its inline
+        imports are cheap ``sys.modules`` lookups instead of cold loads on the
+        UI thread.
         """
         try:
-            import subprocess  # noqa: S404  # stdlib, already loaded
-
-            def _get_branch() -> str:
-                try:
-                    result = subprocess.run(
-                        ["git", "rev-parse", "--abbrev-ref", "HEAD"],  # noqa: S607
-                        capture_output=True,
-                        text=True,
-                        timeout=2,
-                        check=False,
-                    )
-                    if result.returncode == 0:
-                        return result.stdout.strip()
-                except FileNotFoundError:
-                    pass  # git not installed
-                except subprocess.TimeoutExpired:
-                    logger.debug("Git branch detection timed out")
-                except OSError:
-                    logger.debug("Git branch detection failed", exc_info=True)
-                return ""
-
-            branch = await asyncio.to_thread(_get_branch)
-            if self._status_bar:
-                self._status_bar.branch = branch
+            await asyncio.to_thread(self._prewarm_deferred_imports)
         except Exception:
-            logger.warning("Git branch resolution failed", exc_info=True)
-        finally:
-            # Always schedule post-paint init — even if branch resolution
-            # fails, the app must still start the server, session, etc.
-            self.call_after_refresh(self._post_paint_init)
+            logger.warning("Import prewarm failed", exc_info=True)
+
+        # Always schedule post-paint init — even when prewarm fails, the app
+        # must still start the daemon session and related workers.
+        self.call_after_refresh(self._post_paint_init)
 
     async def _post_paint_init(self) -> None:
         """Fire background workers for remaining startup work.
 
         Everything here is non-blocking: workers and thread-offloaded calls
-        so the UI stays responsive.
+        so the UI stays responsive. Import prewarm must finish before this
+        runs (see ``_run_deferred_startup``) so adapter construction does not
+        cold-load langchain/runtime stacks on the Textual message loop.
         """
         # Create UI adapter unconditionally — it only holds UI callbacks.
         from soothe_cli.tui.textual_adapter import TextualUIAdapter

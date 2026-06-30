@@ -28,7 +28,10 @@ def temp_state_manager():
             "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            yield StrangeLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
+            state_manager = StrangeLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
+            # RFC-803 Phase 6: disable async writes for tests needing sync persistence
+            state_manager._async_write_enabled = False
+            yield state_manager
 
 
 @pytest.mark.asyncio
