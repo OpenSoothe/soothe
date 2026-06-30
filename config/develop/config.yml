@@ -58,7 +58,7 @@ router_profiles:
     embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
 
 # Switch profiles: production (DashScope) | local-deploy (oMLX :9642)
-active_router_profile: local-deploy
+active_router_profile: production
 
 # ============================================================
 # AGENT (team concurrency overrides only)
