@@ -264,6 +264,13 @@ class DaemonHandlersMixin:
                     return
                 prompt_text = raw_text
 
+            card_manager = getattr(self, "_card_manager", None)
+            if card_manager is not None:
+                try:
+                    await card_manager.record_user_prompt(loop_id, prompt_text)
+                except Exception:
+                    logger.debug("Failed to record user prompt card for %s", loop_id, exc_info=True)
+
             if self._query_engine is not None:
                 qo = _queue_options_from_daemon_message(msg)
                 model_params = qo["model_params"]

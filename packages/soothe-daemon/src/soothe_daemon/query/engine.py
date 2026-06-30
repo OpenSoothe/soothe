@@ -346,6 +346,12 @@ class QueryEngine:
                 },
             )
         )
+        card_manager = getattr(d, "_card_manager", None)
+        if card_manager is not None:
+            try:
+                await card_manager.ingest_stream_tuple(loop_id, namespace, mode, wire_data)
+            except Exception:
+                logger.debug("Card stream binding failed for loop %s", loop_id, exc_info=True)
 
     def _get_output_streaming_config(self, daemon: Any) -> dict[str, Any]:
         """Get output streaming config parameters from daemon config (RFC-614)."""

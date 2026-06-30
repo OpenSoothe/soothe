@@ -6,12 +6,15 @@ import contextlib
 import json
 import logging
 import os
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from soothe.config import SOOTHE_HOME
 from soothe.foundation.loop.state.persistence.directory_manager import (
+    THREADS_DATA_DIR,
     PersistenceDirectoryManager,
 )
 
@@ -53,7 +56,7 @@ class ThreadLogger:
             thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/data/threads/{thread_id}/logs/``.
             thread_id: Thread ID for the log file name.
             retention_days: Days to retain thread logs before cleanup.
-            max_size_mb: Maximum total size for thread logs (not enforced yet).
+            max_size_mb: Maximum total size for all thread logs under ``data/threads/``.
         """
         tid = str(thread_id or "default")
         # Use new isolated directory structure (RFC-215)
@@ -311,29 +314,88 @@ class ThreadLogger:
                 pass
 
     def cleanup_old_threads(self) -> int:
-        """Delete thread files older than retention_days.
+        """Delete stale thread logs under ``data/threads/`` (global sweep).
 
         Returns:
-            Number of threads deleted.
+            Number of log files deleted.
         """
-        from datetime import timedelta
+        return cleanup_stale_thread_logs(
+            retention_days=self._retention_days,
+            max_size_mb=self._max_size_mb,
+        )
 
-        cutoff = datetime.now(UTC) - timedelta(days=self._retention_days)
-        deleted = 0
 
+def cleanup_stale_thread_logs(
+    *,
+    retention_days: int = 30,
+    max_size_mb: int = 100,
+    threads_root: Path | None = None,
+) -> int:
+    """Delete old ``conversation.jsonl`` files across all thread directories.
+
+    Args:
+        retention_days: Remove logs older than this many days.
+        max_size_mb: When total size exceeds this budget, delete oldest logs first.
+        threads_root: Override ``$SOOTHE_HOME/data/threads`` for tests.
+
+    Returns:
+        Number of log files deleted.
+    """
+    from datetime import timedelta
+
+    root = Path(threads_root or Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR)
+    if not root.is_dir():
+        return 0
+
+    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+    max_bytes = max(0, max_size_mb) * 1024 * 1024
+
+    log_files: list[tuple[Path, float, int]] = []
+    for thread_dir in root.iterdir():
+        if not thread_dir.is_dir():
+            continue
+        log_path = thread_dir / "conversation.jsonl"
+        if not log_path.is_file():
+            continue
         try:
-            self._ensure_dir()
-            for thread_file in self._thread_dir.glob("*.jsonl"):
-                try:
-                    mtime = datetime.fromtimestamp(thread_file.stat().st_mtime, tz=UTC)
-                    if mtime < cutoff:
-                        thread_file.unlink()
-                        deleted += 1
-                        logger.debug("Deleted old thread log: %s", thread_file.name)
-                except Exception:
-                    logger.debug("Failed to process thread file %s", thread_file, exc_info=True)
-                    continue
-        except Exception:
-            logger.warning("Thread cleanup failed", exc_info=True)
+            stat = log_path.stat()
+            mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+            if mtime < cutoff:
+                log_path.unlink(missing_ok=True)
+                _remove_thread_dir_if_empty(thread_dir)
+                continue
+            log_files.append((log_path, stat.st_mtime, stat.st_size))
+        except OSError:
+            logger.debug("Failed to stat thread log %s", log_path, exc_info=True)
 
-        return deleted
+    if max_bytes <= 0:
+        return 0
+
+    total_size = sum(size for _, _, size in log_files)
+    deleted = 0
+    if total_size > max_bytes:
+        log_files.sort(key=lambda item: item[1])
+        for log_path, _, size in log_files:
+            if total_size <= max_bytes:
+                break
+            try:
+                log_path.unlink(missing_ok=True)
+                _remove_thread_dir_if_empty(log_path.parent.parent)
+                total_size -= size
+                deleted += 1
+            except OSError:
+                logger.debug("Failed to delete thread log %s", log_path, exc_info=True)
+    return deleted
+
+
+def _remove_thread_dir_if_empty(thread_dir: Path) -> None:
+    """Remove ``threads/{id}`` when only empty ``logs/`` remains."""
+    try:
+        if not thread_dir.is_dir():
+            return
+        remaining = [p for p in thread_dir.rglob("*") if p.is_file()]
+        if remaining:
+            return
+        shutil.rmtree(thread_dir, ignore_errors=True)
+    except OSError:
+        logger.debug("Failed to remove empty thread dir %s", thread_dir, exc_info=True)

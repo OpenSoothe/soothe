@@ -12,7 +12,7 @@ from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPe
 
 @pytest.fixture
 def tmp_db(tmp_path: Path) -> Path:
-    return tmp_path / "ce_state.db"
+    return tmp_path / "context_engine.db"
 
 
 @pytest.fixture

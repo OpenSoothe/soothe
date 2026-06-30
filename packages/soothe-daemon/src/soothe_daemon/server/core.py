@@ -922,15 +922,24 @@ class SootheDaemon(DaemonHandlersMixin):
 
     async def _periodic_cleanup(self) -> None:
         """Run cleanup every 24 hours."""
+        from soothe.logging.thread_logger import cleanup_stale_thread_logs
+
         while self._running:
             await asyncio.sleep(24 * 3600)
-            if self._thread_logger:
-                try:
-                    deleted = self._thread_logger.cleanup_old_threads()
-                    if deleted > 0:
-                        logger.info("Cleaned up %d old thread logs", deleted)
-                except Exception:
-                    logger.warning("Periodic cleanup failed", exc_info=True)
+            retention_days = 30
+            max_size_mb = 100
+            if self._thread_logger is not None:
+                retention_days = self._thread_logger._retention_days
+                max_size_mb = self._thread_logger._max_size_mb
+            try:
+                deleted = cleanup_stale_thread_logs(
+                    retention_days=retention_days,
+                    max_size_mb=max_size_mb,
+                )
+                if deleted > 0:
+                    logger.info("Cleaned up %d old thread logs", deleted)
+            except Exception:
+                logger.warning("Periodic cleanup failed", exc_info=True)
 
     async def _periodic_postgres_pool_maintenance(self) -> None:
         """Release idle connections on shared daemon pools (every 5 minutes)."""
@@ -967,6 +976,7 @@ class SootheDaemon(DaemonHandlersMixin):
         from datetime import UTC, datetime, timedelta
 
         from soothe_daemon.runtime.loop_gc import purge_loop_execution_data
+        from soothe_daemon.runtime.loop_reconcile import reconcile_orphan_loop_directories
 
         gc_cfg = self._daemon_config.loop_gc
         interval = float(gc_cfg.interval_seconds)
@@ -1019,6 +1029,13 @@ class SootheDaemon(DaemonHandlersMixin):
                         gc_cfg.ephemeral_idle_hours,
                         gc_cfg.empty_idle_hours,
                     )
+
+                removed_orphans = await reconcile_orphan_loop_directories(
+                    self._persistence_manager,
+                    limit=gc_cfg.batch_size,
+                )
+                if removed_orphans:
+                    logger.info("Loop GC removed %d orphan loop directories", removed_orphans)
             except Exception:
                 logger.warning("Loop GC failed", exc_info=True)
 
@@ -1401,6 +1418,26 @@ class SootheDaemon(DaemonHandlersMixin):
         # Close shared persistence manager
         with contextlib.suppress(Exception):
             await self._persistence_manager.close()
+
+        try:
+            from soothe.foundation.loop.state.persistence.directory_manager import (
+                PersistenceDirectoryManager,
+            )
+            from soothe.foundation.loop.state.persistence.runtime_paths import (
+                resolve_context_engine_db_path,
+                resolve_display_db_path,
+            )
+            from soothe.foundation.loop.state.persistence.wal_maintenance import (
+                checkpoint_runtime_databases,
+            )
+
+            checkpoint_runtime_databases(
+                PersistenceDirectoryManager.get_loop_checkpoint_path(),
+                resolve_context_engine_db_path(),
+                resolve_display_db_path(),
+            )
+        except Exception:
+            logger.debug("Runtime database WAL checkpoint skipped", exc_info=True)
 
         # Clean up anonymous workspace directories
         cleanup_anonymous_workspaces()

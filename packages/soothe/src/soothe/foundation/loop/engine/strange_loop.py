@@ -449,16 +449,13 @@ class StrangeLoop:
             from soothe.foundation.context.persistence.sqlite_backend import (
                 SqliteContextPersistence,
             )
-            from soothe.foundation.loop.state.persistence.directory_manager import (
-                PersistenceDirectoryManager,
+            from soothe.foundation.loop.state.persistence.runtime_paths import (
+                resolve_context_engine_db_path,
             )
 
-            loop_dir = PersistenceDirectoryManager.get_loop_directory(state_manager.loop_id)
-            loop_dir.mkdir(parents=True, exist_ok=True)
-            db_path = loop_dir / "ce_state.db"
             persistence = SqliteContextPersistence(
                 loop_id=state_manager.loop_id,
-                db_path=db_path,
+                db_path=resolve_context_engine_db_path(),
             )
         else:
             msg = f"Unknown CE persistence backend: {persistence_backend}"
