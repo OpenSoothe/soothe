@@ -200,8 +200,18 @@ class TuiDaemonSession:
         self._rpc_connected = False
 
     async def detach(self) -> None:
-        """Detach this client from the daemon."""
-        await self._client.notify("disconnect", {})
+        """Detach this client from the daemon.
+
+        No-op when the stream socket is already closed (e.g. daemon restart or
+        network drop before quit). The daemon treats disconnect as idempotent.
+        """
+        if not self._client.is_connected:
+            logger.debug("Skipping detach — connection already closed")
+            return
+        try:
+            await self._client.notify("disconnect", {})
+        except ConnectionError:
+            logger.debug("Daemon connection closed before detach")
 
     async def send_turn(
         self,

@@ -414,6 +414,7 @@ class StrangeLoop:
 
             soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
 
+            persistence = None
             if persistence_backend == "postgresql":
                 try:
                     import asyncpg  # noqa: F401
@@ -421,7 +422,6 @@ class StrangeLoop:
                     logger.warning(
                         "[CE] asyncpg not installed; falling back to SQLite for CE persistence"
                     )
-                    persistence_backend = "sqlite"
                 else:
                     from soothe.foundation.context.persistence.pgsql_backend import (
                         PgsqlContextPersistence,
@@ -446,7 +446,10 @@ class StrangeLoop:
                         dsn=pgsql_dsn,
                     )
 
-            if persistence_backend == "sqlite":
+            if persistence is None:
+                if persistence_backend not in ("sqlite", "postgresql"):
+                    msg = f"Unknown CE persistence backend: {persistence_backend}"
+                    raise ValueError(msg)
                 from soothe.foundation.context.persistence.sqlite_backend import (
                     SqliteContextPersistence,
                 )
@@ -458,9 +461,6 @@ class StrangeLoop:
                     loop_id=state_manager.loop_id,
                     db_path=resolve_context_engine_db_path(),
                 )
-            else:
-                msg = f"Unknown CE persistence backend: {persistence_backend}"
-                raise ValueError(msg)
 
             # RFC-624 Phase 4: Loop-scoped CE lifecycle. Create once per
             # loop_id, persist across goals. On subsequent calls, reuse the
