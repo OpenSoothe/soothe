@@ -14,6 +14,7 @@ import uuid
 
 import pytest
 import pytest_asyncio
+from support_config import config_with_router_profile
 
 from soothe.config import SootheConfig
 from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
@@ -77,7 +78,8 @@ def _postgres_integration_config() -> SootheConfig:
         router_config = {"default": "openai:gpt-4o-mini"}  # Will fail if no credentials
         memory_config = {"enabled": False}
 
-    return SootheConfig(
+    return config_with_router_profile(
+        router_config,
         persistence={
             "default_backend": "postgresql",
             "postgres_base_dsn": base,
@@ -88,7 +90,6 @@ def _postgres_integration_config() -> SootheConfig:
             "postgres_pool_acquire_timeout_seconds": 5,
         },
         providers=providers,
-        router=router_config,
         agent={"protocols": {"memory": memory_config}},
     )
 

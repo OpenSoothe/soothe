@@ -123,6 +123,23 @@ class ModelRouter(BaseModel):
     embedding: str | None = None
 
 
+class RouterProfile(BaseModel):
+    """Named preset combining a :class:`ModelRouter` with matching ``embedding_dims``.
+
+    Use with ``active_router_profile`` on :class:`~soothe.config.settings.SootheConfig`
+    to switch between deployment targets (cloud vs local) without editing role mappings.
+
+    Args:
+        name: Unique profile identifier (e.g. ``production``, ``local-deploy``).
+        router: Role → ``provider:model`` mapping for this preset.
+        embedding_dims: Vector size for the profile's embedding model; must match output.
+    """
+
+    name: str
+    router: ModelRouter
+    embedding_dims: int = 1536
+
+
 class VectorStoreRouter(BaseModel):
     """Maps component roles to "provider:collection" strings.
 

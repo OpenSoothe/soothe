@@ -13,6 +13,7 @@ import pytest_asyncio
 from soothe.config import SootheConfig
 from soothe.runner import SootheRunner
 from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+from support_config import config_with_router_profile
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_postgresql]
 
@@ -36,7 +37,8 @@ async def _probe_config() -> SootheConfig:
         router_config = {}
         memory_config = {"enabled": False}
 
-    cfg = SootheConfig(
+    cfg = config_with_router_profile(
+        router_config,
         persistence={
             "default_backend": "postgresql",
             "postgres_base_dsn": base,
@@ -44,7 +46,6 @@ async def _probe_config() -> SootheConfig:
             "sloop_pool_size": 6,
             "postgres_pool_acquire_timeout_seconds": 5,
         },
-        router=router_config,
         agent={"protocols": {"memory": memory_config}},
     )
     dsn = cfg.resolve_postgres_dsn_for_database("checkpoints")

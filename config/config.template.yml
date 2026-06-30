@@ -29,7 +29,7 @@ providers:
     #   provider_type: openai
     #   api_base_url: http://localhost:1234/v1
     #   api_key: "lmstudio"
-    #   models: [google/gemma-4-26b-a4b]
+    #   models: [GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit]
 
     # Anthropic:
     # - name: anthropic
@@ -37,14 +37,17 @@ providers:
     #   api_key: "${ANTHROPIC_API_KEY}"
     #   models: [claude-sonnet-4-20250514]
 
-router:
-  default: openai:gpt-4o-mini
-  think: null
-  fast: null
-  image: null
-  embedding: null
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+      think: null
+      fast: null
+      image: null
+      embedding: null
+    embedding_dims: 1536
 
-embedding_dims: 1536
+active_router_profile: default
 
 # ============================================================
 # AGENT

@@ -28,6 +28,7 @@ from soothe.config.models import (
     ProgressiveSkillsConfig,
     ProgressiveToolsConfig,
     ReportOutputConfig,
+    RouterProfile,
     SecurityConfig,
     SubagentConfig,
     ToolsConfig,
@@ -43,6 +44,17 @@ from soothe.config.models import (
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
     from langchain_core.language_models import BaseChatModel
+
+
+def default_router_profiles() -> list[RouterProfile]:
+    """Built-in profile used when YAML omits ``router_profiles``."""
+    return [
+        RouterProfile(
+            name="default",
+            router=ModelRouter(default="openai:gpt-4o-mini"),
+            embedding_dims=1536,
+        )
+    ]
 
 
 class _SootheConfigLoggingFileView:
@@ -165,11 +177,17 @@ class SootheConfig(BaseSettings):
     providers: list[ModelProviderConfig] = Field(default_factory=list)
     """Model provider configurations."""
 
-    router: ModelRouter = Field(default_factory=ModelRouter)
-    """Maps purpose roles to ``provider:model`` pairs."""
+    router_profiles: list[RouterProfile] = Field(default_factory=default_router_profiles)
+    """Named router presets (router + embedding_dims)."""
 
-    embedding_dims: int = 1536
-    """Embedding vector dimensions. Must match the embedding model output."""
+    active_router_profile: str = "default"
+    """Name of the router profile to apply. Overridable via ``SOOTHE_ACTIVE_ROUTER_PROFILE``."""
+
+    router: ModelRouter = Field(default_factory=ModelRouter, init=False)
+    """Resolved role → ``provider:model`` map from the active router profile."""
+
+    embedding_dims: int = Field(default=1536, init=False)
+    """Resolved embedding width from the active router profile."""
 
     # --- Agent behaviour (unified) ---
 
@@ -185,6 +203,31 @@ class SootheConfig(BaseSettings):
     claude`` (``soothe[claude]`` extra), not as a subagent.
     Plugin-discovered subagents are merged during config validation.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy_flat_router(cls, data: Any) -> Any:
+        """Reject removed top-level ``router`` / ``embedding_dims`` YAML keys.
+
+        When ``router_profiles`` is present (including ``model_dump`` round-trips),
+        drop resolved ``router`` / ``embedding_dims`` copies so profile application
+        remains the single source of truth.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("router_profiles"):
+            data.pop("router", None)
+            data.pop("embedding_dims", None)
+            return data
+        removed = [key for key in ("router", "embedding_dims") if key in data]
+        if removed:
+            joined = ", ".join(removed)
+            msg = (
+                f"Top-level {joined} removed. "
+                "Define models under router_profiles and select with active_router_profile."
+            )
+            raise ValueError(msg)
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -264,6 +307,51 @@ class SootheConfig(BaseSettings):
         agent["loop"] = _deep_merge(loop, legacy_loop)
         data["agent"] = agent
         return data
+
+    @model_validator(mode="after")
+    def _validate_router_profile_names(self) -> SootheConfig:
+        """Ensure router profile names are unique."""
+        if self.router_profiles:
+            names = [p.name for p in self.router_profiles]
+            duplicates = [n for n in names if names.count(n) > 1]
+            if duplicates:
+                raise ValueError(
+                    f"Router profile names must be unique. Duplicates: {set(duplicates)}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _apply_active_router_profile(self) -> SootheConfig:
+        """Apply the selected router profile to ``router`` and ``embedding_dims``.
+
+        ``SOOTHE_ACTIVE_ROUTER_PROFILE`` overrides the YAML ``active_router_profile`` value
+        when set, so deployments can switch presets without editing config files.
+        """
+        if not self.router_profiles:
+            msg = "router_profiles must contain at least one profile."
+            raise ValueError(msg)
+
+        env_profile = os.environ.get("SOOTHE_ACTIVE_ROUTER_PROFILE")
+        effective_profile = (
+            env_profile.strip()
+            if env_profile and env_profile.strip()
+            else self.active_router_profile
+        )
+        if not effective_profile:
+            msg = "active_router_profile is required."
+            raise ValueError(msg)
+
+        profile_by_name = {p.name: p for p in self.router_profiles}
+        profile = profile_by_name.get(effective_profile)
+        if profile is None:
+            available = sorted(profile_by_name)
+            msg = f"Router profile '{effective_profile}' not found. Available profiles: {available}"
+            raise ValueError(msg)
+
+        object.__setattr__(self, "active_router_profile", effective_profile)
+        object.__setattr__(self, "router", profile.router)
+        object.__setattr__(self, "embedding_dims", profile.embedding_dims)
+        return self
 
     @model_validator(mode="after")
     def _validate_mcp_server_names(self) -> SootheConfig:

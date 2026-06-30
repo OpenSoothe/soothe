@@ -3,6 +3,7 @@
 import os
 
 import pytest
+from support_config import config_with_router_profile
 
 from soothe.config import SootheConfig
 from soothe.middleware import build_soothe_middleware_stack
@@ -97,7 +98,7 @@ async def test_feature_flags(requires_llm_api):
     else:
         router_config = {}
 
-    config1 = SootheConfig(router=router_config) if router_config else SootheConfig()
+    config1 = config_with_router_profile(router_config)
     config1.agent.loop.final_response = "always_synthesize"
     config1.agent.protocols.memory.enabled = False  # Anthropic doesn't support embeddings
     runner1 = SootheRunner(config1)
@@ -108,7 +109,7 @@ async def test_feature_flags(requires_llm_api):
     finally:
         await runner1.cleanup()
 
-    config2 = SootheConfig(router=router_config) if router_config else SootheConfig()
+    config2 = config_with_router_profile(router_config)
     config2.agent.loop.final_response = "adaptive"
     config2.agent.protocols.memory.enabled = False  # Anthropic doesn't support embeddings
     runner2 = SootheRunner(config2)
