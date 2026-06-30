@@ -1,29 +1,14 @@
-"""Tests for simple-query planner bypass helpers."""
+"""Tests for the shared expected-output contract (RFC-630).
+
+The legacy ``SIMPLE_QUERY_DIRECT_PREFIX`` (``"I will complete this goal
+directly:"``) and its ``startswith`` detector are removed (RFC-630). Only the
+``## Result`` evidence contract survives, shared by the trivial-branch plan
+(``build_trivial_plan`` in ``planning/trivial_plan.py``).
+"""
 
 from __future__ import annotations
 
-from soothe.foundation.loop.planning.simple_bypass import (
-    SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
-    SIMPLE_QUERY_DIRECT_PREFIX,
-    format_simple_query_direct_next_action,
-    is_simple_query_direct_next_action,
-)
-
-
-def test_format_simple_query_direct_next_action() -> None:
-    text = format_simple_query_direct_next_action("count readmes")
-    assert text.startswith(SIMPLE_QUERY_DIRECT_PREFIX)
-    assert "count readmes" in text
-
-
-def test_is_simple_query_direct_next_action_true() -> None:
-    assert is_simple_query_direct_next_action(format_simple_query_direct_next_action("hi"))
-
-
-def test_is_simple_query_direct_next_action_false() -> None:
-    assert not is_simple_query_direct_next_action("I'll proceed with analyzing: foo")
-    assert not is_simple_query_direct_next_action("")
-    assert not is_simple_query_direct_next_action(None)
+from soothe.foundation.loop.planning.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
 
 
 def test_simple_query_expected_output_requires_result_block() -> None:
