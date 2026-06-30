@@ -201,16 +201,36 @@ jobs:
         with:
           version: latest
 
+      - name: Remove obsolete buildcache tag
+        if: ${{ steps.publish.outputs.registry_secrets_ready == 'true' }}
+        continue-on-error: true
+        run: |
+          ref="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:buildcache"
+          if docker buildx imagetools inspect "${ref}" >/dev/null 2>&1; then
+            docker buildx imagetools rm "${ref}"
+            echo "Removed obsolete tag ${ref}"
+          else
+            echo "No buildcache tag to remove."
+          fi
+
       - name: Configure build cache backend
         id: build_cache
         env:
-          CACHE_IMAGE: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:buildcache
+          IMAGE: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
         run: |
           set -euo pipefail
           if [ "${{ steps.publish.outputs.registry_secrets_ready }}" = "true" ]; then
-            # Registry cache avoids GHA 10GB quota / reserve failures on large multi-arch layers.
-            printf 'cache-from=type=registry,ref=%s\n' "${CACHE_IMAGE}" >> "${GITHUB_OUTPUT}"
-            printf 'cache-to=type=registry,ref=%s,mode=max,ignore-error=true\n' "${CACHE_IMAGE}" >> "${GITHUB_OUTPUT}"
+            # Inline cache stores metadata in the pushed image manifest. Aliyun ACR rejects the
+            # separate :buildcache manifest (application/vnd.buildkit.cacheconfig.v0).
+            {
+              echo 'cache-from<<EOF'
+              echo "type=registry,ref=${IMAGE}:latest"
+              echo 'type=gha,scope=soothed'
+              echo 'EOF'
+            } >> "${GITHUB_OUTPUT}"
+            if [ "${{ steps.publish.outputs.should_push }}" = "true" ]; then
+              printf 'cache-to=type=inline\n' >> "${GITHUB_OUTPUT}"
+            fi
           else
             # Fallback when registry credentials are unavailable (local-only builds).
             printf '%s\n' 'cache-from=type=gha,scope=soothed' >> "${GITHUB_OUTPUT}"
