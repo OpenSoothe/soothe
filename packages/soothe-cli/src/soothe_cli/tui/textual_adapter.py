@@ -290,6 +290,26 @@ class TextualUIAdapter:
         self._last_main_flushed_assistant_prose = ""
 
 
+def _stream_end_pending_error_message(
+    adapter: TextualUIAdapter,
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
+) -> str:
+    """Choose a user-visible label when the stream ends with in-flight steps."""
+    if bool(getattr(daemon_session, "last_turn_cancellation_seen", False)):
+        return "Stream cancelled"
+    end_state = getattr(daemon_session, "last_turn_end_state", None)
+    if end_state == "stopped":
+        return "Stream cancelled"
+    if end_state == "connection_lost":
+        return "Connection lost during stream"
+    if end_state == "idle" and any(
+        getattr(widget, "_status", "") in {"running", "queued"}
+        for widget in adapter._current_step_messages.values()
+    ):
+        return "Stream ended before steps completed"
+    return "Stream ended unexpectedly"
+
+
 # ---------------------------------------------------------------------------
 # Turn UI coalescing
 # ---------------------------------------------------------------------------
@@ -3383,8 +3403,9 @@ async def execute_task_textual(
             or awaiting_step
         )
         if (adapter._current_step_messages or adapter._tool_to_step) and not skip_safety_net:
-            adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
-            adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
+            stream_end_error = _stream_end_pending_error_message(adapter, daemon_session)
+            adapter.finalize_pending_tools_with_error(stream_end_error)
+            adapter.finalize_pending_steps_with_error(stream_end_error)
 
         await dispatch_hook("task.complete", {"loop_id": loop_id})
 

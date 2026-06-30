@@ -766,10 +766,18 @@ class QueryEngine:
 
                 async def _process_stream() -> None:
                     nonlocal chunk_count, warning_sent, full_response_chars
+                    # Scope cancellation to this stream task only. The daemon keeps a
+                    # single ``_current_query_task`` pointer that concurrent queries
+                    # overwrite; checking that global slot caused unrelated finished
+                    # queries to abort still-running streams (loop 3e1c incident).
+                    stream_task = asyncio.current_task()
 
                     async for chunk in _stream_chunks():
-                        if d._current_query_task and d._current_query_task.done():
-                            logger.info("Stream loop detected cancelled task, stopping")
+                        if stream_task is not None and stream_task.cancelled():
+                            logger.info(
+                                "Stream loop detected cancellation for loop=%s, stopping",
+                                (effective_loop_id or thread_id or "?")[:16],
+                            )
                             break
 
                         chunk_count += 1
