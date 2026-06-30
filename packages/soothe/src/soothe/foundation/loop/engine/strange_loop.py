@@ -115,7 +115,6 @@ class StrangeLoop:
         goal: str,
         thread_id: str,
         workspace: str | None = None,
-        git_status: dict[str, Any] | None = None,
         max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         intent: Any | None = None,  # Intent classification
@@ -136,7 +135,6 @@ class StrangeLoop:
             goal: Goal description to execute
             thread_id: Thread context for execution
             workspace: Thread-specific workspace path (RFC-103)
-            git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
             intent: IntentClassification (RFC-225). ``quiz`` is short-circuited by the runner;
@@ -366,7 +364,6 @@ class StrangeLoop:
             slash_invoked_skill_body=slash_invoked_skill_body,
             thread_id=main_thread_id,
             workspace=workspace,
-            git_status=git_status,
             iteration=iteration,  # Use recovered or initial iteration
             max_iterations=max_iterations,
             intent=intent,
@@ -683,6 +680,5 @@ class StrangeLoop:
             completed_steps=completed_steps,
             routing_classification=getattr(state, "routing_classification", None),
             workspace=state.workspace,
-            git_status=state.git_status,
             thread_id=state.thread_id,
         )

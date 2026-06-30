@@ -129,7 +129,6 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
             goal="test goal",
             thread_id="t1",
             workspace="/tmp/ws",
-            git_status=None,
             max_iterations=1,
             loop_id="L1",
         )

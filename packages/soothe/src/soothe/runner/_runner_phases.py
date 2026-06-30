@@ -687,7 +687,6 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                     if state.intent_classification
                     else None,
                     workspace=state.workspace,  # Pass workspace for planning context
-                    git_status=getattr(state, "git_status", None),
                     thread_id=getattr(state, "thread_id", None),
                 )
 
@@ -731,13 +730,13 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
     async def _collect_context_for_injection(self, state: Any) -> None:
         """Collect context for system prompt XML injection (RFC-104).
 
-        Gathers workspace, git status, thread context, and protocol summary
+        Gathers workspace, thread context, and protocol summary
         for injection into system prompt via SOOTHE_ XML tags.
 
         Args:
             state: Mutable RunnerState to attach context to.
         """
-        from soothe.foundation.workspace import FrameworkFilesystem, get_git_status
+        from soothe.foundation.workspace import FrameworkFilesystem
 
         # Prefer ContextVar (WorkspaceContextMiddleware); else RunnerState (IG-116 / RFC-104).
         workspace_path: Path | None = FrameworkFilesystem.get_current_workspace()
@@ -747,14 +746,6 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
 
         if workspace_path:
             state.workspace = str(workspace_path)
-
-            # Git status (async collection)
-            try:
-                git_status = await get_git_status(workspace_path)
-                state.git_status = git_status
-            except Exception:
-                logger.debug("Git status collection failed", exc_info=True)
-                state.git_status = None
 
         # Thread context
         state.thread_context = {

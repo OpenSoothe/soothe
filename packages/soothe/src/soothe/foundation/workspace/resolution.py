@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
 
@@ -207,79 +204,3 @@ def translate_container_path_to_client(
         return resolved
 
     return host / relative
-
-
-# ---------------------------------------------------------------------------
-# Git Status Collection (RFC-104)
-# ---------------------------------------------------------------------------
-
-
-def _run_git_command(args: list[str], cwd: str, timeout: float = 2.0) -> str:
-    """Run a git command with timeout.
-
-    Args:
-        args: Git command arguments (e.g., ["branch", "--show-current"]).
-        cwd: Working directory to run the command in.
-        timeout: Maximum execution time in seconds.
-
-    Returns:
-        Command stdout stripped of trailing whitespace, or empty string on failure.
-    """
-    try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-        return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return ""
-
-
-async def get_git_status(workspace: Path) -> dict[str, Any] | None:
-    """Collect git repository status for workspace.
-
-    Runs git commands asynchronously with timeout. Returns None if not a
-    git repository or git is unavailable.
-
-    Args:
-        workspace: Workspace directory to check.
-
-    Returns:
-        Dict with keys: branch, main_branch, recent_commits (no porcelain ``status``; IG-383).
-        None if not a git repository.
-    """
-    if not (workspace / ".git").exists():
-        return None
-
-    cwd = str(workspace)
-
-    try:
-        # Run git commands concurrently via asyncio.to_thread (no porcelain status; IG-383)
-        branch_future = asyncio.to_thread(_run_git_command, ["branch", "--show-current"], cwd)
-        main_ref_future = asyncio.to_thread(
-            _run_git_command, ["symbolic-ref", "refs/remotes/origin/HEAD"], cwd
-        )
-        commits_future = asyncio.to_thread(_run_git_command, ["log", "--oneline", "-n", "5"], cwd)
-
-        branch, main_ref, commits = await asyncio.gather(
-            branch_future, main_ref_future, commits_future
-        )
-
-        # Parse main branch from symbolic-ref output
-        # Output format: refs/remotes/origin/main
-        main_branch = "main"
-        if main_ref and "refs/remotes/origin/" in main_ref:
-            main_branch = main_ref.split("/")[-1]
-    except Exception:
-        logger.debug("Git status collection failed for %s", workspace, exc_info=True)
-        return None
-    else:
-        return {
-            "branch": branch or "unknown",
-            "main_branch": main_branch,
-            "recent_commits": commits,
-        }

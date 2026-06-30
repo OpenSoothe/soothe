@@ -54,7 +54,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
     excluded_state_keys = sm._EXCLUDED_STATE_KEYS
     # Parent-owned channels: parallel subagent completions must not merge these back
     # (LangGraph LastValue rejects multiple ``workspace`` writes per step).
-    parent_owned_state_keys = frozenset({"workspace", "git_status"})
+    parent_owned_state_keys = frozenset({"workspace"})
     task_tool_description_template = sm.TASK_TOOL_DESCRIPTION
     # Import create_sub_agent for compiling raw SubAgent specs
     create_sub_agent = sm.create_sub_agent

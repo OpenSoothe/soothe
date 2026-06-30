@@ -971,7 +971,6 @@ class LoopState(BaseModel):
             ``/skill:``; used in execute-step ``<SKILL_CONTEXT>`` (not the full composed goal).
         thread_id: Thread context
         workspace: Thread-specific workspace path (RFC-103)
-        git_status: Optional git snapshot for planner prompts (branch, main_branch, recent_commits; IG-383)
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
@@ -1004,7 +1003,6 @@ class LoopState(BaseModel):
     )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
-    git_status: dict[str, Any] | None = None
     iteration: int = 0
     max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 

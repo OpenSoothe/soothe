@@ -119,23 +119,6 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
     return _LoopHeartbeatHandle(task=task, pm=pm)
 
 
-async def _collect_git_status(
-    workspace: str,
-    get_git_status: Any,
-    path_cls: Any,
-) -> dict[str, Any] | None:
-    """Collect git status for the workspace (RFC-630 Phase C).
-
-    Wraps ``get_git_status`` so it can run as a ``asyncio.Task`` concurrently
-    with the intake LLM call. Returns ``None`` on failure.
-    """
-    try:
-        return await get_git_status(path_cls(workspace).expanduser().resolve())
-    except Exception:
-        logger.debug("Git status collection failed for StrangeLoop", exc_info=True)
-        return None
-
-
 def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
@@ -458,20 +441,6 @@ class StrangeLoopMixin:
         # reaching the orchestrator's Command(resume=...) path. The
         # orchestrator runner verifies the actual pending state and falls back
         # to a normal turn if no clarification is really pending.
-        #
-        # RFC-630 Phase C: start git_status concurrently with the intake LLM
-        # call so the two independent round-trips overlap. The intake result is
-        # awaited first (the quiz fast-path decision needs it); git_status is
-        # awaited later, before run_with_progress consumes it.
-        git_status_task: asyncio.Task[dict[str, Any] | None] | None = None
-        if workspace and not clarification_answer:
-            from pathlib import Path
-
-            from soothe.foundation.workspace import get_git_status
-
-            git_status_task = asyncio.create_task(
-                _collect_git_status(workspace, get_git_status, Path)
-            )
 
         intent_classification = None
         if self._intent_classifier and not clarification_answer:
@@ -501,8 +470,6 @@ class StrangeLoopMixin:
 
             # Fast path: skip StrangeLoop entirely for quiz (greetings + trivia)
             if intent_classification.intent_type == "quiz":
-                if git_status_task is not None:
-                    git_status_task.cancel()
                 await self._materialize_core_agent()
                 async for chunk in self._run_quiz(
                     user_input, tid, classification=intent_classification
@@ -557,15 +524,6 @@ class StrangeLoopMixin:
             )
             clarification_policy = None
 
-        # RFC-630 Phase C: await the git_status task started alongside the
-        # intake LLM call. Returns None if the task was never started or failed.
-        git_status: dict[str, Any] | None = None
-        if git_status_task is not None:
-            try:
-                git_status = await git_status_task
-            except Exception:
-                logger.debug("Git status collection failed for StrangeLoop", exc_info=True)
-
         # Build routing classification from pre-computed intent (avoids redundant classification in graph)
         routing_classification = build_loop_routing_classification(
             intent_classification, preferred_subagent
@@ -583,7 +541,6 @@ class StrangeLoopMixin:
                 thread_id=tid,
                 loop_id=strange_loop_id,
                 workspace=workspace,
-                git_status=git_status,
                 max_iterations=max_iterations,
                 intent=intent_classification,
                 routing_classification=routing_classification,

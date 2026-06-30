@@ -504,7 +504,6 @@ class Executor:
         *,
         routing_classification: Any | None = None,
         workspace: str | None = None,
-        git_status: dict[str, Any] | None = None,
         continue_loop_mode: bool = False,
         synthesis_scenario: str | None = None,
         skill_activation: dict[str, Any] | None = None,
@@ -517,8 +516,6 @@ class Executor:
             out["routing_classification"] = routing_classification
         if workspace:
             out["workspace"] = workspace
-        if git_status is not None:
-            out["git_status"] = git_status
         if continue_loop_mode:
             out["continue_loop_mode"] = True
         if synthesis_scenario:
@@ -1235,7 +1232,6 @@ class Executor:
                     logical_tid,
                     state.workspace,
                     routing_classification=getattr(state, "routing_classification", None),
-                    git_status=state.git_status,
                     continue_loop_mode=continue_loop_mode,
                     loop_state=state,
                     live_event_queue=live_queue,
@@ -1396,7 +1392,6 @@ class Executor:
         workspace: str | None = None,
         *,
         routing_classification: Any | None = None,
-        git_status: dict[str, Any] | None = None,
         continue_loop_mode: bool = False,
         loop_state: LoopState | None = None,
         live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None = None,
@@ -1417,7 +1412,6 @@ class Executor:
             thread_id: Logical thread ID for StepResult, logs, and durability lookups
             workspace: Thread-specific workspace path (RFC-103)
             routing_classification: Loop routing payload for middleware (IG-349, IG-383).
-            git_status: Optional git snapshot for prompt XML (RFC-104).
             continue_loop_mode: True when this loop has prior goals (RFC-225);
                 flows into LangGraph state so middleware injects loop-continuation guidance.
             loop_state: When set, generates isolated thread ID; multi-dep steps inject
@@ -1587,7 +1581,6 @@ class Executor:
                     graph_input_messages,
                     routing_classification=routing_classification,
                     workspace=workspace,
-                    git_status=git_status,
                     continue_loop_mode=continue_loop_mode,
                     skill_activation=skill_activation,
                     mcp_state=mcp_state,

@@ -70,7 +70,6 @@ async def test_sloop_delegation_basic():
     parent_state = Mock()
     parent_state.thread_id = "thread-123"
     parent_state.workspace = "/tmp/test"
-    parent_state.git_status = None
     parent_state.routing_classification = None
 
     # Verify planner exists and has LoopPlannerProtocol

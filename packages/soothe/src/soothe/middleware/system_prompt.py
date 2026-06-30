@@ -119,7 +119,7 @@ class _SystemPromptState(TypedDict):
     Declares:
       - ``routing_classification`` so StrangeLoop's complexity hint reaches the
         prompt builder (IG-383).
-      - ``workspace`` and ``git_status`` so the executor's ``_execute_graph_input``
+      - ``workspace`` so the executor's ``_execute_graph_input``
         and ``WorkspaceContextMiddleware.abefore_agent`` writes propagate to
         ``modify_request``. Without this declaration, ``state.get("workspace")``
         returns ``None`` and WORKSPACE_RULES / WORKSPACE_INSTRUCTIONS / the
@@ -135,7 +135,6 @@ class _SystemPromptState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     routing_classification: NotRequired[Any]  # Type: RoutingClassification
     workspace: NotRequired[str | None]
-    git_status: NotRequired[dict[str, Any] | None]
     sent_mcp_tool_names: NotRequired[set[str]]
     invoked_mcp_tools: NotRequired[dict[str, dict]]
     disabled_mcp_servers: NotRequired[set[str]]
@@ -458,9 +457,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         static_sections.append(env_section)
 
         if state and self._should_inject_workspace(state):
-            ws_section = self._build_workspace_section(
-                state.get("workspace"), state.get("git_status")
-            )
+            ws_section = self._build_workspace_section(state.get("workspace"))
             if ws_section:
                 static_sections.append(ws_section)
 
@@ -610,7 +607,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         joined = "\n".join(lines)
         return f"<MEMORY_SUMMARY>\n{joined}\n</MEMORY_SUMMARY>"
 
-    def _build_workspace_section(self, workspace: Any, git_status: dict | None) -> str | None:
+    def _build_workspace_section(self, workspace: Any) -> str | None:
         """Build <WORKSPACE> section via shared context_xml builder."""
         if not workspace:
             return None
@@ -619,7 +616,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         from soothe.foundation.loop.prompts.context_xml import build_soothe_workspace_section
 
         workspace_path = Path(str(workspace)) if not isinstance(workspace, Path) else workspace
-        return build_soothe_workspace_section(workspace_path, git_status)
+        return build_soothe_workspace_section(workspace_path)
 
     def _build_thread_section(self, thread_context: dict) -> str | None:
         """Build <THREAD> section via shared context_xml builder."""
@@ -997,7 +994,6 @@ class SystemPromptMiddleware(AgentMiddleware):
         if hasattr(request.state, "get"):
             state_dict = {
                 "workspace": request.state.get("workspace"),
-                "git_status": request.state.get("git_status"),
                 "thread_context": request.state.get("thread_context", {}),
                 "protocol_summary": request.state.get("protocol_summary", {}),
                 "messages": request.state.get("messages", []),
