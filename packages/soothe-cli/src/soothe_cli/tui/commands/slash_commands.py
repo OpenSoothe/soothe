@@ -127,30 +127,6 @@ def show_review(console: Console, data: dict[str, Any]) -> None:
     console.print(table)
 
 
-def show_autopilot_dashboard(console: Console, data: dict[str, Any]) -> None:
-    """Render autopilot dashboard from daemon RPC response."""
-    dashboard = data.get("autopilot_dashboard", {})
-
-    table = Table(title="Autopilot Dashboard", show_lines=False)
-    table.add_column("Metric", style="bold cyan")
-    table.add_column("Value", style="white")
-
-    # Display key metrics
-    table.add_row("Status", dashboard.get("status", "idle"))
-    table.add_row("Iterations", str(dashboard.get("iterations", 0)))
-    table.add_row("Goals Completed", str(dashboard.get("goals_completed", 0)))
-    table.add_row("Goals Active", str(dashboard.get("goals_active", 0)))
-
-    console.print(table)
-
-    # Display active goals if present
-    active_goals = dashboard.get("active_goals", [])
-    if active_goals:
-        console.print("\n[bold cyan]Active Goals:[/bold cyan]")
-        for goal in active_goals:
-            console.print(f"  • {goal.get('description', 'unknown')}")
-
-
 # ---------------------------------------------------------------------------
 # Keyboard Shortcuts
 # ---------------------------------------------------------------------------
@@ -264,14 +240,6 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "description": "Submit autopilot job (usage: /autopilot <task>)",
         "requires_query": True,
     },
-    "/autopilot-dashboard": {
-        "location": "daemon",
-        "type": "rpc",
-        "daemon_command": "autopilot_dashboard",
-        "description": "Show autopilot dashboard",
-        "requires_loop": True,
-        "handler": show_autopilot_dashboard,
-    },
     "/autopilot-toggle": {
         "location": "daemon",
         "type": "rpc",
@@ -306,5 +274,4 @@ __all__ = [
     "show_history",
     "show_config",
     "show_review",
-    "show_autopilot_dashboard",
 ]

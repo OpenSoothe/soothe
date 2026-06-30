@@ -275,22 +275,16 @@ class _ModelMixin:
             label = "Autopilot" if mode == "autopilot" else "Solo"
             self._status_bar.set_session_tip(f"Mode: {label}")
 
-    async def _show_autopilot_dashboard(self) -> None:
-        """Show autopilot dashboard as a screen overlay."""
-        from soothe_cli.tui.widgets.autopilot_screen import AutopilotScreen
-
-        is_narrow = self.size.width < 100
-        mode = (
-            self._loop_autopilot_mode
-            if self._loop_autopilot_mode in ("solo", "autopilot")
-            else "solo"
-        )
-        screen = AutopilotScreen(is_narrow=is_narrow, mode=mode)
+    async def _show_context_viewer(self) -> None:
+        """Show context engine goal DAG and status as a modal screen."""
+        from soothe_cli.tui.widgets.context_viewer import ContextViewerScreen
 
         def handle_result(result: None) -> None:  # noqa: ARG001
             if self._chat_input:
                 self._chat_input.focus_input()
 
+        loop_id = self._lc_loop_id
+        screen = ContextViewerScreen(loop_id=loop_id)
         self.push_screen(screen, handle_result)
 
     async def _submit_autopilot_job(self, task: str) -> None:
