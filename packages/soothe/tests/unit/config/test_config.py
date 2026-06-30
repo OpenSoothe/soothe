@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from support_config import config_with_router_profile as config_with_router
 
 from soothe.config import (
     MCPServerConfig,
@@ -238,16 +239,16 @@ class TestLoggingConfig:
 
 class TestModelRouter:
     def test_resolve_default(self) -> None:
-        cfg = SootheConfig(router=ModelRouter(default="dashscope:qwen3.5-flash"))
+        cfg = config_with_router(ModelRouter(default="dashscope:qwen3.5-flash"))
         assert cfg.resolve_model("default") == "dashscope:qwen3.5-flash"
 
     def test_resolve_role_fallback(self) -> None:
-        cfg = SootheConfig(router=ModelRouter(default="dashscope:qwen3.5-flash"))
+        cfg = config_with_router(ModelRouter(default="dashscope:qwen3.5-flash"))
         assert cfg.resolve_model("think") == "dashscope:qwen3.5-flash"
 
     def test_resolve_explicit_role(self) -> None:
-        cfg = SootheConfig(
-            router=ModelRouter(
+        cfg = config_with_router(
+            ModelRouter(
                 default="dashscope:qwen3.5-flash",
                 think="idealab:glm-4.7",
             )
@@ -256,8 +257,8 @@ class TestModelRouter:
         assert cfg.resolve_model("default") == "dashscope:qwen3.5-flash"
 
     def test_resolve_all_roles(self) -> None:
-        cfg = SootheConfig(
-            router=ModelRouter(
+        cfg = config_with_router(
+            ModelRouter(
                 default="a:b",
                 think="c:d",
                 fast="e:f",
@@ -272,7 +273,7 @@ class TestModelRouter:
         assert cfg.resolve_model("embedding") == "i:j"
 
     def test_unknown_role_fallback(self) -> None:
-        cfg = SootheConfig(router=ModelRouter(default="test:model"))
+        cfg = config_with_router(ModelRouter(default="test:model"))
         assert cfg.resolve_model("nonexistent") == "test:model"  # type: ignore[arg-type]
 
     # Backend Inheritance Tests
@@ -314,6 +315,128 @@ class TestModelRouter:
         assert p.postgres_pool_min_size == 4
         assert p.checkpointer_pool_size == 24
         assert p.sloop_pool_size == 24
+
+
+class TestRouterProfiles:
+    def test_active_profile_applies_router_and_embedding_dims(self) -> None:
+        cfg = SootheConfig(
+            router_profiles=[
+                {
+                    "name": "production",
+                    "router": {
+                        "default": "dashscope:glm-5.2",
+                        "fast": "dashscope:kimi-k2.5",
+                        "embedding": "dashscope:multimodal-embedding-v1",
+                    },
+                    "embedding_dims": 768,
+                },
+                {
+                    "name": "local-deploy",
+                    "router": {"default": "local-omlx:glm"},
+                    "embedding_dims": 384,
+                },
+            ],
+            active_router_profile="production",
+        )
+        assert cfg.router.default == "dashscope:glm-5.2"
+        assert cfg.router.fast == "dashscope:kimi-k2.5"
+        assert cfg.router.embedding == "dashscope:multimodal-embedding-v1"
+        assert cfg.embedding_dims == 768
+        assert cfg.resolve_model("fast") == "dashscope:kimi-k2.5"
+
+    def test_active_profile_overrides_yaml_selection(self) -> None:
+        cfg = SootheConfig(
+            router_profiles=[
+                {
+                    "name": "cloud",
+                    "router": {"default": "dashscope:glm-5.2"},
+                    "embedding_dims": 768,
+                },
+                {
+                    "name": "local",
+                    "router": {"default": "local-omlx:glm"},
+                    "embedding_dims": 384,
+                },
+            ],
+            active_router_profile="local",
+        )
+        assert cfg.router.default == "local-omlx:glm"
+        assert cfg.embedding_dims == 384
+
+    def test_legacy_flat_router_yaml_rejected(self, tmp_path: Path) -> None:
+        p = tmp_path / "cfg.yml"
+        p.write_text("router:\n  default: openai:gpt-4o-mini\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Top-level router removed"):
+            SootheConfig.from_yaml_file(str(p))
+
+    def test_legacy_embedding_dims_yaml_rejected(self, tmp_path: Path) -> None:
+        p = tmp_path / "cfg.yml"
+        p.write_text("embedding_dims: 1536\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Top-level embedding_dims removed"):
+            SootheConfig.from_yaml_file(str(p))
+
+    def test_missing_active_profile_raises(self) -> None:
+        with pytest.raises(ValueError, match="Router profile 'missing' not found"):
+            SootheConfig(
+                router_profiles=[{"name": "production", "router": {"default": "a:b"}}],
+                active_router_profile="missing",
+            )
+
+    def test_duplicate_profile_names_raise(self) -> None:
+        with pytest.raises(ValueError, match="Router profile names must be unique"):
+            SootheConfig(
+                router_profiles=[
+                    {"name": "dup", "router": {"default": "a:b"}},
+                    {"name": "dup", "router": {"default": "c:d"}},
+                ],
+            )
+
+    def test_yaml_router_profiles_load(self, tmp_path: Path) -> None:
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "router_profiles:\n"
+            "  - name: local\n"
+            "    router:\n"
+            "      default: local-omlx:test\n"
+            "      embedding: local-omlx:embed\n"
+            "    embedding_dims: 768\n"
+            "active_router_profile: local\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert cfg.router.default == "local-omlx:test"
+        assert cfg.router.embedding == "local-omlx:embed"
+        assert cfg.embedding_dims == 768
+
+    def test_develop_config_loads(self) -> None:
+        path = Path(__file__).resolve().parents[5] / "config" / "develop" / "config.yml"
+        if not path.is_file():
+            pytest.skip("develop config not in checkout")
+        cfg = SootheConfig.from_yaml_file(str(path))
+        assert cfg.active_router_profile == "production"
+        assert cfg.router.default == "dashscope:glm-5.2"
+        assert cfg.embedding_dims == 1024
+
+    def test_env_overrides_yaml_active_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SOOTHE_ACTIVE_ROUTER_PROFILE", "local-deploy")
+        cfg = SootheConfig(
+            router_profiles=[
+                {
+                    "name": "production",
+                    "router": {"default": "dashscope:glm-5.2"},
+                    "embedding_dims": 768,
+                },
+                {
+                    "name": "local-deploy",
+                    "router": {"default": "local-omlx:glm"},
+                    "embedding_dims": 384,
+                },
+            ],
+            active_router_profile="production",
+        )
+        assert cfg.active_router_profile == "local-deploy"
+        assert cfg.router.default == "local-omlx:glm"
+        assert cfg.embedding_dims == 384
 
 
 class TestModelProvider:

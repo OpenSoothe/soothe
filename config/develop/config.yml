@@ -26,33 +26,32 @@ providers:
     api_base_url: "http://100.75.70.86:9642/v1"
     api_key: "mirasoth"
     models:
-      # Code LLM (default / fast / think)
+      - GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit
       - gemma-4-12b-coder-fable5-composer2.5
-      # CV / vision (image role)
       - GLM-4.6V-Flash-8bit
-      # Embedding
       - nomicai-modernbert-embed-base-bf16
 
-# Active router — local oMLX (:9642): Code LLM + CV vision + nomic embedding
-router:
-  default: "local-omlx:gemma-4-12b-coder-fable5-composer2.5"
-  fast: "local-omlx:gemma-4-12b-coder-fable5-composer2.5"
-  think: "local-omlx:gemma-4-12b-coder-fable5-composer2.5"
-  image: "local-omlx:GLM-4.6V-Flash-8bit"
-  embedding: "local-omlx:nomicai-modernbert-embed-base-bf16"
+router_profiles:
+  - name: production
+    router:
+      default: "dashscope:glm-5.2"
+      fast: "dashscope:kimi-k2.5"
+      think: "dashscope:glm-5.2"
+      image: "dashscope:kimi-k2.5"
+      embedding: "dashscope:multimodal-embedding-v1"
+    embedding_dims: 1024  # multimodal-embedding-v1 fixed output size
 
-embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
+  - name: local-deploy
+    router:
+      default: "local-omlx:GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit"
+      fast: "local-omlx:GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit"
+      think: "local-omlx:GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit"
+      image: "local-omlx:GLM-4.6V-Flash-8bit"
+      embedding: "local-omlx:nomicai-modernbert-embed-base-bf16"
+    embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
 
-# --- DashScope router (commented; original develop defaults — swap in when using cloud) ---
-# Requires: export DASHSCOPE_BASE_URL, DASHSCOPE_API_KEY
-# Uses models from providers.dashscope above (glm-5, glm-5.2, qwen3.x, kimi-k2.5, etc.)
-#
-# router:
-#   default: "dashscope:glm-5.2"
-#   fast: "dashscope:kimi-k2.5"
-#   think: "dashscope:glm-5.2"
-#   image: "dashscope:kimi-k2.5"
-#   embedding: "dashscope:multimodal-embedding-v1"
+# Switch profiles: production (DashScope) | local-deploy (oMLX :9642)
+active_router_profile: production
 
 # ============================================================
 # AGENT

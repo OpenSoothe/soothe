@@ -6,8 +6,8 @@ import time
 
 import pytest
 from langchain_core.tools import tool
+from support_config import config_with_router_profile
 
-from soothe.config import SootheConfig
 from soothe.foundation.core.agent import create_soothe_agent
 
 
@@ -15,7 +15,7 @@ def _get_router_config_for_available_credentials() -> dict:
     """Return router config based on available API credentials."""
     if os.getenv("ANTHROPIC_API_KEY"):
         return {"default": "anthropic:claude-sonnet-4-5"}
-    elif os.getenv("OPENAI_API_KEY"):
+    if os.getenv("OPENAI_API_KEY"):
         return {"default": "openai:gpt-4o-mini"}
     return {}
 
@@ -26,12 +26,12 @@ async def test_parallel_tools_config_propagation(requires_llm_api):
     """Verify concurrency config propagates correctly."""
     router = _get_router_config_for_available_credentials()
     # Create config with custom concurrency settings
-    config = SootheConfig(
+    config = config_with_router_profile(
+        router,
         agent={
             "loop": {"limits": {"max_parallel_steps": 5}},
             "protocols": {"memory": {"enabled": False}},
         },
-        router=router,
     )
 
     # Create agent
@@ -75,12 +75,12 @@ async def test_parallel_tools_performance_improvement(requires_llm_api):
         return f"Tool 3 completed after {delay}s"
 
     # Test with parallel execution (max_parallel_steps=3)
-    config_parallel = SootheConfig(
+    config_parallel = config_with_router_profile(
+        router,
         agent={
             "loop": {"limits": {"max_parallel_steps": 3}},
             "protocols": {"memory": {"enabled": False}},
         },
-        router=router,
     )
 
     create_soothe_agent(
@@ -90,12 +90,12 @@ async def test_parallel_tools_performance_improvement(requires_llm_api):
     )
 
     # Test with sequential execution (max_parallel_steps=1)
-    config_sequential = SootheConfig(
+    config_sequential = config_with_router_profile(
+        router,
         agent={
             "loop": {"limits": {"max_parallel_steps": 1}},
             "protocols": {"memory": {"enabled": False}},
         },
-        router=router,
     )
 
     create_soothe_agent(
@@ -126,12 +126,12 @@ async def test_parallel_tools_mixed_sync_async(requires_llm_api):
         await asyncio.sleep(0.5)
         return x * 3
 
-    config = SootheConfig(
+    config = config_with_router_profile(
+        router,
         agent={
             "loop": {"limits": {"max_parallel_steps": 5}},
             "protocols": {"memory": {"enabled": False}},
         },
-        router=router,
     )
 
     create_soothe_agent(
@@ -148,7 +148,7 @@ async def test_parallel_tools_mixed_sync_async(requires_llm_api):
 async def test_parallel_tools_default_parallelism(requires_llm_api):
     """Verify default configuration uses max_parallel_steps=4."""
     router = _get_router_config_for_available_credentials()
-    config = SootheConfig(router=router)
+    config = config_with_router_profile(router)
     config.agent.protocols.memory.enabled = False
 
     # Check default value for max_parallel_steps
@@ -175,7 +175,7 @@ async def test_parallel_tools_extreme_cases(requires_llm_api):
         return "done"
 
     # Test sequential (max_parallel_steps=1)
-    config_seq = SootheConfig(router=router)
+    config_seq = config_with_router_profile(router)
     config_seq.agent.loop.concurrency.max_parallel_steps = 1
     config_seq.agent.protocols.memory.enabled = False
 
@@ -186,7 +186,7 @@ async def test_parallel_tools_extreme_cases(requires_llm_api):
     )
 
     # Test high parallelism (max_parallel_steps=10)
-    config_high = SootheConfig(router=router)
+    config_high = config_with_router_profile(router)
     config_high.agent.loop.concurrency.max_parallel_steps = 10
     config_high.agent.protocols.memory.enabled = False
 
@@ -205,7 +205,7 @@ async def test_parallel_tools_zero_means_unlimited(requires_llm_api):
     """Verify that max_parallel_steps=0 means unlimited (valid special value)."""
     router = _get_router_config_for_available_credentials()
     # 0 is valid - it means unlimited parallelism
-    config_unlimited = SootheConfig(router=router)
+    config_unlimited = config_with_router_profile(router)
     config_unlimited.agent.loop.concurrency.max_parallel_steps = 0
     config_unlimited.agent.protocols.memory.enabled = False
 
