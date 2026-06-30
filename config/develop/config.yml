@@ -26,9 +26,15 @@ providers:
     api_base_url: "http://100.75.70.86:9642/v1"
     api_key: "mirasoth"
     models:
-      - GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit
       - gemma-4-12b-coder-fable5-composer2.5
+      - gemma-4-31B-it-OptiQ-4bit
       - GLM-4.6V-Flash-8bit
+      - GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit
+      - GLM-5.2-mxfp4
+      - MiniMax-M3-4bit
+      - Kimi-K2.7-Code-4bit
+      - Qwen-Image-2512-4bit
+      - DeepSeek-OCR-4bit
       - nomicai-modernbert-embed-base-bf16
 
 router_profiles:
@@ -47,6 +53,15 @@ router_profiles:
       fast: "local-omlx:GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit"
       think: "local-omlx:GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit"
       image: "local-omlx:GLM-4.6V-Flash-8bit"
+      embedding: "local-omlx:nomicai-modernbert-embed-base-bf16"
+    embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
+
+  - name: local-deploy2
+    router:
+      default: "local-omlx:gemma-4-31B-it-OptiQ-4bit"
+      fast: "local-omlx:gemma-4-31B-it-OptiQ-4bit"
+      think: "local-omlx:gemma-4-31B-it-OptiQ-4bit"
+      image: "local-omlx:gemma-4-31B-it-OptiQ-4bit"
       embedding: "local-omlx:nomicai-modernbert-embed-base-bf16"
     embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
 
