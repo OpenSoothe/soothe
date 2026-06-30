@@ -645,12 +645,12 @@ class AutonomousConfig(BaseModel):
 
     # === Autopilot scheduling (daemon-level) ===
     enabled: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Enable the AutopilotService scheduling loop. When True, the daemon "
+            "Enable the AutopilotService scheduling loop. When True (default), the daemon "
             "starts the scheduling loop on startup for 24/7 autonomous operation. "
-            "When False (default), the service is constructed but the scheduling "
-            "loop does not start automatically; goals must be dispatched manually."
+            "When False, the service is constructed but the scheduling loop does not "
+            "start automatically; goals must be dispatched manually."
         ),
     )
     max_iterations: int = 10
