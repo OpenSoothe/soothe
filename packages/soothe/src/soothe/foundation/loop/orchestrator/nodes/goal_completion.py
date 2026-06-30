@@ -147,6 +147,17 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         plan_result,
         strange_loop.config.agent.loop.final_response,
     )
+
+    # RFC-624 Phase 4: Finalize goal lifecycle + persist CE state
+    if ctx.ce is not None:
+        try:
+            await ctx.ce.finalize_goal(ctx.ce_goal_id, status="completed")
+            await ctx.ce.save()
+        except Exception:
+            logger.warning("[goal_completion] CE goal finalization failed", exc_info=True)
+
+    # Build the completion DAG report after CE finalization so goal status reflects
+    # terminal state instead of the pre-finalization "active" snapshot.
     dag_report = plan_manager.format_completion_dag_report().strip()
     if dag_report:
         logger.info(
@@ -161,14 +172,6 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             action.value,
             state.thread_id,
         )
-
-    # RFC-624 Phase 4: Finalize goal lifecycle + persist CE state
-    if ctx.ce is not None:
-        try:
-            await ctx.ce.finalize_goal(ctx.ce_goal_id, status="completed")
-            await ctx.ce.save()
-        except Exception:
-            logger.warning("[goal_completion] CE goal finalization failed", exc_info=True)
 
     final_output = None
     used_synthesis_fallback = False

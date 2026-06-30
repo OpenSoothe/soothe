@@ -68,6 +68,10 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "intent_route": "fast_path",
             "intake_label": intake_label,
             "is_continuation": is_continuation,
+            "plan_route": None,
+            "assess_route": None,
+            "last_outcome": None,
+            "resume_synth": None,
         }
 
     # RFC-630: trivial branch — inject a minimal 1-step plan and skip
@@ -95,4 +99,8 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         "intent_route": "continue_loop",
         "intake_label": intake_label,
         "is_continuation": is_continuation,
+        "plan_route": None,
+        "assess_route": None,
+        "last_outcome": None,
+        "resume_synth": None,
     }
