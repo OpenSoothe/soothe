@@ -46,7 +46,7 @@ active_router_profile: default
 # agent:
 #   name: Soothe
 #   autonomous:
-#     enabled: true          # 24/7 self-running daemon mode
+#     enabled: false         # disable 24/7 autopilot (enabled by default)
 #   core_agent_backend: langgraph  # or claude (requires soothe[claude])
 #
 # tools:
