@@ -8,8 +8,6 @@ from pathlib import Path
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.subagents.explore.schemas import ExploreSubagentConfig
-from soothe.subagents.plan.schemas import PlanSubagentConfig
 
 
 def _repo_config_template_path() -> Path:
@@ -18,24 +16,9 @@ def _repo_config_template_path() -> Path:
 
 
 def _normalize_for_default_compare(data: dict) -> dict:
-    """Strip example-only keys and subagent config dicts that equal schema defaults."""
+    """Strip example-only keys that differ from bare ``SootheConfig()`` defaults."""
     out = copy.deepcopy(data)
     out.pop("providers", None)
-    out.pop("vector_stores", None)
-    out.pop("vector_store_router", None)
-    subs = out.get("subagents") or {}
-    for name, sub in list(subs.items()):
-        if not isinstance(sub, dict):
-            continue
-        cfg = sub.get("config") or {}
-        if name == "explore" and ExploreSubagentConfig(**cfg) == ExploreSubagentConfig():
-            sub["config"] = {}
-        if name == "plan" and PlanSubagentConfig(**cfg) == PlanSubagentConfig():
-            sub["config"] = {}
-        # tacitus.config with llm_role/synthesis_role is an example (no schema class)
-        if name == "tacitus" and cfg:
-            sub["config"] = {}
-        subs[name] = sub
     return out
 
 
@@ -50,7 +33,5 @@ def test_config_template_matches_pydantic_defaults() -> None:
     bd = baseline.model_dump(mode="python")
     assert _normalize_for_default_compare(ld) == _normalize_for_default_compare(bd)
 
-    assert ExploreSubagentConfig(**loaded.subagents["explore"].config) == ExploreSubagentConfig()
-    assert PlanSubagentConfig(**loaded.subagents["plan"].config) == PlanSubagentConfig()
     assert len(loaded.providers) >= 1
-    assert loaded.vector_store_router.default is not None
+    assert loaded.vector_store_router.default == "sqlite_vec_default:soothe_default"

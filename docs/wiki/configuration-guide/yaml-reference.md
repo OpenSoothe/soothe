@@ -4,17 +4,26 @@ A condensed quick-reference for the Soothe YAML schema. This is a map, not an en
 
 ## How the Schema Is Organized
 
-The top-level `SootheConfig` (in `config/settings.py`) is a Pydantic `BaseSettings` model with `env_prefix="SOOTHE_"`. A minimal config touches only `providers`, `router`, and `embedding_dims`:
+The top-level `SootheConfig` (in `config/settings.py`) is a Pydantic `BaseSettings` model with `env_prefix="SOOTHE_"`.
+
+**Zero-config:** with no YAML file, set `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) and run. Soothe synthesizes a provider and uses built-in router/vector-store defaults. Explicit YAML `providers` always wins.
+
+A minimal YAML file (when you need multi-provider or non-env secrets) touches only `providers` and `router_profiles`:
 
 ```yaml
 providers:
   - name: openai
     api_key: ${OPENAI_API_KEY}
     models: [gpt-4o-mini]
-router:
-  default: openai:gpt-4o-mini
-embedding_dims: 1536
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+    embedding_dims: 1536
+active_router_profile: default
 ```
+
+Internal tuning (`agent.loop.*`, pool sizes, security deny lists, etc.) lives in Pydantic defaults — see `models.py`, not the template.
 
 The full set of sections:
 
