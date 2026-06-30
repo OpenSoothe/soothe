@@ -252,7 +252,7 @@ agent:
   # --- Protocols ---
   protocols:
     memory:
-      enabled: true
+      enabled: false  # MemU backend disabled pending redesign
       persist_dir: null
       llm_chat_role: fast
       llm_embed_role: embedding
