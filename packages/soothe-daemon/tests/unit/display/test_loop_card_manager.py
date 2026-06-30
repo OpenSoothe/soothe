@@ -40,6 +40,21 @@ async def test_record_user_prompt_persists_user_card(isolated_display_db) -> Non
 
 
 @pytest.mark.asyncio
+async def test_peek_latest_assistant_response_returns_latest_card(isolated_display_db) -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await _seed_messages(
+        manager,
+        "loop_latest_ai",
+        [
+            HumanMessage(content="question"),
+            AIMessage(content="first answer"),
+            AIMessage(content="latest answer"),
+        ],
+    )
+    assert isolated_display_db.peek_latest_assistant_response("loop_latest_ai") == "latest answer"
+
+
+@pytest.mark.asyncio
 async def test_bind_messages_from_checkpoint_messages() -> None:
     manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
     await _seed_messages(

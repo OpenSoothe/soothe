@@ -30,6 +30,7 @@ from soothe_daemon.services.image_understanding import validate_and_normalize_im
 logger = logging.getLogger(__name__)
 
 _LOOP_PROMPT_PREVIEW_MAX = 200
+_LOOP_AI_RESPONSE_PREVIEW_MAX = 160
 
 
 def _peek_loop_prompt(loop_id: str) -> str | None:
@@ -42,6 +43,20 @@ def _peek_loop_prompt(loop_id: str) -> str | None:
         )
     except Exception:  # noqa: BLE001 — peek is best-effort, never block the RPC
         logger.debug("peek_loop_prompt failed for %s", loop_id, exc_info=True)
+    return None
+
+
+def _peek_latest_assistant_response(loop_id: str) -> str | None:
+    """Return latest assistant response preview from ``display.db``."""
+    try:
+        from soothe.backends.persistence.display_store import get_display_card_store
+
+        return get_display_card_store().peek_latest_assistant_response(
+            loop_id,
+            max_chars=_LOOP_AI_RESPONSE_PREVIEW_MAX,
+        )
+    except Exception:  # noqa: BLE001 — preview is best-effort, never block the RPC
+        logger.debug("peek_latest_assistant_response failed for %s", loop_id, exc_info=True)
     return None
 
 
@@ -1428,6 +1443,9 @@ class MessageRouter:
             prompt = _peek_loop_prompt(loop_id)
             if prompt:
                 entry["prompt"] = prompt
+            latest_ai_response = _peek_latest_assistant_response(loop_id)
+            if latest_ai_response:
+                entry["latest_ai_response"] = latest_ai_response
             loops.append(entry)
 
         await self._send_response(

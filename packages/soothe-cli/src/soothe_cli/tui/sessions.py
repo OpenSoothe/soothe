@@ -44,6 +44,9 @@ class LoopInfo(TypedDict, total=False):
     duration_ms: int
     """Cumulative agent execution time across all goals (milliseconds)."""
 
+    latest_ai_response: str
+    """Latest assistant response preview text for loop selector table."""
+
     live: bool
     """True when an active runner stream is currently attached to the loop."""
 
@@ -122,6 +125,16 @@ def format_relative_timestamp(iso_timestamp: str | None) -> str:
         return f"{months}mo ago"
     years = days // 365
     return f"{years}y ago"
+
+
+def _fallback_duration_ms(created: str | None, updated: str | None) -> int | None:
+    """Derive a duration from timestamps when daemon duration is missing."""
+    created_dt = _parse_iso_to_local(created or "")
+    updated_dt = _parse_iso_to_local(updated or "")
+    if created_dt is None or updated_dt is None:
+        return None
+    delta_ms = int((updated_dt - created_dt).total_seconds() * 1000)
+    return delta_ms if delta_ms > 0 else None
 
 
 def generate_loop_id() -> str:
@@ -204,13 +217,23 @@ async def list_loops_via_daemon_rpc(
         prompt_text = loop_data.get("prompt")
         if isinstance(prompt_text, str) and prompt_text.strip():
             loop_info["prompt"] = prompt_text.strip()
+        latest_ai_response = loop_data.get("latest_ai_response")
+        if isinstance(latest_ai_response, str) and latest_ai_response.strip():
+            loop_info["latest_ai_response"] = latest_ai_response.strip()
         human = loop_data.get("human_messages")
         ai = loop_data.get("ai_messages")
         if isinstance(human, int) or isinstance(ai, int):
             loop_info["messages"] = int(human or 0) + int(ai or 0)
         dur = loop_data.get("duration_ms")
-        if isinstance(dur, int):
+        if isinstance(dur, int) and dur > 0:
             loop_info["duration_ms"] = dur
+        else:
+            fallback = _fallback_duration_ms(
+                loop_info.get("created"),
+                loop_info.get("updated"),
+            )
+            if fallback is not None:
+                loop_info["duration_ms"] = fallback
         live = loop_data.get("live")
         if isinstance(live, bool):
             loop_info["live"] = live

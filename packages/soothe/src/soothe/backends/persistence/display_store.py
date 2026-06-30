@@ -186,6 +186,42 @@ class DisplayCardStore:
             return cleaned[: max_chars - 1] + "…"
         return cleaned
 
+    def peek_latest_assistant_response(
+        self,
+        loop_id: str,
+        *,
+        max_chars: int = 120,
+    ) -> str | None:
+        """Return the latest assistant card content for ``loop_id``, if present."""
+        conn = self._connection()
+        row = conn.execute(
+            """
+            SELECT data_json
+            FROM display_card_mutations
+            WHERE loop_id = ? AND op = 'create' AND kind = 'assistant'
+            ORDER BY seq DESC
+            LIMIT 1
+            """,
+            (loop_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            data = json.loads(row[0])
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        content = data.get("content")
+        if not isinstance(content, str):
+            return None
+        cleaned = " ".join(content.split())
+        if not cleaned:
+            return None
+        if len(cleaned) > max_chars:
+            return cleaned[: max_chars - 1] + "…"
+        return cleaned
+
     def close(self) -> None:
         with self._lock:
             if self._conn is not None:

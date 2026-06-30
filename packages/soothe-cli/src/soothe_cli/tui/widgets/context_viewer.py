@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
+import sqlite3
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from soothe_sdk.client.config import SOOTHE_HOME
 from textual.binding import Binding, BindingType
 from textual.containers import ScrollableContainer, Vertical
 from textual.screen import ModalScreen
@@ -22,9 +21,12 @@ from textual.widgets import Static
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
+from soothe.foundation.loop.state.persistence.runtime_paths import resolve_context_engine_db_path
+
 from soothe_cli.tui.config import get_glyphs, is_ascii_mode
 
 logger = logging.getLogger(__name__)
+_REFRESH_INTERVAL_S = 1.0
 
 # Status color mapping (mirrors autopilot_dashboard.py conventions)
 STATUS_COLORS: dict[str, str] = {
@@ -49,6 +51,54 @@ STATUS_ICONS: dict[str, str] = {
 }
 
 
+def _abbreviate_loop_id(loop_id: str) -> str:
+    """Render loop id in ``prefix...suffix`` form for compact status lines."""
+    raw = str(loop_id or "").strip().strip("[]")
+    if not raw:
+        return "unknown"
+    compact = raw.replace("-", "")
+    if "..." in compact:
+        return compact
+    if len(compact) <= 14:
+        return compact
+    return f"{compact[:8]}...{compact[-4:]}"
+
+
+def _load_goals_from_sqlite(loop_id: str) -> list[dict[str, Any]]:
+    """Load loop goals from the shared Context Engine SQLite DAG snapshot."""
+    raw_loop_id = str(loop_id or "").strip()
+    if not raw_loop_id or raw_loop_id == "unknown":
+        return []
+
+    db_path = resolve_context_engine_db_path()
+    if not db_path.is_file():
+        return []
+
+    try:
+        with sqlite3.connect(str(db_path), timeout=2.0) as conn:
+            row = conn.execute(
+                "SELECT dag_json FROM ce_dag WHERE loop_id = ?",
+                (raw_loop_id,),
+            ).fetchone()
+    except sqlite3.Error:
+        logger.debug("Failed to read CE SQLite at %s", db_path, exc_info=True)
+        return []
+
+    if row is None or not row[0]:
+        return []
+
+    try:
+        data = json.loads(str(row[0]))
+    except json.JSONDecodeError:
+        logger.debug("Invalid DAG JSON for loop %s", raw_loop_id, exc_info=True)
+        return []
+
+    goals = data.get("goals", []) if isinstance(data, dict) else []
+    if not isinstance(goals, list):
+        return []
+    return [g for g in goals if isinstance(g, dict)]
+
+
 class GoalDagPanel(Static):
     """Displays goal DAG as a text tree."""
 
@@ -70,6 +120,11 @@ class GoalDagPanel(Static):
         """
         super().__init__(**kwargs)
         self._goals = goals
+
+    def set_goals(self, goals: list[dict[str, Any]]) -> None:
+        """Replace current goals and refresh panel content."""
+        self._goals = goals
+        self.update(self.render())
 
     def render(self) -> str:
         """Render goal DAG as styled text."""
@@ -119,6 +174,11 @@ class StatusPanel(Static):
         self._goals = goals
         self._loop_id = loop_id
 
+    def set_goals(self, goals: list[dict[str, Any]]) -> None:
+        """Replace current goals and refresh panel content."""
+        self._goals = goals
+        self.update(self.render())
+
     def render(self) -> str:
         """Render status summary."""
         active = sum(1 for g in self._goals if g.get("status") == "active")
@@ -128,7 +188,7 @@ class StatusPanel(Static):
         total = len(self._goals)
 
         lines = [
-            f"[bold blue]Context Status[/]  [dim]Loop: {self._loop_id[:12]}[/]",
+            f"[bold blue]Context Status[/]  [dim]Loop: {_abbreviate_loop_id(self._loop_id)}[/]",
             f"  Total: {total}  |  Active: {active}  |  Completed: {completed}  |  Pending: {pending}  |  Failed: {failed}",
         ]
         return "\n".join(lines)
@@ -199,7 +259,7 @@ class ContextViewerScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
         glyphs = get_glyphs()
-        self._goals = self._load_goals()
+        self._goals = _load_goals_from_sqlite(self._loop_id)
 
         with Vertical():
             yield Static("Context Engine", classes="context-title")
@@ -220,37 +280,19 @@ class ContextViewerScreen(ModalScreen[None]):
 
             colors = theme.get_theme_colors(self)
             container.styles.border = ("ascii", colors.success)
+        self._refresh_context()
+        self.set_interval(_REFRESH_INTERVAL_S, self._refresh_context)
 
     def action_cancel(self) -> None:
         """Dismiss the modal."""
         self.dismiss(None)
 
-    def _load_goals(self) -> list[dict[str, Any]]:
-        """Load goals from context engine persistence file.
-
-        Returns:
-            List of goal dicts from GoalStepDAG, or empty list if not found.
-        """
-        if self._loop_id == "unknown":
-            return []
-
-        soothe_home = Path(SOOTHE_HOME)
-        dag_path = soothe_home / "data" / "context_engine" / self._loop_id / "goal_step_dag.json"
-
-        if not dag_path.is_file():
-            logger.debug("No context engine DAG file at %s", dag_path)
-            return []
-
+    def _refresh_context(self) -> None:
+        """Reload context data and refresh both panels."""
+        goals = _load_goals_from_sqlite(self._loop_id)
+        self._goals = goals
         try:
-            data = json.loads(dag_path.read_text(encoding="utf-8"))
-            goals = data.get("goals", [])
-            if isinstance(goals, list):
-                return goals
-            logger.warning("Unexpected goals format in %s: %s", dag_path, type(goals))
-            return []
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse context engine DAG file at %s", dag_path)
-            return []
+            self.query_one(StatusPanel).set_goals(goals)
+            self.query_one(GoalDagPanel).set_goals(goals)
         except Exception:
-            logger.warning("Error reading context engine DAG file", exc_info=True)
-            return []
+            logger.debug("Failed to refresh context viewer panels", exc_info=True)
