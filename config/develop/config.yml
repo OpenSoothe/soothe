@@ -1,7 +1,10 @@
-# Local development defaults (overrides Pydantic defaults)
+# Team develop profile — overrides Pydantic defaults only.
 # Full reference: config/config.template.yml
-# Zero-config: export OPENAI_API_KEY — no YAML required for OpenAI-only use
-# Persistence: SQLite by default
+# Internal tuning (loop concurrency defaults, checkpoint async, tool_timeout, lazy_core_agent,
+# code_interpreter, MemU memory) lives in packages/soothe/src/soothe/config/models.py.
+#
+# Zero-config: export OPENAI_API_KEY — no YAML required for OpenAI-only use.
+# Persistence: PostgreSQL (docker compose up soothe-pgvector, port 6432)
 # Langfuse: docker compose --profile langfuse up -d (UI on :3300)
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local; export DASHSCOPE_*
 
@@ -68,41 +71,30 @@ router_profiles:
 active_router_profile: production
 
 # ============================================================
-# AGENT
+# AGENT (team concurrency overrides only)
 # ============================================================
 agent:
   autonomous:
-    enabled: true
-    max_parallel_goals: 6    # Increased from default 3 for better goal concurrency
-    max_loops: 8             # Increased from default 4 for more worker loops
+    max_parallel_goals: 6
+    max_loops: 8
   loop:
     concurrency:
-      max_parallel_goals: 8       # Increased from 4 for more concurrent goals
-      max_parallel_steps: 8       # Increased from 4 for more parallel steps
-      max_parallel_subagents: 6   # Increased from 4 for more subagent parallelism
-      max_parallel_tools: 64      # Increased from 50 for higher tool throughput
-      global_max_llm_calls: 16    # Increased from 10 for more concurrent LLM calls
-      step_parallelism: max       # Changed from 'dependency' for maximum parallelism
-      # RFC-803 Phase 6: Async checkpoint writes
-      checkpoint:
-        async_write: true        # Enable fire-and-forget writes (non-blocking)
-        flush_interval: 5.0       # Periodic forced write interval (seconds)
-        queue_size: 100           # Max queued checkpoints before blocking
-    max_subagent_tasks_per_wave: 8  # Increased from 4 for larger subagent batches
-    tool_timeout:
-      enabled: true
-  # QuickJS interpreter for programmatic tool calling (PTC)
-  code_interpreter:
-    enabled: false
-  runtime:
-    lazy_core_agent: true
-  protocols:
-    memory:
-      enabled: false  # MemU backend disabled pending redesign
+      max_parallel_goals: 8
+      max_parallel_steps: 8
+      max_parallel_subagents: 6
+      max_parallel_tools: 64
+      global_max_llm_calls: 16
+      step_parallelism: max
+    max_subagent_tasks_per_wave: 8
 
-# SQLite reader pool for concurrent database access
+# ============================================================
+# PERSISTENCE
+# ============================================================
 persistence:
-  sqlite_reader_pool_size: 12  # Increased from default 8 for better DB concurrency
+  default_backend: postgresql
+  postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
+  postgres_pool_max_idle_seconds: 90
+  postgres_pool_max_lifetime_seconds: 900
 
 security:
   allow_paths_outside_workspace: true
@@ -122,19 +114,11 @@ observability:
       - soothe
 
 # ============================================================
-# PERSISTENCE
+# VECTOR STORES (pgvector; DSN auto-resolved from postgres_base_dsn)
 # ============================================================
-# SQLite default: $SOOTHE_HOME/data/ (metadata.db, checkpoints.db, vector.db)
-# PostgreSQL alternative (uncomment to use):
-# persistence:
-#   default_backend: postgresql
-#   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
-#   postgres_pool_max_idle_seconds: 90
-#   postgres_pool_max_lifetime_seconds: 900
-# vector_stores:
-#   - name: pgvector_dev
-#     provider_type: pgvector
-#     dsn: "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
-#     pool_size: 4
-# vector_store_router:
-#   default: pgvector_dev:soothe_default
+vector_stores:
+  - name: pgvector_dev
+    provider_type: pgvector
+
+vector_store_router:
+  default: pgvector_dev:soothe_default

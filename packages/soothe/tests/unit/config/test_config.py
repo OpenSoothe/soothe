@@ -42,7 +42,7 @@ class TestSootheConfig:
         assert cfg.providers == []
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
-        assert cfg.agent.autonomous.enabled is False
+        assert cfg.agent.autonomous.enabled is True
         assert len(cfg.vector_stores) == 1
         assert cfg.vector_stores[0].name == "sqlite_vec_default"
         assert cfg.vector_store_router.default == "sqlite_vec_default:soothe_default"
