@@ -6,7 +6,7 @@ caches the working method per chat model, and post-validates against the schema.
 
 `BaseChatModel.with_structured_output` is treated as an internal primitive: it is
 called only from inside this module and the wrapper classes that override it
-(`LimitedProviderModelWrapper`, `SootheTokenUsageChatModel`). New code should
+(`OpenAICompatModelWrapper`, `SootheTokenUsageChatModel`). New code should
 call `invoke_structured_chat` or `invoke_structured_chat_typed` instead.
 """
 
@@ -233,7 +233,7 @@ async def invoke_structured_chat(
     """Invoke chat with strict structured output enforced by ``json_schema``.
 
     Args:
-        chat: LangChain chat model (may be LimitedProviderModelWrapper).
+        chat: LangChain chat model (may be OpenAICompatModelWrapper).
         messages: Message list for ``ainvoke``.
         json_schema: Client JSON Schema dict.
         schema_name: Optional provider schema name override.

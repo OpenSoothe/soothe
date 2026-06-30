@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 import jsonschema
@@ -27,18 +28,43 @@ from soothe.utils.text_preview import preview_first
 logger = logging.getLogger(__name__)
 
 
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_json_text(raw: str) -> str:
+    """Normalize model output to a JSON-parseable string.
+
+    Local OpenAI-compatible providers (oMLX/GLM/gemma) sometimes wrap
+    ``json_schema`` output in a markdown fence (````` ```json ... ``` `````)
+    or prefix it with prose even though ``response_format`` requested strict
+    JSON. Strip the fence and, if prose remains, slice to the outermost JSON
+    object so ``json.loads`` succeeds.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return text
+    fence = _JSON_FENCE_RE.search(text)
+    if fence:
+        text = fence.group(1).strip()
+    start = text.find("{")
+    if start > 0:
+        # Leading prose before the first object — slice it off.
+        text = text[start:]
+    return text
+
+
 def _extract_json_str_from_response(response: Any) -> str:
     """Extract JSON text from an AIMessage-like provider response."""
     if hasattr(response, "content") and response.content:
-        return str(response.content)
+        return _strip_json_text(str(response.content))
     if (
         hasattr(response, "additional_kwargs")
         and "reasoning_content" in response.additional_kwargs
         and response.additional_kwargs["reasoning_content"]
     ):
         logger.debug("JSON found in reasoning_content field (additional_kwargs)")
-        return str(response.additional_kwargs["reasoning_content"])
-    return str(response)
+        return _strip_json_text(str(response.additional_kwargs["reasoning_content"]))
+    return _strip_json_text(str(response))
 
 
 def _coerce_structured_json(
@@ -214,7 +240,7 @@ class JsonSchemaModelWrapper(Runnable):
         return getattr(self._model, name)
 
 
-class LimitedProviderModelWrapper(BaseChatModel):
+class OpenAICompatModelWrapper(BaseChatModel):
     """Wrapper that converts json_mode to json_schema for limited provider compatibility.
 
     Handles providers with limited OpenAI API support:
@@ -264,7 +290,7 @@ class LimitedProviderModelWrapper(BaseChatModel):
         strict = kwargs.pop("strict", True)
 
         logger.debug(
-            "LimitedProviderModelWrapper converting method='%s' to json_schema for provider '%s'",
+            "OpenAICompatModelWrapper converting method='%s' to json_schema for provider '%s'",
             method,
             self._provider_name,
         )
@@ -334,7 +360,7 @@ class LimitedProviderModelWrapper(BaseChatModel):
             # If tool_choice is a dict/object, sanitize it for limited providers
             if isinstance(tool_choice, dict):
                 logger.debug(
-                    "LimitedProviderModelWrapper sanitizing object-form tool_choice for %s (provider=%s)",
+                    "OpenAICompatModelWrapper sanitizing object-form tool_choice for %s (provider=%s)",
                     tool_choice,
                     self._provider_name,
                 )
@@ -382,8 +408,18 @@ class LimitedProviderModelWrapper(BaseChatModel):
         run_manager: Any = None,
         **kwargs: Any,
     ) -> Any:
-        """Delegate async streaming to wrapped model."""
-        return await self._model._astream(messages, stop=stop, run_manager=run_manager, **kwargs)
+        """Delegate async streaming to wrapped model.
+
+        ``BaseChatModel._astream`` is an async generator (it ``yield``s
+        chunks). We must mirror that contract — ``yield`` each chunk from the
+        wrapped model rather than ``return``-ing the generator, or langchain's
+        ``astream`` will hit ``async for chunk in <coroutine>`` and fail with
+        ``'async for' requires an object with __aiter__``.
+        """
+        async for chunk in self._model._astream(
+            messages, stop=stop, run_manager=run_manager, **kwargs
+        ):
+            yield chunk
 
     @property
     def _llm_type(self) -> str:

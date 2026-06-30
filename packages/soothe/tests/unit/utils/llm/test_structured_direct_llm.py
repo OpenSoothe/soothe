@@ -17,7 +17,7 @@ from soothe.utils.llm.structured import (
     normalize_structured_result,
     wrap_json_keyword_safe,
 )
-from soothe.utils.llm.wrappers import JsonSchemaModelWrapper, LimitedProviderModelWrapper
+from soothe.utils.llm.wrappers import JsonSchemaModelWrapper, OpenAICompatModelWrapper
 
 _WORD_SCHEMA = {
     "type": "object",
@@ -243,7 +243,7 @@ async def test_json_schema_wrapper_dict_schema() -> None:
 
 def test_limited_provider_wrapper_dict_schema() -> None:
     inner = MagicMock(spec=["with_structured_output"])
-    wrapped = LimitedProviderModelWrapper(inner, "lmstudio")
+    wrapped = OpenAICompatModelWrapper(inner, "lmstudio")
     out = wrapped.with_structured_output(
         _WORD_SCHEMA,
         schema_name="WordReply",

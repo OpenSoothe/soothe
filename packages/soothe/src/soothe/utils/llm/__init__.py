@@ -11,7 +11,7 @@ Architecture (RFC-627):
 - `registry.py`: Provider lookup and credential resolution
 - `factory.py`: LLMFactory class (model creation + caching)
 - `structured.py`: Structured output helpers with fallback chain
-- `wrappers.py`: LimitedProviderModelWrapper, JsonSchemaModelWrapper
+- `wrappers.py`: OpenAICompatModelWrapper, JsonSchemaModelWrapper
 - `schema_wire.py`: JSON Schema wire helpers
 - `observability.py`: Token/streaming observability
 
@@ -55,7 +55,7 @@ from soothe.utils.llm.structured import (
 from soothe.utils.llm.types import ModelRole, ProviderType
 from soothe.utils.llm.wrappers import (
     JsonSchemaModelWrapper,
-    LimitedProviderModelWrapper,
+    OpenAICompatModelWrapper,
 )
 
 __all__ = [
@@ -77,7 +77,7 @@ __all__ = [
     "post_validate_structured_dict",
     "wrap_json_keyword_safe",
     # Wrappers (advanced use)
-    "LimitedProviderModelWrapper",
+    "OpenAICompatModelWrapper",
     "JsonSchemaModelWrapper",
     # Observability
     "SootheTokenUsageChatModel",

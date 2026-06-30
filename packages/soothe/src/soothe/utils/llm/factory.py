@@ -26,7 +26,7 @@ from langchain_core.language_models import BaseChatModel
 from soothe.utils.llm.observability import SootheTokenUsageChatModel
 from soothe.utils.llm.registry import ProviderRegistry
 from soothe.utils.llm.types import ModelRole, ProviderType
-from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
+from soothe.utils.llm.wrappers import OpenAICompatModelWrapper
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
@@ -180,7 +180,7 @@ class LLMFactory:
         """Apply provider-specific wrappers in order.
 
         Wrapper chain:
-        - Custom OpenAI-compatible endpoints: LimitedProviderModelWrapper → SootheTokenUsageChatModel
+        - Custom OpenAI-compatible endpoints: OpenAICompatModelWrapper → SootheTokenUsageChatModel
         - All others: SootheTokenUsageChatModel only
 
         Args:
@@ -196,7 +196,7 @@ class LLMFactory:
                 "Provider '%s' uses a custom OpenAI-compatible endpoint, applying compatibility wrapper",
                 provider_name,
             )
-            model = LimitedProviderModelWrapper(model, provider_name)
+            model = OpenAICompatModelWrapper(model, provider_name)
 
         # Always apply token observability for consistent Langfuse integration
         model = SootheTokenUsageChatModel(model)

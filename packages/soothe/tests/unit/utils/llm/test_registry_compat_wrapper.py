@@ -9,7 +9,7 @@ import pytest
 from soothe.config.models import ModelProviderConfig
 from soothe.config.settings import SootheConfig
 from soothe.utils.llm.registry import ProviderRegistry
-from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
+from soothe.utils.llm.wrappers import OpenAICompatModelWrapper
 
 
 @pytest.mark.parametrize(
@@ -66,4 +66,4 @@ def test_factory_applies_compat_wrapper_for_custom_openai_endpoint() -> None:
     with patch("soothe.utils.llm.factory.init_chat_model", return_value=raw_model):
         model = config.create_chat_model("default")
 
-    assert isinstance(model._model, LimitedProviderModelWrapper)  # noqa: SLF001
+    assert isinstance(model._model, OpenAICompatModelWrapper)  # noqa: SLF001
