@@ -12,6 +12,15 @@ Soothe config has three axes you tune independently:
 
 Most patterns below change only one axis. The minimal config changes *capability* (add a provider) and relies on defaults for the other two. Production configs change all three deliberately.
 
+## Zero-Config (No YAML)
+
+```bash
+export OPENAI_API_KEY=sk-...
+soothed start && soothe
+```
+
+Soothe bootstraps an OpenAI provider from the environment when `providers` is empty. Vector stores default to embedded `sqlite_vec`. Copy `config/config.template.yml` only when you need multi-provider routing, Postgres, Langfuse, or other Tier-B overrides.
+
 ## Minimal to Development
 
 The jump from "it runs" to "it's pleasant to develop with" is small: add a second model for reasoning, bump verbosity, and bound the loop so a runaway agent doesn't burn tokens.

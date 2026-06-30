@@ -69,11 +69,12 @@ soothe -p "Research top 5 Python web frameworks"
 
 ```bash
 pip install -U 'soothe[all]' soothe-cli soothe-daemon
-cp config/config.template.yml ~/.soothe/config/config.yml
-export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY / DASHSCOPE_API_KEY
+export OPENAI_API_KEY="sk-..."  # zero-config: no YAML file required
 soothed start
 soothe
 ```
+
+Optional: copy `config/config.template.yml` to `~/.soothe/config/config.yml` for multi-provider or deployment overrides.
 
 ## Documentation
 

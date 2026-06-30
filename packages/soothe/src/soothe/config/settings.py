@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -55,6 +56,24 @@ def default_router_profiles() -> list[RouterProfile]:
             embedding_dims=1536,
         )
     ]
+
+
+def default_vector_stores() -> list[VectorStoreProviderConfig]:
+    """Built-in sqlite_vec provider used when YAML omits ``vector_stores``."""
+    return [
+        VectorStoreProviderConfig(
+            name="sqlite_vec_default",
+            provider_type="sqlite_vec",
+        )
+    ]
+
+
+def default_vector_store_router() -> VectorStoreRouter:
+    """Built-in vector store routing used when YAML omits ``vector_store_router``."""
+    return VectorStoreRouter(default="sqlite_vec_default:soothe_default")
+
+
+_logger = logging.getLogger(__name__)
 
 
 class _SootheConfigLoggingFileView:
@@ -203,6 +222,52 @@ class SootheConfig(BaseSettings):
     claude`` (``soothe[claude]`` extra), not as a subagent.
     Plugin-discovered subagents are merged during config validation.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _bootstrap_providers_from_env(cls, data: Any) -> Any:
+        """Synthesize providers from env when config lists none (zero-config bootstrap)."""
+        if not isinstance(data, dict):
+            return data
+        if data.get("providers"):
+            return data
+
+        openai_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+        anthropic_key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+        openai_base = (os.environ.get("OPENAI_BASE_URL") or "").strip() or None
+
+        if openai_key:
+            provider: dict[str, Any] = {
+                "name": "openai",
+                "provider_type": "openai",
+                "api_key": openai_key,
+            }
+            if openai_base:
+                provider["api_base_url"] = openai_base
+            data["providers"] = [provider]
+            _logger.info("No providers in config; using OPENAI_API_KEY from environment.")
+            return data
+
+        if anthropic_key:
+            data["providers"] = [
+                {
+                    "name": "anthropic",
+                    "provider_type": "anthropic",
+                    "api_key": anthropic_key,
+                }
+            ]
+            if not data.get("router_profiles"):
+                data["router_profiles"] = [
+                    {
+                        "name": "default",
+                        "router": {"default": "anthropic:claude-sonnet-4-20250514"},
+                        "embedding_dims": 1536,
+                    }
+                ]
+            _logger.info("No providers in config; using ANTHROPIC_API_KEY from environment.")
+            return data
+
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -464,10 +529,10 @@ class SootheConfig(BaseSettings):
 
     # --- Vector store config ---
 
-    vector_stores: list[VectorStoreProviderConfig] = Field(default_factory=list)
+    vector_stores: list[VectorStoreProviderConfig] = Field(default_factory=default_vector_stores)
     """Vector store provider configurations."""
 
-    vector_store_router: VectorStoreRouter = Field(default_factory=VectorStoreRouter)
+    vector_store_router: VectorStoreRouter = Field(default_factory=default_vector_store_router)
     """Maps component roles to provider:collection pairs."""
 
     _vector_store_cache: dict[str, Any] = {}
