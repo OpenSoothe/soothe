@@ -47,7 +47,7 @@ _column_widths_cache: _LoopColumnWidthsCache | None = None
 """Module-level cache so repeated `/resume` opens skip column-width computation
 when the inputs (loop data + config) haven't changed."""
 
-_COL_LID = 10
+_COL_LID = 15
 _COL_STATUS = 12
 _COL_THREADS = 4
 _COL_GOALS = 4
@@ -55,6 +55,7 @@ _COL_MESSAGES = 4
 _COL_DURATION = 6
 _COL_TIMESTAMP = None
 _COL_PROMPT = None  # flex column
+_COL_LATEST_AI = 28
 _MAX_SEARCH_TEXT_LEN = 200
 _AUTO_WIDTH_COLUMNS = {"created_at", "updated_at"}
 _COLUMN_ORDER = (
@@ -67,6 +68,7 @@ _COLUMN_ORDER = (
     "created_at",
     "updated_at",
     "prompt",
+    "latest_ai",
 )
 _COLUMN_WIDTHS: dict[str, int | None] = {
     "loop_id": _COL_LID,
@@ -78,6 +80,7 @@ _COLUMN_WIDTHS: dict[str, int | None] = {
     "created_at": _COL_TIMESTAMP,
     "updated_at": _COL_TIMESTAMP,
     "prompt": _COL_PROMPT,
+    "latest_ai": _COL_LATEST_AI,
 }
 _COLUMN_LABELS = {
     "loop_id": "Loop ID",
@@ -89,6 +92,7 @@ _COLUMN_LABELS = {
     "created_at": "Created",
     "updated_at": "Updated",
     "prompt": "Goal",
+    "latest_ai": "Latest AI",
 }
 _COLUMN_TOGGLE_LABELS = {
     "loop_id": "Loop ID",
@@ -100,6 +104,7 @@ _COLUMN_TOGGLE_LABELS = {
     "created_at": "Created At",
     "updated_at": "Updated At",
     "prompt": "Goal Text",
+    "latest_ai": "Latest AI Response",
 }
 # Reserved for future right-aligned columns (e.g., message counts).
 _RIGHT_ALIGNED_COLUMNS: set[str] = {"messages", "duration"}
@@ -209,10 +214,36 @@ def _truncate_value(value: str, width: int | None) -> str:
     return display[: width - len(ellipsis)] + ellipsis
 
 
+def _abbreviate_middle(value: str, width: int | None) -> str:
+    """Abbreviate text as ``prefix...suffix`` for fixed-width identifiers."""
+    if width is None:
+        return value
+    text = _collapse_whitespace(value)
+    if len(text) <= width:
+        return text
+    marker = "..."
+    if width <= len(marker):
+        return text[:width]
+    # Keep balanced prefix/suffix while reserving room for marker.
+    edge = max(1, (width - len(marker)) // 2)
+    suffix_len = width - len(marker) - edge
+    return f"{text[:edge]}{marker}{text[-suffix_len:]}"
+
+
+def _abbreviate_loop_id(value: str) -> str:
+    """Render loop IDs as ``8-char prefix + ... + 4-char suffix``."""
+    text = _collapse_whitespace(value)
+    if len(text) <= 15:
+        return text
+    return f"{text[:8]}...{text[-4:]}"
+
+
 def _format_duration_ms(duration_ms: int | None) -> str:
     """Compact human duration for the selector cell (e.g. ``43s``, ``1m8s``)."""
-    if not isinstance(duration_ms, int) or duration_ms <= 0:
+    if not isinstance(duration_ms, int):
         return "-"
+    if duration_ms <= 0:
+        return "0s"
     total_seconds = duration_ms // 1000
     if total_seconds < 60:
         return f"{total_seconds}s"
@@ -239,9 +270,8 @@ def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool 
 
     value: str
     if key == "loop_id":
-        # Strip UUID separators in the compact table preview so truncation
-        # never leaves a dangling trailing hyphen in the loop ID column.
-        value = loop["loop_id"].replace("-", "")
+        compact_id = loop["loop_id"].replace("-", "")
+        value = _abbreviate_loop_id(compact_id)
     elif key == "status":
         status = loop.get("status") or "unknown"
         # Distinguish stale "running" persisted state from genuinely-active
@@ -266,6 +296,8 @@ def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool 
         value = fmt(loop.get("updated") or loop.get("created"))
     elif key == "prompt":
         value = str(loop.get("prompt") or "").strip() or "(no prompt)"
+    elif key == "latest_ai":
+        value = str(loop.get("latest_ai_response") or "").strip() or "-"
     else:
         value = ""
 
@@ -422,15 +454,15 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         Binding("pageup", "page_up", "Page up", show=False, priority=True),
         Binding("pagedown", "page_down", "Page down", show=False, priority=True),
         Binding("enter", "select", "Select", show=False, priority=True),
-        Binding("escape", "cancel", "Cancel", show=False, priority=True),
-        Binding("tab", "focus_next_filter", "Next filter", show=False, priority=True),
+        Binding("s", "toggle_sort", "Toggle sort", show=False, priority=True),
         Binding(
-            "shift+tab",
-            "focus_previous_filter",
-            "Previous filter",
+            "r",
+            "toggle_relative_time",
+            "Toggle relative time",
             show=False,
             priority=True,
         ),
+        Binding("escape", "cancel", "Cancel", show=False, priority=True),
     ]
 
     CSS = """
@@ -439,9 +471,9 @@ class LoopSelectorScreen(ModalScreen[str | None]):
     }
 
     LoopSelectorScreen #loop-selector-shell {
-        width: 100%;
-        max-width: 98%;
-        height: 90%;
+        width: 92%;
+        max-width: 120;
+        height: 78%;
         background: $surface;
         border: solid $primary;
         padding: 1 2;
@@ -596,6 +628,14 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         text-overflow: ellipsis;
     }
 
+    LoopSelectorScreen .loop-cell-latest_ai {
+        width: 28;
+        min-width: 12;
+        overflow-x: hidden;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
+    }
+
     LoopSelectorScreen .loop-cell-messages,
     LoopSelectorScreen .loop-cell-duration {
         width: auto;
@@ -712,8 +752,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         lines = (
             f"{glyphs.arrow_up}/{glyphs.arrow_down} navigate"
             f" {glyphs.bullet} Enter select"
-            f" {glyphs.bullet} Tab/Shift+Tab focus options"
-            f" {glyphs.bullet} Space toggle option"
+            f" {glyphs.bullet} S toggle sort"
+            f" {glyphs.bullet} R toggle relative timestamps"
             f" {glyphs.bullet} Esc cancel"
         )
         limit = self._effective_loop_limit()
@@ -741,21 +781,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         return self._filter_input
 
     def _filter_focus_order(self) -> list[Input | Checkbox]:
-        """Return the cached tab order for filter controls in the side panel."""
-        if self._filter_controls is None:
-            filter_input = self._get_filter_input()
-            sort_switch = self.query_one(f"#{_SORT_SWITCH_ID}", Checkbox)
-            relative_switch = self.query_one(f"#{_RELATIVE_TIME_SWITCH_ID}", Checkbox)
-            column_switches = [
-                self.query_one(f"#{self._switch_id(key)}", Checkbox) for key in _COLUMN_ORDER
-            ]
-            self._filter_controls = [
-                filter_input,
-                sort_switch,
-                relative_switch,
-                *column_switches,
-            ]
-        return self._filter_controls
+        """Return focusable controls for the selector."""
+        return [self._get_filter_input()]
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout.
@@ -772,71 +799,38 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 id="loop-filter",
             )
 
-            with Horizontal(classes="loop-selector-body"):
-                with Vertical(classes="loop-table-pane"):
-                    with Horizontal(
-                        classes="loop-list-header",
-                        id="loop-header",
-                    ):
-                        yield Static("", classes="loop-cell loop-cell-cursor")
-                        sort_key = _active_sort_key(self._sort_by_updated)
-                        for key in _visible_column_keys(self._columns):
-                            cell = Static(
-                                _format_header_label(key),
-                                classes=_header_cell_classes(key, sort_key=sort_key),
-                                expand=key in ("initial_prompt", "prompt"),
-                                markup=False,
-                            )
-                            _apply_column_width(cell, key, self._column_widths)
-                            yield cell
+            with Vertical(classes="loop-selector-body loop-table-pane"):
+                with Horizontal(
+                    classes="loop-list-header",
+                    id="loop-header",
+                ):
+                    yield Static("", classes="loop-cell loop-cell-cursor")
+                    sort_key = _active_sort_key(self._sort_by_updated)
+                    for key in _visible_column_keys(self._columns):
+                        cell = Static(
+                            _format_header_label(key),
+                            classes=_header_cell_classes(key, sort_key=sort_key),
+                            expand=key in ("initial_prompt", "prompt"),
+                            markup=False,
+                        )
+                        _apply_column_width(cell, key, self._column_widths)
+                        yield cell
 
-                    with VerticalScroll(classes="loop-list"):
-                        if self._has_initial_loops:
-                            if self._filtered_loops:
-                                self._option_widgets, _ = self._create_option_widgets()
-                                yield from self._option_widgets
-                            else:
-                                yield Static(
-                                    Content.styled("No loops found", "dim"),
-                                    classes="loop-empty",
-                                )
+                with VerticalScroll(classes="loop-list"):
+                    if self._has_initial_loops:
+                        if self._filtered_loops:
+                            self._option_widgets, _ = self._create_option_widgets()
+                            yield from self._option_widgets
                         else:
                             yield Static(
-                                Content.styled("Loading loops...", "dim"),
+                                Content.styled("No loops found", "dim"),
                                 classes="loop-empty",
-                                id="loop-loading",
                             )
-
-                with Vertical(classes="loop-controls"):
-                    yield Static("Options", classes="loop-controls-title")
-                    yield Static(
-                        (
-                            "Tab through sort and column toggles. Column visibility persists between sessions."
-                        ),
-                        classes="loop-controls-help",
-                        markup=False,
-                    )
-                    yield Checkbox(
-                        self._format_sort_toggle_label(),
-                        self._sort_by_updated,
-                        id=_SORT_SWITCH_ID,
-                        classes="loop-column-toggle",
-                        compact=True,
-                    )
-                    yield Checkbox(
-                        "Relative Timestamps",
-                        self._relative_time,
-                        id=_RELATIVE_TIME_SWITCH_ID,
-                        classes="loop-column-toggle",
-                        compact=True,
-                    )
-                    for key in _COLUMN_ORDER:
-                        yield Checkbox(
-                            _COLUMN_TOGGLE_LABELS[key],
-                            self._columns.get(key, False),
-                            id=self._switch_id(key),
-                            classes="loop-column-toggle",
-                            compact=True,
+                    else:
+                        yield Static(
+                            Content.styled("Loading loops...", "dim"),
+                            classes="loop-empty",
+                            id="loop-loading",
                         )
 
             yield Static(
@@ -853,7 +847,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             container.styles.border = ("ascii", colors.success)
 
         filter_input = self._get_filter_input()
-        self._filter_focus_order()
         filter_input.focus()
 
         if self._has_initial_loops:
@@ -1098,6 +1091,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             loop["loop_id"],
             loop.get("status") or "",
             loop.get("prompt") or "",
+            loop.get("latest_ai_response") or "",
         ]
         text = " ".join(parts)
         return text[:_MAX_SEARCH_TEXT_LEN]
@@ -1559,6 +1553,18 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         self._schedule_list_rebuild()
 
         self._persist_sort_order("updated_at" if self._sort_by_updated else "created_at")
+
+    def action_toggle_relative_time(self) -> None:
+        """Toggle timestamp display between relative and absolute."""
+        self._relative_time = not self._relative_time
+
+        from soothe_cli.tui.model_config import save_loop_relative_time
+
+        self.run_worker(
+            asyncio.to_thread(save_loop_relative_time, self._relative_time),
+            group="loop-selector-save",
+        )
+        self._schedule_list_rebuild()
 
     def _persist_sort_order(self, order: str) -> None:
         """Save sort-order preference to config, notifying on failure."""
