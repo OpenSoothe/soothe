@@ -1460,22 +1460,23 @@ class LLMPlanner:
         """Cheaper plan-generate for the ``simple`` intake branch (RFC-630).
 
         Same ``PlanGeneration`` schema as ``generate_from_assessment``, but with
-        a reduced context: only the last 2 step results, no DAG prior-state
-        context, no ContextEngine bundle. Runs the same LLM call with a smaller
-        prompt. Used for single-focused-step goals that don't need the full
-        evidence ledger.
+        a reduced context: only the last 2 step results and no DAG prior-state
+        context. Runs the same LLM call with a smaller prompt. Used for
+        single-focused-step goals that don't need the full evidence ledger.
+
+        The ``context_engine`` is forwarded so the plan-generate ledger pair is
+        still recorded (RFC-624 Phase 4 requires a non-None CE for ledger
+        writes); only ``plan_manager`` is dropped to skip DAG context.
         """
         # Trim step results to the last 2 to shrink the prompt.
         trimmed_state = state.model_copy(update={"step_results": state.step_results[-2:]})
-        # Skip DAG context and ContextEngine bundle by passing plan_manager=None
-        # and context_engine=None — the prompt builder omits those sections.
         return await self.generate_from_assessment(
             goal=goal,
             state=trimmed_state,
             context=context,
             assessment=assessment,
             plan_manager=None,
-            context_engine=None,
+            context_engine=context_engine,
         )
 
     async def plan(
