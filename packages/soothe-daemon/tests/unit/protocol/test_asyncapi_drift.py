@@ -73,7 +73,8 @@ class TestDaemonRegistrySync:
     def test_no_methods_missing_from_registry(self, drift_checker) -> None:
         doc = drift_checker.load_asyncapi(_SPEC_PATH)
         methods = drift_checker.extract_message_methods(doc)
-        registry = drift_checker.load_daemon_registry()
+        registry, import_ok = drift_checker.load_daemon_registry()
+        assert import_ok, "Daemon PARAMS_REGISTRY not importable"
         missing_in_registry, _missing_in_asyncapi = drift_checker.cross_reference_registry(
             methods, registry
         )
@@ -88,7 +89,8 @@ class TestSDKParamsSync:
     def test_no_schemas_missing_from_sdk(self, drift_checker) -> None:
         doc = drift_checker.load_asyncapi(_SPEC_PATH)
         params = drift_checker.extract_params_schemas(doc)
-        sdk_module = drift_checker.load_sdk_params_module()
+        sdk_module, import_ok = drift_checker.load_sdk_params_module()
+        assert import_ok, "SDK params module not importable"
         assert sdk_module is not None, "SDK params module not importable"
         drift = drift_checker.cross_reference_sdk_params(params, sdk_module)
         assert not drift, "AsyncAPI params schemas missing from SDK:\n" + "\n".join(drift)
