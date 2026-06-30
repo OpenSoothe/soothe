@@ -1094,6 +1094,8 @@ class MessageRouter:
 
     async def _handle_skills_list(self, client_id: str, msg: dict[str, Any]) -> None:
         """Return wire-safe skill metadata for the daemon's agent config."""
+        import asyncio
+
         d = self._daemon
         from soothe.skills.catalog import wire_entries_for_agent_config
 
@@ -1114,7 +1116,13 @@ class MessageRouter:
                     if isinstance(raw_ws, str) and raw_ws.strip():
                         workspace = raw_ws.strip()
 
-        skills = wire_entries_for_agent_config(d._config, workspace, skill_index=d._skill_index)
+        # Run filesystem I/O in a thread to avoid blocking the event loop
+        skills = await asyncio.to_thread(
+            wire_entries_for_agent_config,
+            d._config,
+            workspace,
+            skill_index=d._skill_index,
+        )
         await self._send_response(
             client_id,
             msg.get("request_id"),

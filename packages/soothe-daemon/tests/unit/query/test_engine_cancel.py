@@ -556,3 +556,67 @@ async def test_concurrent_query_does_not_abort_unrelated_stream() -> None:
 
     await slow_task
     assert slow_factory.runners["loop-slow"].chunks_yielded == 6
+
+
+@pytest.mark.asyncio
+async def test_cancel_loop_without_active_task_records_pending_cancel() -> None:
+    """Idle cancel must arm ``_pending_cancels`` for the pre-registration race window."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _ChunkedRunner(chunk_count=3, chunk_delay=0.02)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
+    engine = QueryEngine(daemon)
+
+    await engine.cancel_loop("loop-a")
+
+    assert "loop-a" in engine._pending_cancels
+
+
+@pytest.mark.asyncio
+async def test_pending_cancel_aborts_query_before_stream_starts() -> None:
+    """A pending cancel recorded before task registration must abort ``_run_stream``."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _ChunkedRunner(chunk_count=5, chunk_delay=0.03)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
+    engine = QueryEngine(daemon)
+
+    engine._pending_cancels.add("loop-a")
+    await engine.run_query("hello", loop_id="loop-a")
+    await asyncio.sleep(0.15)
+
+    assert runner.chunks_yielded == 0
+    assert "loop-a" not in engine._pending_cancels
+    idle_msgs = [
+        m
+        for m in broadcasts
+        if m.get("type") == "status" and m.get("state") == "idle" and m.get("loop_id") == "loop-a"
+    ]
+    assert idle_msgs
+
+
+@pytest.mark.asyncio
+async def test_cancel_running_query_does_not_poison_immediate_resubmit() -> None:
+    """Ctrl+C on a running query must not leave a stale ``_pending_cancels`` token."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _ChunkedRunner(chunk_count=5, chunk_delay=0.03)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("first", loop_id="loop-a")
+    await asyncio.sleep(0.05)
+    assert runner.chunks_yielded >= 1
+    task1 = daemon._current_query_task
+    assert task1 is not None
+
+    await engine.cancel_loop("loop-a")
+    assert "loop-a" not in engine._pending_cancels
+
+    with suppress(asyncio.CancelledError):
+        await task1
+
+    runner.chunks_yielded = 0
+    await engine.run_query("second", loop_id="loop-a")
+    await asyncio.sleep(0.2)
+
+    assert runner.chunks_yielded >= 1, "resubmit should stream, not hit cancelled_before_start"

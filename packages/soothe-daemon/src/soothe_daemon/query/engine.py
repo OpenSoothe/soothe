@@ -210,6 +210,35 @@ class AsyncCancelOrchestrator:
 
     def _collect_tasks_for_loop(self, loop_id: str) -> list[tuple[str, asyncio.Task]]:
         """Collect asyncio tasks associated with the given loop_id."""
+        return self._query_engine.collect_active_tasks_for_loop(loop_id)
+
+
+class QueryEngine:
+    """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon.
+
+    IG-408: Locals named ``thread_id`` in this module are LangGraph **checkpoint ids**
+    (``configurable.thread_id``). Client-visible scope is always ``loop_id`` /
+    ``effective_loop_id``; ``_loop_scoped_client_message`` strips stray ``thread_id``
+    keys from outbound frames.
+    """
+
+    def __init__(self, daemon: Any) -> None:
+        """Attach to the running ``SootheDaemon`` instance (expects ``_runner_factory`` after ``start()``)."""
+        self._daemon = daemon
+        # RFC-221: per-loop runner instances keyed by loop_id
+        self._active_runners: dict[str, Any] = {}
+        # Async cancel orchestrator for guaranteed cancellation
+        self._cancel_orchestrator: AsyncCancelOrchestrator | None = None
+        # Loop ids cancelled before their query task was registered. The early
+        # ``running`` broadcast (server/handlers.py) can let a ``/cancel`` arrive
+        # before ``run_query`` creates the asyncio task; without this set the
+        # cancel would be lost. ``_run_stream`` checks membership at start and
+        # aborts immediately, emitting ``idle`` so the client observes the
+        # cancellation.
+        self._pending_cancels: set[str] = set()
+
+    def collect_active_tasks_for_loop(self, loop_id: str) -> list[tuple[str, asyncio.Task]]:
+        """Return in-flight query asyncio tasks bound to ``loop_id``."""
         d = self._daemon
         tasks: list[tuple[str, asyncio.Task]] = []
         seen: set[int] = set()
@@ -237,31 +266,6 @@ class AsyncCancelOrchestrator:
             seen.add(id(ct))
 
         return tasks
-
-
-class QueryEngine:
-    """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon.
-
-    IG-408: Locals named ``thread_id`` in this module are LangGraph **checkpoint ids**
-    (``configurable.thread_id``). Client-visible scope is always ``loop_id`` /
-    ``effective_loop_id``; ``_loop_scoped_client_message`` strips stray ``thread_id``
-    keys from outbound frames.
-    """
-
-    def __init__(self, daemon: Any) -> None:
-        """Attach to the running ``SootheDaemon`` instance (expects ``_runner_factory`` after ``start()``)."""
-        self._daemon = daemon
-        # RFC-221: per-loop runner instances keyed by loop_id
-        self._active_runners: dict[str, Any] = {}
-        # Async cancel orchestrator for guaranteed cancellation
-        self._cancel_orchestrator: AsyncCancelOrchestrator | None = None
-        # Loop ids cancelled before their query task was registered. The early
-        # ``running`` broadcast (server/handlers.py) can let a ``/cancel`` arrive
-        # before ``run_query`` creates the asyncio task; without this set the
-        # cancel would be lost. ``_run_stream`` checks membership at start and
-        # aborts immediately, emitting ``idle`` so the client observes the
-        # cancellation.
-        self._pending_cancels: set[str] = set()
 
     @staticmethod
     def _loop_scoped_client_message(loop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1318,11 +1322,12 @@ class QueryEngine:
             logger.warning("cancel_loop called with empty loop_id; ignoring (no cancellation)")
             return
 
-        # Record the cancel so a query task that has not been registered yet
-        # (the early-``running`` race window) aborts when ``_run_stream`` starts.
-        # Cleared by ``_run_stream`` once it has observed the pending cancel or
-        # successfully registered itself.
-        self._pending_cancels.add(lidq)
+        # Record the cancel only when no asyncio task is registered yet (the
+        # early-``running`` race window). When a task already exists, cancel it
+        # directly — leaving ``_pending_cancels`` set would poison the next
+        # submit after Ctrl+C (consumed as ``cancelled_before_start``).
+        if not self.collect_active_tasks_for_loop(lidq):
+            self._pending_cancels.add(lidq)
 
         # RFC-221: signal the pool/local subprocess runner *before* return.
         # This ensures cooperative cancellation starts immediately, even though

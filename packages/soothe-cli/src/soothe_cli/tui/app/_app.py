@@ -192,6 +192,14 @@ class SootheApp(
         self._daemon_skills_wire: list[dict[str, Any]] = []
         """Cached ``skills_list_response`` rows when the TUI uses ``TuiDaemonSession``."""
 
+        self._preloaded_model_data: (
+            tuple[list[tuple[str, str]], str | None, dict[str, dict[str, Any]]] | None
+        ) = None
+        """Cached ``/model`` selector data from startup ``models_list`` prewarm."""
+
+        self._wire_credential_map: dict[str, bool | None] | None = None
+        """Provider credential flags paired with ``_preloaded_model_data``."""
+
         self._connecting = True
 
         self._sandbox_type: str | None = None

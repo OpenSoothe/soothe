@@ -87,36 +87,29 @@ class _ModelMixin:
         preloaded: tuple[list[tuple[str, str]], str | None, dict[str, dict[str, Any]]] | None = None
         wire_creds: dict[str, bool | None] | None = None
         if self._daemon_session is not None:
-            try:
-                resp = await self._daemon_session.list_models()
-            except Exception as exc:
-                logger.exception("daemon list_models failed")
-                await self._mount_message(ErrorMessage(f"Could not load models from daemon: {exc}"))
-                return
-            rows = resp.get("models") or []
-            all_models: list[tuple[str, str]] = []
-            wire_creds = {}
-            for row in rows:
-                if not isinstance(row, dict) or row.get("placeholder"):
-                    continue
-                spec = str(row.get("spec", "")).strip()
-                prov = str(row.get("provider", "")).strip()
-                if not spec or not prov:
-                    continue
-                all_models.append((spec, prov))
-                if prov not in wire_creds and "has_credentials" in row:
-                    wire_creds[prov] = row.get("has_credentials")
-            dm = resp.get("default_model")
-            default_spec = dm if isinstance(dm, str) and dm.strip() else None
-            profiles = {spec: {"profile": {}, "overridden_keys": set()} for spec, _ in all_models}
-            preloaded = (all_models, default_spec, profiles)
-            if not all_models:
-                await self._mount_message(
-                    ErrorMessage(
-                        "Daemon returned no models. Check providers and `models:` lists in the daemon host config.yml."
-                    ),
-                )
-                return
+            if self._preloaded_model_data is not None:
+                preloaded = self._preloaded_model_data
+                wire_creds = self._wire_credential_map
+            else:
+                from soothe_cli.tui.model_config import parse_models_list_response
+
+                try:
+                    resp = await self._daemon_session.list_models()
+                except Exception as exc:
+                    logger.exception("daemon list_models failed")
+                    await self._mount_message(
+                        ErrorMessage(f"Could not load models from daemon: {exc}")
+                    )
+                    return
+                all_models, default_spec, profiles, wire_creds = parse_models_list_response(resp)
+                preloaded = (all_models, default_spec, profiles)
+                if not all_models:
+                    await self._mount_message(
+                        ErrorMessage(
+                            "Daemon returned no models. Check providers and `models:` lists in the daemon host config.yml."
+                        ),
+                    )
+                    return
 
         screen = ModelSelectorScreen(
             current_model=cur_model,

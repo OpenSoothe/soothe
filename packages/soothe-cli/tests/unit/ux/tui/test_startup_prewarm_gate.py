@@ -15,7 +15,7 @@ class _StartupProbe(_StartupMixin):
 
     def __init__(self) -> None:
         self._status_bar = MagicMock()
-        self.call_after_refresh = MagicMock(return_value=True)
+        self.set_timer = MagicMock(return_value=MagicMock())
 
 
 @pytest.mark.asyncio
@@ -38,13 +38,13 @@ async def test_deferred_startup_waits_for_prewarm_before_post_paint(monkeypatch)
         order.append("prewarm_done")
         return None
 
-    def fake_call_after_refresh(callback) -> bool:  # noqa: ANN001
+    def fake_set_timer(delay: float, callback) -> MagicMock:  # noqa: ANN001
         order.append("post_paint_scheduled")
-        return True
+        return MagicMock()
 
     monkeypatch.setattr(probe, "_prewarm_deferred_imports", slow_prewarm)
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
-    probe.call_after_refresh = fake_call_after_refresh
+    probe.set_timer = fake_set_timer
 
     task = asyncio.create_task(probe._run_deferred_startup())
     await asyncio.wait_for(prewarm_started.wait(), timeout=1.0)

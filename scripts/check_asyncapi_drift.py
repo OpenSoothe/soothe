@@ -42,8 +42,13 @@ from typing import Any
 
 # Path bootstrap so the script runs from the repo root without install.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+for _src in (
+    _REPO_ROOT / "packages" / "soothe-daemon" / "src",
+    _REPO_ROOT / "packages" / "soothe-sdk" / "src",
+):
+    _src_str = str(_src)
+    if _src.exists() and _src_str not in sys.path:
+        sys.path.insert(0, _src_str)
 
 try:
     import yaml
@@ -213,21 +218,20 @@ def extract_message_methods(doc: dict[str, Any]) -> dict[str, str | None]:
 # ---------------------------------------------------------------------------
 
 
-def load_daemon_registry() -> dict[tuple[str, str | None], type]:
+def load_daemon_registry() -> tuple[dict[tuple[str, str | None], type], bool]:
     """Import the daemon's PARAMS_REGISTRY.
 
     Returns:
-        The ``PARAMS_REGISTRY`` dict mapping ``(type, method)`` → params model.
-
-    Raises:
-        ImportError: If the daemon package is not importable.
+        Tuple of ``(PARAMS_REGISTRY, import_ok)`` where ``PARAMS_REGISTRY`` maps
+        ``(type, method)`` → params model and ``import_ok`` is ``False`` when the
+        daemon package could not be imported.
     """
     try:
         mod = importlib.import_module("soothe_daemon.protocol.schemas")
     except ImportError as exc:
         print(f"WARNING: Cannot import daemon protocol schemas: {exc}", file=sys.stderr)
-        return {}
-    return getattr(mod, "PARAMS_REGISTRY", {})
+        return {}, False
+    return getattr(mod, "PARAMS_REGISTRY", {}), True
 
 
 def cross_reference_registry(
@@ -283,17 +287,18 @@ def cross_reference_registry(
 # ---------------------------------------------------------------------------
 
 
-def load_sdk_params_module() -> Any:
+def load_sdk_params_module() -> tuple[Any, bool]:
     """Import the SDK's client-side params validation module.
 
     Returns:
-        The imported module, or ``None`` if unavailable.
+        Tuple of ``(module, import_ok)`` where ``module`` is the imported module
+        or ``None`` when unavailable.
     """
     try:
-        return importlib.import_module("soothe_sdk.client.protocol_params")
+        return importlib.import_module("soothe_sdk.client.protocol_params"), True
     except ImportError as exc:
         print(f"WARNING: Cannot import SDK params module: {exc}", file=sys.stderr)
-        return None
+        return None, False
 
 
 def cross_reference_sdk_params(
@@ -368,15 +373,27 @@ def main(argv: list[str] | None = None) -> int:
     print(f"INFO: Found {len(message_methods)} method-specific messages in AsyncAPI.")
 
     # 3. Cross-reference daemon registry
-    registry = load_daemon_registry()
+    registry, daemon_import_ok = load_daemon_registry()
     missing_in_registry, missing_in_asyncapi = cross_reference_registry(message_methods, registry)
 
     # 4. Cross-reference SDK params
-    sdk_module = load_sdk_params_module()
+    sdk_module, sdk_import_ok = load_sdk_params_module()
     sdk_drift = cross_reference_sdk_params(params_schemas, sdk_module)
 
     # 5. Report
     has_errors = False
+    if args.strict and not daemon_import_ok:
+        print(
+            "\nFAIL: --strict requires soothe_daemon.protocol.schemas to be importable.",
+            file=sys.stderr,
+        )
+        has_errors = True
+    if args.strict and not sdk_import_ok:
+        print(
+            "\nFAIL: --strict requires soothe_sdk.client.protocol_params to be importable.",
+            file=sys.stderr,
+        )
+        has_errors = True
     if missing_in_registry:
         print("\nFAIL: Methods in AsyncAPI missing from daemon PARAMS_REGISTRY:")
         has_errors = True
