@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-ModelRole = Literal["default", "fast", "think", "image", "embedding"]
+ModelRole = Literal["default", "fast", "think", "image", "ocr", "embedding"]
 """Valid purpose-based model roles.
 
 Re-exported from config for API convenience. Maps to router.* fields:
@@ -20,6 +20,7 @@ Re-exported from config for API convenience. Maps to router.* fields:
   explore/tacitus subagents, memory extraction, document/audio tooling).
 - ``think``: Stronger reasoning (planning, consensus validation, backoff reasoning).
 - ``image``: Vision-capable model (image analysis, daemon vision preflight).
+- ``ocr``: Dedicated OCR / document text extraction model.
 - ``embedding``: Embedding model (MemU vector search, semantic memory).
 """
 

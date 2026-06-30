@@ -23,6 +23,7 @@ from soothe_daemon.protocol.error_codes import (
     ProtocolError,
     build_error_response,
 )
+from soothe_daemon.protocol.intent_hints import validate_and_normalize_intent_hint
 from soothe_daemon.protocol.schemas import PARAMS_REGISTRY
 from soothe_daemon.protocol.validation import validate_message
 from soothe_daemon.services.image_understanding import validate_and_normalize_image_attachments
@@ -2083,16 +2084,44 @@ class MessageRouter:
             )
             return
 
-        if intent_hint_preview not in ("direct_llm", "image_to_text") and prompt_text is None:
+        raw_attachments = msg.get("attachments")
+        if raw_attachments is not None:
+            normalized_attachments, attachment_error = validate_and_normalize_image_attachments(
+                raw_attachments
+            )
+            if attachment_error is not None:
+                await d._send_client_message(
+                    client_id,
+                    build_error_response(
+                        ErrorCode.INVALID_PARAMS,
+                        attachment_error,
+                        request_id=request_id,
+                    ),
+                )
+                return
+            attachments_for_queue = normalized_attachments or None
+        else:
+            attachments_for_queue = None
+
+        has_response_schema = bool(q_opts.get("response_schema"))
+        normalized_hint, hint_error = validate_and_normalize_intent_hint(
+            intent_hint_preview,
+            prompt_text=prompt_text,
+            has_attachments=bool(attachments_for_queue),
+            has_response_schema=has_response_schema,
+        )
+        if hint_error is not None:
             await d._send_client_message(
                 client_id,
                 build_error_response(
                     ErrorCode.INVALID_REQUEST,
-                    "loop_id and non-empty content (string or object with text) required",
+                    hint_error,
                     request_id=request_id,
                 ),
             )
             return
+        if normalized_hint is not None:
+            q_opts["intent_hint"] = normalized_hint
 
         if not await self._ensure_loop_exists(loop_id):
             await d._send_client_message(
@@ -2117,75 +2146,8 @@ class MessageRouter:
             )
             return
 
-        raw_attachments = msg.get("attachments")
-        if raw_attachments is not None:
-            normalized_attachments, attachment_error = validate_and_normalize_image_attachments(
-                raw_attachments
-            )
-            if attachment_error is not None:
-                await d._send_client_message(
-                    client_id,
-                    build_error_response(
-                        ErrorCode.INVALID_PARAMS,
-                        attachment_error,
-                        request_id=request_id,
-                    ),
-                )
-                return
-            attachments_for_queue = normalized_attachments or None
-        else:
-            attachments_for_queue = None
-
-        if intent_hint_preview in ("direct_llm", "image_to_text"):
-            if intent_hint_preview == "image_to_text" and not attachments_for_queue:
-                await d._send_client_message(
-                    client_id,
-                    build_error_response(
-                        ErrorCode.INVALID_REQUEST,
-                        "intent_hint image_to_text requires non-empty attachments",
-                        request_id=request_id,
-                    ),
-                )
-                return
-            if (
-                intent_hint_preview == "direct_llm"
-                and not prompt_text
-                and not attachments_for_queue
-            ):
-                await d._send_client_message(
-                    client_id,
-                    build_error_response(
-                        ErrorCode.INVALID_REQUEST,
-                        "intent_hint direct_llm requires non-empty content or attachments",
-                        request_id=request_id,
-                    ),
-                )
-                return
-            if intent_hint_preview == "image_to_text":
-                q_opts["intent_hint"] = "direct_llm"
-
         response_schema = q_opts.get("response_schema")
         if response_schema is not None:
-            if intent_hint_preview not in (None, "direct_llm", "image_to_text"):
-                await d._send_client_message(
-                    client_id,
-                    build_error_response(
-                        ErrorCode.INVALID_REQUEST,
-                        "response_schema is only supported with intent_hint direct_llm",
-                        request_id=request_id,
-                    ),
-                )
-                return
-            if attachments_for_queue:
-                await d._send_client_message(
-                    client_id,
-                    build_error_response(
-                        ErrorCode.INVALID_REQUEST,
-                        "response_schema is not supported with direct_llm attachments",
-                        request_id=request_id,
-                    ),
-                )
-                return
             try:
                 from soothe.utils.llm.schema_wire import validate_response_schema
 

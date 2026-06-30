@@ -202,7 +202,7 @@ class LoopInputParams(ParamsBase):
         model: Provider:model override.
         model_params: Additional model parameters.
         attachments: Image attachments.
-        intent_hint: Intent classification hint.
+        intent_hint: Daemon direct-model hint (text_completion, image_to_text, ocr, embed).
         response_schema: Structured output schema.
         response_schema_name: Schema name for logging.
         response_schema_strict: Enable strict schema validation.
@@ -328,7 +328,7 @@ class JobCreateParams(ParamsBase):
         autonomous: Enable autonomous mode.
         max_iterations: Max iterations.
         guidance: Initial guidance.
-        intent_hint: Intent classification hint.
+        intent_hint: Daemon direct-model hint (text_completion, image_to_text, ocr, embed).
     """
 
     goal: str = Field(..., min_length=1, description="Root goal text")

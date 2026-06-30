@@ -12,6 +12,13 @@ from soothe_sdk.client.helpers import (
     request_daemon_shutdown,
     websocket_url_from_config,
 )
+from soothe_sdk.client.intent_hints import (
+    EMBED,
+    IMAGE_TO_TEXT,
+    OCR,
+    TEXT_COMPLETION,
+    validate_loop_input_intent_hint,
+)
 
 # Client-side params validation models (RFC-450 §6.5)
 from soothe_sdk.client.protocol_params import (
@@ -99,6 +106,11 @@ __all__ = [
     "request_daemon_shutdown",
     "fetch_skills_catalog",
     "fetch_config_section",
+    "TEXT_COMPLETION",
+    "IMAGE_TO_TEXT",
+    "OCR",
+    "EMBED",
+    "validate_loop_input_intent_hint",
     "envelope_langchain_message_dict",
     "messages_from_wire_dicts",
     # Protocol-1 wire envelope models (RFC-450 §5, IG-522 Phase 1)

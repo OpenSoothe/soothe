@@ -53,7 +53,7 @@ def test_factory_applies_compat_wrapper_for_custom_openai_endpoint() -> None:
     config = SootheConfig(
         providers=[
             ModelProviderConfig(
-                name="local-omlx",
+                name="omlx",
                 provider_type="openai",
                 api_base_url="http://127.0.0.1:9642/v1",
                 api_key="test",
@@ -62,7 +62,7 @@ def test_factory_applies_compat_wrapper_for_custom_openai_endpoint() -> None:
         router_profiles=[
             {
                 "name": "test",
-                "router": {"default": "local-omlx:test-model"},
+                "router": {"default": "omlx:test-model"},
                 "embedding_dims": 1536,
             }
         ],
