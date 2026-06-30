@@ -33,7 +33,6 @@ jobs:
     if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
-      actions: write
 
     steps:
       - name: Free disk space
@@ -201,42 +200,6 @@ jobs:
         with:
           version: latest
 
-      - name: Remove obsolete buildcache tag
-        if: ${{ steps.publish.outputs.registry_secrets_ready == 'true' }}
-        continue-on-error: true
-        run: |
-          ref="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:buildcache"
-          if docker buildx imagetools inspect "${ref}" >/dev/null 2>&1; then
-            docker buildx imagetools rm "${ref}"
-            echo "Removed obsolete tag ${ref}"
-          else
-            echo "No buildcache tag to remove."
-          fi
-
-      - name: Configure build cache backend
-        id: build_cache
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
-        run: |
-          set -euo pipefail
-          if [ "${{ steps.publish.outputs.registry_secrets_ready }}" = "true" ]; then
-            # Inline cache stores metadata in the pushed image manifest. Aliyun ACR rejects the
-            # separate :buildcache manifest (application/vnd.buildkit.cacheconfig.v0).
-            {
-              echo 'cache-from<<EOF'
-              echo "type=registry,ref=${IMAGE}:latest"
-              echo 'type=gha,scope=soothed'
-              echo 'EOF'
-            } >> "${GITHUB_OUTPUT}"
-            if [ "${{ steps.publish.outputs.should_push }}" = "true" ]; then
-              printf 'cache-to=type=inline\n' >> "${GITHUB_OUTPUT}"
-            fi
-          else
-            # Fallback when registry credentials are unavailable (local-only builds).
-            printf '%s\n' 'cache-from=type=gha,scope=soothed' >> "${GITHUB_OUTPUT}"
-            printf '%s\n' 'cache-to=type=gha,scope=soothed,mode=min,ignore-error=true' >> "${GITHUB_OUTPUT}"
-          fi
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -262,8 +225,5 @@ jobs:
           push: ${{ steps.publish.outputs.should_push == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: ${{ steps.build_cache.outputs.cache-from }}
-          cache-to: ${{ steps.build_cache.outputs.cache-to }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           provenance: false
           sbom: false
