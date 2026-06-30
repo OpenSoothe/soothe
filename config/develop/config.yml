@@ -1,5 +1,6 @@
 # Local development defaults (overrides Pydantic defaults)
 # Full reference: config/config.template.yml
+# Zero-config: export OPENAI_API_KEY — no YAML required for OpenAI-only use
 # Persistence: SQLite by default
 # Langfuse: docker compose --profile langfuse up -d (UI on :3300)
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local; export DASHSCOPE_*

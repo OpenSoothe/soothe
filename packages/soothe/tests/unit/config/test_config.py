@@ -21,7 +21,9 @@ from soothe.config import (
 
 
 class TestSootheConfig:
-    def test_defaults(self) -> None:
+    def test_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         cfg = SootheConfig()
         assert cfg.debug is False
         # Check that tools is a ToolsConfig instance
@@ -41,6 +43,9 @@ class TestSootheConfig:
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
         assert cfg.agent.autonomous.enabled is False
+        assert len(cfg.vector_stores) == 1
+        assert cfg.vector_stores[0].name == "sqlite_vec_default"
+        assert cfg.vector_store_router.default == "sqlite_vec_default:soothe_default"
 
     def test_yaml_with_daemon_top_level_block_loads(self, tmp_path: Path) -> None:
         """Daemon-only keys may appear in legacy agent YAML; they must not break parsing."""
@@ -893,9 +898,14 @@ class TestProtocolConfig:
         )
         assert cfg.resolve_vector_store_role("unknown_role") == "in_memory:soothe_default"
 
-    def test_resolve_vector_store_role_no_default(self) -> None:
-        """Test that role resolution returns None when no assignment and no default."""
+    def test_resolve_vector_store_role_falls_back_to_default(self) -> None:
+        """Unknown roles inherit ``vector_store_router.default`` (sqlite_vec bootstrap)."""
         cfg = SootheConfig()
+        assert cfg.resolve_vector_store_role("unknown_role") == "sqlite_vec_default:soothe_default"
+
+    def test_resolve_vector_store_role_no_default(self) -> None:
+        """When default is unset, unknown roles resolve to None."""
+        cfg = SootheConfig(vector_store_router={"default": None})
         assert cfg.resolve_vector_store_role("unknown_role") is None
 
     def test_vector_store_instance_caching(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1095,3 +1105,43 @@ class TestToolsSettings:
             }
         )
         assert cfg.resolve_persistence_postgres_dsn() == "postgresql://localhost/soothe_new"
+
+
+class TestEnvProviderBootstrap:
+    def test_bootstrap_openai_provider_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-openai")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        cfg = SootheConfig()
+        assert len(cfg.providers) == 1
+        assert cfg.providers[0].name == "openai"
+        assert cfg.providers[0].api_key == "sk-test-openai"
+        assert cfg.router.default == "openai:gpt-4o-mini"
+
+    def test_bootstrap_openai_with_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:1234/v1")
+        cfg = SootheConfig()
+        assert cfg.providers[0].api_base_url == "http://localhost:1234/v1"
+
+    def test_bootstrap_anthropic_provider_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        cfg = SootheConfig()
+        assert len(cfg.providers) == 1
+        assert cfg.providers[0].name == "anthropic"
+        assert cfg.router.default == "anthropic:claude-sonnet-4-20250514"
+
+    def test_bootstrap_skipped_when_yaml_providers_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env-key")
+        cfg = SootheConfig(providers=[ModelProviderConfig(name="custom", api_key="yaml-key")])
+        assert len(cfg.providers) == 1
+        assert cfg.providers[0].name == "custom"
+        assert cfg.providers[0].api_key == "yaml-key"
+
+    def test_openai_takes_priority_over_anthropic(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant")
+        cfg = SootheConfig()
+        assert cfg.providers[0].name == "openai"
