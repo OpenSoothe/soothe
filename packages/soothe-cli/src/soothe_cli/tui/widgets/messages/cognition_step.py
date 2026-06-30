@@ -232,9 +232,13 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
 
     def record_token_usage(self, input_tokens: int, output_tokens: int) -> None:
-        """Accumulate LLM token usage for this step."""
+        """Accumulate LLM token usage for this step or SubAgent card."""
+        if not input_tokens and not output_tokens:
+            return
         self._input_tokens += input_tokens
         self._output_tokens += output_tokens
+        if self._status in ("running", "pending", "queued"):
+            self._sync_running_status_line()
 
     def _token_budget_suffix(self) -> str:
         """Token budget suffix for status lines, e.g. ``in:1.2K out:345``."""

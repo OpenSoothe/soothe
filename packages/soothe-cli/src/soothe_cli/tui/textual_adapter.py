@@ -547,6 +547,42 @@ def _lookup_subagent_card(adapter: TextualUIAdapter, display_key: str) -> Any | 
     return adapter._subagent_cards_by_key.get(_subagent_registry_key(parsed_sid, task_idx))
 
 
+def _lookup_subagent_card_for_task_scope(
+    adapter: TextualUIAdapter,
+    task_scope: TaskScope,
+) -> Any | None:
+    """Return the SubAgent card for a resolved task namespace binding."""
+    step_id = task_scope_step_id(task_scope)
+    if not step_id:
+        return None
+    task_idx = task_scope_task_idx(task_scope, step_id)
+    return adapter._subagent_cards_by_key.get(_subagent_registry_key(step_id, task_idx))
+
+
+def _resolve_token_target_card(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    ns_key: tuple[str, ...],
+) -> Any | None:
+    """Resolve step or SubAgent card for per-card token accounting.
+
+    Main execute namespaces update the step card. Subgraph/task namespaces update
+    the SubAgent card only so step totals exclude nested delegation usage.
+    """
+    if is_step_card_tool_scope(ns_key=ns_key):
+        step_w = adapter._step_by_namespace.get(ns_key)
+        if step_w is not None:
+            return step_w
+        if len(router.active_step_ids) == 1:
+            only_sid = next(iter(router.active_step_ids))
+            return adapter._current_step_messages.get(only_sid)
+        return None
+    task_scope = router.resolve_task_scope(ns_key)
+    if task_scope is None:
+        return None
+    return _lookup_subagent_card_for_task_scope(adapter, task_scope)
+
+
 def _ingest_tool_on_subagent_card(
     adapter: TextualUIAdapter,
     subagent_card: Any,
@@ -2347,18 +2383,16 @@ async def execute_task_textual(
                                     captured_input_tokens = max(
                                         captured_input_tokens, input_toks + output_toks
                                     )
-                                    # Record per-step token usage
-                                    active_step = adapter._step_by_namespace.get(ns_key)
-                                    if active_step is not None:
-                                        active_step.record_token_usage(input_toks, output_toks)
+                                    token_card = _resolve_token_target_card(adapter, router, ns_key)
+                                    if token_card is not None:
+                                        token_card.record_token_usage(input_toks, output_toks)
                                 elif total_toks:
                                     # Fallback: model gives only total (no split)
                                     turn_stats.record_request(active_model, total_toks, 0)
                                     captured_input_tokens = max(captured_input_tokens, total_toks)
-                                    # Record per-step token usage (total only, no split)
-                                    active_step = adapter._step_by_namespace.get(ns_key)
-                                    if active_step is not None:
-                                        active_step.record_token_usage(total_toks, 0)
+                                    token_card = _resolve_token_target_card(adapter, router, ns_key)
+                                    if token_card is not None:
+                                        token_card.record_token_usage(total_toks, 0)
 
                         touched_tool_ids = tool_ids_touched_by_stream_message(message)
                         if touched_tool_ids:
