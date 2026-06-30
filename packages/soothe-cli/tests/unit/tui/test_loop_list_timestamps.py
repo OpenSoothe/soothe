@@ -14,12 +14,15 @@ naive ISO as UTC before converting to local time. Lock both behaviours in.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from soothe_cli.tui.sessions import (
     _parse_iso_to_local,
     format_relative_timestamp,
     format_timestamp,
+    list_loops_via_daemon_rpc,
 )
 
 
@@ -111,3 +114,67 @@ def test_format_relative_timestamp_returns_blank_for_empty_input() -> None:
     assert format_relative_timestamp(None) == ""
     assert format_relative_timestamp("") == ""
     assert format_relative_timestamp("not-an-iso") == ""
+
+
+@pytest.mark.asyncio
+async def test_list_loops_derives_duration_from_created_and_updated() -> None:
+    """Missing daemon duration should fallback to updated-created elapsed time."""
+    daemon = type(
+        "DaemonStub",
+        (),
+        {
+            "list_loops": AsyncMock(
+                return_value={
+                    "loops": [
+                        {
+                            "loop_id": "loop_a",
+                            "status": "idle",
+                            "threads": 1,
+                            "goals": 0,
+                            "switches": 0,
+                            "created": "2026-06-30T09:00:00+00:00",
+                            "updated_at": "2026-06-30T09:00:45+00:00",
+                            "duration_ms": 0,
+                        }
+                    ]
+                }
+            )
+        },
+    )()
+
+    loops = await list_loops_via_daemon_rpc(daemon, limit=20, sort_by="updated")
+
+    assert loops
+    assert loops[0]["duration_ms"] == 45_000
+
+
+@pytest.mark.asyncio
+async def test_list_loops_includes_latest_ai_response_preview() -> None:
+    """loop_list should preserve daemon-provided latest assistant preview."""
+    daemon = type(
+        "DaemonStub",
+        (),
+        {
+            "list_loops": AsyncMock(
+                return_value={
+                    "loops": [
+                        {
+                            "loop_id": "loop_a",
+                            "status": "idle",
+                            "threads": 1,
+                            "goals": 0,
+                            "switches": 0,
+                            "created": "2026-06-30T09:00:00+00:00",
+                            "updated_at": "2026-06-30T09:00:45+00:00",
+                            "latest_ai_response": "Completed the refactor and added tests.",
+                        }
+                    ]
+                }
+            )
+        },
+    )()
+
+    loops = await list_loops_via_daemon_rpc(daemon, limit=20, sort_by="updated")
+
+    assert loops
+    assert loops[0]["latest_ai_response"] == "Completed the refactor and added tests."

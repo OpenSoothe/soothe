@@ -296,6 +296,7 @@ _DEFAULT_LOOP_COLUMNS = {
     "created_at": False,
     "updated_at": True,
     "prompt": True,
+    "latest_ai": True,
 }
 
 
