@@ -13,14 +13,12 @@ def test_task_tool_excludes_parent_owned_keys_from_subagent_merge() -> None:
     assert getattr(sm._build_task_tool, "_soothe_patched_config", False)
 
     # Re-run builder logic: parent-owned keys are excluded alongside deepagents defaults.
-    excluded = sm._EXCLUDED_STATE_KEYS | frozenset({"workspace", "git_status"})
+    excluded = sm._EXCLUDED_STATE_KEYS | frozenset({"workspace"})
     result = {
         "messages": [],
         "workspace": "/Users/proj",
-        "git_status": {"clean": True},
         "search_target": "widgets",
     }
     state_update = {k: v for k, v in result.items() if k not in excluded}
     assert "workspace" not in state_update
-    assert "git_status" not in state_update
     assert state_update.get("search_target") == "widgets"

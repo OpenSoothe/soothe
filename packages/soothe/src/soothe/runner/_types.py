@@ -97,7 +97,6 @@ class RunnerState:
         recalled_memories: Memory items recalled for this query
         recalled_memory_count: Number of memories recalled
         intent_classification: IG-226 Intent classification with goal handling strategy
-        git_status: Git snapshot for planner prompts
         protocol_summary: Protocol backend summary for system prompt
         thread_context: Thread metadata for system prompt
         workspace_size_bytes: Workspace size in bytes (RFC-104)
@@ -129,7 +128,6 @@ class RunnerState:
     observation_refresh_needed: bool = False
     observation_scope_key: str = ""
     # Context for system prompt XML injection (RFC-104)
-    git_status: dict[str, Any] | None = None
     thread_context: dict[str, Any] = field(default_factory=dict)
     protocol_summary: dict[str, Any] = field(default_factory=dict)
     # Per-query artifact store (RFC-0010); avoids sharing one RunArtifactStore on the runner (IG-110)

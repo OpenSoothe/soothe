@@ -154,7 +154,6 @@ class PlanContext(BaseModel):
         completed_steps: Results from already-completed steps.
         routing_classification: Pre-computed routing classification (``RoutingClassification``; IG-383).
         workspace: Current workspace directory path.
-        git_status: Optional git snapshot from runner (``branch``, ``main_branch``, ``recent_commits``).
         working_memory_excerpt: Reserved; not embedded in Plan-phase human text (IG-371).
         thread_id: Daemon thread id for observability (Langfuse session on plan LLM calls).
     """
@@ -164,7 +163,6 @@ class PlanContext(BaseModel):
     completed_steps: list[StepResult] = Field(default_factory=list)
     routing_classification: Any | None = Field(default=None)
     workspace: str | None = None  # Current workspace directory
-    git_status: dict[str, Any] | None = None
     working_memory_excerpt: str | None = None
     thread_id: str | None = Field(
         default=None,

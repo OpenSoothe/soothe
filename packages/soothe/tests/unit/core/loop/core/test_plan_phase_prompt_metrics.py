@@ -36,7 +36,6 @@ def context():
         goal="Test goal",
         thread_id="test-thread",
         workspace=None,
-        git_status=None,
         recent_messages=[],
     )
 
