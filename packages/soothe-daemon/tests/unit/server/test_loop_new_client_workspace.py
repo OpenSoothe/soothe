@@ -51,6 +51,10 @@ class _CapturingDaemon:
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
         self.sent.append(msg)
 
+    async def _broadcast(self, msg: dict[str, Any]) -> None:
+        """Stub for autopilot mode broadcast (tests inspect sent, not broadcast)."""
+        self.sent.append(msg)
+
     async def close(self) -> None:
         if self._persistence_manager is not None:
             await self._persistence_manager.close()
