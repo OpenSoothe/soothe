@@ -161,9 +161,6 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Resolve registry publish eligibility
         id: publish
         env:
@@ -188,13 +185,37 @@ jobs:
         run: |
           echo "::warning::Skipping registry push. Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to publish images after release."
 
+      # Login before setup-buildx: docker/login-action rewrites DOCKER_CONFIG and would
+      # otherwise drop the buildx builder config (see docker/build-push-action#1253).
       - name: Login to Aliyun Container Registry
-        if: ${{ steps.publish.outputs.should_push == 'true' }}
+        if: ${{ steps.publish.outputs.registry_secrets_ready == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.ALIYUN_REGISTRY_USERNAME }}
           password: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          version: latest
+
+      - name: Configure build cache backend
+        id: build_cache
+        env:
+          CACHE_IMAGE: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:buildcache
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.publish.outputs.registry_secrets_ready }}" = "true" ]; then
+            # Registry cache avoids GHA 10GB quota / reserve failures on large multi-arch layers.
+            printf 'cache-from=type=registry,ref=%s\n' "${CACHE_IMAGE}" >> "${GITHUB_OUTPUT}"
+            printf 'cache-to=type=registry,ref=%s,mode=max,ignore-error=true\n' "${CACHE_IMAGE}" >> "${GITHUB_OUTPUT}"
+          else
+            # Fallback when registry credentials are unavailable (local-only builds).
+            printf '%s\n' 'cache-from=type=gha,scope=soothed' >> "${GITHUB_OUTPUT}"
+            printf '%s\n' 'cache-to=type=gha,scope=soothed,mode=min,ignore-error=true' >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Extract metadata
         id: meta
@@ -212,6 +233,7 @@ jobs:
         with:
           context: .
           file: packages/soothe-daemon/Dockerfile
+          builder: ${{ steps.buildx.outputs.name }}
           build-args: |
             SOOTHE_VERSION=${{ steps.soothe_version.outputs.version }}
             SOOTHE_DAEMON_VERSION=${{ steps.soothe_version.outputs.version }}
@@ -220,7 +242,8 @@ jobs:
           push: ${{ steps.publish.outputs.should_push == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: ${{ steps.build_cache.outputs.cache-from }}
+          cache-to: ${{ steps.build_cache.outputs.cache-to }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           provenance: false
           sbom: false
