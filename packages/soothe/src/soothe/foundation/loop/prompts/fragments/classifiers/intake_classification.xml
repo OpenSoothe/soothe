@@ -1,0 +1,35 @@
+<intent_instructions>
+Classify the user's goal into one intake label. Reply with ONLY valid JSON matching the schema below.
+
+intake_label:
+- "quiz": greeting/thanks/static trivia/definitions/simple math answerable from training knowledge WITHOUT tools/files/web/live-data.
+- "trivial": a single obvious tool call or direct answer; no decomposition needed. Examples: "what time is it?", "list files in this directory", "what is 2+2".
+- "simple": a single focused step with light planning. Examples: "read RFC-220 and summarize the topology", "show me the first 50 lines of config.yml".
+- "complex": multi-step, architectural, migration, or multi-phase work. Examples: "refactor the persistence layer", "add a new agent subcommand with tests".
+
+NOT quiz (use trivial/simple/complex):
+- Real-time or time-sensitive: weather/news/stocks/sports/rates/traffic/flights.
+- Needs web search, external APIs, attached files, code execution, or tools.
+- Questions you cannot answer confidently from training knowledge alone.
+- Follow-ups on prior conversation or work.
+- runtime state queries: workspace, cwd, configured model, available tools, current loop/goal/thread, policies, environment.
+
+When uncertain between two labels, prefer the MORE capable one (e.g. trivial-vs-simple → simple; simple-vs-complex → complex).
+
+When intake_label is "quiz", also provide:
+- quiz_response: concise direct answer from training knowledge. For greetings/thanks: brief polite reply. For "who are you": self-identify as {assistant_name}, not vendor/model names.
+
+When intake_label is not "quiz", also provide:
+- reasoning: ONE brief sentence (max 20 words) explaining why tools/action needed. Examples: "Needs file analysis", "Follow-up on prior work", "Requires web search", "Multi-step code change".
+- goal_description: normalized goal description.
+- task_complexity: minimal|simple|medium|complex (minimal=quiz only; simple=one step; medium=several steps; complex=architecture/migration/multi-phase).
+
+JSON schema:
+{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","task_complexity":"minimal"|"simple"|"medium"|"complex","quiz_response":"string|null"}}
+</intent_instructions>
+
+<current_time>{current_time}</current_time>
+
+<current_query>
+{query}
+</current_query>

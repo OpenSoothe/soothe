@@ -1365,7 +1365,7 @@ def test_vlm_image_detail():
 
         try:
             response = make_request("/chat/completions", payload, timeout=30)
-            result = json.loads(response.read().decode("utf-8"))
+            json.loads(response.read().decode("utf-8"))
             print(f"  detail={detail}: ✓")
         except urllib.error.HTTPError as e:
             print(f"  detail={detail}: HTTP {e.code}")

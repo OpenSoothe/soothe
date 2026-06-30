@@ -1,8 +1,9 @@
-"""Intent classifier implementation (RFC-225).
+"""Intent classifier implementation (RFC-225, RFC-630).
 
-Two-value LLM classification (``quiz`` vs. ``agentic``). Loop continuation
-is derived structurally inside ``StrangeLoop`` from the loaded checkpoint
-and is not a classifier concern.
+4-class LLM intake classification (``quiz`` | ``trivial`` | ``simple`` |
+``complex``) via ``classify_intake``, driving ``route_by_intent`` branch
+routing. Loop continuation is derived structurally inside ``StrangeLoop``
+from the loaded checkpoint and is not a classifier concern.
 """
 
 from __future__ import annotations
@@ -16,14 +17,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from soothe.utils.llm.structured import invoke_structured_chat
 
 from .models import (
+    IntakeClassificationLLMResult,
+    IntakeLabel,
     IntentClassification,
-    IntentClassificationLLMResult,
     IntentHint,
     TaskComplexity,
 )
 from .prompts import (
-    INTENT_CLASSIFICATION_PROMPT,
-    INTENT_CLASSIFICATION_RETRY_PROMPT,
+    INTAKE_CLASSIFICATION_PROMPT,
+    INTAKE_CLASSIFICATION_RETRY_PROMPT,
 )
 from .quiz_messages import build_quiz_system_message
 
@@ -36,11 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 class IntentClassifier:
-    """LLM-driven intent classification (RFC-225).
+    """LLM-driven intent classification (RFC-225, RFC-630).
 
-    - Quiz vs. agentic decision via a single structured LLM call.
+    - 4-class intake label via a single structured LLM call.
     - No structural / continuation logic — that is owned by ``StrangeLoop``.
-    - Robust fallbacks to safe defaults on failure.
+    - Robust fallback to ``complex`` on failure (fail-safe: full pipeline runs).
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
@@ -65,18 +67,19 @@ class IntentClassifier:
 
     # -- Public API --------------------------------------------------------
 
-    async def classify_intent(
+    async def classify_intake(
         self,
         query: str,
         *,
         observability_metadata: dict[str, str] | None = None,
         intent_hint: IntentHint | None = None,
     ) -> IntentClassification:
-        """Classify the query as quiz or agentic.
+        """Classify the query into a 4-class intake label (RFC-630).
 
-        - ``intent_hint=quiz`` short-circuits to a quiz classification.
-        - Long/complex queries (heuristic) skip the LLM and resolve as agentic.
-        - Otherwise: one structured LLM call with retry; fallback to agentic.
+        - ``intent_hint=quiz`` short-circuits to a quiz classification (caller
+          assertion, not a content heuristic).
+        - Otherwise: one structured LLM call with retry; fallback to ``complex``
+          so the full pipeline runs (fail-safe, RFC-630 §9.3).
 
         Args:
             query: User input text.
@@ -84,25 +87,23 @@ class IntentClassifier:
             intent_hint: Optional bypass hint (``quiz`` only).
 
         Returns:
-            IntentClassification with ``intent_type`` ∈ {``quiz``, ``agentic``}.
+            IntentClassification with ``intake_label`` ∈
+            {``quiz``, ``trivial``, ``simple``, ``complex``} and ``intent_type``
+            derived from it (``quiz`` → ``quiz``, else ``agentic``).
         """
         if intent_hint == IntentHint.QUIZ:
-            logger.info("Intent hint bypass: quiz")
+            logger.info("Intake hint bypass: quiz")
             return self._build_quiz_intent()
 
-        if self._is_likely_agentic(query):
-            logger.info("Heuristic bypass: query too long/complex for quiz, classifying as agentic")
-            return self._build_agentic_intent(query)
-
         if not self._fast_model:
-            return self._fallback_intent(query)
+            return self._fallback(query)
 
         result: IntentClassification | None = None
         last_error: Exception | None = None
 
         for retry_mode in (False, True):
             try:
-                result = await self._classify_intent_llm(
+                result = await self._classify_intake_llm(
                     query,
                     retry_mode=retry_mode,
                     observability_metadata=observability_metadata,
@@ -111,23 +112,23 @@ class IntentClassifier:
             except Exception as exc:
                 last_error = exc
                 logger.warning(
-                    "Intent classification failed (%s), retrying...",
+                    "Intake classification failed (%s), retrying...",
                     "retry" if retry_mode else "primary",
                 )
-                logger.debug("Intent classification error: %s", exc, exc_info=True)
+                logger.debug("Intake classification error: %s", exc, exc_info=True)
 
         if result is None:
             logger.warning(
-                "Intent classification failed after retry, using fallback (error: %s)",
+                "Intake classification failed after retry, using fallback (error: %s)",
                 type(last_error).__name__ if last_error else "unknown",
             )
-            return self._fallback_intent(query, error_context=last_error)
+            return self._fallback(query, error_context=last_error)
 
         result = self._patch_missing_fields(result, query)
 
         logger.debug(
-            "Intent classified: intent_type=%s complexity=%s",
-            result.intent_type,
+            "Intake classified: intake_label=%s complexity=%s",
+            result.intake_label,
             result.task_complexity,
         )
 
@@ -135,23 +136,26 @@ class IntentClassifier:
 
     # -- Internal LLM calls ------------------------------------------------
 
-    async def _classify_intent_llm(
+    async def _classify_intake_llm(
         self,
         query: str,
         *,
         retry_mode: bool = False,
         observability_metadata: dict[str, str] | None = None,
     ) -> IntentClassification:
-        """LLM quiz detection with structured output.
+        """4-class intake LLM call with structured output (RFC-630).
 
         Uses `invoke_structured_chat` for thinking-model compatibility.
         Models in thinking mode reject `tool_choice=required`, so we use the
         structured_invoke fallback chain: function_calling → json_schema → json_mode.
+        The LLM picks one of ``quiz``/``trivial``/``simple``/``complex``; the
+        result is mapped onto ``intent_type`` so the quiz fast-path and event
+        emission keep working.
         """
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         prompt_template = (
-            INTENT_CLASSIFICATION_RETRY_PROMPT if retry_mode else INTENT_CLASSIFICATION_PROMPT
+            INTAKE_CLASSIFICATION_RETRY_PROMPT if retry_mode else INTAKE_CLASSIFICATION_PROMPT
         )
         prompt = prompt_template.format(
             query=query,
@@ -160,8 +164,8 @@ class IntentClassifier:
         )
 
         config = self._build_invoke_config(
-            "classify_intent",
-            "intent.primary",
+            "classify_intake",
+            "intake.primary",
             observability_metadata=observability_metadata,
         )
 
@@ -170,28 +174,32 @@ class IntentClassifier:
             HumanMessage(content=prompt),
         ]
 
-        # Use invoke_structured_chat for thinking-model fallback support
-        schema = IntentClassificationLLMResult.model_json_schema()
+        schema = IntakeClassificationLLMResult.model_json_schema()
         try:
             result_dict = await invoke_structured_chat(
                 self._fast_model,
                 messages,
                 json_schema=schema,
-                schema_name="IntentClassificationLLMResult",
+                schema_name="IntakeClassificationLLMResult",
                 strict=True,
                 config=config,
             )
         except Exception:
-            logger.exception("LLM intent classification call failed")
+            logger.exception("LLM intake classification call failed")
             raise
 
         if result_dict is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if result_dict.get("intent_type") not in ("agentic", "quiz"):
-            raise ValueError(f"Invalid intent_type from LLM: {result_dict.get('intent_type')!r}")
+        if result_dict.get("intake_label") not in (
+            IntakeLabel.QUIZ,
+            IntakeLabel.TRIVIAL,
+            IntakeLabel.SIMPLE,
+            IntakeLabel.COMPLEX,
+        ):
+            raise ValueError(f"Invalid intake_label from LLM: {result_dict.get('intake_label')!r}")
 
-        llm_result = IntentClassificationLLMResult(**result_dict)
+        llm_result = IntakeClassificationLLMResult(**result_dict)
         return llm_result.to_intent_classification()
 
     # -- Helpers ------------------------------------------------------------
@@ -201,42 +209,28 @@ class IntentClassifier:
         """Build a quiz IntentClassification (fast-path hint bypass)."""
         return IntentClassification(
             intent_type="quiz",
+            intake_label=IntakeLabel.QUIZ,
             reasoning=None,
             goal_description=None,
             task_complexity=TaskComplexity.MINIMAL,
             quiz_response=None,
         )
 
-    @staticmethod
-    def _build_agentic_intent(query: str, reasoning: str | None = None) -> IntentClassification:
-        """Build an agentic IntentClassification with medium complexity.
-
-        Args:
-            query: User query text.
-            reasoning: Optional reasoning (IG-518). If None, uses default heuristic message.
-        """
-        return IntentClassification(
-            intent_type="agentic",
-            reasoning=reasoning or "Query complexity exceeds quiz threshold",
-            goal_description=query,
-            task_complexity=TaskComplexity.MEDIUM,
-            quiz_response=None,
-        )
-
-    def _fallback_intent(
+    def _fallback(
         self,
         query: str,
         *,
         error_context: Exception | None = None,
     ) -> IntentClassification:
-        """Safe fallback to agentic when classification is unavailable or fails."""
+        """Safe fallback to ``complex`` (RFC-630 §9.3): run the full pipeline."""
         reason = type(error_context).__name__ if error_context else "classification_disabled"
-        logger.debug("Intent fallback to agentic (%s)", reason)
+        logger.debug("Intake fallback to complex (%s)", reason)
         return IntentClassification(
             intent_type="agentic",
+            intake_label=IntakeLabel.COMPLEX,
             reasoning=f"Classification fallback ({reason})",
             goal_description=query,
-            task_complexity=TaskComplexity.MEDIUM,
+            task_complexity=TaskComplexity.COMPLEX,
             quiz_response=None,
         )
 
@@ -254,19 +248,6 @@ class IntentClassifier:
                 intent.reasoning = "Goal requires tool execution"
                 logger.debug("Patched missing reasoning")
         return intent
-
-    # -- Heuristic classification -------------------------------------------
-
-    @staticmethod
-    def _is_likely_agentic(query: str) -> bool:
-        """Heuristic: queries with >80 chars, >15 words, or >2 lines are agentic."""
-        if len(query) > 80:
-            return True
-        if len(query.split()) > 15:
-            return True
-        if query.count("\n") >= 2:
-            return True
-        return False
 
     def _build_invoke_config(
         self,

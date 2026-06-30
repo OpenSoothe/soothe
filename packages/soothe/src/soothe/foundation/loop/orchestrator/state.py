@@ -1,8 +1,10 @@
-"""Loop Graph channel schema for LangGraph routing (RFC-220)."""
+"""Loop Graph channel schema for LangGraph routing (RFC-220, RFC-630)."""
 
 from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
+
+from soothe.foundation.loop.intention.models import IntakeLabel
 
 IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "deferred"]
 
@@ -26,6 +28,13 @@ class LoopGraphState(TypedDict, total=False):
     intent_route: IntentRoute | None
     assess_route: AssessRoute | None
     evidence_gather_route: EvidenceGatherRoute | None
+    # RFC-630: 4-class intake label set by init_or_resume, read by
+    # route_by_intent to dispatch to the quiz/trivial/simple/complex branches.
+    intake_label: IntakeLabel | None
+    # RFC-630: structural continuation overlay set by init_or_resume from
+    # checkpoint state (continue_loop_mode + prior completed goals). When True,
+    # route_by_intent dispatches to plan_assess regardless of intake_label.
+    is_continuation: bool | None
     # Clarification relay (RFC-622): serialized to keep the channel JSON-safe.
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None

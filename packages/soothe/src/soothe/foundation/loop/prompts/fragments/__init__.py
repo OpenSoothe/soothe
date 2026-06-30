@@ -63,8 +63,8 @@ QUIZ_RESPONSE_GUIDE_FRAGMENT = _read("system/response_guides/quiz_response.xml")
 # Classifier prompts
 # ---------------------------------------------------------------------------
 
-INTENT_CLASSIFICATION_PROMPT_FRAGMENT = _read("classifiers/intent_classification.xml")
-INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = _read("classifiers/intent_classification_retry.xml")
+INTAKE_CLASSIFICATION_PROMPT_FRAGMENT = _read("classifiers/intake_classification.xml")
+INTAKE_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = _read("classifiers/intake_classification_retry.xml")
 SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
     "classifiers/scenario_classifier_system.xml", strip=True
 )
@@ -85,8 +85,8 @@ __all__ = [
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
     "EXECUTION_RULES_FRAGMENT",
-    "INTENT_CLASSIFICATION_PROMPT_FRAGMENT",
-    "INTENT_CLASSIFICATION_RETRY_PROMPT_FRAGMENT",
+    "INTAKE_CLASSIFICATION_PROMPT_FRAGMENT",
+    "INTAKE_CLASSIFICATION_RETRY_PROMPT_FRAGMENT",
     "LOOP_CONTINUATION_GUIDE_FRAGMENT",
     "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",

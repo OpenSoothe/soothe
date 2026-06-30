@@ -1,8 +1,9 @@
-"""Unit tests for intent classification (RFC-225).
+"""Unit tests for 4-class intake classification (RFC-630).
 
-The LLM classifier produces only ``quiz`` or ``agentic``. Loop
-continuation is derived structurally inside ``StrangeLoop`` from the
-loaded checkpoint and is not a classifier concern.
+The LLM classifier produces a 4-class ``intake_label`` (``quiz`` | ``trivial``
+| ``simple`` | ``complex``) that drives ``route_by_intent``. Loop continuation
+is derived structurally inside ``StrangeLoop`` from the loaded checkpoint and
+is not a classifier concern.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,181 +11,179 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.foundation.loop.intention import IntentClassification, IntentClassifier, TaskComplexity
-from soothe.foundation.loop.intention.models import IntentClassificationLLMResult
+from soothe.foundation.loop.intention.models import (
+    IntakeClassificationLLMResult,
+    IntakeLabel,
+)
 from soothe.foundation.loop.intention.prompts import (
-    INTENT_CLASSIFICATION_PROMPT,
-    INTENT_CLASSIFICATION_RETRY_PROMPT,
+    INTAKE_CLASSIFICATION_PROMPT,
+    INTAKE_CLASSIFICATION_RETRY_PROMPT,
 )
 
 
 class TestIntentClassificationModel:
     """Test IntentClassification Pydantic model."""
 
-    def test_model_creation_quiz_greeting(self) -> None:
+    def test_model_creation_quiz(self) -> None:
         intent = IntentClassification(
             intent_type="quiz",
-            goal_description=None,
+            intake_label=IntakeLabel.QUIZ,
             task_complexity=TaskComplexity.MINIMAL,
             quiz_response="Hello! How can I help?",
         )
         assert intent.intent_type == "quiz"
+        assert intent.intake_label == IntakeLabel.QUIZ
         assert intent.quiz_response == "Hello! How can I help?"
 
-    def test_model_creation_agentic(self) -> None:
+    def test_model_creation_complex(self) -> None:
         intent = IntentClassification(
             intent_type="agentic",
+            intake_label=IntakeLabel.COMPLEX,
             goal_description="Build a web scraper",
             task_complexity=TaskComplexity.COMPLEX,
-            quiz_response=None,
         )
         assert intent.intent_type == "agentic"
+        assert intent.intake_label == IntakeLabel.COMPLEX
         assert intent.goal_description == "Build a web scraper"
         assert intent.quiz_response is None
 
 
-class TestIntentClassificationLLMResult:
-    """Test the LLM result schema and its resolution to IntentClassification."""
+class TestIntakeClassificationLLMResult:
+    """Test the 4-class intake schema and its resolution (RFC-630)."""
 
     def test_quiz_resolves_to_quiz(self) -> None:
-        llm_result = IntentClassificationLLMResult(
-            intent_type="quiz",
-            goal_description=None,
+        llm_result = IntakeClassificationLLMResult(
+            intake_label=IntakeLabel.QUIZ,
             task_complexity=TaskComplexity.MINIMAL,
+            quiz_response="Hi there!",
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "quiz"
-        assert intent.quiz_response is None
+        assert intent.intake_label == IntakeLabel.QUIZ
+        assert intent.quiz_response == "Hi there!"
 
-    def test_agentic_resolves_to_agentic(self) -> None:
-        llm_result = IntentClassificationLLMResult(
-            intent_type="agentic",
-            goal_description="Refactor auth module",
+    def test_trivial_resolves_to_agentic_trivial(self) -> None:
+        llm_result = IntakeClassificationLLMResult(
+            intake_label=IntakeLabel.TRIVIAL,
+            reasoning="one obvious step",
+            goal_description="list files in this directory",
+            task_complexity=TaskComplexity.SIMPLE,
+        )
+        intent = llm_result.to_intent_classification()
+        assert intent.intent_type == "agentic"
+        assert intent.intake_label == IntakeLabel.TRIVIAL
+        assert intent.goal_description == "list files in this directory"
+
+    def test_simple_resolves_to_agentic_simple(self) -> None:
+        llm_result = IntakeClassificationLLMResult(
+            intake_label=IntakeLabel.SIMPLE,
+            reasoning="single focused step",
+            goal_description="summarize RFC-220 topology",
+            task_complexity=TaskComplexity.SIMPLE,
+        )
+        intent = llm_result.to_intent_classification()
+        assert intent.intent_type == "agentic"
+        assert intent.intake_label == IntakeLabel.SIMPLE
+
+    def test_complex_resolves_to_agentic_complex(self) -> None:
+        llm_result = IntakeClassificationLLMResult(
+            intake_label=IntakeLabel.COMPLEX,
+            reasoning="multi-step refactor",
+            goal_description="refactor the persistence layer",
             task_complexity=TaskComplexity.COMPLEX,
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "agentic"
-        assert intent.goal_description == "Refactor auth module"
-        assert intent.quiz_response is None
+        assert intent.intake_label == IntakeLabel.COMPLEX
 
-    def test_quiz_piggybacks_response(self) -> None:
-        llm_result = IntentClassificationLLMResult(
-            intent_type="quiz",
-            goal_description=None,
-            task_complexity=TaskComplexity.MINIMAL,
-            quiz_response="Shakespeare wrote Romeo and Juliet.",
+
+class TestIntakeClassificationPrompts:
+    """Prompt content guards for 4-class intake classification (RFC-630)."""
+
+    def test_primary_prompt_has_four_labels(self) -> None:
+        for label in ("quiz", "trivial", "simple", "complex"):
+            assert label in INTAKE_CLASSIFICATION_PROMPT
+
+    def test_retry_prompt_has_four_labels(self) -> None:
+        for label in ("quiz", "trivial", "simple", "complex"):
+            assert label in INTAKE_CLASSIFICATION_RETRY_PROMPT
+
+    def test_primary_prompt_biases_toward_complex(self) -> None:
+        """When uncertain, the intake must prefer the more capable label (RFC-630 §9.3)."""
+        assert (
+            "prefer" in INTAKE_CLASSIFICATION_PROMPT.lower()
+            or "complex" in INTAKE_CLASSIFICATION_PROMPT
         )
-        intent = llm_result.to_intent_classification()
-        assert intent.intent_type == "quiz"
-        assert intent.quiz_response == "Shakespeare wrote Romeo and Juliet."
 
-    def test_agentic_result_has_no_quiz_response(self) -> None:
-        llm_result = IntentClassificationLLMResult(
-            intent_type="agentic",
-            goal_description="Build a scraper",
-            task_complexity=TaskComplexity.MEDIUM,
-            quiz_response=None,
-        )
-        intent = llm_result.to_intent_classification()
-        assert intent.intent_type == "agentic"
-        assert intent.quiz_response is None
-
-
-class TestIntentClassificationPrompts:
-    """Prompt content guards for quiz-only classification."""
-
-    def test_primary_prompt_is_quiz_only(self) -> None:
-        assert "quiz" in INTENT_CLASSIFICATION_PROMPT
-        assert "agentic" in INTENT_CLASSIFICATION_PROMPT
-        assert "continue_thread" not in INTENT_CLASSIFICATION_PROMPT
-        assert "new_goal" not in INTENT_CLASSIFICATION_PROMPT
-        assert "quiz_response" in INTENT_CLASSIFICATION_PROMPT
-
-    def test_retry_prompt_is_quiz_only(self) -> None:
-        assert "quiz" in INTENT_CLASSIFICATION_RETRY_PROMPT
-        assert "agentic" in INTENT_CLASSIFICATION_RETRY_PROMPT
-        assert "continue_thread" not in INTENT_CLASSIFICATION_RETRY_PROMPT
-        assert "new_goal" not in INTENT_CLASSIFICATION_RETRY_PROMPT
+    def test_primary_prompt_uses_assistant_name(self) -> None:
+        assert "{assistant_name}" in INTAKE_CLASSIFICATION_PROMPT
+        assert "not vendor/model names" in INTAKE_CLASSIFICATION_PROMPT
 
     def test_primary_prompt_excludes_runtime_state_from_quiz(self) -> None:
-        """Runtime-state questions (workspace, cwd, env) must route to agentic.
-
-        Regression: trace fe0d/d414... classified "what is your workspace" as
-        quiz and returned a hallucinated Anthropic-assistant boilerplate.
-        """
-        assert "runtime state" in INTENT_CLASSIFICATION_PROMPT
-        assert "workspace" in INTENT_CLASSIFICATION_PROMPT
-        assert "cwd" in INTENT_CLASSIFICATION_PROMPT
-
-    def test_primary_prompt_quiz_response_uses_assistant_name(self) -> None:
-        assert "{assistant_name}" in INTENT_CLASSIFICATION_PROMPT
-        # IG-518: Prompt optimized - checks semantic intent (not vendor/model names)
-        assert "not vendor/model names" in INTENT_CLASSIFICATION_PROMPT
-
-    def test_retry_prompt_excludes_runtime_state_from_quiz(self) -> None:
-        assert "runtime state" in INTENT_CLASSIFICATION_RETRY_PROMPT
-        assert "workspace" in INTENT_CLASSIFICATION_RETRY_PROMPT
-
-    def test_retry_prompt_quiz_response_uses_assistant_name(self) -> None:
-        assert "{assistant_name}" in INTENT_CLASSIFICATION_RETRY_PROMPT
+        assert "runtime state" in INTAKE_CLASSIFICATION_PROMPT
+        assert "workspace" in INTAKE_CLASSIFICATION_PROMPT
 
 
 @pytest.mark.asyncio
-class TestIntentClassifier:
-    """Test IntentClassifier with mocked LLM."""
+class TestIntakeClassifier:
+    """Test the 4-class intake classifier with mocked LLM (RFC-630)."""
 
-    async def test_quiz_intent_classification(self) -> None:
+    async def test_quiz_intake_classification(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_llm_result = IntentClassification(
             intent_type="quiz",
-            goal_description=None,
+            intake_label=IntakeLabel.QUIZ,
             task_complexity=TaskComplexity.MINIMAL,
-            quiz_response=None,
         )
-        with patch.object(classifier, "_classify_intent_llm", new_callable=AsyncMock) as mock_llm:
+        with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_llm_result
-            result = await classifier.classify_intent("你好")
-
+            result = await classifier.classify_intake("你好")
         assert result.intent_type == "quiz"
-        assert result.quiz_response is None
+        assert result.intake_label == IntakeLabel.QUIZ
 
-    async def test_agentic_intent_classification(self) -> None:
+    async def test_complex_intake_classification(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_llm_result = IntentClassification(
             intent_type="agentic",
-            goal_description="Look up Shanghai weather",
-            task_complexity=TaskComplexity.SIMPLE,
+            intake_label=IntakeLabel.COMPLEX,
+            goal_description="Refactor persistence",
+            task_complexity=TaskComplexity.COMPLEX,
         )
-        with patch.object(classifier, "_classify_intent_llm", new_callable=AsyncMock) as mock_llm:
+        with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_llm_result
-            result = await classifier.classify_intent("上海的天气")
-
+            result = await classifier.classify_intake("Refactor the persistence layer")
         assert result.intent_type == "agentic"
-        assert result.quiz_response is None
-        assert result.goal_description is not None
+        assert result.intake_label == IntakeLabel.COMPLEX
+        assert result.goal_description == "Refactor persistence"
 
-    async def test_quiz_vs_agentic_distinction(self) -> None:
+    async def test_long_query_is_not_short_circuited(self) -> None:
+        """RFC-630: the _is_likely_agentic heuristic is deleted; long queries
+        must reach the LLM, not be forced to agentic by length."""
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-
-        quiz_result = IntentClassification(
+        long_query = (
+            "Please help me refactor the authentication module to use OAuth2 "
+            "with PKCE flow and update all the tests"
+        )
+        mock_llm_result = IntentClassification(
             intent_type="quiz",
-            goal_description=None,
+            intake_label=IntakeLabel.QUIZ,
             task_complexity=TaskComplexity.MINIMAL,
         )
-        with patch.object(classifier, "_classify_intent_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = quiz_result
-            result = await classifier.classify_intent("Who wrote Romeo and Juliet?")
-        assert result.intent_type == "quiz"
-        assert result.task_complexity == TaskComplexity.MINIMAL
+        with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = mock_llm_result
+            result = await classifier.classify_intake(long_query)
+        # Long query reached the LLM (mock called) and was classified quiz —
+        # the length heuristic is gone.
+        mock_llm.assert_awaited()
+        assert result.intake_label == IntakeLabel.QUIZ
 
-        agentic_result = IntentClassification(
-            intent_type="agentic",
-            goal_description="Refactor authentication module",
-            task_complexity=TaskComplexity.MEDIUM,
-        )
-        with patch.object(classifier, "_classify_intent_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = agentic_result
-            result = await classifier.classify_intent("Help me refactor authentication")
+    async def test_fallback_defaults_to_complex(self) -> None:
+        """RFC-630 §9.3: when the classifier is disabled, fallback is complex."""
+        classifier = IntentClassifier(model=None, assistant_name="TestBot")
+        result = await classifier.classify_intake("do something")
         assert result.intent_type == "agentic"
+        assert result.intake_label == IntakeLabel.COMPLEX
+        assert result.task_complexity == TaskComplexity.COMPLEX
 
     async def test_classifier_constructed_with_fast_model(self) -> None:
         model = MagicMock()
@@ -193,40 +192,3 @@ class TestIntentClassifier:
         # invoke_structured_chat builds the runnable lazily at call time, so
         # construction should NOT touch with_structured_output.
         model.with_structured_output.assert_not_called()
-
-    async def test_fallback_defaults_to_agentic(self) -> None:
-        """When the classifier is disabled, fallback is agentic."""
-        classifier = IntentClassifier(model=None, assistant_name="TestBot")
-        result = await classifier.classify_intent("do something")
-        assert result.intent_type == "agentic"
-
-
-class TestHeuristicClassification:
-    """Test heuristic bypass for long/complex queries."""
-
-    def test_short_query_is_not_agentic(self) -> None:
-        assert not IntentClassifier._is_likely_agentic("hello")
-        assert not IntentClassifier._is_likely_agentic("what is 2+2?")
-        assert not IntentClassifier._is_likely_agentic("thanks")
-
-    def test_long_query_is_agentic(self) -> None:
-        long_query = "Please help me refactor the authentication module to use OAuth2 with PKCE flow and update all the tests"
-        assert len(long_query) > 80
-        assert IntentClassifier._is_likely_agentic(long_query)
-
-    def test_many_words_is_agentic(self) -> None:
-        many_words = "I want you to create a new feature that allows users to export their data as a CSV file"
-        assert len(many_words.split()) > 15
-        assert IntentClassifier._is_likely_agentic(many_words)
-
-    def test_multiline_is_agentic(self) -> None:
-        multiline = "First do this\nThen do that\nAnd also this"
-        assert IntentClassifier._is_likely_agentic(multiline)
-
-    @pytest.mark.asyncio
-    async def test_heuristic_bypasses_llm(self) -> None:
-        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
-        long_query = "Please help me refactor the authentication module to use OAuth2 with PKCE flow and update all the tests"
-        result = await classifier.classify_intent(long_query)
-        assert result.intent_type == "agentic"
-        assert result.goal_description == long_query

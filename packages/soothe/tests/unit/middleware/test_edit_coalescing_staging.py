@@ -516,9 +516,7 @@ class TestStagingBufferFlush:
         )
 
         # Manually populate staging buffer and pending edits
-        middleware._staging_buffer["/fake.txt"] = [
-            StringReplacement("old", "new", False, "call-1")
-        ]
+        middleware._staging_buffer["/fake.txt"] = [StringReplacement("old", "new", False, "call-1")]
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
         middleware._pending_edits["/fake.txt"] = [

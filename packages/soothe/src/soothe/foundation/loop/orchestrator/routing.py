@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import logging
 from typing import Any
 
 from langgraph.graph import END
+
+from soothe.foundation.loop.intention.models import IntakeLabel
 
 from .state import PLAN_ROUTE_GOAL_DONE
 
@@ -46,6 +48,41 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
         result,
     )
     return result
+
+
+def route_by_intent(state: dict[str, Any]) -> str:
+    """RFC-630: branch dispatch after init_or_resume by intake label.
+
+    Continuation is checked first from the structural ``is_continuation`` flag
+    set by ``init_or_resume`` (derived from checkpoint state, not the LLM
+    label) — continuation turns always go to ``plan_assess``. Then matches the
+    4-class intake label:
+
+    - ``quiz``    → END (handled pre-graph; defensive duplicate)
+    - ``trivial`` → ``resolve_decision`` (synth 1-step plan in scratch, no plan LLM)
+    - ``simple``  → ``plan_generate`` (skip bounded_evidence_gather + plan_assess)
+    - ``complex`` → ``bounded_evidence_gather`` (full existing spine, IG-476 intact)
+
+    Falls back to ``bounded_evidence_gather`` (complex) when the label is
+    missing — the fail-safe path runs the full pipeline.
+    """
+    if state.get("is_continuation"):
+        logger.debug("[routing] route_by_intent → plan_assess (continuation overlay)")
+        return "plan_assess"
+
+    if state.get("intent_route") == "fast_path":
+        logger.debug("[routing] route_by_intent → END (quiz fast-path)")
+        return END
+
+    label = state.get("intake_label")
+    if label == IntakeLabel.TRIVIAL:
+        logger.debug("[routing] route_by_intent → resolve_decision (trivial)")
+        return "resolve_decision"
+    if label == IntakeLabel.SIMPLE:
+        logger.debug("[routing] route_by_intent → plan_generate (simple)")
+        return "plan_generate"
+    logger.debug("[routing] route_by_intent → bounded_evidence_gather (complex/default)")
+    return "bounded_evidence_gather"
 
 
 def route_after_init(state: dict[str, Any]) -> str:

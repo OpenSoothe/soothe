@@ -20,8 +20,8 @@ def test_build_quiz_system_message_includes_quiz_guide() -> None:
 
 
 @pytest.mark.asyncio
-class TestIntentClassifierQuizMessages:
-    """Intent classifier passes identity system message to the LLM."""
+class TestIntakeClassifierQuizMessages:
+    """Intake classifier passes identity system message to the LLM."""
 
     @staticmethod
     def _messages_from_invoke_call(call_args: object) -> list:
@@ -34,17 +34,17 @@ class TestIntentClassifierQuizMessages:
             return payload
         return [payload]
 
-    async def test_classify_intent_llm_uses_system_message(self) -> None:
+    async def test_classify_intake_llm_uses_system_message(self) -> None:
         from soothe.foundation.loop.intention import IntentClassifier
         from soothe.foundation.loop.intention.models import (
-            IntentClassificationLLMResult,
+            IntakeClassificationLLMResult,
+            IntakeLabel,
             TaskComplexity,
         )
 
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
-        mock_result = IntentClassificationLLMResult(
-            intent_type="quiz",
-            goal_description=None,
+        mock_result = IntakeClassificationLLMResult(
+            intake_label=IntakeLabel.QUIZ,
             task_complexity=TaskComplexity.MINIMAL,
             quiz_response="I'm Soothe, your assistant.",
         )
@@ -54,7 +54,7 @@ class TestIntentClassifierQuizMessages:
             "soothe.foundation.loop.intention.classifier.invoke_structured_chat",
             invoke_mock,
         ):
-            await classifier._classify_intent_llm("who are u")
+            await classifier._classify_intake_llm("who are u")
 
         messages = self._messages_from_invoke_call(invoke_mock.call_args)
         assert isinstance(messages[0], SystemMessage)

@@ -4,6 +4,8 @@ This document defines the terminology and naming conventions used in this projec
 
 **Last Updated**: 2026-06-30
 
+> Note: Also covers start-phase intake & branch routing terms (RFC-630).
+
 ## Core Terminology
 
 ### Core Module Architecture
@@ -176,6 +178,19 @@ This document defines the terminology and naming conventions used in this projec
 | Plan DAG Recoverability | Invariant that the full DAG of any persisted goal — nodes, edges, execution mode, planner metadata, done-node overlay, per-node outcomes — is recoverable from `GoalExecutionRecord` alone. | RFC-225 |
 | `_LOOP_CONTINUATION_GUIDE` | System-prompt section injected by `system_prompt` when `state["continue_loop_mode"]` is `True`. Renamed from `_THREAD_CONTINUATION_GUIDE`. | RFC-225 |
 | `seed_loop_ledger_from_prior_goal()` | Seeds a new goal's `loop_messages` from the immediately prior completed goal in the same loop. Runs unconditionally for any same-loop new goal. Renamed from `seed_continue_thread_ledger_from_prior_goal()`. | RFC-225 |
+
+### Start-Phase Intake & Branch Routing Terms (RFC-630)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Intake LLM | Single structured LLM call on the fast model that classifies a user goal into one of four labels (`quiz \| trivial \| simple \| complex`) before the graph is dispatched. Runs `asyncio.gather`-ed with the pre-graph IO cluster (checkpoint load, ContextEngine load, instruction/memory file reads, git status) so its round-trip is hidden behind IO that must run anyway. Replaces the binary `IntentClassifier` LLM + its `_is_likely_agentic` heuristic bypass. | RFC-630 |
+| IntakeLabel | 4-class enum: `quiz` (greeting/thanks/trivia, no tools), `trivial` (single obvious action, no planning LLM needed), `simple` (single focused step, lightweight plan), `complex` (multi-step/multi-phase, full plan). Continuation is NOT a label — it is a structural overlay from the checkpoint. | RFC-630 |
+| `route_by_intent` | Conditional edge after `init_or_resume` that dispatches to one of four branches by intake label, with continuation as a structural overlay checked first. Replaces `route_after_init`'s two-valued quiz/agentic dispatch. Pure function over `(state, ctx)`. | RFC-630 |
+| Branch routing | The four start-phase dispatch paths: `quiz`→END, `trivial`→synthetic 1-step plan (no plan LLM), `simple`→lightweight `plan_generate`, `complex`→the full existing spine with the IG-476 fresh-loop skip intact. | RFC-630 |
+| `generate_lightweight` | Cheaper plan call for the `simple` branch: reuses `generate_from_assessment`'s structured-output path with a reduced context window (last N step results, no full evidence ledger). Same `PlanGeneration` schema. | RFC-630 |
+| Trivial-branch plan | Minimal 1-step `PlanResult` injected by `init_or_resume` for the `trivial` label: step action = the intake LLM's `goal_description` (no prefix), plan reasoning = `None` (no synthetic prose), `expected_output` = the `## Result` evidence contract. Replaces the `simple_bypass` `"I will complete this goal directly:"` prefix. | RFC-630 |
+| Two-stage pre-graph gather | Parallelized pre-graph sequence: stage 1 = intake LLM ∥ `checkpoint.load` ∥ `git_status`; stage 2 = CE construct+load+`create_goal`/`activate_goal` (depend on checkpoint) ∥ instruction/memory file reads via `to_thread`. Stage split is a correctness constraint (CE needs the checkpoint), not an optimization choice. | RFC-630 |
+| Direct replacement | The 4-class intake is the sole intent path — the legacy binary `IntentClassificationLLMResult` schema, `classify_intent`, the binary prompt fragments, and `_is_likely_agentic` are removed outright. No feature flag, no backward-compat shim. The `IntentClassifiedEvent` wire contract (`intent_type: quiz\|agentic`) is preserved; `intent_type` is derived from the 4-class label. | RFC-630 |
 
 ### Clarification Relay Terms (RFC-622, RFC-623)
 
