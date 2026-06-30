@@ -9,6 +9,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.loop.engine.step_wave_types import _StreamCollectChunk
 
 
 @pytest.mark.asyncio
@@ -32,10 +33,11 @@ async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_final
 
     executor = Executor(mock_agent)
     rows = [r async for r in executor._stream_and_collect(fake_stream(), budget=None)]
-    _evt, _ev, tc_main, _msgs, delegate_final, _outcomes, _has_error, tc_subgraph = rows[-1]
-    assert delegate_final.strip() == "Namespaced explore answer."
-    assert tc_main == 0
-    assert tc_subgraph == 1
+    final = rows[-1]
+    assert final.output is not None
+    assert final.delegate_final.strip() == "Namespaced explore answer."
+    assert final.main_tool_count == 0
+    assert final.subgraph_tool_count == 1
 
 
 @pytest.mark.asyncio
@@ -62,11 +64,12 @@ async def test_stream_and_collect_joins_task_tool_returns_as_delegate_finals() -
     async for row in executor._stream_and_collect(fake_stream(), budget=None):
         results.append(row)
     assert len(results) == 2  # tuple passthrough + final aggregate
-    final_out, event, tc_count, msgs, delegate_final, _outcomes, _has_error, _subgraph = results[-1]
-    assert event is None
-    assert tc_count == 1
-    assert delegate_final == "Counted 3 README files."
-    assert "Counted 3 README files." in (final_out or "")
+    final = results[-1]
+    assert final.event is None
+    assert final.output is not None
+    assert final.main_tool_count == 1
+    assert final.delegate_final == "Counted 3 README files."
+    assert "Counted 3 README files." in final.output
 
 
 @pytest.mark.asyncio
@@ -138,8 +141,10 @@ async def test_stream_and_collect_rewrites_tool_call_ids_to_unified() -> None:
     assert len(rows) >= 1
     # Check that the chunk was modified with unified ID
     modified_chunk = rows[0]
-    if isinstance(modified_chunk[1], tuple) and len(modified_chunk[1]) == 3:
-        _ns, mode, data = modified_chunk[1]
+    event = modified_chunk.event
+    assert event is not None
+    if len(event) == 3:
+        _ns, mode, data = event
         if mode == "messages" and isinstance(data, tuple) and len(data) >= 2:
             msg = data[0]
             if isinstance(msg, AIMessageChunk):
@@ -180,8 +185,10 @@ async def test_stream_and_collect_rewrites_subgraph_tool_ids_to_task_level() -> 
             step_id="GHT-01",
         )
     ]
-    modified_chunk = rows[0][1]
-    _ns, mode, data = modified_chunk
+    modified_chunk = rows[0]
+    event = modified_chunk.event
+    assert event is not None
+    _ns, mode, data = event
     assert mode == "messages"
     msg = data[0]
     tc_chunks = getattr(msg, "tool_call_chunks", None) or []
@@ -218,20 +225,12 @@ async def test_stream_and_collect_rewrites_tool_call_id_to_unified() -> None:
 
     executor = Executor(mock_agent)
     rewritten_msg: AIMessageChunk | None = None
-    async for (
-        _out,
-        event,
-        _tc,
-        _msgs,
-        _df,
-        _outcomes,
-        _has_error,
-        _subgraph,
-    ) in executor._stream_and_collect(
+    async for chunk in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="GHT-01",
     ):
+        event = chunk.event
         # Rewritten message is in event tuple for intermediate yields (not in msgs)
         if isinstance(event, tuple) and len(event) == 3:
             ns, mode, data = event
@@ -307,7 +306,9 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
             step_subagent="explore",
         )
     ]
-    _ns, _mode, data = rows[0][1]
+    event = rows[0].event
+    assert event is not None
+    _ns, _mode, data = event
     msg = data[0]
     tc = msg.tool_calls[0]
     assert tc["id"] == "JPV_01:s:task:0"
@@ -356,7 +357,9 @@ async def test_stream_preserves_model_task_description_over_step_brief() -> None
             step_subagent="explore",
         )
     ]
-    msg = rows[0][1][2][0]
+    event = rows[0].event
+    assert event is not None
+    msg = event[2][0]
     assert msg.tool_calls[0]["args"]["description"] == "Model-specific delegation brief"
 
 
@@ -405,7 +408,9 @@ async def test_stream_emits_string_tool_call_chunk_args_after_enrich() -> None:
             step_subagent="explore",
         )
     ]
-    msg = rows[0][1][2][0]
+    event = rows[0].event
+    assert event is not None
+    msg = event[2][0]
     tc_chunks = getattr(msg, "tool_call_chunks", None) or []
     assert tc_chunks
     assert isinstance(tc_chunks[0]["args"], str)
@@ -473,7 +478,9 @@ async def test_subgraph_rewrite_skips_already_unified_step_level_ids() -> None:
             step_id="EZJ-07",
         )
     ]
-    _ns, _mode, data = rows[0][1]
+    event = rows[0].event
+    assert event is not None
+    _ns, _mode, data = event
     msg = data[0]
     tc_chunks = getattr(msg, "tool_call_chunks", None) or []
     assert tc_chunks[0]["id"] == "EZJ_07:s:task:0"
@@ -506,7 +513,8 @@ async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> 
     ):
         rows.append(row)
     assert len(rows) >= 2
-    _out, event, _tc, _msgs, _df, _outcomes, _has_error, _subgraph = rows[0]
+    wire = rows[0]
+    event = wire.event
     assert isinstance(event, tuple) and len(event) == 3
     _ns, mode, data = event
     assert mode == "messages"
@@ -586,20 +594,12 @@ async def test_stream_and_collect_emits_late_tool_call_update_on_tool_message() 
 
     executor = Executor(MagicMock())
     custom_payloads: list[dict] = []
-    async for (
-        _out,
-        event,
-        _tc,
-        _msgs,
-        _df,
-        _outcomes,
-        _has_error,
-        _subgraph,
-    ) in executor._stream_and_collect(
+    async for chunk in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="YJH-01",
     ):
+        event = chunk.event
         if isinstance(event, tuple) and len(event) == 3 and event[1] == "custom":  # noqa: PLR2004
             data = event[2]
             if isinstance(data, dict):
@@ -757,20 +757,12 @@ async def test_stream_and_collect_assigns_task_idx_per_subgraph_namespace() -> N
 
     executor = Executor(mock_agent)
     rewritten_ids: list[str] = []
-    async for (
-        _out,
-        event,
-        _tc,
-        _msgs,
-        _df,
-        _outcomes,
-        _has_error,
-        _subgraph,
-    ) in executor._stream_and_collect(
+    async for chunk in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="WAV-01",
     ):
+        event = chunk.event
         if not isinstance(event, tuple) or len(event) != 3:
             continue
         _ns, mode, data = event
@@ -785,6 +777,43 @@ async def test_stream_and_collect_assigns_task_idx_per_subgraph_namespace() -> N
 
     assert "WAV_01:t0:grep:0" in rewritten_ids
     assert "WAV_01:t1:grep:0" in rewritten_ids
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_emits_subgraph_placeholder_wire_update() -> None:
+    """Subagent ``tools:`` subgraph placeholder updates yield wire chunks (ea1d regression)."""
+    from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
+    tool_msg = ToolMessage(
+        content="[]",
+        tool_call_id="functions.glob:0",
+        name="glob",
+    )
+    chunk: tuple = (
+        ("tools:subgraph-explore",),
+        "messages",
+        (tool_msg, {}),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    wire_chunks: list[_StreamCollectChunk] = []
+    async for chunk_out in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="JNA-02",
+    ):
+        if chunk_out.event is not None and chunk_out.event[1] == "custom":
+            wire_chunks.append(chunk_out)
+
+    assert wire_chunks
+    payload = wire_chunks[0].event[2]
+    assert isinstance(payload, dict)
+    assert payload.get("type") == STREAM_TOOL_CALL_UPDATE
+    assert str(payload.get("tool_call_id", "")).startswith("JNA_02:t0:glob:")
 
 
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:
