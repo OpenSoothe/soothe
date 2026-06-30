@@ -494,7 +494,7 @@ class _ExecutionMixin:
             await self._mount_message(UserMessage(command))
             help_body = (
                 "Commands: /quit, /clear, /editor, /autopilot <task>, /cron <schedule>, "
-                "/autopilot-dashboard, /mcp, "
+                "/context, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /theme, "
                 "/tokens, /resume, "
@@ -662,8 +662,8 @@ class _ExecutionMixin:
                 )
                 return
             await self._submit_cron_job(args, slash_input=command)
-        elif cmd == "/autopilot-dashboard":
-            await self._show_autopilot_dashboard()
+        elif cmd == "/context":
+            await self._show_context_viewer()
         elif cmd == "/mcp":
             await self._show_mcp_viewer()
         elif cmd == "/theme":

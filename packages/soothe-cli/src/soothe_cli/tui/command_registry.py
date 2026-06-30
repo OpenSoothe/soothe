@@ -62,12 +62,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="goals autonomous job submit",
     ),
     SlashCommand(
-        name="/autopilot-dashboard",
-        description="Open autopilot dashboard",
-        bypass_tier=BypassTier.IMMEDIATE_UI,
-        hidden_keywords="goals status workers",
-    ),
-    SlashCommand(
         name="/cron",
         description="Add scheduled job (usage: /cron <natural language>)",
         bypass_tier=BypassTier.QUEUED,
@@ -89,6 +83,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         description="Show active MCP servers and tools",
         bypass_tier=BypassTier.SIDE_EFFECT_FREE,
         hidden_keywords="servers",
+    ),
+    SlashCommand(
+        name="/context",
+        description="View goal DAG and status from context engine",
+        bypass_tier=BypassTier.IMMEDIATE_UI,
+        hidden_keywords="goals dag status context engine",
     ),
     SlashCommand(
         name="/model",
