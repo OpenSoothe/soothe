@@ -444,14 +444,17 @@ class StrangeLoopMixin:
         # to a normal turn if no clarification is really pending.
         intent_classification = None
         if self._intent_classifier and not clarification_answer:
-            intent_classification = await self._intent_classifier.classify_intent(
+            # RFC-630: 4-class intake LLM (quiz | trivial | simple | complex),
+            # drives route_by_intent branch routing in the graph.
+            intent_classification = await self._intent_classifier.classify_intake(
                 user_input,
                 intent_hint=intent_hint,
             )
 
             logger.info(
-                "[StrangeLoop] intent_type=%s - %s",
+                "[StrangeLoop] intent_type=%s intake=%s - %s",
                 intent_classification.intent_type,
+                intent_classification.intake_label,
                 user_input[:50],
             )
 

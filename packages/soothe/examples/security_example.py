@@ -10,13 +10,14 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from soothe.foundation.core.security.integration import SecureFilesystemWrapper
+
 from soothe.foundation.core.security import SecurityEnforcer
 from soothe.foundation.core.security.enforcement import (
     SecurityContext,
     SecurityError,
     create_enforcer,
 )
-from soothe.foundation.core.security.integration import SecureFilesystemWrapper
 from soothe.foundation.core.security.policy import (
     PERMISSIVE_POLICY,
     STRICT_POLICY,

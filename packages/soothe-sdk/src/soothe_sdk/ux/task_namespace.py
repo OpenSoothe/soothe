@@ -30,6 +30,7 @@ class ParsedUnifiedToolCallId(NamedTuple):
         """Non-unified or empty id sentinel."""
         return cls("", "", None, tool_info)
 
+
 _TASK_SCOPE_SEP = "\x1e"
 
 

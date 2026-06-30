@@ -1,7 +1,7 @@
 # RFC Index
 
 **Last Updated**: 2026-06-30
-**Total RFCs**: 81 (6 archived, 7 reclassified, 1 process specification)
+**Total RFCs**: 82 (6 archived, 7 reclassified, 1 process specification)
 
 This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
@@ -9,7 +9,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Status | Count |
 |--------|-------|
-| Draft | 52 |
+| Draft | 53 |
 | Implemented | 15 |
 | Implemented (Partially Superseded) | 1 |
 | Implemented — runtime architecture refined | 1 |
@@ -21,7 +21,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 53 |
+| Architecture Design | 54 |
 | Implementation Interface Design | 14 |
 | Unknown | 2 |
 | Architecture Design + Implementation Interface Design | 2 |
@@ -535,6 +535,15 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Extends: RFC-450 (client-side transport/lifecycle), RFC-610 (SDK module structure)
   - Authors: Xiaming Chen
 
+- **RFC-630**: [Start-Phase LLM Intake and Branch Routing](RFC-630-start-phase-llm-intake-and-branch-routing.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-06-30
+  - Depends on: RFC-220, RFC-225, RFC-226, RFC-503
+  - Extends: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
+  - Supersedes: IG-518 `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection
+  - Authors: Xiaming Chen
+
 ---
 
 ### Product & Applications (7xx)
@@ -695,7 +704,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | 3xx | Protocols | 8 |
 | 4xx | Daemon & Transport | 8 |
 | 5xx | CLI & TUI | 6 |
-| 6xx | Plugin System & Extensions | 20 |
+| 6xx | Plugin System & Extensions | 21 |
 | 7xx | Product & Applications | 1 |
 | 8xx | Persistence & Backends | 3 |
 | 9xx | Security & Policy | 2 |
@@ -704,6 +713,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-630**: Start-Phase LLM Intake and Branch Routing (2026-06-30, Draft)
 - **RFC-629**: Go Client Library — Core Upgrade and Appkit Architecture (2026-06-30, Draft)
 - **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)
 - **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)

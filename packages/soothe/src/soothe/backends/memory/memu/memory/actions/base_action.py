@@ -3,6 +3,8 @@
 Defines the interface and common functionality for all memory actions.
 """
 
+from __future__ import annotations
+
 import logging
 import re
 import uuid

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from langchain_core.embeddings import Embeddings
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # HTTP status code for successful responses
 HTTP_OK = 200
@@ -28,10 +28,7 @@ class DashScopeEmbeddings(BaseModel, Embeddings):
     dimension: int = 1536
     _client: Any = None
 
-    class Config:
-        """Pydantic config for arbitrary field types."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize DashScope embeddings.
@@ -98,7 +95,7 @@ class DashScopeEmbeddings(BaseModel, Embeddings):
 
         return all_embeddings
 
-    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:  # noqa: ARG002
         """Asynchronously embed a list of documents.
 
         Note: DashScope SDK doesn't have native async support, so this falls back
