@@ -185,6 +185,59 @@ async def test_goal_completion_logs_planning_dag_at_info(
 
 
 @pytest.mark.asyncio
+async def test_goal_completion_dag_reflects_finalized_goal_status(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The completion DAG log should reflect post-finalize CE goal status."""
+    caplog.set_level(logging.INFO)
+    ce = _make_ce()
+    loop_state = LoopState(goal="count all file types", thread_id="thr-status")
+    goal = GoalNode(description="count all file types", status="active")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+    plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=True)
+    pm = PlanManager(goal="count all file types")
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
+    status_when_reported: dict[str, str | None] = {"value": None}
+
+    def fake_report() -> str:
+        status_when_reported["value"] = ce.get_goal_sync(goal.id).status
+        return "Mock DAG report"
+
+    pm.format_completion_dag_report = Mock(side_effect=fake_report)
+
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    async def fake_gen(self, goal, state):  # noqa: ARG002
+        yield ((), "messages", (AIMessage(content="done"), {}))
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        strange_loop=strange_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+        ce=ce,
+        goal=goal,
+    )
+
+    with patch.object(SynthesisGenerator, "generate_synthesis", fake_gen):
+        await node_goal_completion(ctx, {})
+
+    assert "Planning DAG at goal end" in caplog.text
+    assert "Mock DAG report" in caplog.text
+    assert status_when_reported["value"] == "completed"
+
+
+@pytest.mark.asyncio
 async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
     ce = _make_ce()
     loop_state = LoopState(goal="g", thread_id="thr-1")

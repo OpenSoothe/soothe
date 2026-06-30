@@ -52,7 +52,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_goal_context_manager = MagicMock()
     mock_plan_manager = MagicMock()
 
-    from soothe.core.strange_loop.state.checkpoint import (
+    from soothe.foundation.loop.state.checkpoint import (
         GoalExecutionRecord,
         StrangeLoopCheckpoint,
         ThreadHealthMetrics,
@@ -76,8 +76,8 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         started_at=datetime.now(UTC),
     )
 
-    from soothe.core.strange_loop.orchestrator.phase_scratch import LoopPhaseScratch
-    from soothe.core.strange_loop.state.schemas import LoopState
+    from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.foundation.loop.state.schemas import LoopState
 
     state = LoopState(
         goal="Test goal",
@@ -93,7 +93,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         plan_manager=mock_plan_manager,
         checkpoint=checkpoint,
         goal_record=goal_record,
-        continue_thread_mode=False,
+        continue_loop_mode=False,
         recovery_valid_resume=False,
         loop_state=state,
         emit=lambda event_type, data: None,
