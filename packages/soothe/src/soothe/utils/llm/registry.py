@@ -79,7 +79,7 @@ class ProviderRegistry:
         return normalized.startswith("https://api.openai.com")
 
     def requires_openai_compat_wrapper(self, name: str) -> bool:
-        """Whether to apply ``LimitedProviderModelWrapper`` for this provider.
+        """Whether to apply ``OpenAICompatModelWrapper`` for this provider.
 
         Local OpenAI-compatible servers (oMLX, LMStudio, vLLM) often return
         structured output in ``reasoning_content`` and reject object-form

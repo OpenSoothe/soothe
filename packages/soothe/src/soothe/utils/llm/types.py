@@ -38,7 +38,7 @@ class ProviderType(Enum):
     Accepts object and string tool_choice formats.
 
     When ``api_base_url`` points at a non-standard endpoint (local oMLX, LMStudio, vLLM),
-    ``LLMFactory`` auto-applies ``LimitedProviderModelWrapper`` for ``reasoning_content``
+    ``LLMFactory`` auto-applies ``OpenAICompatModelWrapper`` for ``reasoning_content``
     and ``tool_choice`` compatibility.
     """
 
