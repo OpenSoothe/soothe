@@ -603,13 +603,12 @@ class TestWorkspaceInjection:
         )
 
     def test_state_schema_declares_workspace_channel(self) -> None:
-        """LangGraph drops undeclared keys between nodes — `workspace` and
-        `git_status` MUST be declared in ``_SystemPromptState`` so the
-        executor's input dict and ``WorkspaceContextMiddleware``'s updates
-        actually reach ``modify_request``. Trace 705623 regression: without
-        this declaration the workspace blocks silently vanish from the
-        execute-step system prompt even when state["workspace"] was set
-        upstream.
+        """LangGraph drops undeclared keys between nodes — `workspace`
+        MUST be declared in ``_SystemPromptState`` so the executor's input
+        dict and ``WorkspaceContextMiddleware``'s updates actually reach
+        ``modify_request``. Trace 705623 regression: without this declaration
+        the workspace blocks silently vanish from the execute-step system
+        prompt even when state["workspace"] was set upstream.
         """
         from soothe.middleware.system_prompt import _SystemPromptState
 
@@ -620,12 +619,10 @@ class TestWorkspaceInjection:
             "system prompt loses WORKSPACE_RULES, <WORKSPACE>, and "
             "WORKSPACE_INSTRUCTIONS."
         )
-        assert "git_status" in annotations
         # Annotations are stringified by ``from __future__ import annotations``
         # so we assert on the string form (NotRequired survives) rather than
         # ``__required_keys__`` which loses the marker at runtime.
         assert "NotRequired" in str(annotations["workspace"])
-        assert "NotRequired" in str(annotations["git_status"])
 
 
 def test_available_tools_block_when_progressive_enabled() -> None:

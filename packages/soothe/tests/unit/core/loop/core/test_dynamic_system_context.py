@@ -75,7 +75,7 @@ class TestWorkspaceSection:
 
     def test_workspace_section_non_git(self) -> None:
         """Workspace section handles non-git directory."""
-        section = build_soothe_workspace_section(Path("/tmp/test"), None)
+        section = build_soothe_workspace_section(Path("/tmp/test"))
 
         # RFC-207: Removed SOOTHE_ prefix from WORKSPACE tag
         # IG-183: Removed version attribute for cache optimization
@@ -87,27 +87,25 @@ class TestWorkspaceSection:
         assert "<branch>" not in section
 
     def test_workspace_section_with_git(self) -> None:
-        """Workspace section includes git branch info when available (IG-183: removed volatile fields)."""
-        git_status = {
-            "branch": "feature/test",
-            "main_branch": "main",
-            "status": "M src/file.py",  # IG-183: This field is now excluded (volatile)
-            "recent_commits": "abc123 fix: something",  # IG-183: This field is now excluded (volatile)
-        }
+        """Workspace section detects git via .git directory presence."""
+        # Create a mock path that has .git directory
+        mock_path = MagicMock()
+        mock_path.resolve.return_value = Path("/project")
+        mock_path.is_dir.return_value = True
+        # Simulate .git exists
+        git_dir = MagicMock()
+        git_dir.exists.return_value = True
+        mock_path.__truediv__ = lambda self, other: git_dir if other == ".git" else MagicMock()
 
-        section = build_soothe_workspace_section(Path("/project"), git_status)
+        section = build_soothe_workspace_section(mock_path)
 
         assert 'present="true"' in section
-        assert "feature/test" in section
-        assert "main" in section
-        # IG-183: status and recent_commits removed for cache optimization
-        assert "M src/file.py" not in section
-        assert "abc123" not in section
+        assert '<vcs present="true"/>' in section
 
     def test_workspace_section_no_workspace_uses_cwd(self) -> None:
         """Workspace section uses cwd when workspace is None."""
         with patch.object(Path, "cwd", return_value=Path("/current/working/dir")):
-            section = build_soothe_workspace_section(None, None)
+            section = build_soothe_workspace_section(None)
             assert "/current/working/dir" in section
 
 
@@ -213,7 +211,7 @@ class TestBuildContextSectionsForComplexity:
     def test_medium_order(self) -> None:
         config = MagicMock()
         config.resolve_model.return_value = "m"
-        state = {"workspace": "/tmp", "git_status": None}
+        state = {"workspace": "/tmp"}
         blocks = build_context_sections_for_complexity(
             config=config, complexity="medium", state=state, include_workspace_extras=False
         )
@@ -251,7 +249,6 @@ class TestComplexityMapping:
         """Medium complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
-            "git_status": None,
         }
 
         prompt = middleware._get_prompt_for_complexity("medium", state)
@@ -272,11 +269,6 @@ class TestComplexityMapping:
         """Complex complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
-            "git_status": {
-                "branch": "main",
-                "main_branch": "main",
-                "recent_commits": "",
-            },
             "thread_context": {"thread_id": "abc", "conversation_turns": 1},
             "protocol_summary": {"context": {"type": "VectorContext"}},
         }
@@ -298,7 +290,6 @@ class TestComplexityMapping:
         """Base prompt content is preserved before context blocks."""
         state = {
             "workspace": Path("/project"),
-            "git_status": None,
         }
 
         prompt = middleware._get_prompt_for_complexity("medium", state)
@@ -308,41 +299,3 @@ class TestComplexityMapping:
         assert "Today's date is" not in prompt
         core = middleware._get_base_prompt_core("medium")
         assert core in prompt
-
-
-class TestGitStatusHelper:
-    """Tests for get_git_status helper function."""
-
-    @pytest.mark.asyncio
-    async def test_non_git_directory_returns_none(self, tmp_path: Path) -> None:
-        """Non-git directory returns None."""
-        from soothe.foundation.workspace import get_git_status
-
-        result = await get_git_status(tmp_path)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_git_directory_returns_snapshot(self, tmp_path: Path) -> None:
-        """Git directory returns snapshot dict (no porcelain status; IG-383)."""
-        import subprocess
-
-        from soothe.foundation.workspace import get_git_status
-
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=False)
-        subprocess.run(
-            ["git", "config", "user.email", "test@test.com"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=False,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=False
-        )
-
-        result = await get_git_status(tmp_path)
-
-        assert result is not None
-        assert "branch" in result
-        assert "main_branch" in result
-        assert "status" not in result
-        assert "recent_commits" in result

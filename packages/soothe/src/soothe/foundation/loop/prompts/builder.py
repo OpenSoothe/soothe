@@ -287,9 +287,7 @@ class PromptBuilder:
         if context.workspace:
             from soothe.foundation.loop.prompts.context_xml import build_soothe_workspace_section
 
-            parts.append(
-                build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n"
-            )
+            parts.append(build_soothe_workspace_section(Path(context.workspace)) + "\n")
 
         return "\n".join(parts)
 

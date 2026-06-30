@@ -556,7 +556,6 @@ class LLMPlanner:
             prefix = build_shared_environment_workspace_prefix(
                 self._config,
                 context.workspace,
-                context.git_status,
                 include_workspace_extras=True,
             )
             return f"{prefix}{body}"

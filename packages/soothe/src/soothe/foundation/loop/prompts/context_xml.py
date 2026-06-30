@@ -84,7 +84,6 @@ def _readme_excerpt(root: Path, *, max_chars: int) -> str | None:
 
 def build_soothe_workspace_section(
     workspace: Path | None,
-    git_status: dict[str, Any] | None,
     *,
     include_layout_preview: bool = False,
     max_layout_entries: int = 40,
@@ -94,11 +93,9 @@ def build_soothe_workspace_section(
     """Build nested WORKSPACE XML block (RFC-207: removed SOOTHE_ prefix).
 
     IG-183: Optimized for prompt caching - omits ``recent_commits`` in this section.
-    IG-383: ``get_git_status`` does not include porcelain ``status``.
 
     Args:
         workspace: Project root; when None, the process current working directory is used.
-        git_status: Optional dict from ``get_git_status`` (None if not a git repo).
         include_layout_preview: When True, add capped top-level name list.
         max_layout_entries: Cap for layout preview.
         include_readme_excerpt: When True, add short README snippet if present.
@@ -109,20 +106,13 @@ def build_soothe_workspace_section(
     """
     root = workspace or Path.cwd()
     cwd = str(root.resolve())
-    is_git = git_status is not None
+    is_git = (root / ".git").exists()
     present = "true" if is_git else "false"
 
     lines: list[str] = [
         f"<root>{_xml_text(cwd)}</root>",
-        f'<vcs present="{present}">',
+        f'<vcs present="{present}"/>',
     ]
-    if git_status:
-        lines.append(f"  <branch>{_xml_text(git_status.get('branch', 'unknown'))}</branch>")
-        lines.append(
-            f"  <main_branch>{_xml_text(git_status.get('main_branch', 'main'))}</main_branch>"
-        )
-        # IG-183 / IG-383: branch info only (no recent_commits in this block)
-    lines.append("</vcs>")
 
     if include_layout_preview and root.is_dir():
         preview = _safe_list_dir_names(root, max_entries=max_layout_entries)
@@ -192,7 +182,6 @@ def build_soothe_protocols_section(protocol_summary: dict[str, Any]) -> str:
 def build_shared_environment_workspace_prefix(
     config: SootheConfig,
     workspace: str | None,
-    git_status: dict[str, Any] | None,
     *,
     include_workspace_extras: bool = False,
 ) -> str:
@@ -202,7 +191,6 @@ def build_shared_environment_workspace_prefix(
     ws_path = Path(workspace).expanduser().resolve() if workspace else None
     ws = build_soothe_workspace_section(
         ws_path,
-        git_status,
         include_layout_preview=include_workspace_extras,
         include_readme_excerpt=include_workspace_extras,
     )
@@ -226,7 +214,6 @@ def build_context_sections_for_complexity(
     sections.append(
         build_soothe_workspace_section(
             workspace_path,
-            state.get("git_status"),
             include_layout_preview=include_workspace_extras,
             include_readme_excerpt=include_workspace_extras,
         )
