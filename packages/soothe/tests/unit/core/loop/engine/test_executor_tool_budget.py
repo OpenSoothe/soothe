@@ -54,16 +54,16 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
     rows = [
         r
         async for r in ex._stream_and_collect(fake_stream(), budget=budget, step_id="s0")
-        if r[0] is not None
+        if r.output is not None
     ]
 
     assert len(rows) == 1
-    output, _, tool_count, _msgs, _df, outcomes, _has_error, _subgraph = rows[0]
-    assert tool_count == 2
+    final = rows[0]
+    assert final.main_tool_count == 2
     assert budget.hit_tool_budget is True
-    assert "alpha" in output and "beta" in output
-    assert "gamma" not in output
-    assert len(outcomes) == 2
+    assert "alpha" in (final.output or "") and "beta" in (final.output or "")
+    assert "gamma" not in (final.output or "")
+    assert len(final.outcomes) == 2
 
 
 def test_default_max_tool_calls_per_step_is_99() -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
@@ -28,8 +28,18 @@ FailureCategory = Literal[
 
 SuggestedAction = Literal["create_prerequisite", "retry", "escalate", "skip"]
 
-_KEYWORD_RULES: list[tuple[FailureCategory, frozenset[str], float, SuggestedAction]] = [
-    (
+
+class FailureKeywordRule(NamedTuple):
+    """Static keyword rule for fast failure intent classification."""
+
+    category: FailureCategory
+    keywords: frozenset[str]
+    confidence: float
+    action: SuggestedAction
+
+
+_KEYWORD_RULES: list[FailureKeywordRule] = [
+    FailureKeywordRule(
         "missing_prerequisite",
         frozenset(
             {
@@ -48,7 +58,7 @@ _KEYWORD_RULES: list[tuple[FailureCategory, frozenset[str], float, SuggestedActi
         0.85,
         "create_prerequisite",
     ),
-    (
+    FailureKeywordRule(
         "permission_denied",
         frozenset(
             {"permission denied", "access denied", "forbidden", "unauthorized", "not allowed"}
@@ -56,25 +66,25 @@ _KEYWORD_RULES: list[tuple[FailureCategory, frozenset[str], float, SuggestedActi
         0.9,
         "escalate",
     ),
-    (
+    FailureKeywordRule(
         "resource_unavailable",
         frozenset({"out of memory", "no space", "disk full", "connection refused", "unavailable"}),
         0.8,
         "retry",
     ),
-    (
+    FailureKeywordRule(
         "syntax_error",
         frozenset({"syntaxerror", "syntax error", "parse error", "invalid syntax"}),
         0.85,
         "retry",
     ),
-    (
+    FailureKeywordRule(
         "logic_error",
         frozenset({"assertionerror", "valueerror", "typeerror", "runtime error", "exception"}),
         0.75,
         "retry",
     ),
-    (
+    FailureKeywordRule(
         "timeout",
         frozenset({"timeout", "timed out", "deadline exceeded"}),
         0.9,
@@ -107,12 +117,12 @@ def classify_failure_intent_keyword(text: str) -> FailureIntent:
     best_confidence = 0.4
     best_action: SuggestedAction = "retry"
 
-    for category, keywords, confidence, action in _KEYWORD_RULES:
-        if any(kw in lowered for kw in keywords):
-            if confidence > best_confidence:
-                best_category = category
-                best_confidence = confidence
-                best_action = action
+    for rule in _KEYWORD_RULES:
+        if any(kw in lowered for kw in rule.keywords):
+            if rule.confidence > best_confidence:
+                best_category = rule.category
+                best_confidence = rule.confidence
+                best_action = rule.action
 
     return FailureIntent(
         category=best_category,

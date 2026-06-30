@@ -11,10 +11,24 @@ IG-416: Unified tool call ID format for step-level and task-level tool calls.
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, TypeAlias
+from typing import Any, NamedTuple, TypeAlias
 
 TaskScope: TypeAlias = tuple[str, str, str]
 """``(task_tool_call_id, subagent_type, step_id)`` — ``step_id`` may be empty."""
+
+
+class ParsedUnifiedToolCallId(NamedTuple):
+    """Parsed components of a unified tool_call_id."""
+
+    step_id: str
+    type_code: str
+    task_idx: int | None
+    tool_info: str
+
+    @classmethod
+    def empty(cls, *, tool_info: str = "") -> ParsedUnifiedToolCallId:
+        """Non-unified or empty id sentinel."""
+        return cls("", "", None, tool_info)
 
 _TASK_SCOPE_SEP = "\x1e"
 
@@ -108,7 +122,7 @@ def normalize_unified_tool_call_id(tool_call_id: str) -> str:
     return tid
 
 
-def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]:
+def parse_unified_tool_call_id(tool_call_id: str) -> ParsedUnifiedToolCallId:
     """Parse unified tool_call_id format into components.
 
     Recognition rules (in order):
@@ -130,19 +144,16 @@ def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None,
         tool_call_id: Unified tool_call_id string.
 
     Returns:
-        Tuple of (step_id, type_code, task_idx, tool_info):
-        - step_id: Canonical execute step id (hyphen form, e.g. ``GHT-01``)
-        - type_code: ``s`` for step-level, ``t`` for task-level, ``''`` if not unified
-        - task_idx: ``None`` for step-level, integer for task-level
-        - tool_info: Provider-stamped tool fragment (e.g. ``grep:0``, ``tool-{uuid}``)
+        Parsed components: step_id, type_code, task_idx, tool_info.
+        Non-unified ids use empty step_id/type_code and preserve the raw id in tool_info.
     """
     tid = str(tool_call_id).strip()
     if not tid:
-        return ("", "", None, "")
+        return ParsedUnifiedToolCallId.empty()
 
     parts = tid.split(":")
     if len(parts) < 3 or not _is_wire_step_fragment(parts[0]):
-        return ("", "", None, tid)
+        return ParsedUnifiedToolCallId.empty(tool_info=tid)
 
     type_part = parts[1]
     if type_part == "s":
@@ -152,17 +163,17 @@ def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None,
         try:
             task_idx = int(type_part[1:])
         except ValueError:
-            return ("", "", None, tid)
+            return ParsedUnifiedToolCallId.empty(tool_info=tid)
         type_code = "t"
     else:
-        return ("", "", None, tid)
+        return ParsedUnifiedToolCallId.empty(tool_info=tid)
 
     tool_info = _tool_info_from_unified_parts(parts)
     if not tool_info:
-        return ("", "", None, tid)
+        return ParsedUnifiedToolCallId.empty(tool_info=tid)
 
     step_id = _step_id_from_unified_fragment(parts[0])
-    return (step_id, type_code, task_idx, tool_info)
+    return ParsedUnifiedToolCallId(step_id, type_code, task_idx, tool_info)
 
 
 def is_step_level_task_tool_id(tool_call_id: str) -> bool:
@@ -507,6 +518,7 @@ __all__ = [
     "_shorten_tool_call_id",
     "prune_bound_pending_namespaces",
     "parse_unified_tool_call_id",
+    "ParsedUnifiedToolCallId",
     "register_task_spawn_for_step",
     "resolve_task_parent_lookup",
     "resolve_task_scope_for_subgraph_tool",

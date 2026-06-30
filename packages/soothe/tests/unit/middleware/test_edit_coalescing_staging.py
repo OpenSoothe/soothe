@@ -32,6 +32,21 @@ from soothe.middleware.edit_coalescing import (
 # ---------------------------------------------------------------------------
 
 
+def _replacement(
+    old_string: str,
+    new_string: str,
+    *,
+    replace_all: bool = False,
+    tool_call_id: str = "",
+) -> StringReplacement:
+    return StringReplacement(
+        old_string=old_string,
+        new_string=new_string,
+        replace_all=replace_all,
+        tool_call_id=tool_call_id,
+    )
+
+
 def _make_request(
     tool_name: str,
     tool_args: dict[str, Any],
@@ -300,8 +315,8 @@ class TestStagingBufferCoalescing:
         assert "/tmp/test.txt" in middleware._staging_buffer
         entries = middleware._staging_buffer["/tmp/test.txt"]
         assert len(entries) == 2
-        assert entries[0][3] == "call-1"
-        assert entries[1][3] == "call-2"
+        assert entries[0].tool_call_id == "call-1"
+        assert entries[1].tool_call_id == "call-2"
 
         # Cancel tasks to avoid hanging
         task1.cancel()
@@ -329,8 +344,8 @@ class TestStringOverlapDetection:
         middleware = EditCoalescingMiddleware()
         content = "alpha beta gamma delta"
         replacements = [
-            ("alpha", "ALPHA", False, "call-1"),
-            ("gamma", "GAMMA", False, "call-2"),
+            _replacement("alpha", "ALPHA", tool_call_id="call-1"),
+            _replacement("gamma", "GAMMA", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is None
@@ -340,8 +355,8 @@ class TestStringOverlapDetection:
         middleware = EditCoalescingMiddleware()
         content = "alpha beta gamma"
         replacements = [
-            ("alpha beta", "X", False, "call-1"),
-            ("beta", "Y", False, "call-2"),
+            _replacement("alpha beta", "X", tool_call_id="call-1"),
+            _replacement("beta", "Y", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is not None
@@ -357,8 +372,8 @@ class TestStringOverlapDetection:
         # Two non-replace_all edits with the same old_string that appears once
         # Both target the same character range → overlap
         replacements = [
-            ("hello", "HI", False, "call-1"),
-            ("hello", "HEY", False, "call-2"),
+            _replacement("hello", "HI", tool_call_id="call-1"),
+            _replacement("hello", "HEY", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is not None
@@ -374,8 +389,8 @@ class TestStringOverlapDetection:
         middleware = EditCoalescingMiddleware()
         content = "hello world hello world"
         replacements = [
-            ("hello", "HI", False, "call-1"),
-            ("hello", "HEY", False, "call-2"),
+            _replacement("hello", "HI", tool_call_id="call-1"),
+            _replacement("hello", "HEY", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is None
@@ -385,8 +400,8 @@ class TestStringOverlapDetection:
         middleware = EditCoalescingMiddleware()
         content = "abcdef"
         replacements = [
-            ("abc", "ABC", False, "call-1"),
-            ("def", "DEF", False, "call-2"),
+            _replacement("abc", "ABC", tool_call_id="call-1"),
+            _replacement("def", "DEF", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is None
@@ -397,8 +412,8 @@ class TestStringOverlapDetection:
         content = "aaa bbb aaa ccc aaa"
         # replace_all for "aaa" spans from first to last occurrence
         replacements = [
-            ("aaa", "X", True, "call-1"),
-            ("bbb aaa", "Y", False, "call-2"),
+            _replacement("aaa", "X", replace_all=True, tool_call_id="call-1"),
+            _replacement("bbb aaa", "Y", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is not None
@@ -410,8 +425,8 @@ class TestStringOverlapDetection:
         middleware = EditCoalescingMiddleware()
         content = "hello world"
         replacements = [
-            ("", "empty", False, "call-1"),
-            ("hello", "HELLO", False, "call-2"),
+            _replacement("", "empty", tool_call_id="call-1"),
+            _replacement("hello", "HELLO", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is None
@@ -421,8 +436,8 @@ class TestStringOverlapDetection:
         middleware = EditCoalescingMiddleware()
         content = "hello world"
         replacements = [
-            ("nonexistent", "X", False, "call-1"),
-            ("hello", "HELLO", False, "call-2"),
+            _replacement("nonexistent", "X", tool_call_id="call-1"),
+            _replacement("hello", "HELLO", tool_call_id="call-2"),
         ]
         result = middleware._find_string_overlaps(content, replacements)
         assert result is None
@@ -501,7 +516,9 @@ class TestStagingBufferFlush:
         )
 
         # Manually populate staging buffer and pending edits
-        middleware._staging_buffer["/fake.txt"] = [("old", "new", False, "call-1")]
+        middleware._staging_buffer["/fake.txt"] = [
+            StringReplacement("old", "new", False, "call-1")
+        ]
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
         middleware._pending_edits["/fake.txt"] = [
@@ -653,7 +670,7 @@ class TestStagingBufferEviction:
         entries = middleware._staging_buffer.get("/test.txt", [])
         assert len(entries) == 2
         # The oldest (c1) should be evicted, c2 and c3 should remain
-        call_ids = [e[3] for e in entries]
+        call_ids = [e.tool_call_id for e in entries]
         assert "c1" not in call_ids
         assert "c2" in call_ids
         assert "c3" in call_ids

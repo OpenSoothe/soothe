@@ -25,6 +25,9 @@ _DELEGATE_FINAL_PER_TASK_CAP = 80_000
 
 _TUPLE_LEN = 3
 
+# Type for stream events yielded during execution
+StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
+
 
 @dataclass
 class _ExecuteStepResult:
@@ -53,6 +56,62 @@ class _ActStreamBudget:
 
 
 @dataclass(frozen=True, slots=True)
+class _StreamCollectChunk:
+    """One yield from ``Executor._stream_and_collect`` (IG-493 extension).
+
+    Two modes:
+    - Wire event: ``event`` set, other summary fields at defaults.
+    - Final summary: ``output`` set with accumulated act-stream results.
+    """
+
+    output: str | None = None
+    event: StreamEvent | None = None
+    main_tool_count: int = 0
+    messages: tuple[BaseMessage, ...] = ()
+    delegate_final: str = ""
+    outcomes: tuple[dict[str, Any], ...] = ()
+    has_error: bool = False
+    subgraph_tool_count: int = 0
+
+    @classmethod
+    def wire_event(cls, event: StreamEvent) -> _StreamCollectChunk:
+        """Immediate display chunk for TUI / parallel live-event fan-out."""
+        return cls(event=event)
+
+    @classmethod
+    def finalized(
+        cls,
+        *,
+        output: str,
+        main_tool_count: int,
+        messages: list[BaseMessage],
+        delegate_final: str,
+        outcomes: list[dict[str, Any]],
+        has_error: bool,
+        subgraph_tool_count: int,
+    ) -> _StreamCollectChunk:
+        """Terminal aggregate after the act stream completes."""
+        return cls(
+            output=output,
+            main_tool_count=main_tool_count,
+            messages=tuple(messages),
+            delegate_final=delegate_final,
+            outcomes=tuple(outcomes),
+            has_error=has_error,
+            subgraph_tool_count=subgraph_tool_count,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingInterruptFetch:
+    """Result of reading LangGraph interrupts after an execute stream ends."""
+
+    pending_interrupts: dict[str, Any] = field(default_factory=dict)
+    interrupt_occurred: bool = False
+    captured_clarification: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class StepWaveQueued:
     """Ready steps waiting for a later execute batch (``max_parallel_steps`` cap)."""
 
@@ -75,7 +134,7 @@ class _ParallelStepDone:
     """Sentinel placed on the parallel live-event queue when one step finishes."""
 
     step_id: str
-    payload: tuple[list[StreamEvent], StepResult, list[BaseMessage], str] | BaseException
+    payload: _ExecuteStepResult | BaseException
 
 
 def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
@@ -89,9 +148,6 @@ def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
             return f"{tool_name} failed"
     return "Tool execution error"
 
-
-# Type for stream events yielded during execution
-StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
 
 _ParallelLiveQueueItem = StreamEvent | _ParallelStepDone
 
@@ -111,8 +167,10 @@ __all__ = [
     "_ActStreamBudget",
     "_DELEGATE_FINAL_PER_TASK_CAP",
     "_ExecuteStepResult",
+    "_StreamCollectChunk",
     "_first_tool_error_message",
     "_DEFAULT_MAX_TOOL_CALLS_PER_STEP",
+    "_PendingInterruptFetch",
     "_ParallelStepDone",
     "_ParallelLiveQueueItem",
     "_TUPLE_LEN",
