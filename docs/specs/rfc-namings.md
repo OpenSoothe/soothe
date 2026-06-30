@@ -2,7 +2,7 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-06-26
+**Last Updated**: 2026-06-30
 
 ## Core Terminology
 
@@ -195,6 +195,21 @@ This document defines the terminology and naming conventions used in this projec
 | `defer_kind` (event field) | Field in `ClarificationDeferredError` event indicating why Veritas deferred. Used by downstream handlers for categorization. | RFC-623 |
 | `invoke_structured_chat` | Veritas helper that calls the model with `VeritasAnswerSchema` to check confidence. Returns structured `can_answer` decision. | RFC-623 |
 | `build_veritas_response_schema(n)` | Constructor for Veritas schema with configurable `max_defer_attempts` N. | RFC-623 |
+
+### Go Client Library Terms (RFC-629)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| `Client` (Go) | The `client/go` core WebSocket client for the protocol-1 daemon. Owns transport, handshake, envelope codec, RPC, streaming, control-frame handling, heartbeat, reconnect/reattach, and concurrent request/subscription multiplexing on a single connection. | RFC-629 |
+| `appkit` | The `client/go/appkit` sibling package holding the reusable application-architecture layer over `Client`: connection pooling, single-flight query gating, turn execution, event classification, and SSE fan-out. Product decisions are supplied via configuration and interfaces. | RFC-629 |
+| `ConnectionPool` | `appkit` component that acquires/releases/health-checks/reuses a `Client` per logical session, delegating bootstrap (`loop_new` + `subscribe`) or reattach (`loop_reattach` + `ReattachAndProbe`) to the core `Client`. | RFC-629 |
+| `QueryGate` | `appkit` component enforcing single-flight query execution per session (`ErrQueryBusy`) and the cancel-before-context ordering (daemon `cancel` before local context cancel, on a detached timeout). | RFC-629 |
+| `TurnRunner` | `appkit` component executing a timeout-bounded turn: send `loop_input`, consume the multiplexed event stream, classify events, resolve the deliverable, then persist/broadcast. | RFC-629 |
+| `EventClassifier` | `appkit` component mapping streamed frames to deliverable/streaming/terminal outcomes, keyed on `(namespace, mode, phase)` with a configurable `DeliverablePhases` set. | RFC-629 |
+| `DeliverablePhases` | Application-supplied configuration set naming which `phase` values on `mode:"messages"` chunks count as user-facing deliverables (e.g. `{quiz, goal_completion, direct_model}`). A product decision, not library policy. | RFC-629 |
+| `SSEBroadcaster` | `appkit` string-keyed pub/sub fan-out for SSE-style event delivery to subscribers; rekeyed from any application domain key type to `string`. | RFC-629 |
+| `SessionStore` | `appkit` interface abstracting per-application persistence: session↔loop-id mapping, message append, last-used/reset tracking. Triarch's Postgres `ChatRegistryStore` is one implementation. | RFC-629 |
+| `StaleLoopError` | Typed error returned by `ReattachAndProbe` when a loop accepts the reattach handshake but fails the `loop_get` liveness probe; signals the caller to fall back to a fresh `loop_new` bootstrap. | RFC-629 |
 
 ### Code Naming
 
