@@ -437,6 +437,42 @@ class ModelProfileEntry:
         self.kwargs = kwargs
 
 
+def parse_models_list_response(
+    resp: dict[str, Any],
+) -> tuple[
+    list[tuple[str, str]],
+    str | None,
+    dict[str, dict[str, Any]],
+    dict[str, bool | None],
+]:
+    """Parse daemon ``models_list`` wire payload for the ``/model`` UI.
+
+    Args:
+        resp: Raw ``models_list`` RPC response from the daemon.
+
+    Returns:
+        Tuple of ``(all_models, default_spec, profiles, wire_credential_map)`` where
+        ``all_models`` is ``(provider:model spec, provider)`` pairs.
+    """
+    rows = resp.get("models") or []
+    all_models: list[tuple[str, str]] = []
+    wire_creds: dict[str, bool | None] = {}
+    for row in rows:
+        if not isinstance(row, dict) or row.get("placeholder"):
+            continue
+        spec = str(row.get("spec", "")).strip()
+        prov = str(row.get("provider", "")).strip()
+        if not spec or not prov:
+            continue
+        all_models.append((spec, prov))
+        if prov not in wire_creds and "has_credentials" in row:
+            wire_creds[prov] = row.get("has_credentials")
+    dm = resp.get("default_model")
+    default_spec = dm if isinstance(dm, str) and dm.strip() else None
+    profiles = {spec: {"profile": {}, "overridden_keys": set()} for spec, _ in all_models}
+    return all_models, default_spec, profiles, wire_creds
+
+
 def get_available_models() -> list[ModelProfileEntry]:
     """List models declared on daemon config (for ``/model`` UI).
 
@@ -470,21 +506,41 @@ def get_available_models() -> list[ModelProfileEntry]:
             return []
 
         out: list[ModelProfileEntry] = []
-        for p_name, p_data in providers_data.items():
-            models = p_data.get("models", [])
-            if models:
-                for m in models:
-                    out.append(ModelProfileEntry(p_name, m))
-            else:
-                provider_type = p_data.get("provider_type", "unknown")
-                out.append(
-                    ModelProfileEntry(
-                        p_name,
-                        "",
-                        display_name=f"{p_name} ({provider_type})",
-                        description="Configure models: list under this provider in config.yml",
+        # Daemon returns providers as a list of dicts with 'name' field
+        if isinstance(providers_data, list):
+            for p_entry in providers_data:
+                p_name = p_entry.get("name", "")
+                models = p_entry.get("models", [])
+                if models:
+                    for m in models:
+                        out.append(ModelProfileEntry(p_name, m))
+                else:
+                    provider_type = p_entry.get("provider_type", "unknown")
+                    out.append(
+                        ModelProfileEntry(
+                            p_name,
+                            "",
+                            display_name=f"{p_name} ({provider_type})",
+                            description="Configure models: list under this provider in config.yml",
+                        )
                     )
-                )
+        else:
+            # Legacy dict format (provider_name -> config)
+            for p_name, p_data in providers_data.items():
+                models = p_data.get("models", [])
+                if models:
+                    for m in models:
+                        out.append(ModelProfileEntry(p_name, m))
+                else:
+                    provider_type = p_data.get("provider_type", "unknown")
+                    out.append(
+                        ModelProfileEntry(
+                            p_name,
+                            "",
+                            display_name=f"{p_name} ({provider_type})",
+                            description="Configure models: list under this provider in config.yml",
+                        )
+                    )
         return out
     except Exception:
         logger.debug("Could not fetch providers from daemon", exc_info=True)

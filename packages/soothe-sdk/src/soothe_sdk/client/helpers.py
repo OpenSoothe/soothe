@@ -295,6 +295,9 @@ async def fetch_skills_catalog(client: WebSocketClient, timeout: float = 15.0) -
 async def fetch_config_section(client: WebSocketClient, section: str, timeout: float = 5.0) -> dict:
     """Fetch daemon config section via RPC.
 
+    Performs ``connection_init`` / ``connection_ack`` handshake when needed
+    before sending the request (RFC-450 §8.2).
+
     Args:
         client: Connected WebSocketClient
         section: Config section name (e.g., "providers", "defaults")
@@ -306,5 +309,6 @@ async def fetch_config_section(client: WebSocketClient, section: str, timeout: f
     Raises:
         ConnectionError: If daemon not reachable
     """
+    await _ensure_handshake(client, timeout=timeout)
     response = await client.request("config_get", {"section": section}, timeout=timeout)
     return response.get(section, {})

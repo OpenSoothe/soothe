@@ -129,16 +129,26 @@ class _StartupMixin:
         # Focus the input immediately so the cursor is visible on first paint
         self._chat_input.focus_input()
 
-        # Run import prewarm off the UI thread before post-paint init so adapter
-        # construction does not cold-load heavy modules on the Textual message loop.
+        # Start daemon connection immediately in background — this waits for the
+        # daemon to become ready and should run concurrently with import prewarm
+        # to avoid sequential delays when the daemon is freshly started.
+        self.run_worker(
+            self._connect_daemon_background,
+            exclusive=True,
+            group="daemon-connect",
+        )
+
+        # Run import prewarm off the UI thread. Post-paint init runs after prewarm
+        # completes to ensure adapter construction doesn't cold-load heavy modules.
         self._startup_task = asyncio.create_task(self._run_deferred_startup())
 
     async def _run_deferred_startup(self) -> None:
         """Prewarm imports in a worker thread, then schedule post-paint workers.
 
-        Post-paint init is scheduled only after prewarm completes so its inline
-        imports are cheap ``sys.modules`` lookups instead of cold loads on the
-        UI thread.
+        Daemon connection runs independently (started in on_mount) so it can
+        proceed while prewarm loads heavy modules. Post-paint init is scheduled
+        only after prewarm completes so its inline imports are cheap
+        ``sys.modules`` lookups instead of cold loads on the UI thread.
         """
         try:
             await asyncio.to_thread(self._prewarm_deferred_imports)
@@ -146,8 +156,11 @@ class _StartupMixin:
             logger.warning("Import prewarm failed", exc_info=True)
 
         # Always schedule post-paint init — even when prewarm fails, the app
-        # must still start the daemon session and related workers.
-        self.call_after_refresh(self._post_paint_init)
+        # must still start session state and related workers. Use a minimal
+        # non-zero delay (0.001s) to avoid Textual's ZeroDivisionError with
+        # set_timer(0), and wrap in asyncio.create_task since set_timer
+        # expects a synchronous callable.
+        self.set_timer(0.001, lambda: asyncio.create_task(self._post_paint_init()))
 
     async def _post_paint_init(self) -> None:
         """Fire background workers for remaining startup work.
@@ -167,6 +180,7 @@ class _StartupMixin:
             set_active_message=self._set_active_message,
             sync_message_content=self._sync_message_content,
         )
+
         # Wire token display callbacks
         self._ui_adapter._on_tokens_update = self._on_tokens_update
         self._ui_adapter._on_tokens_hide = self._hide_tokens
@@ -181,11 +195,8 @@ class _StartupMixin:
 
         self.run_worker(self._init_session_state, exclusive=True, group="session-init")
 
-        self.run_worker(
-            self._connect_daemon_background,
-            exclusive=True,
-            group="daemon-connect",
-        )
+        # Daemon connection is started directly in on_mount to run concurrently
+        # with import prewarm — no need to start it again here.
 
         # Background update check and what's-new banner (on by default; opt-out via
         # SOOTHE_CLI_NO_UPDATE_CHECK or [update].check: false; SOOTHE_CLI_UPDATE_CHECK
@@ -204,12 +215,8 @@ class _StartupMixin:
                 group="startup-whats-new",
             )
 
-        # Prewarm model discovery and profile caches so /model opens quickly.
-        self.run_worker(
-            self._prewarm_model_caches,
-            exclusive=True,
-            group="startup-model-prewarm",
-        )
+        # Model cache prewarm runs from ``on_soothe_app_daemon_ready`` once the
+        # session exists — post-paint is too early (``_daemon_session`` is still None).
 
         # Resume sessions always load prior conversation, even when a startup
         # prompt is queued — otherwise the user sees their new turn on an
@@ -506,6 +513,12 @@ class _StartupMixin:
             group="daemon-skills-catalog",
         )
 
+        self.run_worker(
+            self._prewarm_model_caches,
+            exclusive=True,
+            group="startup-model-prewarm",
+        )
+
     def on_soothe_app_server_start_failed(self, event: ServerStartFailed) -> None:
         """Handle daemon bootstrap / connection failure."""
         self._connecting = False
@@ -589,18 +602,18 @@ class _StartupMixin:
         )
 
     async def _prewarm_model_caches(self) -> None:
-        """Prewarm model discovery and profile caches without blocking startup."""
-        if self._daemon_session is None:
+        """Prewarm ``/model`` selector data via the connected daemon session."""
+        session = self._daemon_session
+        if session is None:
             logger.debug("Skipping model cache prewarm - daemon session not ready")
             return
         try:
-            from soothe_cli.tui.model_config import (
-                get_available_models,
-                get_model_profiles,
-            )
+            from soothe_cli.tui.model_config import parse_models_list_response
 
-            await asyncio.to_thread(get_available_models)
-            await asyncio.to_thread(get_model_profiles, cli_override=self._profile_override)
+            resp = await session.list_models()
+            all_models, default_spec, profiles, wire_creds = parse_models_list_response(resp)
+            self._preloaded_model_data = (all_models, default_spec, profiles)
+            self._wire_credential_map = wire_creds
         except Exception:
             logger.warning("Could not prewarm model caches", exc_info=True)
 
