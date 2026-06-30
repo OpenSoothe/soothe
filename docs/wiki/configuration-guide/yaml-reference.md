@@ -62,7 +62,7 @@ See [Provider Setup](provider-setup.md) for selection criteria.
 
 ## Router
 
-`ModelRouter` maps five roles to `"provider_name:model_name"` strings: `default`, `think`, `fast`, `image`, `embedding`. Unset roles inherit `default`. Agent code never names a model directly — it requests a role and the router resolves it.
+`ModelRouter` maps six roles to `"provider_name:model_name"` strings: `default`, `think`, `fast`, `image`, `ocr`, `embedding`. Unset roles inherit `default`. Agent code never names a model directly — it requests a role and the router resolves it.
 
 ## Agent
 

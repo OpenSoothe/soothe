@@ -80,8 +80,6 @@ class LoopRunRequest:
     model_params: dict[str, Any] = field(default_factory=dict)
     # Worker pool timeout and cancellation support
     timeout_seconds: float | None = None
-    # Intent hint to bypass LLM classification
-    intent_hint: str | None = None
     # RFC-622: per-request clarification mode ("auto" / "manual" / None for daemon default)
     clarification_mode: str | None = None
     # RFC-622: when True, the runner treats ``user_input`` as the answer to the

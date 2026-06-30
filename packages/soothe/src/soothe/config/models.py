@@ -91,7 +91,7 @@ class VectorStoreProviderConfig(BaseModel):
     grpc_port: int = 50051
 
 
-ModelRole = Literal["default", "fast", "think", "image", "embedding"]
+ModelRole = Literal["default", "fast", "think", "image", "ocr", "embedding"]
 """Valid purpose-based model roles.
 
 - ``default``: Main orchestrator reasoning (CoreAgent, failure analysis, system context).
@@ -99,6 +99,7 @@ ModelRole = Literal["default", "fast", "think", "image", "embedding"]
   explore/tacitus subagents, memory extraction, document/audio tooling).
 - ``think``: Stronger reasoning (planning, consensus validation, backoff reasoning).
 - ``image``: Vision-capable model (image analysis, daemon vision preflight).
+- ``ocr``: Dedicated OCR / document text extraction model.
 - ``embedding``: Embedding model (MemU vector search, semantic memory).
 """
 
@@ -113,6 +114,7 @@ class ModelRouter(BaseModel):
         think: Stronger model for planning and complex reasoning.
         fast: Cheap/fast model for classification and scoring.
         image: Vision-capable model for image understanding.
+        ocr: OCR model for document text extraction.
         embedding: Embedding model for vector operations.
     """
 
@@ -120,6 +122,7 @@ class ModelRouter(BaseModel):
     think: str | None = None
     fast: str | None = None
     image: str | None = None
+    ocr: str | None = None
     embedding: str | None = None
 
 
@@ -2173,7 +2176,7 @@ class ClarificationConfig(BaseModel):
 class VeritasConfig(BaseModel):
     """RFC-622: configuration for the veritas auto-answerer subagent."""
 
-    model_role: Literal["default", "fast", "think", "image", "embedding"] = "think"
+    model_role: Literal["default", "fast", "think", "image", "ocr", "embedding"] = "think"
     """Which ``ModelRole`` to use for veritas calls; defaults to ``think``."""
 
     max_context_steps: int = Field(default=8, ge=0)
@@ -2199,7 +2202,7 @@ class CronConfig(BaseModel):
     poll_interval: int = Field(
         default=60, ge=10, le=3600, description="Monitoring tick interval in seconds"
     )
-    extraction_model: Literal["default", "fast", "think", "image", "embedding"] = Field(
+    extraction_model: Literal["default", "fast", "think", "image", "ocr", "embedding"] = Field(
         default="fast", description="LLM role for NL extraction"
     )
     extraction_timeout: int = Field(

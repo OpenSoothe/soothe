@@ -227,10 +227,10 @@ def _router_with_enqueue_stub(
 
 
 @pytest.mark.asyncio
-async def test_loop_input_direct_llm_attachments_only_enqueues(
+async def test_loop_input_direct_llm_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """direct_llm with attachments and empty content is valid."""
+    """Removed intent_hint direct_llm must not enqueue."""
     router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
 
     await router.dispatch(
@@ -241,35 +241,7 @@ async def test_loop_input_direct_llm_attachments_only_enqueues(
             "method": "loop_input",
             "params": {
                 "loop_id": loop_id,
-                "content": "",
-                "intent_hint": "direct_llm",
-                "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
-            },
-        },
-    )
-
-    enqueue.assert_awaited_once()
-    payload = enqueue.await_args.args[1]
-    assert payload["intent_hint"] == "direct_llm"
-    assert payload["attachments"]
-    assert sent[-1][1]["type"] == "response"
-
-
-@pytest.mark.asyncio
-async def test_loop_input_direct_llm_without_content_or_attachments_returns_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
-
-    await router.dispatch(
-        "client-go-parity",
-        {
-            "proto": "1",
-            "type": "request",
-            "method": "loop_input",
-            "params": {
-                "loop_id": loop_id,
-                "content": "",
+                "content": "hello",
                 "intent_hint": "direct_llm",
             },
         },
@@ -279,11 +251,67 @@ async def test_loop_input_direct_llm_without_content_or_attachments_returns_erro
     err = sent[-1][1]
     assert err["type"] == "error"
     assert err["error"]["code"] == ErrorCode.INVALID_REQUEST.value
-    assert "content or attachments" in err["error"]["message"].lower()
+    assert "removed" in err["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
-async def test_loop_input_image_to_text_normalizes_intent_hint(
+async def test_loop_input_image_to_text_attachments_only_enqueues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """image_to_text with attachments and empty content is valid."""
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+
+    await router.dispatch(
+        "client-go-parity",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "",
+                "intent_hint": "image_to_text",
+                "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+            },
+        },
+    )
+
+    enqueue.assert_awaited_once()
+    payload = enqueue.await_args.args[1]
+    assert payload["intent_hint"] == "image_to_text"
+    assert payload["attachments"]
+    assert sent[-1][1]["type"] == "response"
+
+
+@pytest.mark.asyncio
+async def test_loop_input_text_completion_without_content_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+
+    await router.dispatch(
+        "client-go-parity",
+        {
+            "proto": "1",
+            "type": "request",
+            "method": "loop_input",
+            "params": {
+                "loop_id": loop_id,
+                "content": "",
+                "intent_hint": "text_completion",
+            },
+        },
+    )
+
+    enqueue.assert_not_awaited()
+    err = sent[-1][1]
+    assert err["type"] == "error"
+    assert err["error"]["code"] == ErrorCode.INVALID_REQUEST.value
+    assert "content" in err["error"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_loop_input_image_to_text_keeps_hint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     router, enqueue, _, loop_id = _router_with_enqueue_stub(monkeypatch)
@@ -305,4 +333,4 @@ async def test_loop_input_image_to_text_normalizes_intent_hint(
 
     enqueue.assert_awaited_once()
     payload = enqueue.await_args.args[1]
-    assert payload["intent_hint"] == "direct_llm"
+    assert payload["intent_hint"] == "image_to_text"

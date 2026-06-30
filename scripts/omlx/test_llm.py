@@ -26,7 +26,7 @@ Environment (optional):
     OMLX_VLM_MODEL     CV / vision (GLM-4.6V-Flash-8bit)
     OMLX_EMBED_MODEL   Embedding (nomicai-modernbert-embed-base-bf16)
 
-Matches config/develop/config.yml router roles for local-omlx.
+Matches config/develop/config.yml router roles for omlx.
 """
 
 import base64

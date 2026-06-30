@@ -25,8 +25,9 @@ from soothe_sdk.ux.stream_tool_wire import (
 )
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
+from soothe_daemon.protocol.intent_hints import is_daemon_direct_hint
 from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
-from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
+from soothe_daemon.services.direct_llm_turn import run_intent_hint_turn
 from soothe_daemon.services.image_understanding import enrich_user_text_with_vision
 
 logger = logging.getLogger(__name__)
@@ -533,7 +534,7 @@ class QueryEngine:
                 await d._session_manager.release_loop_ownership(client_id)
             return
 
-        if intent_hint in ("direct_llm", "image_to_text"):
+        if is_daemon_direct_hint(intent_hint):
             await self._start_direct_model_background(
                 text=text,
                 thread_id=thread_id,
@@ -729,7 +730,6 @@ class QueryEngine:
                     preferred_subagent=stream_kwargs.get("preferred_subagent"),
                     model=model,
                     model_params=model_params or {},
-                    intent_hint=intent_hint,
                     clarification_mode=stream_kwargs.get("clarification_mode"),
                     clarification_answer=clarification_answer,
                     clarification_answers=clarification_answers,
@@ -1162,8 +1162,9 @@ class QueryEngine:
             st_activity.last_activity = datetime.now(UTC)
 
         try:
-            answer = await run_direct_llm_turn(
+            answer = await run_intent_hint_turn(
                 d._config,
+                intent_hint=direct_intent_hint,
                 user_text=text,
                 model=model,
                 model_params=model_params,
@@ -1176,8 +1177,9 @@ class QueryEngine:
 
             from soothe.foundation.loop.utils.messages import LoopAIMessage
 
+            phase = direct_intent_hint
             ai_flat = _serialize_for_json(
-                LoopAIMessage(content=answer, phase="direct_model", thread_id=thread_id)
+                LoopAIMessage(content=answer, phase=phase, thread_id=thread_id)
             )
             await d._broadcast(
                 self._loop_scoped_client_message(
@@ -1221,7 +1223,7 @@ class QueryEngine:
                 subscription_id = await d._session_manager.get_loop_subscription_id(
                     cid, effective_loop_id
                 )
-                await router._send_complete(cid, subscription_id, reason="direct_llm_end")
+                await router._send_complete(cid, subscription_id, reason="direct_turn_end")
             await d._broadcast(
                 self._loop_scoped_client_message(
                     effective_loop_id,

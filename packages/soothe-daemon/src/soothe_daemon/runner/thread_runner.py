@@ -163,7 +163,7 @@ def _thread_worker_body(
 
     def _run_single(req: LoopRunRequest, request_id: str, pusher: ResponsePusher | None) -> None:
         """Execute one request, reusing worker runner when configured."""
-        from soothe.runner._worker_utils import parse_intent_hint
+        from soothe.runner._worker_utils import cancel_orphan_loop_tasks
         from soothe.runner.worker_logging import configure_loop_runner_worker_logging
 
         from soothe_daemon.runner._worker_runner import acquire_worker_runner
@@ -210,7 +210,6 @@ def _thread_worker_body(
                         max_iterations=req.max_iterations,
                         preferred_subagent=req.preferred_subagent,
                         client_loop_id=req.loop_id,
-                        intent_hint=parse_intent_hint(req.intent_hint),
                         autopilot_job=req.autopilot_job,  # RFC-222 revised
                         clarification_mode=req.clarification_mode,
                         clarification_answer=req.clarification_answer,
@@ -335,6 +334,8 @@ def _thread_worker_body(
                     worker_id,
                     request_id,
                 )
+        finally:
+            cancel_orphan_loop_tasks(loop)
 
     try:
         while not stop_event.is_set() and requests_completed < max_requests:

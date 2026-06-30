@@ -30,7 +30,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop.intention import IntentHint
 from soothe.foundation.workspace import resolve_workspace_for_stream
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -44,7 +43,6 @@ from ._types import generate_thread_id
 
 # Re-export types
 __all__ = [
-    "IntentHint",
     "SootheRunner",
     "generate_thread_id",
 ]
@@ -586,7 +584,6 @@ class SootheRunner(
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
         client_loop_id: str | None = None,
-        intent_hint: IntentHint | None = None,
         autopilot_job: Any = None,  # GoalDispatchEnvelope | None — see RFC-222 revised
         clarification_mode: str | None = None,  # RFC-622 per-request override
         clarification_answer: bool = False,  # RFC-622: resume hint
@@ -614,8 +611,6 @@ class SootheRunner(
             max_iterations: Override max iterations from config.
             preferred_subagent: Optional subagent hint merged into StrangeLoop (IG-349).
             client_loop_id: Daemon client loop scope for logging and stream correlation.
-            intent_hint: Suggested intent to bypass LLM classification. When ``quiz``,
-                skips the intent classification LLM call.
             autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
                 Worker hydrates StrangeLoop from ``autopilot_job.merged_context`` and runs
                 ``autopilot_job.goal_description``; ``user_input`` is ignored. Emits a
@@ -681,7 +676,6 @@ class SootheRunner(
                 workspace=effective_workspace,
                 max_iterations=max_iterations or self._config.agent.loop.max_iterations,
                 preferred_subagent=preferred_subagent,
-                intent_hint=intent_hint,
                 clarification_mode=clarification_mode,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,

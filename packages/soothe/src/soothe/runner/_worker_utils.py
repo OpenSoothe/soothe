@@ -5,12 +5,11 @@ Functions extracted from local_runner.py for reuse across runner implementations
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING
-
-from soothe.foundation.loop.intention import IntentHint
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
@@ -44,23 +43,21 @@ def spawn_safe_request(request: LoopRunRequest) -> LoopRunRequest:
     return replace(request, model_params=safe_params)
 
 
-def parse_intent_hint(intent_hint: str | None) -> IntentHint | None:
-    """Parse intent_hint string to IntentHint enum.
+def cancel_orphan_loop_tasks(loop: asyncio.AbstractEventLoop) -> None:
+    """Cancel asyncio tasks left behind after a worker request completes.
 
-    Args:
-        intent_hint: String intent hint value.
-
-    Returns:
-        IntentHint enum or None if invalid/empty.
+    Leaked background tasks (for example async checkpoint flush workers when
+    ``StrangeLoopStateManager.close()`` did not run) can corrupt the worker
+    event loop on the next ``run_until_complete`` call.
     """
-    if not intent_hint:
-        return None
-    normalized = intent_hint.strip().lower()
-    try:
-        return IntentHint(normalized)
-    except ValueError:
-        logger.warning("Invalid intent_hint value: %s", intent_hint)
-        return None
+    pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+    if not pending:
+        return
+
+    for task in pending:
+        task.cancel()
+
+    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 
 
-__all__ = ["spawn_safe_config", "spawn_safe_request", "parse_intent_hint"]
+__all__ = ["cancel_orphan_loop_tasks", "spawn_safe_config", "spawn_safe_request"]

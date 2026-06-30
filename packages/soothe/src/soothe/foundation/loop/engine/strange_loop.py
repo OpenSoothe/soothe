@@ -221,65 +221,96 @@ class StrangeLoop:
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
 
-        # RFC-217: Goal context config for CE-backed goal context injection
-        from soothe.config.models import GoalContextConfig
+        try:
+            # RFC-217: Goal context config for CE-backed goal context injection
+            from soothe.config.models import GoalContextConfig
 
-        goal_context_config = getattr(self.config.agent.loop, "goal_context", GoalContextConfig())
+            goal_context_config = getattr(
+                self.config.agent.loop, "goal_context", GoalContextConfig()
+            )
 
-        # Try to recover from checkpoint (RFC-216: loop-scoped).
-        # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
-        # same TUI/daemon thread reuses one StrangeLoop checkpoint across user turns.
-        checkpoint = await state_manager.load()
+            # Try to recover from checkpoint (RFC-216: loop-scoped).
+            # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
+            # same TUI/daemon thread reuses one StrangeLoop checkpoint across user turns.
+            checkpoint = await state_manager.load()
 
-        if checkpoint is not None:
-            checkpoint_normalized = False
-            if checkpoint.current_thread_id != main_thread_id:
-                checkpoint.current_thread_id = main_thread_id
-                checkpoint_normalized = True
-            if main_thread_id not in checkpoint.thread_ids:
-                checkpoint.thread_ids.append(main_thread_id)
-                checkpoint_normalized = True
-            if checkpoint_normalized:
-                await state_manager.save(checkpoint)
-                logger.info(
-                    "Normalized checkpoint thread identity to loop_id: loop=%s current_thread_id=%s",
-                    state_manager.loop_id,
-                    main_thread_id,
-                )
-        # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
-        recovery_valid_resume = False
-        goal_record = None
-        iteration = 0
+            if checkpoint is not None:
+                checkpoint_normalized = False
+                if checkpoint.current_thread_id != main_thread_id:
+                    checkpoint.current_thread_id = main_thread_id
+                    checkpoint_normalized = True
+                if main_thread_id not in checkpoint.thread_ids:
+                    checkpoint.thread_ids.append(main_thread_id)
+                    checkpoint_normalized = True
+                if checkpoint_normalized:
+                    await state_manager.save(checkpoint)
+                    logger.info(
+                        "Normalized checkpoint thread identity to loop_id: loop=%s current_thread_id=%s",
+                        state_manager.loop_id,
+                        main_thread_id,
+                    )
+            # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
+            recovery_valid_resume = False
+            goal_record = None
+            iteration = 0
 
-        if checkpoint and checkpoint.status == "running":
-            current_goal_index = checkpoint.current_goal_index
-            if 0 <= current_goal_index < len(checkpoint.goal_history):
-                goal_record = checkpoint.goal_history[current_goal_index]
-                iteration = goal_record.iteration
-                recovery_valid_resume = True
-                logger.info(
-                    "Recovering from checkpoint at iteration %d (goal: %s)",
-                    iteration,
-                    goal_record.goal_id,
-                )
-            elif checkpoint.goal_history and any(
-                g.status in ("completed", "failed", "cancelled") for g in checkpoint.goal_history
-            ):
-                # RFC-225: daemon's pre-query metadata write can clobber `status`
-                # from "idle" back to "running" while `current_goal_index` stays
-                # at -1 (left by finalize_goal). Goal history still holds prior
-                # completed goals — treat as idle continuation: append a new goal,
-                # seed from prior, preserve history.
-                logger.info(
-                    "Checkpoint status=running but current_goal_index=%d with %d prior goal(s); "
-                    "treating as idle continuation (loop=%s)",
-                    current_goal_index,
-                    len(checkpoint.goal_history),
-                    state_manager.loop_id,
-                )
-                # Restore the logical "idle" status before calling start_new_goal
-                # (which refuses to start a goal when status=="running").
-                checkpoint.status = "idle"
+            if checkpoint and checkpoint.status == "running":
+                current_goal_index = checkpoint.current_goal_index
+                if 0 <= current_goal_index < len(checkpoint.goal_history):
+                    goal_record = checkpoint.goal_history[current_goal_index]
+                    iteration = goal_record.iteration
+                    recovery_valid_resume = True
+                    logger.info(
+                        "Recovering from checkpoint at iteration %d (goal: %s)",
+                        iteration,
+                        goal_record.goal_id,
+                    )
+                elif checkpoint.goal_history and any(
+                    g.status in ("completed", "failed", "cancelled")
+                    for g in checkpoint.goal_history
+                ):
+                    # RFC-225: daemon's pre-query metadata write can clobber `status`
+                    # from "idle" back to "running" while `current_goal_index` stays
+                    # at -1 (left by finalize_goal). Goal history still holds prior
+                    # completed goals — treat as idle continuation: append a new goal,
+                    # seed from prior, preserve history.
+                    logger.info(
+                        "Checkpoint status=running but current_goal_index=%d with %d prior goal(s); "
+                        "treating as idle continuation (loop=%s)",
+                        current_goal_index,
+                        len(checkpoint.goal_history),
+                        state_manager.loop_id,
+                    )
+                    # Restore the logical "idle" status before calling start_new_goal
+                    # (which refuses to start a goal when status=="running").
+                    checkpoint.status = "idle"
+                    checkpoint.current_thread_id = main_thread_id
+                    if main_thread_id not in checkpoint.thread_ids:
+                        checkpoint.thread_ids.append(main_thread_id)
+                    goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
+                    checkpoint.goal_history.append(goal_record)
+                    checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                    checkpoint.status = "running"
+                    # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
+                    await state_manager.save(checkpoint)
+                    iteration = 0
+                    recovery_valid_resume = False
+                else:
+                    logger.warning(
+                        "Checkpoint has invalid goal index %d (history length: %d), re-initializing",
+                        current_goal_index,
+                        len(checkpoint.goal_history),
+                    )
+                    checkpoint = await state_manager.initialize(main_thread_id, max_iterations)
+                    goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
+                    checkpoint.goal_history.append(goal_record)
+                    checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                    checkpoint.status = "running"
+                    await state_manager.save(checkpoint)
+                    iteration = 0
+                    recovery_valid_resume = False
+
+            elif checkpoint and checkpoint.status == "idle":
                 checkpoint.current_thread_id = main_thread_id
                 if main_thread_id not in checkpoint.thread_ids:
                     checkpoint.thread_ids.append(main_thread_id)
@@ -288,349 +319,324 @@ class StrangeLoop:
                 checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
                 checkpoint.status = "running"
                 # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
+                # via ce.load() which restores prior DAG + ledger state.
                 await state_manager.save(checkpoint)
                 iteration = 0
-                recovery_valid_resume = False
-            else:
-                logger.warning(
-                    "Checkpoint has invalid goal index %d (history length: %d), re-initializing",
-                    current_goal_index,
-                    len(checkpoint.goal_history),
+                logger.debug(
+                    "continued loop %s: new goal id=%s idx=%d",
+                    state_manager.loop_id,
+                    goal_record.goal_id,
+                    checkpoint.current_goal_index,
                 )
+
+            else:
+                if checkpoint is not None:
+                    logger.info(
+                        "Starting fresh StrangeLoop checkpoint (prior status=%s loop_id=%s)",
+                        checkpoint.status,
+                        state_manager.loop_id,
+                    )
                 checkpoint = await state_manager.initialize(main_thread_id, max_iterations)
                 goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
                 checkpoint.goal_history.append(goal_record)
                 checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
                 checkpoint.status = "running"
+
+                logger.debug(
+                    "created goal: id=%s idx=%d obj=%d",
+                    goal_record.goal_id,
+                    checkpoint.current_goal_index,
+                    id(goal_record),
+                )
+
                 await state_manager.save(checkpoint)
-                iteration = 0
-                recovery_valid_resume = False
 
-        elif checkpoint and checkpoint.status == "idle":
-            checkpoint.current_thread_id = main_thread_id
-            if main_thread_id not in checkpoint.thread_ids:
-                checkpoint.thread_ids.append(main_thread_id)
-            goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
-            checkpoint.goal_history.append(goal_record)
-            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-            checkpoint.status = "running"
-            # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
-            # via ce.load() which restores prior DAG + ledger state.
-            await state_manager.save(checkpoint)
-            iteration = 0
-            logger.debug(
-                "continued loop %s: new goal id=%s idx=%d",
-                state_manager.loop_id,
-                goal_record.goal_id,
-                checkpoint.current_goal_index,
+            # RFC-225: derive continue_loop_mode from the FINAL checkpoint state, AFTER
+            # branching has settled goal_history. True iff at least one prior goal exists
+            # alongside the active one (i.e., goal_history has 2+ entries). The valid-resume
+            # branch keeps goal_history unchanged, so this also covers resumes where the
+            # in-flight goal is not the first goal of the loop.
+            continue_loop_mode = len(checkpoint.goal_history) >= 2 or (
+                recovery_valid_resume and len(checkpoint.goal_history) >= 2
             )
 
-        else:
-            if checkpoint is not None:
-                logger.info(
-                    "Starting fresh StrangeLoop checkpoint (prior status=%s loop_id=%s)",
-                    checkpoint.status,
-                    state_manager.loop_id,
-                )
-            checkpoint = await state_manager.initialize(main_thread_id, max_iterations)
-            goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
-            checkpoint.goal_history.append(goal_record)
-            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-            checkpoint.status = "running"
-
-            logger.debug(
-                "created goal: id=%s idx=%d obj=%d",
-                goal_record.goal_id,
-                checkpoint.current_goal_index,
-                id(goal_record),
-            )
-
-            await state_manager.save(checkpoint)
-
-        # RFC-225: derive continue_loop_mode from the FINAL checkpoint state, AFTER
-        # branching has settled goal_history. True iff at least one prior goal exists
-        # alongside the active one (i.e., goal_history has 2+ entries). The valid-resume
-        # branch keeps goal_history unchanged, so this also covers resumes where the
-        # in-flight goal is not the first goal of the loop.
-        continue_loop_mode = len(checkpoint.goal_history) >= 2 or (
-            recovery_valid_resume and len(checkpoint.goal_history) >= 2
-        )
-
-        state = LoopState(
-            goal=execution_goal,
-            goal_user_submission=goal_user_submission,
-            skill_context=skill_context,
-            slash_invoked_skill_name=slash_invoked_skill_name,
-            slash_invoked_skill_body=slash_invoked_skill_body,
-            thread_id=main_thread_id,
-            workspace=workspace,
-            iteration=iteration,  # Use recovered or initial iteration
-            max_iterations=max_iterations,
-            intent=intent,
-            routing_classification=routing_classification,
-            loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
-        )
-
-        # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring
-        state.continue_loop = continue_loop_mode
-
-        wm_cfg = self.config.agent.loop.working_memory
-        if wm_cfg.enabled:
-            state.working_memory = LoopWorkingMemory(
+            state = LoopState(
+                goal=execution_goal,
+                goal_user_submission=goal_user_submission,
+                skill_context=skill_context,
+                slash_invoked_skill_name=slash_invoked_skill_name,
+                slash_invoked_skill_body=slash_invoked_skill_body,
                 thread_id=main_thread_id,
-                max_inline_chars=wm_cfg.max_inline_chars,
-                max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
+                workspace=workspace,
+                iteration=iteration,  # Use recovered or initial iteration
+                max_iterations=max_iterations,
+                intent=intent,
+                routing_classification=routing_classification,
+                loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
             )
 
-        logger.info(
-            "[Goal] %s (max_iterations=%d, iteration=%d, continue_loop=%s)",
-            log_preview(execution_goal, 80),
-            max_iterations,
-            state.iteration,
-            continue_loop_mode,
-        )
+            # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring
+            state.continue_loop = continue_loop_mode
 
-        queue: asyncio.Queue[Any] = asyncio.Queue()
-        _graph_sentinel = object()
-
-        async def emit(event_type: str, event_data: Any) -> None:
-            await queue.put((event_type, event_data))
-
-        plan_manager: Any
-
-        # RFC-624 Phase 4: ContextEngine is always active
-        from soothe.foundation.context.engine import ContextEngine as _ContextEngine
-        from soothe.foundation.context.planning import StepPlanManagerAdapter
-
-        from .context_adapters import (
-            ContextEngineGoalContextAdapter,
-        )
-
-        persistence_backend = self.config.persistence.default_backend
-
-        soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
-
-        if persistence_backend == "postgresql":
-            try:
-                import asyncpg  # noqa: F401
-            except ImportError:
-                logger.warning(
-                    "[CE] asyncpg not installed; falling back to SQLite for CE persistence"
-                )
-                persistence_backend = "sqlite"
-            else:
-                from soothe.foundation.context.persistence.pgsql_backend import (
-                    PgsqlContextPersistence,
+            wm_cfg = self.config.agent.loop.working_memory
+            if wm_cfg.enabled:
+                state.working_memory = LoopWorkingMemory(
+                    thread_id=main_thread_id,
+                    max_inline_chars=wm_cfg.max_inline_chars,
+                    max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
                 )
 
-                # RFC-612: prefer postgres_base_dsn + database name; fall back to
-                # soothe_postgres_dsn (single-database legacy DSN).
-                base_dsn = self.config.persistence.postgres_base_dsn
-                if base_dsn:
-                    # Strip trailing slash and append checkpoints database name
-                    db_name = self.config.persistence.postgres_databases.get(
-                        "checkpoints", "soothe_checkpoints"
-                    )
-                    pgsql_dsn = f"{base_dsn.rstrip('/')}/{db_name}"
-                else:
-                    pgsql_dsn = self.config.persistence.soothe_postgres_dsn
-                if not pgsql_dsn:
-                    msg = "PostgreSQL persistence backend requires postgres_base_dsn or soothe_postgres_dsn in config"
-                    raise ValueError(msg)
-                persistence = PgsqlContextPersistence(
-                    loop_id=state_manager.loop_id,
-                    dsn=pgsql_dsn,
-                )
-
-        if persistence_backend == "sqlite":
-            from soothe.foundation.context.persistence.sqlite_backend import (
-                SqliteContextPersistence,
-            )
-            from soothe.foundation.loop.state.persistence.runtime_paths import (
-                resolve_context_engine_db_path,
-            )
-
-            persistence = SqliteContextPersistence(
-                loop_id=state_manager.loop_id,
-                db_path=resolve_context_engine_db_path(),
-            )
-        else:
-            msg = f"Unknown CE persistence backend: {persistence_backend}"
-            raise ValueError(msg)
-
-        # RFC-624 Phase 4: Loop-scoped CE lifecycle. Create once per
-        # loop_id, persist across goals. On subsequent calls, reuse the
-        # existing instance, load prior DAG, and add a new goal.
-        ce_config = self.config.agent.loop.context_engine
-        projection_config = ce_config.to_projection_config()
-
-        if self._ce is None:
-            self._ce = _ContextEngine(
-                persistence=persistence,
-                projection_config=projection_config,
-                soothe_home=soothe_home,
-                workspace=Path(workspace) if workspace else None,
-            )
-        else:
-            # Update workspace if it changed between goals
-            if workspace:
-                self._ce._semantic.workspace = Path(workspace)
-
-        ce_instance = self._ce
-
-        # RFC-630 Phase C: parallelize the pre-graph IO. ``ce.load()`` (prior
-        # DAG hydration) and the three semantic file reads are independent —
-        # gather them so the LLM round-trip and disk reads overlap rather than
-        # running sequentially on the event loop. The sync file reads are
-        # wrapped in ``to_thread`` so they no longer block the event loop.
-        semantic_tasks: list = []
-        if workspace:
-            ce_instance._semantic.workspace = Path(workspace)
-            semantic_tasks = [
-                asyncio.to_thread(ce_instance._semantic.load_project_instructions),
-                asyncio.to_thread(ce_instance._semantic.load_agent_instructions),
-                asyncio.to_thread(ce_instance._semantic.load_memory),
-            ]
-
-        if semantic_tasks:
-            loaded, *_ = await asyncio.gather(
-                ce_instance.load(), *semantic_tasks, return_exceptions=True
-            )
-        else:
-            loaded = await ce_instance.load()
-
-        if isinstance(loaded, Exception):
-            logger.warning("[CE] load() failed: %s", loaded, exc_info=True)
-            loaded = False
-        if loaded:
             logger.info(
-                "ContextEngine loaded prior state (goals=%d, backend=%s)",
-                len(ce_instance.get_all_goals()),
+                "[Goal] %s (max_iterations=%d, iteration=%d, continue_loop=%s)",
+                log_preview(execution_goal, 80),
+                max_iterations,
+                state.iteration,
+                continue_loop_mode,
+            )
+
+            queue: asyncio.Queue[Any] = asyncio.Queue()
+            _graph_sentinel = object()
+
+            async def emit(event_type: str, event_data: Any) -> None:
+                await queue.put((event_type, event_data))
+
+            plan_manager: Any
+
+            # RFC-624 Phase 4: ContextEngine is always active
+            from soothe.foundation.context.engine import ContextEngine as _ContextEngine
+            from soothe.foundation.context.planning import StepPlanManagerAdapter
+
+            from .context_adapters import (
+                ContextEngineGoalContextAdapter,
+            )
+
+            persistence_backend = self.config.persistence.default_backend
+
+            soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
+
+            if persistence_backend == "postgresql":
+                try:
+                    import asyncpg  # noqa: F401
+                except ImportError:
+                    logger.warning(
+                        "[CE] asyncpg not installed; falling back to SQLite for CE persistence"
+                    )
+                    persistence_backend = "sqlite"
+                else:
+                    from soothe.foundation.context.persistence.pgsql_backend import (
+                        PgsqlContextPersistence,
+                    )
+
+                    # RFC-612: prefer postgres_base_dsn + database name; fall back to
+                    # soothe_postgres_dsn (single-database legacy DSN).
+                    base_dsn = self.config.persistence.postgres_base_dsn
+                    if base_dsn:
+                        # Strip trailing slash and append checkpoints database name
+                        db_name = self.config.persistence.postgres_databases.get(
+                            "checkpoints", "soothe_checkpoints"
+                        )
+                        pgsql_dsn = f"{base_dsn.rstrip('/')}/{db_name}"
+                    else:
+                        pgsql_dsn = self.config.persistence.soothe_postgres_dsn
+                    if not pgsql_dsn:
+                        msg = "PostgreSQL persistence backend requires postgres_base_dsn or soothe_postgres_dsn in config"
+                        raise ValueError(msg)
+                    persistence = PgsqlContextPersistence(
+                        loop_id=state_manager.loop_id,
+                        dsn=pgsql_dsn,
+                    )
+
+            if persistence_backend == "sqlite":
+                from soothe.foundation.context.persistence.sqlite_backend import (
+                    SqliteContextPersistence,
+                )
+                from soothe.foundation.loop.state.persistence.runtime_paths import (
+                    resolve_context_engine_db_path,
+                )
+
+                persistence = SqliteContextPersistence(
+                    loop_id=state_manager.loop_id,
+                    db_path=resolve_context_engine_db_path(),
+                )
+            else:
+                msg = f"Unknown CE persistence backend: {persistence_backend}"
+                raise ValueError(msg)
+
+            # RFC-624 Phase 4: Loop-scoped CE lifecycle. Create once per
+            # loop_id, persist across goals. On subsequent calls, reuse the
+            # existing instance, load prior DAG, and add a new goal.
+            ce_config = self.config.agent.loop.context_engine
+            projection_config = ce_config.to_projection_config()
+
+            if self._ce is None:
+                self._ce = _ContextEngine(
+                    persistence=persistence,
+                    projection_config=projection_config,
+                    soothe_home=soothe_home,
+                    workspace=Path(workspace) if workspace else None,
+                )
+            else:
+                # Update workspace if it changed between goals
+                if workspace:
+                    self._ce._semantic.workspace = Path(workspace)
+
+            ce_instance = self._ce
+
+            # RFC-630 Phase C: parallelize the pre-graph IO. ``ce.load()`` (prior
+            # DAG hydration) and the three semantic file reads are independent —
+            # gather them so the LLM round-trip and disk reads overlap rather than
+            # running sequentially on the event loop. The sync file reads are
+            # wrapped in ``to_thread`` so they no longer block the event loop.
+            semantic_tasks: list = []
+            if workspace:
+                ce_instance._semantic.workspace = Path(workspace)
+                semantic_tasks = [
+                    asyncio.to_thread(ce_instance._semantic.load_project_instructions),
+                    asyncio.to_thread(ce_instance._semantic.load_agent_instructions),
+                    asyncio.to_thread(ce_instance._semantic.load_memory),
+                ]
+
+            if semantic_tasks:
+                loaded, *_ = await asyncio.gather(
+                    ce_instance.load(), *semantic_tasks, return_exceptions=True
+                )
+            else:
+                loaded = await ce_instance.load()
+
+            if isinstance(loaded, Exception):
+                logger.warning("[CE] load() failed: %s", loaded, exc_info=True)
+                loaded = False
+            if loaded:
+                logger.info(
+                    "ContextEngine loaded prior state (goals=%d, backend=%s)",
+                    len(ce_instance.get_all_goals()),
+                    persistence_backend,
+                )
+
+            ce_goal = await ce_instance.create_goal(
+                execution_goal,
+                generating_reasoning="StrangeLoop goal",
+                source="user",
+                max_iterations=max_iterations,
+            )
+            await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+
+            # RFC-624 Phase 4 Step 3: bind CE to LoopState
+            state.bind_ce(ce_instance, ce_goal.id)
+
+            plan_manager = StepPlanManagerAdapter(
+                subengine=ce_instance.planning.step,
+                goal_id=ce_goal.id,
+            )
+
+            # Replace GoalContextManager with CE-backed adapter
+            goal_context_manager = ContextEngineGoalContextAdapter(
+                context_engine=ce_instance,
+                state_manager=state_manager,
+                config=goal_context_config,
+            )
+
+            logger.info(
+                "ContextEngine active (goal_id=%s, backend=%s)",
+                ce_goal.id,
                 persistence_backend,
             )
 
-        ce_goal = await ce_instance.create_goal(
-            execution_goal,
-            generating_reasoning="StrangeLoop goal",
-            source="user",
-            max_iterations=max_iterations,
-        )
-        await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+            ctx = LoopRuntimeContext(
+                strange_loop=self,
+                state_manager=state_manager,
+                anchor_manager=anchor_manager,
+                goal_context_manager=goal_context_manager,
+                plan_manager=plan_manager,
+                checkpoint=checkpoint,
+                goal_record=goal_record,
+                continue_loop_mode=continue_loop_mode,
+                recovery_valid_resume=recovery_valid_resume,
+                loop_state=state,
+                emit=emit,
+                intent_classifier=intent_classifier,
+                preferred_subagent=preferred_subagent,
+                clarification_policy=clarification_policy,
+                clarification_resume_text=goal if clarification_answer else None,
+                clarification_resume_answers=(
+                    list(clarification_answers)
+                    if clarification_answer and clarification_answers
+                    else None
+                ),
+                proposal_queue=proposal_queue,  # RFC-204 Group C
+                ce=ce_instance,
+                ce_goal_id=ce_goal.id,
+            )
 
-        # RFC-624 Phase 4 Step 3: bind CE to LoopState
-        state.bind_ce(ce_instance, ce_goal.id)
+            async def pump_graph() -> None:
+                try:
+                    from soothe.foundation.loop.orchestrator.runner import invoke_strange_loop_graph
 
-        plan_manager = StepPlanManagerAdapter(
-            subengine=ce_instance.planning.step,
-            goal_id=ce_goal.id,
-        )
+                    await invoke_strange_loop_graph(ctx)
+                except Exception as e:
+                    # Check if this is a recoverable DB connection error
+                    from soothe.foundation.loop.state.persistence.retry_utils import (
+                        is_recoverable_connection_error,
+                    )
 
-        # Replace GoalContextManager with CE-backed adapter
-        goal_context_manager = ContextEngineGoalContextAdapter(
-            context_engine=ce_instance,
-            state_manager=state_manager,
-            config=goal_context_config,
-        )
+                    if is_recoverable_connection_error(e):
+                        logger.error(
+                            "[pump_graph] DB connection error after retries: %s: %s. "
+                            "Emitting fatal_error event instead of crashing daemon.",
+                            type(e).__name__,
+                            e,
+                        )
+                        await queue.put(
+                            (
+                                "fatal_error",
+                                {
+                                    "error": f"Database connection lost: {type(e).__name__}",
+                                    "recoverable": True,
+                                },
+                            )
+                        )
+                    else:
+                        logger.error(
+                            "[pump_graph] Graph execution error: %s: %s",
+                            type(e).__name__,
+                            e,
+                            exc_info=True,
+                        )
+                        await queue.put(
+                            (
+                                "fatal_error",
+                                {"error": str(e), "recoverable": False},
+                            )
+                        )
+                finally:
+                    await queue.put(_graph_sentinel)
 
-        logger.info(
-            "ContextEngine active (goal_id=%s, backend=%s)",
-            ce_goal.id,
-            persistence_backend,
-        )
-
-        ctx = LoopRuntimeContext(
-            strange_loop=self,
-            state_manager=state_manager,
-            anchor_manager=anchor_manager,
-            goal_context_manager=goal_context_manager,
-            plan_manager=plan_manager,
-            checkpoint=checkpoint,
-            goal_record=goal_record,
-            continue_loop_mode=continue_loop_mode,
-            recovery_valid_resume=recovery_valid_resume,
-            loop_state=state,
-            emit=emit,
-            intent_classifier=intent_classifier,
-            preferred_subagent=preferred_subagent,
-            clarification_policy=clarification_policy,
-            clarification_resume_text=goal if clarification_answer else None,
-            clarification_resume_answers=(
-                list(clarification_answers)
-                if clarification_answer and clarification_answers
-                else None
-            ),
-            proposal_queue=proposal_queue,  # RFC-204 Group C
-            ce=ce_instance,
-            ce_goal_id=ce_goal.id,
-        )
-
-        async def pump_graph() -> None:
+            pump_task = asyncio.create_task(pump_graph())
             try:
-                from soothe.foundation.loop.orchestrator.runner import invoke_strange_loop_graph
-
-                await invoke_strange_loop_graph(ctx)
-            except Exception as e:
-                # Check if this is a recoverable DB connection error
-                from soothe.foundation.loop.state.persistence.retry_utils import (
-                    is_recoverable_connection_error,
-                )
-
-                if is_recoverable_connection_error(e):
-                    logger.error(
-                        "[pump_graph] DB connection error after retries: %s: %s. "
-                        "Emitting fatal_error event instead of crashing daemon.",
-                        type(e).__name__,
-                        e,
-                    )
-                    await queue.put(
-                        (
-                            "fatal_error",
-                            {
-                                "error": f"Database connection lost: {type(e).__name__}",
-                                "recoverable": True,
-                            },
+                while True:
+                    item = await queue.get()
+                    if item is _graph_sentinel:
+                        logger.debug(
+                            "[run_with_progress] Graph sentinel received, ending stream (loop=%s)",
+                            ctx.state_manager.loop_id,
                         )
-                    )
-                else:
-                    logger.error(
-                        "[pump_graph] Graph execution error: %s: %s",
-                        type(e).__name__,
-                        e,
-                        exc_info=True,
-                    )
-                    await queue.put(
-                        (
-                            "fatal_error",
-                            {"error": str(e), "recoverable": False},
-                        )
-                    )
-            finally:
-                await queue.put(_graph_sentinel)
-
-        pump_task = asyncio.create_task(pump_graph())
-        try:
-            while True:
-                item = await queue.get()
-                if item is _graph_sentinel:
-                    logger.debug(
-                        "[run_with_progress] Graph sentinel received, ending stream (loop=%s)",
-                        ctx.state_manager.loop_id,
-                    )
-                    break
-                yield item
-        except asyncio.CancelledError:
-            pump_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await pump_task
-            raise
-        finally:
-            if not pump_task.done():
+                        break
+                    yield item
+            except asyncio.CancelledError:
                 pump_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pump_task
-            else:
-                await pump_task
-            # IG-404: Close backend pools to prevent connection exhaustion
+                raise
+            finally:
+                if not pump_task.done():
+                    pump_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await pump_task
+                else:
+                    await pump_task
+
+        finally:
+            # Always stop async checkpoint worker even when setup fails before graph start.
             await state_manager.close()
             await anchor_manager.close()
 

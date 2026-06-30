@@ -1,4 +1,4 @@
-"""Integration tests for structured ``intent_hint=direct_llm`` turns (IG-419)."""
+"""Integration tests for structured ``intent_hint=text_completion`` turns (IG-419)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from soothe.config import SootheConfig
 from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
-from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
+from soothe_daemon.services.direct_llm_turn import run_text_completion_turn
 from tests.integration.daemon._structured_direct_llm_helpers import (
     WORD_REPLY_SCHEMA,
     await_messages_assistant_content,
@@ -46,10 +46,10 @@ async def websocket_daemon_llm(tmp_path: Path):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_loop_input_rejects_response_schema_without_direct_llm(
+async def test_loop_input_rejects_response_schema_without_structured_hint(
     websocket_daemon_llm: tuple[SootheDaemon, int, SootheConfig],
 ) -> None:
-    """Wire validation: response_schema requires intent_hint direct_llm."""
+    """Wire validation: response_schema requires text_completion or image_to_text."""
     _daemon, port, _cfg = websocket_daemon_llm
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
@@ -67,7 +67,7 @@ async def test_loop_input_rejects_response_schema_without_direct_llm(
                 "params": {
                     "loop_id": loop_id,
                     "content": "hello",
-                    "intent_hint": "quiz",
+                    "intent_hint": "embed",
                     "response_schema": WORD_REPLY_SCHEMA,
                 },
             }
@@ -82,9 +82,9 @@ async def test_loop_input_rejects_response_schema_without_direct_llm(
             if ev.get("type") == "error":
                 err = ev.get("error") or {}
                 assert err.get("code") == -32600  # INVALID_REQUEST
-                assert "direct_llm" in str(err.get("message", "")).lower()
+                assert "text_completion" in str(err.get("message", "")).lower()
                 return
-        raise AssertionError("expected INVALID_REQUEST for response_schema with intent_hint=quiz")
+        raise AssertionError("expected INVALID_REQUEST for response_schema with intent_hint=embed")
     finally:
         if client.is_connected:
             await client.close()
@@ -92,12 +92,12 @@ async def test_loop_input_rejects_response_schema_without_direct_llm(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_run_direct_llm_turn_structured_service(
+async def test_run_text_completion_turn_structured_service(
     integration_config: SootheConfig,
     requires_llm_api,
 ) -> None:
-    """Service-level structured direct_llm against configured providers."""
-    raw = await run_direct_llm_turn(
+    """Service-level structured text_completion against configured providers."""
+    raw = await run_text_completion_turn(
         integration_config,
         user_text='Return JSON with the word field set exactly to "STRUCT".',
         response_schema=WORD_REPLY_SCHEMA,
@@ -110,7 +110,7 @@ async def test_run_direct_llm_turn_structured_service(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_websocket_direct_llm_structured_json_reply(
+async def test_websocket_text_completion_structured_json_reply(
     websocket_daemon_llm: tuple[SootheDaemon, int, SootheConfig],
     requires_llm_api,
 ) -> None:
@@ -127,7 +127,7 @@ async def test_websocket_direct_llm_structured_json_reply(
         await client.send_input(
             loop_id,
             'Return JSON with word set exactly to "WIRE".',
-            intent_hint="direct_llm",
+            intent_hint="text_completion",
             response_schema=WORD_REPLY_SCHEMA,
             response_schema_name="WordReply",
             response_schema_strict=True,
@@ -147,11 +147,11 @@ async def test_websocket_direct_llm_structured_json_reply(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_websocket_direct_llm_plain_text_without_schema(
+async def test_websocket_text_completion_plain_text_without_schema(
     websocket_daemon_llm: tuple[SootheDaemon, int, SootheConfig],
     requires_llm_api,
 ) -> None:
-    """Regression: direct_llm without response_schema still returns plain text."""
+    """Regression: text_completion without response_schema still returns plain text."""
     _daemon, port, _cfg = websocket_daemon_llm
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
@@ -164,7 +164,7 @@ async def test_websocket_direct_llm_plain_text_without_schema(
         await client.send_input(
             loop_id,
             "Reply with exactly one word: PLAIN.",
-            intent_hint="direct_llm",
+            intent_hint="text_completion",
         )
         await await_status_state(client.read_event, "running", timeout=15.0)
         raw = await await_messages_assistant_content(client.read_event, timeout=120.0)
