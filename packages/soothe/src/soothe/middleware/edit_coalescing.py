@@ -264,7 +264,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
         self._detection_window_ms = self._config.detection_window_ms
         self._pending_edits: dict[str, list[PendingEdit]] = {}
         # Staging buffer: path -> list of (old_string, new_string, replace_all)
-        self._staging_buffer: dict[str, list[tuple[str, str, bool, str]]] = {}
+        self._staging_buffer: dict[str, list[StringReplacement]] = {}
         self._window_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
         self._lock_registry = lock_registry or FileEditLockRegistry()
@@ -365,7 +365,14 @@ class EditCoalescingMiddleware(AgentMiddleware):
                             file_path,
                         )
 
-                entries.append((old_string, new_string, replace_all, tool_call_id))
+                entries.append(
+                    StringReplacement(
+                        old_string=old_string,
+                        new_string=new_string,
+                        replace_all=replace_all,
+                        tool_call_id=tool_call_id,
+                    )
+                )
 
                 # Also track in pending_edits so _process_after_window picks it up
                 if file_path not in self._pending_edits:
@@ -439,7 +446,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
         self,
         file_path: str,
         edits: list[PendingEdit],
-        replacements: list[tuple[str, str, bool, str]],
+        replacements: list[StringReplacement],
     ) -> None:
         """Dispatch coalesced string-replacement edits for a single file.
 
@@ -451,8 +458,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
         Args:
             file_path: Target file path.
             edits: List of pending edit_file edits for this file.
-            replacements: List of ``(old_string, new_string, replace_all,
-                tool_call_id)`` tuples from the staging buffer.
+            replacements: Staged string replacements for this file.
         """
         # Detect overlapping string replacements before touching the filesystem
         try:
@@ -496,7 +502,10 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
                 # Apply replacements sequentially in memory
                 applied_count = 0
-                for old_string, new_string, replace_all, _call_id in replacements:
+                for replacement in replacements:
+                    old_string = replacement.old_string
+                    new_string = replacement.new_string
+                    replace_all = replacement.replace_all
                     if old_string not in content:
                         # String not found — skip this replacement but continue
                         continue
@@ -633,7 +642,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
     def _find_string_overlaps(
         self,
         content: str,
-        replacements: list[tuple[str, str, bool, str]],
+        replacements: list[StringReplacement],
     ) -> tuple[set[str], list[tuple[int, int]]] | None:
         """Detect overlapping string-replacement ranges.
 
@@ -644,8 +653,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
         Args:
             content: Original file content.
-            replacements: List of ``(old_string, new_string, replace_all,
-                tool_call_id)`` tuples.
+            replacements: Staged string replacements for the file.
 
         Returns:
             Tuple of (conflicting call_ids, conflicting char ranges) if a
@@ -654,7 +662,10 @@ class EditCoalescingMiddleware(AgentMiddleware):
         # Compute character ranges for each replacement
         ranges: list[tuple[int, int, str]] = []
         cursor = 0
-        for old_string, _new_string, replace_all, call_id in replacements:
+        for replacement in replacements:
+            old_string = replacement.old_string
+            replace_all = replacement.replace_all
+            call_id = replacement.tool_call_id
             if not old_string:
                 continue
             if old_string not in content:

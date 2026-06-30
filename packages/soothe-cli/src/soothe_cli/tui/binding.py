@@ -35,6 +35,7 @@ def message_to_widget(data: MessageData) -> Widget:
         SummarizationMessage,
         UserMessage,
     )
+    from soothe_cli.tui.widgets.messages.cognition_step import _DeferredStepComplete
 
     match data.type:
         case MessageType.USER:
@@ -100,7 +101,7 @@ def message_to_widget(data: MessageData) -> Widget:
             elif phase == "interrupted":
                 w._deferred_interrupted = data.step_summary or "Interrupted"
             elif phase in ("success", "error") and data.step_success is not None:
-                w._deferred_complete = (
+                w._deferred_complete = _DeferredStepComplete(
                     bool(data.step_success),
                     int(data.step_duration_ms or 0),
                     int(data.step_tool_call_count or 0),

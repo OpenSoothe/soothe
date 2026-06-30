@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 from rich.cells import cell_len
 from textual.binding import Binding, BindingType
@@ -33,15 +33,17 @@ from soothe_cli.tui.widgets._links import open_style_link
 
 logger = logging.getLogger(__name__)
 
-_column_widths_cache: (
-    tuple[
-        tuple[tuple[str, str | None], ...],  # (loop_id, checkpoint_id) fingerprint
-        frozenset[str],  # visible column keys
-        bool,  # relative_time
-        dict[str, int | None],  # computed widths
-    ]
-    | None
-) = None
+
+class _LoopColumnWidthsCache(NamedTuple):
+    """Inputs fingerprint for resume-table column width caching."""
+
+    fingerprint: tuple[tuple[str, str | None], ...]
+    visible_columns: frozenset[str]
+    relative_time: bool
+    widths: dict[str, int | None]
+
+
+_column_widths_cache: _LoopColumnWidthsCache | None = None
 """Module-level cache so repeated `/resume` opens skip column-width computation
 when the inputs (loop data + config) haven't changed."""
 
@@ -1038,14 +1040,14 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         )
 
         if _column_widths_cache is not None:
-            fp, vis, rel, cached_widths = _column_widths_cache
+            cached = _column_widths_cache
             if (
-                fp == fingerprint
-                and vis == visible
-                and rel == self._relative_time
+                cached.fingerprint == fingerprint
+                and cached.visible_columns == visible
+                and cached.relative_time == self._relative_time
                 and self._cell_text
             ):
-                return dict(cached_widths)
+                return dict(cached.widths)
 
         # Pre-format every visible cell in one pass.
         cell_text: dict[tuple[str, str], str] = {}
@@ -1069,7 +1071,12 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             )
             widths[key] = max(header_len, max_cell) + _CELL_PADDING_RIGHT
 
-        _column_widths_cache = (fingerprint, visible, self._relative_time, widths)
+        _column_widths_cache = _LoopColumnWidthsCache(
+            fingerprint=fingerprint,
+            visible_columns=visible,
+            relative_time=self._relative_time,
+            widths=widths,
+        )
         return widths
 
     @staticmethod

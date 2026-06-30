@@ -8,9 +8,22 @@ import re
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 logger = logging.getLogger(__name__)
+
+
+class TimestampedMemoryItem(NamedTuple):
+    """Parsed fields from a timestamped memory ledger line."""
+
+    memory_id: str
+    mentioned_at: str
+    content: str
+    links: str
+
+    @classmethod
+    def empty(cls) -> TimestampedMemoryItem:
+        return cls("", "", "", "")
 
 
 class BaseAction(ABC):
@@ -227,9 +240,8 @@ class BaseAction(ABC):
         for i, line_raw in enumerate(lines):
             line = line_raw.strip()
             if line:  # Only process non-empty lines
-                memory_id, mentioned_at, clean_content, links = (
-                    self._extract_timestamped_memory_item(line)
-                )
+                parsed = self._extract_timestamped_memory_item(line)
+                memory_id, mentioned_at, clean_content, links = parsed
 
                 if clean_content:
                     item = {
@@ -244,7 +256,7 @@ class BaseAction(ABC):
 
         return items
 
-    def _extract_timestamped_memory_item(self, line: str) -> tuple[str, str, str, str]:
+    def _extract_timestamped_memory_item(self, line: str) -> TimestampedMemoryItem:
         """Extract memory ID, content, timestamp, and links from timestamped format.
 
         Format: [memory_id][mentioned at date] content [links].
@@ -253,7 +265,7 @@ class BaseAction(ABC):
             line: Line with timestamped memory format
 
         Returns:
-            Tuple of (memory_id, mentioned_at, content, links)
+            Parsed memory id, timestamp, content, and optional links.
         """
         import re
 
@@ -264,12 +276,13 @@ class BaseAction(ABC):
         match = re.match(pattern, line)
 
         if match:
-            memory_id = match.group(1)
-            mentioned_at = match.group(2)
-            content = match.group(3).strip()
-            links = match.group(4) or ""
-            return memory_id, mentioned_at, content, links
-        return "", "", "", ""
+            return TimestampedMemoryItem(
+                memory_id=match.group(1),
+                mentioned_at=match.group(2),
+                content=match.group(3).strip(),
+                links=match.group(4) or "",
+            )
+        return TimestampedMemoryItem.empty()
 
     # ================================
     # Common utility methods that actions can use

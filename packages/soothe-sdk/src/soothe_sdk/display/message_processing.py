@@ -12,11 +12,25 @@ import contextlib
 import json
 import re
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, NamedTuple
 
 # ============================================================================
 # Shared Tool Call Streaming Helpers (IG-053)
 # ============================================================================
+
+
+class PendingToolCallFinalize(NamedTuple):
+    """Result of finalizing a pending streamed tool call."""
+
+    parsed_args: dict[str, Any] | None
+    pending_state: dict[str, Any]
+    needs_emit: bool
+    raw_args_str: str
+
+    @classmethod
+    def empty(cls) -> PendingToolCallFinalize:
+        """Sentinel when the tool call id is missing or unknown."""
+        return cls(None, {}, False, "")
 
 
 def seed_pending_tool_calls_from_message(
@@ -384,7 +398,7 @@ def try_parse_pending_tool_call_args(
 def finalize_pending_tool_call(
     pending_tool_calls: dict[str, dict[str, Any]],
     tool_call_id: str,
-) -> tuple[dict[str, Any] | None, dict[str, Any], bool, str]:
+) -> PendingToolCallFinalize:
     """Finalize and remove a pending tool call when its result arrives.
 
     Args:
@@ -392,16 +406,12 @@ def finalize_pending_tool_call(
         tool_call_id: ID of the tool call to finalize.
 
     Returns:
-        Tuple of (parsed_args, pending_state dict, needs_emit, raw_args_str).
-        - parsed_args: Parsed args dict if valid JSON, None otherwise.
-        - pending_state: The pending tool call state dict.
-        - needs_emit: True if the tool call wasn't emitted yet.
-        - raw_args_str: Raw args string for display fallback.
-        If not found, returns (None, {}, False, "").
+        Parsed args, pending state, emit flag, and raw args string.
+        If not found, returns :meth:`PendingToolCallFinalize.empty`.
     """
     str_id = str(tool_call_id) if tool_call_id else ""
     if not str_id or str_id not in pending_tool_calls:
-        return None, {}, False, ""
+        return PendingToolCallFinalize.empty()
 
     pending = pending_tool_calls[str_id]
     parsed_args = None
@@ -419,7 +429,7 @@ def finalize_pending_tool_call(
 
     # Clean up the pending entry
     del pending_tool_calls[str_id]
-    return parsed_args, pending, needs_emit, raw_args_str
+    return PendingToolCallFinalize(parsed_args, pending, needs_emit, raw_args_str)
 
 
 def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: int = 120) -> str:

@@ -72,6 +72,8 @@ from soothe.foundation.loop.engine.step_wave_types import (
     _ActStreamBudget,
     _append_parallel_stream_event,
     _ExecuteStepResult,
+    _PendingInterruptFetch,
+    _StreamCollectChunk,
     _first_tool_error_message,
     _ParallelLiveQueueItem,
     _ParallelStepDone,
@@ -360,14 +362,14 @@ class Executor:
         capture: ClarificationCapture | None,
         loop_state_view: LoopStateView | None,
         origin_node: ClarificationOrigin,
-    ) -> tuple[dict[str, Any], bool, bool]:
+    ) -> _PendingInterruptFetch:
         """Read pending LangGraph interrupts from ``aget_state`` after a stream ends.
 
         IG-477: Avoid ``stream_mode`` ``updates`` during execute streaming — each update
         carries a full graph state snapshot (~400 MiB during subgraph tool streaming).
 
         Returns:
-            Tuple of ``(pending_interrupts, interrupt_occurred, captured_clarification)``.
+            Pending interrupt payload and flags for resume / clarification capture.
         """
         pending_interrupts: dict[str, Any] = {}
         interrupt_occurred = False
@@ -376,11 +378,11 @@ class Executor:
             detector is not None and capture is not None and loop_state_view is not None
         )
         if getattr(self.core_agent, "can_read_graph_state", True) is False:
-            return pending_interrupts, False, False
+            return _PendingInterruptFetch()
 
         graph_state = await self.core_agent.execution_aget_state(config=graph_config)
         if graph_state is None:
-            return pending_interrupts, False, False
+            return _PendingInterruptFetch()
 
         interrupts: tuple[Interrupt, ...] = ()
         if graph_state is not None:
@@ -409,7 +411,11 @@ class Executor:
                     continue
             pending_interrupts[interrupt_obj.id] = interrupt_obj.value
             interrupt_occurred = True
-        return pending_interrupts, interrupt_occurred, captured_clarification
+        return _PendingInterruptFetch(
+            pending_interrupts=pending_interrupts,
+            interrupt_occurred=interrupt_occurred,
+            captured_clarification=captured_clarification,
+        )
 
     async def _core_agent_astream_with_interrupt_resume(
         self,
@@ -468,21 +474,17 @@ class Executor:
             except asyncio.CancelledError:
                 raise
 
-            (
-                pending_interrupts,
-                interrupt_occurred,
-                captured_clarification,
-            ) = await self._fetch_pending_interrupts_from_state(
+            fetch = await self._fetch_pending_interrupts_from_state(
                 graph_config,
                 detector=detector,
                 capture=capture,
                 loop_state_view=loop_state_view,
                 origin_node=origin_node,
             )
-            if captured_clarification:
+            if fetch.captured_clarification:
                 return
 
-            if not interrupt_occurred:
+            if not fetch.interrupt_occurred:
                 return
 
             interrupt_iterations += 1
@@ -493,7 +495,7 @@ class Executor:
                 )
                 return
 
-            resume_payload = build_auto_resume_payload(pending_interrupts)
+            resume_payload = build_auto_resume_payload(fetch.pending_interrupts)
             current_input = Command(resume=resume_payload)
 
     @staticmethod
@@ -943,7 +945,7 @@ class Executor:
             state: Loop state whose ``loop_messages`` list is extended in wave order.
             steps: Ready steps for this wave (same order as ``gather_results``).
             gather_results: Results from ``asyncio.gather`` over per-step tasks — each entry is
-                either an exception or the tuple returned by ``_execute_step_collecting_events``.
+                either an exception or the :class:`_ExecuteStepResult` from ``_execute_step_collecting_events``.
         """
         from langchain_core.messages import AIMessage
 
@@ -1398,7 +1400,7 @@ class Executor:
         continue_loop_mode: bool = False,
         loop_state: LoopState | None = None,
         live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None = None,
-    ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
+    ) -> _ExecuteStepResult:
         """Execute single step, collecting events for the parallel merge queue.
 
         When ``live_event_queue`` is set (parallel execute), each stream chunk is pushed
@@ -1422,7 +1424,7 @@ class Executor:
                 predecessor ledger messages.
 
         Returns:
-            Tuple of ``(events, StepResult, AI messages for IG-199, delegate_final_text)``.
+            Collected execute-step stream result (events, step outcome, messages, delegate text).
         """
         start = time.perf_counter()
         events: list[StreamEvent] = []
@@ -1606,32 +1608,23 @@ class Executor:
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
             has_tool_error = False  # IG-454: Track tool errors for StepResult.success
-            async for (
-                final_output,
-                event,
-                tc_count,
-                msg_list,
-                df,
-                chunk_outcomes,
-                stream_has_error,
-                tc_subgraph_count,
-            ) in self._stream_and_collect(
+            async for chunk in self._stream_and_collect(
                 stream,
                 budget=budget,
                 step_id=step.id,
                 step_description=step.description,
                 step_subagent=wire_subagent,
             ):
-                if event is not None:
-                    _append_parallel_stream_event(events, event, live_event_queue)
-                elif final_output is not None:
-                    output = final_output
-                    main_tool_call_count = tc_count
-                    subgraph_tool_call_count = tc_subgraph_count
-                    messages = msg_list
-                    delegate_final = df
-                    stream_outcomes = chunk_outcomes
-                    has_tool_error = stream_has_error
+                if chunk.event is not None:
+                    _append_parallel_stream_event(events, chunk.event, live_event_queue)
+                elif chunk.output is not None:
+                    output = chunk.output
+                    main_tool_call_count = chunk.main_tool_count
+                    subgraph_tool_call_count = chunk.subgraph_tool_count
+                    messages = list(chunk.messages)
+                    delegate_final = chunk.delegate_final
+                    stream_outcomes = list(chunk.outcomes)
+                    has_tool_error = chunk.has_error
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -1767,19 +1760,7 @@ class Executor:
         step_id: str | None = None,
         step_description: str = "",
         step_subagent: str | None = None,
-    ) -> AsyncGenerator[
-        tuple[
-            str | None,
-            StreamEvent | None,
-            int,
-            list[BaseMessage],
-            str,
-            list[dict[str, Any]],
-            bool,
-            int,
-        ],
-        None,
-    ]:
+    ) -> AsyncGenerator[_StreamCollectChunk, None]:
         """Stream events immediately while accumulating output and counting tool calls.
 
         This is the canonical streaming method that yields events as they arrive
@@ -1804,11 +1785,8 @@ class Executor:
             step_subagent: Optional planner subagent hint for ``subagent_type``.
 
         Yields:
-            Tuple of ``(output, event, main_tool_count, messages, delegate_final_text, outcomes, has_error, subgraph_tool_count)``:
-            - When event is not None: immediate display chunk (counts zero, has_error False).
-            - At end: combined_output, main-graph tool count (excludes subgraph),
-              root AIMessages list, joined ``task`` tool bodies (ordered, capped),
-              RFC-211 outcome metadata per main-graph tool, ``has_error``, and subgraph tool count.
+            :class:`_StreamCollectChunk` — wire events during streaming, then one
+            finalized summary at the end.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk
 
@@ -1921,9 +1899,9 @@ class Executor:
                         )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
-                yield None, emit_chunk, 0, [], "", [], False, 0
+                yield _StreamCollectChunk.wire_event(emit_chunk)
                 for tool_ev in tool_update_events:
-                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], "", [], False, 0
+                    yield _StreamCollectChunk.wire_event((_ns_chunk, "custom", tool_ev))
                 chunk = emit_chunk
 
             stop_act_stream = False
@@ -2140,7 +2118,7 @@ class Executor:
                     if tool_ev is not None:
                         subgraph_tool_updates.append((ns_tuple, tool_ev))
             for ns_tuple, tool_ev in subgraph_tool_updates:
-                yield None, (ns_tuple, "custom", tool_ev), 0, [], "", [], False
+                yield _StreamCollectChunk.wire_event((ns_tuple, "custom", tool_ev))
 
             for task_msg in iter_messages_for_delegate_task_scan(chunk):
                 text_out = extract_text_from_message_content(task_msg.content)
@@ -2177,15 +2155,14 @@ class Executor:
                 delegate_final_text = delegate_final_text[:DELEGATE_FINAL_WAVE_CAP]
 
         has_tool_error = any(o.get("has_error") for o in outcomes)
-        yield (
-            join_text_fragments(chunks),
-            None,
-            tool_call_count,
-            messages,
-            delegate_final_text,
-            outcomes,
-            has_tool_error,
-            subgraph_tool_call_count,
+        yield _StreamCollectChunk.finalized(
+            output=join_text_fragments(chunks),
+            main_tool_count=tool_call_count,
+            messages=messages,
+            delegate_final=delegate_final_text,
+            outcomes=outcomes,
+            has_error=has_tool_error,
+            subgraph_tool_count=subgraph_tool_call_count,
         )
 
     async def _build_batch_human_messages(

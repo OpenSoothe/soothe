@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from time import monotonic, time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from soothe_sdk.ux.task_namespace import (
     is_step_level_task_tool_id,
@@ -59,6 +59,13 @@ if TYPE_CHECKING:
     from textual.timer import Timer
 
 logger = logging.getLogger(__name__)
+
+
+class _DeferredStepComplete(NamedTuple):
+    success: bool
+    duration_ms: int
+    tool_call_count: int
+    summary: str
 
 
 class CognitionStepMessage(Vertical):
@@ -165,7 +172,7 @@ class CognitionStepMessage(Vertical):
         self._tools_widget: Static | None = None
         self._detail_widget: Static | None = None
         self._activity_widget: Static | None = None
-        self._deferred_complete: tuple[bool, int, int, str] | None = None
+        self._deferred_complete: _DeferredStepComplete | None = None
         self._deferred_running: bool = False
         self._deferred_surface_sync: bool = False
         self._last_success: bool | None = None
@@ -271,9 +278,14 @@ class CognitionStepMessage(Vertical):
             self.set_interrupted(msg)
             return
         if self._deferred_complete is not None:
-            success, duration_ms, tool_call_count, summary = self._deferred_complete
+            deferred = self._deferred_complete
             self._deferred_complete = None
-            self.set_complete(success, duration_ms, tool_call_count, summary)
+            self.set_complete(
+                deferred.success,
+                deferred.duration_ms,
+                deferred.tool_call_count,
+                deferred.summary,
+            )
             return
         if self._deferred_running:
             self._deferred_running = False
@@ -1275,7 +1287,9 @@ class CognitionStepMessage(Vertical):
         self._last_tool_call_count = tool_call_count
         self._last_summary = summary.strip()
         if self._status_widget is None or self._detail_widget is None:
-            self._deferred_complete = (success, duration_ms, tool_call_count, summary)
+            self._deferred_complete = _DeferredStepComplete(
+                success, duration_ms, tool_call_count, summary
+            )
             return
 
         self.mark_unfinished_tools_on_step_complete(success=success)
