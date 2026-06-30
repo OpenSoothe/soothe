@@ -499,7 +499,7 @@ class MemUConfig(BaseModel):
     """MemU memory backend configuration.
 
     Args:
-        enabled: Whether MemU memory backend is enabled.
+        enabled: Whether MemU memory backend is enabled. Default off pending redesign.
         persist_dir: Directory for memory files. Defaults to ~/.soothe/memory.
         llm_chat_role: Router role for chat model (extraction/categorization).
         llm_embed_role: Router role for embedding model (vector search).
@@ -509,7 +509,7 @@ class MemUConfig(BaseModel):
         memory_categories: Predefined memory categories.
     """
 
-    enabled: bool = True
+    enabled: bool = False
     persist_dir: str | None = None
 
     llm_chat_role: str = "fast"
