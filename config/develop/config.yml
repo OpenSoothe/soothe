@@ -82,6 +82,9 @@ agent:
     enabled: false
   runtime:
     lazy_core_agent: true
+  protocols:
+    memory:
+      enabled: false  # MemU backend disabled pending redesign
 
 # SQLite reader pool for concurrent database access
 persistence:
