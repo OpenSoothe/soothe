@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 from langchain_core.embeddings import Embeddings
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # HTTP status code for successful responses
 HTTP_OK = 200
@@ -30,10 +30,7 @@ class DashScopeOpenAIEmbeddings(BaseModel, Embeddings):
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     dimension: int = 1536
 
-    class Config:
-        """Pydantic config for arbitrary field types."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize DashScope OpenAI-compatible embeddings.

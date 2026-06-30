@@ -72,11 +72,11 @@ from soothe.foundation.loop.engine.step_wave_types import (
     _ActStreamBudget,
     _append_parallel_stream_event,
     _ExecuteStepResult,
-    _PendingInterruptFetch,
-    _StreamCollectChunk,
     _first_tool_error_message,
     _ParallelLiveQueueItem,
     _ParallelStepDone,
+    _PendingInterruptFetch,
+    _StreamCollectChunk,
 )
 from soothe.foundation.loop.engine.thread_selection import (
     _select_thread_for_step,

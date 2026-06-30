@@ -1,6 +1,7 @@
 """Plan generation node (RFC-220 ``plan_generate`` after assess + pre-generate).
 
 IG-476: Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
+RFC-630: Also handles the ``simple`` intake branch (lightweight plan, synthetic assessment).
 """
 
 from __future__ import annotations
@@ -8,10 +9,27 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.loop.intention.models import IntakeLabel
+from soothe.foundation.loop.state.schemas import StatusAssessment
+
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 
 logger = logging.getLogger(__name__)
+
+
+def _create_synthetic_assessment() -> StatusAssessment:
+    """Create synthetic StatusAssessment when plan_assess was skipped.
+
+    Used by the fresh-loop bypass (IG-476) and the ``simple`` intake branch
+    (RFC-630), both of which reach plan_generate without a prior assess call.
+    """
+    return StatusAssessment(
+        status="continue",
+        goal_progress="none",
+        assessment_reasoning="Synthetic assessment: plan_assess skipped (fresh-loop or simple branch).",
+        require_goal_completion=False,
+    )
 
 
 async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -20,6 +38,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     Assessment can come from:
     1. plan_assess node (normal flow)
     2. bounded_evidence_gather (fresh-loop bypass, IG-476)
+    3. synthetic, when reached via the ``simple`` intake branch (RFC-630)
     """
     strange_loop = ctx.strange_loop
     strange_loop = strange_loop  # Legacy alias
@@ -38,14 +57,30 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         logger.info("[PlanGenerate] Using fresh-loop bypass assessment")
 
     context = strange_loop._build_plan_context(state)
-    plan_result = await strange_loop.plan_phase.generate_from_assessment(
-        goal=state.goal,
-        state=state,
-        context=context,
-        assessment=assessment,
-        plan_manager=plan_manager,
-        context_engine=ctx.ce,
-    )
+
+    # RFC-630: the ``simple`` intake branch skips plan_assess and reaches
+    # plan_generate directly with a synthetic assessment. Use the cheaper
+    # lightweight plan call (reduced context, same schema).
+    intake_label = getattr(state.intent, "intake_label", None) if state.intent else None
+    if intake_label == IntakeLabel.SIMPLE and not state.step_results:
+        logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
+        plan_result = await strange_loop.plan_phase.generate_lightweight(
+            goal=state.goal,
+            state=state,
+            context=context,
+            assessment=assessment,
+            plan_manager=plan_manager,
+            context_engine=ctx.ce,
+        )
+    else:
+        plan_result = await strange_loop.plan_phase.generate_from_assessment(
+            goal=state.goal,
+            state=state,
+            context=context,
+            assessment=assessment,
+            plan_manager=plan_manager,
+            context_engine=ctx.ce,
+        )
 
     ctx.scratch.plan_result = plan_result
 

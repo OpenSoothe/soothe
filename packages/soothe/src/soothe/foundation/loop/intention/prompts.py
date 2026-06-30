@@ -1,14 +1,14 @@
-"""LLM prompts for intent classification (RFC-225).
+"""LLM prompts for 4-class intake classification (RFC-630).
 
-Two-value classification with piggybacked quiz answer: the LLM decides whether
-a query is a simple quiz (greeting, thanks, static trivia answerable without
-tools) or requires the agentic loop. When quiz, the LLM also provides the
-direct answer (``quiz_response``) to avoid a second LLM call. Loop continuation
-is derived structurally inside ``StrangeLoop`` from the checkpoint, not classified.
+The LLM classifies the user's goal into one of ``quiz`` | ``trivial`` |
+``simple`` | ``complex``. When ``quiz``, the LLM also provides the direct
+answer (``quiz_response``) to avoid a second LLM call. Loop continuation is
+derived structurally inside ``StrangeLoop`` from the checkpoint, not classified.
 
 Prompt bodies live as ``.xml`` fragments under
-``soothe.core.prompts.fragments.classifiers``; this module loads them directly
-to avoid importing ``soothe.core.prompts`` (circular import with config).
+``soothe.foundation.loop.prompts.fragments.classifiers``; this module loads
+them directly to avoid importing ``soothe.foundation.loop.prompts`` (circular
+import with config).
 
 XML structure:
 - <intent_instructions>: Static content (classification rules, JSON schema)
@@ -29,13 +29,13 @@ def _read_classifier_fragment(name: str) -> str:
     return (_CLASSIFIER_FRAGMENTS_DIR / name).read_text(encoding="utf-8")
 
 
-# Intent classification prompt (quiz detection only; continue/new_goal decided structurally)
-INTENT_CLASSIFICATION_PROMPT = _read_classifier_fragment("intent_classification.xml")
+# 4-class intake classification prompt (RFC-630)
+INTAKE_CLASSIFICATION_PROMPT = _read_classifier_fragment("intake_classification.xml")
 
-# Retry prompt (simplified)
-INTENT_CLASSIFICATION_RETRY_PROMPT = _read_classifier_fragment("intent_classification_retry.xml")
+# 4-class intake retry prompt (simplified)
+INTAKE_CLASSIFICATION_RETRY_PROMPT = _read_classifier_fragment("intake_classification_retry.xml")
 
 __all__ = [
-    "INTENT_CLASSIFICATION_PROMPT",
-    "INTENT_CLASSIFICATION_RETRY_PROMPT",
+    "INTAKE_CLASSIFICATION_PROMPT",
+    "INTAKE_CLASSIFICATION_RETRY_PROMPT",
 ]

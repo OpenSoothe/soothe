@@ -28,12 +28,12 @@ from .routing import (
     route_after_clarification,
     route_after_evidence_gather,
     route_after_execute,
-    route_after_init,
     route_after_iteration_gate,
     route_after_plan,
     route_after_record_iteration,
     route_after_resolve_decision,
     route_after_validate_evidence,
+    route_by_intent,
 )
 from .runtime_context import LoopRuntimeContext
 from .state import LoopGraphState
@@ -117,8 +117,15 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_edge(START, "init_or_resume")
     graph.add_conditional_edges(
         "init_or_resume",
-        route_after_init,
-        {"iteration_gate": "iteration_gate", END: END},
+        route_by_intent,
+        {
+            "iteration_gate": "iteration_gate",
+            "bounded_evidence_gather": "bounded_evidence_gather",
+            "plan_generate": "plan_generate",
+            "plan_assess": "plan_assess",
+            "resolve_decision": "resolve_decision",
+            END: END,
+        },
     )
     graph.add_conditional_edges(
         "iteration_gate",

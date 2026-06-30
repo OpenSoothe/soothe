@@ -1,9 +1,10 @@
-"""Intent classification Pydantic models (RFC-225).
+"""Intent classification Pydantic models (RFC-225, RFC-630).
 
-Two-value intent classification: ``quiz`` (greetings, thanks, trivia
-answered without tools) vs. ``agentic`` (everything else). Whether an
-agentic query continues an in-flight loop is derived structurally
-inside ``StrangeLoop`` from the loaded checkpoint, not classified here.
+Intent classification produces a 4-class intake label (RFC-630) —
+``quiz`` | ``trivial`` | ``simple`` | ``complex`` — that drives
+``route_by_intent`` branch routing. Whether an agentic query continues an
+in-flight loop is derived structurally inside ``StrangeLoop`` from the
+loaded checkpoint, not classified here.
 """
 
 from __future__ import annotations
@@ -22,6 +23,24 @@ class IntentHint(StrEnum):
     """
 
     QUIZ = "quiz"
+
+
+class IntakeLabel(StrEnum):
+    """4-class intake label for branch routing (RFC-630).
+
+    Continuation is NOT a label — it is a structural overlay from the
+    checkpoint (RFC-225). The intake LLM never decides continuation.
+
+    - ``quiz``: greeting/thanks/trivia, no tools.
+    - ``trivial``: single obvious action, no planning LLM needed.
+    - ``simple``: single focused step, lightweight plan.
+    - ``complex``: multi-step / multi-phase, full plan.
+    """
+
+    QUIZ = "quiz"
+    TRIVIAL = "trivial"
+    SIMPLE = "simple"
+    COMPLEX = "complex"
 
 
 class TaskComplexity(StrEnum):
@@ -62,15 +81,22 @@ class RoutingClassification(BaseModel):
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (RFC-225, IG-518).
+    """Primary intent classification model (RFC-225, IG-518, RFC-630).
 
-    Two-value LLM classification:
+    4-class LLM intake classification:
     - ``quiz``: minimal direct reply (greeting/thanks/trivia) without tools.
-    - ``agentic``: everything else; the runner / StrangeLoop derive loop
-      continuation structurally from the checkpoint.
+    - ``trivial``/``simple``/``complex``: agentic goals of increasing effort;
+      the runner / StrangeLoop derive loop continuation structurally from the
+      checkpoint.
+
+    ``intake_label`` carries the 4-class label and drives ``route_by_intent``;
+    ``intent_type`` is derived from it (``quiz`` → ``quiz``, all others →
+    ``agentic``) so the downstream quiz fast-path and event emission keep
+    working.
 
     Args:
-        intent_type: ``quiz`` or ``agentic``.
+        intent_type: ``quiz`` or ``agentic`` (derived from ``intake_label``).
+        intake_label: 4-class intake label for branch routing (RFC-630).
         reasoning: Brief reasoning for agentic classification (IG-518, agentic only).
         goal_description: Normalized goal description (populated for agentic).
         task_complexity: Routing complexity level.
@@ -79,6 +105,10 @@ class IntentClassification(BaseModel):
 
     intent_type: Literal["quiz", "agentic"] = Field(
         description="Primary intent: quiz (greeting/thanks/trivia without tools) or agentic (everything else)"
+    )
+    intake_label: IntakeLabel = Field(
+        description="4-class intake label for branch routing (RFC-630): "
+        "quiz, trivial, simple, or complex"
     )
     reasoning: str | None = Field(
         default=None,
@@ -104,40 +134,50 @@ class IntentClassification(BaseModel):
         )
 
 
-class IntentClassificationLLMResult(BaseModel):
-    """Structured output from intent classifier LLM (IG-518).
+class IntakeClassificationLLMResult(BaseModel):
+    """Structured output from the 4-class intake LLM (RFC-630).
 
-    The LLM decides ``quiz`` vs. ``agentic`` only. Quiz fast-path piggybacks
-    the answer in ``quiz_response`` so the runner can short-circuit without
-    a second LLM call. Agentic intents include brief ``reasoning`` for
-    client visibility (IG-518).
+    The LLM picks one of ``quiz``/``trivial``/``simple``/``complex``; the
+    label drives ``route_by_intent``. Quiz piggybacks the answer in
+    ``quiz_response`` (preserves the quiz short-circuit). Non-quiz intents
+    carry brief ``reasoning`` for client visibility (IG-518). Loop
+    continuation is derived structurally, not classified.
     """
 
-    intent_type: Literal["quiz", "agentic"] = Field(
-        description="Primary intent: quiz (greeting/thanks/static trivia without tools), "
-        "agentic (everything else — tools, follow-ups, analysis)"
+    intake_label: IntakeLabel = Field(
+        description="Primary intake: quiz (greeting/thanks/trivia, no tools), "
+        "trivial (single obvious action, no planning LLM), "
+        "simple (single focused step, lightweight plan), "
+        "complex (multi-step/multi-phase, full plan)"
     )
     reasoning: str | None = Field(
         default=None,
-        description="Brief reasoning for agentic classification (one sentence max 20 words). Empty for quiz.",
+        description="Brief reasoning (one sentence max 20 words). Empty for quiz.",
     )
     goal_description: str | None = Field(
         default=None,
-        description="Normalized goal description for display and GoalEngine (agentic only)",
+        description="Normalized goal description for display and GoalEngine (non-quiz only)",
     )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity: minimal (quiz), simple, medium, or complex"
     )
     quiz_response: str | None = Field(
         default=None,
-        description="Direct answer for quiz intents (greeting/thanks/trivia). Provide concise, factual response from training knowledge.",
+        description="Direct answer for quiz intents (greeting/thanks/trivia). Concise, from training knowledge.",
     )
 
     def to_intent_classification(self) -> IntentClassification:
-        """Convert LLM result to runtime IntentClassification."""
-        if self.intent_type == "quiz":
+        """Convert LLM result to runtime IntentClassification.
+
+        Maps the 4-class label onto ``intent_type`` so the quiz fast-path and
+        event emission keep working: ``quiz`` → ``quiz``, all others →
+        ``agentic``. The 4-class label is preserved on ``intake_label`` for
+        ``route_by_intent``.
+        """
+        if self.intake_label == IntakeLabel.QUIZ:
             return IntentClassification(
                 intent_type="quiz",
+                intake_label=IntakeLabel.QUIZ,
                 reasoning=None,
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
@@ -145,6 +185,7 @@ class IntentClassificationLLMResult(BaseModel):
             )
         return IntentClassification(
             intent_type="agentic",
+            intake_label=self.intake_label,
             reasoning=self.reasoning,
             goal_description=self.goal_description,
             task_complexity=self.task_complexity,

@@ -150,6 +150,51 @@ class PlanPhase:
         )
         return self.finalize_plan_result(state=state, context=context, result=result)
 
+    async def generate_lightweight(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        assessment: StatusAssessment,
+        *,
+        plan_manager: Any = None,
+        context_engine: Any | None = None,
+    ) -> PlanResult:
+        """Run a cheaper plan-generate call for the ``simple`` intake branch (RFC-630).
+
+        Same ``PlanGeneration`` schema as ``generate_from_assessment``, but the
+        planner reduces the context window (fewer history slots, no full
+        evidence ledger). Falls back to ``generate_from_assessment`` when the
+        planner does not implement the lightweight path.
+        """
+        self._prepare_state_evidence(state)
+        logger.info(
+            "[Plan] iter=%d calling lightweight generate (history=%d, results=%d)",
+            state.iteration,
+            len(state.action_history),
+            len(state.step_results),
+        )
+        lightweight = getattr(self._loop_planner, "generate_lightweight", None)
+        if lightweight is None:
+            # Planner does not implement a lightweight path; use the full path.
+            return await self.generate_from_assessment(
+                goal=goal,
+                state=state,
+                context=context,
+                assessment=assessment,
+                plan_manager=plan_manager,
+                context_engine=context_engine,
+            )
+        result = await lightweight(
+            goal=goal,
+            state=state,
+            context=context,
+            assessment=assessment,
+            plan_manager=plan_manager,
+            context_engine=context_engine,
+        )
+        return self.finalize_plan_result(state=state, context=context, result=result)
+
     async def plan(
         self,
         goal: str,

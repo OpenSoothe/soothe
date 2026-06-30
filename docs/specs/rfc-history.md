@@ -2,8 +2,8 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-06-26
-**Total RFCs**: 80
+**Last Updated**: 2026-06-30
+**Total RFCs**: 82
 
 ## Summary Statistics
 
@@ -11,28 +11,47 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Draft | 50 | 62.5% |
-| Implemented | 16 | 20.0% |
-| Archived | 6 | 7.7% |
-| Proposed | 3 | 3.8% |
-| Accepted | 1 | 1.3% |
-| Implemented (Partially Superseded) | 1 | 1.3% |
+| Draft | 53 | 64.6% |
+| Implemented | 16 | 19.5% |
+| Archived | 6 | 7.3% |
+| Proposed | 2 | 2.4% |
+| Accepted | 1 | 1.2% |
+| Implemented (Partially Superseded) | 1 | 1.2% |
+| Implemented — runtime architecture refined | 1 | 1.2% |
+| Unknown | 2 | 2.4% |
 
 ### By Kind
 
 | Kind | Count |
 |------|-------|
-| Architecture Design | 48 |
+| Architecture Design | 54 |
 | Implementation Interface Design | 14 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Architecture Design / Impl Interface | 1 |
 | Conceptual Design | 1 |
-| Protocol Specification | 2 |
+| Architecture Design + Protocol Specification | 1 |
+| Protocol Specification | 1 |
 | Feature Enhancement | 1 |
 | Product Specification | 1 |
 | Process Specification | 1 |
+| Unknown | 2 |
 
 ## Chronological Timeline
+
+### Major Changes - 2026-06-30
+
+**RFC-630**: Start-Phase LLM Intake and Branch Routing — replaces heuristic intent judgment with LLM intake + branch routing
+
+- Replaces the binary `IntentClassifier` LLM + its `_is_likely_agentic` heuristic bypass (len>80 / words>15 / newlines≥2) with a single 4-class intake LLM (`quiz | trivial | simple | complex`)
+- Runs the intake LLM `asyncio.gather`-ed with the pre-graph IO cluster (checkpoint load, ContextEngine load, instruction/memory file reads via `to_thread`, git status) so the LLM round-trip is hidden behind IO that must run anyway
+- Adds `route_by_intent` conditional edge after `init_or_resume` dispatching to four branches: `quiz`→END, `trivial`→synthetic 1-step plan (no plan LLM), `simple`→lightweight `plan_generate`, `complex`→full existing spine
+- Continuation remains a structural overlay from the checkpoint (not an LLM label); clarification remains emergent from the planner (not an intake branch)
+- Deletes the `simple_bypass` `"I will complete this goal directly:"` prefix; the `trivial` branch emits the goal itself as the step action, retaining the `## Result` evidence contract
+- Preserves the fresh-loop skip (IG-476), continuation discriminator (RFC-226), and clarification relay (RFC-622) unchanged
+- Extends RFC-225 (intent classification taxonomy) and RFC-220 (orchestrator topology); supersedes the IG-518 heuristic-bypass path
+- Feature flag `config.agent.loop.intake.branch_routing.enabled` (default `false`) gates rollout
+
+---
 
 ### Major Changes - 2026-06-26
 
@@ -72,6 +91,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### 2026-06
 
+- **2026-06-30**: RFC-630 - Start-Phase LLM Intake and Branch Routing
 - **2026-06-26**: RFC-628 - Cognition Step Card Display
   - Status: Implemented
   - Kind: Implementation Interface Design
