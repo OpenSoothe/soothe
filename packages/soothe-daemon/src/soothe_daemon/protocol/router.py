@@ -6,7 +6,6 @@ of reaching into ``runner._durability``.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
@@ -31,55 +30,16 @@ from soothe_daemon.services.image_understanding import validate_and_normalize_im
 logger = logging.getLogger(__name__)
 
 _LOOP_PROMPT_PREVIEW_MAX = 200
-_LOOP_PROMPT_SCAN_LIMIT = 32
 
 
 def _peek_loop_prompt(loop_id: str) -> str | None:
-    """Return the loop's initial user prompt from ``cards.jsonl``, if available.
-
-    The /resume selector needs a short identifying snippet per loop. The
-    cheapest authoritative source is the loop's display card ledger: the first
-    ``op=create, kind=user`` line carries the original goal text. We scan only
-    the first few records so a huge ledger does not slow the list RPC.
-
-    Args:
-        loop_id: Loop identifier whose cards.jsonl should be peeked.
-
-    Returns:
-        Stripped prompt text (capped at ``_LOOP_PROMPT_PREVIEW_MAX`` chars), or
-        ``None`` when the ledger has no user card or cannot be read.
-    """
+    """Return the loop's initial user prompt from ``display.db``, if available."""
     try:
-        path = PersistenceDirectoryManager.get_loop_directory(loop_id) / "cards.jsonl"
-        if not path.exists():
-            return None
-        with path.open(encoding="utf-8") as fh:
-            for index, line in enumerate(fh):
-                if index >= _LOOP_PROMPT_SCAN_LIMIT:
-                    break
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(record, dict):
-                    continue
-                if record.get("op") != "create" or record.get("kind") != "user":
-                    continue
-                data = record.get("data")
-                if not isinstance(data, dict):
-                    continue
-                content = data.get("content")
-                if not isinstance(content, str):
-                    continue
-                cleaned = " ".join(content.split())
-                if not cleaned:
-                    return None
-                if len(cleaned) > _LOOP_PROMPT_PREVIEW_MAX:
-                    cleaned = cleaned[: _LOOP_PROMPT_PREVIEW_MAX - 1] + "…"
-                return cleaned
+        from soothe.backends.persistence.display_store import get_display_card_store
+
+        return get_display_card_store().peek_user_prompt(
+            loop_id, max_chars=_LOOP_PROMPT_PREVIEW_MAX
+        )
     except Exception:  # noqa: BLE001 — peek is best-effort, never block the RPC
         logger.debug("peek_loop_prompt failed for %s", loop_id, exc_info=True)
     return None
@@ -1939,9 +1899,6 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message; may contain optional ``workspace`` and ``user`` fields.
         """
-        from soothe.foundation.loop.state.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
         from soothe.foundation.workspace import resolve_loop_workspace, validate_client_workspace
         from uuid_utils import uuid7
 
@@ -2486,20 +2443,11 @@ class MessageRouter:
 
         try:
             loop_id_str = str(loop_id)
-            if await card_manager.is_display_empty(loop_id_str):
-                ledger = await card_manager.ensure_for_loop(loop_id_str)
-                snapshot = ledger.snapshot()
-                wire_cards: list[dict[str, Any]] = []
-                latest_seq = 0
-                context_tokens = 0
-            else:
-                # Force re-derivation so TUI resume receives the latest final
-                # goal-completion response, not a stale cached snapshot.
-                ledger = await card_manager.refresh(loop_id_str)
-                snapshot = ledger.snapshot()
-                wire_cards = [card_to_wire_dict(card) for card in snapshot]
-                latest_seq = ledger.next_seq() - 1
-                context_tokens = await self._read_loop_context_tokens(loop_id_str)
+            ledger = await card_manager.ensure_for_loop(loop_id_str)
+            snapshot = ledger.snapshot()
+            wire_cards = [card_to_wire_dict(card) for card in snapshot]
+            latest_seq = ledger.next_seq() - 1 if ledger.card_count() > 0 else 0
+            context_tokens = await self._read_loop_context_tokens(loop_id_str)
         except Exception as exc:
             await d._send_client_message(
                 client_id,

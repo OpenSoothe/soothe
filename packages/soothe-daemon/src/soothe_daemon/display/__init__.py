@@ -2,17 +2,10 @@
 
 This package owns the per-loop card ledger that backs the TUI's resume flow:
 
-* ``LoopCardLedger`` — file-backed wrapper around
-  ``soothe_sdk.display.InMemoryCardLedger``; appends to and loads from
-  ``~/.soothe/data/loops/<loop_id>/cards.jsonl``.
-* ``LoopCardManager`` — per-loop lifecycle, lazy derivation from the
-  authoritative checkpoint + activity log via
-  ``soothe_sdk.display.card_binder``, and ``card.*`` replay-to-client.
-
-Live event delivery is unchanged by this package; the ledger powers the
-resume / reattach replay path. Cards are derived lazily on RPC (and
-re-derived when the checkpoint advances); real-time streaming binding
-alongside live event delivery is left for a future iteration.
+* ``LoopCardLedger`` — SQLite-backed wrapper around
+  ``soothe_sdk.display.InMemoryCardLedger``; persists to ``display.db``.
+* ``LoopCardManager`` — per-loop lifecycle, real-time binding from stream
+  tuples via ``soothe_sdk.display.card_binder``, and ``card.*`` replay-to-client.
 """
 
 from __future__ import annotations

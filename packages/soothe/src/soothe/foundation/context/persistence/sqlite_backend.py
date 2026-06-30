@@ -217,3 +217,25 @@ class SqliteContextPersistence:
             await asyncio.to_thread(_clear)
         except Exception:
             logger.warning("[CE] Failed to clear CE tables", exc_info=True)
+
+
+def purge_loop_context_engine_state(
+    loop_id: str,
+    *,
+    db_path: Path | None = None,
+) -> None:
+    """Delete ContextEngine rows for ``loop_id`` from the shared database."""
+    from soothe.foundation.loop.state.persistence.runtime_paths import (
+        resolve_context_engine_db_path,
+    )
+
+    path = db_path or resolve_context_engine_db_path()
+    if not path.is_file():
+        return
+    try:
+        with sqlite3.connect(str(path), timeout=30) as conn:
+            conn.execute("DELETE FROM ce_dag WHERE loop_id = ?", (loop_id,))
+            conn.execute("DELETE FROM ce_ledger WHERE loop_id = ?", (loop_id,))
+            conn.commit()
+    except sqlite3.Error:
+        logger.warning("[CE] Failed to purge loop %s from %s", loop_id, path, exc_info=True)

@@ -164,7 +164,16 @@ class StrangeLoopCheckpointPersistenceManager:
 
     async def purge_loop_execution_data(self, loop_id: str) -> None:
         """Delete loop row and related execution tables (keeps workspace dirs)."""
+        import asyncio
+
+        from soothe.backends.persistence.display_store import get_display_card_store
+        from soothe.foundation.context.persistence.sqlite_backend import (
+            purge_loop_context_engine_state,
+        )
+
         await self._backend.purge_loop_execution_data(loop_id)
+        await asyncio.to_thread(get_display_card_store().delete_loop, loop_id)
+        await asyncio.to_thread(purge_loop_context_engine_state, loop_id)
         logger.info("Purged loop execution data: loop=%s", loop_id)
 
     async def save_checkpoint_anchor(

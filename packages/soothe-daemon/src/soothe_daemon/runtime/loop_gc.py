@@ -99,8 +99,7 @@ async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] |
         await daemon._session_manager.unsubscribe_loop(cid, loop_id)
 
     await daemon._loop_input_dispatcher.cleanup_loop(loop_id)
-    # Release in-memory card ledger (cards.jsonl file is removed by the
-    # filesystem teardown below). RFC-413.
+    # Release in-memory card ledger; display rows are purged via persistence manager.
     card_manager = getattr(daemon, "_card_manager", None)
     if card_manager is not None:
         try:

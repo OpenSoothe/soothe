@@ -7,9 +7,9 @@ from protocol and tool/subagent resolution.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.client.config import SOOTHE_DATA_DIR
 from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.config import SootheConfig
@@ -65,9 +65,8 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
         try:
             from soothe.backends.durability.sqlite import SQLiteDurability
 
-            db_path = config.persistence.metadata_sqlite_path
             logger.info("Using SQLite durability backend (metadata.db)")
-            return SQLiteDurability(db_path=db_path)
+            return SQLiteDurability()
         except Exception as e:
             logger.error(
                 "SQLite durability requested but failed: %s. "
@@ -142,12 +141,11 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         The runner will create AsyncSqliteSaver from the path in async context.
     """
     try:
-        from pathlib import Path
-
-        # Use unified checkpoint_sqlite_path for checkpoints (soothe_checkpoints.db)
-        db_path = config.persistence.checkpoint_sqlite_path or str(
-            Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
+        from soothe.foundation.loop.state.persistence.directory_manager import (
+            PersistenceDirectoryManager,
         )
+
+        db_path = str(PersistenceDirectoryManager.get_loop_checkpoint_path())
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
         logger.warning("Failed to create SQLite checkpointer path: %s", exc)

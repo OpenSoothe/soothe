@@ -7,9 +7,8 @@ and produce ``card.replay_begin`` → ``card.created`` × N →
 
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -22,58 +21,16 @@ from soothe_daemon.display.loop_card_manager import (
 )
 from soothe_daemon.event.reattachment import handle_loop_reattach
 
-
-def _patch_langgraph_checkpoint(monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> None:
-    import soothe_daemon.display.loop_card_manager as lcm
-
-    async def _fake(_thread_id: str) -> bool:
-        return exists
-
-    monkeypatch.setattr(lcm, "langgraph_checkpoint_exists", _fake)
-
-
-@pytest.fixture
-def loops_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect SOOTHE_HOME so PersistenceDirectoryManager writes into tmp."""
-    soothe_home = tmp_path / "soothe_home"
-    soothe_home.mkdir()
-    import soothe.config
-
-    monkeypatch.setattr(soothe.config, "SOOTHE_HOME", str(soothe_home))
-    return soothe_home / "data" / "loops"
-
-
-def _patch_bind_thread(monkeypatch: pytest.MonkeyPatch, thread_id: str = "thread_x") -> None:
-    import soothe_daemon.runtime.loop_dispatcher as dispatcher
-
-    async def _fake(_daemon, _loop_id):
-        return thread_id
-
-    monkeypatch.setattr(dispatcher, "bind_execution_thread_for_loop", _fake)
-
-
 _LEGACY_FRAME_TYPES = frozenset({"history_replay", "loop_reattached", "replay_complete"})
 
 
 @pytest.mark.asyncio
-async def test_handle_loop_reattach_streams_only_card_frames(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Reattach emits card.* only — RFC-411 legacy frames are gone."""
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
-    runner = MagicMock()
-    runner.get_thread_state_values = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="hello"),
-                AIMessage(content="hi there"),
-            ]
-        }
-    )
-    runner.get_persisted_thread_messages = AsyncMock(return_value=[])
-    daemon = SimpleNamespace(_runner=runner)
+async def test_handle_loop_reattach_streams_only_card_frames() -> None:
+    daemon = SimpleNamespace(_runner=MagicMock())
     daemon._card_manager = LoopCardManager(daemon)
+    state = daemon._card_manager._buffers["loop_test"]  # noqa: SLF001
+    state.messages = [HumanMessage(content="hello"), AIMessage(content="hi there")]
+    await daemon._card_manager._flush_buffers_to_ledger("loop_test", state)  # noqa: SLF001
 
     sent: list[dict] = []
 
@@ -84,15 +41,14 @@ async def test_handle_loop_reattach_streams_only_card_frames(
 
     await handle_loop_reattach("loop_test", daemon, client_id="client_a")
 
-    types = [f["type"] for f in sent]
+    types = [frame["type"] for frame in sent]
     assert types[0] == CARD_REPLAY_BEGIN
     assert types[-1] == CARD_REPLAY_END
-    created_frames = [f for f in sent if f["type"] == CARD_CREATED]
+    created_frames = [frame for frame in sent if frame["type"] == CARD_CREATED]
     assert len(created_frames) == 2
 
-    # No legacy frames anymore.
     for legacy in _LEGACY_FRAME_TYPES:
-        assert legacy not in types, f"legacy frame {legacy} should not be emitted"
+        assert legacy not in types
 
     for frame in sent:
         if "loop_id" in frame:
@@ -100,15 +56,8 @@ async def test_handle_loop_reattach_streams_only_card_frames(
 
 
 @pytest.mark.asyncio
-async def test_handle_loop_reattach_emits_empty_card_block(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A loop with no derivable data still produces a clean card.replay_* block."""
-    _patch_bind_thread(monkeypatch)
-    runner = MagicMock()
-    runner.get_thread_state_values = AsyncMock(return_value={"messages": []})
-    runner.get_persisted_thread_messages = AsyncMock(return_value=[])
-    daemon = SimpleNamespace(_runner=runner)
+async def test_handle_loop_reattach_emits_empty_card_block() -> None:
+    daemon = SimpleNamespace(_runner=MagicMock())
     daemon._card_manager = LoopCardManager(daemon)
 
     sent: list[dict] = []
@@ -120,10 +69,10 @@ async def test_handle_loop_reattach_emits_empty_card_block(
 
     await handle_loop_reattach("loop_empty", daemon, client_id="client_b")
 
-    types = [f["type"] for f in sent]
+    types = [frame["type"] for frame in sent]
     assert CARD_REPLAY_BEGIN in types
     assert CARD_REPLAY_END in types
-    assert not [f for f in sent if f["type"] == CARD_CREATED]
+    assert not [frame for frame in sent if frame["type"] == CARD_CREATED]
     for legacy in _LEGACY_FRAME_TYPES:
         assert legacy not in types
 
@@ -132,8 +81,7 @@ async def test_handle_loop_reattach_emits_empty_card_block(
 async def test_handle_loop_reattach_without_card_manager_returns_silently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Missing card manager: handler logs + returns; no legacy frames emitted."""
-    daemon = SimpleNamespace()  # no _card_manager attribute
+    daemon = SimpleNamespace()
 
     sent: list[dict] = []
 
@@ -143,6 +91,4 @@ async def test_handle_loop_reattach_without_card_manager_returns_silently(
     daemon._send_client_message = fake_send
 
     await handle_loop_reattach("loop_bare", daemon, client_id="client_c")
-    types = [f["type"] for f in sent]
-    # No frames at all.
-    assert not types
+    assert not sent
