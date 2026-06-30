@@ -300,3 +300,48 @@ async def test_ensure_rpc_connected_skips_when_already_connected() -> None:
     connect_mock.assert_not_awaited()
     session._rpc_client.request_connection_init.assert_not_awaited()
     session._rpc_client.wait_for_connection_ack.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_records_cancellation_command() -> None:
+    """``command_response`` cancel notices should be tracked for stream-end UX."""
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "command_response",
+                "loop_id": "loop-main",
+                "content": "[yellow]Cancellation requested.[/yellow]",
+            },
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+        ]
+    )
+
+    _ = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert session.last_turn_cancellation_seen is True
+    assert session.last_turn_end_state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_records_stopped_end_state() -> None:
+    """Stopped status should be surfaced to the stream-end safety net."""
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {"type": "status", "state": "stopped", "loop_id": "loop-main"},
+        ]
+    )
+
+    _ = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert session.last_turn_end_state == "stopped"
+    assert session.last_turn_cancellation_seen is False

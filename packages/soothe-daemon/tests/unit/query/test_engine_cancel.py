@@ -79,6 +79,49 @@ class _SlowCancelRunner(_FakeRunner):
             raise
 
 
+class _ChunkedRunner:
+    """Yields a fixed number of stream chunks with a delay between each."""
+
+    def __init__(self, *, chunk_count: int, chunk_delay: float) -> None:
+        self.current_thread_id = "thread-1"
+        self.chunk_count = chunk_count
+        self.chunk_delay = chunk_delay
+        self.chunks_yielded = 0
+
+    async def touch_thread_activity_timestamp(self, _thread_id: str) -> None:
+        return None
+
+    async def create_persisted_thread(self, thread_id: str | None = None) -> Any:
+        del thread_id
+        return SimpleNamespace(thread_id="thread-1")
+
+    def set_current_thread_id(self, thread_id: str | None) -> None:
+        self.current_thread_id = thread_id
+
+    async def astream(self, _text: str, **_kwargs: Any):  # type: ignore[override]
+        for _ in range(self.chunk_count):
+            await asyncio.sleep(self.chunk_delay)
+            self.chunks_yielded += 1
+            yield ("", "messages", ())
+
+
+class _PerLoopRunnerFactory:
+    """Create independent chunked runners per loop id."""
+
+    def __init__(self, *, chunk_count: int, chunk_delay: float) -> None:
+        self._chunk_count = chunk_count
+        self._chunk_delay = chunk_delay
+        self.runners: dict[str, _ChunkedRunner] = {}
+
+    def create_runner(self, loop_id: str) -> _FakeLoopRunner:
+        runner = _ChunkedRunner(
+            chunk_count=self._chunk_count,
+            chunk_delay=self._chunk_delay,
+        )
+        self.runners[loop_id] = runner
+        return _FakeLoopRunner(runner)
+
+
 class _FakeThreadRegistry:
     def get(self, _thread_id: str) -> None:
         return None
@@ -124,6 +167,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             _thread_id="thread-1",
             log_user_input=lambda _text: None,
             log_assistant_response=lambda _text: None,
+            log=lambda *_args, **_kwargs: None,
         ),
         _config=SimpleNamespace(
             logging=SimpleNamespace(
@@ -216,6 +260,7 @@ def _daemon_factory(
             _thread_id="thread-1",
             log_user_input=lambda _text: None,
             log_assistant_response=lambda _text: None,
+            log=lambda *_args, **_kwargs: None,
         ),
         _config=SimpleNamespace(
             logging=SimpleNamespace(
@@ -371,6 +416,7 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
             _thread_id="thread-1",
             log_user_input=lambda _text: None,
             log_assistant_response=lambda _text: None,
+            log=lambda *_args, **_kwargs: None,
         ),
         _config=SimpleNamespace(
             logging=SimpleNamespace(
@@ -474,3 +520,39 @@ async def test_cancel_loop_cancels_subprocess_runner_before_stream_finally() -> 
 
     with suppress(asyncio.CancelledError):
         await task
+
+
+@pytest.mark.asyncio
+async def test_concurrent_query_does_not_abort_unrelated_stream() -> None:
+    """A later query replacing ``_current_query_task`` must not stop an earlier stream."""
+    broadcasts: list[dict[str, Any]] = []
+    slow_factory = _PerLoopRunnerFactory(chunk_count=6, chunk_delay=0.04)
+    fast_factory = _PerLoopRunnerFactory(chunk_count=1, chunk_delay=0.0)
+
+    daemon = _daemon_factory(
+        runner=_ChunkedRunner(chunk_count=1, chunk_delay=0.0),
+        broadcasts=broadcasts,
+    )
+    daemon._runner_factory = slow_factory
+
+    engine = QueryEngine(daemon)
+    await engine.run_query("slow loop", loop_id="loop-slow")
+    slow_task = daemon._current_query_task
+    assert slow_task is not None
+
+    await asyncio.sleep(0.05)
+    assert slow_factory.runners["loop-slow"].chunks_yielded >= 1
+
+    daemon._runner_factory = fast_factory
+    await engine.run_query("fast loop", loop_id="loop-fast")
+    fast_task = daemon._current_query_task
+    assert fast_task is not None
+    assert fast_task is not slow_task
+
+    await asyncio.sleep(0.05)
+    await fast_task
+    assert fast_factory.runners["loop-fast"].chunks_yielded == 1
+    assert not slow_task.done()
+
+    await slow_task
+    assert slow_factory.runners["loop-slow"].chunks_yielded == 6

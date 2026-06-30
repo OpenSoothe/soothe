@@ -89,6 +89,8 @@ class TuiDaemonSession:
         self._post_idle_drain_deadline = post_idle_drain_deadline
         self._closed = False
         self.turn_event_stats = TurnEventStats()
+        self.last_turn_end_state: str | None = None
+        self.last_turn_cancellation_seen: bool = False
 
     @property
     def loop_id(self) -> str | None:
@@ -302,6 +304,8 @@ class TuiDaemonSession:
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
         self.turn_event_stats = TurnEventStats()
+        self.last_turn_end_state = None
+        self.last_turn_cancellation_seen = False
         query_started = False
         expected_loop_id = self._loop_id
         self._streaming = True
@@ -338,6 +342,7 @@ class TuiDaemonSession:
                         )
                     if not event:
                         if query_started and not self._client.is_connection_alive():
+                            self.last_turn_end_state = "connection_lost"
                             raise ConnectionError("Daemon connection lost")
                         break
 
@@ -388,11 +393,18 @@ class TuiDaemonSession:
                             query_started = True
                             progress_seen = True
                         elif query_started and state in {"idle", "stopped"}:
+                            self.last_turn_end_state = state
                             async for chunk in self._drain_stream_events_after_idle(
                                 expected_loop_id=expected_loop_id,
                             ):
                                 yield chunk
                             break
+                        continue
+
+                    if event_type == "command_response":
+                        content = str(event.get("content", ""))
+                        if "Cancellation requested" in content:
+                            self.last_turn_cancellation_seen = True
                         continue
 
                     if event_type != "event":
