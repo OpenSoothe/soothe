@@ -28,6 +28,7 @@ providers:
     models:
       - gemma-4-12b-coder-fable5-composer2.5
       - gemma-4-31B-it-OptiQ-4bit
+      - GLM-4.6V-Flash-4bit
       - GLM-4.6V-Flash-8bit
       - GLM-4.7-Flash-Claude-Opus-4.5-High-Reasoning-Distill-8bit
       - GLM-5.2-mxfp4

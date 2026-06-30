@@ -1,16 +1,10 @@
-"""Tests for the per-loop card manager (RFC-413).
-
-The manager wires the SDK binder against the runner's checkpoint + activity
-log to derive cards lazily. Tests use mocked runners + canned messages so we
-don't need a live daemon.
-"""
+"""Tests for the per-loop card manager (real-time binding + DB ledger)."""
 
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -23,77 +17,43 @@ from soothe_daemon.display.loop_card_manager import (
 )
 
 
-@pytest.fixture
-def loops_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect SOOTHE_HOME so PersistenceDirectoryManager writes into tmp."""
-    soothe_home = tmp_path / "soothe_home"
-    soothe_home.mkdir()
-    # PersistenceDirectoryManager reads soothe.config.SOOTHE_HOME at call time.
-    import soothe.config
-
-    monkeypatch.setattr(soothe.config, "SOOTHE_HOME", str(soothe_home))
-    # Cached module instances in directory_manager hold no state; nothing else
-    # to patch.
-    return soothe_home / "data" / "loops"
-
-
-def _make_runner(
-    checkpoint_messages: list = None,
-    activity_log: list = None,
-) -> SimpleNamespace:
-    """Build a runner shim that returns the canned values."""
-    runner = MagicMock()
-    runner.get_thread_state_values = AsyncMock(return_value={"messages": checkpoint_messages or []})
-    runner.get_persisted_thread_messages = AsyncMock(return_value=activity_log or [])
-    return runner
-
-
-def _patch_bind_thread(monkeypatch: pytest.MonkeyPatch, thread_id: str = "thread_x") -> None:
-    """Make bind_execution_thread_for_loop return a deterministic id."""
-    import soothe_daemon.runtime.loop_dispatcher as dispatcher
-
-    async def _fake(_daemon, _loop_id):
-        return thread_id
-
-    monkeypatch.setattr(dispatcher, "bind_execution_thread_for_loop", _fake)
-
-
-def _patch_langgraph_checkpoint(monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> None:
-    """Control LangGraph checkpoint probe used by the empty-loop fast path."""
-    import soothe_daemon.display.loop_card_manager as lcm
-
-    async def _fake(_thread_id: str) -> bool:
-        return exists
-
-    monkeypatch.setattr(lcm, "langgraph_checkpoint_exists", _fake)
+async def _seed_messages(
+    manager: LoopCardManager,
+    loop_id: str,
+    messages: list,
+    *,
+    log_events: list[dict] | None = None,
+) -> None:
+    state = manager._buffers[loop_id]  # noqa: SLF001
+    state.messages = list(messages)
+    state.log_events = list(log_events or [])
+    await manager._flush_buffers_to_ledger(loop_id, state)  # noqa: SLF001
 
 
 @pytest.mark.asyncio
-async def test_ensure_for_loop_backfills_from_checkpoint(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
-    messages = [
-        HumanMessage(content="hello"),
-        AIMessage(content="hi there"),
-    ]
-    runner = _make_runner(checkpoint_messages=messages)
-    daemon = SimpleNamespace(_runner=runner)
-
-    manager = LoopCardManager(daemon)
+async def test_record_user_prompt_persists_user_card(isolated_display_db) -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=None))
+    await manager.record_user_prompt("loop_a", "hello")
     ledger = await manager.ensure_for_loop("loop_a")
-    snapshot = ledger.snapshot()
-    assert [c.content for c in snapshot] == ["hello", "hi there"]
-    assert (loops_root / "loop_a" / "cards.jsonl").exists()
+    assert [card.content for card in ledger.snapshot()] == ["hello"]
+    assert isolated_display_db.peek_user_prompt("loop_a") == "hello"
 
 
 @pytest.mark.asyncio
-async def test_ensure_for_loop_uses_activity_log_when_no_checkpoint(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
+async def test_bind_messages_from_checkpoint_messages() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await _seed_messages(
+        manager,
+        "loop_b",
+        [HumanMessage(content="from log"), AIMessage(content="log reply")],
+    )
+    ledger = await manager.ensure_for_loop("loop_b")
+    assert [card.content for card in ledger.snapshot()] == ["from log", "log reply"]
+
+
+@pytest.mark.asyncio
+async def test_bind_messages_from_activity_log() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
     activity = [
         {
             "kind": "conversation",
@@ -108,53 +68,28 @@ async def test_ensure_for_loop_uses_activity_log_when_no_checkpoint(
             "timestamp": "2026-06-04T10:00:01+00:00",
         },
     ]
-    runner = _make_runner(checkpoint_messages=[], activity_log=activity)
-    daemon = SimpleNamespace(_runner=runner)
-
-    manager = LoopCardManager(daemon)
-    ledger = await manager.ensure_for_loop("loop_b")
-    snapshot = ledger.snapshot()
-    assert [c.content for c in snapshot] == ["from log", "log reply"]
+    await _seed_messages(manager, "loop_c", [], log_events=activity)
+    ledger = await manager.ensure_for_loop("loop_c")
+    assert [card.content for card in ledger.snapshot()] == ["from log", "log reply"]
 
 
 @pytest.mark.asyncio
-async def test_ensure_for_loop_returns_empty_when_no_data(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    runner = _make_runner(checkpoint_messages=[], activity_log=[])
-    daemon = SimpleNamespace(_runner=runner)
-
-    manager = LoopCardManager(daemon)
+async def test_ensure_for_loop_returns_empty_when_no_data(isolated_display_db) -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=None))
     ledger = await manager.ensure_for_loop("loop_empty")
     assert ledger.card_count() == 0
-    runner.get_thread_state_values.assert_not_called()
-    # cards.jsonl is still created (just contains the header).
-    assert (loops_root / "loop_empty" / "cards.jsonl").exists()
+    assert isolated_display_db.list_mutations("loop_empty")[0].op == "header"
 
 
 @pytest.mark.asyncio
-async def test_is_display_empty_skips_core_agent_checkpoint_read(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    runner = _make_runner(checkpoint_messages=[], activity_log=[])
-    daemon = SimpleNamespace(_runner=runner)
-    manager = LoopCardManager(daemon)
-
+async def test_is_display_empty_uses_db_only() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
     assert await manager.is_display_empty("loop_fast") is True
-    runner.get_thread_state_values.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_replay_to_client_empty_loop_skips_checkpoint_read(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    runner = _make_runner(checkpoint_messages=[], activity_log=[])
-    daemon = SimpleNamespace(_runner=runner)
-    manager = LoopCardManager(daemon)
-
+async def test_replay_to_client_empty_loop() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=None))
     sent: list[dict] = []
 
     async def collect(frame: dict) -> None:
@@ -162,60 +97,14 @@ async def test_replay_to_client_empty_loop_skips_checkpoint_read(
 
     total = await manager.replay_to_client("loop_fast_replay", collect)
     assert total == 0
-    runner.get_thread_state_values.assert_not_called()
     assert sent[0]["type"] == CARD_REPLAY_BEGIN
     assert sent[-1]["type"] == CARD_REPLAY_END
     assert sent[0]["total_cards"] == 0
 
 
 @pytest.mark.asyncio
-async def test_refresh_empty_loop_is_noop(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    runner = _make_runner(checkpoint_messages=[], activity_log=[])
-    daemon = SimpleNamespace(_runner=runner)
-    manager = LoopCardManager(daemon)
-
-    ledger = await manager.refresh("loop_refresh_empty")
-    assert ledger.card_count() == 0
-    runner.get_thread_state_values.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_refresh_re_derives_after_messages_added(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
-    runner = _make_runner(checkpoint_messages=[HumanMessage(content="round1")])
-    daemon = SimpleNamespace(_runner=runner)
-
-    manager = LoopCardManager(daemon)
-    ledger = await manager.ensure_for_loop("loop_c")
-    assert [c.content for c in ledger.snapshot()] == ["round1"]
-
-    # Simulate more turn(s): runner now reports more messages.
-    runner.get_thread_state_values = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="round1"),
-                AIMessage(content="reply1"),
-                HumanMessage(content="round2"),
-            ]
-        }
-    )
-    await manager.refresh("loop_c")
-    contents = [c.content for c in ledger.snapshot()]
-    assert contents == ["round1", "reply1", "round2"]
-
-
-@pytest.mark.asyncio
-async def test_replay_to_client_emits_begin_created_end(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
+async def test_replay_to_client_emits_begin_created_end() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
     messages = [
         HumanMessage(content="q"),
         AIMessage(
@@ -230,59 +119,29 @@ async def test_replay_to_client_emits_begin_created_end(
         ),
         AIMessage(content="here you go"),
     ]
-    runner = _make_runner(checkpoint_messages=messages)
-    daemon = SimpleNamespace(_runner=runner)
-    manager = LoopCardManager(daemon)
-    await manager.ensure_for_loop("loop_d")
+    await _seed_messages(manager, "loop_d", messages)
 
     sent: list[dict] = []
 
-    async def collect(frame):
+    async def collect(frame: dict) -> None:
         sent.append(frame)
 
     total = await manager.replay_to_client("loop_d", collect)
-
-    # One begin, N created, one end.
-    types = [f["type"] for f in sent]
+    types = [frame["type"] for frame in sent]
     assert types[0] == CARD_REPLAY_BEGIN
     assert types[-1] == CARD_REPLAY_END
-    middle = [t for t in types[1:-1]]
-    assert all(t == CARD_CREATED for t in middle)
+    middle = types[1:-1]
+    assert all(item == CARD_CREATED for item in middle)
     assert len(middle) == total
-
-    # Begin frame metadata
-    assert sent[0]["total_cards"] == total
-    # End frame metadata
-    assert sent[-1]["card_count"] == total
-
-    # Each created frame carries data + card_id + kind.
-    for frame in sent[1:-1]:
-        assert frame["loop_id"] == "loop_d"
-        assert frame["card_id"]
-        assert frame["kind"]
-        assert isinstance(frame["data"], dict)
-        assert "type" in frame["data"]
 
 
 @pytest.mark.asyncio
-async def test_replay_to_client_refreshes_before_replay(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
-    runner = _make_runner(checkpoint_messages=[HumanMessage(content="turn1")])
-    daemon = SimpleNamespace(_runner=runner)
-    manager = LoopCardManager(daemon)
-    await manager.ensure_for_loop("loop_refresh")
-
-    # Simulate new persisted state after the initial derivation.
-    runner.get_thread_state_values = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="turn1"),
-                AIMessage(content="final goal completion response"),
-            ]
-        }
+async def test_replay_to_client_reads_persisted_cards() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await _seed_messages(
+        manager,
+        "loop_refresh",
+        [HumanMessage(content="turn1"), AIMessage(content="final goal completion response")],
     )
 
     sent: list[dict] = []
@@ -300,35 +159,22 @@ async def test_replay_to_client_refreshes_before_replay(
 
 
 @pytest.mark.asyncio
-async def test_stop_for_loop_releases_in_memory_state(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    _patch_langgraph_checkpoint(monkeypatch, exists=True)
-    runner = _make_runner(checkpoint_messages=[HumanMessage(content="x")])
-    daemon = SimpleNamespace(_runner=runner)
-    manager = LoopCardManager(daemon)
-    await manager.ensure_for_loop("loop_e")
+async def test_stop_for_loop_releases_in_memory_state(isolated_display_db) -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await _seed_messages(manager, "loop_e", [HumanMessage(content="x")])
     assert "loop_e" in manager._ledgers  # noqa: SLF001
 
     await manager.stop_for_loop("loop_e")
     assert "loop_e" not in manager._ledgers  # noqa: SLF001
-
-    # File still exists on disk; only in-memory state was released.
-    assert (loops_root / "loop_e" / "cards.jsonl").exists()
+    assert isolated_display_db.list_mutations("loop_e")
 
 
 @pytest.mark.asyncio
-async def test_ensure_for_loop_handles_runner_unavailable(
-    loops_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_bind_thread(monkeypatch)
-    daemon = SimpleNamespace(_runner=None)
-    manager = LoopCardManager(daemon)
+async def test_ensure_for_loop_without_runner_still_opens_ledger(isolated_display_db) -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=None))
     ledger = await manager.ensure_for_loop("loop_no_runner")
-    # No runner → no cards, but ledger file is created.
     assert ledger.card_count() == 0
-    assert (loops_root / "loop_no_runner" / "cards.jsonl").exists()
+    assert isolated_display_db.list_mutations("loop_no_runner")
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience

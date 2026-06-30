@@ -160,16 +160,6 @@ class PersistenceDirectoryManager:
         return Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
 
     @staticmethod
-    def get_loop_metadata_path(loop_id: str) -> Path:
-        """Get StrangeLoop loop metadata.json path.
-
-        Returns:
-            Path to loop's metadata.json (human-readable quick access).
-        """
-        # No need to import SOOTHE_HOME here - uses get_loop_directory
-        return PersistenceDirectoryManager.get_loop_directory(loop_id) / "metadata.json"
-
-    @staticmethod
     def get_loop_working_memory_dir(loop_id: str) -> Path:
         """Get StrangeLoop working memory spill directory.
 

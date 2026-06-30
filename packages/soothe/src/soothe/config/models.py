@@ -378,10 +378,6 @@ class PersistenceConfig(BaseModel):
                       "vectors": "soothe_vectors", "memory": "soothe_memory"}
         soothe_postgres_dsn: Single-database PostgreSQL DSN when ``postgres_base_dsn`` is unset.
         default_backend: Default backend for new protocols (can be overridden).
-        metadata_sqlite_path: Path for ThreadInfo metadata storage (SQLitePersistStore).
-            None defaults to $SOOTHE_DATA_DIR/metadata.db.
-        checkpoint_sqlite_path: Path for shared checkpoints database (LangGraph + StrangeLoop).
-            None defaults to $SOOTHE_DATA_DIR/soothe_checkpoints.db (IG-055 unified SQLite).
     """
 
     # RFC-612: Multi-database architecture
@@ -456,12 +452,6 @@ class PersistenceConfig(BaseModel):
         ge=1.0,
         le=300.0,
         description="Seconds to wait for a free pool connection before PoolTimeout.",
-    )
-
-    # IG-055: Unified SQLite architecture (metadata.db + soothe_checkpoints.db)
-    metadata_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/metadata.db
-    checkpoint_sqlite_path: str | None = (
-        None  # None = $SOOTHE_DATA_DIR/soothe_checkpoints.db (shared)
     )
 
     # SQLite concurrency settings for multiple loop support

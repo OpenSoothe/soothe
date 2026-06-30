@@ -551,10 +551,6 @@ class StrangeLoopStateManager:
 
         # Sync write (either disabled or queue full fallback)
         await self._do_save_checkpoint(checkpoint)
-        await asyncio.to_thread(self._sync_metadata_to_disk)
-        logger.debug(
-            "Saved loop checkpoint (sync): loop=%s status=%s", self.loop_id, checkpoint.status
-        )
 
     async def _do_save_checkpoint(self, checkpoint: StrangeLoopCheckpoint) -> None:
         """Perform actual checkpoint write (called by worker or sync fallback).
@@ -605,13 +601,11 @@ class StrangeLoopStateManager:
                     timeout=self._flush_interval,
                 )
                 await self._do_save_checkpoint(checkpoint)
-                await asyncio.to_thread(self._sync_metadata_to_disk)
 
             except TimeoutError:
                 # Periodic flush: ensure latest checkpoint is persisted
                 if self._last_save_checkpoint:
                     await self._do_save_checkpoint(self._last_save_checkpoint)
-                    await asyncio.to_thread(self._sync_metadata_to_disk)
                     logger.debug(
                         "Periodic checkpoint flush: loop=%s",
                         self.loop_id,
@@ -622,7 +616,6 @@ class StrangeLoopStateManager:
                 if self._last_save_checkpoint:
                     try:
                         await self._do_save_checkpoint(self._last_save_checkpoint)
-                        await asyncio.to_thread(self._sync_metadata_to_disk)
                     except Exception:
                         logger.exception("Final checkpoint flush failed: loop=%s", self.loop_id)
                 logger.info("Async checkpoint worker stopped: loop=%s", self.loop_id)
@@ -641,7 +634,6 @@ class StrangeLoopStateManager:
         """
         if self._last_save_checkpoint:
             await self._do_save_checkpoint(self._last_save_checkpoint)
-            await asyncio.to_thread(self._sync_metadata_to_disk)
             logger.info("Force checkpoint flush: loop=%s", self.loop_id)
 
     def _save_checkpoint_sync(
@@ -1216,31 +1208,3 @@ class StrangeLoopStateManager:
             entries=[],  # Entries reconstructed from step results
             spill_files=spill_files,
         )
-
-    def _sync_metadata_to_disk(self) -> None:
-        """Sync checkpoint metadata to filesystem (denormalized cache for CLI).
-
-        SQLite remains source of truth; metadata.json is for convenience.
-        Called automatically from _save_checkpoint_to_db() to cover all lifecycle points.
-        """
-        if self._checkpoint is None:
-            return
-
-        metadata = {
-            "loop_id": self._checkpoint.loop_id,
-            "status": self._checkpoint.status,
-            "thread_ids": self._checkpoint.thread_ids,
-            "current_thread_id": self._checkpoint.current_thread_id,
-            "total_goals_completed": self._checkpoint.total_goals_completed,
-            "total_thread_switches": self._checkpoint.total_thread_switches,
-            "total_duration_ms": self._checkpoint.total_duration_ms,
-            "total_tokens_used": self._checkpoint.total_tokens_used,
-            "schema_version": self._checkpoint.schema_version,
-            "created_at": self._checkpoint.created_at.isoformat(),
-            "updated_at": self._checkpoint.updated_at.isoformat(),
-        }
-
-        self.run_dir.mkdir(parents=True, exist_ok=True)
-        metadata_path = self.run_dir / "metadata.json"
-        metadata_path.write_text(json.dumps(metadata, indent=2))
-        logger.debug("Synced metadata: %s", metadata_path)
