@@ -59,7 +59,14 @@ def test_factory_applies_compat_wrapper_for_custom_openai_endpoint() -> None:
                 api_key="test",
             )
         ],
-        router={"default": "local-omlx:test-model"},
+        router_profiles=[
+            {
+                "name": "test",
+                "router": {"default": "local-omlx:test-model"},
+                "embedding_dims": 1536,
+            }
+        ],
+        active_router_profile="test",
     )
 
     raw_model = MagicMock()

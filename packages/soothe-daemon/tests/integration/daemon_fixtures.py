@@ -265,7 +265,8 @@ def build_daemon_config(
     )
     agent = SootheConfig(
         providers=base_config.providers,
-        router=base_config.router,
+        router_profiles=base_config.router_profiles,
+        active_router_profile=base_config.active_router_profile,
         vector_stores=base_config.vector_stores,
         vector_store_router=base_config.vector_store_router,
         filesystem_middleware=fs_middleware,

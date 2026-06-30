@@ -1,12 +1,14 @@
 """Unit tests for streaming configuration in SootheConfig."""
 
+from support_config import config_with_router_profile as config_with_router
+
 from soothe.config.models import ModelProviderConfig, ModelRouter
-from soothe.config.settings import SootheConfig
 
 
 def test_create_chat_model_with_streaming_enabled():
     """Verify models are created with streaming=True by default."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
             ModelProviderConfig(
                 name="test-provider",
@@ -14,7 +16,6 @@ def test_create_chat_model_with_streaming_enabled():
                 api_key="${OPENAI_API_KEY}",
             )
         ],
-        router=ModelRouter(default="test-provider:gpt-4o-mini"),
     )
 
     model = config.create_chat_model("default")
@@ -26,7 +27,8 @@ def test_create_chat_model_with_streaming_enabled():
 
 def test_create_chat_model_for_spec_with_streaming():
     """Verify models created with explicit spec also have streaming=True."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
             ModelProviderConfig(
                 name="test-provider",
@@ -45,7 +47,8 @@ def test_create_chat_model_for_spec_with_streaming():
 
 def test_create_chat_model_for_spec_with_params_streaming():
     """Verify streaming=True is not overridden by model_params."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
             ModelProviderConfig(
                 name="test-provider",
@@ -67,7 +70,8 @@ def test_create_chat_model_for_spec_with_params_streaming():
 
 def test_model_cache_includes_streaming_key():
     """Verify cache keys include streaming parameter for proper invalidation."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
             ModelProviderConfig(
                 name="test-provider",
@@ -75,7 +79,6 @@ def test_model_cache_includes_streaming_key():
                 api_key="${OPENAI_API_KEY}",
             )
         ],
-        router=ModelRouter(default="test-provider:gpt-4o-mini"),
     )
 
     # Create model twice - should use cache
@@ -93,7 +96,8 @@ def test_model_cache_includes_streaming_key():
 
 def test_create_chat_model_for_spec_cache_key_streaming():
     """Verify spec model cache keys include streaming parameter."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(default="test-provider:gpt-4o-mini"),
         providers=[
             ModelProviderConfig(
                 name="test-provider",
@@ -129,7 +133,12 @@ def test_create_chat_model_for_spec_cache_key_streaming():
 
 def test_multiple_roles_all_streaming():
     """Verify all model roles (default, think, fast) have streaming enabled."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(
+            default="test-provider:gpt-4o-mini",
+            think="test-provider:gpt-4o",
+            fast="test-provider:gpt-4o-mini",
+        ),
         providers=[
             ModelProviderConfig(
                 name="test-provider",
@@ -137,11 +146,6 @@ def test_multiple_roles_all_streaming():
                 api_key="${OPENAI_API_KEY}",
             )
         ],
-        router=ModelRouter(
-            default="test-provider:gpt-4o-mini",
-            think="test-provider:gpt-4o",
-            fast="test-provider:gpt-4o-mini",
-        ),
     )
 
     for role in ["default", "think", "fast"]:
@@ -152,7 +156,8 @@ def test_multiple_roles_all_streaming():
 
 def test_streaming_with_provider_wrapper():
     """Verify streaming works with provider compatibility wrappers."""
-    config = SootheConfig(
+    config = config_with_router(
+        ModelRouter(default="limited-provider:local-model"),
         providers=[
             ModelProviderConfig(
                 name="limited-provider",
@@ -160,7 +165,6 @@ def test_streaming_with_provider_wrapper():
                 api_key="${OPENAI_API_KEY}",
             )
         ],
-        router=ModelRouter(default="limited-provider:local-model"),
     )
 
     model = config.create_chat_model("default")
