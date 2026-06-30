@@ -192,14 +192,14 @@ Provider-specific wrappers applied automatically by provider type:
 | Provider Type | Wrappers Applied (Order) |
 |---------------|--------------------------|
 | `openai` | `SootheTokenUsageChatModel` |
-| `limited_openai` | `LimitedProviderModelWrapper` → `SootheTokenUsageChatModel` |
+| `limited_openai` | `OpenAICompatModelWrapper` → `SootheTokenUsageChatModel` |
 | `anthropic` | `SootheTokenUsageChatModel` |
 | `ollama` | `SootheTokenUsageChatModel` |
 | `custom` | `SootheTokenUsageChatModel` |
 
 **Wrapper Responsibilities**:
 
-- `LimitedProviderModelWrapper`: Converts `json_mode` to `json_schema`, sanitizes `tool_choice` to string values, extracts JSON from `reasoning_content` field
+- `OpenAICompatModelWrapper`: Converts `json_mode` to `json_schema`, sanitizes `tool_choice` to string values, extracts JSON from `reasoning_content` field
 - `SootheTokenUsageChatModel`: Prepends token usage callback handler, ensures Langfuse-compatible token format in `llm_output`
 
 ### §6 Structured Output
@@ -281,7 +281,7 @@ __all__ = [
     "StructuredOutputError",
 
     # Wrappers (advanced)
-    "LimitedProviderModelWrapper",
+    "OpenAICompatModelWrapper",
     "JsonSchemaModelWrapper",
 
     # Observability
@@ -446,7 +446,7 @@ User Code
     │       ├─ registry.get_provider_kwargs(provider_name)
     │       ├─ init_chat_model(init_str, streaming=True, ...)
     │       ├─ _apply_wrapper_chain(model, provider_type, provider_name)
-    │       │       ├─ LimitedProviderModelWrapper (if LIMITED_OPENAI)
+    │       │       ├─ OpenAICompatModelWrapper (if LIMITED_OPENAI)
     │       │       └─ SootheTokenUsageChatModel (always)
     │       └─ cache & return wrapped model
     │
