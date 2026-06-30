@@ -47,6 +47,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_async_loop_runtime_error(exc: BaseException) -> bool:
+    """Return True when asyncio cannot run because the event loop is gone or mismatched."""
+    if not isinstance(exc, RuntimeError):
+        return False
+    msg = str(exc).casefold()
+    return (
+        "no running event loop" in msg
+        or "event loop is closed" in msg
+        or "bound to a different event loop" in msg
+    )
+
+
 class StrangeLoopStateManager:
     """Manages StrangeLoop checkpoint lifecycle (RFC-216: loop-scoped, multi-thread).
 
@@ -129,6 +141,7 @@ class StrangeLoopStateManager:
         # Async write infrastructure (lazy initialized)
         self._pending_saves: asyncio.Queue[StrangeLoopCheckpoint] | None = None
         self._flush_worker: asyncio.Task | None = None
+        self._worker_loop: asyncio.AbstractEventLoop | None = None
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
         self._worker_started = False
         self._worker_lock = asyncio.Lock()
@@ -575,8 +588,10 @@ class StrangeLoopStateManager:
             if self._worker_started:
                 return
 
+            worker_loop = asyncio.get_running_loop()
+            self._worker_loop = worker_loop
             self._pending_saves = asyncio.Queue(maxsize=self._queue_size)
-            self._flush_worker = asyncio.create_task(self._flush_worker_loop())
+            self._flush_worker = worker_loop.create_task(self._flush_worker_loop())
             self._worker_started = True
 
             logger.info(
@@ -586,18 +601,48 @@ class StrangeLoopStateManager:
                 self._queue_size,
             )
 
+    async def _stop_flush_worker(self) -> None:
+        """Stop the async checkpoint worker and release queue resources."""
+        async with self._worker_lock:
+            worker = self._flush_worker
+            self._flush_worker = None
+            self._pending_saves = None
+            self._worker_started = False
+            self._worker_loop = None
+
+        if worker is None:
+            return
+
+        worker.cancel()
+        try:
+            await worker
+        except asyncio.CancelledError:
+            pass
+
     async def _flush_worker_loop(self) -> None:
         """Background loop that flushes queued checkpoints.
 
         RFC-803 Phase 6: Handles queued writes and periodic forced flush.
         """
+        worker_loop = self._worker_loop
+        pending_saves = self._pending_saves
+        if worker_loop is None or pending_saves is None:
+            return
+
         while True:
+            if worker_loop.is_closed():
+                logger.warning(
+                    "Async checkpoint worker stopping: event loop closed loop=%s",
+                    self.loop_id,
+                )
+                return
+
             try:
                 # Wait for either:
                 # 1. New checkpoint in queue
                 # 2. Flush interval timeout (force periodic write)
                 checkpoint = await asyncio.wait_for(
-                    self._pending_saves.get(),
+                    pending_saves.get(),
                     timeout=self._flush_interval,
                 )
                 await self._do_save_checkpoint(checkpoint)
@@ -619,6 +664,15 @@ class StrangeLoopStateManager:
                     except Exception:
                         logger.exception("Final checkpoint flush failed: loop=%s", self.loop_id)
                 logger.info("Async checkpoint worker stopped: loop=%s", self.loop_id)
+                raise
+
+            except RuntimeError as exc:
+                if _is_async_loop_runtime_error(exc):
+                    logger.warning(
+                        "Async checkpoint worker stopping: event loop unavailable loop=%s",
+                        self.loop_id,
+                    )
+                    return
                 raise
 
             except Exception:
@@ -1148,18 +1202,9 @@ class StrangeLoopStateManager:
         Must be called after StrangeLoop completes to release database connections.
         For shared pool mode, only clears references (pool closed at daemon shutdown).
         """
-        # RFC-803 Phase 6: Force final flush and stop worker
-        if self._worker_started and self._flush_worker:
-            self._flush_worker.cancel()
-            try:
-                await self._flush_worker
-            except asyncio.CancelledError:
-                pass
-            self._flush_worker = None
-            self._worker_started = False
-
-        # Force final checkpoint write
+        # RFC-803 Phase 6: Force final checkpoint write, then stop worker
         await self.force_flush()
+        await self._stop_flush_worker()
 
         # Close PostgreSQL backend pool (only if owned, not shared)
         if self._postgres_backend is not None:

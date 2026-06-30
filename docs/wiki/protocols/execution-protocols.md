@@ -47,7 +47,7 @@ Key fields and their purposes:
 - **`client_workspace` / `user_id` / `client_workspace_id`** — workspace resolution. If `client_workspace` is set, it's used directly; otherwise the runner computes `$SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>`.
 - **`autonomous` / `max_iterations`** — control autonomous goal management and loop iteration limits.
 - **`timeout_seconds`** — worker pool timeout for cancellation.
-- **`intent_hint`** — bypass LLM classification with a known intent.
+- **`intent_hint`** — daemon-only direct model turns (``text_completion``, ``image_to_text``, ``ocr``, ``embed``).
 - **`clarification_mode` / `clarification_answer` / `clarification_answers`** (RFC-622) — when `clarification_answer=True`, the runner treats `user_input` as the answer to a pending clarification interrupt and resumes the graph via `Command(resume=...)` rather than starting a new turn. The runner verifies against the loop's persisted `pending_clarification` state.
 - **`autopilot_job`** (RFC-222 revised) — when set, this request is dispatched by the daemon's `AutopilotService`; the worker hydrates from a context bundle instead of `user_input`.
 

@@ -27,7 +27,7 @@ from soothe.foundation.loop.clarification.events import (
     ClarificationDeferredEvent,
     ClarificationRequestedEvent,
 )
-from soothe.foundation.loop.intention import IntentHint, build_loop_routing_classification
+from soothe.foundation.loop.intention import build_loop_routing_classification
 from soothe.foundation.loop.utils.events import LoopAgentReasonEvent
 from soothe.foundation.loop.utils.messages import (
     loop_assistant_messages_chunk,
@@ -401,7 +401,6 @@ class StrangeLoopMixin:
         workspace: str | None = None,
         max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
         preferred_subagent: str | None = None,
-        intent_hint: IntentHint | None = None,
         clarification_mode: str | None = None,
         clarification_answer: bool = False,
         clarification_answers: list[str] | None = None,
@@ -416,7 +415,6 @@ class StrangeLoopMixin:
             workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
             preferred_subagent: Optional subagent hint for routing
-            intent_hint: Suggested intent to bypass LLM classification
             clarification_mode: RFC-622 mode for this goal (``"auto"`` /
                 ``"manual"``). ``None`` falls back to
                 ``config.agent.clarification.default_mode``.
@@ -448,7 +446,6 @@ class StrangeLoopMixin:
             # drives route_by_intent branch routing in the graph.
             intent_classification = await self._intent_classifier.classify_intake(
                 user_input,
-                intent_hint=intent_hint,
             )
 
             logger.info(

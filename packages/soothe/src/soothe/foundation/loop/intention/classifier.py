@@ -20,7 +20,6 @@ from .models import (
     IntakeClassificationLLMResult,
     IntakeLabel,
     IntentClassification,
-    IntentHint,
     TaskComplexity,
 )
 from .prompts import (
@@ -72,29 +71,21 @@ class IntentClassifier:
         query: str,
         *,
         observability_metadata: dict[str, str] | None = None,
-        intent_hint: IntentHint | None = None,
     ) -> IntentClassification:
         """Classify the query into a 4-class intake label (RFC-630).
 
-        - ``intent_hint=quiz`` short-circuits to a quiz classification (caller
-          assertion, not a content heuristic).
-        - Otherwise: one structured LLM call with retry; fallback to ``complex``
-          so the full pipeline runs (fail-safe, RFC-630 §9.3).
+        One structured LLM call with retry; fallback to ``complex`` so the full
+        pipeline runs (fail-safe, RFC-630 §9.3).
 
         Args:
             query: User input text.
             observability_metadata: Optional metadata for observability.
-            intent_hint: Optional bypass hint (``quiz`` only).
 
         Returns:
             IntentClassification with ``intake_label`` ∈
             {``quiz``, ``trivial``, ``simple``, ``complex``} and ``intent_type``
             derived from it (``quiz`` → ``quiz``, else ``agentic``).
         """
-        if intent_hint == IntentHint.QUIZ:
-            logger.info("Intake hint bypass: quiz")
-            return self._build_quiz_intent()
-
         if not self._fast_model:
             return self._fallback(query)
 

@@ -29,7 +29,6 @@ class LoopRunnerActor:
 
     async def run(self, request: LoopRunRequest, queue: Queue) -> None:
         """Stream chunks from ``SootheRunner.astream()`` into ``queue``."""
-        from soothe.runner._worker_utils import parse_intent_hint
         from soothe.runner.worker_logging import configure_loop_runner_worker_logging
 
         configure_loop_runner_worker_logging(self._runner.config, request.loop_id)
@@ -42,7 +41,6 @@ class LoopRunnerActor:
                 max_iterations=request.max_iterations,
                 preferred_subagent=request.preferred_subagent,
                 client_loop_id=request.loop_id,
-                intent_hint=parse_intent_hint(request.intent_hint),
                 autopilot_job=request.autopilot_job,  # RFC-222 revised
                 clarification_mode=request.clarification_mode,
                 clarification_answer=request.clarification_answer,

@@ -14,6 +14,7 @@ from typing import Any
 import websockets.asyncio.client
 import websockets.exceptions
 
+from soothe_sdk.client.intent_hints import validate_loop_input_intent_hint
 from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
 
 logger = logging.getLogger(__name__)
@@ -622,14 +623,18 @@ class WebSocketClient:
             model: Provider:model override string.
             model_params: Additional model parameters.
             attachments: Image attachments (mime_type + base64 data).
-            intent_hint: Suggested intent. The only standard value that bypasses
-                in-agent classification is ``quiz`` (greetings/thanks/trivia).
-                Daemon-only values ``direct_llm`` invoke a configured chat model
-                directly (no Soothe agent graph). With attachments, the configured
-                ``image`` role vision model is used; without attachments, the
-                ``default`` role (or ``model`` override) is used. ``response_schema``
-                requests strict JSON output for text-only turns. Deprecated alias
-                ``image_to_text`` (attachments required) is normalized to ``direct_llm``.
+            intent_hint: Daemon-only direct model hint. Supported values:
+                ``text_completion`` (``default`` role, text-only),
+                ``image_to_text`` (``image`` role, attachments required),
+                ``ocr`` (``ocr`` role, attachments required),
+                ``embed`` (``embedding`` role, text-only; returns JSON vector).
+                ``response_schema`` is supported for ``text_completion`` and
+                ``image_to_text``. Agent-path pass-through hints (e.g.
+                ``resume_clarification``, ``skill:foo``) are forwarded unchanged.
+                Legacy ``direct_llm`` and ``quiz`` are rejected before send.
+
+        Raises:
+            ValueError: When ``intent_hint`` is a removed legacy value.
             clarification_mode: RFC-622 clarification relay mode for this turn
                 (``"auto"`` / ``"manual"``). ``None`` lets the daemon fall back
                 to its configured default.
@@ -663,6 +668,9 @@ class WebSocketClient:
         if attachments:
             params["attachments"] = attachments
         if intent_hint:
+            hint_error = validate_loop_input_intent_hint(intent_hint)
+            if hint_error is not None:
+                raise ValueError(hint_error)
             params["intent_hint"] = intent_hint
         if response_schema:
             params["response_schema"] = response_schema

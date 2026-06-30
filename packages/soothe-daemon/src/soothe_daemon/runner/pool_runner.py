@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.config import SOOTHE_HOME
 from soothe.config.settings import SootheConfig
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
-from soothe.runner._worker_utils import parse_intent_hint
+from soothe.runner._worker_utils import spawn_safe_config
 
 from soothe_daemon.config import SootheDaemonConfig
 
@@ -332,7 +332,6 @@ def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
 
     Same as _worker_utils.spawn_safe_config — strips runtime caches.
     """
-    from soothe.runner._worker_utils import spawn_safe_config
 
     return spawn_safe_config(config)
 
@@ -438,6 +437,7 @@ def _pool_worker_body(
     """
     import asyncio as _asyncio
 
+    from soothe.runner._worker_utils import cancel_orphan_loop_tasks
     from soothe.runner.worker_logging import configure_loop_runner_worker_logging
 
     from soothe_daemon.runner._worker_runner import acquire_worker_runner
@@ -498,7 +498,6 @@ def _pool_worker_body(
                         max_iterations=req.max_iterations,
                         preferred_subagent=req.preferred_subagent,
                         client_loop_id=req.loop_id,
-                        intent_hint=parse_intent_hint(req.intent_hint),
                         autopilot_job=req.autopilot_job,  # RFC-222 revised
                         clarification_mode=req.clarification_mode,
                         clarification_answer=req.clarification_answer,
@@ -662,6 +661,8 @@ def _pool_worker_body(
                     worker_id,
                     request_id,
                 )
+        finally:
+            cancel_orphan_loop_tasks(loop)
 
     while requests_completed < max_requests:
         try:

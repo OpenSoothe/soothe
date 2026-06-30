@@ -15,16 +15,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class IntentHint(StrEnum):
-    """Suggested intent hint to bypass LLM classification.
-
-    Only ``QUIZ`` is supported — agentic flow is the structural default
-    for any non-quiz input and needs no hint.
-    """
-
-    QUIZ = "quiz"
-
-
 class IntakeLabel(StrEnum):
     """4-class intake label for branch routing (RFC-630).
 

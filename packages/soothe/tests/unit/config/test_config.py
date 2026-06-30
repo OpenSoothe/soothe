@@ -268,6 +268,7 @@ class TestModelRouter:
                 think="c:d",
                 fast="e:f",
                 image="g:h",
+                ocr="k:l",
                 embedding="i:j",
             )
         )
@@ -275,6 +276,7 @@ class TestModelRouter:
         assert cfg.resolve_model("think") == "c:d"
         assert cfg.resolve_model("fast") == "e:f"
         assert cfg.resolve_model("image") == "g:h"
+        assert cfg.resolve_model("ocr") == "k:l"
         assert cfg.resolve_model("embedding") == "i:j"
 
     def test_unknown_role_fallback(self) -> None:
@@ -337,7 +339,7 @@ class TestRouterProfiles:
                 },
                 {
                     "name": "local-deploy",
-                    "router": {"default": "local-omlx:glm"},
+                    "router": {"default": "omlx:glm"},
                     "embedding_dims": 384,
                 },
             ],
@@ -359,13 +361,13 @@ class TestRouterProfiles:
                 },
                 {
                     "name": "local",
-                    "router": {"default": "local-omlx:glm"},
+                    "router": {"default": "omlx:glm"},
                     "embedding_dims": 384,
                 },
             ],
             active_router_profile="local",
         )
-        assert cfg.router.default == "local-omlx:glm"
+        assert cfg.router.default == "omlx:glm"
         assert cfg.embedding_dims == 384
 
     def test_legacy_flat_router_yaml_rejected(self, tmp_path: Path) -> None:
@@ -402,15 +404,15 @@ class TestRouterProfiles:
             "router_profiles:\n"
             "  - name: local\n"
             "    router:\n"
-            "      default: local-omlx:test\n"
-            "      embedding: local-omlx:embed\n"
+            "      default: omlx:test\n"
+            "      embedding: omlx:embed\n"
             "    embedding_dims: 768\n"
             "active_router_profile: local\n",
             encoding="utf-8",
         )
         cfg = SootheConfig.from_yaml_file(str(p))
-        assert cfg.router.default == "local-omlx:test"
-        assert cfg.router.embedding == "local-omlx:embed"
+        assert cfg.router.default == "omlx:test"
+        assert cfg.router.embedding == "omlx:embed"
         assert cfg.embedding_dims == 768
 
     def test_develop_config_loads(self) -> None:
@@ -418,7 +420,7 @@ class TestRouterProfiles:
         if not path.is_file():
             pytest.skip("develop config not in checkout")
         cfg = SootheConfig.from_yaml_file(str(path))
-        assert cfg.active_router_profile == "production"
+        assert cfg.active_router_profile == "local-deploy"
         assert cfg.router.default == "dashscope:glm-5.2"
         assert cfg.embedding_dims == 1024
 
@@ -433,14 +435,14 @@ class TestRouterProfiles:
                 },
                 {
                     "name": "local-deploy",
-                    "router": {"default": "local-omlx:glm"},
+                    "router": {"default": "omlx:glm"},
                     "embedding_dims": 384,
                 },
             ],
             active_router_profile="production",
         )
         assert cfg.active_router_profile == "local-deploy"
-        assert cfg.router.default == "local-omlx:glm"
+        assert cfg.router.default == "omlx:glm"
         assert cfg.embedding_dims == 384
 
 
