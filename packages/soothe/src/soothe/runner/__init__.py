@@ -395,7 +395,12 @@ class SootheRunner(
         return await self.thread_context_manager().get_thread_artifacts(thread_id)
 
     async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
-        """Refresh ``updated_at`` on thread metadata (activity ping)."""
+        """Refresh ``updated_at`` on thread metadata (activity ping).
+
+        When durability record is missing (e.g., after daemon restart with existing loop),
+        attempts recovery via ThreadContextManager._recover_missing_thread_metadata to
+        restore thread metadata from run artifacts.
+        """
         if not thread_id:
             return
         try:
@@ -404,10 +409,28 @@ class SootheRunner(
             await self._durability.update_thread_metadata(thread_id, {})
             logger.debug("Thread %s updated_at refreshed", thread_id)
         except KeyError:
+            # Durability record missing - attempt recovery for loop threads
+            # (e.g., daemon restarted while TUI held existing loop_id)
             logger.debug(
-                "touch_thread_activity_timestamp: no durability record for %s",
+                "touch_thread_activity_timestamp: no durability record for %s, attempting recovery",
                 thread_id,
             )
+            try:
+                tcm = self.thread_context_manager()
+                await tcm._recover_missing_thread_metadata(thread_id)
+                logger.info("Recovered durability metadata for thread %s", thread_id)
+            except KeyError:
+                # Recovery failed - no run artifacts exist
+                logger.debug(
+                    "touch_thread_activity_timestamp: recovery failed for %s (no run artifacts)",
+                    thread_id,
+                )
+            except Exception:
+                logger.debug(
+                    "touch_thread_activity_timestamp: recovery attempt failed for %s",
+                    thread_id,
+                    exc_info=True,
+                )
         except Exception:
             logger.debug("touch_thread_activity_timestamp failed", exc_info=True)
 
