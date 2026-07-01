@@ -101,7 +101,7 @@ def resolve_planner(
             except Exception:
                 logger.warning("Failed to create model for planner")
 
-    from soothe.foundation.loop.planning.planner import LLMPlanner
+    from soothe.foundation.loop.cognition.planner import LLMPlanner
 
     return LLMPlanner(model=planner_model, config=config)
 

@@ -16,6 +16,7 @@ from soothe.foundation.events import (
     IntentClassifiedEvent,  # IG-518
     StrangeLoopCompletedEvent,
     StrangeLoopPlanDecisionEvent,
+    StrangeLoopPlanPhaseStatusEvent,
     StrangeLoopStartedEvent,
     StrangeLoopStepCompletedEvent,
     StrangeLoopStepQueuedEvent,
@@ -444,6 +445,7 @@ class StrangeLoopMixin:
         if self._intent_classifier and not clarification_answer:
             # RFC-630: 4-class intake LLM (quiz | trivial | simple | complex),
             # drives route_by_intent branch routing in the graph.
+            yield _custom(StrangeLoopPlanPhaseStatusEvent(label="Classifying request").to_dict())
             intent_classification = await self._intent_classifier.classify_intake(
                 user_input,
             )
@@ -675,6 +677,11 @@ class StrangeLoopMixin:
                     # IG-416: Forward custom tool_call_update (main + subgraph).
                     if _forward_messages_chunk(event_data):
                         yield event_data
+
+                elif event_type == "plan_phase_status":
+                    label = str(event_data.get("label", "")).strip()
+                    if label:
+                        yield _custom(StrangeLoopPlanPhaseStatusEvent(label=label).to_dict())
 
                 elif event_type == "assess":
                     reasoning = str(event_data.get("assessment_reasoning", "")).strip()

@@ -10,10 +10,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from soothe.foundation.loop.cognition.trivial_plan import build_trivial_plan
 from soothe.foundation.loop.intention.models import IntakeLabel
 from soothe.foundation.loop.orchestrator.nodes.init_or_resume import node_init_or_resume
 from soothe.foundation.loop.orchestrator.routing import route_by_intent
-from soothe.foundation.loop.planning.trivial_plan import build_trivial_plan
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -94,6 +94,43 @@ async def test_init_or_resume_trivial_injects_synth_plan() -> None:
     assert scratch.plan_result.next_action == "list files in this directory"
     assert scratch.plan_result.decision is not None
     assert len(scratch.plan_result.decision.steps) == 1
+
+
+@pytest.mark.asyncio
+async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
+    """Trivial intake must not bypass plan_assess when loop continuation is active."""
+    from soothe.foundation.loop.intention import IntentClassification, TaskComplexity
+
+    intent = IntentClassification(
+        intent_type="agentic",
+        intake_label=IntakeLabel.TRIVIAL,
+        goal_description="continue",
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    loop_state = SimpleNamespace(intent=intent, goal="continue")
+    prior_goal = SimpleNamespace(
+        id="goal-0",
+        status="cancelled",
+        description="review local changes",
+        action_history=[],
+        steps=SimpleNamespace(nodes={"s1": SimpleNamespace(status="completed")}),
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        scratch=scratch,
+        ce=SimpleNamespace(get_all_goals=lambda: [prior_goal]),
+        ce_goal_id="goal-1",
+        checkpoint=SimpleNamespace(goal_history=[SimpleNamespace(), SimpleNamespace()]),
+        continue_loop_mode=True,
+        recovery_valid_resume=False,
+        emit=_noop_emit,
+    )
+
+    result = await node_init_or_resume(ctx, {})
+
+    assert result["is_continuation"] is True
+    assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio

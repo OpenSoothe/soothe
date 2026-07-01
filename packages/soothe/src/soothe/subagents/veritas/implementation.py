@@ -17,6 +17,10 @@ from soothe.subagents.veritas.schemas import (
     VeritasAnswerSchema,
     build_veritas_response_schema,
 )
+from soothe.utils.llm.invoke_policy import (
+    await_with_llm_call_policy,
+    llm_rate_limit_config_from,
+)
 from soothe.utils.llm.structured import (
     StructuredOutputError,
     invoke_structured_chat,
@@ -105,13 +109,21 @@ async def answer(
     )
 
     try:
-        data = await invoke_structured_chat(
-            model,
-            messages,
-            json_schema=json_schema,
-            schema_name="VeritasAnswer",
-            strict=True,
-            config=invoke_config,
+
+        async def _invoke() -> dict[str, Any]:
+            return await invoke_structured_chat(
+                model,
+                messages,
+                json_schema=json_schema,
+                schema_name="VeritasAnswer",
+                strict=True,
+                config=invoke_config,
+            )
+
+        data = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(soothe_config),
+            thread_id=thread_id,
         )
     except StructuredOutputError as exc:
         logger.warning("[veritas] structured output failed: %s", exc)

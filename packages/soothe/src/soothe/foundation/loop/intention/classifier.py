@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from soothe.utils.llm.invoke_policy import (
+    await_with_llm_call_policy,
+    llm_rate_limit_config_from,
+)
 from soothe.utils.llm.structured import invoke_structured_chat
 
 from .models import (
@@ -167,13 +171,20 @@ class IntentClassifier:
 
         schema = IntakeClassificationLLMResult.model_json_schema()
         try:
-            result_dict = await invoke_structured_chat(
-                self._fast_model,
-                messages,
-                json_schema=schema,
-                schema_name="IntakeClassificationLLMResult",
-                strict=True,
-                config=config,
+
+            async def _invoke() -> dict[str, Any]:
+                return await invoke_structured_chat(
+                    self._fast_model,
+                    messages,
+                    json_schema=schema,
+                    schema_name="IntakeClassificationLLMResult",
+                    strict=True,
+                    config=config,
+                )
+
+            result_dict = await await_with_llm_call_policy(
+                _invoke,
+                config=llm_rate_limit_config_from(self._soothe_config),
             )
         except Exception:
             logger.exception("LLM intake classification call failed")

@@ -1,4 +1,8 @@
-"""Per-loop card ledger lifecycle, real-time binding, and reattach replay."""
+"""Per-loop card ledger lifecycle, real-time binding, and reattach replay.
+
+IG-535 Optimization 4: Uses dedicated card-bind executor to isolate from
+asyncio.to_thread pool, preventing contention under concurrent loops.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +10,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +32,33 @@ CARD_CREATED = "card.created"
 CARD_REPLAY_END = "card.replay_end"
 
 _DERIVABLE_CUSTOM_KINDS = frozenset({"event", "tool_call", "tool_result", "conversation"})
+
+# IG-535 Optimization 4: Dedicated executor for card binding (isolated from to_thread pool)
+# 2 workers sufficient since binding is CPU-bound and not latency-critical
+_card_bind_executor: ThreadPoolExecutor | None = None
+
+
+def _get_card_bind_executor() -> ThreadPoolExecutor:
+    """Return the dedicated card-bind executor (lazily initialized).
+
+    IG-535: Separate from asyncio.to_thread pool to prevent contention
+    when N concurrent loops all call card binding simultaneously.
+    """
+    global _card_bind_executor
+    if _card_bind_executor is None:
+        _card_bind_executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="soothe-card-bind",
+        )
+    return _card_bind_executor
+
+
+def shutdown_card_bind_executor() -> None:
+    """Shutdown the card-bind executor on daemon stop."""
+    global _card_bind_executor
+    if _card_bind_executor is not None:
+        _card_bind_executor.shutdown(wait=False)
+        _card_bind_executor = None
 
 
 @dataclass
@@ -128,7 +160,21 @@ class LoopCardManager:
         return True
 
     async def _flush_buffers_to_ledger(self, loop_id: str, state: _BindingBuffers) -> None:
-        cards = await asyncio.to_thread(self._bind_cards, state.messages, state.log_events)
+        """Flush buffers to ledger using dedicated card-bind executor.
+
+        IG-535 Optimization 4: Uses isolated ThreadPoolExecutor instead of
+        asyncio.to_thread to prevent contention with general thread pool.
+        """
+        executor = _get_card_bind_executor()
+        loop = asyncio.get_running_loop()
+
+        # Run binding in dedicated executor (not asyncio.to_thread pool)
+        cards = await loop.run_in_executor(
+            executor,
+            self._bind_cards,
+            state.messages,
+            state.log_events,
+        )
         ledger = await self._open_ledger(loop_id)
         mutations = cards_to_mutations(cards) if cards else []
         if mutations:

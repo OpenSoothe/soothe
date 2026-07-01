@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,14 @@ _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
 # IG-477: cap in-query assistant text accumulation (~100KB)
 _MAX_FULL_RESPONSE_CHARS = 100_000
+
+
+class QueryAdmission(StrEnum):
+    """Result of daemon query admission under ``_query_state_lock``."""
+
+    ADMITTED = "admitted"
+    DAEMON_BUSY = "daemon_busy"
+    LOOP_BUSY = "loop_busy"
 
 
 class AsyncCancelOrchestrator:
@@ -275,6 +284,96 @@ class QueryEngine:
         out.pop("thread_id", None)
         return out
 
+    async def _broadcast_loop_message(self, loop_id: str, payload: dict[str, Any]) -> None:
+        """Broadcast one loop-scoped frame with per-loop in-flight budget (IG-534 2.2)."""
+        d = self._daemon
+        budget = getattr(d, "_loop_broadcast_budget", None)
+        if budget is not None:
+            async with budget.slot(loop_id):
+                await d._broadcast(self._loop_scoped_client_message(loop_id, payload))
+            return
+        await d._broadcast(self._loop_scoped_client_message(loop_id, payload))
+
+    async def _admit_query(
+        self,
+        *,
+        effective_loop_id: str | None,
+        thread_id: str,
+    ) -> QueryAdmission:
+        """Reserve daemon / per-loop query capacity atomically."""
+        d = self._daemon
+        max_concurrent = getattr(d._daemon_config, "max_concurrent_threads", 100)
+        async with d._query_state_lock:
+            if max_concurrent > 0 and len(d._active_threads) >= max_concurrent:
+                return QueryAdmission.DAEMON_BUSY
+            if effective_loop_id and effective_loop_id in d._loops_with_active_query:
+                return QueryAdmission.LOOP_BUSY
+            d._query_running = True
+            if effective_loop_id:
+                d._loops_with_active_query.add(effective_loop_id)
+            return QueryAdmission.ADMITTED
+
+    async def _release_query_admission(self, effective_loop_id: str | None) -> None:
+        """Drop per-loop admission reservation when a query ends or aborts early."""
+        if not effective_loop_id:
+            return
+        d = self._daemon
+        async with d._query_state_lock:
+            d._loops_with_active_query.discard(effective_loop_id)
+
+    async def _register_query_task(self, thread_id: str, task: asyncio.Task[Any]) -> None:
+        """Register a background query task under ``_query_state_lock``."""
+        d = self._daemon
+        async with d._query_state_lock:
+            d._active_threads[thread_id] = task
+            d._current_query_task = task
+
+    async def _unregister_query_task(self, thread_id: str) -> None:
+        """Remove a query task registration under ``_query_state_lock``."""
+        d = self._daemon
+        async with d._query_state_lock:
+            d._active_threads.pop(thread_id, None)
+
+    async def _reject_query_admission(
+        self,
+        admission: QueryAdmission,
+        *,
+        effective_loop_id: str | None,
+        client_id: str | None,
+    ) -> None:
+        """Broadcast rejection and release ownership when admission fails."""
+        d = self._daemon
+        max_concurrent = getattr(d._daemon_config, "max_concurrent_threads", 100)
+        if admission == QueryAdmission.DAEMON_BUSY:
+            error = (
+                f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                "Wait for a query to finish or cancel one before starting a new one."
+            )
+            code = "DAEMON_BUSY"
+        else:
+            error = (
+                "This loop already has a query in progress. "
+                "Wait for it to finish or cancel before starting another."
+            )
+            code = "LOOP_BUSY"
+
+        if effective_loop_id:
+            await self._broadcast_loop_message(
+                effective_loop_id,
+                {
+                    "type": "event",
+                    "namespace": [],
+                    "mode": "custom",
+                    "data": {"type": ERROR, "error": error, "code": code},
+                },
+            )
+            await self._broadcast_loop_message(
+                effective_loop_id,
+                {"type": "status", "state": "idle"},
+            )
+        if client_id:
+            await d._session_manager.release_loop_ownership(client_id)
+
     async def _broadcast_stream_tuple(
         self,
         loop_id: str,
@@ -303,20 +402,18 @@ class QueryEngine:
             if isinstance(msg_wire, dict):
                 tool_updates = list(extract_tool_call_updates_from_wire_message(msg_wire))
                 if tool_updates:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            loop_id,
-                            {
-                                "type": "event",
-                                "namespace": list(namespace),
-                                "mode": "custom",
-                                "data": {
-                                    "type": TOOL_CALL_UPDATES_BATCH,
-                                    "updates": tool_updates,
-                                    "count": len(tool_updates),
-                                },
+                    await self._broadcast_loop_message(
+                        loop_id,
+                        {
+                            "type": "event",
+                            "namespace": list(namespace),
+                            "mode": "custom",
+                            "data": {
+                                "type": TOOL_CALL_UPDATES_BATCH,
+                                "updates": tool_updates,
+                                "count": len(tool_updates),
                             },
-                        )
+                        },
                     )
                     if coalescer is not None:
                         wire_data = coalescer.strip_tool_metadata_for_batch(wire_data)
@@ -340,16 +437,14 @@ class QueryEngine:
             and coalescer.should_skip_tool_message_wire(wire_data[0])
         ):
             return
-        await d._broadcast(
-            self._loop_scoped_client_message(
-                loop_id,
-                {
-                    "type": "event",
-                    "namespace": list(namespace),
-                    "mode": mode,
-                    "data": wire_data,
-                },
-            )
+        await self._broadcast_loop_message(
+            loop_id,
+            {
+                "type": "event",
+                "namespace": list(namespace),
+                "mode": mode,
+                "data": wire_data,
+            },
         )
         card_manager = getattr(d, "_card_manager", None)
         if card_manager is not None:
@@ -494,48 +589,23 @@ class QueryEngine:
             )
         thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
 
-        # IG-054: Capacity check before vision preflight (IG-327) to avoid wasted image API calls.
-        # Check is done outside the lock to avoid holding it during awaits; the insert is
-        # protected by _query_state_lock (Bug 4.4).
-        max_concurrent = getattr(d._daemon_config, "max_concurrent_threads", 100)
-        async with d._query_state_lock:
-            at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
-        if at_capacity:
+        # IG-054: Admit before vision preflight (IG-327) to avoid wasted image API calls.
+        admission = await self._admit_query(
+            effective_loop_id=effective_loop_id,
+            thread_id=thread_id,
+        )
+        if admission is not QueryAdmission.ADMITTED:
             logger.warning(
-                "Daemon at capacity (%d/%d queries), rejecting (loop=%s checkpoint=%s)",
-                len(d._active_threads),
-                max_concurrent,
+                "Query admission rejected (%s) loop=%s checkpoint=%s",
+                admission,
                 effective_loop_id or "?",
                 thread_id[:16] if thread_id else "?",
             )
-
-            if effective_loop_id:
-                await d._broadcast(
-                    self._loop_scoped_client_message(
-                        effective_loop_id,
-                        {
-                            "type": "event",
-                            "namespace": [],
-                            "mode": "custom",
-                            "data": {
-                                "type": ERROR,
-                                "error": (
-                                    f"Daemon has reached its concurrent query limit ({max_concurrent}). "
-                                    "Wait for a query to finish or cancel one before starting a new one."
-                                ),
-                                "code": "DAEMON_BUSY",
-                            },
-                        },
-                    )
-                )
-                await d._broadcast(
-                    self._loop_scoped_client_message(
-                        effective_loop_id,
-                        {"type": "status", "state": "idle"},
-                    )
-                )
-            if client_id:
-                await d._session_manager.release_loop_ownership(client_id)
+            await self._reject_query_admission(
+                admission,
+                effective_loop_id=effective_loop_id,
+                client_id=client_id,
+            )
             return
 
         if is_daemon_direct_hint(intent_hint):
@@ -568,23 +638,21 @@ class QueryEngine:
                     thread_id[:16] if thread_id else "?",
                 )
                 if effective_loop_id:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": [],
-                                "mode": "custom",
-                                "data": emit_error_event(exc),
-                            },
-                        )
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {
+                            "type": "event",
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": emit_error_event(exc),
+                        },
                     )
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {"type": "status", "state": "idle"},
-                        )
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
                     )
+                d._query_running = False
+                await self._release_query_admission(effective_loop_id)
                 if client_id:
                     await d._session_manager.release_loop_ownership(client_id)
                 return
@@ -607,10 +675,6 @@ class QueryEngine:
                 "preferred_subagent": preferred_subagent,
             }
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
-
-        # No placeholder pattern - set task directly after creation
-        async with d._query_state_lock:
-            d._query_running = True
 
         if client_id and effective_loop_id:
             await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
@@ -672,15 +736,14 @@ class QueryEngine:
                         await router._send_complete(
                             cid, subscription_id, reason="cancelled_before_start"
                         )
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {"type": "status", "state": "idle"},
-                        )
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
                     )
                 if client_id:
                     await d._session_manager.release_loop_ownership(client_id)
                 d._query_running = False
+                await self._release_query_admission(effective_loop_id)
                 self._pending_cancels.discard(effective_loop_id)
                 return
 
@@ -804,20 +867,18 @@ class QueryEngine:
                                     remaining,
                                 )
                                 if effective_loop_id:
-                                    await d._broadcast(
-                                        self._loop_scoped_client_message(
-                                            effective_loop_id,
-                                            {
-                                                "type": "event",
-                                                "namespace": [],
-                                                "mode": "custom",
-                                                "data": {
-                                                    "type": "query_timeout_warning",
-                                                    "message": f"Query will timeout in {remaining:.0f} seconds",
-                                                    "remaining_seconds": remaining,
-                                                },
+                                    await self._broadcast_loop_message(
+                                        effective_loop_id,
+                                        {
+                                            "type": "event",
+                                            "namespace": [],
+                                            "mode": "custom",
+                                            "data": {
+                                                "type": "query_timeout_warning",
+                                                "message": f"Query will timeout in {remaining:.0f} seconds",
+                                                "remaining_seconds": remaining,
                                             },
-                                        )
+                                        },
                                     )
 
                         if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
@@ -898,20 +959,18 @@ class QueryEngine:
                     d._current_query_task.cancel()
 
                 if effective_loop_id:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": [],
-                                "mode": "custom",
-                                "data": {
-                                    "type": ERROR,
-                                    "error": f"Query cancelled after {timeout_minutes} minute timeout",
-                                    "timeout_minutes": timeout_minutes,
-                                },
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {
+                            "type": "event",
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": {
+                                "type": ERROR,
+                                "error": f"Query cancelled after {timeout_minutes} minute timeout",
+                                "timeout_minutes": timeout_minutes,
                             },
-                        )
+                        },
                     )
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
@@ -922,21 +981,20 @@ class QueryEngine:
             except Exception as exc:
                 logger.exception("Daemon query error")
                 if effective_loop_id:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": [],
-                                "mode": "custom",
-                                "data": emit_error_event(exc),
-                            },
-                        )
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {
+                            "type": "event",
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": emit_error_event(exc),
+                        },
                     )
             finally:
                 reset_stream_model_override(override_token)
                 d._query_running = False
-                d._active_threads.pop(thread_id, None)
+                await self._unregister_query_task(thread_id)
+                await self._release_query_admission(effective_loop_id)
                 # RFC-221: tear down the subprocess runner (pool cancel_event / local SIGTERM).
                 # ``cancel_loop`` may have already popped and cancelled; pop here covers
                 # disconnect and other paths where no explicit cancel ran.
@@ -1023,11 +1081,9 @@ class QueryEngine:
                             subscription_id,
                             reason="stream_end",
                         )
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {"type": "status", "state": "idle"},
-                        )
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
                     )
 
                 if client_id:
@@ -1036,16 +1092,13 @@ class QueryEngine:
 
         try:
             task = asyncio.create_task(_run_stream())
-            d._current_query_task = task
-            d._active_threads[thread_id] = task
+            await self._register_query_task(thread_id, task)
             # Broadcast ``running`` only after the task is registered so a
             # concurrent ``/cancel`` can resolve it (RFC-221 cancel race fix).
             if effective_loop_id:
-                await d._broadcast(
-                    self._loop_scoped_client_message(
-                        effective_loop_id,
-                        {"type": "status", "state": "running"},
-                    )
+                await self._broadcast_loop_message(
+                    effective_loop_id,
+                    {"type": "status", "state": "running"},
                 )
             # Yield once so _run_stream begins before run_query returns; otherwise /cancel
             # can run before the coroutine starts and skip finally cleanup.
@@ -1060,8 +1113,8 @@ class QueryEngine:
         except Exception:
             logger.exception("Failed to create query task")
             d._query_running = False
-            if thread_id in d._active_threads:
-                d._active_threads.pop(thread_id, None)
+            await self._unregister_query_task(thread_id)
+            await self._release_query_admission(effective_loop_id)
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
             raise
@@ -1103,8 +1156,7 @@ class QueryEngine:
 
         try:
             task = asyncio.create_task(_run_direct())
-            d._current_query_task = task
-            d._active_threads[thread_id] = task
+            await self._register_query_task(thread_id, task)
             await asyncio.sleep(0)
         except asyncio.CancelledError:
             logger.info("Direct model task cancelled during creation")
@@ -1113,8 +1165,8 @@ class QueryEngine:
         except Exception:
             logger.exception("Failed to create direct model task")
             d._query_running = False
-            if thread_id in d._active_threads:
-                d._active_threads.pop(thread_id, None)
+            await self._unregister_query_task(thread_id)
+            await self._release_query_admission(effective_loop_id)
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
             raise
@@ -1137,8 +1189,6 @@ class QueryEngine:
     ) -> None:
         """Execute one direct model call and broadcast a single assistant ``messages`` event."""
         d = self._daemon
-        async with d._query_state_lock:
-            d._query_running = True
 
         if client_id and effective_loop_id:
             await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
@@ -1150,11 +1200,9 @@ class QueryEngine:
                     effective_loop_id[:8],
                 )
 
-        await d._broadcast(
-            self._loop_scoped_client_message(
-                effective_loop_id,
-                {"type": "status", "state": "running"},
-            )
+        await self._broadcast_loop_message(
+            effective_loop_id,
+            {"type": "status", "state": "running"},
         )
 
         user_log_line = text.strip() if text.strip() else f"[{direct_intent_hint}]"
@@ -1185,16 +1233,14 @@ class QueryEngine:
             ai_flat = _serialize_for_json(
                 LoopAIMessage(content=answer, phase=phase, thread_id=thread_id)
             )
-            await d._broadcast(
-                self._loop_scoped_client_message(
-                    effective_loop_id,
-                    {
-                        "type": "event",
-                        "namespace": [],
-                        "mode": "messages",
-                        "data": (ai_flat, {}),
-                    },
-                )
+            await self._broadcast_loop_message(
+                effective_loop_id,
+                {
+                    "type": "event",
+                    "namespace": [],
+                    "mode": "messages",
+                    "data": (ai_flat, {}),
+                },
             )
             thread_logger.log_assistant_response(answer)
         except asyncio.CancelledError:
@@ -1202,20 +1248,19 @@ class QueryEngine:
             raise
         except Exception as exc:
             logger.exception("Direct model turn failed")
-            await d._broadcast(
-                self._loop_scoped_client_message(
-                    effective_loop_id,
-                    {
-                        "type": "event",
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": emit_error_event(exc),
-                    },
-                )
+            await self._broadcast_loop_message(
+                effective_loop_id,
+                {
+                    "type": "event",
+                    "namespace": [],
+                    "mode": "custom",
+                    "data": emit_error_event(exc),
+                },
             )
         finally:
             d._query_running = False
-            d._active_threads.pop(thread_id, None)
+            await self._unregister_query_task(thread_id)
+            await self._release_query_admission(effective_loop_id)
             try:
                 thread_logger.flush()
             except Exception:
@@ -1228,11 +1273,9 @@ class QueryEngine:
                     cid, effective_loop_id
                 )
                 await router._send_complete(cid, subscription_id, reason="direct_turn_end")
-            await d._broadcast(
-                self._loop_scoped_client_message(
-                    effective_loop_id,
-                    {"type": "status", "state": "idle"},
-                )
+            await self._broadcast_loop_message(
+                effective_loop_id,
+                {"type": "status", "state": "idle"},
             )
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)

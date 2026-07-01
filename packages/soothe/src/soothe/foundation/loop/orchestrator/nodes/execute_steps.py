@@ -491,6 +491,13 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     if isinstance(strange_loop.core_agent, LazyCoreAgent):
         await strange_loop.core_agent.amaterialize()
 
+    from soothe.foundation.loop.engine.step_brief_hydrator import StepBriefHydrator
+
+    hydrator_model = getattr(strange_loop.loop_planner, "_model", None)
+    step_brief_hydrator = (
+        StepBriefHydrator(hydrator_model, strange_loop.config) if hydrator_model else None
+    )
+
     run_executor = Executor(
         strange_loop.core_agent,
         checkpointer=checkpointer,
@@ -504,6 +511,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         clarification_resume_answer_payload=resume_answer_payload,
         proposal_queue=ctx.proposal_queue,  # RFC-204 Group C
         context_engine=ctx.ce,  # RFC-624 Phase 4
+        step_brief_hydrator=step_brief_hydrator,
     )
     async for item in run_executor.execute(
         decision=decision,

@@ -34,6 +34,7 @@ from soothe_sdk.core.events import (
     LOOP_CLARIFICATION_REQUESTED,
     STRANGE_LOOP_COMPLETED,
     STRANGE_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_PLAN_PHASE,
     STRANGE_LOOP_STARTED,
     STRANGE_LOOP_STEP_COMPLETED,
     STRANGE_LOOP_STEP_QUEUED,
@@ -124,9 +125,12 @@ logger = logging.getLogger(__name__)
 # IG-504: LLM retry event type for step card status display
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
-# ---------------------------------------------------------------------------
-# Adapter core
-# ---------------------------------------------------------------------------
+# Thinking-row spinner labels (turn-level; step cards carry finer detail).
+SPINNER_LABEL_THINKING = "Thinking"
+SPINNER_LABEL_CLASSIFYING = "Classifying request"
+SPINNER_LABEL_EXECUTING = "Executing step"
+SPINNER_LABEL_RUNNING_TOOLS = "Running tools"
+SPINNER_LABEL_AWAITING_ANSWER = "Awaiting your answer"
 
 
 class TextualUIAdapter:
@@ -141,6 +145,8 @@ class TextualUIAdapter:
         mount_message: Callable[..., Awaitable[None]],
         update_status: Callable[[str], None],
         set_spinner: Callable[[SpinnerStatus], Awaitable[None]] | None = None,
+        pause_spinner: Callable[[str], Awaitable[None]] | None = None,
+        resume_spinner: Callable[[], Awaitable[None]] | None = None,
         set_active_message: Callable[[str | None], None] | None = None,
         sync_message_content: Callable[[str, str], None] | None = None,
     ) -> None:
@@ -153,6 +159,12 @@ class TextualUIAdapter:
 
         self._set_spinner = set_spinner
         """Callback to show/hide loading spinner."""
+
+        self._pause_spinner = pause_spinner
+        """Callback to pause the thinking-row spinner (clarification wait)."""
+
+        self._resume_spinner = resume_spinner
+        """Callback to resume the thinking-row spinner after clarification."""
 
         self._set_active_message = set_active_message
         """Callback to set the active streaming message ID (pass `None` to clear)."""
@@ -1664,6 +1676,41 @@ def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
     return bool(adapter._tool_to_step)
 
 
+def _format_retry_spinner_label(attempt: int, max_attempts: int) -> str:
+    """Build thinking-row label for planner/execute LLM retries without a step card."""
+    if attempt > 0 and max_attempts > 0:
+        return f"Retrying ({attempt}/{max_attempts})"
+    return "Retrying"
+
+
+async def _maybe_set_running_tools_spinner(
+    adapter: TextualUIAdapter,
+    *,
+    clarification_pending: bool | None = None,
+) -> None:
+    """Show tool-run feedback on the thinking row when tools are in flight."""
+    if clarification_pending is None:
+        clarification_pending = bool(getattr(adapter, "_clarification_pending", False))
+    if clarification_pending or not adapter._set_spinner:
+        return
+    if _adapter_has_pending_tools(adapter):
+        await adapter._set_spinner(SPINNER_LABEL_RUNNING_TOOLS)
+
+
+async def _maybe_set_thinking_spinner(
+    adapter: TextualUIAdapter,
+    *,
+    clarification_pending: bool | None = None,
+) -> None:
+    """Reset thinking row when idle, unless blocked on clarification."""
+    if clarification_pending is None:
+        clarification_pending = bool(getattr(adapter, "_clarification_pending", False))
+    if clarification_pending or not adapter._set_spinner:
+        return
+    if not _adapter_has_pending_tools(adapter):
+        await adapter._set_spinner(SPINNER_LABEL_THINKING)
+
+
 def _mark_step_tool_rows_running(adapter: TextualUIAdapter) -> None:
     """Mark step-aggregated tool rows running after graph interrupt resume."""
     for tcid, stw in list(adapter._tool_to_step.items()):
@@ -1783,8 +1830,7 @@ async def _finalize_goal_completion_stream(
     adapter._goal_completion_mounted_this_turn = True
     if adapter._set_active_message:
         adapter._set_active_message(None)
-    if adapter._set_spinner:
-        await adapter._set_spinner("Thinking")
+    await _maybe_set_thinking_spinner(adapter)
 
 
 async def _flush_inflight_goal_completion_streams(
@@ -2076,6 +2122,12 @@ def _log_turn_event_stats(
     if daemon_session is not None:
         ev_stats.merge(daemon_session.turn_event_stats)
     turn_stats.event_stats = ev_stats
+    if ev_stats.inbound_dropped > 0:
+        logger.warning(
+            "Stream degraded during turn: %d inbound frame(s) dropped "
+            "(response may be incomplete; try /resume or re-run)",
+            ev_stats.inbound_dropped,
+        )
     logger.info(
         "Turn event stats: %s (%.1fs wall)",
         ev_stats.summary_line(),
@@ -2231,7 +2283,7 @@ async def execute_task_textual(
 
     # Show spinner
     if adapter._set_spinner:
-        await adapter._set_spinner("Thinking")
+        await adapter._set_spinner(SPINNER_LABEL_THINKING)
 
     # Hide token display during streaming (will be shown with accurate count at end)
     if adapter._on_tokens_hide:
@@ -2396,7 +2448,9 @@ async def execute_task_textual(
                                     exc_info=True,
                                 )
                             if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
-                                await adapter._set_spinner("Thinking")
+                                await _maybe_set_thinking_spinner(
+                                    adapter, clarification_pending=clarification_pending
+                                )
 
                         if isinstance(message, HumanMessage):
                             content = message.text
@@ -2450,7 +2504,9 @@ async def execute_task_textual(
                             # completed (avoids premature "Thinking..." when
                             # parallel tool calls are active).
                             if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
-                                await adapter._set_spinner("Thinking")
+                                await _maybe_set_thinking_spinner(
+                                    adapter, clarification_pending=clarification_pending
+                                )
 
                             # Show file operation results - always show diffs in chat
                             if record:
@@ -2614,8 +2670,9 @@ async def execute_task_textual(
                             if existing_msg is not None:
                                 if adapter._set_active_message:
                                     adapter._set_active_message(None)
-                                if adapter._set_spinner:
-                                    await adapter._set_spinner("Thinking")
+                                await _maybe_set_thinking_spinner(
+                                    adapter, clarification_pending=clarification_pending
+                                )
                                 continue
 
                             if (
@@ -2629,8 +2686,9 @@ async def execute_task_textual(
                             ):
                                 if adapter._set_active_message:
                                     adapter._set_active_message(None)
-                                if adapter._set_spinner:
-                                    await adapter._set_spinner("Thinking")
+                                await _maybe_set_thinking_spinner(
+                                    adapter, clarification_pending=clarification_pending
+                                )
                                 continue
 
                             if pending_text:
@@ -2668,8 +2726,9 @@ async def execute_task_textual(
 
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
-                            if adapter._set_spinner:
-                                await adapter._set_spinner("Thinking")
+                            await _maybe_set_thinking_spinner(
+                                adapter, clarification_pending=clarification_pending
+                            )
                             continue
 
                         # Simple-bypass plan next_action (phase=plan_direct) is a single
@@ -2718,8 +2777,9 @@ async def execute_task_textual(
                             # existing entry as "already shown" and skips the final card.
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
-                            if adapter._set_spinner:
-                                await adapter._set_spinner("Thinking")
+                            await _maybe_set_thinking_spinner(
+                                adapter, clarification_pending=clarification_pending
+                            )
                             continue
 
                         for block in blocks:
@@ -3044,6 +3104,10 @@ async def execute_task_textual(
                                                     parsed_args,
                                                     raw_args=raw_args_stream,
                                                 )
+                                                await _maybe_set_running_tools_spinner(
+                                                    adapter,
+                                                    clarification_pending=clarification_pending,
+                                                )
                                         else:
                                             router.buffer_main_tool(
                                                 str(lookup_id),
@@ -3066,6 +3130,10 @@ async def execute_task_textual(
                                             tool_name=buffer_name,
                                             args=parsed_args,
                                             raw_args=raw_args_stream,
+                                        )
+                                        await _maybe_set_running_tools_spinner(
+                                            adapter,
+                                            clarification_pending=clarification_pending,
                                         )
 
                                 tool_call_buffers.pop(buffer_key, None)
@@ -3198,11 +3266,17 @@ async def execute_task_textual(
                                                     target_step_id
                                                 ] = input_widget
                                                 await adapter._mount_message(input_widget)
+                                        if adapter._pause_spinner:
+                                            await adapter._pause_spinner(
+                                                SPINNER_LABEL_AWAITING_ANSWER
+                                            )
                                 continue
 
                             if event_type == LOOP_CLARIFICATION_ANSWERED:
                                 clarification_pending = False
                                 adapter._clarification_pending = False
+                                if adapter._resume_spinner:
+                                    await adapter._resume_spinner()
                                 continue
 
                             if event_type == STRANGE_LOOP_PLAN_DECISION and not ns_key:
@@ -3270,6 +3344,8 @@ async def execute_task_textual(
                                     step_widget.set_running()
                                     adapter._step_by_namespace[ns_key] = step_widget
                                     router.on_step_started(step_id)
+                                    if adapter._set_spinner and not clarification_pending:
+                                        await adapter._set_spinner(SPINNER_LABEL_EXECUTING)
                                     logger.debug(
                                         "[STEP_STARTED] step_card step_id=%s ns=%r",
                                         step_id,
@@ -3411,6 +3487,18 @@ async def execute_task_textual(
                                             break
                                 if widget is not None:
                                     widget.set_retry_status(attempt, max_attempts, error_type)
+                                elif adapter._set_spinner and not clarification_pending:
+                                    await adapter._set_spinner(
+                                        _format_retry_spinner_label(attempt, max_attempts)
+                                    )
+                                continue
+
+                            if event_type == STRANGE_LOOP_PLAN_PHASE:
+                                label = str(data.get("label", "")).strip()
+                                if label and adapter._set_spinner:
+                                    await adapter._set_spinner(label)
+                                elif label:
+                                    adapter._update_status(label)
                                 continue
 
                             if event_type == LOOP_REASON_EVENT_TYPE:
@@ -3487,8 +3575,7 @@ async def execute_task_textual(
                     "Failed to mount summarization notification",
                     exc_info=True,
                 )
-            if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
-                await adapter._set_spinner("Thinking")
+            await _maybe_set_thinking_spinner(adapter, clarification_pending=clarification_pending)
 
         # Flush any remaining text from all namespaces (IG-426: parallelized)
         flush_tasks: list[Any] = []

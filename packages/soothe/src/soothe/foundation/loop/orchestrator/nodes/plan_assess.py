@@ -20,11 +20,24 @@ from soothe.foundation.loop.state.schemas import (
     StatusAssessment,
     StepAction,
 )
+from soothe.foundation.loop.utils.continue_keyword import is_continue_keyword
 
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_GOAL_DONE
 
 logger = logging.getLogger(__name__)
+
+_PLAN_ASSESS_STATUS_LABEL = "Assessing goal progress"
+_PLAN_CONTINUATION_STATUS_LABEL = "Assessing continuation context"
+
+
+async def _emit_plan_phase_status(
+    ctx: LoopRuntimeContext,
+    *,
+    label: str,
+) -> None:
+    """Update TUI spinner/status while plan assess or generate LLM calls run."""
+    await ctx.emit("plan_phase_status", {"label": label})
 
 
 # Ordered progress buckets shared by the digest hint and StatusAssessment.goal_progress.
@@ -66,41 +79,50 @@ _CONTINUE_THREAD_DESCRIPTIONS = [
 ]
 
 
-def _has_prior_completed_goal(ctx: LoopRuntimeContext) -> bool:
-    """Check CE DAG for at least one completed prior goal.
-
-    RFC-624 Phase 4: CE is authoritative for goal state; checkpoint GER is metadata-only.
-    CE is guaranteed active when graph nodes execute (created before graph invocation).
-
-    Args:
-        ctx: LoopRuntimeContext with CE reference.
-
-    Returns:
-        True if at least one goal in CE DAG has status="completed".
-    """
+def _has_prior_goal_for_continuation(ctx: LoopRuntimeContext) -> bool:
+    """Check CE DAG for prior goal work usable by continuation routing."""
     if ctx.ce is None:
         return False
-    return any(g.status == "completed" for g in ctx.ce.get_all_goals())
+    current_id = ctx.ce_goal_id
+    for goal in ctx.ce.get_all_goals():
+        if current_id and goal.id == current_id:
+            continue
+        completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
+        if completed_steps or goal.action_history:
+            return True
+        if goal.status in ("completed", "cancelled", "failed"):
+            return True
+    if ctx.checkpoint and len(ctx.checkpoint.goal_history) >= 2:
+        return True
+    return False
+
+
+def _has_prior_completed_goal(ctx: LoopRuntimeContext) -> bool:
+    """Check CE DAG for at least one completed prior goal (legacy alias)."""
+    return _has_prior_goal_for_continuation(ctx)
 
 
 def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
-    """Compact summary of completed prior goals for the continuation_assess prompt.
+    """Compact summary of prior goals for the continuation_assess prompt.
 
     RFC-624 Phase 4 Stage 2: Reads from CE GoalStepDAG instead of checkpoint.goal_history.
-    CE DAG contains completed goals with step data; checkpoint GER is metadata-only.
+    Includes cancelled/interrupted prior goals so ``continue`` keyword recovery works.
 
     Args:
         ctx: LoopRuntimeContext with CE reference.
 
     Returns:
-        List of dicts (one per completed prior goal) with keys:
+        List of dicts (one per prior goal) with keys:
         ``goal_id``, ``goal_text``, ``completion``, ``step_count``.
     """
     if ctx.ce is None:
         return []
     out: list[dict] = []
+    current_id = ctx.ce_goal_id
     for goal in ctx.ce.get_all_goals():
-        if goal.status != "completed":
+        if current_id and goal.id == current_id:
+            continue
+        if goal.status not in ("completed", "cancelled", "failed", "active"):
             continue
         completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
         out.append(
@@ -112,6 +134,26 @@ def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
             }
         )
     return out
+
+
+def _continuation_bootstrap_goal_text(ctx: LoopRuntimeContext, state: LoopState) -> str:
+    """Goal text embedded in continuation bootstrap when user sent a lone ``continue``."""
+    if not is_continue_keyword(state.goal):
+        return state.goal
+    if ctx.ce is not None:
+        current_id = ctx.ce_goal_id
+        for goal in ctx.ce.get_all_goals():
+            if current_id and goal.id == current_id:
+                continue
+            prior_text = (goal.description or "").strip()
+            if prior_text:
+                return prior_text
+    if ctx.checkpoint and len(ctx.checkpoint.goal_history) >= 2:
+        prior = ctx.checkpoint.goal_history[-2]
+        prior_text = (prior.goal_text or "").strip()
+        if prior_text:
+            return prior_text
+    return state.goal
 
 
 def build_continue_loop_bootstrap_plan(
@@ -181,26 +223,56 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     context = strange_loop._build_plan_context(state)
 
     # RFC-226: iter=0 continuation discriminator.
-    # Only fires when this loop already has at least one completed prior goal,
-    # state is a true first plan (no step results, recovery is clean), and
-    # the structural continue_loop_mode flag is set by StrangeLoop.
-    # RFC-624 Phase 4: Use CE DAG query instead of checkpoint.goal_history.
+    # Fires when prior goal context exists, state is a true first plan (no step
+    # results), and the structural continue_loop_mode flag is set by StrangeLoop.
     if (
         state.iteration == 0
         and ctx.continue_loop_mode
         and not state.step_results
-        and _has_prior_completed_goal(ctx)
+        and _has_prior_goal_for_continuation(ctx)
         and (
             not ctx.recovery_valid_resume
             or (
                 ctx.goal_record is not None
                 and ctx.goal_record.iteration == 0
+                and ctx.ce is not None
                 and len(ctx.ce.ledger.get_messages()) == 0
             )
         )
     ):
+        bootstrap_goal = _continuation_bootstrap_goal_text(ctx, state)
+        if is_continue_keyword(state.goal):
+            logger.info(
+                "[Plan] iter=0 continue keyword: bootstrap with prior goal context",
+            )
+            plan_result = build_continue_loop_bootstrap_plan(
+                bootstrap_goal,
+                terminal_after_execute=False,
+                reasoning="Continue keyword: resume prior loop work from ledger context.",
+                goal_progress="medium",
+            )
+            ctx.scratch.plan_result = plan_result
+            ctx.scratch.plan_assessment = None
+            await ctx.emit(
+                "plan",
+                {
+                    "iteration": state.iteration,
+                    "status": plan_result.status,
+                    "progress": plan_result.goal_progress,
+                    "next_action": plan_result.next_action,
+                    "assessment_reasoning": plan_result.assessment_reasoning,
+                    "plan_reasoning": plan_result.plan_reasoning,
+                    "plan_action": plan_result.plan_action,
+                },
+            )
+            return {"assess_route": "skip_generate"}
+
         prior_goals = _prior_goal_summaries(ctx)  # RFC-624 Phase 4 Stage 2: reads CE DAG
         if prior_goals:
+            await _emit_plan_phase_status(
+                ctx,
+                label=_PLAN_CONTINUATION_STATUS_LABEL,
+            )
             assessment = await strange_loop.loop_planner.assess_continuation(
                 current_goal=state.goal,
                 prior_goals=prior_goals,
@@ -214,7 +286,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                     reason_text[:120],
                 )
                 plan_result = build_continue_loop_bootstrap_plan(
-                    state.goal,
+                    bootstrap_goal,
                     terminal_after_execute=True,
                     reasoning=assessment.reasoning,
                     goal_progress=assessment.goal_progress,
@@ -258,6 +330,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
             return {"assess_route": "continue_generate"}
 
+    await _emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
     assessment = await strange_loop.plan_phase.assess_status(
         goal=state.goal,
         state=state,

@@ -18,8 +18,10 @@ from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 
 _ARG_PREVIEW_MAX_CHARS = 80
 _EDIT_STRING_PREVIEW_MAX_CHARS = 30
+_ERROR_STATUS_TAIL_MAX_CHARS = 48
 _EDIT_STRING_ARG_KEYS = frozenset({"old_string", "new_string"})
 _SKIP_ARG_KEYS = frozenset({"_raw", "_subgraph_tool", "value"})
+_GENERIC_ERROR_TAILS = frozenset({"", "error", "failed", "tool error"})
 
 
 def compact_arg_text(text: str) -> str:
@@ -113,16 +115,62 @@ def format_step_tool_activity_command(tool_name: str, args: dict[str, Any]) -> s
     return display
 
 
+def abbreviate_tool_error_message(
+    error: str, *, max_chars: int = _ERROR_STATUS_TAIL_MAX_CHARS
+) -> str:
+    """One-line error summary for a failed tool row (no gutter or phase icon)."""
+    text = str(error or "").strip()
+    if not text:
+        return ""
+
+    parsed: dict[str, Any] | None = None
+    if text.startswith("{") and text.endswith("}"):
+        try:
+            loaded = json.loads(text)
+        except (TypeError, ValueError):
+            loaded = None
+        if isinstance(loaded, dict):
+            parsed = loaded
+            for key in ("error", "message", "detail", "reason"):
+                val = loaded.get(key)
+                if isinstance(val, str) and val.strip():
+                    text = val.strip()
+                    break
+
+    first_line = _compact_arg_text(text.splitlines()[0].strip())
+    lowered = first_line.lower()
+    for prefix in (
+        "error executing tool:",
+        "tool execution error:",
+        "tool error:",
+        "error:",
+    ):
+        if lowered.startswith(prefix):
+            first_line = first_line[len(prefix) :].strip()
+            break
+
+    summary = preview_first(first_line, max_chars)
+    if summary.lower() in _GENERIC_ERROR_TAILS:
+        return ""
+    if parsed is not None and parsed.get("success") is False and not summary:
+        return ""
+    return summary
+
+
 def format_step_tool_activity_status_tail(
     phase: str,
     *,
     duration_ms: int = 0,
+    error: str = "",
 ) -> str:
     """Trailing status fragment (duration, failure); phase icon is rendered separately."""
     p = (phase or "pending").strip().lower()
     if p == "success" and duration_ms > 0:
         return f" ({format_duration_ms(duration_ms)})"
     if p == "error":
+        summary = abbreviate_tool_error_message(error)
+        if summary:
+            return f" · {summary}"
         return " · failed"
     if p == "rejected":
         return " · rejected"
@@ -139,8 +187,13 @@ def format_step_tool_activity_line(
     phase: str,
     *,
     duration_ms: int = 0,
+    error: str = "",
 ) -> str:
     """Full activity text without gutter or phase icon."""
     command = format_step_tool_activity_command(tool_name, args)
-    tail = format_step_tool_activity_status_tail(phase, duration_ms=duration_ms)
+    tail = format_step_tool_activity_status_tail(
+        phase,
+        duration_ms=duration_ms,
+        error=error,
+    )
     return f"{command}{tail}"

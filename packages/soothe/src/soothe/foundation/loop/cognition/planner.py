@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
+from soothe.config.models import LLMRateLimitConfig
 from soothe.foundation.loop.state.schemas import (
     FIRST_WAVE_MAX_STEPS,
     AgentDecision,
@@ -41,6 +42,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
+from soothe.utils.llm.invoke_policy import await_with_llm_call_policy
 from soothe.utils.llm.structured import invoke_structured_chat_typed
 from soothe.utils.network_errors import calculate_network_backoff, is_transient_network_error
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
@@ -190,6 +192,53 @@ class LLMPlanner:
             return None
         return merged
 
+    def _llm_rate_limit_config(self) -> LLMRateLimitConfig:
+        """Timeout/retry policy for direct planner LLM calls (bypasses middleware stack)."""
+        if self._config is not None:
+            return self._config.agent.loop.llm_rate_limit
+        return LLMRateLimitConfig()
+
+    async def _invoke_structured(
+        self,
+        model: Any,
+        messages: list[Any],
+        schema: type[Any],
+        *,
+        config: dict[str, Any] | None = None,
+        thread_id: str | None = None,
+    ) -> Any:
+        """Structured planner output with bounded timeout and retry."""
+
+        async def _call() -> Any:
+            return await invoke_structured_chat_typed(model, messages, schema, config=config)
+
+        return await await_with_llm_call_policy(
+            _call,
+            config=self._llm_rate_limit_config(),
+            thread_id=thread_id,
+        )
+
+    async def _ainvoke_bounded(
+        self,
+        model: Any,
+        input: str | list[Any],
+        *,
+        config: dict[str, Any] | None = None,
+        thread_id: str | None = None,
+    ) -> Any:
+        """Raw ``ainvoke`` with bounded timeout and retry."""
+
+        async def _call() -> Any:
+            if config is not None:
+                return await model.ainvoke(input, config=config)
+            return await model.ainvoke(input)
+
+        return await await_with_llm_call_policy(
+            _call,
+            config=self._llm_rate_limit_config(),
+            thread_id=thread_id,
+        )
+
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via LLM structured output."""
         # Direct LLM call - no template fallback
@@ -219,8 +268,8 @@ class LLMPlanner:
 
         try:
             lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="revise-plan")
-            revised = await _invoke_plan_structured_output(
-                self._model, messages, Plan, config=lf_cfg
+            revised = await self._invoke_structured(
+                self._model, messages, Plan, config=lf_cfg, thread_id=thread_id
             )
             revised.status = "revised"
             return self._normalize_hints(revised)
@@ -363,7 +412,7 @@ class LLMPlanner:
             The LLM's response as a string.
         """
         try:
-            response = await self._model.ainvoke(messages)
+            response = await self._ainvoke_bounded(self._model, messages, thread_id=None)
             content = getattr(response, "content", str(response))
 
             if isinstance(content, str):
@@ -397,7 +446,7 @@ class LLMPlanner:
         """
         try:
             human_msg = LoopHumanMessage(content=prompt)  # No thread context
-            response = await self._model.ainvoke([human_msg])
+            response = await self._ainvoke_bounded(self._model, [human_msg], thread_id=None)
             content = getattr(response, "content", str(response))
             return _extract_text_content(content)
         except Exception as e:
@@ -413,7 +462,13 @@ class LLMPlanner:
             lf_cfg = self._planner_langfuse_run_config(
                 thread_id=context.thread_id, phase="create-plan-structured"
             )
-            plan = await _invoke_plan_structured_output(self._model, messages, Plan, config=lf_cfg)
+            plan = await self._invoke_structured(
+                self._model,
+                messages,
+                Plan,
+                config=lf_cfg,
+                thread_id=context.thread_id,
+            )
             return self._normalize_hints(plan)
         except Exception as e:
             logger.warning("Structured output failed, trying manual parse: %s", e)
@@ -428,9 +483,11 @@ class LLMPlanner:
                 thread_id=thread_id, phase="create-plan-fallback"
             )
             if lf_cfg is not None:
-                response = await self._model.ainvoke(prompt, config=lf_cfg)
+                response = await self._ainvoke_bounded(
+                    self._model, prompt, config=lf_cfg, thread_id=thread_id
+                )
             else:
-                response = await self._model.ainvoke(prompt)
+                response = await self._ainvoke_bounded(self._model, prompt, thread_id=thread_id)
             content = getattr(response, "content", str(response))
             return self._parse_json_from_response(_extract_text_content(content), goal)
         except Exception as e:
@@ -536,6 +593,7 @@ class LLMPlanner:
             "- Each step must be independently executable",
             "- description: Brief summary for TUI display (under 20 words)",
             "- full_description: Detailed execution context (50-150 words) including key file paths, identifiers, parameters, and context needed to execute without referencing the original goal",
+            "- When dependencies is set: full_description is REQUIRED and must instruct using predecessor output without repeating predecessor discovery",
             "- execution_hint: 'tool' (direct tool), 'subagent' (delegate), 'auto' (LLM reasoning)",
             "- When execution_hint='subagent', set subagent to a capability name (usually 'explore' for readonly repo search)",
             "- If user requests specific subagent, set execution_hint='subagent' and subagent accordingly",
@@ -697,8 +755,12 @@ class LLMPlanner:
 
         while network_attempts < _NETWORK_RETRY_MAX_ATTEMPTS:
             try:
-                assessment = await _invoke_plan_structured_output(
-                    model, messages, StatusAssessment, config=lf_cfg
+                assessment = await self._invoke_structured(
+                    model,
+                    messages,
+                    StatusAssessment,
+                    config=lf_cfg,
+                    thread_id=thread_id,
                 )
 
                 if assessment is None:
@@ -747,7 +809,7 @@ class LLMPlanner:
 
         # Fallback: try raw message parsing
         try:
-            raw = await model.ainvoke(messages, config=lf_cfg)
+            raw = await self._ainvoke_bounded(model, messages, config=lf_cfg, thread_id=thread_id)
             # Debug: log raw response content structure
             content_preview = ""
             if hasattr(raw, "content"):
@@ -833,7 +895,7 @@ class LLMPlanner:
         """
         from langchain_core.messages import HumanMessage
 
-        from soothe.foundation.loop.planning.continuation_prompts import (
+        from soothe.foundation.loop.cognition.continuation_prompts import (
             format_loop_continuation_assess_prompt,
         )
         from soothe.foundation.loop.state.schemas import ContinuationAssessment
@@ -849,8 +911,12 @@ class LLMPlanner:
             lf_cfg = self._planner_langfuse_run_config(
                 thread_id=thread_id, phase="continuation-assess"
             )
-            result = await _invoke_plan_structured_output(
-                model, messages, ContinuationAssessment, config=lf_cfg
+            result = await self._invoke_structured(
+                model,
+                messages,
+                ContinuationAssessment,
+                config=lf_cfg,
+                thread_id=thread_id,
             )
         except asyncio.CancelledError:
             raise
@@ -957,8 +1023,12 @@ class LLMPlanner:
                 lf_cfg = self._planner_langfuse_run_config(
                     thread_id=thread_id, phase="plan-generate"
                 )
-                plan_result = await _invoke_plan_structured_output(
-                    model, plan_messages, plan_schema, config=lf_cfg
+                plan_result = await self._invoke_structured(
+                    model,
+                    plan_messages,
+                    plan_schema,
+                    config=lf_cfg,
+                    thread_id=thread_id,
                 )
 
                 if plan_result is None:
@@ -1024,8 +1094,12 @@ class LLMPlanner:
                             lf_cfg_retry = self._planner_langfuse_run_config(
                                 thread_id=thread_id, phase="plan-generate-retry"
                             )
-                            plan_result = await _invoke_plan_structured_output(
-                                model, plan_messages, plan_schema, config=lf_cfg_retry
+                            plan_result = await self._invoke_structured(
+                                model,
+                                plan_messages,
+                                plan_schema,
+                                config=lf_cfg_retry,
+                                thread_id=thread_id,
                             )
                             if plan_result is not None:
                                 logger.debug(
@@ -1239,7 +1313,7 @@ class LLMPlanner:
                 break
 
         if human_msg is not None and ai_response is not None:
-            from soothe.foundation.loop.planning.ledger_compaction import (
+            from soothe.foundation.loop.cognition.ledger_compaction import (
                 compact_planning_human_content,
             )
             from soothe.foundation.loop.utils.messages import LoopAIMessage, _record_ledger_message
@@ -1402,7 +1476,7 @@ class LLMPlanner:
                 break
 
         if human_msg is not None and ai_response is not None:
-            from soothe.foundation.loop.planning.ledger_compaction import (
+            from soothe.foundation.loop.cognition.ledger_compaction import (
                 compact_planning_human_content,
             )
             from soothe.foundation.loop.utils.messages import LoopAIMessage, _record_ledger_message
@@ -1694,11 +1768,18 @@ class LLMPlanner:
                                 thread_id=state.thread_id, phase="plan-json-retry"
                             )
                             if lf_retry is not None:
-                                response = await self._model.ainvoke(
-                                    messages_for_retry, config=lf_retry
+                                response = await self._ainvoke_bounded(
+                                    self._model,
+                                    messages_for_retry,
+                                    config=lf_retry,
+                                    thread_id=state.thread_id,
                                 )
                             else:
-                                response = await self._model.ainvoke(messages_for_retry)
+                                response = await self._ainvoke_bounded(
+                                    self._model,
+                                    messages_for_retry,
+                                    thread_id=state.thread_id,
+                                )
                             raw_content = _extract_text_content(response.content)
 
                             logger.debug(

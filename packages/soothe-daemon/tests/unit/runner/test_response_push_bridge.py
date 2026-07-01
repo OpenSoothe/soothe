@@ -118,3 +118,12 @@ async def test_response_pusher_done_waits_when_queue_full() -> None:
     msg_type, payload = await asyncio.wait_for(out.get(), timeout=1.0)
     assert msg_type == "done"
     assert payload is None
+
+
+def test_pending_slots_are_isolated_per_worker() -> None:
+    from soothe_daemon.runner.response_bridge import _pending_slots_for
+
+    worker_a = _pending_slots_for("thread-worker-0")
+    worker_b = _pending_slots_for("thread-worker-1")
+    assert worker_a is not worker_b
+    assert worker_a is _pending_slots_for("thread-worker-0")

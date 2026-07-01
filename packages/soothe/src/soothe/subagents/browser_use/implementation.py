@@ -111,9 +111,20 @@ Examples:
         except ImportError:
             pass
 
-        response = await model.ainvoke(
-            messages,
-            config={"metadata": metadata},
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
+
+        async def _invoke() -> Any:
+            return await model.ainvoke(
+                messages,
+                config={"metadata": metadata},
+            )
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(config),
         )
         content = response.content.strip()
         result: bool = content.lower() == "yes"

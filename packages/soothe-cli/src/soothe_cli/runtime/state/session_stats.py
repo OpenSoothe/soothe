@@ -139,6 +139,7 @@ class TurnEventStats:
     text_chunks: int = 0
     heartbeats_dropped: int = 0
     post_idle_drained: int = 0
+    inbound_dropped: int = 0
 
     def record(
         self,
@@ -187,6 +188,7 @@ class TurnEventStats:
         self.heartbeats_dropped += other.heartbeats_dropped
         self.post_idle_drained += other.post_idle_drained
         self.filtered_early += other.filtered_early
+        self.inbound_dropped += other.inbound_dropped
 
     def summary_line(self) -> str:
         """Return a one-line summary suitable for structured logging.
@@ -220,6 +222,8 @@ class TurnEventStats:
             detail_parts.append(f"{self.heartbeats_dropped} hb-drop")
         if self.post_idle_drained:
             detail_parts.append(f"{self.post_idle_drained} post-idle")
+        if self.inbound_dropped:
+            detail_parts.append(f"{self.inbound_dropped} inbound-drop")
         if detail_parts:
             parts.append("; ".join(detail_parts))
 

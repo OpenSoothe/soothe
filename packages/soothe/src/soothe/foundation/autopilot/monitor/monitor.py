@@ -15,8 +15,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.autopilot.monitor.backoff_reasoner import GoalBackoffReasoner
+from soothe.foundation.autopilot.monitor.goal_dag_verifier import GoalDAGVerifier
 from soothe.foundation.autopilot.monitor.models import (
-    DagHealthReport,
     DreamingContext,
     DreamingMode,
     DreamingScope,
@@ -62,6 +62,7 @@ class AutopilotMonitor:
         self._bus = bus
         self._config = config
         self._backoff_reasoner = GoalBackoffReasoner(config)
+        self._verifier = GoalDAGVerifier(ce, config)
         self._shutdown_event = asyncio.Event()
 
         # Subscribe to events
@@ -140,29 +141,8 @@ class AutopilotMonitor:
         )
 
     async def _analyze_placement(self, description: str) -> GoalPlacement:
-        """LLM-driven placement analysis for new goal.
-
-        Args:
-            description: Goal description to analyze
-
-        Returns:
-            GoalPlacement with priority, dependencies, merge suggestion
-        """
-        # Gather current DAG state
-        active = self._ce.get_goals_by_status("active")
-        pending = self._ce.get_goals_by_status("pending")
-
-        # Simple heuristic for now (LLM integration in full impl)
-        load = len(active) + len(pending)
-        if load > 5:
-            adjusted_priority = max(20, 50 - load * 2)
-        else:
-            adjusted_priority = 50
-
-        return GoalPlacement(
-            adjusted_priority=adjusted_priority,
-            reasoning=f"Adjusted based on current DAG load ({load} goals)",
-        )
+        """LLM-driven placement analysis for new goal."""
+        return await self._verifier.analyze_placement(description)
 
     # ── Event Handlers ────────────────────────────────────────────────────────
 
@@ -220,8 +200,14 @@ class AutopilotMonitor:
         while not self._shutdown_event.is_set():
             await asyncio.sleep(interval)
             try:
-                report = await self._verify_dag_health()
-                if report.suggest_remove or report.suggest_merge:
+                report = await self._verifier.verify_dag_health()
+                await self._verifier.apply_health_report(report)
+                if (
+                    report.suggest_remove
+                    or report.suggest_merge
+                    or report.suggest_decompose
+                    or report.suggest_reset
+                ):
                     logger.info("DAG health report: %s", report.reasoning)
             except Exception:
                 logger.exception("DAG verification failed")
@@ -237,34 +223,16 @@ class AutopilotMonitor:
             except Exception:
                 logger.exception("Dreaming timer failed")
 
-    # ── Verification ────────────────────────────────────────────────────────────────
-
-    async def _verify_dag_health(self) -> DagHealthReport:
-        """LLM-driven periodic background verification.
-
-        Checks for stale goals, merge opportunities, decomposition needs.
-        """
-        # TODO: LLM integration
-        pending = self._ce.get_goals_by_status("pending")
-
-        report = DagHealthReport()
-
-        # Heuristic: check for stuck goals
-        for goal in pending:
-            # Goals pending for > 1 hour
-            age_seconds = asyncio.get_event_loop().time() - goal.created_at.timestamp()
-            if age_seconds > 3600:
-                report.suggest_reset.append(goal.id)
-
-        return report
-
     async def _verify_post_completion(self, goal_id: str) -> None:
-        """LLM-driven analysis after goal completion.
-
-        Checks for decomposition opportunities, redundancy, follow-up goals.
-        """
-        # TODO: LLM integration
-        logger.debug("Post-completion verification for goal %s", goal_id)
+        """LLM-driven analysis after goal completion."""
+        result = await self._verifier.verify_dag_post_completion(goal_id)
+        await self._verifier.apply_post_completion(result)
+        if result.get("new_goals") or result.get("decomposition"):
+            logger.info(
+                "Post-completion verification for %s: %s",
+                goal_id,
+                result.get("reasoning", ""),
+            )
 
     # ── Dreaming ────────────────────────────────────────────────────────────────
 

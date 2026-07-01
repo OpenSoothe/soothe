@@ -5,6 +5,7 @@ from __future__ import annotations
 from soothe_sdk.client.protocol import preview_first
 
 from soothe_cli.tui.tool_display import (
+    abbreviate_tool_error_message,
     format_step_tool_activity_command,
     format_step_tool_activity_line,
     format_step_tool_activity_status_tail,
@@ -62,6 +63,34 @@ def test_format_command_parses_json_string_value_payload() -> None:
 
 def test_format_status_tail_success_duration() -> None:
     assert format_step_tool_activity_status_tail("success", duration_ms=3200) == " (3.2s)"
+
+
+def test_format_status_tail_error_with_message() -> None:
+    tail = format_step_tool_activity_status_tail(
+        "error",
+        error="Tavily API key is missing or invalid",
+    )
+    assert tail == " · Tavily API key is missing or invalid"
+
+
+def test_format_status_tail_error_generic_falls_back_to_failed() -> None:
+    assert format_step_tool_activity_status_tail("error", error="failed") == " · failed"
+    assert format_step_tool_activity_status_tail("error", error="") == " · failed"
+
+
+def test_abbreviate_tool_error_message_json_envelope() -> None:
+    msg = abbreviate_tool_error_message('{"success": false, "error": "HTTP 429 Too Many Requests"}')
+    assert msg == "HTTP 429 Too Many Requests"
+
+
+def test_abbreviate_tool_error_message_strips_error_prefix() -> None:
+    msg = abbreviate_tool_error_message("Error: connection refused by peer")
+    assert msg == "connection refused by peer"
+
+
+def test_abbreviate_tool_error_message_multiline_first_line() -> None:
+    msg = abbreviate_tool_error_message("Rate limit exceeded\nRetry after 60s")
+    assert msg == "Rate limit exceeded"
 
 
 def test_format_activity_line_combines_command_and_tail() -> None:

@@ -15,6 +15,7 @@ from soothe.middleware.llm_rate_limit import (
     _extract_retry_after_seconds,
     _is_api_rate_limit_error,
 )
+from soothe.utils.llm.structured import StructuredOutputError
 
 
 @pytest.fixture
@@ -145,16 +146,17 @@ async def test_timeout_after_retries_exhausted(
         return await coro
 
     with patch("asyncio.wait_for", side_effect=mock_wait_for):
-        with pytest.raises(EnhancedTimeoutError) as exc_info:
-            await middleware_with_retry.awrap_model_call(mock_request, always_timeout_handler)
+        with patch("asyncio.sleep"):
+            with pytest.raises(EnhancedTimeoutError) as exc_info:
+                await middleware_with_retry.awrap_model_call(mock_request, always_timeout_handler)
 
-        # Should have attempted 3 times (1 initial + 2 retries)
-        assert call_count == 3
+            # Should have attempted 3 times (1 initial + 2 retries)
+            assert call_count == 3
 
-        # EnhancedTimeoutError should have metadata
-        exc = exc_info.value
-        assert exc.retries == 2
-        assert exc.timeout_seconds >= 60  # Escalated timeout
+            # EnhancedTimeoutError should have metadata
+            exc = exc_info.value
+            assert exc.retries == 2
+            assert exc.timeout_seconds >= 60  # Escalated timeout
 
 
 @pytest.mark.asyncio
@@ -200,14 +202,15 @@ async def test_timeout_escalation_on_retry(
         return await coro
 
     with patch("asyncio.wait_for", side_effect=mock_wait_for):
-        with pytest.raises(EnhancedTimeoutError):
-            await middleware_with_retry.awrap_model_call(mock_request, track_timeout_handler)
+        with patch("asyncio.sleep"):
+            with pytest.raises(EnhancedTimeoutError):
+                await middleware_with_retry.awrap_model_call(mock_request, track_timeout_handler)
 
-        # Should have escalating timeouts: 60 -> 120 -> 240 (multiplier 2x)
-        assert len(timeouts_used) == 3
-        assert timeouts_used[0] == 60  # Base timeout
-        assert timeouts_used[1] == 120  # 60 * 2 = 120
-        assert timeouts_used[2] == 240  # 120 * 2 = 240
+            # Should have escalating timeouts: 60 -> 120 -> 240 (multiplier 2x)
+            assert len(timeouts_used) == 3
+            assert timeouts_used[0] == 60  # Base timeout
+            assert timeouts_used[1] == 120  # 60 * 2 = 120
+            assert timeouts_used[2] == 240  # 120 * 2 = 240
 
 
 @pytest.mark.asyncio
@@ -424,11 +427,12 @@ async def test_global_mode_retry(
         return await coro
 
     with patch("asyncio.wait_for", side_effect=mock_wait_for):
-        with pytest.raises(EnhancedTimeoutError):
-            await middleware_global.awrap_model_call(mock_request, timeout_handler)
+        with patch("asyncio.sleep"):
+            with pytest.raises(EnhancedTimeoutError):
+                await middleware_global.awrap_model_call(mock_request, timeout_handler)
 
-        # Should retry in global mode too
-        assert call_count == 3  # 1 initial + 2 retries
+            # Should retry in global mode too
+            assert call_count == 3  # 1 initial + 2 retries
 
 
 @pytest.mark.asyncio
@@ -562,6 +566,14 @@ def middleware_no_429_retry() -> LLMRateLimitMiddleware:
         # IG-499: Disable 429 retry
         retry_on_rate_limit=False,
     )
+
+
+def test_is_api_rate_limit_error_wrapped_structured_output() -> None:
+    """StructuredOutputError wrapping RateLimitError must still be detected."""
+    root = MockRateLimitError()
+    wrapped = StructuredOutputError(f"structured model invoke failed: {root}")
+    wrapped.__cause__ = root
+    assert _is_api_rate_limit_error(wrapped) is True
 
 
 def test_is_api_rate_limit_error_by_class_name() -> None:

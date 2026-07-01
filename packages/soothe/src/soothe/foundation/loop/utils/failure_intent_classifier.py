@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 from pydantic import BaseModel, Field
 
 from soothe.config.models import FailureIntentConfig
+from soothe.utils.llm.invoke_policy import (
+    await_with_llm_call_policy,
+    llm_rate_limit_config_from,
+)
 from soothe.utils.llm.structured import invoke_structured_chat_typed
 
 if TYPE_CHECKING:
@@ -166,11 +170,18 @@ async def classify_failure_intent_async(
             phase="reflect",
             run_name="soothe:failure-intent",
         )
-        return await invoke_structured_chat_typed(
-            model,
-            [HumanMessage(content=prompt)],
-            FailureIntent,
-            config=invoke_config,
+
+        async def _invoke() -> FailureIntent:
+            return await invoke_structured_chat_typed(
+                model,
+                [HumanMessage(content=prompt)],
+                FailureIntent,
+                config=invoke_config,
+            )
+
+        return await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(soothe_config),
         )
     except Exception:
         logger.debug("LLM failure intent classification failed", exc_info=True)

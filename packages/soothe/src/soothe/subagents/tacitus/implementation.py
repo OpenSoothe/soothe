@@ -100,6 +100,7 @@ def create_tacitus_subagent(
         sources,
         tacitus_config,
         synthesis_model=synthesis_model,
+        soothe_config=config,
         _domain=domain,
     )
 

@@ -8,9 +8,9 @@
 #    - CLI must NOT import daemon runtime (soothe_daemon)
 #    - SDK must be independent (no CLI/daemon imports)
 #    - soothe (in-proc core) must NOT depend on soothe-daemon (one-way dep)
-# 3. Code formatting check (make format)
-# 4. Linting (make lint) - checks ALL packages
-# 5. Unit tests (all packages)
+# 3. Code formatting check (ruff format, parallel per package)
+# 4. Linting (ruff check, parallel per package)
+# 5. Unit tests (all packages, parallel execution)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -56,6 +56,13 @@ FAILED_CHECKS=()
 FAILED_LOGS=()
 FAILED_TEST_ENTRIES=()
 SLOW_TEST_ENTRIES=()
+
+# Set true after setup_workspace() syncs; skips redundant dry-run in dependency checks.
+WORKSPACE_SYNCED=false
+
+# Workspace venv binaries (avoid per-package `uv run` startup overhead).
+VENV_PYTHON="${WORKSPACE_ROOT}/.venv/bin/python"
+VENV_RUFF="${WORKSPACE_ROOT}/.venv/bin/ruff"
 
 # Report tests taking longer than this (seconds), or with no pytest output (hang).
 SLOW_TEST_THRESHOLD_SEC=60
@@ -174,38 +181,6 @@ _format_duration() {
     else
         printf '%ss' "$sec"
     fi
-}
-
-# Background: alert when pytest produces no output for SLOW_TEST_THRESHOLD_SEC.
-_hang_watcher() {
-    local activity_file="$1"
-    local context_file="$2"
-    local pkg="$3"
-    local slow_file="$4"
-    local last_alert_ts=""
-
-    while [ -f "${activity_file}.running" ]; do
-        sleep 10
-        [ ! -f "$activity_file" ] && continue
-
-        local last_ts now elapsed ctx
-        last_ts=$(cat "$activity_file")
-        now=$(_now_seconds)
-        elapsed=$((now - last_ts))
-        ctx=$(cat "$context_file" 2>/dev/null || echo "unknown")
-
-        if [ "$elapsed" -lt "$SLOW_TEST_THRESHOLD_SEC" ]; then
-            continue
-        fi
-        if [ "$last_alert_ts" = "$last_ts" ]; then
-            continue
-        fi
-
-        last_alert_ts="$last_ts"
-        local ctx_short="${ctx#tests/unit/}"
-        echo -e "  ${YELLOW}⏱${NC} no output for $(_format_duration "$elapsed") — possible hang after: ${ctx_short}" >&2
-        printf '%s|%s|%s|hang\n' "$pkg" "$ctx" "$elapsed" >>"$slow_file"
-    done
 }
 
 # Stream pytest output: print fail/error/skip/slow immediately.
@@ -376,7 +351,9 @@ validate_package_dependencies() {
     print_ok "daemon ↛ soothe-cli (runtime)"
 
     # Rule 5: Workspace integrity - all packages must be in sync
-    if ! command -v uv >/dev/null 2>&1; then
+    if $WORKSPACE_SYNCED; then
+        print_ok "workspace in sync"
+    elif ! command -v uv >/dev/null 2>&1; then
         print_warn "uv not found, skipping workspace sync check"
     else
         local sync_output
@@ -429,6 +406,7 @@ setup_workspace() {
         exit 1
     fi
     print_ok "critical deps (psycopg_pool, jsonschema, langfuse)"
+    WORKSPACE_SYNCED=true
 }
 
 ensure_deps_installed() {
@@ -448,6 +426,87 @@ ensure_deps_installed() {
 # CODE FORMATTING
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Run ruff format --check for one package. Args: pkg exit_file details_file
+_format_check_pkg() {
+    local pkg="$1"
+    local exit_file="$2"
+    local details_file="$3"
+    local paths="src/"
+    if [ -d "$WORKSPACE_ROOT/packages/$pkg/tests/" ]; then
+        paths="src/ tests/"
+    fi
+    local output
+    local exit_code=0
+    output=$(cd "$WORKSPACE_ROOT/packages/$pkg" && "$VENV_RUFF" format --check $paths 2>&1) || exit_code=$?
+    echo "$exit_code" >"$exit_file"
+    if [ "$exit_code" -ne 0 ]; then
+        printf '\n[%s]\n%s\n' "$pkg" "$output" >"${details_file}.${pkg}"
+    fi
+}
+
+# Run ruff check for one package. Args: pkg exit_file details_file
+_lint_check_pkg() {
+    local pkg="$1"
+    local exit_file="$2"
+    local details_file="$3"
+    local paths="src/"
+    if [ -d "$WORKSPACE_ROOT/packages/$pkg/tests/" ]; then
+        paths="src/ tests/"
+    fi
+    local output
+    local exit_code=0
+    output=$(cd "$WORKSPACE_ROOT/packages/$pkg" && "$VENV_RUFF" check $paths 2>&1) || exit_code=$?
+    echo "$exit_code" >"$exit_file"
+    if [ "$exit_code" -ne 0 ]; then
+        printf '\n[%s]\n%s\n' "$pkg" "$output" >"${details_file}.${pkg}"
+    fi
+}
+
+_collect_durations_from_log() {
+    local pkg="$1"
+    local log_file="$2"
+    local line sec_int test_id
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([0-9.]+)s[[:space:]]+(call|setup|teardown)[[:space:]]+(.+)$ ]]; then
+            sec_int=${BASH_REMATCH[1]%%.*}
+            test_id="${BASH_REMATCH[3]}"
+            if [ "$sec_int" -ge "$SLOW_TEST_THRESHOLD_SEC" ]; then
+                SLOW_TEST_ENTRIES+=("${pkg}|${test_id}|${sec_int}|slow")
+            fi
+        fi
+    done < <(grep -E "^[0-9.]+s (call|setup|teardown)" "$log_file" 2>/dev/null || true)
+}
+
+# Run pytest for one package. Args: pkg result_dir
+_run_pkg_tests() {
+    local pkg="$1"
+    local result_dir="$2"
+    cd "$WORKSPACE_ROOT/packages/$pkg"
+    local exit_code=0
+    # Use pytest-xdist for packages with mostly sync tests (sdk, cli).
+    # soothe and soothe-daemon have many async fixtures that don't work well with xdist.
+    # Falls back to sequential if xdist not installed.
+    local xdist_opts=""
+    if "$VENV_PYTHON" -c "import xdist" 2>/dev/null; then
+        case "$pkg" in
+            soothe-sdk|soothe-cli)
+                xdist_opts="-n4 --dist=loadgroup"
+                ;;
+            *)
+                # soothe and soothe-daemon: async fixtures incompatible with xdist workers
+                xdist_opts=""
+                ;;
+        esac
+    fi
+    "$VENV_PYTHON" -m pytest tests/unit/ \
+        $xdist_opts \
+        -v --tb=line --no-header --disable-warnings --durations=15 \
+        >"$result_dir/${pkg}.log" 2>&1 || exit_code=$?
+    echo "$exit_code" >"$result_dir/${pkg}.exit"
+    cd "$WORKSPACE_ROOT"
+}
+
 check_formatting() {
     print_section "format"
 
@@ -465,25 +524,36 @@ check_formatting() {
 
     local format_failed=false
     local format_details=""
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    local pids=()
 
     for pkg in "${ALL_PACKAGES[@]}"; do
-        cd "$WORKSPACE_ROOT/packages/$pkg"
-        local paths="src/"
-        if [ -d "tests/" ]; then
-            paths="src/ tests/"
-        fi
-        local output
+        _format_check_pkg "$pkg" "$tmpdir/${pkg}.exit" "$tmpdir/details" &
+        pids+=($!)
+    done
+
+    for pid in "${pids[@]}"; do
+        wait "$pid" || true
+    done
+
+    for pkg in "${ALL_PACKAGES[@]}"; do
         local exit_code
-        output=$(uv run ruff format --check $paths 2>&1) && exit_code=0 || exit_code=$?
-        cd "$WORKSPACE_ROOT"
-        if [ $exit_code -eq 0 ]; then
+        exit_code=$(cat "$tmpdir/${pkg}.exit")
+        if [ "$exit_code" -eq 0 ]; then
             print_ok "$pkg"
         else
             print_fail "$pkg"
             format_failed=true
-            format_details+="\n[$pkg]\n${output}\n"
         fi
     done
+
+    for pkg in "${ALL_PACKAGES[@]}"; do
+        if [ -f "$tmpdir/details.${pkg}" ]; then
+            format_details+=$(cat "$tmpdir/details.${pkg}")
+        fi
+    done
+    rm -rf "$tmpdir"
 
     if $format_failed; then
         record_failure_log "Formatting" "$format_details"
@@ -515,25 +585,36 @@ check_linting() {
 
     local lint_failed=false
     local lint_details=""
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    local pids=()
 
     for pkg in "${ALL_PACKAGES[@]}"; do
-        cd "$WORKSPACE_ROOT/packages/$pkg"
-        local paths="src/"
-        if [ -d "tests/" ]; then
-            paths="src/ tests/"
-        fi
-        local output
+        _lint_check_pkg "$pkg" "$tmpdir/${pkg}.exit" "$tmpdir/details" &
+        pids+=($!)
+    done
+
+    for pid in "${pids[@]}"; do
+        wait "$pid" || true
+    done
+
+    for pkg in "${ALL_PACKAGES[@]}"; do
         local exit_code
-        output=$(uv run ruff check $paths 2>&1) && exit_code=0 || exit_code=$?
-        cd "$WORKSPACE_ROOT"
-        if [ $exit_code -eq 0 ]; then
+        exit_code=$(cat "$tmpdir/${pkg}.exit")
+        if [ "$exit_code" -eq 0 ]; then
             print_ok "$pkg"
         else
             print_fail "$pkg"
             lint_failed=true
-            lint_details+="\n[$pkg]\n${output}\n"
         fi
     done
+
+    for pkg in "${ALL_PACKAGES[@]}"; do
+        if [ -f "$tmpdir/details.${pkg}" ]; then
+            lint_details+=$(cat "$tmpdir/details.${pkg}")
+        fi
+    done
+    rm -rf "$tmpdir"
 
     if $lint_failed; then
         record_failure_log "Linting" "$lint_details"
@@ -560,7 +641,7 @@ check_asyncapi_drift() {
 
     local output
     local exit_code
-    output=$(uv run python scripts/check_asyncapi_drift.py --strict 2>&1) && exit_code=0 || exit_code=$?
+    output=$("$VENV_PYTHON" scripts/check_asyncapi_drift.py --strict 2>&1) && exit_code=0 || exit_code=$?
     if [ $exit_code -eq 0 ]; then
         print_ok "spec ↔ pydantic in sync"
     else
@@ -594,39 +675,40 @@ run_tests() {
 
     local tests_failed=false
     local test_details=""
+    local result_dir
+    result_dir=$(mktemp -d)
+    local test_pids=()
+    local test_pkgs=()
 
     for pkg in "${ALL_PACKAGES[@]}"; do
         if [ ! -d "$WORKSPACE_ROOT/packages/$pkg/tests/unit" ]; then
             continue
         fi
+        test_pkgs+=("$pkg")
+        _run_pkg_tests "$pkg" "$result_dir" &
+        test_pids+=($!)
+    done
+
+    for pid in "${test_pids[@]}"; do
+        wait "$pid" || true
+    done
+
+    for pkg in "${test_pkgs[@]}"; do
+        local log_file="$result_dir/${pkg}.log"
+        local exit_code
+        exit_code=$(cat "$result_dir/${pkg}.exit")
 
         echo -e "  ${CYAN}${pkg}${NC}"
-        cd "$WORKSPACE_ROOT/packages/$pkg"
 
-        local failures_file output_file slow_file activity_file context_file
+        local failures_file slow_file activity_file context_file
         failures_file=$(mktemp)
-        output_file=$(mktemp)
         slow_file=$(mktemp)
         activity_file=$(mktemp)
         context_file=$(mktemp)
-        touch "${activity_file}.running"
-        local exit_code=0
-        local watcher_pid=""
 
-        _hang_watcher "$activity_file" "$context_file" "$pkg" "$slow_file" &
-        watcher_pid=$!
-
-        set +e
-        uv run python -m pytest tests/unit/ \
-            -v --tb=line --no-header --disable-warnings \
-            2>&1 | tee "$output_file" | _parse_pytest_lines "$pkg" "$failures_file" "$slow_file" "$activity_file" "$context_file"
-        exit_code=${PIPESTATUS[0]}
-        set -e
-
-        rm -f "${activity_file}.running"
-        wait "$watcher_pid" 2>/dev/null || true
-
-        cd "$WORKSPACE_ROOT"
+        _parse_pytest_lines "$pkg" "$failures_file" "$slow_file" "$activity_file" "$context_file" \
+            <"$log_file"
+        _collect_durations_from_log "$pkg" "$log_file"
 
         if [ -s "$failures_file" ]; then
             _collect_failures_file "$failures_file"
@@ -635,18 +717,20 @@ run_tests() {
             _collect_slow_file "$slow_file"
         fi
 
-        if [ $exit_code -eq 0 ]; then
+        if [ "$exit_code" -eq 0 ]; then
             print_ok "${pkg}"
         else
             print_fail "${pkg}"
             tests_failed=true
             test_details+="\n[$pkg]\n"
-            test_details+=$(grep -E "^FAILED|^ERROR" "$output_file" || true)
+            test_details+=$(grep -E "^FAILED|^ERROR" "$log_file" || true)
             test_details+="\n"
         fi
 
-        rm -f "$failures_file" "$output_file" "$slow_file" "$activity_file" "$context_file"
+        rm -f "$failures_file" "$slow_file" "$activity_file" "$context_file"
     done
+
+    rm -rf "$result_dir"
 
     if $tests_failed; then
         record_failure_log "Tests" "$test_details"

@@ -165,6 +165,13 @@ class LoadingWidget(Static):
         if self.is_mounted:
             self._refresh_line()
 
+    def activate_status(self, status: str) -> None:
+        """Resume animation (if paused) and set status text."""
+        self._paused = False
+        self._status = status
+        if self.is_mounted:
+            self._refresh_line()
+
     def set_turn_start_mono(self, turn_start: float) -> None:
         """Anchor total elapsed time to the start of the user query (if not already set)."""
         if self._turn_start_mono is None:

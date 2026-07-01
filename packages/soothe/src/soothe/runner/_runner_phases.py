@@ -144,6 +144,7 @@ class PhasesMixin:
                 thread_id=thread_id,
             )
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
+            await self._save_quiz_to_state(user_input, fallback_response, thread_id)
             return
 
         from soothe.foundation.loop.intention.quiz_messages import build_quiz_system_message
@@ -162,6 +163,10 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         ]
 
         try:
+            from soothe.utils.llm.invoke_policy import (
+                await_with_llm_call_policy,
+                llm_rate_limit_config_from,
+            )
             from soothe.utils.observability.langfuse import build_traced_config
 
             quiz_config = build_traced_config(
@@ -173,7 +178,15 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 run_name="soothe:quiz",
                 independent_trace=True,  # Standalone trace, not nested under strange-loop-graph
             )
-            response = await quiz_model.ainvoke(quiz_messages, config=quiz_config)
+
+            async def _invoke() -> Any:
+                return await quiz_model.ainvoke(quiz_messages, config=quiz_config)
+
+            response = await await_with_llm_call_policy(
+                _invoke,
+                config=llm_rate_limit_config_from(self._config),
+                thread_id=thread_id,
+            )
             answer = response.content if hasattr(response, "content") else str(response)
 
             yield loop_assistant_messages_chunk(
@@ -191,9 +204,15 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 phase="quiz",
                 thread_id=thread_id,
             )
+            await self._save_quiz_to_state(user_input, fallback_response, thread_id)
 
     async def _save_quiz_to_state(self, query: str, response: str, thread_id: str) -> None:
-        """Persist quiz (minimal-path) Human+AI pair to the checkpointer."""
+        """Persist quiz (minimal-path) Human+AI pair to checkpointer and loop ledger."""
+        await self._save_quiz_to_checkpointer(query, response, thread_id)
+        await self._save_quiz_to_ledger(query, response, thread_id)
+
+    async def _save_quiz_to_checkpointer(self, query: str, response: str, thread_id: str) -> None:
+        """Persist quiz Human+AI pair to the LangGraph checkpointer."""
         await self._ensure_checkpointer_initialized()
 
         if not thread_id:
@@ -210,6 +229,45 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
             logger.debug("Quiz exchange saved to checkpointer for thread %s", thread_id)
         except Exception:
             logger.debug("Failed to save quiz to checkpointer", exc_info=True)
+
+    async def _save_quiz_to_ledger(self, query: str, response: str, thread_id: str) -> None:
+        """Persist quiz Human+AI pair to the loop ContextEngine ledger."""
+        from pathlib import Path
+
+        from soothe.config import SOOTHE_HOME
+        from soothe.foundation.context.engine import ContextEngine
+        from soothe.foundation.context.persistence.factory import (
+            resolve_context_engine_persistence,
+        )
+        from soothe.foundation.loop.utils.messages import (
+            LoopAIMessage,
+            LoopHumanMessage,
+            _record_ledger_message,
+        )
+
+        loop_id = (getattr(self, "_client_loop_id_for_stream", None) or thread_id or "").strip()
+        answer = (response or "").strip()
+        if not loop_id or not answer:
+            return
+
+        try:
+            ce_config = self._config.agent.loop.context_engine
+            persistence = resolve_context_engine_persistence(self._config, loop_id)
+            soothe_home = Path(self._config.home) if hasattr(self._config, "home") else SOOTHE_HOME
+            ce = ContextEngine(
+                persistence=persistence,
+                projection_config=ce_config.to_projection_config(),
+                soothe_home=soothe_home,
+            )
+            await ce.load()
+            human = LoopHumanMessage(content=query, thread_id=thread_id, phase="quiz")
+            ai = LoopAIMessage(content=answer, thread_id=thread_id, phase="quiz")
+            _record_ledger_message(ce, human, "quiz")
+            _record_ledger_message(ce, ai, "quiz")
+            await ce.save()
+            logger.debug("Quiz exchange saved to loop ledger for loop %s", loop_id)
+        except Exception:
+            logger.debug("Failed to save quiz to loop ledger", exc_info=True)
 
     # -- LangGraph stream with interrupt auto-resume -------------------------
 

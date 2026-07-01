@@ -505,7 +505,7 @@ class ContextEngine:
         Returns:
             List of ready GoalNodes, sorted by (-priority, created_at).
         """
-        return self._dag.peek_ready_goals(limit)
+        return self._scheduler.peek_ready_goals(limit)
 
     def claim_goal(self, goal_id: str, loop_id: str | None = None) -> GoalNode | None:
         """Atomically transition goal to active (dispatch claim).
@@ -521,7 +521,7 @@ class ContextEngine:
         Returns:
             GoalNode if claimed, None if ineligible or conflict appeared.
         """
-        goal = self._dag.claim_goal(goal_id, loop_id)
+        goal = self._scheduler.claim_goal(goal_id, loop_id=loop_id)
         if goal is not None:
             self._fire("goal_activated", goal_id)
         return goal

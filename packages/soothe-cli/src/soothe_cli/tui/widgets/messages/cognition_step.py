@@ -618,6 +618,7 @@ class CognitionStepMessage(Vertical):
             row.args or {},
             row.phase or "pending",
             duration_ms=row.duration_ms,
+            error=str(row.output or "") if phase == "error" else "",
         )
         tone = task_tool_row_tone(row, colors)
         return Content.styled(f"{gutter}{icon} {body}", tone)

@@ -5,6 +5,7 @@ from soothe_daemon.runtime.loop_autopilot_mode import (
     get_loop_autopilot_mode,
     set_loop_autopilot_mode,
 )
+from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
 from soothe_daemon.runtime.loop_dispatcher import (
     LoopInputDispatcher,
     bind_execution_thread_for_loop,
@@ -12,6 +13,7 @@ from soothe_daemon.runtime.loop_dispatcher import (
 from soothe_daemon.runtime.thread_state import ThreadState, ThreadStateRegistry
 
 __all__ = [
+    "LoopBroadcastBudget",
     "LoopInputDispatcher",
     "ThreadState",
     "ThreadStateRegistry",

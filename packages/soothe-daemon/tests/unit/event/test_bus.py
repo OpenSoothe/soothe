@@ -169,6 +169,45 @@ async def test_multiple_topics():
 
 
 @pytest.mark.asyncio
+async def test_goal_completion_blocks_when_queue_full() -> None:
+    """goal_completion wire frames block on overflow instead of being dropped."""
+    bus = EventBus()
+    queue: asyncio.Queue[dict[str, any]] = asyncio.Queue(maxsize=1)
+
+    await bus.subscribe("loop:gc", queue)
+    await bus.publish("loop:gc", {"type": "filler"})
+    assert queue.full()
+
+    gc_event = {
+        "type": "event",
+        "loop_id": "loop:gc",
+        "mode": "messages",
+        "data": ({"phase": "goal_completion", "content": "tail"}, {}),
+    }
+    publish_task = asyncio.create_task(bus.publish("loop:gc", gc_event))
+    await asyncio.sleep(0.05)
+    assert not publish_task.done()
+
+    await queue.get()
+    await asyncio.wait_for(publish_task, timeout=1.0)
+
+    received_event, _ = await queue.get()
+    assert received_event["data"][0]["phase"] == "goal_completion"
+
+
+def test_drop_counter_increments_on_normal_drop() -> None:
+    """IG-534 Phase 0: Drop counter tracks NORMAL drops by topic."""
+    from soothe_daemon.event.bus import _increment_drop_counter, get_event_bus_drop_counts
+
+    # Reset state
+    _increment_drop_counter("NORMAL", "loop:test")
+    counts = get_event_bus_drop_counts()
+    key = "NORMAL|loop:test"
+    assert key in counts
+    assert counts[key] >= 1
+
+
+@pytest.mark.asyncio
 async def test_topic_count():
     """Test topic_count property."""
     bus = EventBus()

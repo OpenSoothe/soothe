@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +28,27 @@ _NORMAL_DROP_LOG_LAST: dict[str, float] = {}
 _HIGH_DROP_LOG_LAST: dict[str, float] = {}
 _NO_SUBSCRIBER_LOG_LAST: dict[str, float] = {}
 _DROP_LOG_INTERVAL_SEC = 5.0
+
+# IG-534 Phase 0: Drop counters for observability (thread-safe for concurrent publishers)
+_drop_counters: dict[str, int] = {}  # key: f"{priority}|{topic}"
+_drop_counters_lock = threading.Lock()
+
+
+def _increment_drop_counter(priority: str, topic: str) -> int:
+    """Increment drop counter and return current total (IG-534)."""
+    key = f"{priority}|{topic}"
+    with _drop_counters_lock:
+        _drop_counters[key] = _drop_counters.get(key, 0) + 1
+        return _drop_counters[key]
+
+
+def get_event_bus_drop_counts() -> dict[str, int]:
+    """Return snapshot of drop counters for daemon_status (IG-534 Phase 0).
+
+    Returns dict mapping ``priority|topic`` to cumulative drop count.
+    """
+    with _drop_counters_lock:
+        return dict(_drop_counters)
 
 
 def _effective_queue_max(queue: asyncio.Queue[Any]) -> int:
@@ -49,6 +71,77 @@ def _throttle_log(
     if now - prev >= interval:
         last_map[topic] = now
         return True
+    return False
+
+
+def _wire_has_goal_completion_phase(event: dict[str, Any]) -> bool:
+    """Return True when a wire event carries goal_completion synthesis."""
+    if event.get("type") != "event" or event.get("mode") != "messages":
+        return False
+    data = event.get("data")
+    if not isinstance(data, (tuple, list)) or not data:
+        return False
+    msg = data[0]
+    return isinstance(msg, dict) and msg.get("phase") == "goal_completion"
+
+
+def _resolve_publish_priority(
+    event: dict[str, Any],
+    event_meta: EventMeta | None,
+) -> EventPriority:
+    """Resolve effective priority for one publish, including wire overrides."""
+    priority = event_meta.priority if event_meta else EventPriority.NORMAL
+    if (
+        event_meta is None
+        and event.get("type") == "status"
+        and event.get("state") in ("running", "idle")
+    ):
+        return EventPriority.CRITICAL
+    if _wire_has_goal_completion_phase(event) and priority.value > EventPriority.HIGH.value:
+        return EventPriority.HIGH
+    return priority
+
+
+def _should_block_on_queue_full(
+    event: dict[str, Any],
+    event_meta: EventMeta | None,
+    priority: EventPriority,
+    *,
+    queue_size: int,
+    queue_max: int,
+) -> bool:
+    """Return True when a full queue must block rather than drop this event."""
+    if priority == EventPriority.CRITICAL:
+        return True
+    if _wire_has_goal_completion_phase(event):
+        return True
+    if priority == EventPriority.NORMAL and queue_size >= int(queue_max * 0.9):
+        return _is_user_visible_for_backpressure(event, event_meta)
+    return False
+
+
+def _is_user_visible_for_backpressure(
+    event: dict[str, Any],
+    event_meta: EventMeta | None,
+) -> bool:
+    """Return True for wire frames that must not be silently dropped under pressure."""
+    from soothe.foundation.events.visibility import (
+        WireEnvelopeKind,
+        classify_wire_envelope,
+        event_type_from_wire_message,
+        is_catalog_event_client_wire_visible,
+    )
+
+    kind = classify_wire_envelope(event)
+    if kind in (
+        WireEnvelopeKind.EVENT_MESSAGES,
+        WireEnvelopeKind.EVENT_UPDATES,
+        WireEnvelopeKind.CONTROL,
+    ):
+        return True
+    if kind is WireEnvelopeKind.EVENT_CATALOG:
+        wire_type = event_type_from_wire_message(event) or ""
+        return is_catalog_event_client_wire_visible(wire_type, event_meta)
     return False
 
 
@@ -145,25 +238,103 @@ class EventBus:
                 )
             return
 
-        # Send (event, event_meta) tuple to queues for filtering (RFC-0022)
-        for queue in queues:
-            # IG-258 Phase 1: Priority-aware overflow strategy
-            queue_size = queue.qsize()
-            queue_max = _effective_queue_max(queue)
-            near_capacity = queue_size > (queue_max * 0.8)  # 80% threshold
+        priority = _resolve_publish_priority(event, event_meta)
+        await asyncio.gather(
+            *(
+                self._deliver_to_subscriber(queue, topic, event, event_meta, priority)
+                for queue in queues
+            )
+        )
 
-            # Get event priority from metadata
-            priority = event_meta.priority if event_meta else EventPriority.NORMAL
-            if (
-                event_meta is None
-                and isinstance(event, dict)
-                and event.get("type") == "status"
-                and event.get("state") in ("running", "idle")
+    async def _deliver_to_subscriber(
+        self,
+        queue: asyncio.Queue[Any],
+        topic: str,
+        event: dict[str, Any],
+        event_meta: EventMeta | None,
+        priority: EventPriority,
+    ) -> None:
+        """Deliver one event to a single subscriber queue with priority policy."""
+        queue_size = queue.qsize()
+        queue_max = _effective_queue_max(queue)
+        near_capacity = queue_size > (queue_max * 0.8)  # 80% threshold
+
+        block_on_full = _should_block_on_queue_full(
+            event,
+            event_meta,
+            priority,
+            queue_size=queue_size,
+            queue_max=queue_max,
+        )
+
+        # Fast drop when already at capacity (avoids exception per put on hot path)
+        if not block_on_full and priority == EventPriority.NORMAL and queue_size >= queue_max:
+            _increment_drop_counter("NORMAL", topic)
+            if _throttle_log(
+                _NORMAL_DROP_LOG_LAST,
+                topic,
+                interval=_DROP_LOG_INTERVAL_SEC,
             ):
-                priority = EventPriority.CRITICAL
+                logger.warning(
+                    "Queue full for topic %s, dropping NORMAL priority events "
+                    "(consumer slower than producer; suppressing similar logs %.0fs)",
+                    topic,
+                    _DROP_LOG_INTERVAL_SEC,
+                )
+            return
+        if not block_on_full and priority == EventPriority.HIGH and queue_size >= queue_max:
+            _increment_drop_counter("HIGH", topic)
+            if _throttle_log(
+                _HIGH_DROP_LOG_LAST,
+                topic,
+                interval=_DROP_LOG_INTERVAL_SEC,
+            ):
+                logger.error(
+                    "Dropped HIGH priority event — queue full (topic=%s, queue=%d/%d); "
+                    "suppressing repeat logs %.0fs",
+                    topic,
+                    queue_size,
+                    queue_max,
+                    _DROP_LOG_INTERVAL_SEC,
+                )
+            return
 
-            # Fast drop when already at capacity (avoids exception per put on hot path)
-            if priority == EventPriority.NORMAL and queue_size >= queue_max:
+        try:
+            # LOW priority: Skip when queue near capacity
+            if near_capacity and priority == EventPriority.LOW:
+                logger.debug(
+                    "Skipping LOW priority event for queue at %d/%d capacity",
+                    queue_size,
+                    queue_max,
+                )
+                return
+
+            # Try non-blocking put first
+            queue.put_nowait((event, event_meta))
+        except asyncio.QueueFull:
+            if block_on_full:
+                logger.warning(
+                    "Queue full for protected event, blocking until space available "
+                    "(topic=%s, priority=%s)",
+                    topic,
+                    priority.name,
+                )
+                await queue.put((event, event_meta))
+            elif priority == EventPriority.HIGH:
+                if _throttle_log(
+                    _HIGH_DROP_LOG_LAST,
+                    topic,
+                    interval=_DROP_LOG_INTERVAL_SEC,
+                ):
+                    logger.error(
+                        "Dropped HIGH priority event due to queue overflow (topic=%s, queue=%d/%d); "
+                        "suppressing repeat logs %.0fs",
+                        topic,
+                        queue_size,
+                        queue_max,
+                        _DROP_LOG_INTERVAL_SEC,
+                    )
+            elif priority == EventPriority.NORMAL:
                 if _throttle_log(
                     _NORMAL_DROP_LOG_LAST,
                     topic,
@@ -171,74 +342,11 @@ class EventBus:
                 ):
                     logger.warning(
                         "Queue full for topic %s, dropping NORMAL priority events "
-                        "(consumer slower than producer; suppressing similar logs %.0fs)",
+                        "(consumer backlog; suppressing similar logs %.0fs)",
                         topic,
                         _DROP_LOG_INTERVAL_SEC,
                     )
-                continue
-            if priority == EventPriority.HIGH and queue_size >= queue_max:
-                if _throttle_log(
-                    _HIGH_DROP_LOG_LAST,
-                    topic,
-                    interval=_DROP_LOG_INTERVAL_SEC,
-                ):
-                    logger.error(
-                        "Dropped HIGH priority event — queue full (topic=%s, queue=%d/%d); "
-                        "suppressing repeat logs %.0fs",
-                        topic,
-                        queue_size,
-                        queue_max,
-                        _DROP_LOG_INTERVAL_SEC,
-                    )
-                continue
-
-            try:
-                # LOW priority: Skip when queue near capacity
-                if near_capacity and priority == EventPriority.LOW:
-                    logger.debug(
-                        "Skipping LOW priority event for queue at %d/%d capacity",
-                        queue_size,
-                        queue_max,
-                    )
-                    continue
-
-                # Try non-blocking put first
-                queue.put_nowait((event, event_meta))
-            except asyncio.QueueFull:
-                # CRITICAL events: Block until space available (never drop)
-                if priority == EventPriority.CRITICAL:
-                    logger.warning(
-                        "Queue full for CRITICAL event, blocking until space available (topic=%s)",
-                        topic,
-                    )
-                    await queue.put((event, event_meta))
-                elif priority == EventPriority.HIGH:
-                    if _throttle_log(
-                        _HIGH_DROP_LOG_LAST,
-                        topic,
-                        interval=_DROP_LOG_INTERVAL_SEC,
-                    ):
-                        logger.error(
-                            "Dropped HIGH priority event due to queue overflow (topic=%s, queue=%d/%d); "
-                            "suppressing repeat logs %.0fs",
-                            topic,
-                            queue_size,
-                            queue_max,
-                            _DROP_LOG_INTERVAL_SEC,
-                        )
-                elif priority == EventPriority.NORMAL:
-                    if _throttle_log(
-                        _NORMAL_DROP_LOG_LAST,
-                        topic,
-                        interval=_DROP_LOG_INTERVAL_SEC,
-                    ):
-                        logger.warning(
-                            "Queue full for topic %s, dropping NORMAL priority events "
-                            "(consumer backlog; suppressing similar logs %.0fs)",
-                            topic,
-                            _DROP_LOG_INTERVAL_SEC,
-                        )
-                # LOW priority: rare here (handled above); drop silently
+            # LOW priority: rare here (handled above); drop silently
 
     async def subscribe(self, topic: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Subscribe queue to receive events for topic with write lock (Phase 2).

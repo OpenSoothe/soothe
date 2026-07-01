@@ -8,7 +8,7 @@ Verifies that next_action field:
 
 import pytest
 
-from soothe.foundation.loop.planning.planner import LLMPlanner
+from soothe.foundation.loop.cognition.planner import LLMPlanner
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     PlanGenerateStep,

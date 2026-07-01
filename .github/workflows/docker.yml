@@ -5,9 +5,13 @@ on:
     workflows: ["Release Soothe Packages"]
     types: [completed]
   workflow_dispatch:
+    branches:
+      - "**"
+    tags:
+      - "*"
     inputs:
       soothe_version:
-        description: "Version for soothe / soothe-sdk / soothe-daemon wheels (omit for latest GitHub release in this repo)"
+        description: "PyPI version override (optional). When set, checkout resolves the matching git tag. When omitted, build from the branch or tag selected in 'Use workflow from'."
         required: false
         default: ""
         type: string
@@ -41,27 +45,20 @@ jobs:
           sudo apt-get clean
           df -h
 
-      - name: Resolve checkout ref
-        id: checkout_ref
-        run: |
-          set -euo pipefail
-          ref=""
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            ref="${{ github.event.workflow_run.head_sha }}"
-          fi
-          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
-
-      - name: Resolve release tag (manual / API)
-        id: release_ref
-        if: ${{ github.event_name != 'workflow_run' }}
+      - name: Resolve build context
+        id: build_context
         env:
           GH_REPO: ${{ github.repository }}
           INPUT_VERSION: ${{ github.event.inputs.soothe_version }}
+          GH_REF: ${{ github.ref }}
+          GH_REF_NAME: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          v=""
-          tag_ref=""
+          checkout_ref=""
+          version=""
+          publish_version_tags=false
 
           api_get() {
             curl -fsSL \
@@ -71,7 +68,6 @@ jobs:
               "$1"
           }
 
-          # Probe a tag name via the API; echoes the tag if it exists, otherwise empty.
           tag_exists() {
             local cand="$1"
             if api_get "https://api.github.com/repos/${GH_REPO}/git/ref/tags/${cand}" >/dev/null 2>&1; then
@@ -79,44 +75,44 @@ jobs:
             fi
           }
 
-          if [ -n "${INPUT_VERSION// }" ]; then
-            v="${INPUT_VERSION#v}"
-            # The repo may tag bare ("0.5.27") or v-prefixed ("v0.5.27").
-            # Probe the API for whichever form actually exists.
-            tag_ref="$(tag_exists "${v}")"
-            if [ -z "${tag_ref}" ]; then
-              tag_ref="$(tag_exists "v${v}")"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            checkout_ref="${{ github.event.workflow_run.head_sha }}"
+            publish_version_tags=true
+          elif [ -n "${INPUT_VERSION// }" ]; then
+            version="${INPUT_VERSION#v}"
+            checkout_ref="$(tag_exists "${version}")"
+            if [ -z "${checkout_ref}" ]; then
+              checkout_ref="$(tag_exists "v${version}")"
             fi
-            if [ -z "${tag_ref}" ]; then
-              echo "::error::No git tag found for version '${INPUT_VERSION}' (tried '${v}' and 'v${v}'). Push the tag before dispatching."
+            if [ -z "${checkout_ref}" ]; then
+              echo "::error::No git tag found for version '${INPUT_VERSION}' (tried '${version}' and 'v${version}'). Push the tag before dispatching."
               exit 1
             fi
+            publish_version_tags=true
+          elif [[ "${GH_REF}" == refs/tags/* ]]; then
+            checkout_ref="${GH_REF_NAME}"
+            version="${GH_REF_NAME#v}"
+            publish_version_tags=true
           else
-            if ! json="$(api_get "https://api.github.com/repos/${GH_REPO}/releases/latest")"; then
-              json=""
-            fi
-            tag_ref="$(printf '%s' "$json" | jq -r 'try .tag_name // empty')"
-            if [ -n "$tag_ref" ] && [ "$tag_ref" != "null" ]; then
-              v="${tag_ref#v}"
-            else
-              tag_ref=""
-            fi
+            checkout_ref="${GH_SHA}"
+            publish_version_tags=false
           fi
 
-          echo "version=${v}" >> "${GITHUB_OUTPUT}"
-          echo "tag_ref=${tag_ref}" >> "${GITHUB_OUTPUT}"
+          echo "checkout_ref=${checkout_ref}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "publish_version_tags=${publish_version_tags}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout
         uses: actions/checkout@v5
         with:
           submodules: true
-          ref: ${{ steps.checkout_ref.outputs.ref || steps.release_ref.outputs.tag_ref || github.sha }}
+          ref: ${{ steps.build_context.outputs.checkout_ref }}
 
       - name: Resolve Soothe version for Docker build
         id: soothe_version
         run: |
           set -euo pipefail
-          v="${{ steps.release_ref.outputs.version }}"
+          v="${{ steps.build_context.outputs.version }}"
           if [ -z "$v" ]; then
             v="$(tr -d ' \n\r\t' < VERSION)"
           fi
@@ -208,8 +204,8 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=
-            type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ github.event_name == 'workflow_run' && steps.soothe_version.outputs.version != '' }}
+            type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
 
       - name: Build and push daemon image (multi-platform)
         uses: docker/build-push-action@v6

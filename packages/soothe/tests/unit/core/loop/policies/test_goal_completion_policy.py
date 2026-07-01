@@ -1,15 +1,17 @@
-"""Unit tests for goal completion hybrid policy (IG-298)."""
+"""Unit tests for goal completion hybrid policy (IG-298, IG-537)."""
 
 from __future__ import annotations
 
 import pytest
 
-from soothe.foundation.loop.planning.dag import PlanDAG
-from soothe.foundation.loop.planning.manager import (
-    CompletionStrategy,
-    PlanManager,
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.planning import StepPlanManagerAdapter
+from soothe.foundation.context.planning.completion import (
     determine_goal_completion_needs,
+    heuristic_requires_goal_completion,
 )
+from soothe.foundation.context.planning.models import CompletionStrategy
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -35,46 +37,75 @@ def mock_loop_state(**kwargs) -> LoopState:
     return LoopState(**{**defaults, **kwargs})
 
 
-# --- determine_goal_completion_needs tests (standalone function) ---
+def _state_kwargs(state: LoopState) -> dict:
+    return {
+        "dag_failed_steps": sum(1 for r in state.step_results if not r.success),
+        "dag_completed_steps": sum(1 for r in state.step_results if r.success),
+        "last_execute_wave_parallel_multi_step": state.last_execute_wave_parallel_multi_step,
+        "last_wave_hit_subagent_cap": state.last_wave_hit_subagent_cap,
+        "current_decision_steps": (
+            state.current_decision.steps if state.current_decision else None
+        ),
+    }
 
 
-def test_llm_only_mode_true():
+def _make_adapter(goal_description: str = "test") -> StepPlanManagerAdapter:
+    ce = ContextEngine()
+    goal = GoalNode(description=goal_description)
+    ce._dag.add_goal(goal)
+    return StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+
+
+# --- determine_goal_completion_needs tests ---
+
+
+def test_llm_only_mode_true() -> None:
     state = mock_loop_state()
-    result = determine_goal_completion_needs(llm_decision=True, state=state, mode="llm_only")
+    result = determine_goal_completion_needs(
+        llm_decision=True, mode="llm_only", **_state_kwargs(state)
+    )
     assert result is True
 
 
-def test_llm_only_mode_false():
+def test_llm_only_mode_false() -> None:
     state = mock_loop_state()
-    result = determine_goal_completion_needs(llm_decision=False, state=state, mode="llm_only")
+    result = determine_goal_completion_needs(
+        llm_decision=False, mode="llm_only", **_state_kwargs(state)
+    )
     assert result is False
 
 
-def test_default_mode_is_llm_only():
+def test_default_mode_is_llm_only() -> None:
     state = mock_loop_state(last_execute_wave_parallel_multi_step=True)
-    assert determine_goal_completion_needs(llm_decision=False, state=state) is False
-    assert determine_goal_completion_needs(llm_decision=True, state=state) is True
+    assert determine_goal_completion_needs(llm_decision=False, **_state_kwargs(state)) is False
+    assert determine_goal_completion_needs(llm_decision=True, **_state_kwargs(state)) is True
 
 
-def test_heuristic_only_mode_parallel_multi_step():
+def test_heuristic_only_mode_parallel_multi_step() -> None:
     state = mock_loop_state(last_execute_wave_parallel_multi_step=True)
-    result = determine_goal_completion_needs(llm_decision=False, state=state, mode="heuristic_only")
+    result = determine_goal_completion_needs(
+        llm_decision=False, mode="heuristic_only", **_state_kwargs(state)
+    )
     assert result is True
 
 
-def test_hybrid_mode_llm_true_honored():
+def test_hybrid_mode_llm_true_honored() -> None:
     state = mock_loop_state()
-    result = determine_goal_completion_needs(llm_decision=True, state=state, mode="hybrid")
+    result = determine_goal_completion_needs(
+        llm_decision=True, mode="hybrid", **_state_kwargs(state)
+    )
     assert result is True
 
 
-def test_hybrid_mode_llm_false_heuristic_true():
+def test_hybrid_mode_llm_false_heuristic_true() -> None:
     state = mock_loop_state(last_execute_wave_parallel_multi_step=True)
-    result = determine_goal_completion_needs(llm_decision=False, state=state, mode="hybrid")
+    result = determine_goal_completion_needs(
+        llm_decision=False, mode="hybrid", **_state_kwargs(state)
+    )
     assert result is True
 
 
-def test_hybrid_mode_both_false():
+def test_hybrid_mode_both_false() -> None:
     step_results = [
         StepResult(
             step_id="S1",
@@ -87,50 +118,46 @@ def test_hybrid_mode_both_false():
     state = mock_loop_state(
         iteration=0, step_results=step_results, last_execute_wave_parallel_multi_step=False
     )
-    result = determine_goal_completion_needs(llm_decision=False, state=state, mode="hybrid")
+    result = determine_goal_completion_needs(
+        llm_decision=False, mode="hybrid", **_state_kwargs(state)
+    )
     assert result is False
 
 
-def test_hybrid_mode_zero_execution_no_heuristic_fallback():
+def test_hybrid_mode_zero_execution_no_heuristic_fallback() -> None:
     state = mock_loop_state(
         iteration=0, step_results=[], last_execute_wave_parallel_multi_step=False
     )
-    result = determine_goal_completion_needs(llm_decision=False, state=state, mode="hybrid")
+    result = determine_goal_completion_needs(
+        llm_decision=False, mode="hybrid", **_state_kwargs(state)
+    )
     assert result is False
 
 
-def test_heuristic_parallel_multi_step():
+def test_heuristic_parallel_multi_step() -> None:
     state = mock_loop_state(last_execute_wave_parallel_multi_step=True)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is True
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is True
 
 
-def test_heuristic_subagent_cap():
+def test_heuristic_subagent_cap() -> None:
     state = mock_loop_state(last_wave_hit_subagent_cap=True)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is True
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is True
 
 
-def test_heuristic_single_wave():
+def test_heuristic_single_wave() -> None:
     state = mock_loop_state(iteration=1)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is False
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
 
 
-def test_heuristic_few_steps():
+def test_heuristic_few_steps() -> None:
     step_results = [
         StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
     ]
     state = mock_loop_state(step_results=step_results)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is False
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
 
 
-def test_heuristic_dag_dependencies():
+def test_heuristic_dag_dependencies() -> None:
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -144,12 +171,10 @@ def test_heuristic_dag_dependencies():
         execution_mode="dependency",
     )
     state = mock_loop_state(current_decision=decision)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is True
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is True
 
 
-def test_heuristic_no_dependencies():
+def test_heuristic_no_dependencies() -> None:
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -162,14 +187,11 @@ def test_heuristic_no_dependencies():
         StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
     ]
     state = mock_loop_state(current_decision=decision, step_results=step_results)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is False
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
 
 
-def test_heuristic_failed_steps_low_success_rate():
-    pm = PlanManager(goal="test")
-    # Ingest a plan with two steps
+def test_heuristic_failed_steps_low_success_rate() -> None:
+    adapter = _make_adapter()
     d = AgentDecision(
         type="execute_steps",
         steps=[
@@ -181,9 +203,8 @@ def test_heuristic_failed_steps_low_success_rate():
     pr = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=d, next_action=""
     )
-    pm.ingest_plan(pr, "KFA", 0)
-    # Mark outcomes: 1 success, 1 failure → success_rate=0.5 < 0.6 threshold
-    pm.record_step_outcomes(
+    adapter.ingest_plan(pr, "KFA", 0)
+    adapter.record_step_outcomes(
         [
             StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
             StepResult(
@@ -196,13 +217,23 @@ def test_heuristic_failed_steps_low_success_rate():
             ),
         ]
     )
+    state = mock_loop_state(
+        step_results=[
+            StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
+            StepResult(
+                step_id="S2",
+                success=False,
+                outcome={},
+                error="Error",
+                duration_ms=100,
+                thread_id="t1",
+            ),
+        ]
+    )
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is True
 
-    state = mock_loop_state()
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is True
 
-
-def test_heuristic_failed_steps_high_success_rate():
+def test_heuristic_failed_steps_high_success_rate() -> None:
     step_results = [
         StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
         StepResult(step_id="S2", success=True, outcome={}, duration_ms=100, thread_id="t1"),
@@ -212,12 +243,10 @@ def test_heuristic_failed_steps_high_success_rate():
         ),
     ]
     state = mock_loop_state(step_results=step_results)
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is False
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
 
 
-def test_heuristic_combined_complexity():
+def test_heuristic_combined_complexity() -> None:
     state = mock_loop_state(
         iteration=2,
         last_execute_wave_parallel_multi_step=True,
@@ -238,12 +267,10 @@ def test_heuristic_combined_complexity():
             ),
         ],
     )
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is True
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is True
 
 
-def test_heuristic_simple_execution():
+def test_heuristic_simple_execution() -> None:
     step_results = [
         StepResult(
             step_id="S1",
@@ -260,12 +287,10 @@ def test_heuristic_simple_execution():
         last_wave_hit_subagent_cap=False,
         current_decision=None,
     )
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is False
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
 
 
-def test_heuristic_empty_step_results_no_completion_signal():
+def test_heuristic_empty_step_results_no_completion_signal() -> None:
     state = mock_loop_state(
         iteration=0,
         step_results=[],
@@ -273,16 +298,14 @@ def test_heuristic_empty_step_results_no_completion_signal():
         last_wave_hit_subagent_cap=False,
         current_decision=None,
     )
-    pm = PlanManager(goal="test")
-    result = pm._heuristic_requires_goal_completion(state)
-    assert result is False
+    assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
 
 
-# --- PlanDAG tests ---
+# --- StepPlanningSubengine ingest tests (replaces PlanDAG) ---
 
 
-def test_plandag_ingest_plan_new():
-    dag = PlanDAG()
+def test_step_dag_ingest_plan_new() -> None:
+    adapter = _make_adapter()
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -298,15 +321,15 @@ def test_plandag_ingest_plan_new():
         decision=decision,
         next_action="Do steps",
     )
-    dag.ingest_plan(plan_result, "KFA", 0)
-    assert dag.total_steps == 2
-    assert dag.plan_count == 1
-    assert "01" in dag.nodes
-    assert "02" in dag.nodes
+    adapter.ingest_plan(plan_result, "KFA", 0)
+    ctx = adapter.get_planning_context()
+    assert ctx.total_steps == 2
+    assert "01" in ctx.pending_step_ids
+    assert "02" in ctx.pending_step_ids
 
 
-def test_plandag_mark_completed():
-    dag = PlanDAG()
+def test_step_dag_mark_completed() -> None:
+    adapter = _make_adapter()
     decision = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
@@ -315,15 +338,17 @@ def test_plandag_mark_completed():
     plan_result = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=decision, next_action=""
     )
-    dag.ingest_plan(plan_result, "KFA", 0)
-    outcome = StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")
-    dag.mark_completed("01", outcome)
-    assert dag.completed_steps == 1
-    assert dag.remaining_steps == 0
+    adapter.ingest_plan(plan_result, "KFA", 0)
+    adapter.record_step_outcomes(
+        [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
+    )
+    ctx = adapter.get_planning_context()
+    assert ctx.completed_steps == 1
+    assert ctx.pending_step_ids == set()
 
 
-def test_plandag_mark_failed():
-    dag = PlanDAG()
+def test_step_dag_mark_failed() -> None:
+    adapter = _make_adapter()
     decision = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
@@ -332,17 +357,26 @@ def test_plandag_mark_failed():
     plan_result = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=decision, next_action=""
     )
-    dag.ingest_plan(plan_result, "KFA", 0)
-    outcome = StepResult(
-        step_id="01", success=False, outcome={}, error="err", duration_ms=10, thread_id="t"
+    adapter.ingest_plan(plan_result, "KFA", 0)
+    adapter.record_step_outcomes(
+        [
+            StepResult(
+                step_id="01",
+                success=False,
+                outcome={},
+                error="err",
+                duration_ms=10,
+                thread_id="t",
+            )
+        ]
     )
-    dag.mark_failed("01", outcome)
-    assert dag.failed_steps == 1
-    assert dag.success_rate == 0.0
+    ctx = adapter.get_planning_context()
+    assert "01" in ctx.failed_step_ids
+    assert ctx.success_rate == 0.0
 
 
-def test_plandag_dag_dependencies():
-    dag = PlanDAG()
+def test_step_dag_dependencies() -> None:
+    adapter = _make_adapter()
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -355,14 +389,13 @@ def test_plandag_dag_dependencies():
     plan_result = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=decision, next_action=""
     )
-    dag.ingest_plan(plan_result, "KFA", 0)
-    assert dag.has_dag_dependencies is True
-    assert dag.max_chain_depth == 3
+    adapter.ingest_plan(plan_result, "KFA", 0)
+    ctx = adapter.get_planning_context()
+    assert ctx.chain_depth == 3
 
 
-def test_plandag_multiple_plans():
-    dag = PlanDAG()
-    # Plan 1
+def test_step_dag_multiple_plans() -> None:
+    adapter = _make_adapter()
     d1 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
@@ -371,9 +404,8 @@ def test_plandag_multiple_plans():
     pr1 = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=d1, next_action=""
     )
-    dag.ingest_plan(pr1, "KFA", 0)
+    adapter.ingest_plan(pr1, "KFA", 0)
 
-    # Plan 2 (replan)
     d2 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="KFA-02", description="New step")],
@@ -382,28 +414,28 @@ def test_plandag_multiple_plans():
     pr2 = PlanResult(
         status="continue", goal_progress="medium", plan_action="new", decision=d2, next_action=""
     )
-    dag.ingest_plan(pr2, "XYZ", 1)
+    adapter.ingest_plan(pr2, "XYZ", 1)
 
-    assert dag.plan_count == 2
-    assert dag.total_steps == 2  # 01 from plan1, KFA-02 from plan2
-
-
-# --- PlanManager.determine_completion_strategy tests ---
+    ctx = adapter.get_planning_context()
+    assert ctx.total_steps == 2
+    assert ctx.replan_count == 1
 
 
-def test_strategy_always_synthesize():
-    pm = PlanManager(goal="test")
+# --- determine_completion_strategy tests ---
+
+
+def test_strategy_always_synthesize() -> None:
+    adapter = _make_adapter()
     pr = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
     state = mock_loop_state()
     assert (
-        pm.determine_completion_strategy(state, pr, "always_synthesize")
+        adapter.determine_completion_strategy(state, pr, "always_synthesize")
         == CompletionStrategy.SYNTHESIZE
     )
 
 
-def test_strategy_ledger_direct_simple():
-    pm = PlanManager(goal="test")
-    # Simple: 1 plan, no deps, no failures, <=2 steps
+def test_strategy_ledger_direct_simple() -> None:
+    adapter = _make_adapter()
     d = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
@@ -417,18 +449,19 @@ def test_strategy_ledger_direct_simple():
         require_goal_completion=False,
         next_action="",
     )
-    pm.ingest_plan(pr, "KFA", 0)
-    outcome = StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")
-    pm.record_step_outcomes([outcome])
-
+    adapter.ingest_plan(pr, "KFA", 0)
+    adapter.record_step_outcomes(
+        [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
+    )
     state = mock_loop_state()
     assert (
-        pm.determine_completion_strategy(state, pr, "adaptive") == CompletionStrategy.LEDGER_DIRECT
+        adapter.determine_completion_strategy(state, pr, "adaptive")
+        == CompletionStrategy.LEDGER_DIRECT
     )
 
 
-def test_strategy_synthesize_multiple_plans():
-    pm = PlanManager(goal="test")
+def test_strategy_synthesize_multiple_plans() -> None:
+    adapter = _make_adapter()
     d1 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
@@ -437,7 +470,7 @@ def test_strategy_synthesize_multiple_plans():
     pr1 = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=d1, next_action=""
     )
-    pm.ingest_plan(pr1, "KFA", 0)
+    adapter.ingest_plan(pr1, "KFA", 0)
 
     d2 = AgentDecision(
         type="execute_steps",
@@ -452,14 +485,17 @@ def test_strategy_synthesize_multiple_plans():
         require_goal_completion=True,
         next_action="",
     )
-    pm.ingest_plan(pr2, "XYZ", 1)
+    adapter.ingest_plan(pr2, "XYZ", 1)
 
     state = mock_loop_state()
-    assert pm.determine_completion_strategy(state, pr2, "adaptive") == CompletionStrategy.SYNTHESIZE
+    assert (
+        adapter.determine_completion_strategy(state, pr2, "adaptive")
+        == CompletionStrategy.SYNTHESIZE
+    )
 
 
-def test_strategy_synthesize_failed_steps():
-    pm = PlanManager(goal="test")
+def test_strategy_synthesize_failed_steps() -> None:
+    adapter = _make_adapter()
     d = AgentDecision(
         type="execute_steps",
         steps=[
@@ -476,8 +512,8 @@ def test_strategy_synthesize_failed_steps():
         require_goal_completion=True,
         next_action="",
     )
-    pm.ingest_plan(pr, "KFA", 0)
-    pm.record_step_outcomes(
+    adapter.ingest_plan(pr, "KFA", 0)
+    adapter.record_step_outcomes(
         [
             StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t"),
             StepResult(
@@ -485,9 +521,11 @@ def test_strategy_synthesize_failed_steps():
             ),
         ]
     )
-
     state = mock_loop_state()
-    assert pm.determine_completion_strategy(state, pr, "adaptive") == CompletionStrategy.SYNTHESIZE
+    assert (
+        adapter.determine_completion_strategy(state, pr, "adaptive")
+        == CompletionStrategy.SYNTHESIZE
+    )
 
 
 if __name__ == "__main__":

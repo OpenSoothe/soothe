@@ -216,6 +216,10 @@ class WorkerPoolConfig(BaseModel):
         default=True,
         description="Create cached SootheRunner at worker startup when reuse_runner is true",
     )
+    warmup_core_agent: bool = Field(
+        default=True,
+        description=("Materialize LazyCoreAgent during worker warmup when warmup_runner is true"),
+    )
 
     def get_effective_pool_size(self) -> int:
         """Get effective max pool size, ensuring max >= min."""
@@ -293,8 +297,8 @@ class ThreadPoolConfig(BaseModel):
     """Thread pool configuration for loop execution.
 
     Uses threads instead of subprocesses for lower overhead (~ms vs ~8s spawn).
-    Each thread has a dedicated asyncio event loop; fresh SootheRunner instances
-    are created per request to ensure no user data leakage.
+    Each thread has a dedicated asyncio event loop. One reused SootheRunner per
+    worker (``prepare_for_request`` between turns) balances startup cost and isolation.
 
     PostgreSQL Pool Sharing (IG-406):
     Daemon-level singleton pools are shared by ALL threads in the pool. This is
@@ -328,16 +332,16 @@ class ThreadPoolConfig(BaseModel):
         description="Enable thread pool mode (lighter weight, ~ms vs ~8s subprocess spawn)",
     )
     min_pool_size: int = Field(
-        default=2,
-        ge=1,
-        le=64,
-        description="Minimum threads to keep pooled",
-    )
-    max_pool_size: int = Field(
         default=8,
         ge=1,
+        le=64,
+        description="Minimum threads to keep pooled (IG-535: 8 baseline for burst handling)",
+    )
+    max_pool_size: int = Field(
+        default=32,
+        ge=1,
         le=128,
-        description="Maximum threads to scale up",
+        description="Maximum threads to scale up (IG-535: 32 for concurrent loop parallelism)",
     )
     idle_timeout_seconds: int = Field(
         default=300,
@@ -357,10 +361,10 @@ class ThreadPoolConfig(BaseModel):
         description="Default per-request timeout in seconds (0 = no timeout)",
     )
     thread_startup_timeout_seconds: int = Field(
-        default=10,
+        default=60,
         ge=1,
-        le=60,
-        description="Timeout for thread startup and event loop init (seconds)",
+        le=120,
+        description="Timeout for worker SootheRunner/CoreAgent warmup at startup (seconds)",
     )
     reuse_runner: bool = Field(
         default=True,
@@ -369,6 +373,10 @@ class ThreadPoolConfig(BaseModel):
     warmup_runner: bool = Field(
         default=True,
         description="Create cached SootheRunner at worker startup when reuse_runner is true",
+    )
+    warmup_core_agent: bool = Field(
+        default=True,
+        description=("Materialize LazyCoreAgent during worker warmup when warmup_runner is true"),
     )
 
     def get_effective_pool_size(self) -> int:

@@ -17,6 +17,8 @@ from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 
 logger = logging.getLogger(__name__)
 
+_PLAN_GENERATE_STATUS_LABEL = "Generating plan"
+
 
 def _create_synthetic_assessment() -> StatusAssessment:
     """Create synthetic StatusAssessment when plan_assess was skipped.
@@ -57,6 +59,8 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         logger.info("[PlanGenerate] Using fresh-loop bypass assessment")
 
     context = strange_loop._build_plan_context(state)
+
+    await ctx.emit("plan_phase_status", {"label": _PLAN_GENERATE_STATUS_LABEL})
 
     # RFC-630: the ``simple`` intake branch skips plan_assess and reaches
     # plan_generate directly with a synthetic assessment. Use the cheaper

@@ -195,8 +195,15 @@ class SootheDaemon(DaemonHandlersMixin):
         self._active_threads: dict[str, asyncio.Task] = {}
         #: Loop ids for all in-flight streams (heartbeats; internal only).
         self._active_stream_loop_ids: set[str] = set()
+        #: Loop ids with an admitted query (exclusive per loop; IG-534 Phase 2.2).
+        self._loops_with_active_query: set[str] = set()
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
         self._query_state_lock = asyncio.Lock()
+        from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
+
+        self._loop_broadcast_budget = LoopBroadcastBudget(
+            int(getattr(self._daemon_config, "max_in_flight_broadcasts_per_loop", 80) or 0)
+        )
         # Daemon readiness state for explicit startup handshake (RFC-0023)
         self._readiness_state: str = "starting"
         self._readiness_message: str | None = None
@@ -510,16 +517,7 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.debug("Stale worker process cleanup skipped", exc_info=True)
 
-            # RFC-221: pre-warm runner pool (worker_pool or thread_pool).
-            if self._daemon_config.worker_pool.enabled or self._daemon_config.thread_pool.enabled:
-                try:
-                    await self._runner_factory.initialize_pool()
-                except Exception as exc:
-                    self._readiness_state = "error"
-                    self._readiness_message = str(exc)
-                    raise
-
-            # Pre-open shared PostgreSQL pools in thread_pool mode.
+            # Pre-open shared PostgreSQL pools before worker warmup (checkpointer attach).
             try:
                 from soothe_daemon.persistence.pools import preopen_shared_postgres_pools
 
@@ -529,6 +527,15 @@ class SootheDaemon(DaemonHandlersMixin):
                     "Failed to pre-open shared PostgreSQL pools at startup",
                     exc_info=True,
                 )
+
+            # RFC-221: pre-warm runner pool (worker_pool or thread_pool).
+            if self._daemon_config.worker_pool.enabled or self._daemon_config.thread_pool.enabled:
+                try:
+                    await self._runner_factory.initialize_pool()
+                except Exception as exc:
+                    self._readiness_state = "error"
+                    self._readiness_message = str(exc)
+                    raise
 
             # RFC-412: Initialize MCP registry (daemon-singleton)
             if self._config.mcp_servers:

@@ -427,17 +427,22 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 - Disabled: client short-circuits incremental assistant rendering for configured phases.
 - Enabled: normal incremental accumulation + rendering for loop-tagged assistant `messages` chunks.
 
-### Priority-Aware Overflow (RFC-401, IG-258)
+### Priority-Aware Overflow (RFC-401, IG-258, IG-534)
 
 **Streaming Event Priority**:
-- Goal-completion streaming: `EventPriority.NORMAL`
-- Tool response streaming: `EventPriority.LOW` (experimental, may drop on overflow)
-- Final events: `EventPriority.HIGH` (never dropped)
+- Goal-completion streaming (`phase="goal_completion"` on wire): **`EventPriority.HIGH` minimum**; blocks on client queue overflow (never silently dropped)
+- User-visible NORMAL frames at ≥90% client queue capacity: **block** (not drop) until space available
+- Tool response streaming: `EventPriority.LOW` (may drop on overflow)
+- Terminal lifecycle (`status: running|idle`): `EventPriority.CRITICAL`
 
 **Queue Management**:
-- Existing EventBus priority overflow strategy (IG-258 Phase 1)
+- EventBus priority overflow strategy (IG-258 Phase 1, IG-534 Phase 1)
 - 80% threshold for LOW priority dropping
-- CRITICAL events block until space available
+- CRITICAL and protected synthesis frames block until space available
+
+### Per-Client Stream Delivery (IG-534 Phase 3)
+
+`stream_delivery` mode (`adaptive` | `streaming` | `batch`) is stored on **`ClientSession`**, not on a per-loop map shared across subscribers. Each WebSocket client chooses coalescing behavior independently.
 
 ### Network Overhead
 
@@ -625,6 +630,7 @@ soothe --no-streaming -p "Write a report"
 **Authors**: Soothe Team
 
 **Revision History**:
+- v1.3 (2026-07-01): IG-534 — goal-completion HIGH priority + block on overflow; per-client `stream_delivery`; user-visible NORMAL block at 90% queue
 - v1.2 (2026-04-29): Consistency polish — aligned examples/config semantics with daemon-side execute-phase suppression and goal-completion streaming contract
 - v1.1 (2026-04-28): IG-304 amendment — daemon-side suppression isolation, tool-only message forwarding, goal-completion output contract
 - v1.0 (2026-04-27): Initial RFC draft for unified streaming framework

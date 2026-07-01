@@ -258,3 +258,81 @@ class GoalDAGVerifier:
             ],
             "total_goals": len(goals),
         }
+
+    async def apply_health_report(self, report: DagHealthReport) -> None:
+        """Apply DAG health verification suggestions via ContextEngine planning APIs.
+
+        Args:
+            report: Structured health report from :meth:`verify_dag_health`.
+        """
+        goal_planner = self._ce.planning.goal
+
+        for decomp in report.suggest_decompose:
+            goal_planner.apply_llm_subgoals(decomp.goal_id, decomp.subgoals)
+
+        for goal_id in report.suggest_remove:
+            try:
+                await self._ce.cancel_goal(goal_id, reason="dag_health_verification")
+            except Exception:
+                logger.warning(
+                    "Failed to cancel goal %s from health report", goal_id, exc_info=True
+                )
+
+        for goal_id in report.suggest_reset:
+            goal = self._ce.get_goal_sync(goal_id)
+            if goal is None:
+                continue
+            if goal.status in ("blocked", "suspended"):
+                try:
+                    await self._ce.reactivate_goal(goal_id)
+                except Exception:
+                    logger.warning("Failed to reactivate goal %s", goal_id, exc_info=True)
+
+        for goal_id, priority in report.suggest_priority_adjust.items():
+            goal = self._ce.get_goal_sync(goal_id)
+            if goal is not None:
+                goal.priority = max(0, min(100, int(priority)))
+
+        for merge in report.suggest_merge:
+            logger.info(
+                "Merge suggestion (not auto-applied): goals=%s desc=%s",
+                merge.goal_ids,
+                merge.merged_description[:80],
+            )
+
+    async def apply_post_completion(self, result: dict[str, Any]) -> None:
+        """Apply post-completion verification suggestions to the CE DAG.
+
+        Args:
+            result: Dict returned by :meth:`verify_dag_post_completion`.
+        """
+        if not result:
+            return
+
+        completed_id = result.get("completed_goal_id") or ""
+        goal_planner = self._ce.planning.goal
+
+        new_goals = result.get("new_goals") or []
+        if new_goals:
+            await goal_planner.reflect_and_create_goals(
+                completed_id,
+                new_goals=new_goals,
+            )
+
+        decomp = result.get("decomposition")
+        if decomp and decomp.get("goal_id"):
+            goal_planner.apply_llm_subgoals(
+                decomp["goal_id"],
+                decomp.get("subgoals") or [],
+                reasoning=result.get("reasoning", ""),
+            )
+
+        for redundant_id in result.get("redundant_goals") or []:
+            try:
+                await self._ce.cancel_goal(redundant_id, reason="post_completion_redundant")
+            except Exception:
+                logger.warning(
+                    "Failed to cancel redundant goal %s",
+                    redundant_id,
+                    exc_info=True,
+                )

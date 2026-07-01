@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import soothe.subagents.browser_use._runtime as browser_runtime
 from soothe.subagents.browser_use._runtime import (
     cleanup_browser_temp_files,
     cleanup_stale_chrome,
@@ -18,13 +19,18 @@ from soothe.subagents.browser_use._runtime import (
 from soothe.subagents.browser_use.config_model import BrowserUseSubagentConfig
 
 
+def _isolated_soothe_home():
+    """Patch browser runtime to use an isolated SOOTHE_HOME directory."""
+    return patch.object(
+        browser_runtime,
+        "SOOTHE_HOME",
+        Path(tempfile.mkdtemp()),
+    )
+
+
 def test_get_browser_runtime_dir() -> None:
     """Test getting browser runtime directory."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         runtime_dir = get_browser_runtime_dir()
         assert runtime_dir.name == "browser"
         assert runtime_dir.parent.name == "agents"
@@ -33,11 +39,7 @@ def test_get_browser_runtime_dir() -> None:
 
 def test_get_browser_downloads_dir() -> None:
     """Test getting browser downloads directory."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         downloads_dir = get_browser_downloads_dir()
         assert downloads_dir.name == "downloads"
         assert downloads_dir.exists()
@@ -45,11 +47,7 @@ def test_get_browser_downloads_dir() -> None:
 
 def test_get_browser_user_data_dir() -> None:
     """Test getting browser user data directory."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         user_data_dir = get_browser_user_data_dir()
         assert user_data_dir.name == "default"
         assert user_data_dir.parent.name == "profiles"
@@ -63,11 +61,7 @@ def test_get_browser_user_data_dir() -> None:
 
 def test_get_browser_extensions_dir() -> None:
     """Test getting browser extensions directory."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         extensions_dir = get_browser_extensions_dir()
         assert extensions_dir.name == "extensions"
         assert extensions_dir.exists()
@@ -75,11 +69,7 @@ def test_get_browser_extensions_dir() -> None:
 
 def test_cleanup_browser_temp_files() -> None:
     """Test cleaning up temporary browser files."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         # Create temp directories
         downloads_dir = get_browser_downloads_dir()
         temp_download = downloads_dir / "browser-use-downloads-abc12345"
@@ -124,11 +114,7 @@ def test_browser_use_config_from_dict() -> None:
 
 def test_runtime_directory_structure() -> None:
     """Test that the complete directory structure is created."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         # Get all directories
         runtime_dir = get_browser_runtime_dir()
         downloads_dir = get_browser_downloads_dir()
@@ -148,11 +134,7 @@ def test_runtime_directory_structure() -> None:
 
 def test_cleanup_stale_chrome_no_processes() -> None:
     """Test cleanup_stale_chrome when no matching processes."""
-    with patch.object(
-        Path,
-        "home",
-        return_value=Path(tempfile.mkdtemp()),
-    ):
+    with _isolated_soothe_home():
         # Should return 0 when no processes match
         killed = cleanup_stale_chrome("/nonexistent/profile")
         assert killed == 0

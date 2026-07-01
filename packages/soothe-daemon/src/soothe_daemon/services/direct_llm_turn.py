@@ -8,6 +8,10 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from soothe.utils.llm.invoke_policy import (
+    await_with_llm_call_policy,
+    llm_rate_limit_config_from,
+)
 from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat
 from soothe.utils.text_preview import log_preview
 
@@ -105,27 +109,37 @@ async def _invoke_chat_turn(
         structured,
     )
 
-    if structured:
-        try:
-            data = await invoke_structured_chat(
-                chat,
-                messages,
-                json_schema=response_schema,
-                schema_name=response_schema_name,
-                strict=strict,
-                config=invoke_cfg,
-            )
-            out = json.dumps(data, ensure_ascii=False)
-        except StructuredOutputError:
-            raise
-        except Exception as exc:
-            msg = f"structured {purpose} failed: {exc}"
-            raise StructuredOutputError(msg) from exc
-    else:
+    llm_policy = llm_rate_limit_config_from(config)
+
+    async def _call() -> str:
+        if structured:
+            try:
+                data = await invoke_structured_chat(
+                    chat,
+                    messages,
+                    json_schema=response_schema,
+                    schema_name=response_schema_name,
+                    strict=strict,
+                    config=invoke_cfg,
+                )
+                return json.dumps(data, ensure_ascii=False)
+            except StructuredOutputError:
+                raise
+            except Exception as exc:
+                msg = f"structured {purpose} failed: {exc}"
+                raise StructuredOutputError(msg) from exc
         response = await chat.ainvoke(messages, config=invoke_cfg)
         out = str(response.content).strip()
-        if not out:
-            out = empty_fallback
+        return out if out else empty_fallback
+
+    try:
+        out = await await_with_llm_call_policy(
+            _call,
+            config=llm_policy,
+            thread_id=session_id,
+        )
+    except StructuredOutputError:
+        raise
 
     logger.info(
         "[intent_hint %s] response session_id=%s model=%s structured=%s content=%s",

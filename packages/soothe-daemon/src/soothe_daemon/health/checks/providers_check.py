@@ -55,13 +55,25 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
         model = config.create_chat_model("default")
 
         # IG-143: Add metadata for tracing
-        from soothe.middleware._utils import create_llm_call_metadata
-
         # Try a minimal test call with timeout
         # Use asyncio.wait_for to enforce timeout
-        async def test_call() -> Any:
-            from langchain_core.messages import HumanMessage
+        from langchain_core.messages import HumanMessage
+        from soothe.middleware._utils import create_llm_call_metadata
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
 
+        llm_config = llm_rate_limit_config_from(config).model_copy(
+            update={
+                "call_timeout_seconds": 5,
+                "call_timeout_max_seconds": 5,
+                "max_rate_limit_retries": 1,
+                "max_timeout_retries": 0,
+            }
+        )
+
+        async def test_call() -> Any:
             return await model.ainvoke(
                 [HumanMessage(content="test")],
                 config={
@@ -75,7 +87,7 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
             )
 
         try:
-            await asyncio.wait_for(test_call(), timeout=5.0)
+            await await_with_llm_call_policy(test_call, config=llm_config)
 
             return CheckResult(
                 name=provider_name,
