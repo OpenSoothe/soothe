@@ -79,7 +79,7 @@ class LoadingWidget(Static):
             status: Initial status text to display.
             turn_start_monotonic: Start of the current query/turn (``time.monotonic()``). When
                 omitted, the first mount time is used so elapsed still advances monotonically.
-            show_interrupt_hint: When ``False``, omit the elapsed-time / esc hint (startup connect).
+            show_interrupt_hint: When ``False``, omit only the esc-to-interrupt hint (e.g. startup connect).
         """
         super().__init__()
         self._status = status
@@ -94,8 +94,11 @@ class LoadingWidget(Static):
     def _format_status_line(status: str) -> str:
         return f" {status}... "
 
-    def _format_hint_line(self, elapsed_secs: float) -> str:
-        return f"({format_duration(elapsed_secs)} · esc to interrupt)"
+    def _format_hint_line(self, elapsed_secs: float, *, include_interrupt: bool = True) -> str:
+        duration = format_duration(elapsed_secs)
+        if include_interrupt:
+            return f"({duration} · esc to interrupt)"
+        return f"({duration})"
 
     def _elapsed_seconds(self) -> float:
         if self._turn_start_mono is None:
@@ -107,19 +110,18 @@ class LoadingWidget(Static):
         status_part = Content.styled(self._format_status_line(self._status), colors.primary)
         if self._paused:
             spinner_part = Content.styled(get_glyphs().pause, "dim")
-            hint_part = Content.styled(
-                f" (paused at {format_duration(float(self._paused_total_elapsed))} · esc to interrupt)",
-                colors.muted,
-            )
+            paused_duration = format_duration(float(self._paused_total_elapsed))
+            if self._show_interrupt_hint:
+                paused_hint = f" (paused at {paused_duration} · esc to interrupt)"
+            else:
+                paused_hint = f" (paused at {paused_duration})"
+            hint_part = Content.styled(paused_hint, colors.muted)
         else:
             spinner_part = Content.styled(self._spinner.current_frame(), colors.primary)
-            if self._show_interrupt_hint:
-                hint_part = Content.styled(
-                    f" {self._format_hint_line(self._elapsed_seconds())}",
-                    colors.muted,
-                )
-            else:
-                hint_part = Content("")
+            hint_part = Content.styled(
+                f" {self._format_hint_line(self._elapsed_seconds(), include_interrupt=self._show_interrupt_hint)}",
+                colors.muted,
+            )
         return Content.assemble(spinner_part, status_part, hint_part)
 
     def _refresh_line(self) -> None:

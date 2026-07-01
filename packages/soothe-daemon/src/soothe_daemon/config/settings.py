@@ -148,6 +148,14 @@ class SootheDaemonConfig(BaseSettings):
             "Excess blocks only that loop's stream consumer."
         ),
     )
+    card_ingest_queue_maxsize: int = Field(
+        default=500,
+        ge=1,
+        description=(
+            "Maximum queued stream frames per loop for background display-card binding "
+            "(IG-534 §2.3). Saturated queues drop oldest frames."
+        ),
+    )
 
     # --- EventBus distribution stats (IG-403) -------------------------------
 

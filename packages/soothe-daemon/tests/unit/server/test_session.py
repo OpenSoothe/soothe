@@ -70,12 +70,41 @@ async def test_subscribe_loop_preserves_stream_delivery_when_omitted():
     client_id = await manager.create_session(transport, None)
 
     await manager.subscribe_loop(client_id, "loop-abc123", stream_delivery="adaptive")
-    assert manager.get_stream_delivery("loop-abc123") == "adaptive"
+    session = await manager.get_session(client_id)
+    assert session is not None
+    assert session.stream_delivery == "adaptive"
+    assert manager.get_stream_delivery(client_id=client_id) == "adaptive"
 
     await manager.subscribe_loop(client_id, "loop-abc123")
-    assert manager.get_stream_delivery("loop-abc123") == "adaptive"
+    assert session.stream_delivery == "adaptive"
+    assert manager.get_stream_delivery(client_id=client_id) == "adaptive"
 
     await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_stream_delivery_isolated_per_client_on_same_loop():
+    """IG-534 §3.2: subscribing client B must not overwrite client A's preference."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport_a = MagicMock()
+    transport_a.name = "test-a"
+    transport_b = MagicMock()
+    transport_b.name = "test-b"
+
+    client_a = await manager.create_session(transport_a, None)
+    client_b = await manager.create_session(transport_b, None)
+
+    loop_id = "loop:shared"
+    await manager.subscribe_loop(client_a, loop_id, stream_delivery="streaming")
+    await manager.subscribe_loop(client_b, loop_id, stream_delivery="batch")
+
+    assert manager.get_stream_delivery(client_id=client_a) == "streaming"
+    assert manager.get_stream_delivery(client_id=client_b) == "batch"
+
+    await manager.remove_session(client_a)
+    await manager.remove_session(client_b)
 
 
 @pytest.mark.asyncio

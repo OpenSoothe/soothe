@@ -7,6 +7,7 @@ asyncio.to_thread pool, preventing contention under concurrent loops.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -67,18 +68,44 @@ class _BindingBuffers:
     log_events: list[dict[str, Any]] = field(default_factory=list)
 
 
+_CARD_BIND_QUEUE_MAXSIZE = 500  # IG-534 §2.3: bounded per-loop ingest backlog
+
+
+@dataclass
+class _LoopIngestWorker:
+    queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None]
+    task: asyncio.Task[None]
+
+
 class LoopCardManager:
     """Owns per-loop ``LoopCardLedger`` instances and real-time card binding."""
 
-    def __init__(self, daemon: Any) -> None:
+    def __init__(
+        self, daemon: Any, *, ingest_queue_maxsize: int = _CARD_BIND_QUEUE_MAXSIZE
+    ) -> None:
         self._daemon = daemon
         self._ledgers: dict[str, LoopCardLedger] = {}
         self._buffers: dict[str, _BindingBuffers] = defaultdict(_BindingBuffers)
+        self._ingest_workers: dict[str, _LoopIngestWorker] = {}
+        self._ingest_queue_maxsize = max(1, int(ingest_queue_maxsize))
+        self._ingest_lock = asyncio.Lock()
 
     async def stop_for_loop(self, loop_id: str) -> None:
         """Drop in-memory ledger and binding buffers for ``loop_id``."""
+        await self._shutdown_ingest_worker(loop_id)
         self._ledgers.pop(loop_id, None)
         self._buffers.pop(loop_id, None)
+
+    async def _shutdown_ingest_worker(self, loop_id: str) -> None:
+        async with self._ingest_lock:
+            worker_state = self._ingest_workers.pop(loop_id, None)
+        if worker_state is None:
+            return
+        task = worker_state.task
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
     async def _open_ledger(self, loop_id: str) -> LoopCardLedger:
         ledger = self._ledgers.get(loop_id)
@@ -123,7 +150,88 @@ class LoopCardManager:
         mode: str,
         data: Any,
     ) -> None:
-        """Bind cards from one runner stream tuple as execution progresses."""
+        """Queue one stream tuple for background card binding (IG-534 §2.3).
+
+        Never blocks the daemon stream hot path. Failures are logged in the
+        per-loop ingest worker.
+        """
+        if mode == "updates":
+            return
+        queue = await self._ensure_ingest_queue(loop_id)
+        item = (namespace, mode, data)
+        dropped = False
+        try:
+            queue.put_nowait(item)
+        except asyncio.QueueFull:
+            with contextlib.suppress(asyncio.QueueEmpty):
+                queue.get_nowait()
+                dropped = True
+            try:
+                queue.put_nowait(item)
+            except asyncio.QueueFull:
+                logger.warning(
+                    "Card ingest queue full for loop %s; dropping frame (dropped_oldest=%s)",
+                    loop_id,
+                    dropped,
+                )
+                return
+        if dropped:
+            logger.debug(
+                "Card ingest queue saturated for loop %s; dropped oldest pending frame",
+                loop_id,
+            )
+
+    async def _ensure_ingest_queue(self, loop_id: str) -> asyncio.Queue:
+        async with self._ingest_lock:
+            worker_state = self._ingest_workers.get(loop_id)
+            if worker_state is not None:
+                return worker_state.queue
+            queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None] = asyncio.Queue(
+                maxsize=self._ingest_queue_maxsize
+            )
+            task = asyncio.create_task(
+                self._ingest_worker(loop_id, queue),
+                name=f"soothe-card-ingest-{loop_id[:16]}",
+            )
+            self._ingest_workers[loop_id] = _LoopIngestWorker(queue=queue, task=task)
+            return queue
+
+    async def _ingest_worker(
+        self,
+        loop_id: str,
+        queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None],
+    ) -> None:
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                namespace, mode, data = item
+                try:
+                    await self._ingest_stream_tuple_now(loop_id, namespace, mode, data)
+                except Exception:
+                    logger.exception("Card ingest worker failed for loop %s", loop_id)
+        except asyncio.CancelledError:
+            while True:
+                try:
+                    item = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                if item is None:
+                    continue
+                namespace, mode, data = item
+                with contextlib.suppress(Exception):
+                    await self._ingest_stream_tuple_now(loop_id, namespace, mode, data)
+            raise
+
+    async def _ingest_stream_tuple_now(
+        self,
+        loop_id: str,
+        namespace: tuple[str, ...],
+        mode: str,
+        data: Any,
+    ) -> None:
+        """Apply one stream tuple to in-memory buffers and flush to the ledger."""
         del namespace  # reserved for future namespace-aware binding
         if mode == "updates":
             return

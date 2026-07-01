@@ -63,3 +63,15 @@ def test_loading_widget_startup_mode_omits_interrupt_hint() -> None:
     widget.activate_status("Waiting for agent to be ready", show_interrupt_hint=False)
     assert widget._show_interrupt_hint is False
     assert widget._format_status_line("Connecting to daemon") == " Connecting to daemon... "
+    assert widget._format_hint_line(12.0, include_interrupt=False) == "(12s)"
+    assert widget._format_hint_line(12.0, include_interrupt=True) == "(12s · esc to interrupt)"
+
+
+def test_loading_widget_startup_mode_still_shows_elapsed() -> None:
+    widget = LoadingWidget("Waiting for agent to be ready", show_interrupt_hint=False)
+    widget._turn_start_mono = 100.0
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("soothe_cli.tui.widgets.loading.monotonic", lambda: 112.5)
+        assert widget._elapsed_seconds() == 12.0
+        hint = widget._format_hint_line(widget._elapsed_seconds(), include_interrupt=False)
+    assert hint == "(12s)"

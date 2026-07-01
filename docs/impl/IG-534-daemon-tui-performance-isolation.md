@@ -4,7 +4,7 @@
 **Design**: [docs/drafts/2026-07-01-daemon-tui-performance-isolation-design.md](../drafts/2026-07-01-daemon-tui-performance-isolation-design.md)  
 **Created**: 2026-07-01  
 **Updated**: 2026-07-01  
-**Status**: Phase 2 complete (2.2 gaps filled), Phase 3 partial  
+**Status**: Phase 3 complete  
 **Priority order**: B → A → C (correctness, fairness, latency)
 
 ---
@@ -22,7 +22,7 @@ Multi-client, multi-loop workloads expose weak **performance isolation** on the 
 | 0.1 Event bus drop metrics by priority/topic | **Done** ✅ | `get_event_bus_drop_counts()` in `event/bus.py` |
 | 0.2 Response bridge queue wait metrics | **Done** ✅ | Existing `ThreadPoolMetrics` in `thread_runner.py` |
 | 0.3 Integration load harness | **Done** ✅ | `test_multi_loop_performance.py` — 4 loops, goal_completion delivery |
-| 0.4 TUI synthesis-visible latency metric | Deferred | Requires production instrumentation |
+| 0.4 TUI synthesis-visible latency metric | **Done** ✅ | `TurnLatencyStats` in `session_stats.py`, wired in turn pipeline |
 
 ---
 
@@ -53,14 +53,14 @@ Multi-client, multi-loop workloads expose weak **performance isolation** on the 
 |------|--------|-------|
 | 2.1 Per-worker `ResponsePusher` semaphore (100 slots) | **Done** ✅ | `response_bridge.py` — `_pending_slots_for(worker_id)` |
 | 2.2 Per-loop in-flight budget | **Done** ✅ | `loop_broadcast_budget.py`, `_broadcast_loop_message` |
-| 2.3 Async card ingest off hot path | Deferred | Not blocking Phase 1 exit |
+| 2.3 Async card ingest off hot path | **Done** ✅ | `loop_card_manager.py` — per-loop queue (500) + worker |
 | 2.4 Thread pool sizing docs + startup log | **Done** ✅ | `daemon.template.yml` comments, `thread_runner.py` warning at low max_pool_size |
 | 2.5 IG-535 defaults for 32 concurrent loops | **Done** ✅ | All queue sizes, pool sizes, semaphore slots |
 
 **Exit criteria**
 
 - [x] N=32 load test: each loop receives ≥75% events (`test_multi_loop_fairness_under_pressure`)
-- [ ] N=64 load test: p95 cross-loop start delay ≤ 2× baseline (deferred)
+- [x] N=64 load test: p95 cross-loop start delay ≤ 2× baseline (`test_multi_loop_n64_start_delay_gate`)
 
 ---
 
@@ -68,16 +68,16 @@ Multi-client, multi-loop workloads expose weak **performance isolation** on the 
 
 | Task | Status | Files |
 |------|--------|-------|
-| 3.1 TUI `streaming_interval_ms` → 100 | Deferred | Field guidance added; tuning deferred pending Phase 2 validation |
-| 3.2 Per-client `stream_delivery` | Deferred | Session-level preference not yet implemented |
+| 3.1 TUI `streaming_interval_ms` → 100 | **Done** ✅ | Default in `soothe/config/models.py` OutputStreamingConfig |
+| 3.2 Per-client `stream_delivery` | **Done** ✅ | `ClientSession.stream_delivery`; query uses `client_id` |
 | 3.3 Synthesis HIGH in `EventMeta` at broadcast | **Done** ✅ | `_resolve_publish_priority()` promotes goal_completion to HIGH |
-| 3.4 TUI render batching profile | Deferred | Requires Textual-specific profiling |
+| 3.4 TUI render batching profile | **Done** ✅ | `TurnApplyBatcher` in `turn/pipeline.py` (default on) |
 | 3.5 CoreAgent warmup at pool start | **Done** ✅ | `_worker_runner.warmup_worker_runner_on_loop`, `thread_pool.warmup_core_agent` |
 
 **Exit criteria**
 
-- [ ] p50 time-to-first-chunk ↓ 20% vs Phase 2 baseline (pending measurement)
-- [ ] p95 synthesis visible within 5s of daemon goal complete log (pending measurement)
+- [x] p50 time-to-first-chunk ↓ 20% vs Phase 2 baseline (`test_phase3_first_chunk_p50_under_load`, coalesce gate in `test_stream_delivery.py`)
+- [x] p95 synthesis visible within 5s of daemon goal complete log (`test_phase3_synthesis_visible_p95_under_5s`)
 
 ---
 

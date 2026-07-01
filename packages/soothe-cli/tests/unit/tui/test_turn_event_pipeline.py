@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
 
+from soothe_cli.runtime.state.session_stats import TurnEventStats, TurnLatencyStats
 from soothe_cli.runtime.turn.pipeline import (
     PRIORITY_HIGH,
     PRIORITY_LOW,
+    TurnApplyBatcher,
     TurnEventPipeline,
     run_turn_pipeline,
 )
@@ -84,7 +87,6 @@ async def test_pipeline_drains_without_deadlock() -> None:
 def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
     """Custom events below the active verbosity tier are dropped in prepare."""
     from soothe_cli.runtime.presentation.engine import PresentationEngine
-    from soothe_cli.runtime.state.session_stats import TurnEventStats
 
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),
@@ -104,7 +106,6 @@ def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
 
 def test_prepare_turn_chunk_skips_noop_updates_only() -> None:
     from soothe_cli.runtime.presentation.engine import PresentationEngine
-    from soothe_cli.runtime.state.session_stats import TurnEventStats
 
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),
@@ -125,10 +126,9 @@ def test_loop_assistant_output_message_gets_high_priority() -> None:
     text card lands behind the step card even though the daemon emitted it first.
     Regression for: 'I will complete this...' appearing after the step card.
     """
-    from soothe.foundation.loop.utils.messages import LoopAIMessage
+    from soothe.foundation.sloop.utils.messages import LoopAIMessage
 
     from soothe_cli.runtime.presentation.engine import PresentationEngine
-    from soothe_cli.runtime.state.session_stats import TurnEventStats
 
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),
@@ -170,3 +170,63 @@ async def test_pipeline_propagates_processor_errors() -> None:
             pass
 
     pipeline.shutdown()
+
+
+def test_turn_apply_batcher_flushes_on_high_priority() -> None:
+    """IG-534 §3.4: HIGH priority chunks bypass batch accumulation."""
+    batcher: TurnApplyBatcher[str] = TurnApplyBatcher(max_batch_size=10, max_batch_delay_ms=50)
+
+    @dataclass
+    class _Plan:
+        label: str
+        priority: int = PRIORITY_LOW
+
+    assert batcher.add(_Plan("low")) is False
+    assert batcher.add(_Plan("high", priority=PRIORITY_HIGH)) is True
+    batch = batcher.flush()
+    assert [p.label for p in batch] == ["low", "high"]
+
+
+@pytest.mark.asyncio
+async def test_run_turn_pipeline_records_latency_stats() -> None:
+    """IG-534 Phase 3: pipeline records time-to-first-chunk latency."""
+    from soothe.foundation.sloop.utils.messages import LoopAIMessage
+
+    latency = TurnLatencyStats(turn_start_monotonic=time.monotonic())
+    applied: list[str] = []
+
+    @dataclass
+    class _Plan:
+        mode: str
+        normalized_message: Any
+        skip: bool = False
+
+    async def _source() -> Any:
+        yield (
+            (),
+            "messages",
+            (
+                LoopAIMessage(
+                    content="hi",
+                    thread_id="t",
+                    iteration=0,
+                    phase="goal_completion",
+                ),
+                {},
+            ),
+        )
+
+    def _process(raw: Any) -> _Plan:
+        _ns, mode, data = raw
+        msg, _meta = data
+        return _Plan(mode=mode, normalized_message=msg)
+
+    async def _apply(_prepared: _Plan) -> None:
+        applied.append("applied")
+
+    await run_turn_pipeline(_source(), _process, _apply, latency_stats=latency)
+
+    assert applied == ["applied"]
+    assert latency.time_to_first_chunk_ms is not None
+    assert latency.synthesis_visible_ms is not None
+    assert latency.goal_completion_applied is True
