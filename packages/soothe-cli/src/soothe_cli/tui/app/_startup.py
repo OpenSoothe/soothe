@@ -35,6 +35,11 @@ from soothe_cli.tui.widgets.welcome import WelcomeBanner
 
 logger = logging.getLogger(__name__)
 
+# Cold-start: daemon may bind WebSocket ~30s after PID file (CoreAgent pool warmup).
+_DAEMON_READY_TIMEOUT_S = 60.0
+_DAEMON_CONNECT_MAX_ATTEMPTS = 3
+_DAEMON_CONNECT_RETRY_DELAY_S = 2.0
+
 
 class _StartupMixin:
     """Startup, server/daemon workers, skills discovery, prewarm and update methods."""
@@ -405,51 +410,105 @@ class _StartupMixin:
 
         return await discover_skills_async(daemon_config=self._daemon_config)
 
+    @staticmethod
+    def _daemon_connect_attempt_label(*, phase: str, attempt: int, max_attempts: int) -> str:
+        """Format a daemon-connect spinner label with attempt progress.
+
+        The first try shows only ``phase``; attempt suffixes appear after a
+        timeout or failure triggers a retry.
+        """
+        if max_attempts <= 1 or attempt <= 1:
+            return phase
+        return f"{phase} (attempt {attempt}/{max_attempts})"
+
     async def _connect_daemon_background(self) -> None:
         """Background worker: connect the TUI directly to the daemon."""
         from soothe_cli.tui.textual_adapter import (
-            SPINNER_LABEL_CONNECTING_DAEMON,
             SPINNER_LABEL_WAITING_AGENT_READY,
         )
 
-        await self._set_spinner(SPINNER_LABEL_WAITING_AGENT_READY, show_interrupt_hint=False)
-        try:
-            from soothe_sdk.client import (
-                is_daemon_live,
-                websocket_url_from_config,
+        for attempt in range(1, _DAEMON_CONNECT_MAX_ATTEMPTS + 1):
+            waiting_label = self._daemon_connect_attempt_label(
+                phase=SPINNER_LABEL_WAITING_AGENT_READY,
+                attempt=attempt,
+                max_attempts=_DAEMON_CONNECT_MAX_ATTEMPTS,
             )
+            await self._set_spinner(waiting_label, show_interrupt_hint=False)
+            try:
+                session, status_event = await self._connect_daemon_once(attempt=attempt)
+            except Exception as exc:
+                if attempt < _DAEMON_CONNECT_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Daemon connect attempt %d/%d failed: %s",
+                        attempt,
+                        _DAEMON_CONNECT_MAX_ATTEMPTS,
+                        exc,
+                    )
+                    await asyncio.sleep(_DAEMON_CONNECT_RETRY_DELAY_S)
+                    continue
+                self.post_message(self.ServerStartFailed(error=exc))
+                return
 
-            from soothe_cli.runtime.transport.session import TuiDaemonSession
-
-            ws_url = websocket_url_from_config(self._daemon_config)
-
-            # Check daemon status via WebSocket RPC (IG-174 Phase 1)
-            # Wait for daemon to be fully ready, not just port-live (IG-489)
-            daemon_live = await is_daemon_live(
-                ws_url, timeout=5.0, wait_for_ready=True, ready_timeout=30.0
-            )
-
-            if not daemon_live:
-                # CLI does NOT control daemon start/stop per architectural separation (IG-174/IG-175)
-                # Show helpful error message instead
-                raise ConnectionError(
-                    f"Soothe daemon not running at {ws_url}. "
-                    f"Please start the daemon with: soothed start"
-                )
-
-            await self._set_spinner(SPINNER_LABEL_CONNECTING_DAEMON, show_interrupt_hint=False)
-
-            session = TuiDaemonSession(
-                self._daemon_config,
-                workspace=self._cwd,
-                post_idle_drain_deadline=0.3,
-            )
-            status_event = await session.connect(resume_loop_id=self._lc_loop_id)
-        except Exception as exc:
-            self.post_message(self.ServerStartFailed(error=exc))
+            self.post_message(self.DaemonReady(session=session, status_event=status_event))
             return
 
-        self.post_message(self.DaemonReady(session=session, status_event=status_event))
+    async def _connect_daemon_once(
+        self,
+        *,
+        attempt: int,
+    ) -> tuple[Any, dict[str, Any]]:
+        """Wait for daemon readiness and bootstrap one TUI session.
+
+        Args:
+            attempt: Current connect attempt (1-based).
+
+        Returns:
+            Tuple of ``(TuiDaemonSession, status_event)``.
+
+        Raises:
+            ConnectionError: If the daemon is not reachable or ready in time.
+            Exception: If loop bootstrap fails.
+        """
+        from soothe_sdk.client import (
+            is_daemon_live,
+            websocket_url_from_config,
+        )
+
+        from soothe_cli.runtime.transport.session import TuiDaemonSession
+        from soothe_cli.tui.textual_adapter import SPINNER_LABEL_CONNECTING_DAEMON
+
+        ws_url = websocket_url_from_config(self._daemon_config)
+
+        # Check daemon status via WebSocket RPC (IG-174 Phase 1)
+        # Wait for daemon to be fully ready, not just port-live (IG-489)
+        daemon_live = await is_daemon_live(
+            ws_url,
+            timeout=5.0,
+            wait_for_ready=True,
+            ready_timeout=_DAEMON_READY_TIMEOUT_S,
+        )
+
+        if not daemon_live:
+            # CLI does NOT control daemon start/stop per architectural separation (IG-174/IG-175)
+            raise ConnectionError(
+                f"Soothe daemon not running at {ws_url}. "
+                f"Please start the daemon with: soothed start"
+            )
+
+        connecting_label = self._daemon_connect_attempt_label(
+            phase=SPINNER_LABEL_CONNECTING_DAEMON,
+            attempt=attempt,
+            max_attempts=_DAEMON_CONNECT_MAX_ATTEMPTS,
+        )
+        await self._set_spinner(connecting_label, show_interrupt_hint=False)
+
+        session = TuiDaemonSession(
+            self._daemon_config,
+            workspace=self._cwd,
+            post_idle_drain_deadline=0.3,
+        )
+        status_event = await session.connect(resume_loop_id=self._lc_loop_id)
+        return session, status_event
 
     def on_soothe_app_daemon_ready(self, event: DaemonReady) -> None:
         """Handle successful daemon bootstrap for the TUI."""

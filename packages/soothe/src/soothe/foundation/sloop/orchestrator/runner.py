@@ -14,6 +14,7 @@ from typing import Any
 
 from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.observability.langfuse import (
     loop_graph_langfuse_run_display_name,
     merge_langfuse_runnable_config,
@@ -33,8 +34,9 @@ def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
     if pp is not None:
         if pp.full_output and str(pp.full_output).strip():
             return str(pp.full_output).strip()
-        if pp.next_action and str(pp.next_action).strip():
-            return str(pp.next_action).strip()
+        action_text = resolve_plan_action_text(pp)
+        if action_text:
+            return action_text
     last = ctx.loop_state.last_execute_assistant_text
     if last and str(last).strip():
         return str(last).strip()

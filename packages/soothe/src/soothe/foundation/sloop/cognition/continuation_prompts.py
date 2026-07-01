@@ -29,7 +29,10 @@ DECISION CRITERIA:
   context alone (e.g., "translate that", "summarize the result", "explain it in chinese")
   with no new tools or cross-domain work.
 - Choose "plan_generate" when the current request needs multiple steps, new tool calls,
-  or addresses a topic not covered by prior goals.
+  addresses a topic not covered by prior goals, OR when the user says continue/resume/proceed
+  and the prior goal completion report contains recommended next actions to implement.
+- For continue/resume/proceed: prefer "plan_generate" when prior completion lists
+  recommendations, high-priority items, or follow-up implementation work.
 
 Return a ContinuationAssessment JSON object with fields: action, reasoning, goal_progress.
 """
@@ -58,7 +61,7 @@ def format_loop_continuation_assess_prompt(
         for g in prior_goals:
             rows.append(
                 f"  - {g['goal_id']} | text={g['goal_text'][:60]!r} | "
-                f"completion={preview_first(g.get('completion', ''), 120)!r} | "
+                f"completion={preview_first(g.get('completion', ''), 800)!r} | "
                 f"steps={g.get('step_count', 0)} | "
                 f"last={g.get('current_plan_action', '')[:60]!r}"
             )

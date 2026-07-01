@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StatusAssessment
+from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.text_preview import log_preview
 
 # Maximum evidence summary length before truncating model-supplied evidence
@@ -82,7 +83,7 @@ class PlanPhase:
         # full_output is now populated by goal_completion from the ledger,
         # so we don't concatenate raw evidence strings here.
 
-        state.add_action_to_history(result.next_action or "")
+        state.add_action_to_history(resolve_plan_action_text(result))
 
         successes = sum(1 for r in state.step_results if r.success)
         failures = sum(1 for r in state.step_results if not r.success)

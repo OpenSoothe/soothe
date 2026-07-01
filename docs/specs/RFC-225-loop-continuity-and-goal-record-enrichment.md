@@ -111,7 +111,7 @@ One `loop_id` ↔ one main thread (`main_thread_id = loop_id`) ↔ many short-li
 
 - **LangChain checkpointer** — holds raw message / tool-call state. Rows exist per `thread_id`:
   - `main_thread_id` (= loop_id): CoreAgent orchestration thread (Plan node, single-step Execute).
-  - Forked `thread_id`s: per-step branches that inherit predecessor history.
+  - Forked `thread_id`s: per-step `__step_<id>` branches with empty checkpoints. Dependent steps receive predecessor output via `PRIOR STEP EVIDENCE` in the execute envelope; `continue_loop` bootstrap replays prior-goal execute ledger rows (RFC-214 §3.1).
   Untouched by this RFC.
 - **StrangeLoop checkpoint** — keyed by `loop_id` only. Holds the orchestration ledger: goals, plans, step outcomes, evidence, and the orchestration Human-AI message pairs (`loop_messages`). References thread_ids in `thread_ids` and `GoalExecutionRecord.thread_id` but does not duplicate message-level content.
 

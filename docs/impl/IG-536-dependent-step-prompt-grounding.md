@@ -1,6 +1,6 @@
 # IG-536: Dependent Step Prompt Grounding
 
-**Related**: [IG-508](IG-508-step-full-description.md) (step `full_description`); RFC-214 (unified execute-step ledger / branch predecessor replay)
+**Related**: [IG-508](IG-508-step-full-description.md) (step `full_description`); RFC-214 (unified execute-step ledger / dependent-step envelope grounding)
 **Created**: 2026-07-01
 **Status**: Implemented
 
@@ -34,7 +34,7 @@ Example chain:
 | **P0** | `PRIOR STEP EVIDENCE` section in every dependent execute envelope | `step_predecessor_context.py`, `user_message.py`, `executor.py` |
 | **P1** | Planner requires concrete `full_description` when `dependencies` is set | `planner.py`, `plan_generate_instructions.xml` |
 | **P2** | Between-wave brief hydration (LLM + template fallback) for vague dependent steps | `step_brief_hydrator.py`, `executor._hydrate_dependent_steps_before_wave` |
-| **P3** | Fresh `__step_<id>` thread per step + predecessor ledger message injection | `thread_selection.py`, `executor._predecessor_graph_messages` |
+| **P3** | Fresh `__step_<id>` thread per step; dependent steps ground via envelope only | `thread_selection.py`, `executor.py` |
 
 ### Execute flow (dependent step)
 
@@ -49,9 +49,8 @@ sequenceDiagram
     Hydr-->>Wave: updated step.full_description
     Wave->>Exec: run step with dependencies
     Exec->>Exec: P3: select fresh __step_<id> thread
-    Exec->>Exec: P3: deep-copy predecessor execute_step ledger rows
     Exec->>Exec: P0: build PRIOR STEP EVIDENCE from ledger / StepResult
-    Exec->>CE: graph_input = predecessor msgs + execute envelope
+    Exec->>CE: graph_input = single execute envelope
     Note over CE: GOAL + PRIOR STEP EVIDENCE + EXECUTION HINTS
 ```
 
@@ -108,7 +107,7 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 
 ---
 
-## P3: Thread isolation + predecessor ledger injection
+## P3: Thread isolation + envelope-only predecessor grounding
 
 **Files**:
 
@@ -118,9 +117,9 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 | Task | Status | Notes |
 |------|--------|-------|
 | Fresh `__step_<id>` thread for every step | Done | Removed sole-child chain reuse; dependent steps no longer inherit predecessor checkpoint |
-| `predecessor_messages_for_step()` | Done | Deep-copies transitive predecessor `execute_step` Human/AI ledger rows |
-| Message cap | Done | `plan_prompt_ledger.plan_ledger_max_messages` (capped at 256; `0` = unlimited) |
-| Envelope + injection together | Done | Agent sees both raw ledger replay and summarized `PRIOR STEP EVIDENCE` |
+| `build_prior_step_evidence()` in envelope | Done | Transitive deps; body from latest execute_step AI ledger row or `StepResult` |
+| No predecessor ledger replay for DAG deps | Done | Removed `_predecessor_graph_messages` — replay duplicated AI bodies already in `PRIOR STEP EVIDENCE` |
+| `continue_loop` bootstrap replay | Done | `prior_loop_execute_messages()` still replays prior-goal execute rows (RFC-225; no envelope evidence on that path) |
 
 ---
 
@@ -130,7 +129,7 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 |------|------|
 | `foundation/sloop/engine/step_predecessor_context.py` | Evidence builder, hydration heuristics, execution hints |
 | `foundation/sloop/engine/step_brief_hydrator.py` | LLM between-wave brief expansion |
-| `foundation/sloop/engine/executor.py` | Orchestrates hydration, envelope, ledger injection |
+| `foundation/sloop/engine/executor.py` | Orchestrates hydration, envelope, continuation bootstrap replay |
 | `foundation/sloop/engine/thread_selection.py` | Per-step isolated thread IDs |
 | `foundation/sloop/engine/predecessor_branch_context.py` | Transitive dep closure + ledger slice helpers |
 | `foundation/sloop/prompts/user_message.py` | `PRIOR STEP EVIDENCE` envelope section |
@@ -147,7 +146,7 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 |-----------|----------|
 | `tests/unit/core/loop/engine/test_step_predecessor_context.py` | Hydration heuristic, evidence from ledger, hints, template brief |
 | `tests/unit/core/loop/engine/test_step_brief_hydrator.py` | LLM path + template fallback |
-| `tests/unit/core/loop/engine/test_executor_branch_predecessor.py` | Fresh thread + envelope evidence + transitive ledger injection + P2 hydration |
+| `tests/unit/core/loop/engine/test_executor_branch_predecessor.py` | Fresh thread + envelope evidence + no ledger replay for deps + P2 hydration + continuation bootstrap |
 | `tests/unit/core/prompts/test_user_envelope.py` | `PRIOR STEP EVIDENCE` envelope section ordering |
 
 ---
@@ -158,7 +157,7 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 - [x] EXECUTION HINTS forbid repeating completed discovery when evidence is present
 - [x] Planner prompts require grounded `full_description` for dependent steps
 - [x] Vague dependent briefs are hydrated between waves when enabled
-- [x] Each step runs on a fresh isolated thread with predecessor ledger injection
+- [x] Each step runs on a fresh isolated thread; dependent steps use envelope-only predecessor grounding
 - [x] Unit tests cover evidence building, hydration, and executor integration
 
 ---

@@ -10,7 +10,6 @@ from soothe_cli.tui.widgets.messages import CognitionReasonMessage
 
 def test_intent_classified_reasoning_cognition_message() -> None:
     widget = CognitionReasonMessage(
-        next_action="",
         status="",
         iteration=0,
         plan_reasoning="I'll inspect the repo to map the architecture.",

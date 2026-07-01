@@ -12,6 +12,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.state.schemas import ContinuationAssessment
 
@@ -25,6 +26,8 @@ def _make_planner() -> LLMPlanner:
     # _plan_phase_chat_model is a module-level function; let it pass through `model`.
     planner = LLMPlanner.__new__(LLMPlanner)
     planner._model = model
+    planner._plan_assess_model = model
+    planner._plan_generate_model = model
     planner._config = None
     planner._loop_id = "loop-test"
     return planner

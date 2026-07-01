@@ -46,6 +46,26 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
+def _create_loop_phase_model(
+    config: SootheConfig,
+    role: str,
+    *,
+    fallback: BaseChatModel | None,
+    phase: str,
+) -> BaseChatModel | None:
+    """Resolve a loop-phase chat model from router role."""
+    try:
+        return config.create_chat_model(role)
+    except Exception:
+        logger.warning(
+            "Failed to create %s model for role=%s; falling back to planner model",
+            phase,
+            role,
+            exc_info=True,
+        )
+        return fallback
+
+
 def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     """Instantiate the MemoryProtocol implementation using MemU.
 
@@ -101,9 +121,28 @@ def resolve_planner(
             except Exception:
                 logger.warning("Failed to create model for planner")
 
+    loop_cfg = config.agent.loop
+    plan_assess_model = _create_loop_phase_model(
+        config,
+        loop_cfg.plan_assess_model_role,
+        fallback=planner_model,
+        phase="plan-assess",
+    )
+    plan_generate_model = _create_loop_phase_model(
+        config,
+        loop_cfg.plan_generate_model_role,
+        fallback=planner_model,
+        phase="plan-generate",
+    )
+
     from soothe.foundation.sloop.cognition.planner import LLMPlanner
 
-    return LLMPlanner(model=planner_model, config=config)
+    return LLMPlanner(
+        model=planner_model,
+        config=config,
+        plan_assess_model=plan_assess_model,
+        plan_generate_model=plan_generate_model,
+    )
 
 
 def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:

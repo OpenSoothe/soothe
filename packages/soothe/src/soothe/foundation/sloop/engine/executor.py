@@ -48,6 +48,10 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
     compute_act_wave_finalize,
     provenance_is_task_delegate,
 )
+from soothe.foundation.sloop.engine.continuation_context import (
+    build_continuation_execution_hints,
+    build_prior_goal_completion_block,
+)
 from soothe.foundation.sloop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
     await_next_graph_stream_chunk,
@@ -57,13 +61,9 @@ from soothe.foundation.sloop.engine.graph_interrupt import (
 from soothe.foundation.sloop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
 )
-from soothe.foundation.sloop.engine.predecessor_branch_context import (
-    prior_loop_execute_messages,
-)
 from soothe.foundation.sloop.engine.step_predecessor_context import (
     build_dependent_execution_hints,
     build_prior_step_evidence,
-    predecessor_messages_for_step,
     step_needs_brief_hydration,
 )
 from soothe.foundation.sloop.engine.step_wave_types import (
@@ -343,25 +343,6 @@ class Executor:
             primary["tools_completed"] = primary.get("tools_completed") or len(outcomes)
         return primary
 
-    def _branch_predecessor_message_cap(self) -> int:
-        """Max ledger messages to deep-copy into a parallel branch CoreAgent input (RFC-214).
-
-        When ``plan_prompt_ledger.plan_ledger_max_messages`` is positive, reuse it as an
-        upper bound (capped at 256). When it is zero, treat as unlimited so full
-        predecessor context is available. Without config, use
-        ``DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES``.
-        """
-        from soothe.foundation.sloop.engine.predecessor_branch_context import (
-            DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
-        )
-
-        if self._config is None:
-            return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
-        cap = int(self._config.agent.loop.plan_prompt_ledger.plan_ledger_max_messages)
-        if cap > 0:
-            return min(cap, 256)
-        return 0
-
     def _step_brief_hydration_enabled(self) -> bool:
         if self._config is None:
             return True
@@ -418,47 +399,37 @@ class Executor:
 
         decision = loop_state.current_decision if loop_state is not None else None
         predecessor_evidence = ""
+        prior_goal_completion = ""
         if loop_state is not None and decision is not None and (step.dependencies or []):
             predecessor_evidence = build_prior_step_evidence(step, decision, loop_state)
+        elif (
+            loop_state is not None
+            and getattr(loop_state, "continue_loop", False)
+            and loop_state.iteration == 0
+            and not (step.dependencies or [])
+        ):
+            prior_goal_completion = build_prior_goal_completion_block(loop_state.loop_messages)
 
         step_goal_text = step.full_description or step.description
-        execution_hints = build_dependent_execution_hints(
-            step,
-            has_predecessor_evidence=bool(predecessor_evidence.strip()),
-            wire_subagent=wire_subagent,
-            workspace=workspace,
-            expected_output=step.expected_output,
-        )
+        if prior_goal_completion.strip():
+            execution_hints = build_continuation_execution_hints(
+                has_prior_goal_completion=True,
+            )
+        else:
+            execution_hints = build_dependent_execution_hints(
+                step,
+                has_predecessor_evidence=bool(predecessor_evidence.strip()),
+                wire_subagent=wire_subagent,
+                workspace=workspace,
+                expected_output=step.expected_output,
+            )
         return UserMessageBuilder().build_execute_step_message(
             step_goal_text,
             execution_hints=execution_hints,
             predecessor_evidence=predecessor_evidence or None,
+            prior_goal_completion=prior_goal_completion or None,
             skill_context=loop_state.skill_context if loop_state else None,
         )
-
-    def _predecessor_graph_messages(
-        self,
-        step: StepAction,
-        loop_state: LoopState,
-    ) -> list[BaseMessage]:
-        """Inject predecessor execute_step ledger rows for dependent steps."""
-        decision = loop_state.current_decision
-        if decision is None or not (step.dependencies or []):
-            return []
-        cap = self._branch_predecessor_message_cap()
-        injected = predecessor_messages_for_step(
-            loop_state.loop_messages,
-            step,
-            decision,
-            max_messages=cap,
-        )
-        if injected:
-            logger.info(
-                "[ThreadFork] step=%s injected %d predecessor execute msgs",
-                step.id,
-                len(injected),
-            )
-        return injected
 
     async def _fetch_pending_interrupts_from_state(
         self,
@@ -1559,7 +1530,6 @@ class Executor:
 
             # IG-477: Thread isolation for parallel safety; predecessor context via injection.
             fork_thread_id = thread_id  # Default to main thread
-            direct_deps = step.dependencies or []
 
             if loop_state is not None and loop_state.current_decision is not None:
                 fork_thread_id = _select_thread_for_step(
@@ -1598,35 +1568,10 @@ class Executor:
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
-            # Build user message with execution hints (RFC-214)
+            # Build user message with execution hints (RFC-214).
+            # Dependent steps: PRIOR STEP EVIDENCE in envelope only.
+            # Loop continuation bootstrap: PRIOR GOAL COMPLETION in envelope only.
             graph_input_messages: list[BaseMessage] = []
-
-            if direct_deps and loop_state is not None:
-                graph_input_messages = self._predecessor_graph_messages(step, loop_state)
-
-            # RFC-225: Loop-continuation bootstrap injection.
-            # The bootstrap step (iter=0, no deps, continue_loop=True) forks from the
-            # main loop thread, which has NO LangChain checkpoints (prior goal steps
-            # ran on their own forked threads). The seeded LoopState.loop_messages
-            # carries the prior goal's execute_step ledger; inject it so the agent
-            # actually sees the prior conversation it needs to address.
-            elif (
-                not direct_deps
-                and loop_state is not None
-                and getattr(loop_state, "continue_loop", False)
-                and loop_state.iteration == 0
-                and loop_state.loop_messages
-            ):
-                cap = self._branch_predecessor_message_cap()
-                graph_input_messages = prior_loop_execute_messages(
-                    loop_state.loop_messages, max_messages=cap
-                )
-                if graph_input_messages:
-                    logger.info(
-                        "[LoopContinuation] step=%s bootstrap injected %d prior-goal execute msgs",
-                        step.id,
-                        len(graph_input_messages),
-                    )
 
             envelope = self._compose_execute_step_envelope(
                 step,

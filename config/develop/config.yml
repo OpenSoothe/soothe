@@ -80,6 +80,9 @@ agent:
       global_max_llm_calls: 16
       step_parallelism: max
     max_subagent_tasks_per_wave: 8
+    plan_assess_model_role: fast
+    plan_generate_model_role: fast
+    goal_synthesis_model_role: fast
 
 # ============================================================
 # PERSISTENCE

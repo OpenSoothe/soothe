@@ -5,7 +5,18 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from soothe_daemon.runner._worker_runner import warmup_worker_runner_on_loop
+import pytest
+
+from soothe_daemon.runner._worker_runner import (
+    _warmup_worker_core_agent,
+    warmup_worker_runner_on_loop,
+)
+
+
+class _FakeLazyCoreAgent:
+    """Stand-in for LazyCoreAgent in isinstance checks."""
+
+    is_materialized: bool = False
 
 
 @patch("soothe_daemon.runner._worker_runner.acquire_worker_runner")
@@ -36,15 +47,15 @@ def test_warmup_worker_runner_skips_core_agent_when_disabled(
 
 
 @patch(
-    "soothe_daemon.runner._worker_runner._materialize_runner_core_agent",
+    "soothe_daemon.runner._worker_runner._warmup_worker_core_agent",
     new_callable=AsyncMock,
 )
 @patch("soothe_daemon.runner._worker_runner.acquire_worker_runner")
 def test_warmup_worker_runner_materializes_core_agent(
     mock_acquire: MagicMock,
-    mock_materialize: AsyncMock,
+    mock_warmup: AsyncMock,
 ) -> None:
-    """Warmup compiles LazyCoreAgent on the worker event loop."""
+    """Warmup compiles CoreAgent graphs on the worker event loop."""
     runner = MagicMock()
     mock_acquire.return_value = (runner, runner)
     config = MagicMock()
@@ -64,11 +75,84 @@ def test_warmup_worker_runner_materializes_core_agent(
         loop.close()
 
     assert result is runner
-    mock_materialize.assert_awaited_once_with(
+    mock_warmup.assert_awaited_once_with(
         runner,
         config=config,
         warmup_core_agent=True,
     )
+
+
+@pytest.mark.asyncio
+async def test_warmup_worker_core_agent_touches_execution_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warmup compiles the ephemeral execute twin after primary materialize."""
+    execute_graph = MagicMock(name="execute_graph")
+    materialized = MagicMock()
+    materialized.execution_graph = execute_graph
+
+    lazy_agent = _FakeLazyCoreAgent()
+    lazy_agent.is_materialized = False
+
+    runner = MagicMock()
+    runner._core_agent = lazy_agent
+    runner._materialize_core_agent = AsyncMock(return_value=materialized)
+    runner._materialized_core_agent.return_value = materialized
+
+    config = MagicMock()
+    config.agent.runtime.lazy_core_agent = True
+
+    monkeypatch.setattr(
+        "soothe.foundation.core.agent._lazy.LazyCoreAgent",
+        _FakeLazyCoreAgent,
+    )
+    monkeypatch.setattr(
+        "soothe.foundation.sloop.engine.executor.ephemeral_execute_stream_enabled",
+        lambda: True,
+    )
+
+    await _warmup_worker_core_agent(
+        runner,
+        config=config,
+        warmup_core_agent=True,
+    )
+
+    runner._materialize_core_agent.assert_awaited_once()
+    runner._materialized_core_agent.assert_called_once()
+    assert materialized.execution_graph is execute_graph
+
+
+@pytest.mark.asyncio
+async def test_warmup_worker_core_agent_skips_execution_graph_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Execute twin warmup is skipped when ephemeral execute streaming is off."""
+    lazy_agent = _FakeLazyCoreAgent()
+    lazy_agent.is_materialized = True
+
+    runner = MagicMock()
+    runner._core_agent = lazy_agent
+
+    config = MagicMock()
+    config.agent.runtime.lazy_core_agent = True
+
+    monkeypatch.setattr(
+        "soothe.foundation.core.agent._lazy.LazyCoreAgent",
+        _FakeLazyCoreAgent,
+    )
+    monkeypatch.setattr(
+        "soothe.foundation.sloop.engine.executor.ephemeral_execute_stream_enabled",
+        lambda: False,
+    )
+
+    await _warmup_worker_core_agent(
+        runner,
+        config=config,
+        warmup_core_agent=True,
+    )
+
+    runner._materialize_core_agent.assert_not_called()
+    runner._materialized_core_agent.assert_not_called()
 
 
 def test_warmup_worker_runner_returns_none_when_reuse_disabled() -> None:

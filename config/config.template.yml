@@ -48,6 +48,10 @@ active_router_profile: default
 #   name: Soothe
 #   runtime:
 #     lazy_core_agent: true   # defer graph compile; pair with daemon thread_pool.warmup_core_agent
+#   loop:
+#     plan_assess_model_role: think   # router role for plan-assess + continuation routing
+#     plan_generate_model_role: think # router role for plan-generate
+#     goal_synthesis_model_role: think # router role for goal-completion synthesis
 #   autonomous:
 #     enabled: true          # start 24/7 AutopilotService scheduling loop (default: false)
 #     goal_deadline_seconds: 3600  # recommended for guarded production pilot

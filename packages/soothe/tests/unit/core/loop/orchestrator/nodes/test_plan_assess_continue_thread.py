@@ -11,6 +11,9 @@ CE ledger spans all goals via ce.load(), no explicit seeding needed.
 from datetime import UTC, datetime
 from pathlib import Path
 
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.sloop.orchestrator.nodes.plan_assess import (
     _prior_goal_summaries,
     build_continue_loop_bootstrap_plan,
@@ -23,10 +26,6 @@ from soothe.foundation.sloop.state.checkpoint import (
     WorkingMemoryState,
 )
 from soothe.foundation.sloop.state.schemas import LoopState
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 def _make_ce_with_completed_goal() -> ContextEngine:
@@ -88,6 +87,11 @@ def test_build_bootstrap_plan_shape() -> None:
     assert pr.decision.type == "execute_steps"
     assert len(pr.decision.steps) == 1
     assert pr.decision.execution_mode == "parallel"
+    step = pr.decision.steps[0]
+    assert step.description == "user follow-up"
+    assert step.full_description
+    assert "user follow-up" in step.full_description
+    assert "PRIOR GOAL COMPLETION" in step.full_description
     # RFC-226 default: not terminal
     assert pr.terminal_after_execute is False
 
@@ -102,8 +106,9 @@ def test_build_bootstrap_plan_terminal_flag_propagates() -> None:
     assert pr.terminal_after_execute is True
     assert pr.assessment_reasoning == "Pure translation; no new tools needed."
     assert pr.goal_progress == "low"
-    # Step description embeds the actual goal text.
-    assert "translate the result to chinese" in pr.decision.steps[0].description
+    step = pr.decision.steps[0]
+    assert step.description == "translate the result to chinese"
+    assert "translate the result to chinese" in (step.full_description or "")
 
 
 # ── _prior_goal_summaries (RFC-226, RFC-624 Phase 4 Stage 2) ───────────────────

@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+
 from soothe.foundation.sloop.cognition.planner import (
     LLMPlanner,
     _parse_status_assessment_from_raw_message,
 )
 from soothe.foundation.sloop.state.schemas import StatusAssessment
-
 from soothe.utils.llm.structured import StructuredOutputError
 
 
@@ -36,6 +36,7 @@ async def test_assess_status_recovers_done_when_structured_invoke_fails() -> Non
     mock_model = MagicMock()
     mock_model.bind = MagicMock(return_value=mock_model)
     planner._model = mock_model
+    planner._plan_assess_model = mock_model
 
     done_payload = {
         "status": "done",

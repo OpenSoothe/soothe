@@ -554,8 +554,8 @@ class PlanResult(BaseModel):
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Descriptive progress level (none | low | medium | high | complete).
         assessment_reasoning: Phase-1 status justification (reserved; StatusAssessment has no LLM text field).
-        plan_reasoning: Reserved for phase-2 strategy text; not populated from PlanGeneration (IG-329).
-        next_action: User-facing action summary (full text, no truncation).
+        plan_reasoning: Plan-generate ``reasoning`` for user-facing cognition cards.
+        next_action: Internal orchestration hint (not shown in TUI).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
         decision: New steps to run when plan_action is new; None when keep.
@@ -574,10 +574,10 @@ class PlanResult(BaseModel):
     """Reserved; assess-phase schema has no separate justification string (IG-329)."""
 
     plan_reasoning: str = Field(default="", max_length=500)
-    """Reserved; plan-generate structured output does not include a separate strategy string (IG-329)."""
+    """Plan-generate reasoning surfaced in cognition cards."""
 
     next_action: str = Field(default="", max_length=500)
-    """Complete action text from both phases (no truncation, full reasoning chain visible)."""
+    """Internal next-step hint for loop orchestration (not forwarded to TUI)."""
 
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
@@ -732,7 +732,6 @@ class PlanGeneration(BaseModel):
         reasoning: First-person plan rationale shown in the TUI cognition card
             (e.g. "I'll …", "Let me …").
         adaptive_granularity: Optional step granularity hint.
-        next_action: User-facing next step (plan-specific, max 300 chars).
     """
 
     type: Literal["execute_steps", "final"] | None = None
@@ -750,9 +749,6 @@ class PlanGeneration(BaseModel):
         description=("First-person plan rationale for the cognition card (e.g. I'll …, Let me …)."),
     )
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
-
-    next_action: str = Field(default="", max_length=300)
-    """User-facing next step (plan-specific)."""
 
     @model_validator(mode="before")
     @classmethod
