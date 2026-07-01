@@ -5,8 +5,8 @@ from soothe.foundation.sloop.prompts.fragments import PLAN_GENERATE_INSTRUCTIONS
 
 def test_plan_generate_uses_flattened_decision_fields() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
-    assert "plan_action, type, steps, execution_mode" in text
-    assert "plan_action" in text
+    assert "type, steps, execution_mode" in text
+    assert "plan_action" not in text
     assert "subagent" not in text
     assert "evidence_refs" not in text
     assert "supportive_evidence" not in text

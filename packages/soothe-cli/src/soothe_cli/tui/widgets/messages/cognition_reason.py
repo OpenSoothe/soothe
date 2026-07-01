@@ -69,7 +69,7 @@ class CognitionReasonMessage(Vertical):
             iteration: Agent-loop iteration index.
             plan_action: ``keep`` or ``new`` (execution strategy).
             assessment_reasoning: Phase-1 status justification from plan-assess.
-            plan_reasoning: Legacy phase-2 strategy text (usually empty after IG-329).
+            plan_reasoning: First-person plan-generate rationale (I'll / Let me …).
             **kwargs: Passed to ``Vertical``.
         """
         super().__init__(**kwargs)

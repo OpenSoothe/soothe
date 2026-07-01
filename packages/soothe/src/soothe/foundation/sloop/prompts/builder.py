@@ -269,7 +269,7 @@ class PromptBuilder:
                 "<FOLLOW_UP_POLICY>\n"
                 '- If the goal depends on prior conversation text, status MUST NOT be "done" until CoreAgent execution '
                 "has produced the requested output (translation, summary, etc.).\n"
-                '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
+                "- Include at least one concrete execute_steps item that performs the work "
                 "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
                 "- Do not claim the task is finished in next_action unless the evidence or step output contains "
                 "the actual result.\n"
@@ -393,9 +393,8 @@ class PromptBuilder:
                 ex_a = str(nxt).zfill(width)
                 ex_b = str(nxt + 1).zfill(width)
                 step_id_hint = (
-                    f'This goal already used lower step indices; for plan_action "new", '
-                    f"use the next unused local step ids starting with {ex_a} "
-                    f"(e.g. {ex_a}, {ex_b}, …), not 01/02 again."
+                    f"This goal already used lower step indices; use the next unused local "
+                    f"step ids starting with {ex_a} (e.g. {ex_a}, {ex_b}, …), not 01/02 again."
                 )
 
         common_kwargs = dict(

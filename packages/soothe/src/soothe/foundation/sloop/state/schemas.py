@@ -720,20 +720,21 @@ class PlanGeneration(BaseModel):
     """PlanGeneration: generate execution plan when goal incomplete (RFC-604).
 
     Conditional schema for the plan-generate LLM call (IG-329: minimal fields only).
+    Runtime ``plan_action`` (keep/new) is derived from assess status and loop state,
+    not from this schema.
 
     Attributes:
-        plan_action: Reuse in-flight AgentDecision or supply a new one.
-        type: Decision type for a new plan.
-        steps: Steps for a new plan. Required non-empty when ``plan_action='new'`` and
-            ``type='execute_steps'``. May be empty when ``type='final'`` (same as ``AgentDecision``).
-        execution_mode: Execution mode for ``steps``. When ``plan_action='new'`` and ``type`` is set
-            but the model omits this field, it defaults to ``parallel``.
-        reasoning: Internal rationale for the decision.
+        type: Decision type for the plan.
+        steps: Steps for the plan. Required non-empty when ``type='execute_steps'``.
+            May be empty when ``type='final'`` (same as ``AgentDecision``).
+        execution_mode: Execution mode for ``steps``. When ``type`` is set but the model
+            omits this field, it defaults to ``parallel``.
+        reasoning: First-person plan rationale shown in the TUI cognition card
+            (e.g. "I'll …", "Let me …").
         adaptive_granularity: Optional step granularity hint.
         next_action: User-facing next step (plan-specific, max 300 chars).
     """
 
-    plan_action: Literal["keep", "new"] = "new"
     type: Literal["execute_steps", "final"] | None = None
     steps: list[PlanGenerateStep] = Field(default_factory=list)
     execution_mode: ExecutionMode | None = Field(
@@ -743,7 +744,11 @@ class PlanGeneration(BaseModel):
             "Never 'sequential'."
         ),
     )
-    reasoning: str = ""
+    reasoning: str = Field(
+        default="",
+        max_length=500,
+        description=("First-person plan rationale for the cognition card (e.g. I'll …, Let me …)."),
+    )
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
     next_action: str = Field(default="", max_length=300)
@@ -751,15 +756,9 @@ class PlanGeneration(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _default_execution_mode_when_new(cls, data: Any) -> Any:
-        """Default execution_mode for plan_action=new when the LLM omits it.
-
-        Pydantic does not allow returning a copied model from an ``after`` validator
-        during normal ``__init__`` validation; inject via ``before`` instead.
-        """
+    def _default_execution_mode_when_typed(cls, data: Any) -> Any:
+        """Default execution_mode when the LLM omits it but ``type`` is set."""
         if not isinstance(data, dict):
-            return data
-        if data.get("plan_action", "new") != "new":
             return data
         if data.get("type") is None:
             return data
@@ -768,20 +767,32 @@ class PlanGeneration(BaseModel):
         return data
 
     @model_validator(mode="after")
-    def _validate_plan_action(self) -> PlanGeneration:
-        """Ensure keep/new and decision align.
-
-        IG-264: plan_action='keep' CAN have decision (optional, not enforced).
-        Only enforce that plan_action='new' requires decision.
-        """
-        if self.plan_action == "new":
-            if self.type is None:
-                raise ValueError("plan_action 'new' requires type")
-            if self.type == "execute_steps" and not self.steps:
-                raise ValueError(
-                    "plan_action 'new' with type 'execute_steps' requires non-empty steps"
-                )
+    def _validate_generation_fields(self) -> PlanGeneration:
+        """Ensure typed plan-generate output includes required step fields."""
+        if self.type is None:
+            raise ValueError("plan generation requires type")
+        if self.type == "execute_steps" and not self.steps:
+            raise ValueError("type 'execute_steps' requires non-empty steps")
         return self
+
+
+def derive_plan_action(
+    *,
+    assessment_status: Literal["continue", "replan", "done"],
+    has_remaining_steps: bool,
+) -> Literal["keep", "new"]:
+    """Derive runtime plan reuse vs replace from assess status and in-flight plan state.
+
+    Args:
+        assessment_status: Status from the assess phase.
+        has_remaining_steps: Whether ``current_decision`` still has pending steps.
+
+    Returns:
+        ``keep`` when assess says continue and pending steps remain; otherwise ``new``.
+    """
+    if assessment_status == "continue" and has_remaining_steps:
+        return "keep"
+    return "new"
 
 
 def plan_generation_model_for_iteration(iteration: int) -> type[PlanGeneration]:

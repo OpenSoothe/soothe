@@ -277,7 +277,7 @@ class UserMessageBuilder:
                 "TASK",
                 "1. Generate an execution plan for the goal\n"
                 "2. Specify steps with descriptions, expected outputs, and dependencies\n"
-                "3. Return plan_action (keep/new) and step details",
+                "3. Return first-person reasoning (I'll / Let me …) and step details",
             )
         )
 
