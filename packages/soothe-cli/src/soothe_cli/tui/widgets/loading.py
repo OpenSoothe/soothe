@@ -66,18 +66,26 @@ class LoadingWidget(Static):
     }
     """
 
-    def __init__(self, status: str = "Thinking", *, turn_start_mono: float | None = None) -> None:
+    def __init__(
+        self,
+        status: str = "Thinking",
+        *,
+        turn_start_mono: float | None = None,
+        show_interrupt_hint: bool = True,
+    ) -> None:
         """Initialize loading widget.
 
         Args:
             status: Initial status text to display.
             turn_start_monotonic: Start of the current query/turn (``time.monotonic()``). When
                 omitted, the first mount time is used so elapsed still advances monotonically.
+            show_interrupt_hint: When ``False``, omit the elapsed-time / esc hint (startup connect).
         """
         super().__init__()
         self._status = status
         self._spinner = Spinner()
         self._turn_start_mono: float | None = turn_start_mono
+        self._show_interrupt_hint = show_interrupt_hint
         self._animation_timer: Timer | None = None
         self._paused = False
         self._paused_total_elapsed: int = 0
@@ -105,10 +113,13 @@ class LoadingWidget(Static):
             )
         else:
             spinner_part = Content.styled(self._spinner.current_frame(), colors.primary)
-            hint_part = Content.styled(
-                f" {self._format_hint_line(self._elapsed_seconds())}",
-                colors.muted,
-            )
+            if self._show_interrupt_hint:
+                hint_part = Content.styled(
+                    f" {self._format_hint_line(self._elapsed_seconds())}",
+                    colors.muted,
+                )
+            else:
+                hint_part = Content("")
         return Content.assemble(spinner_part, status_part, hint_part)
 
     def _refresh_line(self) -> None:
@@ -165,10 +176,12 @@ class LoadingWidget(Static):
         if self.is_mounted:
             self._refresh_line()
 
-    def activate_status(self, status: str) -> None:
+    def activate_status(self, status: str, *, show_interrupt_hint: bool | None = None) -> None:
         """Resume animation (if paused) and set status text."""
         self._paused = False
         self._status = status
+        if show_interrupt_hint is not None:
+            self._show_interrupt_hint = show_interrupt_hint
         if self.is_mounted:
             self._refresh_line()
 
