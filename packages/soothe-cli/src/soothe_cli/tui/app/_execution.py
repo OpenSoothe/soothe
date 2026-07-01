@@ -565,6 +565,13 @@ class _ExecutionMixin:
                         AppMessage("Not connected to the daemon; cannot start a new loop.")
                     )
                 else:
+                    if self._agent_running:
+                        await self._interrupt_daemon_agent_turn()
+                        worker = self._agent_worker
+                        if worker is not None:
+                            with suppress(Exception):
+                                await asyncio.wait_for(worker.wait(), timeout=5.0)
+                        await self._cleanup_agent_task()
                     status_event = await self._daemon_session.new_loop()
                     new_loop_id = (
                         str(status_event.get("loop_id", "")) or self._session_state.reset_loop()
@@ -937,6 +944,7 @@ class _ExecutionMixin:
             if self._ui_adapter:
                 self._ui_adapter.finalize_pending_tools_with_error(f"{error_title}: {display_err}")
                 self._ui_adapter.finalize_pending_steps_with_error(f"{error_title}: {display_err}")
+            await self._try_recover_goal_completion_from_ledger()
             try:
                 await self._mount_message(ErrorMessage(f"{error_title}. {display_err}"))
             except Exception:
@@ -989,6 +997,35 @@ class _ExecutionMixin:
         busy = self._agent_running or self._shell_running
         if not busy and self._pending_messages:
             await self._process_next_from_queue()
+
+    async def _try_recover_goal_completion_from_ledger(self) -> None:
+        """Mount persisted goal_completion when the stream aborted before the report card."""
+        adapter = self._ui_adapter
+        session = self._daemon_session
+        if adapter is None or session is None or self._session_state is None:
+            return
+        if getattr(adapter, "_goal_completion_mounted_this_turn", False):
+            return
+        loop_id = self._session_state.loop_id
+        if not loop_id:
+            return
+        try:
+            from soothe_cli.tui.widgets.messages.assistant import AssistantMessage
+
+            text = await session.fetch_goal_completion_text(loop_id)
+            if not text:
+                return
+            msg = AssistantMessage(text, id=f"asst-recovered-{loop_id[:8]}")
+            await self._mount_message(msg)
+            await msg.write_initial_content()
+            adapter._goal_completion_mounted_this_turn = True
+            logger.info(
+                "Recovered goal_completion from ledger for loop %s (%d chars)",
+                loop_id[:8],
+                len(text),
+            )
+        except Exception:
+            logger.debug("goal_completion ledger recovery failed", exc_info=True)
 
     async def _cleanup_agent_task(self) -> None:
         """Clean up after agent task completes or is cancelled."""

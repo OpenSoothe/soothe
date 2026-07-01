@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 from soothe_cli.runtime.state.step_router import StepTaskRouter
-from soothe_cli.tui.textual_adapter import TextualUIAdapter, _resolve_token_target_card
+from soothe_cli.tui.textual_adapter import (
+    TextualUIAdapter,
+    _register_execute_namespace_binding,
+    _resolve_token_target_card,
+)
 from soothe_cli.tui.widgets.messages import CognitionStepMessage
 from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
 
@@ -86,3 +92,61 @@ def test_step_card_excludes_subgraph_token_stream() -> None:
     assert target is None
     assert step._input_tokens == 0
     assert step._output_tokens == 0
+
+
+def test_resolve_token_target_card_falls_back_to_single_active_step() -> None:
+    """Execute namespace not in _step_by_namespace falls back to the sole active step."""
+    adapter = _make_adapter()
+    router = StepTaskRouter()
+    step = CognitionStepMessage("ABC-01", "Main step", id="step-main")
+    adapter._current_step_messages["ABC-01"] = step
+    router.on_step_started("ABC-01")
+    # Note: _step_by_namespace is NOT populated for ("execute:run-1",)
+    # (simulating the real-world namespace mismatch where step_started
+    #  registers under () but messages arrive under execute:UUID)
+    ns_key = ("execute:run-1",)
+
+    target = _resolve_token_target_card(adapter, router, ns_key)
+    assert target is step
+
+
+def test_resolve_token_target_card_extracts_step_id_from_message_tool_calls() -> None:
+    """When multiple steps are active, resolve via tool_call_id in the message."""
+    adapter = _make_adapter()
+    router = StepTaskRouter()
+    step_a = CognitionStepMessage("ABC-01", "Step A", id="step-a")
+    step_b = CognitionStepMessage("ABC-02", "Step B", id="step-b")
+    adapter._current_step_messages["ABC-01"] = step_a
+    adapter._current_step_messages["ABC-02"] = step_b
+    router.on_step_started("ABC-01")
+    router.on_step_started("ABC-02")
+    # Both active, namespace not registered
+    ns_key = ("execute:run-a",)
+
+    # Message with a tool_call carrying a unified id that encodes step ABC-01
+    message = MagicMock()
+    message.tool_calls = [{"id": "ABC_01:s:grep:0", "name": "grep"}]
+
+    target = _resolve_token_target_card(adapter, router, ns_key, message=message)
+    assert target is step_a
+    assert target is not step_b
+
+
+def test_register_execute_namespace_binding_resolves_parallel_token_routing() -> None:
+    """Binding an execute namespace lets token routing find the right step card."""
+    adapter = _make_adapter()
+    router = StepTaskRouter()
+    step_a = CognitionStepMessage("ABC-01", "Step A", id="step-a")
+    step_b = CognitionStepMessage("ABC-02", "Step B", id="step-b")
+    adapter._current_step_messages["ABC-01"] = step_a
+    adapter._current_step_messages["ABC-02"] = step_b
+    router.on_step_started("ABC-01")
+    router.on_step_started("ABC-02")
+
+    ns_a = ("execute:run-a",)
+    _register_execute_namespace_binding(adapter, router, ns_a, step_id="ABC-01")
+
+    # Token chunk arrives under the execute namespace — should find step_a
+    target = _resolve_token_target_card(adapter, router, ns_a)
+    assert target is step_a
+    assert target is not step_b

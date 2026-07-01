@@ -280,7 +280,7 @@ async def _run_headless_session_once(
                     query_started = True
                 elif (state == "idle" and query_started) or state == "stopped":
                     loop_clock = asyncio.get_event_loop()
-                    drain_deadline = loop_clock.time() + 2.5
+                    drain_deadline = loop_clock.time() + 30.0
                     while loop_clock.time() < drain_deadline:
                         try:
                             nxt = await asyncio.wait_for(client.read_event(), timeout=0.25)

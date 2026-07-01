@@ -351,7 +351,7 @@ class ThreadPoolConfig(BaseModel):
         description="Max requests before thread respawn (prevents memory buildup)",
     )
     request_timeout_seconds: int = Field(
-        default=0,
+        default=7200,
         ge=0,
         le=604_800,
         description="Default per-request timeout in seconds (0 = no timeout)",

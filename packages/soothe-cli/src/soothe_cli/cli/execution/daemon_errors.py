@@ -5,9 +5,17 @@ from __future__ import annotations
 # Partial match for pool_runner RuntimeError when an OS worker exits mid-turn.
 DAEMON_WORKER_SUBPROCESS_LOST = "Worker subprocess exited unexpectedly during query execution"
 
+# Partial match for thread_runner RuntimeError when a worker thread dies mid-turn.
+DAEMON_WORKER_THREAD_LOST = "Worker thread exited unexpectedly during query execution"
+
 _FRIENDLY_WORKER_SUBPROCESS_LOST = (
     "The daemon execution worker stopped unexpectedly (for example after the pool "
     "recycled an idle subprocess). Send your message again."
+)
+
+_FRIENDLY_WORKER_THREAD_LOST = (
+    "The daemon execution worker stopped unexpectedly during your request. "
+    "Send your message again, or use /resume to recover the loop."
 )
 
 _FRIENDLY_DAEMON_CONNECTION_LOST = (
@@ -45,9 +53,13 @@ def friendly_daemon_execution_error(exc: BaseException | str) -> str:
         return _FRIENDLY_DAEMON_CONNECTION_LOST
     if isinstance(exc, RuntimeError) and DAEMON_WORKER_SUBPROCESS_LOST in str(exc):
         return _FRIENDLY_WORKER_SUBPROCESS_LOST
+    if isinstance(exc, RuntimeError) and DAEMON_WORKER_THREAD_LOST in str(exc):
+        return _FRIENDLY_WORKER_THREAD_LOST
     text = str(exc)
     if DAEMON_WORKER_SUBPROCESS_LOST in text:
         return _FRIENDLY_WORKER_SUBPROCESS_LOST
+    if DAEMON_WORKER_THREAD_LOST in text:
+        return _FRIENDLY_WORKER_THREAD_LOST
     return text if isinstance(exc, str) else str(exc)
 
 
@@ -55,3 +67,9 @@ def is_daemon_worker_subprocess_lost(exc: BaseException | str) -> bool:
     """Return whether an error indicates a pool worker process exited mid-query."""
     text = str(exc)
     return DAEMON_WORKER_SUBPROCESS_LOST in text
+
+
+def is_daemon_worker_thread_lost(exc: BaseException | str) -> bool:
+    """Return whether an error indicates a pool worker thread exited mid-query."""
+    text = str(exc)
+    return DAEMON_WORKER_THREAD_LOST in text
