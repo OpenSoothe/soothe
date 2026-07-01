@@ -37,11 +37,11 @@ _QUIZ_RESPONSE_GUIDE = QUIZ_RESPONSE_GUIDE_FRAGMENT
 # ---------------------------------------------------------------------------
 
 _SHELL_GUIDE = """\
-Execution tools:
+Execution tools (always bound — not listed in <AVAILABLE_TOOLS>):
 - run_command: Execute shell commands synchronously (returns output). Use for: CLI tools, scripts.
 - run_python: Execute Python code with session persistence. Variables persist across calls.
-- run_background: Run long commands in background (returns PID). Use for: training, servers.
-- kill_process: Terminate background process by PID.
+- run_background: Run long commands in background (returns PID). Use for: training, servers, builds.
+- kill_process: Terminate background process by PID from run_background.
 """
 
 _FILE_OPS_GUIDE = """\
@@ -74,7 +74,7 @@ Benefits:
 """
 
 _RESEARCH_GUIDE = """\
-Research tools:
+Research tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
 - search_web: Quick web search for factual lookups, news, current events (single call).
 - crawl_web: Extract clean content from a web page URL.
 - tacitus: Public-domain deep investigation (web, academic, URLs).
@@ -82,7 +82,7 @@ Research tools:
 """
 
 _DATA_GUIDE = """\
-Data inspection tools (single-purpose):
+Data inspection tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
 - inspect_data: Inspect data file structure - columns, types, samples (CSV, Excel, JSON, Parquet).
 - summarize_data: Get statistical summary of data (tabular) or document summary (PDF, DOCX).
 - check_data_quality: Validate data quality - missing values, duplicates, anomalies (tabular only).
@@ -118,11 +118,16 @@ Tool selection rules (follow strictly):
 
 {_SUBAGENT_GUIDE}
 
+Progressive tool binding:
+- Always bound: filesystem, surgical edits, execution (run_command, run_python, run_background, kill_process), search_tools, write_todos, task, current_datetime.
+- <AVAILABLE_TOOLS> lists deferred tools not yet bound to this hop. Use search_tools(query) or call a listed name to promote it for subsequent hops.
+
 Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_file_lines) instead of full-file rewrites.
 - Use websearch for quick lookups; use tacitus for thorough public-domain investigation.
-- Use run_command for shell execution, run_python for Python code.\
+- Use run_command for sync shell, run_background for long-running jobs, kill_process to stop background PIDs, run_python for Python code.
+- When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
 
 # Cache-stable directive about user-facing prose language. Lives in the system
