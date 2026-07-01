@@ -102,7 +102,7 @@ class IntentClassification(BaseModel):
     )
     reasoning: str | None = Field(
         default=None,
-        description="Brief reasoning for agentic classification (why tools/action needed)",
+        description="Brief first-person reasoning for agentic classification (I'll / Let me …).",
     )
     goal_description: str | None = Field(
         default=None,
@@ -142,7 +142,7 @@ class IntakeClassificationLLMResult(BaseModel):
     )
     reasoning: str | None = Field(
         default=None,
-        description="Brief reasoning (one sentence max 20 words). Empty for quiz.",
+        description="Brief first-person reasoning (one sentence, max 20 words). Empty for quiz.",
     )
     goal_description: str | None = Field(
         default=None,

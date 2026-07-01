@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from soothe.foundation.sloop.engine.context_adapters import (
-    ContextEngineGoalContextAdapter,
-    _format_execute_briefing_from_ce_goals,
-)
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.ledger import LedgerManager
@@ -14,6 +10,10 @@ from soothe.foundation.context.models import GoalNode, StepExecution, StepNode
 from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.context.planning.models import DagPlanningContext
 from soothe.foundation.context.projection import ContextBundle
+from soothe.foundation.sloop.engine.context_adapters import (
+    ContextEngineGoalContextAdapter,
+    _format_execute_briefing_from_ce_goals,
+)
 
 # ── StepPlanManagerAdapter public API ────────────────────────────────
 
@@ -255,7 +255,6 @@ class TestPromptBuilderContextBundle:
         """When context_bundle is None, behavior is unchanged."""
         from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
-
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -270,10 +269,9 @@ class TestPromptBuilderContextBundle:
         assert "<MEMORY_INSTRUCTIONS>" not in str(system_msg.content)
 
     def test_build_plan_messages_with_bundle_supplements_system(self) -> None:
-        """ContextBundle injects supplementary instructions into system message."""
+        """ContextBundle injects agent/memory instructions into system (not project rules)."""
         from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
-
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -294,7 +292,7 @@ class TestPromptBuilderContextBundle:
             context_bundle=bundle,
         )
         system_content = str(messages[0].content)
-        assert "Custom project instructions" in system_content
+        assert "Custom project instructions" not in system_content
         assert "<AGENT_INSTRUCTIONS>" in system_content
         assert "Agent-specific instructions" in system_content
         assert "<MEMORY_INSTRUCTIONS>" in system_content
@@ -304,7 +302,6 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects goal/step lineage into human message (not goal progress)."""
         from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
-
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -340,7 +337,6 @@ class TestPromptBuilderContextBundle:
         """Empty ContextBundle fields are not injected."""
         from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
-
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()

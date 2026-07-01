@@ -73,7 +73,10 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
     tool_args_meaningful,
 )
 from soothe_cli.runtime.parse.tool_result import extract_tool_result_payload
-from soothe_cli.runtime.policy.essential_events import LOOP_REASON_EVENT_TYPE
+from soothe_cli.runtime.policy.essential_events import (
+    INTENT_CLASSIFIED_EVENT_TYPE,
+    LOOP_REASON_EVENT_TYPE,
+)
 from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.runtime.presentation.explore_task_display import (
@@ -3514,6 +3517,31 @@ async def execute_task_textual(
                                     await adapter._set_spinner(label)
                                 elif label:
                                     adapter._update_status(label)
+                                continue
+
+                            if event_type == INTENT_CLASSIFIED_EVENT_TYPE:
+                                reasoning = str(data.get("reasoning", "")).strip()
+                                if not reasoning:
+                                    continue
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                        router=router,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                intent_widget = CognitionReasonMessage(
+                                    next_action="",
+                                    status="",
+                                    iteration=0,
+                                    plan_reasoning=reasoning,
+                                    id=f"intent-{uuid.uuid4().hex[:8]}",
+                                )
+                                await adapter._mount_message(intent_widget)
                                 continue
 
                             if event_type == LOOP_REASON_EVENT_TYPE:

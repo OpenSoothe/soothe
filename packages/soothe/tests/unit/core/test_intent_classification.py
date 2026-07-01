@@ -9,6 +9,7 @@ is not a classifier concern.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from soothe.foundation.sloop.intention import IntentClassification, IntentClassifier, TaskComplexity
 from soothe.foundation.sloop.intention.models import (
     IntakeClassificationLLMResult,
@@ -122,6 +123,11 @@ class TestIntakeClassificationPrompts:
         assert "runtime state" in INTAKE_CLASSIFICATION_PROMPT
         assert "workspace" in INTAKE_CLASSIFICATION_PROMPT
 
+    def test_primary_prompt_requests_first_person_reasoning(self) -> None:
+        prompt = INTAKE_CLASSIFICATION_PROMPT.lower()
+        assert "first-person" in prompt or "i'll" in prompt
+        assert "let me" in prompt
+
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
@@ -183,6 +189,22 @@ class TestIntakeClassifier:
         assert result.intent_type == "agentic"
         assert result.intake_label == IntakeLabel.COMPLEX
         assert result.task_complexity == TaskComplexity.COMPLEX
+        assert result.reasoning is not None
+        assert result.reasoning.lower().startswith(("i'll", "let me"))
+
+    async def test_patch_missing_reasoning_uses_first_person(self) -> None:
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
+        mock_llm_result = IntentClassification(
+            intent_type="agentic",
+            intake_label=IntakeLabel.SIMPLE,
+            goal_description="summarize readme",
+            task_complexity=TaskComplexity.SIMPLE,
+            reasoning=None,
+        )
+        with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = mock_llm_result
+            result = await classifier.classify_intake("summarize readme")
+        assert result.reasoning == "I'll use tools to work through this goal."
 
     async def test_classifier_constructed_with_fast_model(self) -> None:
         model = MagicMock()
