@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import pytest
+
 from soothe.foundation.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
 from soothe.foundation.sloop.clarification.protocol import ClarificationRequest
 from soothe.foundation.sloop.clarification.selector import build_default_clarification_policy
-
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
 

@@ -1,6 +1,7 @@
 """Tests for RFC-226 record_iteration → goal_completion fast-exit routing."""
 
 from langgraph.graph import END
+
 from soothe.foundation.sloop.orchestrator.routing import route_after_record_iteration
 
 

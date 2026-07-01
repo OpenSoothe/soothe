@@ -4,7 +4,6 @@ import errno
 from unittest.mock import MagicMock
 
 from soothe.foundation.sloop.engine.executor import Executor
-
 from soothe.utils.network_errors import (
     format_connection_refusal_message,
     is_expected_connection_refusal,

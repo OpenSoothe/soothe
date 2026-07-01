@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.sloop.engine.executor import Executor
-
 from soothe.config import SootheConfig
 from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
+from soothe.foundation.sloop.engine.executor import Executor
 from soothe.utils.observability import langfuse as langfuse_util
 
 

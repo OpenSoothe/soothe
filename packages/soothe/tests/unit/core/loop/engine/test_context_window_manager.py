@@ -10,6 +10,7 @@ Tests cover:
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from soothe.foundation.sloop.engine.context_window_manager import (
     ContextCompactionResult,
     ContextWindowManager,

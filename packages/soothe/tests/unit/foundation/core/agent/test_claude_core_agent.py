@@ -205,6 +205,7 @@ class TestClaudeCoreAgentStreamConversion:
     def test_emit_text_chunks_langgraph_compatible(self, claude_agent):
         """Stream chunks must match LangGraph format for executor aggregation."""
         from langchain_core.messages import AIMessageChunk
+
         from soothe.foundation.sloop.utils.stream_normalize import (
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,

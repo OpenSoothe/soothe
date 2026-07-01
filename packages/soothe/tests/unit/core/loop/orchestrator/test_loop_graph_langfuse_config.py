@@ -2,9 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from soothe.foundation.sloop.orchestrator.runner import build_loop_graph_invoke_config
-
 from soothe.config import SootheConfig
+from soothe.foundation.sloop.orchestrator.runner import build_loop_graph_invoke_config
 
 
 def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:

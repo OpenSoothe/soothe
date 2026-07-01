@@ -13,9 +13,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe.foundation.sloop.state.schemas import PlanResult
 
 from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
+from soothe.foundation.sloop.state.schemas import PlanResult
 from soothe.protocols.runner import GoalDispatchEnvelope
 from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
 

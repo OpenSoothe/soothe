@@ -1,10 +1,10 @@
 """Tests for wave metrics aggregation in Executor (IG-132)."""
 
 import pytest
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 
 from soothe.config import SootheConfig
+from soothe.foundation.sloop.engine.executor import Executor
+from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 
 
 @pytest.fixture

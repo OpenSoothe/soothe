@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from soothe.foundation.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
 from soothe.foundation.sloop.clarification.runtime_factory import (
