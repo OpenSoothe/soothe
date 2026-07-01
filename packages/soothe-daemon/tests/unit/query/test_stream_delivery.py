@@ -65,6 +65,28 @@ def test_adaptive_small_goal_completion_passthrough() -> None:
     assert out[0][2][0]["phase"] == "goal_completion"
 
 
+def test_coalesce_interval_100_faster_first_emit_than_300_baseline() -> None:
+    """IG-534 Phase 3: shorter coalesce interval reduces time-to-first-chunk."""
+
+    def _time_to_first_emit_ms(interval_ms: int) -> float | None:
+        coalescer = StreamDeliveryCoalescer(
+            "adaptive",
+            coalesce_interval_ms=interval_ms,
+        )
+        started = time.monotonic()
+        assert coalescer.ingest(*_text_chunk("hello")) == []
+        time.sleep(0.12)
+        out = coalescer.ingest(*_text_chunk(" world"))
+        if out:
+            return (time.monotonic() - started) * 1000.0
+        return None
+
+    fast_ms = _time_to_first_emit_ms(100)
+    slow_ms = _time_to_first_emit_ms(300)
+    assert fast_ms is not None, "100ms coalesce should emit within 120ms idle"
+    assert slow_ms is None, "300ms coalesce should not emit within 120ms idle"
+
+
 def test_text_chunks_coalesce_until_last() -> None:
     coalescer = StreamDeliveryCoalescer("adaptive", coalesce_interval_ms=10_000)
     assert coalescer.ingest(*_text_chunk("a")) == []

@@ -1161,13 +1161,13 @@ class OutputStreamingConfig(BaseModel):
         ),
     )
     streaming_interval_ms: int = Field(
-        default=300,
+        default=100,
         ge=50,
         le=1000,
         description=(
             "Daemon WebSocket batching interval (milliseconds). "
-            "IG-534 Phase 3: recommend 100 for TUI clients (faster perceived response), "
-            "300 for headless consumers (lower network overhead). Per-client tuning pending."
+            "IG-534 Phase 3: 100ms default for TUI clients (faster perceived response); "
+            "use 300 for headless consumers to reduce network overhead."
         ),
     )
     tui_flush_interval_ms: int = Field(

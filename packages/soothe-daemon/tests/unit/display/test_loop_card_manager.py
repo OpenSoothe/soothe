@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -14,6 +15,7 @@ from soothe_daemon.display.loop_card_manager import (
     CARD_REPLAY_BEGIN,
     CARD_REPLAY_END,
     LoopCardManager,
+    _BindingBuffers,
 )
 
 
@@ -174,6 +176,31 @@ async def test_replay_to_client_reads_persisted_cards() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ingest_stream_tuple_returns_before_flush_completes(monkeypatch) -> None:
+    """Stream ingest must not block on ledger flush (IG-534 §2.3)."""
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    flush_started = asyncio.Event()
+
+    original_flush = manager._flush_buffers_to_ledger
+
+    async def slow_flush(loop_id: str, state: _BindingBuffers) -> None:
+        flush_started.set()
+        await asyncio.sleep(0.15)
+        await original_flush(loop_id, state)
+
+    monkeypatch.setattr(manager, "_flush_buffers_to_ledger", slow_flush)
+
+    wire = {"type": "ai", "content": "hello", "chunk_position": "last"}
+    await manager.ingest_stream_tuple("loop_async", (), "messages", (wire, {}))
+    assert not flush_started.is_set()
+    await asyncio.wait_for(flush_started.wait(), timeout=1.0)
+    await asyncio.sleep(0.2)
+    ledger = await manager.ensure_for_loop("loop_async")
+    assert ledger.card_count() >= 1
+    await manager.stop_for_loop("loop_async")
+
+
+@pytest.mark.asyncio
 async def test_stop_for_loop_releases_in_memory_state(isolated_display_db) -> None:
     manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
     await _seed_messages(manager, "loop_e", [HumanMessage(content="x")])
@@ -182,6 +209,20 @@ async def test_stop_for_loop_releases_in_memory_state(isolated_display_db) -> No
     await manager.stop_for_loop("loop_e")
     assert "loop_e" not in manager._ledgers  # noqa: SLF001
     assert isolated_display_db.list_mutations("loop_e")
+
+
+@pytest.mark.asyncio
+async def test_stop_for_loop_cancels_ingest_worker() -> None:
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await manager.ingest_stream_tuple(
+        "loop_worker",
+        (),
+        "custom",
+        {"kind": "conversation", "role": "assistant", "content": "hi"},
+    )
+    assert "loop_worker" in manager._ingest_workers  # noqa: SLF001
+    await manager.stop_for_loop("loop_worker")
+    assert "loop_worker" not in manager._ingest_workers  # noqa: SLF001
 
 
 @pytest.mark.asyncio

@@ -91,6 +91,7 @@ from soothe_cli.runtime.state.session_stats import (
     SessionStats,
     SpinnerStatus,
     TurnEventStats,
+    TurnLatencyStats,
     format_token_count,
 )
 from soothe_cli.runtime.state.step_router import StepTaskRouter
@@ -2135,6 +2136,17 @@ def _log_turn_event_stats(
         ev_stats.summary_line(),
         turn_stats.wall_time_seconds,
     )
+    if ev_stats.latency is not None:
+        if ev_stats.latency.time_to_first_chunk_ms is not None:
+            logger.info(
+                "Turn latency: time_to_first_chunk=%.0fms",
+                ev_stats.latency.time_to_first_chunk_ms,
+            )
+        if ev_stats.latency.synthesis_visible_ms is not None:
+            logger.info(
+                "Turn latency: synthesis_visible=%.0fms",
+                ev_stats.latency.synthesis_visible_ms,
+            )
 
 
 def _should_show_clarification_prompt(
@@ -2266,6 +2278,7 @@ async def execute_task_textual(
     if turn_stats is None:
         turn_stats = SessionStats()
     ev_stats = TurnEventStats()
+    ev_stats.latency = TurnLatencyStats(turn_start_monotonic=time.monotonic())
     start_time = time.monotonic()
 
     # Warn if token display callbacks are only partially wired — all three
@@ -3562,6 +3575,7 @@ async def execute_task_textual(
             chunk_source,
             lambda raw: prepare_turn_chunk(prep_state, raw),
             _apply_turn_chunk,
+            latency_stats=ev_stats.latency,
         )
 
         await ui_coalesce.flush_final()

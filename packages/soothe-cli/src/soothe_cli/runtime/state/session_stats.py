@@ -8,6 +8,7 @@ config, no widget imports) so that `app.py` can import `SessionStats` and
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 SpinnerStatus = str | None
@@ -107,6 +108,52 @@ class SessionStats:
 
 
 @dataclass
+class TurnLatencyStats:
+    """IG-534 Phase 3: end-to-end turn latency observability.
+
+    Attributes:
+        turn_start_monotonic: Monotonic timestamp when the turn began.
+        time_to_first_chunk_ms: Milliseconds from turn start to first applied chunk.
+        synthesis_visible_ms: Milliseconds from turn start to first goal_completion apply.
+        goal_completion_applied: Whether a goal_completion chunk was applied.
+    """
+
+    turn_start_monotonic: float = 0.0
+    time_to_first_chunk_ms: float | None = None
+    synthesis_visible_ms: float | None = None
+    goal_completion_applied: bool = False
+
+    def record_first_chunk(self) -> None:
+        """Record time-to-first-chunk once per turn."""
+        if self.time_to_first_chunk_ms is not None or self.turn_start_monotonic <= 0:
+            return
+        self.time_to_first_chunk_ms = (time.monotonic() - self.turn_start_monotonic) * 1000.0
+
+    def record_goal_completion(self) -> None:
+        """Record synthesis-visible latency once per turn."""
+        if self.goal_completion_applied or self.turn_start_monotonic <= 0:
+            return
+        self.goal_completion_applied = True
+        self.synthesis_visible_ms = (time.monotonic() - self.turn_start_monotonic) * 1000.0
+
+    def merge(self, other: TurnLatencyStats) -> None:
+        """Merge another stats object (keeps earliest first-chunk / synthesis times)."""
+        if other.time_to_first_chunk_ms is not None:
+            if (
+                self.time_to_first_chunk_ms is None
+                or other.time_to_first_chunk_ms < self.time_to_first_chunk_ms
+            ):
+                self.time_to_first_chunk_ms = other.time_to_first_chunk_ms
+        if other.synthesis_visible_ms is not None:
+            if (
+                self.synthesis_visible_ms is None
+                or other.synthesis_visible_ms < self.synthesis_visible_ms
+            ):
+                self.synthesis_visible_ms = other.synthesis_visible_ms
+        self.goal_completion_applied = self.goal_completion_applied or other.goal_completion_applied
+
+
+@dataclass
 class TurnEventStats:
     """Event counts accumulated over a single daemon turn.
 
@@ -140,6 +187,7 @@ class TurnEventStats:
     heartbeats_dropped: int = 0
     post_idle_drained: int = 0
     inbound_dropped: int = 0
+    latency: TurnLatencyStats | None = None
 
     def record(
         self,
@@ -189,6 +237,10 @@ class TurnEventStats:
         self.post_idle_drained += other.post_idle_drained
         self.filtered_early += other.filtered_early
         self.inbound_dropped += other.inbound_dropped
+        if other.latency is not None:
+            if self.latency is None:
+                self.latency = TurnLatencyStats()
+            self.latency.merge(other.latency)
 
     def summary_line(self) -> str:
         """Return a one-line summary suitable for structured logging.
@@ -224,6 +276,10 @@ class TurnEventStats:
             detail_parts.append(f"{self.post_idle_drained} post-idle")
         if self.inbound_dropped:
             detail_parts.append(f"{self.inbound_dropped} inbound-drop")
+        if self.latency is not None and self.latency.time_to_first_chunk_ms is not None:
+            detail_parts.append(f"ttfc={self.latency.time_to_first_chunk_ms:.0f}ms")
+        if self.latency is not None and self.latency.synthesis_visible_ms is not None:
+            detail_parts.append(f"synth={self.latency.synthesis_visible_ms:.0f}ms")
         if detail_parts:
             parts.append("; ".join(detail_parts))
 
