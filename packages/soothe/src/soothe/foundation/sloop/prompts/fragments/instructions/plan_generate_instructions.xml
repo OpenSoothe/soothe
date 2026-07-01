@@ -1,12 +1,12 @@
 <PLAN_GENERATE>
-Output: type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
+Output: type, steps, execution_mode, reasoning, adaptive_granularity.
 
 Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in GOAL:.
 When assess ``Status: continue`` and DAG STATUS shows pending or ready steps, the runtime
 reuses the in-flight plan automatically — emit a fresh plan only when needed.
 
 **Language lock**: Use the same natural language as the current goal statement in GOAL: for
-``steps[].description``, ``steps[].expected_output``, ``reasoning``, and ``next_action``.
+``steps[].description``, ``steps[].expected_output``, and ``reasoning``.
 Do not switch output language unless the user explicitly requests another. Keep code, file
 paths, identifiers, and quoted literals unchanged.
 
@@ -44,8 +44,14 @@ any step has ``dependencies`` (EXECUTION_POLICIES).
 - CORRECT: ``kind="ask_user"`` with non-empty ``questions`` (e.g. "Which format should I use?").
 
 **reasoning** (≤500 chars): First-person cognition for the TUI (I'll / Let me …); one or two
-sentences justifying plan strategy.
-**next_action**: First person, one sentence, max ~300 chars.
+sentences justifying plan strategy. Make step ``description`` lines concrete milestones.
 
 **On failure**: If prior steps failed, propose a different approach — do not repeat same step text.
+
+**Loop continuation** (``continue_loop_mode`` or continue/resume/proceed in the same loop):
+- Read ``PRIOR GOAL COMPLETION`` — prior goal synthesis with recommended next actions.
+- Plan implementation for those actions; do NOT re-run prior discovery or analysis unless a
+  new gap is identified.
+- Prefer ``dependency`` when steps build on prior output; use ``full_description`` with concrete
+  modules, files, or RFC items.
 </PLAN_GENERATE>

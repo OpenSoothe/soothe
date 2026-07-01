@@ -15,22 +15,41 @@
 
 This RFC defines a checkpoint-based thread inheritance mechanism for step execution in StrangeLoop. Steps with singleton dependencies fork from their predecessor's checkpoint to inherit full conversation history (tool calls, messages, artifacts). Steps with multiple dependencies fork from the main thread and use message injection for predecessor context. This design achieves two goals: (1) main thread ID alignment with loop_id, and (2) efficient history inheritance via LangGraph's `acopy_thread()` API instead of deep-copying messages.
 
+### Implementation status (as of 2026-07-01)
+
+**Shipped (IG-477):** Every execute step runs on a fresh `{loop_id}__step_{step_id}` namespace with an **empty** checkpoint. Predecessor context does **not** come from checkpoint fork or sole-child thread reuse.
+
+**Shipped (RFC-214 §3.1, 2026-07-01):** Dependent steps within the same goal ground predecessors via the **`PRIOR STEP EVIDENCE`** section in the execute envelope only. The executor no longer replays predecessor Human/AI ledger rows into CoreAgent input for DAG dependents (avoids duplicating the same AI body).
+
+**Shipped (RFC-225):** Loop-continuation bootstrap (`continue_loop=True`, no deps) still replays prior-goal `execute_step` ledger rows via `prior_loop_execute_messages()`.
+
+**Not shipped:** `ThreadForkManager`, `acopy_thread` / `copy_thread_via_public_api` checkpoint inheritance, and sole-child thread reuse described below remain **target** design. The sections below document the intended fork strategy for future work; current behavior is isolation + envelope grounding (+ bootstrap ledger replay).
+
 ---
 
 ## Problem Statement
 
-### Current Behavior
+### Current Behavior (shipped)
 
 The Execute phase creates isolated branch threads for each step:
 
 ```python
-stream_thread_id = f"{logical_tid}__p{step_id}"  # Parallel isolation, no inheritance
+stream_thread_id = f"{logical_tid}__step_{step_id}"  # Parallel isolation, empty checkpoint
 ```
 
-Each step starts with an empty checkpoint namespace. Predecessor context is injected via `predecessor_execute_messages_for_branch()`, which:
-- Deep-copies messages (memory overhead)
-- Only includes `execute_step` phase messages (filtered subset)
-- Does not preserve full checkpoint state (artifacts, intermediate state, channel versions)
+Each step starts with an empty checkpoint namespace.
+
+| Case | Predecessor context delivery |
+|------|------------------------------|
+| Step with `dependencies` (same goal) | `PRIOR STEP EVIDENCE` in the execute envelope only (`build_prior_step_evidence()` from ledger / `StepResult`) |
+| `continue_loop` bootstrap (no deps) | `prior_loop_execute_messages()` — deep-copied prior-goal `execute_step` Human/AI rows |
+| No deps, not continuation | Envelope only |
+
+`predecessor_execute_messages_for_branch()` remains in the codebase for bootstrap replay and tests; it is **not** called for same-goal DAG dependent steps.
+
+### Target behavior (not yet shipped)
+
+Predecessor context via checkpoint fork (singleton deps) or ledger replay (multi-dep) as originally specified below.
 
 ### Goals
 
@@ -72,7 +91,7 @@ Per the 2026-05-28 revision, the strategy now distinguishes singleton-with-sibli
 
 **No-deps fork rationale**: parallel-safety. Two no-deps steps running concurrently must not share a thread namespace, so each gets its own `__step_<id>` namespace sourced from main (empty when main has no checkpoints yet).
 
-**Multi-deps fork rationale**: as before, no single source thread carries the union of all parents' history. The step gets a fresh isolated namespace and the executor injects transitive predecessor messages into the input list.
+**Multi-deps fork rationale (target):** no single source thread carries the union of all parents' history. The step would get a fresh isolated namespace. **Shipped alternative:** envelope `PRIOR STEP EVIDENCE` aggregates transitive predecessor AI output — no ledger row replay into graph input.
 
 **Key distinction**:
 - **Direct dependencies** + sibling count determine fork source AND whether to copy
@@ -94,7 +113,9 @@ LangGraph's stock savers (`InMemorySaver`, `AsyncSqliteSaver`, `AsyncPostgresSav
 │  • Orchestrates step execution                                      │
 │  • Calls ThreadForkManager before each step                         │
 │  • Uses forked_thread_id for CoreAgent stream                       │
-│  • Injects messages for multi-dep steps                             │
+│  • Dependent steps: envelope PRIOR STEP EVIDENCE (shipped)          │
+│  • continue_loop bootstrap: prior-goal ledger replay (shipped)      │
+│  • (target) Injects messages for multi-dep when checkpoint fork ships │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓ prepare_thread_for_step()
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -127,7 +148,9 @@ Executor.execute()
            → select_fork_source(step, decision, state) → source_thread_id
            → fork_checkpoint(source, target, checkpointer) → forked_thread_id
         → CoreAgent.astream() with forked_thread_id as configurable.thread_id
-        → (multi-dep only) predecessor_execute_messages_for_branch(transitive_deps)
+        → (shipped) dependent steps: envelope PRIOR STEP EVIDENCE only
+        → (shipped) continue_loop bootstrap: prior_loop_execute_messages()
+        → (target) multi-dep checkpoint fork path: predecessor_execute_messages_for_branch(transitive_deps)
 ```
 
 ---
@@ -255,11 +278,25 @@ class LoopState(BaseModel):
     )
 ```
 
-### Executor Modification (MODIFY)
+### Executor Modification (MODIFY — target; partial ship)
 
 **Location**: `packages/soothe/src/soothe/core/loop/engine/executor.py`
 
-**Changes in `_execute_step_collecting_events()`**:
+**Shipped in `_execute_step_collecting_events()`:**
+
+```python
+# Fresh isolated thread per step (IG-477)
+stream_thread_id = f"{main_thread_id}__step_{step.id}"
+
+# Dependent steps: single envelope with PRIOR STEP EVIDENCE — no ledger replay
+graph_input_messages = [LoopHumanMessage(content=envelope, phase="execute_step", ...)]
+
+# continue_loop bootstrap only: replay prior-goal execute_step ledger rows
+if continue_loop and not direct_deps and loop_state.loop_messages:
+    graph_input_messages = prior_loop_execute_messages(...) + graph_input_messages
+```
+
+**Target (RFC-223 checkpoint fork — not shipped):**
 
 ```python
 async def _execute_step_collecting_events(...):
@@ -402,9 +439,10 @@ Step D (depends on B + C):
 
 ### Integration Tests
 
-- `test_singleton_chain_inherits_checkpoint()` - B's checkpoint contains A's messages
-- `test_multi_dep_injects_messages()` - C receives injected messages from A, B
-- `test_parallel_singleton_same_source()` - B, C both fork from A (isolated writes)
+- `test_singleton_chain_inherits_checkpoint()` - B's checkpoint contains A's messages *(target)*
+- `test_multi_dep_envelope_evidence_only()` - C receives `PRIOR STEP EVIDENCE` in envelope, not ledger replay *(shipped)*
+- `test_parallel_singleton_same_source()` - B, C both fork from A (isolated writes) *(target)*
+- `test_continue_loop_bootstrap_injects_prior_execute_ledger()` *(shipped, RFC-225)*
 
 ---
 
@@ -426,8 +464,8 @@ Step D (depends on B + C):
 - Verify existing tests pass
 
 ### Phase 4: Cleanup
-- `predecessor_branch_context.py` logic unchanged for multi-dep
-- Singleton case now uses checkpoint inheritance
+- `predecessor_branch_context.py`: `prior_loop_execute_messages()` for continuation bootstrap; `predecessor_execute_messages_for_branch()` retained for helpers/tests — not used for same-goal DAG dependents (envelope-only grounding)
+- Singleton checkpoint inheritance remains future work
 
 ---
 
@@ -445,7 +483,7 @@ Step D (depends on B + C):
 ## References
 
 - RFC-201: StrangeLoop Plan-Execute Loop Architecture
-- RFC-214: Unified message ledger (`predecessor_execute_messages_for_branch`)
+- RFC-214: Unified message ledger; dependent-step `PRIOR STEP EVIDENCE` (§3.1); `prior_loop_execute_messages` for continuation bootstrap
 - RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-218: StrangeLoop Checkpoint Tree Architecture
 - RFC-222: Autopilot and Goal Engine Architecture (loop_id, loop pool)
@@ -481,6 +519,11 @@ Step D (depends on B + C):
   ``InMemorySaver``), expanded ``test_thread_fork_manager.py`` for the
   sole-child / siblings split, updated executor integration tests.
 
+### 2026-07-01 (Implementation alignment)
+- **Shipped:** Per-step `__step_<id>` isolation with empty checkpoints (IG-477); dependent steps ground predecessors via `PRIOR STEP EVIDENCE` in the execute envelope only — predecessor Human/AI ledger replay removed from CoreAgent input to eliminate duplicate AI bodies (RFC-214 §3.1).
+- **Shipped:** `continue_loop` bootstrap still uses `prior_loop_execute_messages()` (RFC-225).
+- **Unchanged target:** Checkpoint fork / sole-child reuse / `ThreadForkManager` remain future work; document marked with implementation-status section at top.
+
 ---
 
-*Enabling efficient thread inheritance via LangGraph checkpoint forking while preserving DAG complexity handling.*
+*Enabling efficient thread inheritance via LangGraph checkpoint forking while preserving DAG complexity handling. Current production path: isolated step threads + envelope grounding (+ continuation ledger replay).*

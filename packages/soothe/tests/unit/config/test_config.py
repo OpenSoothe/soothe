@@ -144,6 +144,26 @@ class TestSootheConfig:
             cfg = SootheConfig(agent={"protocols": {"planner": {"routing": routing}}})
             assert cfg.agent.protocols.planner.routing == routing
 
+    def test_loop_plan_model_roles_default(self) -> None:
+        cfg = SootheConfig()
+        assert cfg.agent.loop.plan_assess_model_role == "think"
+        assert cfg.agent.loop.plan_generate_model_role == "think"
+        assert cfg.agent.loop.goal_synthesis_model_role == "think"
+
+    def test_loop_plan_model_roles_yaml(self) -> None:
+        cfg = SootheConfig(
+            agent={
+                "loop": {
+                    "plan_assess_model_role": "fast",
+                    "plan_generate_model_role": "think",
+                    "goal_synthesis_model_role": "fast",
+                }
+            }
+        )
+        assert cfg.agent.loop.plan_assess_model_role == "fast"
+        assert cfg.agent.loop.plan_generate_model_role == "think"
+        assert cfg.agent.loop.goal_synthesis_model_role == "fast"
+
     def test_verbosity_default(self) -> None:
         cfg = SootheConfig()
         assert cfg.logging.verbosity == "normal"

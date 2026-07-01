@@ -52,23 +52,35 @@ def acquire_worker_runner(
     return runner, cached_runner
 
 
-async def _materialize_runner_core_agent(
+async def _warmup_worker_core_agent(
     runner: SootheRunner,
     *,
     config: SootheConfig,
     warmup_core_agent: bool,
 ) -> None:
-    """Compile LazyCoreAgent and attach checkpointer when configured."""
-    if not warmup_core_agent or not config.agent.runtime.lazy_core_agent:
+    """Compile CoreAgent graphs used on the first execute path.
+
+    Worker warmup materializes the primary LazyCoreAgent (with checkpointer) and,
+    when ephemeral execute streaming is enabled, the checkpointer-free execute
+    twin so the first TUI turn does not pay a second multi-second compile.
+    """
+    if not warmup_core_agent:
         return
 
     from soothe.foundation.core.agent._lazy import LazyCoreAgent
+    from soothe.foundation.sloop.engine.executor import ephemeral_execute_stream_enabled
 
-    core_agent = runner._core_agent
-    if isinstance(core_agent, LazyCoreAgent) and core_agent.is_materialized:
-        return
+    if config.agent.runtime.lazy_core_agent:
+        core_agent = runner._core_agent
+        if isinstance(core_agent, LazyCoreAgent) and not core_agent.is_materialized:
+            await runner._materialize_core_agent()
 
-    await runner._materialize_core_agent()
+    if ephemeral_execute_stream_enabled():
+        _ = runner._materialized_core_agent().execution_graph
+
+
+# Backward-compatible alias for tests and external patches.
+_materialize_runner_core_agent = _warmup_worker_core_agent
 
 
 def warmup_worker_runner_on_loop(
@@ -115,7 +127,7 @@ def warmup_worker_runner_on_loop(
     materialize_start = time.perf_counter()
     try:
         loop.run_until_complete(
-            _materialize_runner_core_agent(
+            _warmup_worker_core_agent(
                 cached_runner,
                 config=config,
                 warmup_core_agent=True,

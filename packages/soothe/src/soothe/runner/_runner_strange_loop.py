@@ -30,10 +30,20 @@ from soothe.foundation.sloop.clarification.events import (
 )
 from soothe.foundation.sloop.intention import build_loop_routing_classification
 from soothe.foundation.sloop.utils.events import LoopAgentReasonEvent
+from soothe.foundation.sloop.utils.loop_reason_display import (
+    is_displayable_assessment_reasoning as _is_displayable_assessment_reasoning,
+)
+from soothe.foundation.sloop.utils.loop_reason_display import (
+    is_displayable_plan_reasoning as _is_displayable_plan_reasoning,
+)
+from soothe.foundation.sloop.utils.loop_reason_display import (
+    should_emit_loop_reason_event as _should_emit_loop_reason_event,
+)
 from soothe.foundation.sloop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
+from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 from soothe.runner._runner_shared import StreamChunk, _custom
 from soothe.utils.text_preview import preview_first
@@ -347,46 +357,6 @@ def _clip_sloop_step_description(
     return text[: max_len - 1].rstrip() + "…"
 
 
-_BOILERPLATE_PLAN_NEXT_ACTIONS: frozenset[str] = frozenset(
-    {
-        "Goal achieved successfully",
-        "Goal progress sufficient for completion",
-    }
-)
-
-
-def _is_displayable_plan_next_action(text: str) -> bool:
-    """True when ``next_action`` is user-facing plan-generate text worth a reason card."""
-    stripped = (text or "").strip()
-    return bool(stripped) and stripped not in _BOILERPLATE_PLAN_NEXT_ACTIONS
-
-
-def _is_displayable_assessment_reasoning(text: str) -> bool:
-    """True when assess text is real LLM output (not fresh-loop routing placeholders)."""
-    stripped = (text or "").strip()
-    if not stripped:
-        return False
-    return not stripped.startswith("Fresh-loop bypass:")
-
-
-def _should_emit_loop_reason_event(
-    *,
-    assessment_reasoning: str,
-    plan_reasoning: str,
-    next_action: str = "",
-) -> bool:
-    """Whether to forward a loop reason event to clients.
-
-    Assess cards use ``assessment_reasoning``; plan-generate cards use ``next_action``
-    (RFC-604 / IG-329 user-facing line). Legacy ``plan_reasoning`` is still honored.
-    """
-    return bool(
-        assessment_reasoning.strip()
-        or plan_reasoning.strip()
-        or _is_displayable_plan_next_action(next_action)
-    )
-
-
 class StrangeLoopMixin:
     """Layer 2 StrangeLoop integration.
 
@@ -690,7 +660,6 @@ class StrangeLoopMixin:
                             LoopAgentReasonEvent(
                                 status="",
                                 progress="",
-                                next_action="",
                                 assessment_reasoning=reasoning,
                                 iteration=int(event_data.get("iteration", 0)),
                                 plan_action="",
@@ -699,12 +668,11 @@ class StrangeLoopMixin:
 
                 elif event_type == "generate":
                     plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
-                    if plan_reasoning:
+                    if _is_displayable_plan_reasoning(plan_reasoning):
                         yield _custom(
                             LoopAgentReasonEvent(
                                 status="",
                                 progress="",
-                                next_action="",
                                 assessment_reasoning="",
                                 plan_reasoning=plan_reasoning,
                                 iteration=int(event_data.get("iteration", 0)),
@@ -713,19 +681,16 @@ class StrangeLoopMixin:
                         )
 
                 elif event_type == "plan":
-                    next_action = str(event_data.get("next_action", "")).strip()
                     assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
                     plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
                     if _should_emit_loop_reason_event(
                         assessment_reasoning=assessment_reasoning,
                         plan_reasoning=plan_reasoning,
-                        next_action=next_action,
                     ):
                         yield _custom(
                             LoopAgentReasonEvent(
                                 status=str(event_data.get("status", "")),
                                 progress=event_data["progress"],
-                                next_action=next_action,
                                 assessment_reasoning=assessment_reasoning,
                                 plan_reasoning=plan_reasoning,
                                 plan_action=event_data.get("plan_action", "new"),
@@ -756,7 +721,7 @@ class StrangeLoopMixin:
                         skip_goal_completion_wire_duplicate = False
 
                     evidence = (final_result.evidence_summary or "")[:500]
-                    completion_summary = (final_result.next_action or "").strip()
+                    completion_summary = resolve_plan_action_text(final_result).strip()
                     if not completion_summary:
                         completion_summary = (
                             f"{n_act_steps} step(s) complete"

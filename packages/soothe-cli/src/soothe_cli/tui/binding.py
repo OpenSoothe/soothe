@@ -111,7 +111,6 @@ def message_to_widget(data: MessageData) -> Widget:
 
         case MessageType.COGNITION_REASON:
             return CognitionReasonMessage(
-                next_action=data.cognition_plan_next_action or "",
                 status=data.cognition_plan_status or "",
                 iteration=int(data.cognition_plan_iteration or 0),
                 plan_action=data.cognition_plan_action or "",
@@ -198,7 +197,6 @@ def message_from_widget(widget: Widget) -> MessageData:
             type=MessageType.COGNITION_REASON,
             content="",
             id=widget_id,
-            cognition_plan_next_action=widget._next_action,
             cognition_plan_status=widget._status,
             cognition_plan_iteration=widget._iteration,
             cognition_plan_action=widget._plan_action,

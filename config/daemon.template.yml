@@ -119,8 +119,9 @@ identity:
 # - Lower values cause queue waits; higher values increase memory and PG connection usage.
 #
 # CoreAgent cold start (daemon + TUI): keep agent.runtime.lazy_core_agent=true in soothe
-# config AND warmup_core_agent=true here — lazy defers compile; warmup runs it during
-# daemon "warming" so the first client message does not freeze the TUI (~5–10s saved).
+# config AND warmup_core_agent=true here — lazy defers compile; warmup runs primary +
+# ephemeral execute graphs during daemon "warming" so the first client turn avoids
+# two multi-second compiles (~7s primary + ~7s execute twin).
 thread_pool:
   enabled: true
   min_pool_size: 8  # IG-535: Pre-warm baseline for burst handling

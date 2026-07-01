@@ -30,6 +30,7 @@ from soothe.foundation.sloop.utils.json_parsing import (
     _try_parse_json_dict,
 )
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.reflection import (
     _default_agent_decision,
     _extract_text_content,
@@ -103,7 +104,7 @@ def _detect_stuck_loop(state: LoopState) -> str | None:
     """IG-454: Detect if the loop is stuck and should be terminated or replanned.
 
     Checks for:
-    1. Repeated identical actions (same next_action N times consecutively)
+    1. Repeated identical actions (same internal action line N times consecutively)
     2. Consecutive failed step results (N errors without success)
 
     Args:
@@ -153,6 +154,8 @@ class LLMPlanner:
         model: Any,
         config: SootheConfig | None = None,
         *,
+        plan_assess_model: Any | None = None,
+        plan_generate_model: Any | None = None,
         loop_id: str | None = None,
     ) -> None:
         """Initialize LLMPlanner.
@@ -160,11 +163,15 @@ class LLMPlanner:
         Args:
             model: Langchain BaseChatModel supporting structured output.
             config: Optional configuration for shared context XML in prompts.
+            plan_assess_model: Model for plan-assess and continuation-assess calls.
+            plan_generate_model: Model for plan-generate calls.
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
         from soothe.foundation.sloop.prompts import PromptBuilder
 
         self._model = model
+        self._plan_assess_model = plan_assess_model or model
+        self._plan_generate_model = plan_generate_model or model
         self._config = config
         self._loop_id = loop_id
         self._prompt_builder = PromptBuilder(config)
@@ -746,7 +753,7 @@ class LLMPlanner:
         """
         from soothe.foundation.sloop.state.schemas import StatusAssessment
 
-        model = _plan_phase_chat_model(self._model)
+        model = _plan_phase_chat_model(self._plan_assess_model)
         lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
 
         # IG-503: Retry loop for transient network errors
@@ -906,7 +913,7 @@ class LLMPlanner:
             capabilities=capabilities,
         )
         messages = [HumanMessage(content=prompt)]
-        model = _plan_phase_chat_model(self._model)
+        model = _plan_phase_chat_model(self._plan_assess_model)
         try:
             lf_cfg = self._planner_langfuse_run_config(
                 thread_id=thread_id, phase="continuation-assess"
@@ -1016,7 +1023,7 @@ class LLMPlanner:
         )
         plan_messages = messages + [context_msg]
 
-        model = _plan_phase_chat_model(self._model)
+        model = _plan_phase_chat_model(self._plan_generate_model)
 
         # Retry structured output up to 2 times when None returned (IG-xxx)
         max_retries = 2
@@ -1048,7 +1055,7 @@ class LLMPlanner:
                 logger.debug(
                     "[Plan] steps=%d next=%s",
                     len(plan_result.steps) if isinstance(plan_result.steps, list) else 0,
-                    preview_first(plan_result.next_action, chars=80),
+                    preview_first(resolve_plan_action_text(plan_result), chars=80),
                 )
 
                 return plan_result, plan_result
@@ -1108,7 +1115,7 @@ class LLMPlanner:
                                     len(plan_result.steps)
                                     if isinstance(plan_result.steps, list)
                                     else 0,
-                                    preview_first(plan_result.next_action, chars=80),
+                                    preview_first(resolve_plan_action_text(plan_result), chars=80),
                                 )
                                 return plan_result, plan_result
                         except Exception as retry_exc:
@@ -1153,7 +1160,6 @@ class LLMPlanner:
             steps=step_actions_to_plan_generate_steps(
                 _default_agent_decision(goal, iteration).steps
             ),
-            next_action="I'll proceed with a default plan.",
         ), None
 
     @staticmethod
@@ -1182,8 +1188,8 @@ class LLMPlanner:
     ) -> Any:
         """Combine StatusAssessment and PlanGeneration results (RFC-604, IG-152).
 
-        Uses plan_result.next_action for the user-facing action line (IG-329).
-        Populates ``plan_reasoning`` from plan-generate ``reasoning`` for TUI cognition cards.
+        Keeps derived ``next_action`` on ``PlanResult`` for internal orchestration;
+        ``plan_reasoning`` carries plan-generate ``reasoning`` for user-facing cognition cards.
 
         Args:
             assessment: StatusAssessment result
@@ -1195,8 +1201,7 @@ class LLMPlanner:
         from soothe.foundation.sloop.state.schemas import PlanResult
         from soothe.utils.text_preview import preview_first
 
-        # Use plan_result.next_action (concrete, actionable)
-        action_text = plan_result.next_action.strip()
+        action_text = resolve_plan_action_text(plan_result)
         plan_reasoning = (plan_result.reasoning or "").strip()
 
         logger.debug("[PlanAction] %s", preview_first(action_text, chars=80))
@@ -1496,7 +1501,6 @@ class LLMPlanner:
                     steps=step_actions_to_plan_generate_steps(
                         _default_agent_decision(goal, state.iteration).steps
                     ),
-                    next_action=f"I'll proceed with analyzing: {preview_first(goal, 80)}",
                 )
 
         # RFC-214: Record plan-generate pair in ledger (not injected into CoreAgent)
@@ -1798,16 +1802,17 @@ class LLMPlanner:
                             lf_retry = self._planner_langfuse_run_config(
                                 thread_id=state.thread_id, phase="plan-json-retry"
                             )
+                            retry_model = _plan_phase_chat_model(self._plan_generate_model)
                             if lf_retry is not None:
                                 response = await self._ainvoke_bounded(
-                                    self._model,
+                                    retry_model,
                                     messages_for_retry,
                                     config=lf_retry,
                                     thread_id=state.thread_id,
                                 )
                             else:
                                 response = await self._ainvoke_bounded(
-                                    self._model,
+                                    retry_model,
                                     messages_for_retry,
                                     thread_id=state.thread_id,
                                 )

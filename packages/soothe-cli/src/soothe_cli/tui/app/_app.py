@@ -243,6 +243,9 @@ class SootheApp(
 
         self._loading_widget: LoadingWidget | None = None
 
+        self._connect_spinner_start_mono: float | None = None
+        """Monotonic anchor for startup daemon-connect elapsed time in the thinking row."""
+
         self._context_tokens: int = 0
         """Local cache of the last total-context token count.
 

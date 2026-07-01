@@ -1,10 +1,16 @@
 """Predecessor execute-step ledger slices for parallel branch threads.
 
-When the executor uses a branched LangGraph ``thread_id`` (``{logical}__p{step_id}``), the
-checkpoint namespace starts empty. This module selects prior ``execute_step`` Human/AI
-ledger rows whose ``step_id`` is in the transitive dependency closure of the current step
-so the branch CoreAgent receives dependency context without merging sibling parallel
-threads. Design: RFC-214 (unified ledger; parallel branch predecessor replay).
+When the executor uses a branched LangGraph ``thread_id`` (``{logical}__step_{step_id}``), the
+checkpoint namespace starts empty. This module provides helpers for:
+
+- **Transitive dependency closure** (``transitive_dependency_step_ids``): used by
+  ``build_prior_step_evidence()`` for same-goal dependent steps.
+- **Legacy ledger replay** (``prior_loop_execute_messages()``): retained for tests and
+  tooling; loop-continuation bootstrap now grounds via ``PRIOR GOAL COMPLETION`` in the
+  execute envelope (``continuation_context``) instead of replaying prior execute rows.
+
+Same-goal DAG dependent steps ground predecessors via ``PRIOR STEP EVIDENCE`` in the execute
+envelope only (RFC-214 §3.1).
 """
 
 from __future__ import annotations

@@ -68,7 +68,7 @@ continue_loop_plan_bootstrap_allowed :=
     AND (not recovery_valid_resume OR goal_record is clean)
 ```
 
-When True, `plan_assess` constructs a single-step `PlanResult` via `build_continue_loop_bootstrap_plan(goal)` whose step description embeds the user request and prior-loop framing. The executor injects the seeded `loop_messages` from the prior goal as predecessor context, and the step runs. iter=1 `plan_assess` then invokes the planner LLM to assess "are we done?" — which, on a one-step bootstrap, almost always returns `done`.
+When True, `plan_assess` constructs a single-step `PlanResult` via `build_continue_loop_bootstrap_plan(goal)` whose step description embeds the user request and prior-loop framing. The executor injects the seeded `loop_messages` from the prior goal as **full prior-goal execute-step Human/AI ledger replay** (`prior_loop_execute_messages()` — distinct from same-goal dependent steps, which use envelope `PRIOR STEP EVIDENCE` only per RFC-214 §3.1), and the step runs. iter=1 `plan_assess` then invokes the planner LLM to assess "are we done?" — which, on a one-step bootstrap, almost always returns `done`.
 
 ### 3.2 Observed defects
 

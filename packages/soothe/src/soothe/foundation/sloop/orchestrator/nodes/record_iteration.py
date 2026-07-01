@@ -6,6 +6,8 @@ import logging
 import time
 from typing import Any
 
+from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
+
 from ..checkpointer import core_agent_checkpointer
 from ..runtime_context import LoopRuntimeContext
 
@@ -77,9 +79,11 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
         working_memory=state.working_memory,
     )
 
+    plan_action_text = resolve_plan_action_text(plan_result)
+
     execution_summary = {
         "status": getattr(plan_result, "status", "success"),
-        "next_action_summary": getattr(plan_result, "next_action", None),
+        "next_action_summary": plan_action_text or None,
         "tools_executed": [
             f"execute({sr.step_id})" for sr in step_results if hasattr(sr, "step_id")
         ],
@@ -99,7 +103,7 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
             "iteration": iteration_completed,
             "status": plan_result.status,
             "progress": plan_result.goal_progress,
-            "next_action": plan_result.next_action,
+            "next_action": plan_action_text,
         },
     )
 
@@ -114,8 +118,8 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # RFC-624 Phase 4 Step 5: record action + previous_plan on CE goal
     if ctx.ce is not None and ctx.ce_goal_id:
         try:
-            if plan_result.next_action:
-                ctx.ce.record_action(ctx.ce_goal_id, plan_result.next_action)
+            if plan_action_text:
+                ctx.ce.record_action(ctx.ce_goal_id, plan_action_text)
             ctx.ce.set_previous_plan(ctx.ce_goal_id, plan_result)
         except Exception:
             logger.debug(

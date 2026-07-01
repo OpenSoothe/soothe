@@ -81,6 +81,21 @@ class StrangeLoop:
             except Exception:
                 pass
 
+        planner_fallback = getattr(loop_planner, "_model", None)
+        self._goal_synthesis_llm: Any | None = None
+        try:
+            self._goal_synthesis_llm = config.create_chat_model(
+                config.agent.loop.goal_synthesis_model_role
+            )
+        except Exception:
+            self._goal_synthesis_llm = planner_fallback
+
+    def goal_synthesis_model(self) -> Any:
+        """Resolved chat model for goal-completion synthesis."""
+        if self._goal_synthesis_llm is not None:
+            return self._goal_synthesis_llm
+        return getattr(self.loop_planner, "_model", None)
+
     async def run(
         self,
         goal: str,

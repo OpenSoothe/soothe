@@ -154,9 +154,6 @@ class MessageData:
     step_tool_calls_json: str | None = None
     """JSON list of tool rows from ``CognitionStepMessage.snapshot_tool_rows()`` (IG-402)."""
 
-    cognition_plan_next_action: str | None = None
-    """User-facing next step (COGNITION_REASON only)."""
-
     cognition_plan_status: str | None = None
     """Plan status: continue, replan, done (COGNITION_REASON only)."""
 

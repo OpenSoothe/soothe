@@ -117,7 +117,6 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
         ],
         execution_mode="parallel",
         reasoning="I'll translate section by section and keep the model rationale in the dump.",
-        next_action="I'll translate section by section.",
     )
     planner._generate_plan_with_response = AsyncMock(  # type: ignore[method-assign]
         return_value=(plan_generation, plan_generation)

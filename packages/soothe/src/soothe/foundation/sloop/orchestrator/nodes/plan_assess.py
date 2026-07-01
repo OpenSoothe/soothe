@@ -13,6 +13,10 @@ import logging
 import random
 from typing import Any, Literal
 
+from soothe.foundation.sloop.engine.continuation_context import (
+    build_continue_bootstrap_step_briefs,
+    checkpoint_completions_by_goal_text,
+)
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -115,6 +119,10 @@ def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
         List of dicts (one per prior goal) with keys:
         ``goal_id``, ``goal_text``, ``completion``, ``step_count``.
     """
+    completions_by_text = checkpoint_completions_by_goal_text(
+        ctx.checkpoint,
+        exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
+    )
     if ctx.ce is None:
         return []
     out: list[dict] = []
@@ -125,53 +133,37 @@ def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
         if goal.status not in ("completed", "cancelled", "failed", "active"):
             continue
         completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
+        goal_text = (goal.description or "").strip()
+        completion = completions_by_text.get(goal_text, "")
+        if not completion and goal.action_history:
+            completion = goal.action_history[-1]
         out.append(
             {
                 "goal_id": goal.id,
                 "goal_text": goal.description,
-                "completion": goal.action_history[-1] if goal.action_history else "",
+                "completion": completion,
                 "step_count": len(completed_steps),
             }
         )
     return out
 
 
-def _continuation_bootstrap_goal_text(ctx: LoopRuntimeContext, state: LoopState) -> str:
-    """Goal text embedded in continuation bootstrap when user sent a lone ``continue``."""
-    if not is_continue_keyword(state.goal):
-        return state.goal
-    if ctx.ce is not None:
-        current_id = ctx.ce_goal_id
-        for goal in ctx.ce.get_all_goals():
-            if current_id and goal.id == current_id:
-                continue
-            prior_text = (goal.description or "").strip()
-            if prior_text:
-                return prior_text
-    if ctx.checkpoint and len(ctx.checkpoint.goal_history) >= 2:
-        prior = ctx.checkpoint.goal_history[-2]
-        prior_text = (prior.goal_text or "").strip()
-        if prior_text:
-            return prior_text
-    return state.goal
-
-
 def build_continue_loop_bootstrap_plan(
     goal: str,
     *,
+    raw_user_goal: str | None = None,
     terminal_after_execute: bool = False,
     reasoning: str = "",
     goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low",
 ) -> PlanResult:
     """Build a synthetic first ``PlanResult`` for loop continuation (RFC-225, RFC-226).
 
-    The new user request is embedded in the step description so the agent knows
-    exactly what to address. The executor prepends prior goal ledger entries from
-    CE LedgerManager as graph_input_messages, giving the agent the conversational
-    context it needs to answer.
+    The executor grounds prior work via ``PRIOR GOAL COMPLETION`` in the execute
+    envelope (synthesized prior goal report), not by replaying execute-step ledger rows.
 
     Args:
-        goal: Loop goal text (the current user request).
+        goal: Resolved continuation goal text (often same as ``raw_user_goal``).
+        raw_user_goal: Original user submission (e.g. lone ``continue`` keyword).
         terminal_after_execute: When True (RFC-226), the plan asserts its single
             step IS the goal completion; ``record_iteration`` routes directly to
             ``goal_completion`` without an iter=1 status check.
@@ -181,18 +173,18 @@ def build_continue_loop_bootstrap_plan(
     Returns:
         ``PlanResult`` with ``status=continue`` and a single parallel step.
     """
+    user_goal = (raw_user_goal or goal).strip()
     next_action = random.choice(_CONTINUE_THREAD_DESCRIPTIONS)
+    briefs = build_continue_bootstrap_step_briefs(user_goal=user_goal)
     decision = AgentDecision(
         type="execute_steps",
         steps=[
             StepAction(
-                description=(
-                    "Address the user's request using prior conversation context "
-                    f"from earlier goals in this loop: {goal}"
-                ),
+                description=briefs.description,
+                full_description=briefs.full_description,
                 expected_output=(
-                    "A response that addresses the current request while staying consistent "
-                    "with earlier conversation context."
+                    "Concrete progress on the recommended next actions from the prior goal "
+                    "completion report, without repeating prior goal discovery or analysis."
                 ),
             )
         ],
@@ -205,7 +197,7 @@ def build_continue_loop_bootstrap_plan(
         assessment_reasoning=(
             reasoning or "Loop-continuation bootstrap: initial planner call skipped."
         ),
-        plan_reasoning="Single execute wave from prior loop context and current goal.",
+        plan_reasoning="Single execute wave grounded on prior goal completion report.",
         next_action=next_action,
         plan_action="new",
         decision=decision,
@@ -240,34 +232,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
         )
     ):
-        bootstrap_goal = _continuation_bootstrap_goal_text(ctx, state)
-        if is_continue_keyword(state.goal):
-            logger.info(
-                "[Plan] iter=0 continue keyword: bootstrap with prior goal context",
-            )
-            plan_result = build_continue_loop_bootstrap_plan(
-                bootstrap_goal,
-                terminal_after_execute=False,
-                reasoning="Continue keyword: resume prior loop work from ledger context.",
-                goal_progress="medium",
-            )
-            ctx.scratch.plan_result = plan_result
-            ctx.scratch.plan_assessment = None
-            await ctx.emit(
-                "plan",
-                {
-                    "iteration": state.iteration,
-                    "status": plan_result.status,
-                    "progress": plan_result.goal_progress,
-                    "next_action": plan_result.next_action,
-                    "assessment_reasoning": plan_result.assessment_reasoning,
-                    "plan_reasoning": plan_result.plan_reasoning,
-                    "plan_action": plan_result.plan_action,
-                },
-            )
-            return {"assess_route": "skip_generate"}
-
-        prior_goals = _prior_goal_summaries(ctx)  # RFC-624 Phase 4 Stage 2: reads CE DAG
+        prior_goals = _prior_goal_summaries(ctx)
         if prior_goals:
             await _emit_plan_phase_status(
                 ctx,
@@ -286,25 +251,40 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                     reason_text[:120],
                 )
                 plan_result = build_continue_loop_bootstrap_plan(
-                    bootstrap_goal,
+                    state.goal,
+                    raw_user_goal=state.goal,
                     terminal_after_execute=True,
                     reasoning=assessment.reasoning,
                     goal_progress=assessment.goal_progress,
                 )
                 ctx.scratch.plan_result = plan_result
                 ctx.scratch.plan_assessment = None
-                await ctx.emit(
-                    "plan",
-                    {
-                        "iteration": state.iteration,
-                        "status": plan_result.status,
-                        "progress": plan_result.goal_progress,
-                        "next_action": plan_result.next_action,
-                        "assessment_reasoning": plan_result.assessment_reasoning,
-                        "plan_reasoning": plan_result.plan_reasoning,
-                        "plan_action": plan_result.plan_action,
-                    },
-                )
+                if is_continue_keyword(state.goal):
+                    await ctx.emit(
+                        "plan",
+                        {
+                            "iteration": state.iteration,
+                            "status": plan_result.status,
+                            "progress": plan_result.goal_progress,
+                            "next_action": "",
+                            "assessment_reasoning": "",
+                            "plan_reasoning": "",
+                            "plan_action": plan_result.plan_action,
+                        },
+                    )
+                else:
+                    await ctx.emit(
+                        "plan",
+                        {
+                            "iteration": state.iteration,
+                            "status": plan_result.status,
+                            "progress": plan_result.goal_progress,
+                            "next_action": plan_result.next_action,
+                            "assessment_reasoning": plan_result.assessment_reasoning,
+                            "plan_reasoning": plan_result.plan_reasoning,
+                            "plan_action": plan_result.plan_action,
+                        },
+                    )
                 return {"assess_route": "skip_generate"}
             # action == "plan_generate": escalate to full planner.
             # Surface discriminator reasoning before plan_generate (RFC-226).

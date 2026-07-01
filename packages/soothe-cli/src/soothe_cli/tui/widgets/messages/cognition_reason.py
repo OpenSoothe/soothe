@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class CognitionReasonMessage(Vertical):
-    """Single card for plan assessment and plan reasoning (keep/new suffix).
+    """Single card for plan assessment and plan reasoning.
 
     Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
     """
@@ -53,7 +53,6 @@ class CognitionReasonMessage(Vertical):
     def __init__(
         self,
         *,
-        next_action: str,
         status: str,
         iteration: int,
         plan_action: str = "new",
@@ -64,16 +63,14 @@ class CognitionReasonMessage(Vertical):
         """Initialize a plan-reason card.
 
         Args:
-            next_action: User-facing plan-generate line (RFC-604 / IG-329).
             status: Plan status (continue, replan, done).
             iteration: Agent-loop iteration index.
-            plan_action: ``keep`` or ``new`` (execution strategy).
+            plan_action: ``keep`` or ``new`` (internal execution strategy, not displayed).
             assessment_reasoning: Phase-1 status justification from plan-assess.
-            plan_reasoning: First-person plan-generate rationale (I'll / Let me …).
+            plan_reasoning: Plan-generate ``reasoning`` shown in the cognition card.
             **kwargs: Passed to ``Vertical``.
         """
         super().__init__(**kwargs)
-        self._next_action = next_action.strip()
         self._status = status
         self._iteration = iteration
         self._plan_action = plan_action if plan_action in ("keep", "new") else ""
@@ -86,8 +83,6 @@ class CognitionReasonMessage(Vertical):
             parts.append(self._assessment_reasoning)
         if self._plan_reasoning:
             parts.append(self._plan_reasoning)
-        elif self._next_action:
-            parts.append(self._next_action)
         if len(parts) == 2:
             first = parts[0]
             if not first.endswith((".", "!", "?")):
@@ -97,8 +92,6 @@ class CognitionReasonMessage(Vertical):
             body = parts[0]
         else:
             body = ""
-        if self._plan_action in ("keep", "new") and body:
-            body = f"{body} · {self._plan_action}"
         return _assemble_card_header(self, "", body)
 
     def compose(self) -> ComposeResult:

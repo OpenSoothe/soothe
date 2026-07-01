@@ -251,7 +251,7 @@ class PromptBuilder:
                 "<FOLLOW_UP_POLICY>\n"
                 'Prior-thread goals: status MUST NOT be "done" until execution produced the '
                 "requested output; include at least one execute_steps item that performs the work; "
-                "do not claim completion in next_action without evidence.\n"
+                "do not claim completion without execution evidence.\n"
                 "</FOLLOW_UP_POLICY>\n"
             )
 
@@ -311,13 +311,16 @@ class PromptBuilder:
                 parts.append("\n")
             parts.append("</PRIOR_CONVERSATION>\n")
 
-        # IG-148: Simplified previous plan assessment (status + progress + next_action only)
+        # IG-148: Simplified previous plan assessment (status + progress + next action only)
         prev = state.previous_plan
         if prev:
+            from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
+
             parts.append("\nPREVIOUS ASSESSMENT (continuity):")
             parts.append(f"- Status: {prev.status}, Progress: {prev.goal_progress:.0%}")
-            if prev.next_action:
-                parts.append(f"- Next action: {prev.next_action}")
+            prev_action = resolve_plan_action_text(prev)
+            if prev_action:
+                parts.append(f"- Next action: {prev_action}")
 
         return "\n".join(parts)
 
@@ -378,10 +381,19 @@ class PromptBuilder:
             context_bundle=context_bundle,
         )
 
+        prior_goal_completion = None
+        if getattr(state, "continue_loop", False) and state.iteration == 0:
+            from soothe.foundation.sloop.engine.continuation_context import (
+                build_prior_goal_completion_block,
+            )
+
+            prior_goal_completion = build_prior_goal_completion_block(state.loop_messages)
+
         if plan_phase == "assess":
             return builder.build_plan_assess_message(**common_kwargs)
         else:
             return builder.build_plan_generate_message(
                 **common_kwargs,
                 step_id_hint=step_id_hint,
+                prior_goal_completion=prior_goal_completion or None,
             )

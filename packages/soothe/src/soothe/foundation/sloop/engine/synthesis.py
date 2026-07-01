@@ -28,6 +28,7 @@ from soothe.foundation.sloop.engine.scenario_classifier import (
 from soothe.foundation.sloop.engine.synthesis_projection import build_synthesis_messages
 from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.utils.messages import tag_messages_stream_chunk_for_goal_completion
+from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 
@@ -265,11 +266,15 @@ def generate_user_fallback_summary(
         logger.info("Fallback summary: use full_output chars=%d", len(final_output))
         return final_output
 
+    action_text = resolve_plan_action_text(plan_result)
+
     # Generate from step results if available
     if state.step_results:
         successful_count = sum(1 for r in state.step_results if r.success)
         total_count = len(state.step_results)
-        final_output = f"Completed {successful_count}/{total_count} steps successfully. {plan_result.next_action or ''}"
+        final_output = (
+            f"Completed {successful_count}/{total_count} steps successfully. {action_text}"
+        )
         logger.info(
             "Fallback summary: generated from steps success=%d/%d",
             successful_count,
@@ -277,7 +282,7 @@ def generate_user_fallback_summary(
         )
         return final_output
 
-    # No steps executed, use next_action as summary
-    final_output = plan_result.next_action or "Goal achieved successfully"
-    logger.info("Fallback summary: use next_action chars=%d", len(final_output))
+    # No steps executed, use internal action text as summary
+    final_output = action_text or "Goal achieved successfully"
+    logger.info("Fallback summary: use plan action text chars=%d", len(final_output))
     return final_output
