@@ -34,15 +34,9 @@ async def test_loop_subscribe_responds_before_background_reattach() -> None:
     router = MessageRouter(daemon)
     router._ensure_loop_exists = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
-    with (
-        patch(
-            "soothe_daemon.runtime.loop_autopilot_mode.ensure_loop_autopilot_mode",
-            new=AsyncMock(return_value="autopilot"),
-        ),
-        patch(
-            "soothe_daemon.event.reattachment.handle_loop_reattach",
-            new=AsyncMock(side_effect=_slow_reattach),
-        ),
+    with patch(
+        "soothe_daemon.event.reattachment.handle_loop_reattach",
+        new=AsyncMock(side_effect=_slow_reattach),
     ):
         await router._handle_loop_subscribe(
             "client-a",
@@ -51,6 +45,7 @@ async def test_loop_subscribe_responds_before_background_reattach() -> None:
 
     assert sent[-1]["type"] == "next"
     assert sent[-1]["payload"]["success"] is True
+    assert sent[-1]["payload"]["autopilot_mode"] == "solo"
     assert not gate.is_set()
 
     gate.set()

@@ -202,7 +202,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ steps.build_context.outputs.publish_version_tags == 'true' }}
             type=sha,prefix=
             type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}

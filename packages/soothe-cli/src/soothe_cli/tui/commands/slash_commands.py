@@ -240,13 +240,6 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "description": "Submit autopilot job (usage: /autopilot <task>)",
         "requires_query": True,
     },
-    "/autopilot-toggle": {
-        "location": "daemon",
-        "type": "rpc",
-        "daemon_command": "autopilot_toggle",
-        "description": "Toggle autopilot mode (solo ↔ autopilot)",
-        "requires_loop": True,
-    },
     # Daemon routing commands (3)
     "/plan": {"location": "daemon", "type": "routing", "description": "Trigger plan mode"},
     "/tacitus": {

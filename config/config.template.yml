@@ -49,7 +49,8 @@ active_router_profile: default
 #   runtime:
 #     lazy_core_agent: true   # defer graph compile; pair with daemon thread_pool.warmup_core_agent
 #   autonomous:
-#     enabled: false         # disable 24/7 autopilot (enabled by default)
+#     enabled: true          # start 24/7 AutopilotService scheduling loop (default: false)
+#     goal_deadline_seconds: 3600  # recommended for guarded production pilot
 #   core_agent_backend: langgraph  # or claude (requires soothe[claude])
 #
 # tools:

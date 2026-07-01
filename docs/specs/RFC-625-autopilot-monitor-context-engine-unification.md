@@ -585,68 +585,26 @@ class ContextEngine:
 
 ---
 
-### §8 Solo Mode vs Autopilot Mode Behavior
+### §8 Interactive Loops vs Daemon Autopilot Jobs (2026-07-01)
 
-**Core principle: CE DAG persists across goals in both modes.**
+**Supersedes** the earlier per-loop Solo/Autopilot toggle design (`/autopilot-toggle`,
+`loop_autopilot_mode` metadata, `AutopilotMode` enum on StrangeLoop).
 
-| Feature | Solo | Autopilot |
-|---------|------|-----------|
-| CE DAG | Yes (linear chain) | Yes (full DAG) |
-| Goal lineage | Yes (sequential) | Yes (complex) |
-| Cross-goal ledger | Yes | Yes |
-| ContextBundle prior_goals | Yes | Yes |
-| Background verification | No | Yes |
-| Proactive restructuring | No | Yes |
-| Dreaming | No | Yes |
-| New input handling | Queue until completion | Immediate CE update |
-| Parallel execution | No | Yes |
-| TUI display | PendingGoalQueue | GoalDAGCard |
+**Current model:**
 
-**Solo mode goal chaining:**
+| Surface | Behavior |
+|---------|----------|
+| **Interactive loop** (TUI chat, `loop_input`) | Always solo StrangeLoop — one conversational turn stream per `loop_id` |
+| **Autopilot job** (`/autopilot <task>`, `job_create`, CLI `soothe autopilot run`, cron) | Daemon-owned `AutopilotService` — cross-loop goal DAG, worker pool, monitor intake |
+| **`agent.autonomous.enabled`** | Starts the daemon 24/7 scheduling loop (master switch) |
 
-```python
-class StrangeLoop:
-    async def run_with_progress(self, user_input: str, loop_id: str, autopilot_mode: AutopilotMode):
-        await self._ce.load()
+Wire field `autopilot_mode` on `loop_new` / `loop_subscribe` responses is **deprecated**:
+always `"solo"`. Clients must not interpret it as a runtime mode switch.
 
-        if autopilot_mode == AutopilotMode.SOLO:
-            # Create linear-chain goal
-            completed_goals = self._ce.get_goals_by_status("completed")
-            prev_id = completed_goals[-1].id if completed_goals else None
-
-            goal = await self._ce.create_goal(
-                user_input,
-                depends_on=[prev_id] if prev_id else [],
-                source="user",
-            )
-            await self._ce.activate_goal(goal.id, loop_id)
-
-        elif autopilot_mode == AutopilotMode.AUTOPILOT_ACTIVE:
-            # Goal already created by Monitor
-            goal = await self._ce.get_goal(self._pending_goal_id)
-            await self._ce.activate_goal(goal.id, loop_id)
-
-        elif autopilot_mode == AutopilotMode.AUTOPILOT_PENDING:
-            # Queue to Monitor, don't create goal here
-            await self._monitor.intake_goal(user_input)
-            return PlanResult(status="queued")
-
-        # Execute graph (same for solo and autopilot_active)
-        state.bind_ce(self._ce, goal.id)
-        result = await self._run_graph(state)
-        await self._ce.finalize_goal(goal.id, status=result.status)
-        await self._ce.save()
-        return result
-```
-
-**AutopilotMode enum:**
-
-```python
-class AutopilotMode(StrEnum):
-    SOLO = "solo"
-    AUTOPILOT_ACTIVE = "autopilot_active"
-    AUTOPILOT_PENDING = "autopilot_pending"
-```
+**Deferred (not implemented):** RFC-625 originally described in-loop CE goal chaining
+that differed by per-loop mode (linear chain vs full DAG). That path was never wired
+into `QueryEngine` / `LoopRunRequest`. If revived, it would be a separate RFC — not
+conflated with daemon job orchestration.
 
 ---
 
@@ -1050,9 +1008,9 @@ class AutopilotService:
 | §5 AutopilotMonitor | ✅ Complete | Core monitor with event handlers implemented |
 | §6 DreamingCoordinator | ✅ Complete | 4-mode distillation coordinator implemented |
 | §7 ContextEngine API additions | ✅ Complete | `remove_goal`, `merge_goals`, `is_dag_complete`, etc. |
-| §8 Solo/Autopilot mode behavior | ✅ Complete | Mode-specific goal chaining implemented |
+| §8 Interactive loops vs daemon jobs | ✅ Revised (2026-07-01) | Per-loop toggle removed; loops always solo, jobs via AutopilotService |
 | §9 TUI GoalDAGCard | ✅ Complete | Widget for autopilot DAG visualization |
-| §10 Live mode switching | ✅ Complete | Toggle API and routing implemented |
+| §10 Live mode switching | ❌ Removed | `/autopilot-toggle` and `loop_autopilot_mode` deleted |
 | §11-§12 Data flow & phases | ✅ Complete | Implementation phases completed |
 | §13 Config additions | ✅ Complete | All configuration fields added |
 | §14 Event definitions | ✅ Complete | GoalRemoved, GoalDecomposed, AutopilotModeSwitched events added |
@@ -1080,5 +1038,5 @@ See `docs/impl/IG-494-rfc625-completion.md` for remaining implementation work.
 - RFC-624: Context Engine — GoalNode, StepDAG, LedgerManager, ProjectionEngine
 - RFC-222: Autopilot and Goal Engine Architecture — AutopilotService, WorkerPool, WorkspaceReservation (GoalEngine deleted per this RFC)
 - RFC-200: Autonomous Goal Management (superseded) — BackoffReasoner migrated to monitor
-- RFC-204: Autopilot Mode — Solo vs Autopilot behavior unchanged
+- RFC-204: Autopilot Mode — job submit via daemon AutopilotService; interactive loops remain solo
 - RFC-217: Goal Context Management — GoalContextManager reads from CE DAG
