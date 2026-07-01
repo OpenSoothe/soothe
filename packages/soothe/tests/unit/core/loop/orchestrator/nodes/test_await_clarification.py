@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+
 from soothe.foundation.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,

@@ -6,9 +6,9 @@ from unittest.mock import patch
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from soothe.foundation.sloop.intention import RoutingClassification
 
 from soothe.config import SootheConfig
+from soothe.foundation.sloop.intention import RoutingClassification
 from soothe.middleware import SystemPromptMiddleware
 
 

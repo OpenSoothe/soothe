@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from soothe.foundation.sloop.state.checkpoint import GoalExecutionRecord
 from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 

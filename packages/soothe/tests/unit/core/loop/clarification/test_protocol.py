@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from soothe.foundation.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,

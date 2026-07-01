@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
 from soothe.foundation.sloop import StrangeLoop
 from soothe.foundation.sloop.clarification import (
     ClarificationAnswer,
@@ -24,7 +25,6 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
     StepAction,
 )
-
 from soothe.protocols.planner import PlanContext
 
 

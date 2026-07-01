@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from soothe.foundation.sloop import StrangeLoop
-from soothe.foundation.sloop.state.schemas import PlanResult
 
 from soothe.config import SootheConfig
+from soothe.foundation.sloop import StrangeLoop
+from soothe.foundation.sloop.state.schemas import PlanResult
 
 
 def _make_mock_core_with_checkpointer() -> Mock:

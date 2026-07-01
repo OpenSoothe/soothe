@@ -263,9 +263,8 @@ def test_calculate_retry_timeout_escalation(
 
 def test_executor_error_classification_enhanced_timeout() -> None:
     """Test executor classifies EnhancedTimeoutError as execution (retryable)."""
-    from soothe.foundation.sloop.engine.executor import Executor
-
     from soothe.foundation.core.agent import CoreAgent
+    from soothe.foundation.sloop.engine.executor import Executor
 
     exc = EnhancedTimeoutError(
         timeout_seconds=480,
@@ -287,9 +286,8 @@ def test_executor_error_classification_enhanced_timeout() -> None:
 
 def test_executor_error_extraction_enhanced_timeout() -> None:
     """Test executor extracts EnhancedTimeoutError metadata."""
-    from soothe.foundation.sloop.engine.executor import Executor
-
     from soothe.foundation.core.agent import CoreAgent
+    from soothe.foundation.sloop.engine.executor import Executor
 
     exc = EnhancedTimeoutError(
         timeout_seconds=480,
@@ -361,9 +359,8 @@ def test_executor_timeout_not_misclassified_as_rate_limit() -> None:
     rate limit detection, causing timeouts to be counted towards the rate limit
     circuit breaker threshold, stopping the loop prematurely.
     """
-    from soothe.foundation.sloop.engine.executor import Executor
-
     from soothe.foundation.core.agent import CoreAgent
+    from soothe.foundation.sloop.engine.executor import Executor
 
     # This is the exact TimeoutError message from graph_interrupt.py
     exc = TimeoutError(

@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
 

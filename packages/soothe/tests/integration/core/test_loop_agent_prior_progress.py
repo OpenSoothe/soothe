@@ -12,6 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult
 from soothe.foundation.sloop.prompts import PromptBuilder
@@ -20,7 +21,6 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
     StepResult,
 )
-
 from soothe.protocols.planner import PlanContext
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+
 from soothe.foundation.sloop.engine.executor import _log_dependency_execution_residual
 from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction
 

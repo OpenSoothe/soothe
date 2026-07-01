@@ -8,12 +8,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 from soothe.config import SootheConfig
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.sloop.engine.executor import Executor
+from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
 def _make_ce() -> ContextEngine:

@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import pytest
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import StepNode
+from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.sloop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
 )
@@ -12,10 +16,6 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
     StepResult,
 )
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import StepNode
-from soothe.foundation.context.planning import StepPlanManagerAdapter
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

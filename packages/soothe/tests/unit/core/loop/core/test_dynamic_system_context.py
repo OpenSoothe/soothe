@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from soothe.config.models import MODEL_KNOWLEDGE_CUTOFFS, get_knowledge_cutoff
 from soothe.foundation.sloop.prompts.context_xml import (
     build_context_sections_for_complexity,
     build_soothe_environment_section,
@@ -13,8 +15,6 @@ from soothe.foundation.sloop.prompts.context_xml import (
     build_soothe_thread_section,
     build_soothe_workspace_section,
 )
-
-from soothe.config.models import MODEL_KNOWLEDGE_CUTOFFS, get_knowledge_cutoff
 from soothe.middleware import SystemPromptMiddleware
 
 

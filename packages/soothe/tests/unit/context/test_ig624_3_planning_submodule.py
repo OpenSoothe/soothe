@@ -10,12 +10,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from soothe.foundation.sloop.state.schemas import (
-    AgentDecision,
-    PlanResult,
-    StepAction,
-    StepResult,
-)
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode, StepNode
@@ -47,6 +41,12 @@ from soothe.foundation.context.planning.models import (
     OrchestrationStrategy,
     PlanWave,
     SubGoalSpec,
+)
+from soothe.foundation.sloop.state.schemas import (
+    AgentDecision,
+    PlanResult,
+    StepAction,
+    StepResult,
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from soothe.foundation.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.foundation.sloop.clarification.protocol import (
     ClarificationAnswer,
@@ -11,7 +12,6 @@ from soothe.foundation.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
 )
-
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
 

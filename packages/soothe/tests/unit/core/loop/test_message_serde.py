@@ -1,9 +1,10 @@
 """Tests for RFC-214: Loop message serde round-trip (Gap G6 fix)."""
 
 from langchain_core.messages import AIMessage, HumanMessage
+from soothe_sdk.utils.serde import create_soothe_serde
+
 from soothe.foundation.sloop.state.checkpoint import GoalExecutionRecord
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe_sdk.utils.serde import create_soothe_serde
 
 
 def test_loop_human_message_serde_roundtrip():

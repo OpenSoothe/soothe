@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+
+from soothe.foundation.core.agent._core import _normalize_layer1_input
 from soothe.foundation.sloop.utils.stream_normalize import (
     GoalCompletionAccumState,
     extract_text_from_message_content,
@@ -14,8 +16,6 @@ from soothe.foundation.sloop.utils.stream_normalize import (
     resolve_goal_completion_text,
     update_goal_completion_from_message,
 )
-
-from soothe.foundation.core.agent._core import _normalize_layer1_input
 
 
 def test_extract_text_from_message_content_str_and_blocks() -> None:

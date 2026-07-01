@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
+
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.engine.step_wave_types import _StreamCollectChunk
 
@@ -253,6 +254,7 @@ async def test_stream_and_collect_rewrites_tool_call_id_to_unified() -> None:
 async def test_backfill_tool_calls_args_from_chunks_by_index() -> None:
     """Chunks without ``id`` still backfill ``tool_calls`` via ``index``."""
     from langchain_core.messages import AIMessage
+
     from soothe.foundation.sloop.engine.executor import _backfill_tool_calls_args_from_chunks
 
     msg = AIMessage(
@@ -419,6 +421,7 @@ async def test_stream_emits_string_tool_call_chunk_args_after_enrich() -> None:
 async def test_backfill_tool_calls_args_from_chunks_on_same_message() -> None:
     """Terminal AIMessage with empty tool_calls gets args from tool_call_chunks."""
     from langchain_core.messages import AIMessage
+
     from soothe.foundation.sloop.engine.executor import _backfill_tool_calls_args_from_chunks
 
     msg = AIMessage(
