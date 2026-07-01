@@ -879,7 +879,7 @@ class LLMPlanner:
         self,
         *,
         current_goal: str,
-        prior_goals: list[dict],
+        prior_goal_completion: str = "",
         capabilities: list[str],
         thread_id: str | None = None,
     ) -> Any:
@@ -891,8 +891,7 @@ class LLMPlanner:
 
         Args:
             current_goal: The new user query (``LoopState.goal``).
-            prior_goals: Compact summary of completed prior goals
-                (from ``_prior_goal_summaries(checkpoint)``).
+            prior_goal_completion: Full prior goal synthesis report (same as plan-generate).
             capabilities: Available tool + subagent names.
             thread_id: Thread id for Langfuse session correlation.
 
@@ -905,11 +904,14 @@ class LLMPlanner:
         from soothe.foundation.sloop.cognition.continuation_prompts import (
             format_loop_continuation_assess_prompt,
         )
+        from soothe.foundation.sloop.engine.continuation_context import (
+            polish_continuation_assess_reasoning,
+        )
         from soothe.foundation.sloop.state.schemas import ContinuationAssessment
 
         prompt = format_loop_continuation_assess_prompt(
             current_goal=current_goal,
-            prior_goals=prior_goals,
+            prior_goal_completion=prior_goal_completion,
             capabilities=capabilities,
         )
         messages = [HumanMessage(content=prompt)]
@@ -934,7 +936,7 @@ class LLMPlanner:
             )
             return ContinuationAssessment(
                 action="plan_generate",
-                reasoning="LLM call failed; safe fallback to full planner.",
+                reasoning="I'll fall back to the full planner because the assess call failed.",
                 goal_progress="none",
             )
 
@@ -945,9 +947,13 @@ class LLMPlanner:
             )
             return ContinuationAssessment(
                 action="plan_generate",
-                reasoning="Invalid LLM output; safe fallback to full planner.",
+                reasoning="I'll use the full planner because the assess output was invalid.",
                 goal_progress="none",
             )
+
+        polished = polish_continuation_assess_reasoning(getattr(result, "reasoning", "") or "")
+        if polished != (result.reasoning or ""):
+            result = result.model_copy(update={"reasoning": polished})
 
         logger.debug(
             "[ContinuationAssess] action=%s reason=%s",
@@ -1375,6 +1381,8 @@ class LLMPlanner:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow, RFC-214).
 
@@ -1469,6 +1477,8 @@ class LLMPlanner:
             plan_phase="generate",
             dag_context=dag_context,
             context_bundle=context_bundle,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
@@ -1565,6 +1575,8 @@ class LLMPlanner:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> Any:
         """Cheaper plan-generate for the ``simple`` intake branch (RFC-630).
 
@@ -1586,6 +1598,8 @@ class LLMPlanner:
             assessment=assessment,
             plan_manager=None,
             context_engine=context_engine,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
 
     async def plan(
@@ -1596,6 +1610,8 @@ class LLMPlanner:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> Any:
         """Plan execution using two-call architecture (RFC-604).
 
@@ -1725,6 +1741,8 @@ class LLMPlanner:
                         plan_phase="generate",
                         dag_context=dag_context,
                         context_bundle=context_bundle,
+                        checkpoint=checkpoint,
+                        exclude_goal_id=exclude_goal_id,
                     )
                     messages_for_retry = generate_messages
                     t_plan = time.perf_counter()

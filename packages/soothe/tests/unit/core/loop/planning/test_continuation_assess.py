@@ -5,6 +5,7 @@ Mocks the LLM structured-output call and asserts:
 - plan_generate action propagates fields
 - LLM exception → safe fallback to plan_generate
 - Invalid LLM action → safe fallback to plan_generate
+- Full PRIOR GOAL COMPLETION body is injected into the prompt (not truncated)
 """
 
 from __future__ import annotations
@@ -13,6 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from soothe.foundation.sloop.cognition.continuation_prompts import (
+    format_loop_continuation_assess_prompt,
+)
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.state.schemas import ContinuationAssessment
 
@@ -20,10 +24,8 @@ from soothe.foundation.sloop.state.schemas import ContinuationAssessment
 def _make_planner() -> LLMPlanner:
     """Construct an LLMPlanner with mocked model + config (sufficient for assess_continuation)."""
     model = MagicMock()
-    # _plan_phase_chat_model returns a chat model; with_structured_output returns the structured wrapper.
     structured = MagicMock()
     model.with_structured_output = MagicMock(return_value=structured)
-    # _plan_phase_chat_model is a module-level function; let it pass through `model`.
     planner = LLMPlanner.__new__(LLMPlanner)
     planner._model = model
     planner._plan_assess_model = model
@@ -33,12 +35,24 @@ def _make_planner() -> LLMPlanner:
     return planner
 
 
+def test_continuation_assess_prompt_injects_full_prior_goal_completion() -> None:
+    body = "x" * 5000
+    prompt = format_loop_continuation_assess_prompt(
+        current_goal="continue",
+        prior_goal_completion=body,
+        capabilities=["read_file"],
+    )
+    assert "PRIOR GOAL COMPLETION:" in prompt
+    assert body in prompt
+    assert "completion=" not in prompt
+
+
 @pytest.mark.asyncio
 async def test_continuation_assess_bootstrap() -> None:
     planner = _make_planner()
     expected = ContinuationAssessment(
         action="bootstrap",
-        reasoning="Translate prior result; no new tools.",
+        reasoning="I'll translate the prior result without new tools.",
         goal_progress="low",
     )
 
@@ -51,20 +65,12 @@ async def test_continuation_assess_bootstrap() -> None:
 
         result = await planner.assess_continuation(
             current_goal="translate the result to chinese",
-            prior_goals=[
-                {
-                    "goal_id": "g0",
-                    "goal_text": "count files",
-                    "completion": "There are 12 file types.",
-                    "step_count": 1,
-                    "current_plan_action": "",
-                }
-            ],
+            prior_goal_completion="There are 12 file types in the project.",
             capabilities=["read_file", "run_python"],
         )
 
     assert result.action == "bootstrap"
-    assert "Translate" in result.reasoning
+    assert result.reasoning.startswith("I'll")
     assert result.goal_progress == "low"
 
 
@@ -73,7 +79,7 @@ async def test_continuation_assess_plan_generate() -> None:
     planner = _make_planner()
     expected = ContinuationAssessment(
         action="plan_generate",
-        reasoning="New tools (email) required.",
+        reasoning="I need email tools to deliver the translated result.",
         goal_progress="none",
     )
 
@@ -86,15 +92,7 @@ async def test_continuation_assess_plan_generate() -> None:
 
         result = await planner.assess_continuation(
             current_goal="translate the result and email to bob",
-            prior_goals=[
-                {
-                    "goal_id": "g0",
-                    "goal_text": "count files",
-                    "completion": "There are 12 file types.",
-                    "step_count": 1,
-                    "current_plan_action": "",
-                }
-            ],
+            prior_goal_completion="There are 12 file types.",
             capabilities=["read_file", "send_email"],
         )
 
@@ -115,20 +113,12 @@ async def test_continuation_assess_llm_exception_falls_back_to_plan_generate() -
 
         result = await planner.assess_continuation(
             current_goal="translate",
-            prior_goals=[
-                {
-                    "goal_id": "g0",
-                    "goal_text": "count",
-                    "completion": "12",
-                    "step_count": 1,
-                    "current_plan_action": "",
-                }
-            ],
+            prior_goal_completion="Prior completion body.",
             capabilities=[],
         )
 
     assert result.action == "plan_generate"
-    assert "fallback" in result.reasoning.lower() or "failed" in result.reasoning.lower()
+    assert result.reasoning.startswith("I'll")
 
 
 @pytest.mark.asyncio
@@ -149,16 +139,9 @@ async def test_continuation_assess_invalid_action_falls_back() -> None:
 
         result = await planner.assess_continuation(
             current_goal="translate",
-            prior_goals=[
-                {
-                    "goal_id": "g0",
-                    "goal_text": "count",
-                    "completion": "12",
-                    "step_count": 1,
-                    "current_plan_action": "",
-                }
-            ],
+            prior_goal_completion="Prior completion body.",
             capabilities=[],
         )
 
     assert result.action == "plan_generate"
+    assert result.reasoning.startswith("I'll")

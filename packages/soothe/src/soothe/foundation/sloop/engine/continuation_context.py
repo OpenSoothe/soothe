@@ -14,8 +14,10 @@ from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint
+    from soothe.foundation.sloop.state.schemas import LoopState
 
 PRIOR_GOAL_COMPLETION_MAX_CHARS = 12_000
+CONTINUATION_ASSESS_REASONING_MAX_CHARS = 240
 
 _CONTINUE_KEYWORD_DESCRIPTION = "Continue prior goal completion recommendations"
 _CONTINUE_KEYWORD_FULL_DESCRIPTION = (
@@ -154,9 +156,106 @@ def build_prior_goal_completion_block(
     ).strip()
     if not body:
         return ""
-    if len(body) <= max_chars:
+    if max_chars <= 0 or len(body) <= max_chars:
         return body
     return body[: max_chars - 1].rstrip() + "…"
+
+
+def format_prior_goal_completion_section(body: str) -> str:
+    """Render PRIOR GOAL COMPLETION section (same label as plan-generate / execute)."""
+    text = (body or "").strip()
+    if not text:
+        return ""
+    return f"PRIOR GOAL COMPLETION:\n{text}"
+
+
+def polish_continuation_assess_reasoning(
+    reasoning: str,
+    *,
+    max_chars: int = CONTINUATION_ASSESS_REASONING_MAX_CHARS,
+) -> str:
+    """Normalize continuation-assess reasoning for TUI cards and logs."""
+    text = " ".join((reasoning or "").split())
+    if not text:
+        return ""
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    clipped = text[: max_chars - 1].rstrip(".,;:")
+    return clipped + "…"
+
+
+def is_continuation_first_plan(state: LoopState) -> bool:
+    """True for iter=0 continuation goals before any in-goal execution."""
+    return (
+        bool(getattr(state, "continue_loop", False))
+        and state.iteration == 0
+        and not state.step_results
+    )
+
+
+def build_prior_goal_summaries(
+    *,
+    ce: Any | None,
+    checkpoint: StrangeLoopCheckpoint | None,
+    exclude_goal_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Compact summary of prior goals for continuation-assess and plan-generate.
+
+    Reads goal metadata from the CE GoalStepDAG and completion bodies from
+    checkpoint ``goal_completion`` fields (same resolution order as
+    ``resolve_prior_goal_completion``).
+
+    Args:
+        ce: ContextEngine (or compatible) exposing ``get_all_goals()``.
+        checkpoint: StrangeLoop checkpoint with persisted goal completions.
+        exclude_goal_id: Current goal id to omit from the summary list.
+
+    Returns:
+        List of dicts with keys ``goal_id``, ``goal_text``, ``completion``,
+        ``step_count``.
+    """
+    completions_by_text = checkpoint_completions_by_goal_text(
+        checkpoint,
+        exclude_goal_id=exclude_goal_id,
+    )
+    if ce is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for goal in ce.get_all_goals():
+        if exclude_goal_id and goal.id == exclude_goal_id:
+            continue
+        if goal.status not in ("completed", "cancelled", "failed", "active"):
+            continue
+        completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
+        goal_text = (goal.description or "").strip()
+        completion = completions_by_text.get(goal_text, "")
+        if not completion and goal.action_history:
+            completion = goal.action_history[-1]
+        out.append(
+            {
+                "goal_id": goal.id,
+                "goal_text": goal.description,
+                "completion": completion,
+                "step_count": len(completed_steps),
+            }
+        )
+    return out
+
+
+def build_continuation_plan_prior_goal_completion(
+    *,
+    loop_messages: list[Any],
+    checkpoint: StrangeLoopCheckpoint | None = None,
+    exclude_goal_id: str | None = None,
+    max_chars: int = 0,
+) -> str:
+    """Build full PRIOR GOAL COMPLETION text for continuation plan prompts."""
+    return build_prior_goal_completion_block(
+        loop_messages,
+        checkpoint=checkpoint,
+        exclude_goal_id=exclude_goal_id,
+        max_chars=max_chars,
+    )
 
 
 def build_continuation_execution_hints(*, has_prior_goal_completion: bool) -> str:
@@ -179,12 +278,18 @@ def build_continuation_execution_hints(*, has_prior_goal_completion: bool) -> st
 
 __all__ = [
     "PRIOR_GOAL_COMPLETION_MAX_CHARS",
+    "CONTINUATION_ASSESS_REASONING_MAX_CHARS",
     "ContinueBootstrapStepBriefs",
     "build_continue_bootstrap_step_briefs",
     "build_continue_bootstrap_step_description",
     "build_continuation_execution_hints",
+    "build_continuation_plan_prior_goal_completion",
     "build_prior_goal_completion_block",
+    "build_prior_goal_summaries",
     "checkpoint_completions_by_goal_text",
+    "format_prior_goal_completion_section",
+    "is_continuation_first_plan",
     "ledger_goal_completion_text",
+    "polish_continuation_assess_reasoning",
     "resolve_prior_goal_completion",
 ]

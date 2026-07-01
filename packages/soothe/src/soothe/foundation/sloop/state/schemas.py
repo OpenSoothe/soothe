@@ -654,7 +654,7 @@ class ContinuationAssessment(BaseModel):
     Attributes:
         action: ``bootstrap`` for chat-like continuations answerable from prior
             context; ``plan_generate`` when new steps or new tools are required.
-        reasoning: One-sentence justification (≤400 chars).
+        reasoning: One first-person sentence (≤240 chars), e.g. "I'll …" or "I need … because …".
         goal_progress: Initial progress estimate; mirrors ``PlanResult.goal_progress``.
     """
 
@@ -666,7 +666,14 @@ class ContinuationAssessment(BaseModel):
             "to the full planner."
         ),
     )
-    reasoning: str = Field(default="", max_length=400)
+    reasoning: str = Field(
+        default="",
+        max_length=240,
+        description=(
+            "One first-person sentence explaining the routing decision "
+            '(e.g. "I will bootstrap from prior context.").'
+        ),
+    )
     goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low"
 
 

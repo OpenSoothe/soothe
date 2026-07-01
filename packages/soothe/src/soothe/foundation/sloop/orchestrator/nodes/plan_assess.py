@@ -14,8 +14,10 @@ import random
 from typing import Any, Literal
 
 from soothe.foundation.sloop.engine.continuation_context import (
+    build_continuation_plan_prior_goal_completion,
     build_continue_bootstrap_step_briefs,
-    checkpoint_completions_by_goal_text,
+    build_prior_goal_summaries,
+    polish_continuation_assess_reasoning,
 )
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -106,48 +108,6 @@ def _has_prior_completed_goal(ctx: LoopRuntimeContext) -> bool:
     return _has_prior_goal_for_continuation(ctx)
 
 
-def _prior_goal_summaries(ctx: LoopRuntimeContext) -> list[dict]:
-    """Compact summary of prior goals for the continuation_assess prompt.
-
-    RFC-624 Phase 4 Stage 2: Reads from CE GoalStepDAG instead of checkpoint.goal_history.
-    Includes cancelled/interrupted prior goals so ``continue`` keyword recovery works.
-
-    Args:
-        ctx: LoopRuntimeContext with CE reference.
-
-    Returns:
-        List of dicts (one per prior goal) with keys:
-        ``goal_id``, ``goal_text``, ``completion``, ``step_count``.
-    """
-    completions_by_text = checkpoint_completions_by_goal_text(
-        ctx.checkpoint,
-        exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
-    )
-    if ctx.ce is None:
-        return []
-    out: list[dict] = []
-    current_id = ctx.ce_goal_id
-    for goal in ctx.ce.get_all_goals():
-        if current_id and goal.id == current_id:
-            continue
-        if goal.status not in ("completed", "cancelled", "failed", "active"):
-            continue
-        completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
-        goal_text = (goal.description or "").strip()
-        completion = completions_by_text.get(goal_text, "")
-        if not completion and goal.action_history:
-            completion = goal.action_history[-1]
-        out.append(
-            {
-                "goal_id": goal.id,
-                "goal_text": goal.description,
-                "completion": completion,
-                "step_count": len(completed_steps),
-            }
-        )
-    return out
-
-
 def build_continue_loop_bootstrap_plan(
     goal: str,
     *,
@@ -232,19 +192,28 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
         )
     ):
-        prior_goals = _prior_goal_summaries(ctx)
+        prior_goals = build_prior_goal_summaries(
+            ce=ctx.ce,
+            checkpoint=ctx.checkpoint,
+            exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
+        )
         if prior_goals:
             await _emit_plan_phase_status(
                 ctx,
                 label=_PLAN_CONTINUATION_STATUS_LABEL,
             )
+            prior_goal_completion = build_continuation_plan_prior_goal_completion(
+                loop_messages=state.loop_messages,
+                checkpoint=ctx.checkpoint,
+                exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
+            )
             assessment = await strange_loop.loop_planner.assess_continuation(
                 current_goal=state.goal,
-                prior_goals=prior_goals,
+                prior_goal_completion=prior_goal_completion,
                 capabilities=context.available_capabilities,
                 thread_id=state.thread_id,
             )
-            reason_text = (assessment.reasoning or "").strip()
+            reason_text = polish_continuation_assess_reasoning(assessment.reasoning or "")
             if assessment.action == "bootstrap":
                 logger.info(
                     "[Plan] iter=0 continuation-assess: bootstrap (%s)",
@@ -254,7 +223,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                     state.goal,
                     raw_user_goal=state.goal,
                     terminal_after_execute=True,
-                    reasoning=assessment.reasoning,
+                    reasoning=reason_text,
                     goal_progress=assessment.goal_progress,
                 )
                 ctx.scratch.plan_result = plan_result
@@ -305,7 +274,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             ctx.scratch.plan_assessment = StatusAssessment(
                 status="continue",
                 goal_progress=assessment.goal_progress,
-                assessment_reasoning=assessment.reasoning,
+                assessment_reasoning=reason_text,
                 require_goal_completion=False,
             )
             return {"assess_route": "continue_generate"}
