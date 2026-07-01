@@ -60,6 +60,8 @@ class PromptBuilder:
         plan_phase: PlanPromptPhase = "assess",
         dag_context: str | None = None,
         context_bundle: ContextBundle | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> list[BaseMessage]:
         """Build SystemMessage + plan context + ledger for Plan phase (RFC-207, RFC-214).
 
@@ -85,6 +87,8 @@ class PromptBuilder:
             context_bundle: Optional ContextBundle from ContextEngine.project() (RFC-624).
                 When provided, supplementary context (goal lineage, progress, instructions)
                 is injected into the prompt. When None, behavior is unchanged.
+            checkpoint: Optional StrangeLoop checkpoint for continuation prior-goal grounding.
+            exclude_goal_id: Current goal id to exclude from continuation prior-goal resolution.
 
         Returns:
             Messages to send to the plan LLM: system, ledger copies, prior thread messages,
@@ -105,21 +109,33 @@ class PromptBuilder:
             plan_phase=plan_phase,
             dag_context=dag_context,
             context_bundle=context_bundle,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
         # RFC-214: execute ledger as real messages (IG-380: optional projection for plan caps).
-        ledger_cfg = None
-        if self.config is not None:
-            ledger_cfg = self.config.agent.loop.plan_prompt_ledger
-        projected = project_loop_messages_for_plan(state.loop_messages, ledger_cfg)
-        out.extend(projected)
-        if len(projected) != len(state.loop_messages):
+        # Continuation iter=0 plan-generate uses PRIOR GOAL COMPLETION instead of step ledger.
+        from soothe.foundation.sloop.engine.continuation_context import is_continuation_first_plan
+
+        skip_ledger = is_continuation_first_plan(state) and plan_phase == "generate"
+        if not skip_ledger:
+            ledger_cfg = None
+            if self.config is not None:
+                ledger_cfg = self.config.agent.loop.plan_prompt_ledger
+            projected = project_loop_messages_for_plan(state.loop_messages, ledger_cfg)
+            out.extend(projected)
+            if len(projected) != len(state.loop_messages):
+                logger.debug(
+                    "Plan messages: ledger projection len=%d (raw=%d) phase=%s",
+                    len(projected),
+                    len(state.loop_messages),
+                    plan_phase,
+                )
+        elif state.loop_messages:
             logger.debug(
-                "Plan messages: ledger projection len=%d (raw=%d) phase=%s",
-                len(projected),
+                "Plan messages: skipping step ledger for continuation plan-generate (raw=%d)",
                 len(state.loop_messages),
-                plan_phase,
             )
 
         # RFC-214: Convert prior thread messages from XML strings to native ledger turns
@@ -333,6 +349,8 @@ class PromptBuilder:
         plan_phase: PlanPromptPhase = "assess",
         dag_context: str | None = None,
         context_bundle: ContextBundle | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -354,6 +372,10 @@ class PromptBuilder:
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
+        from soothe.foundation.sloop.engine.continuation_context import (
+            build_continuation_plan_prior_goal_completion,
+            is_continuation_first_plan,
+        )
         from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
         from soothe.foundation.sloop.state.schemas import next_goal_local_step_id_start
 
@@ -382,12 +404,12 @@ class PromptBuilder:
         )
 
         prior_goal_completion = None
-        if getattr(state, "continue_loop", False) and state.iteration == 0:
-            from soothe.foundation.sloop.engine.continuation_context import (
-                build_prior_goal_completion_block,
+        if is_continuation_first_plan(state) and plan_phase == "generate":
+            prior_goal_completion = build_continuation_plan_prior_goal_completion(
+                loop_messages=state.loop_messages,
+                checkpoint=checkpoint,
+                exclude_goal_id=exclude_goal_id,
             )
-
-            prior_goal_completion = build_prior_goal_completion_block(state.loop_messages)
 
         if plan_phase == "assess":
             return builder.build_plan_assess_message(**common_kwargs)

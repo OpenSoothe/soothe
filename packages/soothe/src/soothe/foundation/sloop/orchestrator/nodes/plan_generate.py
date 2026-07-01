@@ -60,6 +60,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         logger.info("[PlanGenerate] Using fresh-loop bypass assessment")
 
     context = strange_loop._build_plan_context(state)
+    exclude_goal_id = ctx.goal_record.goal_id if ctx.goal_record else None
 
     await ctx.emit("plan_phase_status", {"label": _PLAN_GENERATE_STATUS_LABEL})
 
@@ -76,6 +77,8 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             assessment=assessment,
             plan_manager=plan_manager,
             context_engine=ctx.ce,
+            checkpoint=ctx.checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
     else:
         plan_result = await strange_loop.plan_phase.generate_from_assessment(
@@ -85,6 +88,8 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             assessment=assessment,
             plan_manager=plan_manager,
             context_engine=ctx.ce,
+            checkpoint=ctx.checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
 
     ctx.scratch.plan_result = plan_result
