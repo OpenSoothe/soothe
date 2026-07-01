@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
@@ -23,11 +23,47 @@ from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_mes
 
 if TYPE_CHECKING:
     from soothe.config.models import PlanPromptLedgerConfig
+    from soothe.foundation.sloop.state.schemas import LoopState
 
 logger = logging.getLogger(__name__)
 
+PlannerProjectionMode = Literal["new_goal", "mid_goal"]
+
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
+_NEW_GOAL_LEDGER_PHASES = frozenset({"plan_assess", "plan_generate", "goal_completion"})
+
+
+def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
+    """Return ``new_goal`` at iter=0 before any execution, else ``mid_goal``."""
+    if state.iteration == 0 and not state.step_results:
+        return "new_goal"
+    return "mid_goal"
+
+
+def filter_loop_messages_for_planner_mode(
+    loop_messages: list[BaseMessage],
+    mode: PlannerProjectionMode,
+) -> list[BaseMessage]:
+    """Phase-filter ledger messages before tail/cap projection."""
+    if mode == "mid_goal":
+        return list(loop_messages)
+    out: list[BaseMessage] = []
+    for msg in loop_messages:
+        phase = getattr(msg, "phase", None)
+        if phase in _NEW_GOAL_LEDGER_PHASES:
+            out.append(msg)
+    return out
+
+
+def projected_ledger_has_goal_completion(projected: list[BaseMessage]) -> bool:
+    """True when projected ledger includes a goal_completion AI turn."""
+    for msg in projected:
+        if getattr(msg, "phase", None) != "goal_completion":
+            continue
+        if type(msg).__name__.endswith("AIMessage"):
+            return True
+    return False
 
 
 def _deep_copy_message(msg: BaseMessage) -> BaseMessage:
@@ -153,6 +189,33 @@ def project_loop_messages_for_plan(
         max_per or "off",
     )
     return copies
+
+
+def project_planner_ledger(
+    loop_messages: list[BaseMessage],
+    mode: PlannerProjectionMode,
+    ledger_cfg: PlanPromptLedgerConfig | None,
+) -> list[BaseMessage]:
+    """Project CE ledger for planner prompts with ``new_goal`` / ``mid_goal`` phase filter (IG-538).
+
+    Args:
+        loop_messages: Full RFC-214 ledger from ``LoopState.loop_messages``.
+        mode: ``new_goal`` excludes ``execute_step`` by default; ``mid_goal`` includes all phases.
+        ledger_cfg: Optional tail/char caps (IG-380).
+
+    Returns:
+        Filtered then capped message list for plan LLM prompts.
+    """
+    filtered = filter_loop_messages_for_planner_mode(loop_messages, mode)
+    projected = project_loop_messages_for_plan(filtered, ledger_cfg)
+    logger.debug(
+        "Planner ledger projection: mode=%s in=%d filtered=%d out=%d",
+        mode,
+        len(loop_messages),
+        len(filtered),
+        len(projected),
+    )
+    return projected
 
 
 def project_loop_messages_for_core_agent(

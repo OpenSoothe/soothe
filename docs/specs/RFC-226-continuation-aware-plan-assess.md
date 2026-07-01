@@ -408,7 +408,7 @@ plan_assess(iter=0):
 
 - **RFC-220 (LangGraph Agent Loop Orchestrator)** — Defines the Loop Graph topology this RFC extends with one new conditional edge. The plan / execute / assess node identities are unchanged.
 - **RFC-225 (Loop Continuity and Goal Record Enrichment)** — Provides the persisted per-goal data (`current_plan`, `step_results`, `goal_completion`) that the continuation discriminator consumes. Also provides the seeded `loop_messages` ledger consumed by the executor for the bootstrap step.
-- **RFC-214 (StrangeLoop Loop-Message Surface)** — The `loop_messages` ledger schema is unchanged; this RFC only consumes the seeded entries for prior-goal context.
+- **RFC-214 (StrangeLoop Loop-Message Surface)** — Defines unified planner assembly (§4, P6): `assemble_planner_prompt`, two projection modes, task envelope format. RFC-226 continuation discriminator consumes this assembler instead of a standalone inline prompt. Prior-goal narrative comes from projected ledger + `PRIOR GOALS` tree; checkpoint `goal_completion` is fallback when ledger caps drop completion turns.
 - **RFC-217 (Goal Context Management)** — Unaffected. `thread_switch_pending` and `GoalContextManager` continue to operate as specified.
 - **RFC-604 (Reason-Phase Robustness)** — The `assess` / `generate` split persists; this RFC adds a third structured-output schema (`ContinuationAssessment`) sitting alongside the existing `StatusAssessment` and `PlanGeneration` schemas.
 

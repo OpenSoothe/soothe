@@ -878,54 +878,42 @@ class LLMPlanner:
     async def assess_continuation(
         self,
         *,
-        current_goal: str,
-        prior_goal_completion: str = "",
-        capabilities: list[str],
-        thread_id: str | None = None,
+        state: LoopState,
+        context: PlanContext,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
+        context_bundle: Any | None = None,
     ) -> Any:
-        """RFC-226: discriminator LLM call routing continuations to bootstrap or plan_generate.
+        """RFC-226: discriminator via unified planner assembly (RFC-214 §4, IG-538).
 
-        Invoked from ``plan_assess`` on iter=0 of any agentic query where
-        ``continue_loop_mode`` is True and the loop has at least one completed
-        prior goal. Returns a ``ContinuationAssessment`` Pydantic instance.
-
-        Args:
-            current_goal: The new user query (``LoopState.goal``).
-            prior_goal_completion: Full prior goal synthesis report (same as plan-generate).
-            capabilities: Available tool + subagent names.
-            thread_id: Thread id for Langfuse session correlation.
-
-        Returns:
-            ``ContinuationAssessment`` with ``action``, ``reasoning``, ``goal_progress``.
-            On LLM failure or invalid output, falls back to ``action="plan_generate"``.
+        Routes a follow-up agentic query to bootstrap or plan_generate using the
+        same system + projected ledger + task envelope shape as plan-assess.
         """
-        from langchain_core.messages import HumanMessage
-
-        from soothe.foundation.sloop.cognition.continuation_prompts import (
-            format_loop_continuation_assess_prompt,
-        )
         from soothe.foundation.sloop.engine.continuation_context import (
             polish_continuation_assess_reasoning,
         )
         from soothe.foundation.sloop.state.schemas import ContinuationAssessment
 
-        prompt = format_loop_continuation_assess_prompt(
-            current_goal=current_goal,
-            prior_goal_completion=prior_goal_completion,
-            capabilities=capabilities,
+        messages = self._prompt_builder.build_plan_messages(
+            state.goal,
+            state,
+            context,
+            call_kind="continuation",
+            context_bundle=context_bundle,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
-        messages = [HumanMessage(content=prompt)]
         model = _plan_phase_chat_model(self._plan_assess_model)
         try:
             lf_cfg = self._planner_langfuse_run_config(
-                thread_id=thread_id, phase="continuation-assess"
+                thread_id=state.thread_id, phase="continuation-assess"
             )
             result = await self._invoke_structured(
                 model,
                 messages,
                 ContinuationAssessment,
                 config=lf_cfg,
-                thread_id=thread_id,
+                thread_id=state.thread_id,
             )
         except asyncio.CancelledError:
             raise
