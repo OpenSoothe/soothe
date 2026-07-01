@@ -220,19 +220,13 @@ class PromptBuilder:
         if context.workspace and plan_phase == "generate":
             parts.append(
                 "<WORKSPACE_RULES>\n"
-                "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
-                "Rules:\n"
-                "- Filesystem tools (ls, read_file, write_file, edit_file, glob, grep) take "
-                "workspace-relative paths (e.g. 'src/main.py') or host-absolute paths under the "
-                "workspace root.\n"
-                "- Shell tools (run_command, run_python, run_background) run with cwd set to the "
-                "workspace root. In shell commands, a leading '/' means the HOST filesystem root, "
-                "NOT the workspace. Use '.' or workspace-relative paths (e.g. 'find . -type f', "
-                "'cat src/main.py'), or the host-absolute workspace path from <WORKSPACE><root>.\n"
-                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
-                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
-                "a different project outside this directory.\n"
-                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
+                "Project root is under <WORKSPACE><root>. Filesystem tools: workspace-relative "
+                "or host-absolute paths under that root. Shell tools (run_command, run_python): "
+                "cwd = workspace root; leading '/' in shell = host root — use '.' or relative paths.\n"
+                "- For architecture/codebase/structure goals: inspect this directory immediately.\n"
+                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal "
+                "names a different project outside this directory.\n"
+                "- Do NOT tell the user you need them to share the project first — it is already here.\n"
                 "</WORKSPACE_RULES>\n"
             )
 
@@ -255,12 +249,9 @@ class PromptBuilder:
         if context.recent_messages:
             parts.append(
                 "<FOLLOW_UP_POLICY>\n"
-                '- If the goal depends on prior conversation text, status MUST NOT be "done" until CoreAgent execution '
-                "has produced the requested output (translation, summary, etc.).\n"
-                "- Include at least one concrete execute_steps item that performs the work "
-                "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
-                "- Do not claim the task is finished in next_action unless the evidence or step output contains "
-                "the actual result.\n"
+                'Prior-thread goals: status MUST NOT be "done" until execution produced the '
+                "requested output; include at least one execute_steps item that performs the work; "
+                "do not claim completion in next_action without evidence.\n"
                 "</FOLLOW_UP_POLICY>\n"
             )
 

@@ -15,10 +15,9 @@ When "quiz": quiz_response (concise answer; self-identify as {assistant_name}, N
 When not "quiz":
 - reasoning: ONE first-person sentence (max 20 words) starting with "I'll" or "Let me" — what you will do and why tools are needed.
 - goal_description: normalized goal.
-- task_complexity: minimal|simple|medium|complex.
 
 JSON schema:
-{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","task_complexity":"minimal"|"simple"|"medium"|"complex","quiz_response":"string|null"}}
+{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","quiz_response":"string|null"}}
 </intent_instructions>
 
 <intent_inputs>

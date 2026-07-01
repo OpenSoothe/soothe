@@ -1,15 +1,14 @@
 <PLAN_GENERATE>
 Output: type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
 
-Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in the GOAL: section.
+Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in GOAL:.
 When assess ``Status: continue`` and DAG STATUS shows pending or ready steps, the runtime
-reuses the in-flight plan automatically — you only run when a fresh decision is needed.
+reuses the in-flight plan automatically — emit a fresh plan only when needed.
 
-**Language lock**:
-- Use the same natural language as the current goal statement in GOAL:.
-- Apply this consistently to ``steps[].description``, ``steps[].expected_output``, ``reasoning``, and ``next_action``.
-- Do not switch output language unless the user explicitly requests another language.
-- Keep code, file paths, identifiers, and quoted literals unchanged.
+**Language lock**: Use the same natural language as the current goal statement in GOAL: for
+``steps[].description``, ``steps[].expected_output``, ``reasoning``, and ``next_action``.
+Do not switch output language unless the user explicitly requests another. Keep code, file
+paths, identifiers, and quoted literals unchanged.
 
 **Step count**: Follow EXECUTION_POLICIES (first wave: 1–2 only; later: 1–3).
 
@@ -18,99 +17,35 @@ reuses the in-flight plan automatically — you only run when a fresh decision i
 - ``final``: ONLY after execute_steps produced sufficient evidence. NEVER at iteration 0.
 
 **steps** fields:
-- ``id``: Short token (``01``, ``02``) or per STEP ID HINT:.
-- ``description``: Milestone line (<20 words). Executor handles fine-grained work.
-- ``full_description``: REQUIRED for every ``kind=action`` step. Standalone execution
-  brief (50–120 words), like a detailed task delegation description. Must include
-  concrete scope (paths, modules, identifiers) when known from the goal or context.
-  When ``dependencies`` is set, must state what to do using predecessor output and
-  forbid repeating predecessor discovery actions.
+- ``id``: Short token (``01``, ``02``) or per STEP ID HINT.
+- ``description``: Milestone line (&lt;20 words). Executor handles fine-grained work.
+- ``full_description``: REQUIRED for every ``kind=action`` step. Standalone execution brief
+  (50–120 words) with concrete scope (paths, modules, identifiers) when known. When
+  ``dependencies`` is set, state what to do with predecessor output and forbid repeating
+  predecessor discovery (see EXECUTION_POLICIES dependent chains).
 - ``expected_output``: Checkable completion signal.
-- ``dependencies``: Optional; step ids this depends on.
-- ``kind``: ``action`` (default) or ``ask_user``. See <ASK_USER_STEP>.
-- ``questions``: REQUIRED when ``kind=ask_user``; list of plain-text questions
-  the user must answer before the goal can continue. Forbidden otherwise.
-
-<DEPENDENT_STEP_RULES>
-When ``dependencies`` is non-empty:
-- Set ``execution_mode`` to ``dependency``.
-- ``full_description`` MUST be a self-contained brief the executor can run without
-  re-executing predecessor steps.
-- Include: "Use output from step &lt;id&gt;; do NOT repeat step &lt;id&gt;'s actions."
-- **Diagnose→fix**: step 1 runs check/discovery; step 2 fixes listed items only
-  (no rediscovery command as the first action).
-- **Read→write**: step 1 reads/analyzes; step 2 edits using step 1 findings.
-</DEPENDENT_STEP_RULES>
-
-<ASK_USER_STEP>
-**CRITICAL**: Emit ``kind="ask_user"`` when continuing requires information that is
-not present in the goal, context, or recent step outputs and cannot be reasonably
-inferred. This is the PRIMARY mechanism for clarification — do NOT write prose
-like "Please tell me…" or "Ask the user…" in ``description`` and expect the executor
-to handle it. The executor will NOT ask the user for you. You MUST use the structured
-``ask_user`` step.
-
-**When to use ask_user (REQUIRED)**:
-- The goal is ambiguous and multiple valid approaches exist (e.g., "refine X" without
-  specifying which aspects, "improve Y" without constraints).
-- A key decision point requires user preference (e.g., target format, scope, priority).
-- Essential context is missing and cannot be inferred from available information.
-- On iteration 0 (first wave), if you cannot proceed WITHOUT clarification, emit
-  ``kind="ask_user"`` as your FIRST step — do NOT explore first and ask later.
-
-**When NOT to use ask_user**:
-- The goal is concrete and actionable (e.g., "add logging to module X").
-- Context already provides the needed information.
-- You could reasonably infer the user's intent from the goal statement.
-- To confirm a step you could just do — action speaks louder than asking.
-
-**Rules**:
-- Emit AT MOST ONE ``ask_user`` step per wave; pair it with NO other steps so
-  later actions can use the answer.
-- ``questions`` MUST be a non-empty list of concrete questions. Each question
-  must end in ``?`` and be self-contained (answerable without reading other questions).
-- ``description`` is a SHORT third-person summary (e.g., ``Ask which target format
-  the user wants``); the actual question text belongs in ``questions``.
-- The runtime answers automatically via the clarification relay and resumes
-  planning — you receive the answer in the next iteration's context.
-
-**EXAMPLE - CORRECT**:
-```json
-{
-  "id": "ASK-01",
-  "description": "Ask which aspect to prioritize",
-  "kind": "ask_user",
-  "questions": [
-    "Which aspect of the package structure should I focus on: organization, naming, or documentation?",
-    "Should I preserve backward compatibility or allow breaking changes?"
-  ],
-  "expected_output": "User provides prioritization guidance"
-}
-```
-
-**EXAMPLE - WRONG (DO NOT DO THIS)**:
-```json
-{
-  "id": "02",
-  "description": "Ask clarifying questions about refinement goals",
-  "kind": "action",
-  "questions": null,
-  "expected_output": "Step completed successfully"
-}
-```
-The WRONG example will execute as a normal action step — the model will write prose
-but NO ONE will see it or answer. Use ``kind="ask_user"`` with ``questions`` instead.
-</ASK_USER_STEP>
+- ``dependencies``: Optional; sibling step ``id`` strings.
+- ``kind``: ``action`` (default) or ``ask_user``.
+- ``questions``: REQUIRED when ``kind=ask_user`` — non-empty list of plain-text questions,
+  each ending in ``?``; forbidden otherwise.
 
 **execution_mode** (required when ``type=execute_steps``): only ``parallel`` or ``dependency``.
-- ``parallel`` (default): independent steps; executor may run them concurrently (bounded by config).
-- ``dependency``: only when one or more steps set ``dependencies``; executor respects the DAG.
-- Never output ``sequential`` (removed); invalid values fail validation.
+Never output ``sequential`` (removed); invalid values fail validation. Use ``dependency`` when
+any step has ``dependencies`` (EXECUTION_POLICIES).
 
-**reasoning** (≤500 chars): First-person cognition narrative for the user (shown in the TUI).
-Start with ``I'll`` or ``Let me`` and briefly justify the plan strategy in one or two sentences.
-Example: ``I'll read the config first, then patch the timeout field based on what I find.``
+**ask_user** (PRIMARY clarification — executor will NOT ask the user for you):
+- REQUIRED when: goal is ambiguous; essential context missing and not inferable; user
+  preference needed; iteration 0 and you cannot proceed without answers.
+- NOT when: goal is concrete/actionable; context suffices; intent is reasonably inferable;
+  or you could act instead of confirming.
+- AT MOST ONE ``ask_user`` step per wave; pair with NO other steps. ``description`` = short
+  third-person summary; put question text in ``questions``. Runtime relays answers next iteration.
+- WRONG: ``kind="action"`` with "ask user…" prose — no one will answer.
+- CORRECT: ``kind="ask_user"`` with non-empty ``questions`` (e.g. "Which format should I use?").
+
+**reasoning** (≤500 chars): First-person cognition for the TUI (I'll / Let me …); one or two
+sentences justifying plan strategy.
 **next_action**: First person, one sentence, max ~300 chars.
 
-**On failure**: If prior steps failed, propose a different approach—do not repeat same step text.
+**On failure**: If prior steps failed, propose a different approach — do not repeat same step text.
 </PLAN_GENERATE>
