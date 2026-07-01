@@ -653,8 +653,11 @@ class StrangeLoopStateManager:
                     await self._do_save_checkpoint(self._last_save_checkpoint)
 
             except asyncio.CancelledError:
-                # Final flush on shutdown
-                if self._last_save_checkpoint:
+                # Final flush only if not explicitly stopped via close().
+                # When close() calls _stop_flush_worker(), it sets _worker_started=False
+                # before cancel, and handles flush via force_flush() separately.
+                # Only do final flush here if cancelled externally (e.g., task group cleanup).
+                if self._worker_started and self._last_save_checkpoint:
                     try:
                         await self._do_save_checkpoint(self._last_save_checkpoint)
                     except Exception:

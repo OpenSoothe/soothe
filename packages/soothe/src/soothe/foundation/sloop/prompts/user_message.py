@@ -2,7 +2,7 @@
 
 Replaces XML envelopes with structured text sections (GOAL/CONTEXT/TASK).
 Plan and execute user messages omit INTENT — routing is decided in code before
-the plan LLM runs; synthesis retains INTENT for report tone.
+the plan LLM runs. Goal-synthesis uses a TASK-only closing human message.
 
 System messages retain XML. Only user messages use this format.
 """
@@ -15,10 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from soothe.foundation.context.projection import ContextBundle
-    from soothe.foundation.sloop.engine.scenario_classifier import (
-        ScenarioClassification,
-    )
-    from soothe.foundation.sloop.state.schemas import LoopState, PriorProgressDigest
+    from soothe.foundation.sloop.state.schemas import PriorProgressDigest
 
 # Strip legacy StrangeLoop suffix accidentally baked into goal text or stored checkpoints.
 _GOAL_ITERATION_SUFFIX_RE = re.compile(
@@ -303,62 +300,23 @@ class UserMessageBuilder:
 
         return _render_sections(sections)
 
-    def build_synthesis_message(
-        self,
-        user_query: str,
-        *,
-        state: LoopState,  # noqa: ARG002 — kept for signature compatibility
-        classification: ScenarioClassification,
-        evidence_body: str,
-        intent_type: str = "agentic",
-        task_complexity: str = "medium",
-    ) -> str:
-        """Build user message for goal-completion synthesis (IG-524).
+    def build_synthesis_message(self) -> str:
+        """Build the closing task prompt for goal-completion synthesis.
 
-        Removed EXECUTION SUMMARY and AVAILABLE BUILT-IN SCENARIOS sections:
-        - EXECUTION SUMMARY: Previously read from state.step_results, could show misleading
-          zeros when evidence exists in loop_messages. LLM derives summary from EVIDENCE.
-        - AVAILABLE BUILT-IN SCENARIOS: Static content moved to system prompt
-          (synthesis_report_system.xml) for caching.
-
-        Args:
-            user_query: The original user request text.
-            state: Loop state (unused after IG-524; kept for signature compatibility).
-            classification: Scenario classification result with sections, focus, emphasis.
-            evidence_body: Pre-formatted evidence (step summaries + work transcript).
-            intent_type: Intent classification.
-            task_complexity: Task complexity level.
-
-        Returns:
-            Structured text message for the synthesis HumanMessage.
+        GOAL, INTENT, contextual focus, evidence emphasis, and step summaries
+        live in the system prompt and execute-step ledger messages — not here.
         """
-        sections: list[tuple[str, str]] = [
-            ("GOAL", _goal_text(user_query)),
-            ("INTENT", f"{intent_type} (complexity: {task_complexity})"),
-        ]
-
-        # Contextual focus from classification
-        focus_text = "\n".join(f"- {item}" for item in classification.contextual_focus)
-        sections.append(("CONTEXTUAL FOCUS", focus_text))
-
-        # Evidence emphasis
-        sections.append(("EVIDENCE EMPHASIS", classification.evidence_emphasis))
-
-        # Evidence body
-        if evidence_body.strip():
-            sections.append(("EVIDENCE", evidence_body.strip()))
-
-        sections.append(
-            (
-                "TASK",
-                "1. Write a final report for the person who submitted the request\n"
-                "2. Use only the execution evidence provided — do not invent results\n"
-                "3. Organize by theme, not chronologically\n"
-                "4. Include the required sections for the matched scenario",
-            )
+        return _render_sections(
+            [
+                (
+                    "TASK",
+                    "1. Write a final report for the person who submitted the request\n"
+                    "2. Use only the execution evidence provided — do not invent results\n"
+                    "3. Organize by theme, not chronologically\n"
+                    "4. Include the required sections for the matched scenario",
+                ),
+            ]
         )
-
-        return _render_sections(sections)
 
 
 def flatten_user_message_content(content: str) -> str:

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
+
 from soothe.foundation.sloop.engine.scenario_classifier import ScenarioClassification
 from soothe.foundation.sloop.engine.synthesis import (
     SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
@@ -14,7 +15,6 @@ from soothe.foundation.sloop.engine.synthesis import (
 )
 from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-
 from soothe.utils.observability import langfuse as langfuse_util
 
 
@@ -206,12 +206,14 @@ async def test_generate_synthesis_uses_projected_context_not_raw_ledger() -> Non
             pass
 
     msgs = captured.get("messages") or []
-    assert len(msgs) == 2
+    assert len(msgs) == 4
     assert isinstance(msgs[0], SystemMessage)
-    assert isinstance(msgs[1], HumanMessage)
-    human = msgs[1].content
+    assert isinstance(msgs[1], LoopHumanMessage)
+    assert isinstance(msgs[2], LoopAIMessage)
+    assert isinstance(msgs[3], HumanMessage)
+    assert "README says hello" in str(msgs[2].content)
+    human = msgs[3].content
     assert isinstance(human, str)
-    assert "GOAL:" in human
-    assert "README says hello" in human
+    assert human.startswith("TASK:")
     assert "Plan assess context" not in human
     assert "StrangeLoop" not in human.lower()

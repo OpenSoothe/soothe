@@ -1,46 +1,30 @@
 """Project StrangeLoop state into user-safe synthesis context (RFC-603, RFC-214).
 
-Synthesis must not receive raw ``loop_messages`` (plan envelopes, ledger stubs, or
-orchestration metadata). This module builds a bounded evidence payload and pairs it
-with a system prompt that uses only end-user vocabulary.
+Goal-synthesis injects ``execute_step`` ledger turns as native messages (like
+plan-assess) for prompt-cache alignment. Plan-phase ledger rows stay out of the
+message list. Scenario, focus, emphasis, and the verbatim user request live in
+the system prompt; the closing human message is a short TASK trigger only.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from soothe.foundation.sloop.engine.scenario_classifier import ScenarioClassification
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    project_loop_messages_for_synthesis,
+)
 from soothe.foundation.sloop.prompts.user_message import (
     _goal_text,
     flatten_user_message_content,
 )
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
+    from soothe.config.models import PlanPromptLedgerConfig
     from soothe.foundation.sloop.state.schemas import LoopState
-
-# Phases excluded by ledger ``phase`` metadata (includes goal-completion ledger stubs).
-_EXCLUDED_LEDGER_PHASES = frozenset(
-    {
-        "plan_assess",
-        "plan_generate",
-        "goal_completion",
-        "execute_wave",
-        "quiz",
-    }
-)
-
-
-@dataclass(frozen=True)
-class SynthesisUserContext:
-    """User-safe inputs for final report generation."""
-
-    user_query: str
-    evidence_body: str
 
 
 def normalize_user_query(goal: str | None) -> str:
@@ -61,89 +45,15 @@ def flatten_execute_human_content(content: str) -> str:
     return flatten_user_message_content(content)
 
 
-def _step_evidence_lines(state: LoopState) -> list[str]:
-    lines: list[str] = []
-    for result in state.step_results:
-        if result.success:
-            body = result.to_evidence_string(truncate=False)
-        else:
-            body = f"Failed: {result.error or 'unknown error'}"
-        lines.append(f"[Step {result.step_id}] {body}")
-    return lines
+def _messages_text_len(messages: list[BaseMessage]) -> int:
+    return sum(len(extract_text_from_message_content(getattr(m, "content", ""))) for m in messages)
 
 
-def _execute_transcript_lines(state: LoopState) -> list[str]:
-    """Format execution transcript with standard conversation markers (IG-524).
-
-    Uses USER:/AI: markers instead of [Task]/[Finding] to improve LLM comprehension.
-    Standard conversation markers are universally recognized as turn boundaries.
-    """
-    lines: list[str] = []
-    if not state.loop_messages:
-        return lines
-
-    for msg in state.loop_messages:
-        phase = getattr(msg, "phase", None)
-        if phase in _EXCLUDED_LEDGER_PHASES:
-            continue
-        if phase not in (None, "execute_step"):
-            continue
-
-        if isinstance(msg, LoopHumanMessage):
-            text = flatten_execute_human_content(extract_text_from_message_content(msg.content))
-            if text:
-                lines.append(f"USER: {text}")
-        elif isinstance(msg, LoopAIMessage):
-            text = extract_text_from_message_content(msg.content).strip()
-            if text:
-                lines.append(f"AI: {text}")
-
-    return lines
-
-
-def project_synthesis_user_context(
-    state: LoopState,
+def render_synthesis_system_prompt(
+    classification: ScenarioClassification,
     *,
-    user_query: str | None = None,
-) -> SynthesisUserContext:
-    """Build user-safe query + evidence text from loop state."""
-    query = normalize_user_query(user_query if user_query is not None else state.goal)
-
-    parts: list[str] = []
-    step_lines = _step_evidence_lines(state)
-    if step_lines:
-        parts.append("STEP SUMMARIES:")
-        parts.extend(f"  {line}" for line in step_lines)
-
-    transcript = _execute_transcript_lines(state)
-    if transcript:
-        parts.append("WORK TRANSCRIPT:")
-        parts.extend(f"  {line}" for line in transcript)
-
-    if not parts:
-        parts.append("WORK TRANSCRIPT:")
-        parts.append("  [Finding] No detailed execution record available.")
-
-    evidence_body = "\n".join(parts)
-    return SynthesisUserContext(
-        user_query=query,
-        evidence_body=evidence_body,
-    )
-
-
-def _trim_evidence_body(body: str, max_chars: int) -> str:
-    if max_chars <= 0 or len(body) <= max_chars:
-        return body
-    marker = "\n…[evidence truncated]\n"
-    return body[: max(0, max_chars - len(marker))] + marker
-
-
-def build_synthesis_human_payload(context: SynthesisUserContext) -> str:
-    """Return the single human message body for synthesis (structured text, user vocabulary only)."""
-    return f"GOAL:\n{context.user_query}\n\nEVIDENCE:\n{context.evidence_body}"
-
-
-def render_synthesis_system_prompt(classification: ScenarioClassification) -> str:
+    user_goal: str,
+) -> str:
     """Render system instructions from the synthesis template (no orchestration terms)."""
     from soothe.foundation.sloop.prompts.loader import load_prompt_fragment
     from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
@@ -156,6 +66,7 @@ def render_synthesis_system_prompt(classification: ScenarioClassification) -> st
             sections=classification.sections,
             contextual_focus=focus_items,
             evidence_emphasis=classification.evidence_emphasis,
+            user_goal=user_goal,
         )
         + "\n\n"
         + build_timestamp_xml_footer()
@@ -168,70 +79,36 @@ def build_synthesis_messages(
     *,
     user_query: str | None = None,
     max_chars: int,
+    ledger_cfg: PlanPromptLedgerConfig | None = None,
 ) -> list[BaseMessage]:
-    """Assemble system + human messages for goal-completion synthesis."""
+    """Assemble system + execute ledger + TASK human for goal-completion synthesis."""
     from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 
-    context = project_synthesis_user_context(state, user_query=user_query)
-    context = SynthesisUserContext(
-        user_query=context.user_query,
-        evidence_body=_trim_evidence_body(
-            context.evidence_body,
-            max(0, max_chars - 4096),
-        ),
+    user_goal = normalize_user_query(user_query if user_query is not None else state.goal)
+    system_text = render_synthesis_system_prompt(classification, user_goal=user_goal)
+    ledger_msgs = list(
+        project_loop_messages_for_synthesis(state.loop_messages, ledger_cfg),
     )
-    system_text = render_synthesis_system_prompt(classification)
-
-    # Extract intent from state
-    intent_type = "agentic"
-    task_complexity = "medium"
-    if state.intent and hasattr(state.intent, "intent_type"):
-        intent_type = state.intent.intent_type
-        task_complexity = getattr(state.intent, "task_complexity", "medium")
-
-    builder = UserMessageBuilder()
-    human_text = builder.build_synthesis_message(
-        user_query=context.user_query,
-        state=state,
-        classification=classification,
-        evidence_body=context.evidence_body,
-        intent_type=intent_type,
-        task_complexity=task_complexity,
-    )
+    human_text = UserMessageBuilder().build_synthesis_message()
 
     while max_chars > 0:
-        total = len(system_text) + len(human_text)
+        total = len(system_text) + _messages_text_len(ledger_msgs) + len(human_text)
         if total <= max_chars:
             break
-        over = total - max_chars
-        context = SynthesisUserContext(
-            user_query=context.user_query,
-            evidence_body=_trim_evidence_body(
-                context.evidence_body, len(context.evidence_body) - over
-            ),
-        )
-        human_text = builder.build_synthesis_message(
-            user_query=context.user_query,
-            state=state,
-            classification=classification,
-            evidence_body=context.evidence_body,
-            intent_type=intent_type,
-            task_complexity=task_complexity,
-        )
-        if len(context.evidence_body) < 200:
-            break
+        if ledger_msgs:
+            ledger_msgs.pop(0)
+            continue
+        break
 
-    return [
-        SystemMessage(content=system_text),
-        HumanMessage(content=human_text),
-    ]
+    out: list[BaseMessage] = [SystemMessage(content=system_text)]
+    out.extend(ledger_msgs)
+    out.append(HumanMessage(content=human_text))
+    return out
 
 
 __all__ = [
-    "SynthesisUserContext",
-    "build_synthesis_human_payload",
     "build_synthesis_messages",
+    "flatten_execute_human_content",
     "normalize_user_query",
-    "project_synthesis_user_context",
     "render_synthesis_system_prompt",
 ]
