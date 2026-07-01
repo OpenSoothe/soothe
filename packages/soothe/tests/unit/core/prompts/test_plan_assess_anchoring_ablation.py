@@ -410,15 +410,12 @@ def test_d1_dedupes_goal() -> None:
 
 
 def test_system_sha_is_identical_across_ablations() -> None:
-    """All conditions share the same system prompt (changes are ledger-only).
-
-    ``<TIMESTAMP>`` footer is volatile per call and excluded from the hash.
-    """
+    """All conditions share the same system prompt (changes are ledger-only)."""
     results = _run_all_conditions()
     shas = {r.system_sha for r in results.values()}
     assert len(shas) == 1, f"system message must be identical across conditions; got {shas}"
     sample_system = _render(_build_state())[0].content
-    assert "<TIMESTAMP>" in sample_system
+    assert "<TIMESTAMP>" not in sample_system
 
 
 def test_ablation_report_summary(capsys) -> None:

@@ -19,8 +19,7 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     config = MagicMock()
     config.resolve_model.return_value = "claude-opus-4-6"
     builder = PromptBuilder(config)
-    # WORKSPACE_RULES/WORKSPACE_INSTRUCTIONS are emitted for plan-generate only
-    # (assess is a meta-decision and doesn't need them).
+    # WORKSPACE_RULES are emitted for plan-generate only (assess is a meta-decision).
     messages = builder.build_plan_messages(
         "analyze architecture", state, ctx, plan_phase="generate"
     )
@@ -122,9 +121,9 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     assert messages[-1].content.strip().startswith("GOAL:")
     assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
     assert "翻译成中文" in messages[-1].content
-    # Volatile clock is on the system prompt footer, not plan-context human.
+    # Plan prompts omit volatile clock — execute system prompt carries <TIMESTAMP> when needed.
     assert "TIMESTAMP:" not in messages[-1].content
-    assert "<TIMESTAMP>" in system_content
+    assert "<TIMESTAMP>" not in system_content
 
     # FOLLOW_UP_POLICY in SystemMessage (static rule)
     assert "<FOLLOW_UP_POLICY>" in system_content

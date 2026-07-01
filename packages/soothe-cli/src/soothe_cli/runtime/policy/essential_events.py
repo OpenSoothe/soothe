@@ -24,12 +24,13 @@ STEP_COMPLETE_EVENT_TYPES: Final[frozenset[str]] = frozenset(
 )
 
 LOOP_REASON_EVENT_TYPE: Final[str] = "soothe.cognition.strange_loop.reasoned"
+INTENT_CLASSIFIED_EVENT_TYPE: Final[str] = "soothe.cognition.intent.classified"
 
 ESSENTIAL_PROGRESS_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     set(GOAL_START_EVENT_TYPES)
     | set(STEP_START_EVENT_TYPES)
     | set(STEP_COMPLETE_EVENT_TYPES)
-    | {LOOP_REASON_EVENT_TYPE}
+    | {LOOP_REASON_EVENT_TYPE, INTENT_CLASSIFIED_EVENT_TYPE}
 )
 
 
@@ -56,6 +57,7 @@ def is_step_complete_event_type(event_type: str) -> bool:
 __all__ = [
     "ESSENTIAL_PROGRESS_EVENT_TYPES",
     "GOAL_START_EVENT_TYPES",
+    "INTENT_CLASSIFIED_EVENT_TYPE",
     "LOOP_REASON_EVENT_TYPE",
     "STEP_COMPLETE_EVENT_TYPES",
     "STEP_START_EVENT_TYPES",

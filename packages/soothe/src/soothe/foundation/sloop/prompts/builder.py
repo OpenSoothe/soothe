@@ -213,10 +213,10 @@ class PromptBuilder:
         parts.append(RESPONSE_LANGUAGE_HINT_FRAGMENT + "\n")
 
         # Conditional static sections (present based on context).
-        # Workspace rules + WORKSPACE_INSTRUCTIONS apply only to plan-generate:
-        # plan-assess is a meta-decision (status/progress/next_action) that does
-        # not author steps touching the workspace, so the rules/conventions
-        # blocks are wasted tokens and pollute the cache key.
+        # WORKSPACE_RULES apply only to plan-generate: plan-assess is a meta-decision
+        # (status/progress/next_action) that does not author steps touching the workspace.
+        # Project rules (AGENTS.md / CLAUDE.md) are injected on execute via CoreAgent
+        # system prompt, not plan-generate — keeps the planner cache-stable and lean.
         if context.workspace and plan_phase == "generate":
             parts.append(
                 "<WORKSPACE_RULES>\n"
@@ -235,18 +235,6 @@ class PromptBuilder:
                 "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
                 "</WORKSPACE_RULES>\n"
             )
-            # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable
-            # RFC-624: Use context_bundle.project_instructions when available (skip disk read)
-            if context_bundle is not None and context_bundle.project_instructions:
-                parts.append(context_bundle.project_instructions + "\n")
-            else:
-                from soothe.foundation.sloop.prompts.project_instructions import (
-                    load_workspace_project_instructions,
-                )
-
-                ws_instructions = load_workspace_project_instructions(context.workspace)
-                if ws_instructions:
-                    parts.append(ws_instructions + "\n")
 
         # RFC-624: Supplementary instructions from ContextBundle
         if context_bundle is not None:
@@ -288,10 +276,6 @@ class PromptBuilder:
             from soothe.foundation.sloop.prompts.context_xml import build_soothe_workspace_section
 
             parts.append(build_soothe_workspace_section(Path(context.workspace)) + "\n")
-
-        from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
-
-        parts.append(build_timestamp_xml_footer())
 
         return "\n".join(parts)
 

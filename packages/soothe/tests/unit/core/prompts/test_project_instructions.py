@@ -108,7 +108,7 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
 
 
 def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:
-    """Plan generate uses WORKSPACE_INSTRUCTIONS in system prompt, not envelope."""
+    """plan-generate omits WORKSPACE_INSTRUCTIONS in system and human messages."""
     from soothe.protocols.planner import PlanContext
 
     (tmp_path / "CLAUDE.md").write_text("Plan must follow CLAUDE rules\n", encoding="utf-8")
@@ -120,9 +120,11 @@ def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> N
 
     assess_human = assess[-1].content
     generate_human = generate[-1].content
-    # No project_instructions in envelope - it's in system prompt
+    generate_system = generate[0].content
     assert "<WORKSPACE_INSTRUCTIONS>" not in assess_human
     assert "<WORKSPACE_INSTRUCTIONS>" not in generate_human
+    assert "<WORKSPACE_INSTRUCTIONS>" not in generate_system
+    assert "Plan must follow CLAUDE rules" not in generate_system
 
 
 @pytest.mark.asyncio

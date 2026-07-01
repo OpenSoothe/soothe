@@ -10,8 +10,8 @@ Two failure modes show up in practice (trace 19c3ed3):
 2. The recorded human carries `GOAL:` (or legacy `<USER_QUERY>`). The duplicated
    goal anchors recency away from the latest evidence (ablation D1).
 
-Volatile timestamps live on system prompts (``<TIMESTAMP>`` XML footer), not
-in user or ledger messages — no C1 stripping is required for new turns.
+Volatile timestamps live on execute CoreAgent system prompts (``<TIMESTAMP>`` XML footer), not
+in plan-assess/plan-generate prompts or user/ledger messages.
 
 These helpers apply transforms at the single point where the ledger pair is
 recorded so the live LLM call still sees the full rendered message — only the
