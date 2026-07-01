@@ -217,3 +217,109 @@ def test_flatten_user_message_content_legacy_xml() -> None:
     msg = "<USER_QUERY>\nSearch the repo\n</USER_QUERY>"
     flat = flatten_user_message_content(msg)
     assert flat == "Search the repo"
+
+
+def test_plan_generate_omits_redundant_goal_lineage() -> None:
+    from soothe.foundation.context.projection import ContextBundle
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="count folders",
+        context_bundle=ContextBundle(goal_lineage="count folders"),
+    )
+    assert "GOAL LINEAGE:" not in msg
+
+
+def test_plan_generate_keeps_hierarchical_goal_lineage() -> None:
+    from soothe.foundation.context.projection import ContextBundle
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="Child task",
+        context_bundle=ContextBundle(goal_lineage="Root mission → Child task"),
+    )
+    assert "GOAL LINEAGE:" in msg
+    assert "Root mission → Child task" in msg
+
+
+def test_plan_generate_skips_goal_lineage_when_prior_goal_completion_present() -> None:
+    from soothe.foundation.context.projection import ContextBundle
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="continue",
+        prior_goal_completion="Prior synthesis with recommended next actions.",
+        context_bundle=ContextBundle(goal_lineage="Root → continue"),
+    )
+    assert "PRIOR GOAL COMPLETION:" in msg
+    assert "GOAL LINEAGE:" not in msg
+
+
+def test_plan_generate_includes_prior_goals_from_bundle() -> None:
+    from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="continue",
+        context_bundle=ContextBundle(
+            prior_goals=[
+                PriorGoalSummary(
+                    goal_id="g0",
+                    description="count folders in root",
+                    status="completed",
+                    step_summary="  - 01: List directories",
+                )
+            ]
+        ),
+    )
+    assert "PRIOR GOALS:" in msg
+    assert "count folders in root" in msg
+    assert "List directories" in msg
+    prior_goals_idx = msg.index("PRIOR GOALS:")
+    goal_idx = msg.index("GOAL:")
+    assert goal_idx < prior_goals_idx
+
+
+def test_plan_generate_context_section_order() -> None:
+    from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
+    from soothe.foundation.sloop.state.schemas import PriorProgressDigest, ToolCallHead
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="Child task",
+        prior_goal_completion="Full prior report.",
+        step_id_hint="Use step ids 03, 04.",
+        prior_progress=PriorProgressDigest(
+            iteration=0,
+            wave_index=0,
+            steps_completed=1,
+            derived_progress_hint="medium",
+            tool_calls=[ToolCallHead(name="read_file", head="readme")],
+        ),
+        context_bundle=ContextBundle(
+            goal_lineage="Root mission → Child task",
+            step_lineage="Pending step reasoning",
+            prior_goals=[
+                PriorGoalSummary(
+                    goal_id="g0",
+                    description="prior work",
+                    status="completed",
+                    step_summary="",
+                )
+            ],
+        ),
+        skill_context="Skill body",
+    )
+    labels = [
+        "GOAL:",
+        "PRIOR GOAL COMPLETION:",
+        "PRIOR GOALS:",
+        "PRIOR PROGRESS:",
+        "STEP LINEAGE:",
+        "SKILL REFERENCE:",
+        "STEP ID HINT:",
+        "TASK:",
+    ]
+    indices = [msg.index(label) for label in labels]
+    assert indices == sorted(indices)
+    assert "GOAL LINEAGE:" not in msg

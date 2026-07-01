@@ -13,6 +13,8 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
+from soothe.foundation.context.projection import PriorGoalSummary
+
 if TYPE_CHECKING:
     from soothe.foundation.context.projection import ContextBundle
     from soothe.foundation.sloop.state.schemas import PriorProgressDigest
@@ -77,6 +79,103 @@ def _render_prior_progress(digest: PriorProgressDigest) -> str:
         evidence_lines.pop()
         rendered = _assemble(evidence_lines)
     return rendered
+
+
+def _should_inject_goal_lineage(
+    goal: str,
+    goal_lineage: str,
+    *,
+    prior_goal_completion: str | None = None,
+) -> bool:
+    """Return True when parent-chain GOAL LINEAGE adds context beyond GOAL.
+
+    Skips redundant single-node lineage that duplicates GOAL, and skips entirely
+    when PRIOR GOAL COMPLETION already grounds a continuation goal.
+    """
+    if (prior_goal_completion or "").strip():
+        return False
+    normalized_goal = _goal_text(goal)
+    lineage = (goal_lineage or "").strip()
+    if not lineage:
+        return False
+    if lineage == normalized_goal:
+        return False
+    parts = [part.strip() for part in lineage.split("→")]
+    if len(parts) == 1 and parts[0] == normalized_goal:
+        return False
+    return True
+
+
+def _render_prior_goals_section(prior_goals: list[PriorGoalSummary]) -> str:
+    """Render completed prior goals from ContextBundle (cross-goal thread context)."""
+    if not prior_goals:
+        return ""
+    blocks: list[str] = []
+    for summary in prior_goals:
+        description = (summary.description or "").strip()
+        if not description:
+            continue
+        status = (summary.status or "unknown").strip()
+        block_lines = [f"- [{summary.goal_id}] {description} ({status})"]
+        step_summary = (summary.step_summary or "").strip()
+        if step_summary:
+            block_lines.append(step_summary)
+        completion = (summary.completion_text or "").strip()
+        if completion:
+            block_lines.append(completion)
+        blocks.append("\n".join(block_lines))
+    return "\n\n".join(blocks)
+
+
+def _append_plan_context_sections(
+    sections: list[tuple[str, str]],
+    *,
+    goal: str,
+    dag_context: Any = None,
+    skill_context: str | None = None,
+    prior_progress: PriorProgressDigest | None = None,
+    prior_goal_completion: str | None = None,
+    current_iteration: int | None = None,
+    context_bundle: ContextBundle | None = None,
+    step_id_hint: str | None = None,
+) -> None:
+    """Append shared plan-phase context blocks in a stable, priority order."""
+    if (prior_goal_completion or "").strip():
+        sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
+
+    if context_bundle is not None and context_bundle.prior_goals:
+        prior_goals_text = _render_prior_goals_section(context_bundle.prior_goals)
+        if prior_goals_text:
+            sections.append(("PRIOR GOALS", prior_goals_text))
+
+    if context_bundle is not None:
+        goal_lineage = (context_bundle.goal_lineage or "").strip()
+        if _should_inject_goal_lineage(
+            goal,
+            goal_lineage,
+            prior_goal_completion=prior_goal_completion,
+        ):
+            sections.append(("GOAL LINEAGE", goal_lineage))
+
+    if prior_progress is not None:
+        is_stale = (
+            current_iteration is not None and prior_progress.iteration < current_iteration - 1
+        )
+        if not is_stale:
+            sections.append(("PRIOR PROGRESS", _render_prior_progress(prior_progress)))
+
+    dag_text = _render_dag_status(dag_context)
+    if dag_text:
+        sections.append(("DAG STATUS", dag_text))
+
+    if context_bundle is not None and (context_bundle.step_lineage or "").strip():
+        sections.append(("STEP LINEAGE", context_bundle.step_lineage.strip()))
+
+    if (skill_context or "").strip():
+        sections.append(("SKILL REFERENCE", skill_context.strip()))
+
+    if step_id_hint:
+        sections.append(("STEP ID HINT", step_id_hint))
 
 
 def _render_dag_status(dag_ctx: Any) -> str:
@@ -156,28 +255,15 @@ class UserMessageBuilder:
             ("GOAL", _goal_text(goal)),
         ]
 
-        # Prior progress (with staleness check)
-        if prior_progress is not None:
-            is_stale = (
-                current_iteration is not None and prior_progress.iteration < current_iteration - 1
-            )
-            if not is_stale:
-                sections.append(("PRIOR PROGRESS", _render_prior_progress(prior_progress)))
-
-        # DAG status
-        dag_text = _render_dag_status(dag_context)
-        if dag_text:
-            sections.append(("DAG STATUS", dag_text))
-
-        # ContextBundle supplements
-        if context_bundle is not None:
-            if context_bundle.goal_lineage:
-                sections.append(("GOAL LINEAGE", context_bundle.goal_lineage))
-            if context_bundle.step_lineage:
-                sections.append(("STEP LINEAGE", context_bundle.step_lineage))
-
-        if (skill_context or "").strip():
-            sections.append(("SKILL REFERENCE", skill_context.strip()))
+        _append_plan_context_sections(
+            sections,
+            goal=goal,
+            dag_context=dag_context,
+            skill_context=skill_context,
+            prior_progress=prior_progress,
+            current_iteration=current_iteration,
+            context_bundle=context_bundle,
+        )
 
         sections.append(
             (
@@ -220,34 +306,17 @@ class UserMessageBuilder:
             ("GOAL", _goal_text(goal)),
         ]
 
-        if (prior_goal_completion or "").strip():
-            sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
-
-        # Prior progress (with staleness check)
-        if prior_progress is not None:
-            is_stale = (
-                current_iteration is not None and prior_progress.iteration < current_iteration - 1
-            )
-            if not is_stale:
-                sections.append(("PRIOR PROGRESS", _render_prior_progress(prior_progress)))
-
-        # DAG status
-        dag_text = _render_dag_status(dag_context)
-        if dag_text:
-            sections.append(("DAG STATUS", dag_text))
-
-        # ContextBundle supplements
-        if context_bundle is not None:
-            if context_bundle.goal_lineage:
-                sections.append(("GOAL LINEAGE", context_bundle.goal_lineage))
-            if context_bundle.step_lineage:
-                sections.append(("STEP LINEAGE", context_bundle.step_lineage))
-
-        if (skill_context or "").strip():
-            sections.append(("SKILL REFERENCE", skill_context.strip()))
-
-        if step_id_hint:
-            sections.append(("STEP ID HINT", step_id_hint))
+        _append_plan_context_sections(
+            sections,
+            goal=goal,
+            dag_context=dag_context,
+            skill_context=skill_context,
+            prior_progress=prior_progress,
+            prior_goal_completion=prior_goal_completion,
+            current_iteration=current_iteration,
+            context_bundle=context_bundle,
+            step_id_hint=step_id_hint,
+        )
 
         sections.append(
             (
@@ -354,5 +423,8 @@ def flatten_user_message_content(content: str) -> str:
 __all__ = [
     "PRIOR_PROGRESS_MAX_CHARS",
     "UserMessageBuilder",
+    "_append_plan_context_sections",
+    "_render_prior_goals_section",
+    "_should_inject_goal_lineage",
     "flatten_user_message_content",
 ]

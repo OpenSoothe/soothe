@@ -69,7 +69,7 @@ class LoopPlannerProtocol(Protocol):
         self,
         *,
         current_goal: str,
-        prior_goals: list[dict],
+        prior_goal_completion: str = "",
         capabilities: list[str],
         thread_id: str | None = None,
     ) -> ContinuationAssessment:

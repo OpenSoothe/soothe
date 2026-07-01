@@ -132,6 +132,8 @@ class PlanPhase:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> PlanResult:
         """Run plan-generate call after assess determined work remains."""
         self._prepare_state_evidence(state)
@@ -148,6 +150,8 @@ class PlanPhase:
             assessment=assessment,
             plan_manager=plan_manager,
             context_engine=context_engine,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
         return self.finalize_plan_result(state=state, context=context, result=result)
 
@@ -160,6 +164,8 @@ class PlanPhase:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
     ) -> PlanResult:
         """Run a cheaper plan-generate call for the ``simple`` intake branch (RFC-630).
 
@@ -185,6 +191,8 @@ class PlanPhase:
                 assessment=assessment,
                 plan_manager=plan_manager,
                 context_engine=context_engine,
+                checkpoint=checkpoint,
+                exclude_goal_id=exclude_goal_id,
             )
         result = await lightweight(
             goal=goal,
@@ -193,6 +201,8 @@ class PlanPhase:
             assessment=assessment,
             plan_manager=plan_manager,
             context_engine=context_engine,
+            checkpoint=checkpoint,
+            exclude_goal_id=exclude_goal_id,
         )
         return self.finalize_plan_result(state=state, context=context, result=result)
 

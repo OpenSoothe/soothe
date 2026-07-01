@@ -332,6 +332,31 @@ class TestPromptBuilderContextBundle:
         assert "2/5 completed" not in human_content
         assert "STEP LINEAGE:" in human_content
         assert "Reasoning trace here" in human_content
+        assert human_content.index("GOAL:") < human_content.index("GOAL LINEAGE:")
+        assert human_content.index("GOAL LINEAGE:") < human_content.index("STEP LINEAGE:")
+
+    def test_build_plan_messages_duplicate_lineage_omitted(self) -> None:
+        """GOAL LINEAGE matching GOAL alone is not injected."""
+        from soothe.foundation.sloop.prompts.builder import PromptBuilder
+        from soothe.foundation.sloop.state.schemas import LoopState
+        from soothe.protocols.planner import PlanContext
+
+        builder = PromptBuilder()
+        state = LoopState(goal="Test goal", thread_id="t1")
+        context = PlanContext()
+        bundle = ContextBundle(goal_lineage="Test goal")
+
+        messages = builder.build_plan_messages(
+            "Test goal",
+            state,
+            context,
+            plan_phase="generate",
+            context_bundle=bundle,
+        )
+        from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+
+        human_content = str([m for m in messages if isinstance(m, LoopHumanMessage)][-1].content)
+        assert "GOAL LINEAGE:" not in human_content
 
     def test_build_plan_messages_empty_bundle_fields_omitted(self) -> None:
         """Empty ContextBundle fields are not injected."""

@@ -10,7 +10,9 @@ lightweight and self-contained.
 
 from __future__ import annotations
 
-from soothe.utils.text_preview import preview_first
+from soothe.foundation.sloop.engine.continuation_context import (
+    format_prior_goal_completion_section,
+)
 
 LOOP_CONTINUATION_ASSESS_PROMPT = """\
 You are deciding how to handle a follow-up query in an in-progress conversation loop.
@@ -18,10 +20,7 @@ You are deciding how to handle a follow-up query in an in-progress conversation 
 CURRENT REQUEST:
 {current_goal}
 
-PRIOR GOALS IN THIS LOOP:
-{prior_goals_block}
-
-AVAILABLE CAPABILITIES:
+{prior_goal_completion_section}AVAILABLE CAPABILITIES:
 {capabilities_block}
 
 DECISION CRITERIA:
@@ -35,39 +34,29 @@ DECISION CRITERIA:
   recommendations, high-priority items, or follow-up implementation work.
 
 Return a ContinuationAssessment JSON object with fields: action, reasoning, goal_progress.
+- reasoning: one first-person sentence (≤240 chars), e.g. "I'll …" or "I need … because …"
 """
 
 
 def format_loop_continuation_assess_prompt(
     *,
     current_goal: str,
-    prior_goals: list[dict],
+    prior_goal_completion: str = "",
     capabilities: list[str],
 ) -> str:
     """Render LOOP_CONTINUATION_ASSESS_PROMPT with the per-call context.
 
     Args:
         current_goal: The new user query (``LoopState.goal``).
-        prior_goals: Output of ``_prior_goal_summaries(checkpoint)``; each dict has
-            ``goal_id``, ``goal_text``, ``completion``, ``step_count``,
-            ``current_plan_action``.
+        prior_goal_completion: Full prior goal synthesis report (same body as plan-generate).
         capabilities: Available tool + subagent names (top 30 used).
 
     Returns:
         Formatted prompt string suitable for a single ``HumanMessage``.
     """
-    if prior_goals:
-        rows = []
-        for g in prior_goals:
-            rows.append(
-                f"  - {g['goal_id']} | text={g['goal_text'][:60]!r} | "
-                f"completion={preview_first(g.get('completion', ''), 800)!r} | "
-                f"steps={g.get('step_count', 0)} | "
-                f"last={g.get('current_plan_action', '')[:60]!r}"
-            )
-        prior_block = "\n".join(rows)
-    else:
-        prior_block = "  (none)"
+    prior_section = format_prior_goal_completion_section(prior_goal_completion)
+    if prior_section:
+        prior_section = prior_section + "\n\n"
 
     if capabilities:
         caps_block = ", ".join(capabilities[:30])
@@ -76,6 +65,6 @@ def format_loop_continuation_assess_prompt(
 
     return LOOP_CONTINUATION_ASSESS_PROMPT.format(
         current_goal=current_goal,
-        prior_goals_block=prior_block,
+        prior_goal_completion_section=prior_section,
         capabilities_block=caps_block,
     )

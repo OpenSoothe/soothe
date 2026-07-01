@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continue_bootstrap_step_briefs,
@@ -17,6 +18,7 @@ from soothe.foundation.sloop.state.checkpoint import (
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
+from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage
 
 
@@ -73,6 +75,77 @@ def test_build_prior_goal_completion_block_truncates() -> None:
     block = build_prior_goal_completion_block(ledger, max_chars=100)
     assert len(block) <= 100
     assert block.endswith("…")
+
+
+def test_build_prior_goal_completion_block_unlimited_when_max_chars_zero() -> None:
+    body = "y" * 500
+    ledger = [LoopAIMessage(content=body, phase="goal_completion", thread_id="t")]
+    assert build_prior_goal_completion_block(ledger, max_chars=0) == body
+
+
+def test_polish_continuation_assess_reasoning_collapses_and_truncates() -> None:
+    from soothe.foundation.sloop.engine.continuation_context import (
+        polish_continuation_assess_reasoning,
+    )
+
+    long_reason = "I " + "need " * 80 + "a full planner."
+    polished = polish_continuation_assess_reasoning(long_reason, max_chars=240)
+    assert len(polished) <= 240
+    assert "\n" not in polished
+
+
+def test_format_prior_goal_completion_section_matches_plan_generate_label() -> None:
+    from soothe.foundation.sloop.engine.continuation_context import (
+        format_prior_goal_completion_section,
+    )
+
+    section = format_prior_goal_completion_section("Full report body.")
+    assert section.startswith("PRIOR GOAL COMPLETION:\n")
+    assert "Full report body." in section
+
+
+def test_is_continuation_first_plan_requires_no_step_results() -> None:
+    from soothe.foundation.sloop.engine.continuation_context import is_continuation_first_plan
+
+    state = LoopState(goal="g", thread_id="t", iteration=0, continue_loop=True)
+    assert is_continuation_first_plan(state) is True
+
+    state.step_results.append(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    assert is_continuation_first_plan(state) is False
+
+
+def test_build_prior_goal_summaries_uses_checkpoint_completion() -> None:
+    from soothe.foundation.sloop.engine.continuation_context import build_prior_goal_summaries
+
+    prior = GoalExecutionRecord(
+        goal_id="g0",
+        goal_text="analyze trace",
+        thread_id="tid",
+        status="completed",
+        goal_completion="Checkpoint completion body.",
+        loop_messages=[],
+        started_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
+    )
+    checkpoint = _make_checkpoint(prior)
+
+    goal = MagicMock()
+    goal.id = "g0"
+    goal.description = "analyze trace"
+    goal.status = "completed"
+    goal.steps.nodes.values.return_value = []
+    goal.action_history = []
+
+    ce = MagicMock()
+    ce.get_all_goals.return_value = [goal]
+
+    summaries = build_prior_goal_summaries(
+        ce=ce,
+        checkpoint=checkpoint,
+        exclude_goal_id="g1",
+    )
+    assert len(summaries) == 1
+    assert summaries[0]["completion"] == "Checkpoint completion body."
 
 
 def test_continue_keyword_bootstrap_step_briefs() -> None:
