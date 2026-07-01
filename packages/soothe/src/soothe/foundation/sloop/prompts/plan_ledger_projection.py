@@ -188,3 +188,30 @@ def project_loop_messages_for_core_agent(
         len(loop_messages),
     )
     return out
+
+
+def project_loop_messages_for_synthesis(
+    loop_messages: list[BaseMessage],
+    ledger_cfg: PlanPromptLedgerConfig | None = None,
+) -> list[BaseMessage]:
+    """Return execute_step ledger messages for goal-synthesis prompts (RFC-214).
+
+    Unlike plan-assess / plan-generate, synthesis injects only ``execute_step``
+    human/AI turns — plan-phase reasoning is excluded. Optional ``plan_prompt_ledger``
+    caps apply to the filtered slice (same trimming as plan prompts).
+
+    Args:
+        loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
+        ledger_cfg: Optional size caps; ``None`` treated as all limits disabled.
+
+    Returns:
+        Filtered execute_step messages, optionally deep-trimmed copies.
+    """
+    execute_only = project_loop_messages_for_core_agent(loop_messages)
+    projected = project_loop_messages_for_plan(execute_only, ledger_cfg)
+    logger.debug(
+        "Synthesis ledger projection: %d execute_step messages (filtered from %d total)",
+        len(projected),
+        len(loop_messages),
+    )
+    return projected

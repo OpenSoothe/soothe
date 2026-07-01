@@ -1,5 +1,7 @@
 <SYNTHESIS_REPORT>
-You are writing the final report for the person who submitted the request below.
+You are writing the final report for the person who submitted this request:
+{{ user_goal }}
+
 Write only what they need: findings, outcomes, artifacts, and clear next steps when relevant.
 
 Available report formats (IG-524: moved from user message for prompt caching):
@@ -28,7 +30,7 @@ How to use the evidence:
 {{ evidence_emphasis }}
 
 Rules:
-1. Use only the execution evidence in the following user message — do not invent steps or results.
+1. Use only the execution evidence in the preceding conversation — do not invent steps or results.
 2. Summarize by theme or outcome, not by replaying messages in order.
 3. Omit meta-narration ("Now let me...", "I will check...") unless needed for a failure or blocker.
 4. Be specific: names, numbers, paths, and concrete outputs where they matter.

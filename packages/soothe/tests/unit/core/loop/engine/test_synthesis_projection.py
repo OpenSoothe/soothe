@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
+
 from soothe.foundation.sloop.engine.scenario_classifier import ScenarioClassification
 from soothe.foundation.sloop.engine.synthesis_projection import (
     build_synthesis_messages,
     flatten_execute_human_content,
-    project_synthesis_user_context,
     render_synthesis_system_prompt,
 )
 from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
@@ -26,7 +26,17 @@ def test_flatten_execute_envelope_extracts_goal() -> None:
     assert "EXECUTION HINTS" not in flat
 
 
-def test_projection_excludes_plan_phases() -> None:
+def test_build_synthesis_message_is_task_only() -> None:
+    text = UserMessageBuilder().build_synthesis_message()
+    assert text.startswith("TASK:")
+    assert "GOAL:" not in text
+    assert "INTENT:" not in text
+    assert "CONTEXTUAL FOCUS:" not in text
+    assert "EVIDENCE EMPHASIS:" not in text
+    assert "EVIDENCE:" not in text
+
+
+def test_projection_excludes_plan_phases_from_ledger() -> None:
     builder = UserMessageBuilder()
     plan_human = LoopHumanMessage(
         content=builder.build_plan_assess_message(goal="Analyze latency"),
@@ -51,15 +61,71 @@ def test_projection_excludes_plan_phases() -> None:
         thread_id="t",
         loop_messages=[plan_human, execute_human, execute_ai],
     )
-    ctx = project_synthesis_user_context(state)
-    assert "GOAL:" not in ctx.evidence_body
-    assert "README documents" in ctx.evidence_body
+
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by theme",
+    )
+    msgs = build_synthesis_messages(state, classification, max_chars=50_000)
+    assert len(msgs) == 4
+    assert isinstance(msgs[0], SystemMessage)
+    assert isinstance(msgs[1], LoopHumanMessage)
+    assert isinstance(msgs[2], LoopAIMessage)
+    assert isinstance(msgs[3], HumanMessage)
+    assert msgs[1].content == "Execute: read README"
+    assert "README documents the API." in str(msgs[2].content)
+    human = msgs[3].content
+    assert isinstance(human, str)
+    assert human.startswith("TASK:")
+    assert "Plan assess context" not in human
 
 
-def test_projection_includes_step_summaries() -> None:
-    state = LoopState(
-        goal="run tests",
+def test_system_prompt_includes_user_goal_and_focus() -> None:
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["Summarize key findings for: count file types"],
+        evidence_emphasis="Present key outcomes concisely",
+    )
+    text = render_synthesis_system_prompt(
+        classification,
+        user_goal="count all file types of packages",
+    )
+    assert "count all file types of packages" in text
+    assert "Summarize key findings for: count file types" in text
+    assert "Present key outcomes concisely" in text
+    lowered = text.lower()
+    assert "sloop" not in lowered
+    assert "ledger" not in lowered
+    assert "iteration" not in lowered
+    assert "goal completion" not in lowered
+
+
+def test_build_synthesis_messages_injects_execute_ledger_before_task_human() -> None:
+    classification = ScenarioClassification(
+        scenario="research_synthesis",
+        sections=["Key Findings"],
+        contextual_focus=["Sources"],
+        evidence_emphasis="Cite outcomes",
+    )
+    execute_human = LoopHumanMessage(
+        content="Execute: gather sources",
         thread_id="t",
+        iteration=0,
+        phase="execute_step",
+    )
+    execute_ai = LoopAIMessage(
+        content="Found three papers.",
+        thread_id="t",
+        iteration=0,
+        phase="execute_step",
+    )
+    state = LoopState(
+        goal="Research topic X",
+        thread_id="t",
+        loop_messages=[execute_human, execute_ai],
         step_results=[
             StepResult(
                 step_id="s1",
@@ -71,75 +137,34 @@ def test_projection_includes_step_summaries() -> None:
             )
         ],
     )
-    ctx = project_synthesis_user_context(state)
-    assert "STEP SUMMARIES:" in ctx.evidence_body
-    assert "[Step s1]" in ctx.evidence_body
+    msgs = build_synthesis_messages(state, classification, max_chars=50_000)
+    assert len(msgs) == 4
+    assert isinstance(msgs[0], SystemMessage)
+    assert "Research topic X" in str(msgs[0].content)
+    assert isinstance(msgs[1], LoopHumanMessage)
+    assert isinstance(msgs[2], LoopAIMessage)
+    assert isinstance(msgs[3], HumanMessage)
+    human = msgs[3].content
+    assert isinstance(human, str)
+    assert human.startswith("TASK:")
+    assert "Found three papers." not in human
+    assert "STEP SUMMARIES" not in human
+    assert "StrangeLoop" not in human
 
 
-def test_system_prompt_has_no_orchestration_vocabulary() -> None:
+def test_build_synthesis_messages_system_and_task_only_when_no_ledger() -> None:
     classification = ScenarioClassification(
         scenario="general_summary",
         sections=["Summary"],
         contextual_focus=["Outcomes"],
         evidence_emphasis="Group by theme",
     )
-    text = render_synthesis_system_prompt(classification)
-    lowered = text.lower()
-    assert "sloop" not in lowered
-    assert "ledger" not in lowered
-    assert "iteration" not in lowered
-    assert "goal completion" not in lowered
-
-
-def test_build_synthesis_messages_uses_system_and_human_only() -> None:
-    classification = ScenarioClassification(
-        scenario="research_synthesis",
-        sections=["Key Findings"],
-        contextual_focus=["Sources"],
-        evidence_emphasis="Cite outcomes",
-    )
     state = LoopState(goal="Research topic X", thread_id="t")
     msgs = build_synthesis_messages(state, classification, max_chars=50_000)
     assert len(msgs) == 2
     assert isinstance(msgs[0], SystemMessage)
     assert isinstance(msgs[1], HumanMessage)
-    human = msgs[1].content
-    assert isinstance(human, str)
-    assert "GOAL:" in human
-    assert "Research topic X" in human
-    assert "EVIDENCE:" in human or "STEP SUMMARIES:" in human
-    assert "StrangeLoop" not in human
-    # IG-524: EXECUTION SUMMARY and AVAILABLE BUILT-IN SCENARIOS removed from user message
-    assert "EXECUTION SUMMARY:" not in human
-    assert "AVAILABLE BUILT-IN SCENARIOS:" not in human
-
-
-def test_transcript_uses_standard_conversation_markers() -> None:
-    """IG-524: Transcript uses USER:/AI: instead of [Task]/[Finding]."""
-    execute_human = LoopHumanMessage(
-        content="Execute: read README",
-        thread_id="t",
-        iteration=0,
-        phase="execute_step",
-    )
-    execute_ai = LoopAIMessage(
-        content="README documents the API.",
-        thread_id="t",
-        iteration=0,
-        phase="execute_step",
-    )
-    state = LoopState(
-        goal="Analyze code",
-        thread_id="t",
-        loop_messages=[execute_human, execute_ai],
-    )
-    ctx = project_synthesis_user_context(state)
-    # IG-524: Standard markers USER:/AI: instead of [Task]/[Finding]
-    assert "USER: Execute: read README" in ctx.evidence_body
-    assert "AI: README documents the API." in ctx.evidence_body
-    # Legacy markers removed
-    assert "[Task]" not in ctx.evidence_body
-    assert "[Finding]" not in ctx.evidence_body
+    assert str(msgs[1].content).startswith("TASK:")
 
 
 def test_system_prompt_includes_scenario_list() -> None:
@@ -150,8 +175,7 @@ def test_system_prompt_includes_scenario_list() -> None:
         contextual_focus=["Outcomes"],
         evidence_emphasis="Group by theme",
     )
-    text = render_synthesis_system_prompt(classification)
-    # IG-524: Scenario list in system prompt (not user message)
+    text = render_synthesis_system_prompt(classification, user_goal="g")
     assert "code_architecture_design" in text
     assert "research_synthesis" in text
     assert "general_summary" in text

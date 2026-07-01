@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
-from soothe.foundation.sloop.prompts.plan_ledger_projection import project_loop_messages_for_plan
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    project_loop_messages_for_plan,
+    project_loop_messages_for_synthesis,
+)
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _msgs(n: int) -> list:
@@ -74,3 +77,17 @@ def test_projection_none_cfg_passthrough() -> None:
     proj = project_loop_messages_for_plan(raw, None)
     assert len(proj) == 1
     assert proj[0] is raw[0]
+
+
+def test_synthesis_projection_keeps_execute_step_only() -> None:
+    raw = [
+        LoopHumanMessage(content="assess", thread_id="t", iteration=0, phase="plan_assess"),
+        LoopAIMessage(content="assess-ai", thread_id="t", iteration=0, phase="plan_assess"),
+        LoopHumanMessage(content="gen", thread_id="t", iteration=0, phase="plan_generate"),
+        LoopAIMessage(content="gen-ai", thread_id="t", iteration=0, phase="plan_generate"),
+        LoopHumanMessage(content="exec-h", thread_id="t", iteration=0, phase="execute_step"),
+        LoopAIMessage(content="exec-ai", thread_id="t", iteration=0, phase="execute_step"),
+    ]
+    proj = project_loop_messages_for_synthesis(raw, None)
+    assert len(proj) == 2
+    assert extract_join(proj) == "exec-hexec-ai"
