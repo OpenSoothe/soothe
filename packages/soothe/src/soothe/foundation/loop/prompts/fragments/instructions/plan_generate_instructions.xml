@@ -20,11 +20,25 @@ Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in 
 **steps** fields:
 - ``id``: Short token (``01``, ``02``) or per STEP ID HINT:.
 - ``description``: Milestone line (<20 words). Executor handles fine-grained work.
+- ``full_description``: Standalone execution brief (50–120 words), like a detailed
+  task delegation description. Required when ``dependencies`` is set. Must state what
+  to do using predecessor output and forbid repeating predecessor discovery actions.
 - ``expected_output``: Checkable completion signal.
 - ``dependencies``: Optional; step ids this depends on.
 - ``kind``: ``action`` (default) or ``ask_user``. See <ASK_USER_STEP>.
 - ``questions``: REQUIRED when ``kind=ask_user``; list of plain-text questions
   the user must answer before the goal can continue. Forbidden otherwise.
+
+<DEPENDENT_STEP_RULES>
+When ``dependencies`` is non-empty:
+- Set ``execution_mode`` to ``dependency``.
+- ``full_description`` MUST be a self-contained brief the executor can run without
+  re-executing predecessor steps.
+- Include: "Use output from step &lt;id&gt;; do NOT repeat step &lt;id&gt;'s actions."
+- **Diagnose→fix**: step 1 runs check/discovery; step 2 fixes listed items only
+  (no rediscovery command as the first action).
+- **Read→write**: step 1 reads/analyzes; step 2 edits using step 1 findings.
+</DEPENDENT_STEP_RULES>
 
 <ASK_USER_STEP>
 **CRITICAL**: Emit ``kind="ask_user"`` when continuing requires information that is

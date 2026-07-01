@@ -155,28 +155,28 @@ Screen {
 
 /* Mode-specific borders for UserMessage */
 UserMessage.-mode-shell {
-    border-left: wide $mode-bash;
+    border: solid $mode-bash;
 }
 
 UserMessage.-mode-command {
-    border-left: wide $mode-command;
+    border: solid $mode-command;
 }
 
 /* ASCII border overrides */
 UserMessage.-ascii {
-    border-left: ascii $primary;
+    border: ascii $primary;
 }
 
 UserMessage.-ascii.-mode-shell {
-    border-left: ascii $mode-bash;
+    border: ascii $mode-bash;
 }
 
 UserMessage.-ascii.-mode-command {
-    border-left: ascii $mode-command;
+    border: ascii $mode-command;
 }
 
 QueuedUserMessage.-ascii {
-    border-left: ascii $panel;
+    border: ascii $panel;
 }
 
 /* ChatTextArea: override TextArea's built-in $surface background */

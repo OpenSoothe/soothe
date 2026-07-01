@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import
-from soothe.foundation.loop.planning.ledger_compaction import (
+from soothe.foundation.loop.cognition.ledger_compaction import (
     compact_plan_assess_ai_dump,
     compact_planning_human_content,
 )

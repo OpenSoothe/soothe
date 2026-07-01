@@ -14,8 +14,10 @@ from soothe.config import SOOTHE_HOME
 
 logger = logging.getLogger(__name__)
 
-# Default browser runtime base directory
-_DEFAULT_BROWSER_BASE = SOOTHE_HOME / "agents" / "browser"
+
+def _browser_runtime_base() -> Path:
+    """Return browser runtime base directory (resolved at call time for testability)."""
+    return SOOTHE_HOME / "agents" / "browser"
 
 
 def get_browser_runtime_dir() -> Path:
@@ -24,7 +26,7 @@ def get_browser_runtime_dir() -> Path:
     Returns:
         Path to browser runtime directory.
     """
-    base = _DEFAULT_BROWSER_BASE
+    base = _browser_runtime_base()
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -104,30 +106,9 @@ def cleanup_stale_chrome(user_data_dir: str | Path) -> int:
     Returns:
         Number of processes killed.
     """
-    import subprocess
+    from soothe.utils.browser_cdp import cleanup_stale_chrome as _cleanup_stale_chrome
 
-    killed = 0
-    try:
-        # Find Chrome processes using this profile
-        result = subprocess.run(
-            ["pgrep", "-f", f"chrome.*{user_data_dir}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            pids = result.stdout.strip().split("\n")
-            for pid in pids:
-                if pid:
-                    try:
-                        subprocess.run(["kill", pid], timeout=5)
-                        killed += 1
-                    except Exception:
-                        pass
-    except Exception:
-        logger.debug("Failed to cleanup stale Chrome processes")
-
-    return killed
+    return _cleanup_stale_chrome(str(user_data_dir))
 
 
 __all__ = [

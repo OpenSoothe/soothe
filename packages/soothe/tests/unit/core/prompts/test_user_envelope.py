@@ -84,6 +84,29 @@ def test_execute_message_hints_contains_task_instructions() -> None:
     assert "- Execute the step" in msg
 
 
+def test_execute_message_prior_step_evidence_section() -> None:
+    """Dependent steps include PRIOR STEP EVIDENCE between GOAL and EXECUTION HINTS."""
+    builder = UserMessageBuilder()
+    evidence = "Step 01 — verify (completed)\n---\n✗ F821 undefined name `Any`"
+    msg = builder.build_execute_step_message(
+        "Fix identified failures",
+        execution_hints="Instructions:\n- Apply fixes from evidence",
+        predecessor_evidence=evidence,
+    )
+    assert "PRIOR STEP EVIDENCE:" in msg
+    assert "F821 undefined name `Any`" in msg
+    goal_idx = msg.index("GOAL:")
+    evidence_idx = msg.index("PRIOR STEP EVIDENCE:")
+    hints_idx = msg.index("EXECUTION HINTS:")
+    assert goal_idx < evidence_idx < hints_idx
+
+
+def test_execute_message_omits_prior_step_evidence_when_absent() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message("Solo step")
+    assert "PRIOR STEP EVIDENCE:" not in msg
+
+
 def test_plan_assess_message_uses_goal_label() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_plan_assess_message(

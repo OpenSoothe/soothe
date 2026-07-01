@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain.agents.middleware.types import ModelRequest, ModelResponse, ToolCallRequest
+from langchain.agents.middleware.types import (
+    AgentState,
+    ModelRequest,
+    ModelResponse,
+    ToolCallRequest,
+)
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
@@ -15,6 +21,8 @@ from soothe.toolkits.progressive.registry import (
     DEFAULT_CORE_TOOL_NAMES,
     ProgressiveToolRegistry,
     ToolDescriptor,
+    merge_tool_activation,
+    snapshot_tool_activation,
 )
 
 if TYPE_CHECKING:
@@ -24,11 +32,38 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_NAME = "search_tools"
 
+# Set by SystemPromptMiddleware when <AVAILABLE_TOOLS> marks entries as sent.
+_tool_activation_update: contextvars.ContextVar[dict[str, set[str]] | None] = (
+    contextvars.ContextVar(
+        "soothe_tool_activation_update",
+        default=None,
+    )
+)
+
+
+class ProgressiveToolState(AgentState[Any]):
+    """Graph state channel for progressive builtin-tool activation."""
+
+    tool_activation: NotRequired[Annotated[dict[str, Any], merge_tool_activation]]
+
+
+def stash_tool_activation_update(activation: dict[str, Any]) -> None:
+    """Record a pending ``tool_activation`` write for ``aafter_model``."""
+    _tool_activation_update.set(snapshot_tool_activation(activation))
+
+
+def pop_tool_activation_update() -> dict[str, set[str]] | None:
+    """Return and clear a pending ``tool_activation`` write, if any."""
+    pending = _tool_activation_update.get()
+    _tool_activation_update.set(None)
+    return pending
+
 
 class ProgressiveToolMiddleware(AgentMiddleware):
     """Bind core tools on cold start; promote deferred tools on invoke or search."""
 
     name = "ProgressiveToolMiddleware"
+    state_schema = ProgressiveToolState
 
     def __init__(self, config: SootheConfig) -> None:
         super().__init__()
@@ -58,6 +93,12 @@ class ProgressiveToolMiddleware(AgentMiddleware):
             return None
         if "tool_activation" not in state:
             return {"tool_activation": ProgressiveToolRegistry.init_activation_state()}
+        return None
+
+    async def aafter_model(self, state: dict, runtime: Any) -> dict | None:
+        pending = pop_tool_activation_update()
+        if pending is not None:
+            return {"tool_activation": pending}
         return None
 
     def _activation(self, state: Any) -> dict[str, set[str]]:
@@ -91,6 +132,20 @@ class ProgressiveToolMiddleware(AgentMiddleware):
             + "\nThey are now available on subsequent model hops."
         )
 
+    @staticmethod
+    def _command_with_activation(
+        result: ToolMessage | Command[Any],
+        activation: dict[str, set[str]],
+    ) -> Command[Any]:
+        update: dict[str, Any] = {"tool_activation": snapshot_tool_activation(activation)}
+        if isinstance(result, Command):
+            existing = result.update
+            if isinstance(existing, dict):
+                update = {**existing, **update}
+            return Command(update=update)
+        update["messages"] = [result]
+        return Command(update=update)
+
     async def awrap_tool_call(
         self,
         request: ToolCallRequest,
@@ -109,13 +164,22 @@ class ProgressiveToolMiddleware(AgentMiddleware):
             limit = int(args.get("limit", 10) or 10)
             content = self._handle_search_tools(query, limit, activation)
             tool_call_id = str(tool_call.get("id", "") or tool_call.get("tool_call_id", ""))
-            return ToolMessage(content=content, tool_call_id=tool_call_id, name=_SEARCH_TOOL_NAME)
+            message = ToolMessage(
+                content=content, tool_call_id=tool_call_id, name=_SEARCH_TOOL_NAME
+            )
+            if activation.get("promoted"):
+                logger.debug(
+                    "[ProgressiveTools] search_tools promoted %d tool(s)",
+                    len(activation["promoted"]),
+                )
+            return self._command_with_activation(message, activation)
 
         result = await handler(request)
 
         if tool_name and tool_name not in self._registry.core_tool_names:
             self._registry.mark_promoted(activation, [tool_name])
             logger.debug("[ProgressiveTools] Promoted %s after invocation", tool_name)
+            return self._command_with_activation(result, activation)
 
         return result
 
@@ -138,10 +202,12 @@ class ProgressiveToolMiddleware(AgentMiddleware):
         bound = self._registry.bound_tools(tools, activation)
 
         if len(bound) < len(tools):
+            promoted_count = len(activation.get("promoted", set()))
             logger.debug(
-                "[ProgressiveTools] Bound %d/%d tools (core+promoted)",
+                "[ProgressiveTools] Bound %d/%d tools (core+promoted=%d)",
                 len(bound),
                 len(tools),
+                promoted_count,
             )
             request = request.override(tools=bound)
 

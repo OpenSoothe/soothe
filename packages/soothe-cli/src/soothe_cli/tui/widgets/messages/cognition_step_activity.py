@@ -408,6 +408,7 @@ def append_tool_activity_lines(
         tail = format_step_tool_activity_status_tail(
             row.phase or "pending",
             duration_ms=row.duration_ms,
+            error=str(row.output or "") if phase == "error" else "",
         )
         tone = task_tool_row_tone(row, colors)
         parts.append(Content.styled(f"{gutter}{icon} {command}{tail}", tone))

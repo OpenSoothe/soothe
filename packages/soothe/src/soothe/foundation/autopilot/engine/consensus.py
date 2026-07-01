@@ -7,7 +7,7 @@ If not satisfied, Layer 3 can send the goal back with refined instructions.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from soothe.utils.text_preview import preview, preview_first
 
@@ -30,6 +30,8 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
+    *,
+    soothe_config: Any | None = None,
 ) -> tuple[ConsensusDecision, str]:
     """RFC-204: Holistic evaluation of goal completion via LLM.
 
@@ -54,20 +56,31 @@ async def evaluate_goal_completion(
         msg = "Consensus model is required for goal completion validation"
         raise ConsensusEvaluationError(msg)
 
-    from soothe.utils.observability.langfuse import build_traced_config
-
     prompt = _build_consensus_prompt(
         goal_description, response_text, evidence_summary, success_criteria
     )
     try:
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
+        from soothe.utils.observability.langfuse import build_traced_config
+
         invoke_config = build_traced_config(
-            None,
+            soothe_config,
             purpose="consensus_vote",
             component="cognition.consensus",
             phase="post-loop",
             run_name="soothe:consensus-vote",
         )
-        response = await model.ainvoke(prompt, config=invoke_config)
+
+        async def _invoke() -> Any:
+            return await model.ainvoke(prompt, config=invoke_config)
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(soothe_config),
+        )
         content = response.content.strip().lower() if hasattr(response, "content") else ""
 
         if "send_back" in content:

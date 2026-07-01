@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from soothe.foundation.context.dag_utils import expand_dependency_satisfaction_ids
+
 logger = logging.getLogger(__name__)
 
 # ── Status types ────────────────────────────────────────────────────────
@@ -88,37 +90,6 @@ class StepNode(BaseModel):
     execution: StepExecution | None = None
 
 
-def _expand_dependency_satisfaction_ids(completed_step_ids: set[str]) -> set[str]:
-    """Expand completed step ids with unambiguous local numeric suffix aliases.
-
-    Mirrors ``expand_dependency_satisfaction_ids`` from
-    ``loop/planning/dependency_tokens.py``. When a composite id like ``KFA-01``
-    is completed, later plans may reference it as ``01`` or ``1``. This adds
-    those aliases only when unambiguous.
-    """
-    base = set(completed_step_ids)
-    if not base:
-        return base
-
-    value_to_owners: dict[int, list[str]] = {}
-    for sid in base:
-        if "-" not in sid:
-            continue
-        tail = sid.rsplit("-", 1)[-1]
-        if not tail.isdigit():
-            continue
-        value_to_owners.setdefault(int(tail, 10), []).append(sid)
-
-    for owners in value_to_owners.values():
-        if len(owners) != 1:
-            continue
-        own = owners[0]
-        tail = own.rsplit("-", 1)[-1]
-        base.add(tail)
-        base.add(str(int(tail, 10)))
-    return base
-
-
 class StepDAG(BaseModel):
     """DAG of steps for a single goal."""
 
@@ -134,7 +105,7 @@ class StepDAG(BaseModel):
         Uses dependency token expansion to resolve composite step IDs
         and their local numeric aliases.
         """
-        satisfied = _expand_dependency_satisfaction_ids(self.completed_step_ids())
+        satisfied = expand_dependency_satisfaction_ids(self.completed_step_ids())
         ready: set[str] = set()
         for cid, node in self.nodes.items():
             if node.status != "pending":
@@ -175,7 +146,7 @@ class StepDAG(BaseModel):
         if not self.nodes:
             return 0
 
-        satisfied = _expand_dependency_satisfaction_ids(self.completed_step_ids())
+        satisfied = expand_dependency_satisfaction_ids(self.completed_step_ids())
 
         dependents: dict[str, list[str]] = {cid: [] for cid in self.nodes}
         in_degree: dict[str, int] = {cid: 0 for cid in self.nodes}

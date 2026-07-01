@@ -226,6 +226,10 @@ async def reflect_with_llm(
         )
 
     try:
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
         from soothe.utils.observability.langfuse import build_traced_config
 
         prompt = _build_reflection_prompt(plan, step_results, goal_context)
@@ -236,7 +240,14 @@ async def reflect_with_llm(
             phase="post-loop",
             run_name="soothe:reflection",
         )
-        response = await model.ainvoke(prompt, config=invoke_config)
+
+        async def _invoke() -> Any:
+            return await model.ainvoke(prompt, config=invoke_config)
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(soothe_config),
+        )
         content = response.content if hasattr(response, "content") else str(response)
         return _parse_reflection_response(content, plan, step_results, goal_context)
     except Exception:

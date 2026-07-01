@@ -58,9 +58,13 @@ from soothe.foundation.loop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
 )
 from soothe.foundation.loop.engine.predecessor_branch_context import (
-    predecessor_execute_messages_for_branch,
     prior_loop_execute_messages,
-    transitive_dependency_step_ids,
+)
+from soothe.foundation.loop.engine.step_predecessor_context import (
+    build_dependent_execution_hints,
+    build_prior_step_evidence,
+    predecessor_messages_for_step,
+    step_needs_brief_hydration,
 )
 from soothe.foundation.loop.engine.step_wave_types import (
     _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
@@ -205,6 +209,7 @@ class Executor:
         clarification_resume_answer_payload: dict[str, Any] | None = None,
         proposal_queue: Any | None = None,  # RFC-204 Group C
         context_engine: Any | None = None,  # RFC-624 Phase 4
+        step_brief_hydrator: Any | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -233,6 +238,8 @@ class Executor:
                 flag_blocker, etc.) during execution.
             context_engine: Optional ContextEngine instance for dual-write
                 ledger recording (RFC-624 Phase 4).
+            step_brief_hydrator: Optional :class:`StepBriefHydrator` for between-wave
+                dependent step brief expansion.
         """
         self.core_agent = core_agent
         self._checkpointer = checkpointer
@@ -246,6 +253,7 @@ class Executor:
         self._clarification_resume_answer_payload = clarification_resume_answer_payload
         self._proposal_queue = proposal_queue
         self._context_engine = context_engine
+        self._step_brief_hydrator = step_brief_hydrator
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -353,6 +361,104 @@ class Executor:
         if cap > 0:
             return min(cap, 256)
         return 0
+
+    def _step_brief_hydration_enabled(self) -> bool:
+        if self._config is None:
+            return True
+        return bool(self._config.agent.loop.step_brief_hydration_enabled)
+
+    async def _hydrate_dependent_steps_before_wave(
+        self,
+        steps: list[StepAction],
+        state: LoopState,
+        decision: AgentDecision,
+    ) -> None:
+        """Expand vague dependent-step briefs using predecessor evidence (P2)."""
+        if not self._step_brief_hydration_enabled():
+            return
+        for step in steps:
+            if not step_needs_brief_hydration(step):
+                continue
+            evidence = build_prior_step_evidence(step, decision, state)
+            if not evidence.strip():
+                continue
+            if self._step_brief_hydrator is not None:
+                hydrated = await self._step_brief_hydrator.hydrate(
+                    step,
+                    predecessor_evidence=evidence,
+                    goal=state.goal or "",
+                )
+            else:
+                from soothe.foundation.loop.engine.step_predecessor_context import (
+                    template_hydrate_step_brief,
+                )
+
+                hydrated = template_hydrate_step_brief(
+                    step,
+                    evidence,
+                    goal=state.goal,
+                )
+            step.full_description = hydrated.strip()
+            logger.info(
+                "[Execute] hydrated step %s brief (%d chars)",
+                step.id,
+                len(step.full_description or ""),
+            )
+
+    def _compose_execute_step_envelope(
+        self,
+        step: StepAction,
+        *,
+        loop_state: LoopState | None,
+        wire_subagent: str | None,
+        workspace: str | None,
+    ) -> str:
+        """Build the execute-step user envelope with optional predecessor evidence."""
+        from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
+
+        decision = loop_state.current_decision if loop_state is not None else None
+        predecessor_evidence = ""
+        if loop_state is not None and decision is not None and (step.dependencies or []):
+            predecessor_evidence = build_prior_step_evidence(step, decision, loop_state)
+
+        step_goal_text = step.full_description or step.description
+        execution_hints = build_dependent_execution_hints(
+            step,
+            has_predecessor_evidence=bool(predecessor_evidence.strip()),
+            wire_subagent=wire_subagent,
+            workspace=workspace,
+            expected_output=step.expected_output,
+        )
+        return UserMessageBuilder().build_execute_step_message(
+            step_goal_text,
+            execution_hints=execution_hints,
+            predecessor_evidence=predecessor_evidence or None,
+            skill_context=loop_state.skill_context if loop_state else None,
+        )
+
+    def _predecessor_graph_messages(
+        self,
+        step: StepAction,
+        loop_state: LoopState,
+    ) -> list[BaseMessage]:
+        """Inject predecessor execute_step ledger rows for dependent steps."""
+        decision = loop_state.current_decision
+        if decision is None or not (step.dependencies or []):
+            return []
+        cap = self._branch_predecessor_message_cap()
+        injected = predecessor_messages_for_step(
+            loop_state.loop_messages,
+            step,
+            decision,
+            max_messages=cap,
+        )
+        if injected:
+            logger.info(
+                "[ThreadFork] step=%s injected %d predecessor execute msgs",
+                step.id,
+                len(injected),
+            )
+        return injected
 
     async def _fetch_pending_interrupts_from_state(
         self,
@@ -1369,6 +1475,7 @@ class Executor:
                 break
             w = self._wave_size(len(ready))
             chunk = ready[:w]
+            await self._hydrate_dependent_steps_before_wave(chunk, state, decision)
             queued = self._collect_wave_queued_steps(ready, w, queued_emitted)
             if queued:
                 yield StepWaveQueued(steps=queued)
@@ -1405,7 +1512,7 @@ class Executor:
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
         IG-477: Thread isolation via __step_<id> namespace; predecessor context via message
-        injection (no checkpoint fork). Sole-child chain reuse optimization.
+        injection (no checkpoint fork).
 
         Args:
             step: StepAction with description and optional hints
@@ -1440,12 +1547,9 @@ class Executor:
                 wire_subagent,
             )
 
-            # IG-477: Thread isolation for parallel safety; predecessor context via message injection.
-            # Sole-child chain reuse: when a step is the only dependent of its predecessor,
-            # reuse the predecessor's thread_id directly (no namespace collision with siblings).
+            # IG-477: Thread isolation for parallel safety; predecessor context via injection.
             fork_thread_id = thread_id  # Default to main thread
             direct_deps = step.dependencies or []
-            is_multi_dep = len(direct_deps) > 1
 
             if loop_state is not None and loop_state.current_decision is not None:
                 fork_thread_id = _select_thread_for_step(
@@ -1485,29 +1589,10 @@ class Executor:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
             # Build user message with execution hints (RFC-214)
-            from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
-
-            _user_msg_builder = UserMessageBuilder()
-
             graph_input_messages: list[BaseMessage] = []
 
-            # RFC-223: Multi-dep steps need message injection for all transitive predecessors
-            # Singleton deps get full history via checkpoint fork (no injection needed)
-            if is_multi_dep and loop_state is not None and loop_state.current_decision is not None:
-                transitive_preds = transitive_dependency_step_ids(step, loop_state.current_decision)
-                if transitive_preds:
-                    cap = self._branch_predecessor_message_cap()
-                    graph_input_messages = predecessor_execute_messages_for_branch(
-                        loop_state.loop_messages,
-                        transitive_preds,
-                        max_messages=cap,
-                    )
-                    if graph_input_messages:
-                        logger.info(
-                            "[ThreadFork] step=%s multi-dep injected %d transitive predecessor msgs",
-                            step.id,
-                            len(graph_input_messages),
-                        )
+            if direct_deps and loop_state is not None:
+                graph_input_messages = self._predecessor_graph_messages(step, loop_state)
 
             # RFC-225: Loop-continuation bootstrap injection.
             # The bootstrap step (iter=0, no deps, continue_loop=True) forks from the
@@ -1533,35 +1618,11 @@ class Executor:
                         len(graph_input_messages),
                     )
 
-            # IG-508: Build EXECUTION HINTS with merged task instructions
-            # Use full_description for execution context, fallback to description
-            step_goal_text = step.full_description or step.description
-
-            hints_lines: list[str] = []
-            if wire_subagent:
-                hints_lines.append(f"Suggested subagent: {wire_subagent}")
-            if wire_subagent == "explore" and workspace:
-                hints_lines.append(
-                    f"Workspace root: {workspace}\n"
-                    "Use paths relative to this workspace (e.g. packages/..., docs/...). "
-                    "Do not use absolute paths like /packages/."
-                )
-            if step.expected_output:
-                # IG-508: Format expected output as list item
-                hints_lines.append(f"Expected output:\n- {step.expected_output}")
-            # IG-508: Merge task instructions as list items (no separate TASK section)
-            hints_lines.append(
-                "Instructions:\n"
-                "- Execute the step described in GOAL above\n"
-                "- Use the suggested approach when provided\n"
-                "- Produce output matching the expected output specification"
-            )
-            execution_hints = "\n\n".join(hints_lines)
-
-            envelope = _user_msg_builder.build_execute_step_message(
-                step_goal_text,
-                execution_hints=execution_hints,
-                skill_context=loop_state.skill_context if loop_state else None,
+            envelope = self._compose_execute_step_envelope(
+                step,
+                loop_state=loop_state,
+                wire_subagent=wire_subagent,
+                workspace=workspace,
             )
             logger.debug("[Human Message] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(
@@ -2176,44 +2237,16 @@ class Executor:
         Returns:
             List of LoopHumanMessage instances (one per step)
         """
-        from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
-
-        _batch_builder = UserMessageBuilder()
-
         routing = getattr(state, "routing_classification", None)
         workspace = state.workspace
         messages = []
-        for step_index, step in enumerate(steps):
-            # IG-508: Build EXECUTION HINTS with merged task instructions
-            # Use full_description for execution context, fallback to description
-            step_goal_text = step.full_description or step.description
-
+        for step in steps:
             wire_subagent = resolve_wire_subagent_for_step(step, routing)
-            hints_lines: list[str] = []
-            if wire_subagent:
-                hints_lines.append(f"Suggested subagent: {wire_subagent}")
-            if wire_subagent == "explore" and workspace:
-                hints_lines.append(
-                    f"Workspace root: {workspace}\n"
-                    "Use paths relative to this workspace (e.g. packages/..., docs/...). "
-                    "Do not use absolute paths like /packages/."
-                )
-            if step.expected_output:
-                # IG-508: Format expected output as list item
-                hints_lines.append(f"Expected output:\n- {step.expected_output}")
-            # IG-508: Merge task instructions as list items (no separate TASK section)
-            hints_lines.append(
-                "Instructions:\n"
-                "- Execute the step described in GOAL above\n"
-                "- Use the suggested approach when provided\n"
-                "- Produce output matching the expected output specification"
-            )
-            execution_hints = "\n\n".join(hints_lines)
-
-            envelope = _batch_builder.build_execute_step_message(
-                step_goal_text,
-                execution_hints=execution_hints,
-                skill_context=state.skill_context,
+            envelope = self._compose_execute_step_envelope(
+                step,
+                loop_state=state,
+                wire_subagent=wire_subagent,
+                workspace=workspace,
             )
             msg = LoopHumanMessage(
                 content=envelope,

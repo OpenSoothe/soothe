@@ -15,14 +15,16 @@ DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "edit_file",
         "glob",
         "grep",
-        # soothe surgical file ops (must be core to avoid shell misinterpretation)
+        # deepagents other
+        "write_todos",
+        "task",
+        # soothe surgical file ops
         "delete_file",
         "edit_file_lines",
         "insert_lines",
         "delete_lines",
-        # deepagents other
-        "write_todos",
-        "task",
+        "apply_diff",
+        "file_info",
         # soothe execution
         "run_command",
         "run_python",
@@ -54,6 +56,36 @@ def _tool_description(item: Any) -> str:
         raw = item.get("description")
         return str(raw or "")
     return str(getattr(item, "description", None) or "")
+
+
+def _coerce_name_set(value: Any) -> set[str]:
+    if isinstance(value, set):
+        return {str(v) for v in value}
+    if isinstance(value, (list, tuple)):
+        return {str(v) for v in value}
+    return set()
+
+
+def snapshot_tool_activation(activation: dict[str, Any]) -> dict[str, set[str]]:
+    """Return a graph-safe copy of ``tool_activation`` for ``Command.update``."""
+    return {
+        "sent": _coerce_name_set(activation.get("sent")),
+        "promoted": _coerce_name_set(activation.get("promoted")),
+    }
+
+
+def merge_tool_activation(
+    left: dict[str, Any] | None,
+    right: dict[str, Any] | None,
+) -> dict[str, set[str]]:
+    """LangGraph reducer: union ``sent`` and ``promoted`` tool-name sets."""
+    merged = ProgressiveToolRegistry.init_activation_state()
+    for side in (left, right):
+        if not isinstance(side, dict):
+            continue
+        merged["sent"] |= _coerce_name_set(side.get("sent"))
+        merged["promoted"] |= _coerce_name_set(side.get("promoted"))
+    return merged
 
 
 class ProgressiveToolRegistry:

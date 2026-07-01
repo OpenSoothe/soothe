@@ -31,7 +31,7 @@ def _make_mock_agent() -> MagicMock:
 
 
 def _make_mock_checkpointer() -> MagicMock:
-    """Create mock checkpointer (unused after IG-477 removal)."""
+    """Create mock checkpointer (execute path no longer forks checkpoints)."""
     return MagicMock()
 
 
@@ -119,9 +119,8 @@ async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
 
 
 @pytest.mark.asyncio
-async def test_singleton_sole_child_reuses_predecessor_thread() -> None:
-    """When B is the only step depending on A, B reuses A's thread directly
-    (sole-child optimization — no checkpoint copy)."""
+async def test_singleton_dependent_step_uses_fresh_thread_and_evidence() -> None:
+    """Dependent steps use a fresh thread; predecessor context is injected explicitly."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -138,11 +137,25 @@ async def test_singleton_sole_child_reuses_predecessor_thread() -> None:
         execution_mode="dependency",
         reasoning="r",
     )
+    ledger = [
+        LoopHumanMessage(
+            content="ledger-human-A",
+            phase="execute_step",
+            step_id="A",
+            thread_id="logical-t",
+        ),
+        LoopAIMessage(
+            content="ledger-ai-A with failure details",
+            phase="execute_step",
+            step_id="A",
+            thread_id="logical-t",
+        ),
+    ]
     state = LoopState(
         goal="Test goal",
         thread_id="logical-t",
         current_decision=decision,
-        loop_messages=[],
+        loop_messages=ledger,
         step_thread_ids={"A": "logical-t__step_A"},
     )
     executor = Executor(mock_agent, checkpointer=mock_checkpointer)
@@ -153,10 +166,16 @@ async def test_singleton_sole_child_reuses_predecessor_thread() -> None:
         loop_state=state,
     )
 
-    # Sole-child reuse: B's CoreAgent runs under A's thread, no new namespace.
     cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-    assert cfg["thread_id"] == "logical-t__step_A"
-    assert state.step_thread_ids.get("B") == "logical-t__step_A"
+    assert cfg["thread_id"] == "logical-t__step_B"
+    assert state.step_thread_ids.get("B") == "logical-t__step_B"
+
+    messages = _astream_messages(mock_agent)
+    assert len(messages) >= 2
+    envelope = str(messages[-1].content)
+    assert "PRIOR STEP EVIDENCE" in envelope
+    assert "ledger-ai-A with failure details" in envelope
+    assert "do not repeat completed discovery steps" in envelope
 
 
 @pytest.mark.asyncio
@@ -364,4 +383,132 @@ async def test_multi_dep_injection_logs_threadfork(
     )
 
     assert "[ThreadFork]" in caplog.text
-    assert "multi-dep" in caplog.text or "injected" in caplog.text
+    assert "injected" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_hydrate_dependent_steps_sets_full_description_from_evidence() -> None:
+    """P2: vague dependent briefs are expanded before the execute wave runs."""
+    step_a = StepAction(id="01", description="Run verification")
+    step_b = StepAction(
+        id="02",
+        description="Fix identified test or lint failures",
+        dependencies=["01"],
+    )
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step_a, step_b],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    state = LoopState(
+        goal="fix repo",
+        thread_id="t1",
+        current_decision=decision,
+        loop_messages=[
+            LoopAIMessage(
+                content="verify_finally — pre-commit checks\n✗ F821 undefined name `Any`",
+                phase="execute_step",
+                step_id="01",
+                thread_id="t1",
+            ),
+        ],
+    )
+    executor = Executor(_make_mock_agent())
+
+    await executor._hydrate_dependent_steps_before_wave([step_b], state, decision)
+
+    assert step_b.full_description
+    assert "F821" in step_b.full_description
+    assert "Do NOT repeat discovery" in step_b.full_description
+
+
+@pytest.mark.asyncio
+async def test_hydrate_dependent_steps_skipped_when_disabled() -> None:
+    cfg = MagicMock()
+    cfg.agent.loop.step_brief_hydration_enabled = False
+    step = StepAction(
+        id="02",
+        description="Fix identified failures",
+        dependencies=["01"],
+    )
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step, StepAction(id="01", description="verify")],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    state = LoopState(
+        goal="fix repo",
+        thread_id="t1",
+        current_decision=decision,
+        loop_messages=[
+            LoopAIMessage(
+                content="lint error in foo.py",
+                phase="execute_step",
+                step_id="01",
+                thread_id="t1",
+            ),
+        ],
+    )
+    executor = Executor(_make_mock_agent(), config=cfg)
+
+    await executor._hydrate_dependent_steps_before_wave([step], state, decision)
+
+    assert step.full_description is None
+
+
+@pytest.mark.asyncio
+async def test_continue_loop_bootstrap_injects_prior_execute_ledger() -> None:
+    """Loop continuation bootstrap replays prior execute_step ledger rows."""
+    mock_agent = _make_mock_agent()
+    step = StepAction(id="bootstrap", description="Continue prior work")
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="r",
+    )
+    ledger = [
+        LoopHumanMessage(
+            content="ledger-human-prior",
+            phase="execute_step",
+            step_id="MUY-01",
+            thread_id="logical-t",
+        ),
+        LoopAIMessage(
+            content="ledger-ai-prior git diff output",
+            phase="execute_step",
+            step_id="MUY-01",
+            thread_id="logical-t",
+        ),
+    ]
+    state = LoopState(
+        goal="continue",
+        thread_id="logical-t",
+        current_decision=decision,
+        loop_messages=ledger,
+        continue_loop=True,
+        iteration=0,
+    )
+
+    await Executor._execute_step_collecting_events(
+        Executor(mock_agent),
+        step,
+        "logical-t",
+        loop_state=state,
+        continue_loop_mode=True,
+    )
+
+    messages = _astream_messages(mock_agent)
+    assert any(
+        getattr(m, "content", "") == "ledger-human-prior"
+        or "ledger-ai-prior git diff output" in str(getattr(m, "content", ""))
+        for m in messages
+    )
+    envelope = messages[-1].content if messages else ""
+    assert (
+        "review" in envelope.lower()
+        or "continue" in envelope.lower()
+        or "prior" in envelope.lower()
+    )

@@ -140,6 +140,14 @@ class SootheDaemonConfig(BaseSettings):
             "Caps parallel image-role LLM requests before loop execution."
         ),
     )
+    max_in_flight_broadcasts_per_loop: int = Field(
+        default=80,
+        ge=0,
+        description=(
+            "Maximum concurrent stream broadcasts per loop toward the EventBus (0 = unlimited). "
+            "Excess blocks only that loop's stream consumer."
+        ),
+    )
 
     # --- EventBus distribution stats (IG-403) -------------------------------
 

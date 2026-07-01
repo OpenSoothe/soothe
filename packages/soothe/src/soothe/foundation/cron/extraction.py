@@ -201,32 +201,39 @@ class CronExtractionService:
         Raises:
             Exception: If LLM call fails.
         """
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
+
         model = self._get_model()
+        llm_config = llm_rate_limit_config_from(self._config).model_copy(
+            update={
+                "call_timeout_seconds": self._timeout,
+                "call_timeout_max_seconds": max(self._timeout, 60),
+            }
+        )
 
-        # Use structured output if model supports it
         try:
-            # Try with structured output
-            structured_model = model.with_structured_output(ExtractionSchema)
-            result = await asyncio.wait_for(
-                structured_model.ainvoke(prompt),
-                timeout=self._timeout,
-            )
 
-            return self._schema_to_result(result, prompt)
+            async def _structured() -> ExtractionResult:
+                structured_model = model.with_structured_output(ExtractionSchema)
+                result = await structured_model.ainvoke(prompt)
+                return self._schema_to_result(result, prompt)
+
+            return await await_with_llm_call_policy(_structured, config=llm_config)
 
         except TimeoutError:
             raise
         except Exception as e:
             logger.debug("Structured output failed, falling back to JSON parsing: %s", e)
 
-            # Fallback: invoke and parse JSON from content
-            response = await asyncio.wait_for(
-                model.ainvoke(prompt),
-                timeout=self._timeout,
-            )
+            async def _plain() -> ExtractionResult:
+                response = await model.ainvoke(prompt)
+                content = response.content if hasattr(response, "content") else str(response)
+                return self._parse_json_response(content, prompt)
 
-            content = response.content if hasattr(response, "content") else str(response)
-            return self._parse_json_response(content, prompt)
+            return await await_with_llm_call_policy(_plain, config=llm_config)
 
     def _schema_to_result(
         self,

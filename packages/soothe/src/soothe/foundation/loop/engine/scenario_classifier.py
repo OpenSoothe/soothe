@@ -371,6 +371,10 @@ async def classify_synthesis_scenario(
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
 
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
         from soothe.utils.observability.langfuse import build_traced_config
 
         invoke_config = build_traced_config(
@@ -381,9 +385,17 @@ async def classify_synthesis_scenario(
             session_id=getattr(state, "thread_id", None),
             run_name="soothe:scenario-classify",
         )
-        response = await llm_client.ainvoke(
-            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)],
-            config=invoke_config,
+
+        async def _invoke() -> Any:
+            return await llm_client.ainvoke(
+                [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)],
+                config=invoke_config,
+            )
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(soothe_config),
+            thread_id=getattr(state, "thread_id", None),
         )
 
         # Parse JSON response into ScenarioClassification

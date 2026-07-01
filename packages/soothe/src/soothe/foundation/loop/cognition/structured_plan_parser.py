@@ -8,8 +8,12 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field
 
 from soothe.config.models import StructuredPlanConfig
-from soothe.foundation.loop.planning.parser import parse_plan_from_text
+from soothe.foundation.loop.cognition.parser import parse_plan_from_text
 from soothe.protocols.planner import Plan, PlanStep
+from soothe.utils.llm.invoke_policy import (
+    await_with_llm_call_policy,
+    llm_rate_limit_config_from,
+)
 from soothe.utils.llm.structured import invoke_structured_chat_typed
 
 if TYPE_CHECKING:
@@ -68,15 +72,22 @@ async def parse_plan_structured(
     invoke_config = build_traced_config(
         soothe_config,
         purpose="structured_plan_parse",
-        component="loop.planning.structured_parser",
+        component="loop.cognition.structured_parser",
         phase="plan-generate",
         run_name="soothe:structured-plan-parse",
     )
-    extracted = await invoke_structured_chat_typed(
-        model,
-        [HumanMessage(content=prompt)],
-        PlanExtracted,
-        config=invoke_config,
+
+    async def _invoke() -> PlanExtracted:
+        return await invoke_structured_chat_typed(
+            model,
+            [HumanMessage(content=prompt)],
+            PlanExtracted,
+            config=invoke_config,
+        )
+
+    extracted = await await_with_llm_call_policy(
+        _invoke,
+        config=llm_rate_limit_config_from(soothe_config),
     )
     if not extracted.goal:
         extracted = extracted.model_copy(update={"goal": goal})

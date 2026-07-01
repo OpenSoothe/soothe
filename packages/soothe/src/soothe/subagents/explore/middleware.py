@@ -19,7 +19,6 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.types import Command, Overwrite
 
 from soothe.utils.llm.structured import (
-    invoke_structured_chat_sync_typed,
     invoke_structured_chat_typed,
 )
 from soothe.utils.similarity import (
@@ -256,6 +255,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         max_iterations: int,
         max_matches: int,
         synthesis_model: BaseChatModel | None = None,
+        soothe_config: SootheConfig | None = None,
     ) -> None:
         super().__init__()
         self._model = model
@@ -265,6 +265,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         self._max_matches = max_matches
         # Use separate fast model for synthesis if provided
         self._synthesis_model = synthesis_model or model
+        self._soothe_config = soothe_config
 
     def after_model(
         self,
@@ -489,22 +490,52 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         return prompt, len(detail_lines)
 
     def _invoke_synthesis_llm_sync(self, prompt: str) -> ExploreResult:
-        timeout = self._explore_config.synthesis_timeout_seconds
-        return invoke_structured_chat_sync_typed(
-            self._synthesis_model,
-            [HumanMessage(content=prompt)],
-            ExploreResult,
-            timeout=timeout,
+        from soothe.utils.llm.invoke_policy import (
+            llm_rate_limit_config_from,
+            run_with_llm_call_policy_sync,
         )
 
-    async def _invoke_synthesis_llm_async(self, prompt: str) -> ExploreResult:
         timeout = self._explore_config.synthesis_timeout_seconds
-        async with asyncio.timeout(timeout):
-            return await invoke_structured_chat_typed(
-                self._synthesis_model,
-                [HumanMessage(content=prompt)],
-                ExploreResult,
-            )
+        llm_config = llm_rate_limit_config_from(self._soothe_config).model_copy(
+            update={
+                "call_timeout_seconds": max(int(timeout), 30),
+                "call_timeout_max_seconds": max(int(timeout), 30),
+            }
+        )
+
+        async def _invoke() -> ExploreResult:
+            async with asyncio.timeout(timeout):
+                return await invoke_structured_chat_typed(
+                    self._synthesis_model,
+                    [HumanMessage(content=prompt)],
+                    ExploreResult,
+                )
+
+        return run_with_llm_call_policy_sync(_invoke, config=llm_config)
+
+    async def _invoke_synthesis_llm_async(self, prompt: str) -> ExploreResult:
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
+
+        timeout = self._explore_config.synthesis_timeout_seconds
+        llm_config = llm_rate_limit_config_from(self._soothe_config).model_copy(
+            update={
+                "call_timeout_seconds": max(int(timeout), 30),
+                "call_timeout_max_seconds": max(int(timeout), 30),
+            }
+        )
+
+        async def _invoke() -> ExploreResult:
+            async with asyncio.timeout(timeout):
+                return await invoke_structured_chat_typed(
+                    self._synthesis_model,
+                    [HumanMessage(content=prompt)],
+                    ExploreResult,
+                )
+
+        return await await_with_llm_call_policy(_invoke, config=llm_config)
 
     def _partial_synthesis_response(
         self,
@@ -938,6 +969,7 @@ def build_explore_middleware_stack(
             max_iterations=max_iterations,
             max_matches=max_matches,
             synthesis_model=synthesis_model,
+            soothe_config=soothe_config,
         ),
         ExploreFinalizeMiddleware(
             thoroughness=explore_config.thoroughness,

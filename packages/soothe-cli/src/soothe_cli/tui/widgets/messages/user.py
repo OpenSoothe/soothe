@@ -28,23 +28,31 @@ class UserMessage(Static):
         height: auto;
         padding: 0 1;
         margin: 1 0;
-        background: transparent;
-        border-left: wide $primary;
+        background: $surface;
+        border: solid $primary;
     }
 
     UserMessage.-mode-shell {
-        border-left: wide $mode-bash;
+        border: solid $mode-bash;
     }
 
     UserMessage.-mode-command {
-        border-left: wide $mode-command;
+        border: solid $mode-command;
     }
 
     UserMessage:hover {
-        opacity: 0.9;
+        border: solid $primary-lighten-1;
+    }
+
+    UserMessage.-mode-shell:hover {
+        border: solid $mode-bash;
+    }
+
+    UserMessage.-mode-command:hover {
+        border: solid $mode-command;
     }
     """
-    """Consistent styling with transparent background and colored borders matching other cards."""
+    """Surface card with full border echoing ChatInput so submitted prompts stand out in the flow."""
 
     def __init__(self, content: str, **kwargs: Any) -> None:
         """Initialize a user message.
@@ -98,9 +106,9 @@ class UserMessage(Static):
                 if EMAIL_PREFIX_PATTERN.match(char_before):
                     continue
 
-            # Add text before the match (unstyled)
+            # Add text before the match (high-contrast body)
             if start > last_end:
-                parts.append(content[last_end:start])
+                parts.append((content[last_end:start], colors.foreground))
 
             # The regex only matches tokens starting with / or @
             if token.startswith("/") and start == 0:
@@ -113,7 +121,7 @@ class UserMessage(Static):
 
         # Add remaining text after last match
         if last_end < len(content):
-            parts.append(content[last_end:])
+            parts.append((content[last_end:], colors.foreground))
 
         return Content.assemble(*parts)
 
@@ -132,11 +140,11 @@ class QueuedUserMessage(Static):
         height: auto;
         padding: 0 1;
         margin: 0 0 1 0;
-        background: transparent;
-        border-left: wide $panel;
+        background: $surface-darken-1;
+        border: solid $panel;
     }
     """
-    """Dimmed border to distinguish queued messages from sent ones; text uses terminal `dim` style to match the welcome banner's `Loop:` line."""
+    """Muted ChatInput echo for pending messages; text uses terminal `dim` style."""
 
     def __init__(self, content: str, **kwargs: Any) -> None:
         """Initialize a queued user message.

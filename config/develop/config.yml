@@ -14,8 +14,8 @@
 providers:
   - name: dashscope
     provider_type: openai
-    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
-    api_key: "${DASHSCOPE_CP_API_KEY}"
+    api_base_url: "${DASHSCOPE_BASE_URL}"
+    api_key: "${DASHSCOPE_API_KEY}"
     models:
       - glm-5
       - glm-5.2
@@ -65,6 +65,8 @@ active_router_profile: production
 # AGENT (team concurrency overrides only)
 # ============================================================
 agent:
+  runtime:
+    lazy_core_agent: true  # pair with daemon thread_pool.warmup_core_agent for fast TUI
   autonomous:
     enabled: false
     max_parallel_goals: 6

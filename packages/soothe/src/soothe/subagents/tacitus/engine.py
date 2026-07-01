@@ -354,24 +354,37 @@ async def _invoke_llm_with_timeout(
     messages: list[dict[str, str]],
     timeout_sec: float,
     node_name: str = "llm",
+    *,
+    soothe_config: Any | None = None,
 ) -> Any:
-    """Invoke LLM with timeout protection.
+    """Invoke LLM with timeout protection and shared 429 retry policy."""
+    from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+    from soothe.utils.llm.invoke_policy import (
+        await_with_llm_call_policy,
+        llm_rate_limit_config_from,
+    )
 
-    Args:
-        model: LangChain chat model
-        messages: List of message dicts with 'role' and 'content'
-        timeout_sec: Timeout in seconds
-        node_name: Name of the node for logging
+    llm_config = llm_rate_limit_config_from(soothe_config).model_copy(
+        update={
+            "call_timeout_seconds": int(timeout_sec),
+            "call_timeout_max_seconds": int(timeout_sec),
+        }
+    )
 
-    Returns:
-        Model response or raises TimeoutError
-    """
+    async def _call() -> Any:
+        return await model.ainvoke(messages)
+
     try:
-        # Use ainvoke for async timeout support
-        return await asyncio.wait_for(
-            model.ainvoke(messages),
-            timeout=timeout_sec,
+        return await await_with_llm_call_policy(_call, config=llm_config)
+    except EnhancedTimeoutError as exc:
+        logger.warning(
+            "[%s] LLM invocation timed out after %.1fs",
+            node_name,
+            timeout_sec,
         )
+        raise TimeoutError(
+            f"[{node_name}] LLM invocation timed out after {timeout_sec:.1f}s"
+        ) from exc
     except TimeoutError:
         logger.warning(
             "[%s] LLM invocation timed out after %.1fs",
@@ -389,15 +402,22 @@ def _invoke_llm_sync_with_timeout(
     messages: list[dict[str, str]],
     timeout_sec: float,
     node_name: str = "llm",
+    *,
+    soothe_config: Any | None = None,
 ) -> Any:
     """Synchronous wrapper for LLM invocation with timeout.
 
     Falls back to sync invoke if ainvoke not available or fails.
     """
 
-    # Try async first with timeout
     async def _try_async() -> Any:
-        return await _invoke_llm_with_timeout(model, messages, timeout_sec, node_name)
+        return await _invoke_llm_with_timeout(
+            model,
+            messages,
+            timeout_sec,
+            node_name,
+            soothe_config=soothe_config,
+        )
 
     try:
         # Check if we're in an async context
@@ -420,6 +440,7 @@ def build_tacitus_engine(
     config: TacitusConfig | None = None,
     *,
     synthesis_model: BaseChatModel | None = None,
+    soothe_config: Any | None = None,
     _domain: str = "public",
 ) -> Any:
     """Build and compile the Tacitus LangGraph."""
@@ -468,6 +489,7 @@ def build_tacitus_engine(
                 [{"role": "user", "content": prompt}],
                 timeout_sec=_default_config.llm_timeout_sec,
                 node_name="analyze_topic",
+                soothe_config=soothe_config,
             )
         except TimeoutError:
             logger.warning("[Tacitus] analyze_topic timed out, using fallback")
@@ -533,6 +555,7 @@ def build_tacitus_engine(
                 [{"role": "user", "content": prompt}],
                 timeout_sec=_default_config.llm_timeout_sec,
                 node_name="generate_queries",
+                soothe_config=soothe_config,
             )
         except TimeoutError:
             logger.warning("[Tacitus] generate_queries timed out, using fallback")
@@ -714,6 +737,7 @@ def build_tacitus_engine(
                 [{"role": "user", "content": prompt}],
                 timeout_sec=_default_config.summarize_timeout_sec,
                 node_name="summarize",
+                soothe_config=soothe_config,
             )
             integrated = str(resp.content)
         except TimeoutError:
@@ -794,6 +818,7 @@ def build_tacitus_engine(
                 [{"role": "user", "content": prompt}],
                 timeout_sec=_default_config.llm_timeout_sec,
                 node_name="reflect",
+                soothe_config=soothe_config,
             )
             parsed = parse_json_object(llm_response_text(resp))
         except TimeoutError:
@@ -882,6 +907,7 @@ def build_tacitus_engine(
                 [{"role": "user", "content": prompt}],
                 timeout_sec=_default_config.synthesize_timeout_sec,
                 node_name="synthesize",
+                soothe_config=soothe_config,
             )
             answer = str(resp.content)
         except TimeoutError:

@@ -52,6 +52,42 @@ def _make_cancel_event() -> multiprocessing.Event:
     return ctx.Event()
 
 
+def _mock_mp_spawn_context() -> MagicMock:
+    """Multiprocessing spawn context mock that completes worker warmup on start()."""
+    mock_ctx = MagicMock()
+
+    def _process_factory(*_args: Any, **kwargs: Any) -> MagicMock:
+        mock_process = MagicMock()
+        mock_process.pid = 1234
+        mock_process.is_alive.return_value = True
+        process_args = kwargs.get("args") or (_args[1] if len(_args) > 1 else ())
+        warmup_event = process_args[-1] if process_args else None
+
+        def _start() -> None:
+            if warmup_event is not None and hasattr(warmup_event, "set"):
+                warmup_event.set()
+
+        mock_process.start.side_effect = _start
+        return mock_process
+
+    mock_ctx.Process.side_effect = _process_factory
+    mock_ctx.Queue.side_effect = queue.Queue
+    mock_ctx.Event.side_effect = threading.Event
+    return mock_ctx
+
+
+@pytest.fixture(autouse=True)
+def _complete_mock_pool_warmup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mocked worker processes never run _pool_worker_body; unblock pool.start()."""
+
+    async def _wait(self: WorkerPool, events: list[Any]) -> None:
+        for event in events:
+            if hasattr(event, "set"):
+                event.set()
+
+    monkeypatch.setattr(WorkerPool, "_wait_for_worker_warmups", _wait)
+
+
 class TestWorkerProcess:
     """WorkerProcess state management."""
 
@@ -134,12 +170,7 @@ class TestWorkerPool:
         WorkerPool._pool_lock = None
 
         # Mock multiprocessing context
-        mock_ctx = MagicMock()
-        mock_process = MagicMock()
-        mock_process.pid = 1234
-        mock_process.is_alive.return_value = True
-        mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.side_effect = queue.Queue
+        mock_ctx = _mock_mp_spawn_context()
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
             pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)

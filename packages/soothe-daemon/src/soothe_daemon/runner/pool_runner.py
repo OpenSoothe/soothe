@@ -373,6 +373,8 @@ def _pool_worker(
     heartbeat_interval_seconds: int,
     reuse_runner: bool = True,
     warmup_runner: bool = True,
+    warmup_core_agent: bool = True,
+    warmup_done_event: Any = None,
 ) -> None:
     """Multiprocessing entry: delegate to body and record fatal errors on disk."""
     try:
@@ -388,6 +390,8 @@ def _pool_worker(
             heartbeat_interval_seconds,
             reuse_runner,
             warmup_runner,
+            warmup_core_agent,
+            warmup_done_event,
         )
     except BaseException as exc:
         if type(exc) is GeneratorExit:
@@ -410,6 +414,8 @@ def _pool_worker_body(
     heartbeat_interval_seconds: int,
     reuse_runner: bool = True,
     warmup_runner: bool = True,
+    warmup_core_agent: bool = True,
+    warmup_done_event: Any = None,
 ) -> None:
     """Worker subprocess body: wait for requests and execute loop runs.
 
@@ -448,13 +454,20 @@ def _pool_worker_body(
     requests_completed = 0
     cached_runner = None
 
-    if reuse_runner and warmup_runner:
-        cached_runner, _ = acquire_worker_runner(
+    try:
+        from soothe_daemon.runner._worker_runner import warmup_worker_runner_on_loop
+
+        cached_runner = warmup_worker_runner_on_loop(
+            loop,
             config=config,
-            cached_runner=None,
             reuse_runner=reuse_runner,
             warmup_runner=warmup_runner,
+            warmup_core_agent=warmup_core_agent,
+            worker_id=worker_id,
         )
+    finally:
+        if warmup_done_event is not None:
+            warmup_done_event.set()
 
     def _run_single(req: LoopRunRequest, request_id: str) -> None:
         """Execute one request, reusing worker runner when configured."""
@@ -751,6 +764,8 @@ class WorkerPool:
         dispatch_wait_stats_idle_pause_seconds: int = 120,
         reuse_runner: bool = True,
         warmup_runner: bool = True,
+        warmup_core_agent: bool = True,
+        worker_startup_timeout_seconds: int = 60,
     ) -> None:
         self._config = config
         self._min_pool_size = min_pool_size
@@ -765,6 +780,8 @@ class WorkerPool:
         self._dispatch_wait_stats_idle_pause_seconds = dispatch_wait_stats_idle_pause_seconds
         self._reuse_runner = reuse_runner
         self._warmup_runner = warmup_runner
+        self._warmup_core_agent = warmup_core_agent
+        self._worker_startup_timeout_seconds = worker_startup_timeout_seconds
 
         self._ctx = multiprocessing.get_context("spawn")
         self._workers: dict[str, WorkerProcess] = {}
@@ -820,6 +837,7 @@ class WorkerPool:
                 dispatch_wait_stats_idle_pause_seconds=pool_config.dispatch_wait_stats_idle_pause_seconds,
                 reuse_runner=pool_config.reuse_runner,
                 warmup_runner=pool_config.warmup_runner,
+                warmup_core_agent=pool_config.warmup_core_agent,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -850,10 +868,14 @@ class WorkerPool:
         spawn_config = _spawn_safe_config(self._config)
 
         # Pre-warm only min_pool_size workers at startup
+        warmup_events: list[Any] = []
         for i in range(self._min_pool_size):
             worker_id = f"worker-{i}"
-            await self._spawn_worker(worker_id, spawn_config)
+            _, warmup_event = await self._spawn_worker(worker_id, spawn_config)
+            warmup_events.append(warmup_event)
             self._next_worker_index = i + 1
+
+        await self._wait_for_worker_warmups(warmup_events)
 
         self._running = True
         self._health_task = asyncio.create_task(self._worker_health_watchdog())
@@ -869,12 +891,37 @@ class WorkerPool:
             self._max_requests_per_worker,
         )
 
-    async def _spawn_worker(self, worker_id: str, config: SootheConfig) -> WorkerProcess:
+    async def _wait_for_worker_warmups(self, events: list[Any]) -> None:
+        """Block until baseline workers finish SootheRunner/CoreAgent warmup."""
+        if not events:
+            return
+
+        loop = asyncio.get_running_loop()
+        timeout = self._worker_startup_timeout_seconds
+
+        async def _wait_all() -> None:
+            await asyncio.gather(*(loop.run_in_executor(None, event.wait) for event in events))
+
+        try:
+            await asyncio.wait_for(_wait_all(), timeout=timeout)
+        except TimeoutError:
+            pending = sum(1 for event in events if not event.is_set())
+            logger.warning(
+                "WorkerPool: %d/%d baseline workers still warming after %ds",
+                pending,
+                len(events),
+                timeout,
+            )
+
+    async def _spawn_worker(
+        self, worker_id: str, config: SootheConfig
+    ) -> tuple[WorkerProcess, Any]:
         """Spawn a single worker process with request/response queues and cancel event."""
         request_queue: Any = self._ctx.Queue()
         # IG-477: Bound mp response queue so worker subprocess blocks when full
         response_queue: Any = self._ctx.Queue(maxsize=100)
         cancel_event: Any = self._ctx.Event()
+        warmup_done_event: Any = self._ctx.Event()
 
         process = self._ctx.Process(
             target=_pool_worker,
@@ -890,11 +937,16 @@ class WorkerPool:
                 self._heartbeat_interval_seconds,
                 self._reuse_runner,
                 self._warmup_runner,
+                self._warmup_core_agent,
+                warmup_done_event,
             ),
             daemon=True,
             name=worker_id,
         )
         process.start()
+
+        if not (self._reuse_runner and self._warmup_runner):
+            warmup_done_event.set()
 
         worker = WorkerProcess(
             process=process,
@@ -907,8 +959,8 @@ class WorkerPool:
         self._workers[worker_id] = worker
         self._start_worker_bridge(worker_id)
 
-        logger.debug("WorkerPool: spawned worker %s (pid=%d)", worker_id, process.pid)
-        return worker
+        logger.debug("WorkerPool: spawned worker %s", worker_id)
+        return worker, warmup_done_event
 
     def _start_worker_bridge(self, worker_id: str) -> None:
         """Start per-worker response bridge (blocking mp get → asyncio queue, IG-429)."""
@@ -1318,7 +1370,7 @@ class WorkerPool:
 
         # Spawn replacement
         spawn_config = _spawn_safe_config(self._config)
-        new_worker = await self._spawn_worker(dead_worker.worker_id, spawn_config)
+        new_worker, _ = await self._spawn_worker(dead_worker.worker_id, spawn_config)
         self._workers[dead_worker.worker_id] = new_worker
         await self._notify_worker_slot_available()
 
@@ -1366,7 +1418,8 @@ class WorkerPool:
                 active_count + 1,
                 self._max_pool_size,
             )
-            return await self._spawn_worker(worker_id, spawn_config)
+            worker, _ = await self._spawn_worker(worker_id, spawn_config)
+            return worker
 
         for w in self._workers.values():
             if w.status == WorkerStatus.DEAD or not w.is_alive():

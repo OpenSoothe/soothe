@@ -15,6 +15,7 @@ from soothe.foundation.context.planning.models import (
     DecompositionRequest,
     DecompositionResult,
     OrchestrationStrategy,
+    SubGoalSpec,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,91 @@ class GoalPlanningSubengine:
 
         return created
 
+    def apply_llm_subgoals(
+        self,
+        parent_id: str,
+        subgoals: list[dict[str, Any]],
+        *,
+        max_subgoals: int = 5,
+        reasoning: str = "",
+    ) -> list[GoalNode]:
+        """Create child goals from LLM decomposition payloads (AutopilotMonitor / verifier).
+
+        Args:
+            parent_id: Parent goal to attach subgoals under.
+            subgoals: List of dicts with description, priority, depends_on keys.
+            max_subgoals: Upper bound on children created.
+            reasoning: Optional decomposition rationale for logging.
+
+        Returns:
+            Created GoalNode instances.
+        """
+        specs: list[SubGoalSpec] = []
+        for sg in subgoals[:max_subgoals]:
+            description = (sg.get("description") or "").strip()
+            if not description:
+                continue
+            raw_deps = sg.get("depends_on") or []
+            specs.append(
+                SubGoalSpec(
+                    description=description,
+                    priority=int(sg.get("priority", 50)),
+                    depends_on=[str(d) for d in raw_deps],
+                )
+            )
+        if not specs:
+            return []
+        result = DecompositionResult(
+            subgoals=specs,
+            reasoning=reasoning or "LLM decomposition",
+        )
+        return self.create_subgoals(parent_id, result)
+
+    def create_follow_up_goals(
+        self,
+        new_goals: list[dict[str, Any]],
+        *,
+        parent_id: str | None = None,
+        source: str = "reflection",
+    ) -> list[GoalNode]:
+        """Create follow-up goals from post-completion LLM suggestions.
+
+        Args:
+            new_goals: Dicts with description, priority, depends_on.
+            parent_id: Optional parent goal for lineage.
+            source: Goal source tag.
+
+        Returns:
+            Created GoalNode instances.
+        """
+        created: list[GoalNode] = []
+        for ng in new_goals:
+            description = (ng.get("description") or "").strip()
+            if not description:
+                continue
+            child = GoalNode(
+                description=description,
+                priority=int(ng.get("priority", 50)),
+                parent_id=parent_id,
+                depends_on=[str(d) for d in (ng.get("depends_on") or [])],
+                source=source,
+            )
+            try:
+                self._dag.add_goal(child)
+                created.append(child)
+                logger.info(
+                    "GoalPlanningSubengine: follow-up goal %s under %s",
+                    child.id,
+                    parent_id or "root",
+                )
+            except ValueError:
+                logger.warning(
+                    "GoalPlanningSubengine: depth limit exceeded for follow-up under %s",
+                    parent_id,
+                )
+                break
+        return created
+
     # --- Orchestration ---
 
     def compute_orchestration_strategy(
@@ -152,14 +238,30 @@ class GoalPlanningSubengine:
     async def reflect_and_create_goals(
         self,
         completed_goal_id: str,
+        *,
+        new_goals: list[dict[str, Any]] | None = None,
     ) -> list[GoalNode]:
-        """LLM-driven reflection on a completed goal to identify follow-up goals.
+        """Create follow-up goals after a goal completes.
 
-        Uses the completed goal's context to determine if additional work
-        is needed. Phase 1: Returns empty list (stub).
+        When ``new_goals`` is provided (from post-completion verification),
+        materializes them in the DAG. Callers may also invoke
+        :meth:`create_follow_up_goals` directly.
+
+        Args:
+            completed_goal_id: ID of the completed parent goal.
+            new_goals: Optional LLM-suggested follow-up goal specs.
+
+        Returns:
+            Created GoalNode instances (empty when no suggestions).
         """
-        logger.info(
-            "GoalPlanningSubengine.reflect_and_create_goals: stub for goal %s",
-            completed_goal_id,
+        if not new_goals:
+            logger.debug(
+                "GoalPlanningSubengine.reflect_and_create_goals: no suggestions for %s",
+                completed_goal_id,
+            )
+            return []
+        return self.create_follow_up_goals(
+            new_goals,
+            parent_id=completed_goal_id,
+            source="reflection",
         )
-        return []

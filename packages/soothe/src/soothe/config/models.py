@@ -1164,7 +1164,11 @@ class OutputStreamingConfig(BaseModel):
         default=300,
         ge=50,
         le=1000,
-        description="Daemon WebSocket batching interval (milliseconds)",
+        description=(
+            "Daemon WebSocket batching interval (milliseconds). "
+            "IG-534 Phase 3: recommend 100 for TUI clients (faster perceived response), "
+            "300 for headless consumers (lower network overhead). Per-client tuning pending."
+        ),
     )
     tui_flush_interval_ms: int = Field(
         default=200,
@@ -1425,6 +1429,14 @@ class StrangeLoopConfig(BaseModel):
         description=(
             "When the planner marks the goal done: llm_only trusts StatusAssessment only; "
             "heuristic_only uses execution heuristics only; hybrid uses LLM first with heuristic fallback"
+        ),
+    )
+
+    step_brief_hydration_enabled: bool = Field(
+        default=True,
+        description=(
+            "When true, dependent steps with vague full_description are hydrated "
+            "between execute waves using predecessor evidence (LLM when available)."
         ),
     )
 

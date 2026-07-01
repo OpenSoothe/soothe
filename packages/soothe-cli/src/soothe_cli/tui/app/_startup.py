@@ -177,6 +177,8 @@ class _StartupMixin:
             mount_message=self._mount_message,
             update_status=self._update_status,
             set_spinner=self._set_spinner,
+            pause_spinner=self._pause_spinner,
+            resume_spinner=self._resume_spinner,
             set_active_message=self._set_active_message,
             sync_message_content=self._sync_message_content,
         )

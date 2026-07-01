@@ -14,6 +14,7 @@ import pytest
 
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.query import QueryEngine
+from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
 
 
 class _FakeRunner:
@@ -199,6 +200,8 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
+        _loops_with_active_query=set(),
+        _loop_broadcast_budget=LoopBroadcastBudget(80),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
             claim_loop_ownership=lambda *_args, **_kwargs: None,
@@ -292,6 +295,8 @@ def _daemon_factory(
         _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
+        _loops_with_active_query=set(),
+        _loop_broadcast_budget=LoopBroadcastBudget(80),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
             claim_loop_ownership=lambda *_args, **_kwargs: None,
@@ -367,8 +372,9 @@ async def test_cancel_grace_timeout_keeps_task_then_drains(
 ) -> None:
     """Grace shorter than unwind: cancel returns while unwinding; task kept until finally."""
     broadcasts: list[dict[str, Any]] = []
-    # Unwind longer than cancel_grace_seconds (min 1s per DaemonConfig) triggers warning path.
-    runner = _SlowCancelRunner(unwind_delay=2.0)
+    # Use min allowed grace (1s) with slightly longer unwind (1.1s)
+    # This tests the "grace timeout while unwinding" path in ~1.3s total.
+    runner = _SlowCancelRunner(unwind_delay=1.1)
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=1)
     engine = QueryEngine(daemon)
 
@@ -386,7 +392,8 @@ async def test_cancel_grace_timeout_keeps_task_then_drains(
     assert daemon._current_query_task is task
     assert not task.done()
 
-    await asyncio.sleep(2.5)
+    # Wait for unwind to complete (1.1s unwind - 1s grace timeout already elapsed + margin)
+    await asyncio.sleep(0.2)
     with suppress(asyncio.CancelledError):
         await task
     assert task.done()
@@ -448,6 +455,8 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
         _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
+        _loops_with_active_query=set(),
+        _loop_broadcast_budget=LoopBroadcastBudget(80),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
             claim_loop_ownership=lambda *_args, **_kwargs: None,

@@ -360,21 +360,29 @@ class _MessagesMixin:
                         )
                     )
 
-    def _cancel_worker(self, worker: Worker[None] | None) -> None:
-        """Discard the message queue and cancel an active worker.
+    def _cancel_worker(self, worker: Worker[None] | None, *, discard_queue: bool = True) -> None:
+        """Cancel an active worker, optionally discarding the pending message queue.
 
         Args:
             worker: The worker to cancel.
+            discard_queue: When ``True`` (default), clear queued messages and
+                deferred actions. Set ``False`` on user interrupt (Ctrl+C / Esc)
+                so a queued goal starts after the running one is cancelled.
         """
-        self._discard_queue()
+        if discard_queue:
+            self._discard_queue()
         if worker is not None:
             worker.cancel()
 
-    async def _interrupt_daemon_agent_turn(self) -> None:
+    async def _interrupt_daemon_agent_turn(self, *, discard_queue: bool = True) -> None:
         """Send daemon ``/cancel``, then cancel the local streaming worker.
 
         Awaiting cancel first stops the server-side query; cancelling the worker
         alone would only detach the TUI from chunks while the daemon kept running.
+
+        Args:
+            discard_queue: When ``False``, preserve queued user goals so they
+                run after the cancelled turn finishes cleanup.
         """
         session = self._daemon_session
         worker = self._agent_worker
@@ -384,7 +392,7 @@ class _MessagesMixin:
             except Exception:
                 logger.warning("Failed to send cancel to daemon", exc_info=True)
         if worker is not None:
-            self._cancel_worker(worker)
+            self._cancel_worker(worker, discard_queue=discard_queue)
 
     def action_copy_selection(self) -> None:
         """Copy the current text selection to the system clipboard (Ctrl+Y)."""
@@ -419,7 +427,7 @@ class _MessagesMixin:
                 self._chat_input.clear_input()
                 self._quit_pending = False
                 return
-            self._cancel_worker(self._shell_worker)
+            self._cancel_worker(self._shell_worker, discard_queue=False)
             self._quit_pending = False
             return
 
@@ -431,12 +439,12 @@ class _MessagesMixin:
                 return
             if self._daemon_session is not None:
                 self.run_worker(
-                    self._interrupt_daemon_agent_turn(),
+                    self._interrupt_daemon_agent_turn(discard_queue=False),
                     exclusive=False,
                     group="daemon-interrupt",
                 )
             else:
-                self._cancel_worker(self._agent_worker)
+                self._cancel_worker(self._agent_worker, discard_queue=False)
             self._quit_pending = False
             return
 
@@ -490,7 +498,7 @@ class _MessagesMixin:
 
         # If shell command is running, cancel the worker
         if self._shell_running and self._shell_worker:
-            self._cancel_worker(self._shell_worker)
+            self._cancel_worker(self._shell_worker, discard_queue=False)
             return
 
         # If queued messages exist, pop the last one (LIFO) instead of
@@ -500,16 +508,16 @@ class _MessagesMixin:
             self._pop_last_queued_message()
             return
 
-        # If agent is running, interrupt it and discard queued messages
+        # If agent is running, interrupt it; queued goals start after cleanup
         if self._agent_running and self._agent_worker:
             if self._daemon_session is not None:
                 self.run_worker(
-                    self._interrupt_daemon_agent_turn(),
+                    self._interrupt_daemon_agent_turn(discard_queue=False),
                     exclusive=False,
                     group="daemon-interrupt",
                 )
             else:
-                self._cancel_worker(self._agent_worker)
+                self._cancel_worker(self._agent_worker, discard_queue=False)
             return
 
     def action_quit_app(self) -> None:

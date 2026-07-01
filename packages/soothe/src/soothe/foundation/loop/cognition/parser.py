@@ -27,7 +27,7 @@ async def parse_plan_from_text_async(
     soothe_config: Any | None = None,
 ) -> Plan:
     """Parse plan text with optional structured LLM extraction (IG-433)."""
-    from soothe.foundation.loop.planning.structured_plan_parser import parse_plan_with_config
+    from soothe.foundation.loop.cognition.structured_plan_parser import parse_plan_with_config
 
     return await parse_plan_with_config(
         goal,

@@ -98,6 +98,12 @@ async def _evaluate_with_llm(
     )
 
     try:
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
+        from soothe.utils.observability.langfuse import build_traced_config
+
         invoke_config = build_traced_config(
             soothe_config,
             purpose="criticality_assessment",
@@ -105,7 +111,14 @@ async def _evaluate_with_llm(
             phase="pre-goal",
             run_name="soothe:criticality-assess",
         )
-        response = await model.ainvoke(prompt_text, config=invoke_config)
+
+        async def _invoke() -> Any:
+            return await model.ainvoke(prompt_text, config=invoke_config)
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(soothe_config),
+        )
         content = response.content.strip() if hasattr(response, "content") else ""
 
         risk_level = "medium"

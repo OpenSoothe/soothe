@@ -2,17 +2,12 @@
 
 Uses threads instead of subprocesses for lower overhead (~ms vs ~8s spawn).
 Each thread maintains a dedicated asyncio event loop for LangGraph streaming.
-Fresh SootheRunner instances per request ensure no user data leakage.
+One reused SootheRunner per worker (``prepare_for_request`` between turns) keeps
+startup cost low while isolating per-request state.
 
 ARCHITECTURE: Each worker thread has queues for cross-thread communication:
     - request_queue: main process → worker thread (dispatch requests)
     - response_queue: worker thread → main process (stream responses)
-
-Key differences from multiprocessing pool:
-    - threading.Queue instead of multiprocessing.Queue (no pickling needed)
-    - threading.Event for cancellation (instead of multiprocessing.Event)
-    - Shared memory space (config passed directly, no spawn-safe copy)
-    - No GIL bypass for CPU-bound work (best for async I/O workloads)
 """
 
 from __future__ import annotations
@@ -29,7 +24,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from soothe.config.settings import SootheConfig
-from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
+from soothe.protocols.runner import LoopRunRequest
 
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.runner.response_bridge import ResponsePusher
@@ -39,6 +34,8 @@ if TYPE_CHECKING:
     from soothe.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
+
+_RESPONSE_QUEUE_MAXSIZE = 200  # IG-535: dense streaming under many concurrent loops
 
 # Last error per worker thread (survives unexpected thread exit for watchdog logs).
 _worker_last_errors: dict[str, str] = {}
@@ -74,13 +71,14 @@ class WorkerThreadState:
     cancel_event: threading.Event  # cooperative cancellation signal
     stop_event: threading.Event  # shutdown signal
     worker_id: str
+    #: Baseline slots (index < min_pool_size) stay warm; scaled slots idle out.
+    is_baseline: bool = True
     status: WorkerThreadStatus = WorkerThreadStatus.IDLE
     current_loop_id: str | None = None
     current_request_id: str | None = None
     requests_completed: int = 0
     started_at: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
-    last_heartbeat_at: datetime | None = None
     #: True after we pushed a synthetic error for unexpected thread exit.
     dead_failure_routed: bool = False
 
@@ -94,16 +92,13 @@ class WorkerThreadState:
         self.current_loop_id = None
         self.current_request_id = None
         self.last_activity = datetime.now()
-        self.last_heartbeat_at = None
 
     def mark_busy(self, loop_id: str, request_id: str) -> None:
         """Mark worker as busy handling a request."""
         self.status = WorkerThreadStatus.BUSY
         self.current_loop_id = loop_id
         self.current_request_id = request_id
-        now = datetime.now()
-        self.last_activity = now
-        self.last_heartbeat_at = now
+        self.last_activity = datetime.now()
 
 
 @dataclass
@@ -132,9 +127,12 @@ def _thread_worker_body(
     max_requests: int,
     default_timeout_seconds: int,
     *,
+    is_baseline_worker: bool = True,
     identity_runtime: IdentityRuntime | None = None,
     reuse_runner: bool = True,
     warmup_runner: bool = True,
+    warmup_core_agent: bool = True,
+    warmup_done_event: threading.Event | None = None,
 ) -> None:
     """Thread worker body: maintains event loop, executes requests.
 
@@ -144,7 +142,7 @@ def _thread_worker_body(
         - Reuse one SootheRunner per worker when ``reuse_runner`` (IG-506)
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
-        - Exit on stop_event, idle timeout, or max requests
+        - Exit on stop_event, idle timeout (scaled workers only), or max requests
 
     Args:
         config: SootheConfig (shared memory, no pickling needed).
@@ -153,9 +151,10 @@ def _thread_worker_body(
         response_queue: threading.Queue for sending responses.
         cancel_event: threading.Event for cooperative cancellation.
         stop_event: threading.Event for shutdown signal.
-        idle_timeout_seconds: Exit after this many seconds idle.
+        idle_timeout_seconds: Exit after this many seconds idle (scaled workers only).
         max_requests: Exit after this many requests completed.
         default_timeout_seconds: Default per-request timeout if not specified.
+        is_baseline_worker: When True, wait indefinitely for work (min pool slot).
     """
     # Create dedicated event loop for this thread
     loop = asyncio.new_event_loop()
@@ -164,16 +163,21 @@ def _thread_worker_body(
     requests_completed = 0
     cached_runner = None
 
-    if reuse_runner and warmup_runner:
-        from soothe_daemon.runner._worker_runner import acquire_worker_runner
+    try:
+        from soothe_daemon.runner._worker_runner import warmup_worker_runner_on_loop
 
-        cached_runner, _ = acquire_worker_runner(
+        cached_runner = warmup_worker_runner_on_loop(
+            loop,
             config=config,
-            cached_runner=None,
             reuse_runner=reuse_runner,
             warmup_runner=warmup_runner,
+            warmup_core_agent=warmup_core_agent,
             identity_runtime=identity_runtime,
+            worker_id=worker_id,
         )
+    finally:
+        if warmup_done_event is not None:
+            warmup_done_event.set()
 
     def _run_single(req: LoopRunRequest, request_id: str, pusher: ResponsePusher | None) -> None:
         """Execute one request, reusing worker runner when configured."""
@@ -189,8 +193,6 @@ def _thread_worker_body(
                 response_queue.put((msg_type, request_id, payload))
 
         configure_loop_runner_worker_logging(config, req.loop_id)
-
-        # Clear cancel event at start of new request
         cancel_event.clear()
 
         # Determine timeout: use request-specific or default
@@ -356,8 +358,13 @@ def _thread_worker_body(
     try:
         while not stop_event.is_set() and requests_completed < max_requests:
             try:
-                msg = request_queue.get(timeout=idle_timeout_seconds)
+                if is_baseline_worker:
+                    msg = request_queue.get(timeout=1.0)
+                else:
+                    msg = request_queue.get(timeout=idle_timeout_seconds)
             except queue.Empty:
+                if is_baseline_worker:
+                    continue
                 logger.info(
                     "Thread worker %s idle timeout (%ds), exiting",
                     worker_id,
@@ -415,13 +422,13 @@ class ThreadPool:
         - response_queue for sending responses back
         - cancel_event for cooperative cancellation
 
-    Workers execute requests with fresh SootheRunner instances and stream
-    results tagged with request_id for routing to the correct pending request.
+    Workers reuse one SootheRunner per thread (IG-506) and stream results tagged
+    with request_id for routing to the correct pending request.
 
     Lifecycle:
-        - Startup: pre-warm min_pool_size threads
+        - Startup: pre-warm min_pool_size baseline threads (no idle timeout)
         - Runtime: threads pull requests, execute, return to pool
-        - Scaling: spawn extra threads when needed, idle out when not
+        - Scaling: spawn extra threads when needed; scaled threads idle out and shrink
         - Shutdown: signal all threads to exit, wait, cleanup
     """
 
@@ -441,11 +448,13 @@ class ThreadPool:
         identity_runtime: IdentityRuntime | None = None,
         reuse_runner: bool = True,
         warmup_runner: bool = True,
+        warmup_core_agent: bool = True,
     ) -> None:
         self._config = config  # Shared memory, no spawn-safe copy needed
         self._identity_runtime = identity_runtime
         self._reuse_runner = reuse_runner
         self._warmup_runner = warmup_runner
+        self._warmup_core_agent = warmup_core_agent
         self._min_pool_size = min_pool_size
         self._max_pool_size = max(min_pool_size, max_pool_size)
         self._idle_timeout_seconds = idle_timeout_seconds
@@ -499,6 +508,7 @@ class ThreadPool:
                 identity_runtime=identity_runtime,
                 reuse_runner=pool_config.reuse_runner,
                 warmup_runner=pool_config.warmup_runner,
+                warmup_core_agent=pool_config.warmup_core_agent,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -525,10 +535,17 @@ class ThreadPool:
         self._dispatch_semaphore = asyncio.Semaphore(self._max_pool_size)
         self._worker_available = asyncio.Condition()
 
+        warmup_events: list[threading.Event] = []
         for i in range(self._min_pool_size):
             worker_id = f"thread-worker-{i}"
-            await self._spawn_worker(worker_id)
+            _, warmup_event = await self._spawn_worker(
+                worker_id,
+                is_baseline=True,
+            )
+            warmup_events.append(warmup_event)
             self._next_worker_index = i + 1
+
+        await self._wait_for_worker_warmups(warmup_events)
 
         self._running = True
         self._main_loop = asyncio.get_running_loop()
@@ -542,15 +559,48 @@ class ThreadPool:
             self._idle_timeout_seconds,
             self._max_requests_per_thread,
         )
+        # IG-534: Guidance for thread pool sizing relative to concurrent loops
+        if self._max_pool_size < 4:
+            logger.warning(
+                "ThreadPool: max_pool_size=%d is small; recommend ≥4 for multi-loop workloads "
+                "(each concurrent synthesis occupies one thread for the full turn)",
+                self._max_pool_size,
+            )
 
-    async def _spawn_worker(self, worker_id: str) -> WorkerThreadState:
+    async def _wait_for_worker_warmups(self, events: list[threading.Event]) -> None:
+        """Block until baseline workers finish SootheRunner/CoreAgent warmup."""
+        if not events:
+            return
+
+        loop = asyncio.get_running_loop()
+        timeout = self._thread_startup_timeout_seconds
+
+        async def _wait_all() -> None:
+            await asyncio.gather(*(loop.run_in_executor(None, event.wait) for event in events))
+
+        try:
+            await asyncio.wait_for(_wait_all(), timeout=timeout)
+        except TimeoutError:
+            pending = sum(1 for event in events if not event.is_set())
+            logger.warning(
+                "ThreadPool: %d/%d baseline workers still warming after %ds",
+                pending,
+                len(events),
+                timeout,
+            )
+
+    async def _spawn_worker(
+        self,
+        worker_id: str,
+        *,
+        is_baseline: bool = True,
+    ) -> tuple[WorkerThreadState, threading.Event]:
         """Spawn a single worker thread with queues and events."""
-        # IG-477: Bound response queue to prevent memory leak
-        # 100 items ~ 10-50 MB depending on chunk payload sizes
         request_queue: queue.Queue = queue.Queue()
-        response_queue: queue.Queue = queue.Queue(maxsize=100)
+        response_queue: queue.Queue = queue.Queue(maxsize=_RESPONSE_QUEUE_MAXSIZE)
         cancel_event: threading.Event = threading.Event()
         stop_event: threading.Event = threading.Event()
+        warmup_done_event = threading.Event()
 
         thread = threading.Thread(
             target=_thread_worker_body,
@@ -566,14 +616,20 @@ class ThreadPool:
                 self._request_timeout_seconds,
             ),
             kwargs={
+                "is_baseline_worker": is_baseline,
                 "identity_runtime": self._identity_runtime,
                 "reuse_runner": self._reuse_runner,
                 "warmup_runner": self._warmup_runner,
+                "warmup_core_agent": self._warmup_core_agent,
+                "warmup_done_event": warmup_done_event,
             },
             daemon=True,
             name=worker_id,
         )
         thread.start()
+
+        if not (self._reuse_runner and self._warmup_runner):
+            warmup_done_event.set()
 
         worker = WorkerThreadState(
             thread=thread,
@@ -582,12 +638,17 @@ class ThreadPool:
             cancel_event=cancel_event,
             stop_event=stop_event,
             worker_id=worker_id,
+            is_baseline=is_baseline,
             started_at=datetime.now(),
         )
         self._workers[worker_id] = worker
 
-        logger.debug("ThreadPool: spawned thread worker %s", worker_id)
-        return worker
+        logger.debug(
+            "ThreadPool: spawned thread worker %s (baseline=%s)",
+            worker_id,
+            is_baseline,
+        )
+        return worker, warmup_done_event
 
     def _schedule_abandon_drain(
         self,
@@ -659,12 +720,16 @@ class ThreadPool:
             self._workers_by_loop_id.pop(loop_id, None)
             self._pending_responses.pop(request_id, None)
 
-    async def _recover_stale_busy_worker(self, worker: WorkerThreadState) -> bool:
+    async def _recover_stale_busy_worker(
+        self,
+        worker: WorkerThreadState,
+        *,
+        last_error: str | None = None,
+    ) -> bool:
         """Recover when a worker exited cleanly but main never received ``done``.
 
-        This happens when ``ResponsePusher`` previously dropped ``done`` on a full
-        queue: the worker thread finishes and later hits idle timeout while
-        ``ThreadPool.submit()`` still waits on the response queue.
+        Typical when the worker thread finishes while ``ThreadPool.submit()`` is
+        still waiting on the response queue (crash, forced exit, or delivery gap).
 
         Returns:
             True if recovery ran (synthetic ``done`` or stale bookkeeping cleared)
@@ -689,7 +754,9 @@ class ThreadPool:
                     self._workers_by_loop_id.pop(worker.current_loop_id, None)
             return True
 
-        if _pop_worker_last_error(worker.worker_id) is not None:
+        if last_error is None:
+            last_error = _pop_worker_last_error(worker.worker_id)
+        if last_error is not None:
             return False
 
         worker.dead_failure_routed = True
@@ -746,26 +813,57 @@ class ThreadPool:
                 req_id,
             )
 
+    def _count_live_workers(self) -> int:
+        return sum(1 for w in self._workers.values() if w.is_alive())
+
+    async def _remove_worker_slot(self, worker: WorkerThreadState) -> None:
+        """Drop a dead worker entry without respawning (scale-down)."""
+        self._workers.pop(worker.worker_id, None)
+        await self._notify_worker_slot_available()
+
     async def _handle_dead_worker(self, worker: WorkerThreadState) -> None:
-        """Recover from a dead thread: fail in-flight work and respawn the slot."""
-        logger.warning(
-            "ThreadPool: worker %s thread ended (busy=%s, loop_id=%s, request_id=%s, status=%s%s)",
-            worker.worker_id,
-            worker.status == WorkerThreadStatus.BUSY,
-            worker.current_loop_id,
-            worker.current_request_id,
-            worker.status,
-            f", last_error={last_err!r}"
-            if (last_err := _pop_worker_last_error(worker.worker_id))
-            else "",
+        """Recover from a dead thread: shrink scaled slots or respawn baseline/min."""
+        last_err = _pop_worker_last_error(worker.worker_id)
+        graceful_idle_exit = (
+            worker.status == WorkerThreadStatus.IDLE
+            and worker.current_request_id is None
+            and last_err is None
         )
+
+        if graceful_idle_exit and not worker.is_baseline:
+            logger.info(
+                "ThreadPool: scaled worker %s idle timeout, removing slot (live=%d, min=%d)",
+                worker.worker_id,
+                self._count_live_workers(),
+                self._min_pool_size,
+            )
+            await self._remove_worker_slot(worker)
+            return
+
         if worker.current_request_id is not None:
-            recovered = await self._recover_stale_busy_worker(worker)
+            logger.warning(
+                "ThreadPool: worker %s thread ended (busy=%s, loop_id=%s, "
+                "request_id=%s, status=%s%s)",
+                worker.worker_id,
+                worker.status == WorkerThreadStatus.BUSY,
+                worker.current_loop_id,
+                worker.current_request_id,
+                worker.status,
+                f", last_error={last_err!r}" if last_err else "",
+            )
+            recovered = await self._recover_stale_busy_worker(worker, last_error=last_err)
             if not recovered:
                 await self._route_failure_for_dead_busy_worker(worker)
+        elif not graceful_idle_exit:
+            logger.warning(
+                "ThreadPool: worker %s thread ended unexpectedly (status=%s%s)",
+                worker.worker_id,
+                worker.status,
+                f", last_error={last_err!r}" if last_err else "",
+            )
 
         try:
-            await self._respawn_worker(worker)
+            await self._respawn_worker(worker, is_baseline=worker.is_baseline)
         except Exception:
             logger.exception("ThreadPool: failed to respawn dead worker %s", worker.worker_id)
 
@@ -801,11 +899,23 @@ class ThreadPool:
 
             await asyncio.sleep(1.0)
 
-    async def _respawn_worker(self, dead_worker: WorkerThreadState) -> None:
+    async def _respawn_worker(
+        self,
+        dead_worker: WorkerThreadState,
+        *,
+        is_baseline: bool | None = None,
+    ) -> None:
         """Replace a dead worker with a fresh one."""
-        logger.warning("ThreadPool: respawning dead worker %s", dead_worker.worker_id)
+        baseline = dead_worker.is_baseline if is_baseline is None else is_baseline
+        logger.warning(
+            "ThreadPool: respawning worker %s (baseline=%s, live=%d, min=%d)",
+            dead_worker.worker_id,
+            baseline,
+            self._count_live_workers(),
+            self._min_pool_size,
+        )
 
-        new_worker = await self._spawn_worker(dead_worker.worker_id)
+        new_worker, _ = await self._spawn_worker(dead_worker.worker_id, is_baseline=baseline)
         self._workers[dead_worker.worker_id] = new_worker
         await self._notify_worker_slot_available()
 
@@ -836,12 +946,16 @@ class ThreadPool:
                 active_count + 1,
                 self._max_pool_size,
             )
-            return await self._spawn_worker(worker_id)
+            worker, _ = await self._spawn_worker(worker_id, is_baseline=False)
+            return worker
 
         for w in self._workers.values():
             if w.status == WorkerThreadStatus.DEAD or not w.is_alive():
-                await self._respawn_worker(w)
-                return self._workers[w.worker_id]
+                await self._handle_dead_worker(w)
+                replacement = self._workers.get(w.worker_id)
+                if replacement is not None and replacement.is_alive():
+                    return replacement
+                continue
 
         return None
 
@@ -877,12 +991,12 @@ class ThreadPool:
                             self._waiting_for_worker_slot -= 1
 
                 # IG-477: Bound response queue to prevent memory leak
-                response_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=100)
+                response_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=_RESPONSE_QUEUE_MAXSIZE)
                 self._pending_responses[request_id] = response_queue
                 self._workers_by_loop_id[request.loop_id] = worker.worker_id
                 worker.mark_busy(request.loop_id, request_id)
                 main_loop = self._main_loop or asyncio.get_running_loop()
-                pusher = ResponsePusher(main_loop, response_queue)
+                pusher = ResponsePusher(main_loop, response_queue, worker_id=worker.worker_id)
                 worker.request_queue.put(("request", request_id, request, pusher))
                 if worker.is_alive():
                     break
@@ -1128,11 +1242,6 @@ class ThreadLoopRunner:
         """Request cancellation."""
         if self._pool is not None:
             await self._pool.cancel_request(self._loop_id)
-
-
-# Verify structural compliance at import time
-def _assert_protocol() -> None:
-    _: LoopRunnerProtocol = ThreadLoopRunner.__new__(ThreadLoopRunner)  # type: ignore[assignment]
 
 
 __all__ = [

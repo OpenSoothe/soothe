@@ -82,6 +82,7 @@ STRANGE_LOOP_STEP_STARTED = "soothe.cognition.strange_loop.step.started"
 STRANGE_LOOP_STEP_QUEUED = "soothe.cognition.strange_loop.step.queued"
 STRANGE_LOOP_STEP_COMPLETED = "soothe.cognition.strange_loop.step.completed"
 STRANGE_LOOP_PLAN_DECISION = "soothe.cognition.strange_loop.plan.decision"
+STRANGE_LOOP_PLAN_PHASE = "soothe.cognition.strange_loop.plan.phase"
 
 # Clarification relay events (RFC-622 / RFC-623)
 # Emitted while the loop graph is paused on the ``await_clarification`` node.
@@ -121,6 +122,7 @@ __all__ = [
     "STRANGE_LOOP_STEP_QUEUED",
     "STRANGE_LOOP_STEP_COMPLETED",
     "STRANGE_LOOP_PLAN_DECISION",
+    "STRANGE_LOOP_PLAN_PHASE",
     # Clarification relay (RFC-622 / RFC-623)
     "LOOP_CLARIFICATION_REQUESTED",
     "LOOP_CLARIFICATION_ANSWERED",

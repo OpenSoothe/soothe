@@ -99,6 +99,7 @@ from .constants import (
     STRANGE_LOOP_COMPLETED,
     STRANGE_LOOP_CONTEXT_COMPACTED,
     STRANGE_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_PLAN_PHASE,
     STRANGE_LOOP_STARTED,
     STRANGE_LOOP_STEP_COMPLETED,
     STRANGE_LOOP_STEP_QUEUED,
@@ -247,6 +248,15 @@ class StrangeLoopPlanDecisionEvent(LifecycleEvent):
     execution_mode: str = ""
     total_steps: int = 0  # Cumulative total steps across all iterations
     done_steps: int = 0  # Cumulative completed steps across all iterations
+
+
+class StrangeLoopPlanPhaseStatusEvent(LifecycleEvent):
+    """In-flight plan assess/generate label for TUI spinner (not a chat card)."""
+
+    type: Literal["soothe.cognition.strange_loop.plan.phase"] = (
+        "soothe.cognition.strange_loop.plan.phase"
+    )
+    label: str
 
 
 class StrangeLoopStepStartedEvent(LifecycleEvent):
@@ -771,6 +781,13 @@ _reg(
     StrangeLoopPlanDecisionEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Act plan · {execution_mode}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    STRANGE_LOOP_PLAN_PHASE,
+    StrangeLoopPlanPhaseStatusEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{label}",
     priority=EventPriority.HIGH,
 )
 _reg(

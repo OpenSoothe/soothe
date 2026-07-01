@@ -1429,6 +1429,49 @@ This appendix provides an informative mapping from the previous string error cod
 
 ---
 
+## 14. Stream Degradation Signaling (IG-534)
+
+When the client or daemon cannot keep pace with the event stream, implementations MUST surface degradation to the user rather than silently dropping user-visible content.
+
+### Custom event: `stream_degraded`
+
+Delivered as a standard streaming frame (`type: event`, `mode: custom`):
+
+```json
+{
+  "type": "event",
+  "loop_id": "019f1b8a-8385-70f1-9248-c40213b8b036",
+  "mode": "custom",
+  "data": {
+    "type": "stream_degraded",
+    "reason": "inbound_queue_overflow",
+    "dropped_count": 42,
+    "recoverable": true
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reason` | string | Machine-readable cause (`inbound_queue_overflow`, `event_bus_overflow`, …) |
+| `dropped_count` | int | Cumulative frames lost or evicted since stream start |
+| `recoverable` | bool | Whether `/resume` or ledger fetch may restore content |
+
+**Client behavior**: Display a non-blocking banner; do not abort the turn unless paired with `error` or connection loss.
+
+**Daemon behavior**: Emit when daemon-side client queue drops user-visible frames after blocking timeout (optional; client-local detection is sufficient for inbound overflow).
+
+---
+
+## Document History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v1.1 | 2026-07-01 | IG-534: `stream_degraded` custom event schema |
+| v1.0 | 2026-06-28 | Protocol-1 envelope (`proto: 1`, `next`/`complete`, JSON-RPC hybrid) |
+
+---
+
 ## References
 
 - `docs/analysis/ws-api-standards-comparison.md` — Standards research (AsyncAPI, JSON-RPC, graphql-ws, STOMP)

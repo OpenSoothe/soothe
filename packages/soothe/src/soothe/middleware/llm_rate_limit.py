@@ -29,6 +29,18 @@ logger = logging.getLogger(__name__)
 # IG-499: Helper functions for 429 error detection and retry-after extraction
 
 
+def _iter_exception_chain(exc: BaseException) -> list[BaseException]:
+    """Walk ``__cause__`` / ``__context__`` without cycles."""
+    chain: list[BaseException] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+    return chain
+
+
 def _is_api_rate_limit_error(exc: Exception) -> bool:
     """Check if exception is a 429 rate limit error from OpenAI/Anthropic APIs.
 
@@ -37,27 +49,31 @@ def _is_api_rate_limit_error(exc: Exception) -> bool:
     2. Check response.status_code attribute
     3. Fallback: keyword matching in error string
 
+    Walks the exception chain so wrapped errors (e.g. ``StructuredOutputError``)
+    still trigger retry when the underlying provider raised 429.
+
     Args:
         exc: Exception to check.
 
     Returns:
         True if this is a 429 rate limit error that should trigger retry.
     """
-    # Check by exception class name (works for OpenAI and Anthropic)
-    exc_type_name = type(exc).__name__
-    if exc_type_name == "RateLimitError":
-        return True
-
-    # Check response.status_code (httpx.Response from APIStatusError)
-    response = getattr(exc, "response", None)
-    if response is not None:
-        status_code = getattr(response, "status_code", None)
-        if status_code == 429:
+    for link in _iter_exception_chain(exc):
+        exc_type_name = type(link).__name__
+        if exc_type_name == "RateLimitError":
             return True
 
-    # Fallback: keyword matching
-    error_str = str(exc).lower()
-    return "429" in error_str or "rate limit" in error_str or "throttling" in error_str
+        response = getattr(link, "response", None)
+        if response is not None:
+            status_code = getattr(response, "status_code", None)
+            if status_code == 429:
+                return True
+
+        error_str = str(link).lower()
+        if "429" in error_str or "rate limit" in error_str or "throttling" in error_str:
+            return True
+
+    return False
 
 
 # IG-503: Helper function for transient connection error detection
@@ -153,25 +169,25 @@ def _extract_retry_after_seconds(exc: Exception) -> float | None:
     Returns:
         Retry-after value in seconds, or None if not present/parseable.
     """
-    response = getattr(exc, "response", None)
-    if response is None:
-        return None
+    for link in _iter_exception_chain(exc):
+        response = getattr(link, "response", None)
+        if response is None:
+            continue
 
-    headers = getattr(response, "headers", None)
-    if headers is None:
-        return None
+        headers = getattr(response, "headers", None)
+        if headers is None:
+            continue
 
-    # Try standard retry-after header
-    retry_after = headers.get("retry-after")
-    if retry_after is None:
-        return None
+        retry_after = headers.get("retry-after")
+        if retry_after is None:
+            continue
 
-    # Parse as float (seconds)
-    try:
-        return float(retry_after)
-    except ValueError:
-        # Some APIs use date format; fall back to None
-        return None
+        try:
+            return float(retry_after)
+        except ValueError:
+            continue
+
+    return None
 
 
 # IG-501: Extended rate limit info extraction for Chinese providers
@@ -201,7 +217,11 @@ def _extract_rate_limit_info(exc: Exception) -> dict[str, Any]:
         "provider_name": None,
     }
 
-    response = getattr(exc, "response", None)
+    response = None
+    for link in _iter_exception_chain(exc):
+        response = getattr(link, "response", None)
+        if response is not None:
+            break
     if response is None:
         return result
 

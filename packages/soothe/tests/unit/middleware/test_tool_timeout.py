@@ -164,13 +164,7 @@ class TestToolTimeoutMiddleware:
         )
         request = _make_request("run_command")
 
-        # Even with slow handler, should pass through without timeout
-        result = await middleware.awrap_tool_call(request, _make_slow_async_handler(5.0))
-
-        # Should NOT have timed out - handler was called directly
-        # But since handler takes 5s > 0.1s timeout, if wrapper applied, it would fail
-        # With skip=True, wrapper is NOT applied, so this test would take 5s
-        # For test speed, we use a fast handler instead
+        # skip_tools_with_internal_timeout bypasses the wrapper; use a fast handler.
         result = await middleware.awrap_tool_call(request, _make_async_handler("direct"))
 
         assert isinstance(result, ToolMessage)
