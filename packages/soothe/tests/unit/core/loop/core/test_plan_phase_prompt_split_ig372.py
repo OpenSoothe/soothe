@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
+from soothe.foundation.sloop.prompts import PromptBuilder
+from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
+from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 
-from soothe.foundation.loop.prompts import PromptBuilder
-from soothe.foundation.loop.state.schemas import LoopState, PlanResult, StepResult
-from soothe.foundation.loop.utils.messages import LoopHumanMessage
 from soothe.protocols.planner import PlanContext
 
 

@@ -397,7 +397,7 @@ class EpisodicStore:
 
 | Module | Location | Reason |
 |--------|----------|--------|
-| `LoopState` | `foundation/loop/state/schemas.py` | Metrics moved to CE |
+| `LoopState` | `foundation/sloop/state/schemas.py` | Metrics moved to CE |
 | `ContextProtocol` | `protocols/context.py` | Replaced by CognitiveSubmodule |
 | `goal_history` field | `state/schemas.py` CheckpointSchema | CE GoalStepDAG authoritative |
 
@@ -416,12 +416,12 @@ class EpisodicStore:
 - Add `ingest_cognitive()` API
 - Expose unified `get_ledger_entries(phases)` API
 
-**`soothe/foundation/loop/engine/executor.py`**:
+**`soothe/foundation/sloop/engine/executor.py`**:
 - Replace `state.last_wave_*` with `ce.wave_metrics.*`
 - Replace dual ledger writes with single CE call
 - Delete LoopState parameter from constructor
 
-**`soothe/foundation/loop/orchestrator/nodes/*.py`**:
+**`soothe/foundation/sloop/orchestrator/nodes/*.py`**:
 - Replace `state.current_goal_id` with `ce.get_active_goal().id`
 - Replace `checkpoint.goal_history` reads with `ce.get_all_goals()`
 - All graph nodes read from CE public API
@@ -443,7 +443,7 @@ class EpisodicStore:
 | Update graph nodes | `orchestrator/nodes/*.py` | Read from CE, not LoopState |
 
 **Acceptance Criteria**:
-- `grep -r "class LoopState" packages/soothe/src/soothe/foundation/loop/` returns zero matches
+- `grep -r "class LoopState" packages/soothe/src/soothe/foundation/sloop/` returns zero matches
 - LoopGraphState remains but has no entity fields
 - All tests pass with CE metrics access
 
@@ -502,7 +502,7 @@ class EpisodicStore:
 | Update RFCs | `docs/specs/RFC-*.md` | Superseded sections marked |
 
 **Acceptance Criteria**:
-- `grep -r "goal_history" packages/soothe/src/soothe/foundation/loop/` returns zero matches
+- `grep -r "goal_history" packages/soothe/src/soothe/foundation/sloop/` returns zero matches
 - All entity reads/writes via CE public API
 - Checkpoint is purely metadata (loop_id, thread_ids, status)
 - RFC-302, RFC-303, RFC-203 updated with superseded notices

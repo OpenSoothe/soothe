@@ -10,7 +10,7 @@ from pathlib import Path
 
 from soothe_sdk.display.card_ledger import CardMutation
 
-from soothe.foundation.loop.state.persistence.runtime_paths import resolve_display_db_path
+from soothe.foundation.sloop.state.persistence.runtime_paths import resolve_display_db_path
 
 logger = logging.getLogger(__name__)
 

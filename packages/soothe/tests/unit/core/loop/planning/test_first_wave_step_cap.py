@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.loop.cognition.planner import LLMPlanner
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.cognition.planner import LLMPlanner
+from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
     StepAction,
 )
+
 from soothe.protocols.planner import PlanContext
 
 

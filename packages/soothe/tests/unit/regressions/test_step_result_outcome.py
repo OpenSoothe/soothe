@@ -3,7 +3,7 @@
 Tests that StepResult correctly uses outcome metadata instead of output field.
 """
 
-from soothe.foundation.loop.state.schemas import StepResult
+from soothe.foundation.sloop.state.schemas import StepResult
 
 
 def test_step_result_no_output_field():

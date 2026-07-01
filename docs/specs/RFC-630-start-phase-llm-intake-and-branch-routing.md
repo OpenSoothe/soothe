@@ -51,7 +51,7 @@ This RFC defines:
 
 ### 3.1 Unintelligent heuristic judgment
 
-`IntentClassifier._is_likely_agentic` (`packages/soothe/src/soothe/foundation/loop/intention/classifier.py:260`) classifies any query with `len(query) > 80`, `len(query.split()) > 15`, or `query.count("\n") >= 2` as `agentic` *before* the LLM is consulted. A long trivia question is forced down the agentic path. The `simple_bypass` string-prefix match (`planning/simple_bypass.py:28`, `startswith("I will complete this goal directly:")`) is similarly content-blind: it recognizes a synthetic plan by its prefix rather than by an intelligent label.
+`IntentClassifier._is_likely_agentic` (`packages/soothe/src/soothe/foundation/sloop/intention/classifier.py:260`) classifies any query with `len(query) > 80`, `len(query.split()) > 15`, or `query.count("\n") >= 2` as `agentic` *before* the LLM is consulted. A long trivia question is forced down the agentic path. The `simple_bypass` string-prefix match (`planning/simple_bypass.py:28`, `startswith("I will complete this goal directly:")`) is similarly content-blind: it recognizes a synthetic plan by its prefix rather than by an intelligent label.
 
 ### 3.2 High first-message latency
 
@@ -59,10 +59,10 @@ On a fresh first message, the critical path runs these steps strictly sequential
 
 1. Intent classification LLM call (`runner/_runner_strange_loop.py:447`).
 2. `get_git_status` (`_runner_strange_loop.py:530`).
-3. `state_manager.load()` checkpoint (`foundation/loop/engine/strange_loop.py:234`).
+3. `state_manager.load()` checkpoint (`foundation/sloop/engine/strange_loop.py:234`).
 4. ContextEngine backend construct + `ce.load()` + `create_goal`/`activate_goal` (`strange_loop.py:416`–`502`).
 5. Three synchronous file reads on the event loop: `load_project_instructions()`, `load_agent_instructions()`, `load_memory()` (`strange_loop.py:507`–`515`).
-6. PlanGeneration LLM call (`foundation/loop/planning/planner.py:1297`).
+6. PlanGeneration LLM call (`foundation/sloop/planning/planner.py:1297`).
 
 The fresh-loop shortcut (IG-476) already removes the StatusAssessment LLM from the fresh path. The remaining blockers are the intent call, the pre-graph IO cluster, and the single plan call.
 

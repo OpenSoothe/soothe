@@ -56,7 +56,7 @@ def record_tool_call_args_from_request(request: ToolCallRequest) -> None:
 
 ### 2. Backend: Stream Collection & Merging
 
-**File**: `packages/soothe/src/soothe/foundation/loop/engine/tool_call_args.py`
+**File**: `packages/soothe/src/soothe/foundation/sloop/engine/tool_call_args.py`
 
 **Class**: `ToolCallArgsCollector` merges multiple sources:
 
@@ -97,7 +97,7 @@ def wire_updates_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
 
 ### 3. Backend: Executor Backfill
 
-**File**: `packages/soothe/src/soothe/foundation/loop/engine/executor.py`
+**File**: `packages/soothe/src/soothe/foundation/sloop/engine/executor.py`
 
 **Function**: `_backfill_tool_calls_args_from_chunks()` handles provider quirks:
 

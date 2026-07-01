@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.state.schemas import (
     ContinuationAssessment,
     LoopState,
     PlanResult,
@@ -36,7 +36,7 @@ class LoopPlannerProtocol(Protocol):
             goal: Goal description.
             state: Current loop state (iteration, step results, prior plan, current decision).
             context: Capabilities, completed steps summary, workspace, etc.
-            plan_manager: Optional PlanManager for DAG-aware progressive planning.
+            plan_manager: Optional step-plan adapter for DAG-aware progressive planning.
 
         Returns:
             PlanResult with status, UX fields, and either ``plan_action='keep'`` or a new

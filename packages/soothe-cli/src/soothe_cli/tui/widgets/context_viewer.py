@@ -21,7 +21,7 @@ from textual.widgets import Static
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
-from soothe.foundation.loop.state.persistence.runtime_paths import resolve_context_engine_db_path
+from soothe.foundation.sloop.state.persistence.runtime_paths import resolve_context_engine_db_path
 
 from soothe_cli.tui.config import get_glyphs, is_ascii_mode
 

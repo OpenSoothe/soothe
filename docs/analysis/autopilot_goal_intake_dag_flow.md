@@ -488,7 +488,7 @@ Executed on daemon startup:
 | GoalDAGVerifier | `packages/soothe/src/soothe/foundation/autopilot/monitor/goal_dag_verifier.py` |
 | GoalBackoffReasoner | `packages/soothe/src/soothe/foundation/autopilot/monitor/backoff_reasoner.py` |
 | GoalScheduler | `packages/soothe/src/soothe/foundation/context/planning/scheduling.py` |
-| GoalCompletionNode | `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/goal_completion.py` |
+| GoalCompletionNode | `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` |
 
 ---
 

@@ -10,12 +10,11 @@ Tests cover:
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe.foundation.loop.engine.context_window_manager import (
+from soothe.foundation.sloop.engine.context_window_manager import (
     ContextCompactionResult,
     ContextWindowManager,
 )
-from soothe.foundation.loop.state.schemas import LoopState
+from soothe.foundation.sloop.state.schemas import LoopState
 
 
 class MockCheckpoint:

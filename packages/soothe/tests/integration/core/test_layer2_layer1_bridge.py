@@ -7,7 +7,7 @@ Execution hints are delivered in the per-turn user message envelope
 
 from __future__ import annotations
 
-from soothe.foundation.loop.prompts.user_message import UserMessageBuilder
+from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 
 
 def _execution_hints_text(*, subagent: str | None, expected_output: str | None) -> str | None:

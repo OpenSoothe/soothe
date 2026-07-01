@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import pytest
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import StepNode
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.loop.engine.context_adapters import (
+from soothe.foundation.sloop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
 )
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
     StepResult,
 )
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import StepNode
+from soothe.foundation.context.planning import StepPlanManagerAdapter
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -393,7 +393,7 @@ class TestDagPlanningContextDuckTyping:
     @pytest.mark.asyncio
     async def test_format_dag_context_produces_text(self) -> None:
         """Verify the DagPlanningContext from adapter works with _format_dag_context."""
-        from soothe.foundation.loop.prompts.builder import _format_dag_context
+        from soothe.foundation.sloop.prompts.builder import _format_dag_context
 
         ce = ContextEngine()
         goal = await ce.create_goal("Test goal")
@@ -416,7 +416,7 @@ class TestDagPlanningContextDuckTyping:
 
     @pytest.mark.asyncio
     async def test_format_dag_context_empty_when_no_prior_state(self) -> None:
-        from soothe.foundation.loop.prompts.builder import _format_dag_context
+        from soothe.foundation.sloop.prompts.builder import _format_dag_context
 
         ce = ContextEngine()
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")

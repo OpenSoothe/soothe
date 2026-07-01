@@ -9,7 +9,7 @@
 ## Problem
 
 Planning logic is split across `foundation/context/planning/` (CE state + heuristics)
-and `foundation/loop/cognition/` (StrangeLoop LLM cognition). Legacy `PlanManager` /
+and `foundation/sloop/cognition/` (StrangeLoop LLM cognition). Legacy `PlanManager` /
 `PlanDAG` removed. Goal decomposition wired through `GoalPlanningSubengine` and
 `GoalDAGVerifier`. Scheduling unified via `GoalScheduler` delegation on CE.
 
@@ -50,10 +50,10 @@ and `foundation/loop/cognition/` (StrangeLoop LLM cognition). Legacy `PlanManage
 ```
 foundation/context/dag_utils.py          # expand_dependency_satisfaction_ids (canonical)
 foundation/context/planning/             # CE planning submodule
-foundation/loop/cognition/             # LLMPlanner, PlanPhase, parsers, bypasses
+foundation/sloop/cognition/             # LLMPlanner, PlanPhase, parsers, bypasses
 ```
 
-The `foundation/loop/planning/` package is **removed** (no backward-compat shims).
+The `foundation/sloop/planning/` package is **removed** (no backward-compat shims).
 All imports use `loop.cognition` or `context.dag_utils` directly.
 
 ---

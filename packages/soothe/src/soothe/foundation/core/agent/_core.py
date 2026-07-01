@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
+from soothe.foundation.sloop.engine.executor import ephemeral_execute_stream_enabled
 from soothe.utils.text_preview import log_preview
 
 if TYPE_CHECKING:

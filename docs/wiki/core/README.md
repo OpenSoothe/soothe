@@ -56,7 +56,7 @@ These modules don't have dedicated knowledge articles but are referenced through
 
 - **Middleware Stack** (`soothe.middleware`) — Five Soothe-specific middlewares: policy enforcement, system prompt injection, execution hints, workspace context, and subagent context isolation.
 - **Persistence** (`soothe.foundation.persistence`) — Artifact store and configuration-driven policy for run outputs.
-- **Prompts** (`soothe.foundation.loop.prompts`) — System prompt building via `PromptBuilder`, context XML generation, and template loading.
+- **Prompts** (`soothe.foundation.sloop.prompts`) — System prompt building via `PromptBuilder`, context XML generation, and template loading.
 
 ---
 

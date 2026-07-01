@@ -22,7 +22,7 @@ async def test_query_complexity_classification(test_config: SootheConfig, requir
     try:
         assert hasattr(runner, "_intent_classifier")
         if runner._intent_classifier is not None:
-            from soothe.foundation.loop.intention import IntentClassifier
+            from soothe.foundation.sloop.intention import IntentClassifier
 
             assert isinstance(runner._intent_classifier, IntentClassifier)
 

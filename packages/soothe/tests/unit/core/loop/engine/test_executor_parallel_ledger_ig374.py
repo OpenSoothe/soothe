@@ -9,17 +9,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.engine.act_wave_finalize import (
+from soothe.foundation.sloop.engine.act_wave_finalize import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     _last_tool_result_block,
     _outcome_summary_text,
 )
-from soothe.foundation.loop.engine.executor import Executor
-from soothe.foundation.loop.engine.step_wave_types import _ExecuteStepResult
-from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.foundation.sloop.engine.executor import Executor
+from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult
+from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 def _make_ce() -> ContextEngine:

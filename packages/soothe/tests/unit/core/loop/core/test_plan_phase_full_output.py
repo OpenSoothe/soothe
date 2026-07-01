@@ -5,9 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from soothe.foundation.sloop.cognition.phase import PlanPhase
+from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
 
-from soothe.foundation.loop.cognition.phase import PlanPhase
-from soothe.foundation.loop.state.schemas import LoopState, PlanResult, StepResult
 from soothe.protocols.planner import PlanContext
 
 

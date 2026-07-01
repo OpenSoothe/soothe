@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from soothe.foundation.loop.engine.anchor_manager import CheckpointAnchorManager
+from soothe.foundation.sloop.engine.anchor_manager import CheckpointAnchorManager
 
 
 @pytest.mark.asyncio

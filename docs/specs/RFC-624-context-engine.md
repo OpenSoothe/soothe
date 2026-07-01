@@ -315,7 +315,7 @@ The following gaps were identified between the Phase 1 ContextEngine and what th
 
 | File | Purpose |
 |------|---------|
-| `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` | All three adapter classes |
+| `packages/soothe/src/soothe/foundation/sloop/engine/context_adapters.py` | All three adapter classes |
 | `packages/soothe/tests/unit/core/loop/engine/test_context_adapters.py` | Adapter unit tests |
 
 **Modified files:**
@@ -518,10 +518,10 @@ When CE is enabled, `ContextBundle` from `ContextEngine.project()` is injected i
 
 | File | Change |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` | Fix GoalContextAdapter to read from CE; refactor all adapters to use public API |
-| `packages/soothe/src/soothe/foundation/loop/prompts/builder.py` | Add `context_bundle` param; supplementary injections |
-| `packages/soothe/src/soothe/foundation/loop/planning/planner.py` | Pass `context_bundle` to `build_plan_messages()` when CE enabled |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Add `context_bundle` field (computed per planning call) |
+| `packages/soothe/src/soothe/foundation/sloop/engine/context_adapters.py` | Fix GoalContextAdapter to read from CE; refactor all adapters to use public API |
+| `packages/soothe/src/soothe/foundation/sloop/prompts/builder.py` | Add `context_bundle` param; supplementary injections |
+| `packages/soothe/src/soothe/foundation/sloop/planning/planner.py` | Pass `context_bundle` to `build_plan_messages()` when CE enabled |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/runtime_context.py` | Add `context_bundle` field (computed per planning call) |
 
 ### §28 Behavioral Equivalence
 
@@ -551,7 +551,7 @@ Create a `soothe.context.planning` submodule that absorbs step-level planning in
 
 Threshold constants defined once: `LOW_SUCCESS_RATE_THRESHOLD = 0.6`, `DAG_DEPENDENCY_THRESHOLD = 3`, `SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS = 2`.
 
-`PlanManager` in `soothe.foundation.loop.planning.manager.py` delegates to these functions instead of containing its own implementations. No behavioral change — purely internal refactoring.
+`PlanManager` in `soothe.foundation.sloop.planning.manager.py` delegates to these functions instead of containing its own implementations. No behavioral change — purely internal refactoring.
 
 ### §31 StepPlanningSubengine
 
@@ -629,10 +629,10 @@ class PlanningFacade:
 | `packages/soothe/src/soothe/context/planning/goal_planner.py` | New: `GoalPlanningSubengine` (stub) |
 | `packages/soothe/src/soothe/context/planning/scheduling.py` | New: `GoalScheduler` |
 | `packages/soothe/src/soothe/context/engine.py` | Add planning subengines and `planning` property |
-| `packages/soothe/src/soothe/foundation/loop/planning/manager.py` | Delegate heuristics to `completion.py`; import `DagPlanningContext` and `CompletionStrategy` from `soothe.context.planning.models` |
-| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Wire `StepPlanManagerAdapter` instead of `ContextEnginePlanAdapter` |
-| `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` | Remove `ContextEnginePlanAdapter` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Update `plan_manager` type to accept `PlanManager | StepPlanManagerAdapter` |
+| `packages/soothe/src/soothe/foundation/sloop/planning/manager.py` | Delegate heuristics to `completion.py`; import `DagPlanningContext` and `CompletionStrategy` from `soothe.context.planning.models` |
+| `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py` | Wire `StepPlanManagerAdapter` instead of `ContextEnginePlanAdapter` |
+| `packages/soothe/src/soothe/foundation/sloop/engine/context_adapters.py` | Remove `ContextEnginePlanAdapter` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/runtime_context.py` | Update `plan_manager` type to accept `PlanManager | StepPlanManagerAdapter` |
 
 ---
 
@@ -799,13 +799,13 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 
 | File | Change |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/loop/engine/context_lifecycle.py` | **New**: `ContextEngineLifecycle` class |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Add `ce_lifecycle` field |
-| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Create lifecycle, call `on_goal_start()` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py` | Call `on_plan_ingested()` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_generate.py` | Pass `context_bundle` from lifecycle |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Call `on_steps_executed()` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/goal_completion.py` | Replace `ce.save()` with `on_goal_complete()` |
+| `packages/soothe/src/soothe/foundation/sloop/engine/context_lifecycle.py` | **New**: `ContextEngineLifecycle` class |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/runtime_context.py` | Add `ce_lifecycle` field |
+| `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py` | Create lifecycle, call `on_goal_start()` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_assess.py` | Call `on_plan_ingested()` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_generate.py` | Pass `context_bundle` from lifecycle |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/record_iteration.py` | Call `on_steps_executed()` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` | Replace `ce.save()` with `on_goal_complete()` |
 | `packages/soothe/src/soothe/config/models.py` | Flip `enabled` default to `True` |
 | `packages/soothe/tests/unit/core/loop/engine/test_context_lifecycle.py` | **New**: lifecycle unit tests |
 | `packages/soothe/tests/integration/context/test_ce_strange_loop_equivalence.py` | Add lifecycle + goal completion tests |
@@ -1179,11 +1179,11 @@ No prompt format changes. `PromptBuilder` renders `prior_goals` into the same `<
 | `packages/soothe/src/soothe/context/persistence/file_backend.py` | Add `asyncio.to_thread` for file I/O |
 | `packages/soothe/src/soothe/context/persistence/sqlite_backend.py` | Add `close()`, fix thread-safety |
 | `packages/soothe/src/soothe/context/persistence/__init__.py` | Remove InMemory export, add Pgsql export |
-| `packages/soothe/src/soothe/foundation/loop/state/schemas.py` | Add CE-backed properties for `loop_messages`, `step_results`, `completed_step_ids`; delete `sync_loop_messages_from_ce()`; simplify `bind_ce()` |
-| `packages/soothe/src/soothe/foundation/loop/state/checkpoint.py` | Trim `GoalExecutionRecord` to 7 fields; schema 4.0 |
-| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Lazy CE creation, `ce.load()` on startup, remove InMemory fallback |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/*.py` | Replace dual-write with CE-only writes; remove sync calls |
-| `packages/soothe/src/soothe/foundation/loop/utils/messages.py` | Simplify `_record_ledger_message()`; delete `seed_loop_ledger_from_prior_goal()` |
+| `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` | Add CE-backed properties for `loop_messages`, `step_results`, `completed_step_ids`; delete `sync_loop_messages_from_ce()`; simplify `bind_ce()` |
+| `packages/soothe/src/soothe/foundation/sloop/state/checkpoint.py` | Trim `GoalExecutionRecord` to 7 fields; schema 4.0 |
+| `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py` | Lazy CE creation, `ce.load()` on startup, remove InMemory fallback |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/*.py` | Replace dual-write with CE-only writes; remove sync calls |
+| `packages/soothe/src/soothe/foundation/sloop/utils/messages.py` | Simplify `_record_ledger_message()`; delete `seed_loop_ledger_from_prior_goal()` |
 | `packages/soothe/src/soothe/config/models.py` | Default `"sqlite"`, add `"pgsql"`, remove `"in_memory"`; add `PgsqlPersistenceConfig` |
 
 ### §59 Acceptance Criteria

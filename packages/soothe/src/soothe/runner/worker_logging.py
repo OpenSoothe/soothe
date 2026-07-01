@@ -11,7 +11,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soothe.config.settings import SootheConfig
-from soothe.foundation.loop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.logging.context import set_thread_id
 from soothe.logging.setup import (
     ThreadFormatter,

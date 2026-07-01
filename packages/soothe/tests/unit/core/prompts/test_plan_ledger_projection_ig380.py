@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
+from soothe.foundation.sloop.prompts.plan_ledger_projection import project_loop_messages_for_plan
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
-from soothe.foundation.loop.prompts.plan_ledger_projection import project_loop_messages_for_plan
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _msgs(n: int) -> list:

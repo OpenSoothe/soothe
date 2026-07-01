@@ -312,16 +312,16 @@ class ExecutionCheckpoint(BaseModel):
 
 | Path | Purpose |
 |------|---------|
-| `foundation/loop/state/execution_state.py` | ExecutionState + WaveMetrics |
-| `foundation/loop/state/checkpoint_v5.py` | ExecutionCheckpoint (schema 5.0) |
+| `foundation/sloop/state/execution_state.py` | ExecutionState + WaveMetrics |
+| `foundation/sloop/state/checkpoint_v5.py` | ExecutionCheckpoint (schema 5.0) |
 
 **Modified modules**:
 
 | Path | Changes |
 |------|---------|
 | `foundation/context/models.py:GoalNode` | Add `max_iterations` field (from LoopState) |
-| `foundation/loop/orchestrator/state.py` | Replace LoopState → ExecutionState |
-| `foundation/loop/orchestrator/strange_loop.py` | Remove loop_messages list, use LedgerManager |
+| `foundation/sloop/orchestrator/state.py` | Replace LoopState → ExecutionState |
+| `foundation/sloop/orchestrator/strange_loop.py` | Remove loop_messages list, use LedgerManager |
 | `foundation/autopilot/monitor/monitor.py` | Job operations → CE goal APIs |
 
 ---
@@ -396,7 +396,7 @@ class ExecutionCheckpoint(BaseModel):
 **Scope**: Create ExecutionState and WaveMetrics, wire into StrangeLoop
 
 **Changes**:
-- New `foundation/loop/state/execution_state.py`
+- New `foundation/sloop/state/execution_state.py`
 - Replace LoopState references in orchestrator nodes
 - Add ContextEngine reference injection
 - Property accessors backed by CE GoalNode

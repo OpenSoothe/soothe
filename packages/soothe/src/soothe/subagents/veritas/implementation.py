@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.foundation.loop.clarification.protocol import ClarificationRequest
+from soothe.foundation.sloop.clarification.protocol import ClarificationRequest
 from soothe.subagents.veritas.prompts import (
     build_veritas_system_prompt,
     build_veritas_user_prompt,

@@ -6,15 +6,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
-
-from soothe.foundation.loop.clarification.protocol import (
+from soothe.foundation.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
     ClarificationRequest,
     LoopStateView,
     request_to_state,
 )
-from soothe.foundation.loop.orchestrator.nodes.await_clarification import (
+from soothe.foundation.sloop.orchestrator.nodes.await_clarification import (
     node_await_clarification,
 )
 

@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 from soothe import __version__ as core_version
-from soothe.foundation.loop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 

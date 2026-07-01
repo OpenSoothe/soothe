@@ -3,8 +3,8 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from soothe.foundation.sloop.state.schemas import PlanResult
 
-from soothe.foundation.loop.state.schemas import PlanResult
 from soothe.runner._types import GoalResult
 
 
@@ -83,7 +83,8 @@ async def test_sloop_delegation_basic():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_sloop_result():
     """Test planner.reflect() handles sloop_result parameter."""
-    from soothe.foundation.loop.cognition.planner import LLMPlanner
+    from soothe.foundation.sloop.cognition.planner import LLMPlanner
+
     from soothe.protocols.planner import GoalContext
 
     # Mock model
@@ -130,7 +131,8 @@ async def test_planner_reflect_with_sloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_failed_sloop_result():
     """Test planner generates recovery directives for failed StrangeLoop result."""
-    from soothe.foundation.loop.cognition.planner import LLMPlanner
+    from soothe.foundation.sloop.cognition.planner import LLMPlanner
+
     from soothe.protocols.planner import GoalContext
 
     mock_model = Mock()
@@ -175,7 +177,8 @@ async def test_planner_reflect_with_failed_sloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_without_sloop_result():
     """Test planner falls back to heuristic reflection without sloop_result."""
-    from soothe.foundation.loop.cognition.planner import LLMPlanner
+    from soothe.foundation.sloop.cognition.planner import LLMPlanner
+
     from soothe.protocols.planner import Plan, PlanStep
 
     mock_model = Mock()
@@ -245,8 +248,9 @@ def test_goal_result_serialization():
 @pytest.mark.asyncio
 async def test_sloop_run_with_progress_interface():
     """Verify StrangeLoop.run_with_progress() interface matches expectations."""
+    from soothe.foundation.sloop import StrangeLoop
+
     from soothe.foundation.core.agent import CoreAgent
-    from soothe.foundation.loop import StrangeLoop
 
     # Mock CoreAgent
     mock_core_agent = Mock(spec=CoreAgent)

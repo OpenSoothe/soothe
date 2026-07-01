@@ -8,7 +8,7 @@ directly:"``) and its ``startswith`` detector are removed (RFC-630). Only the
 
 from __future__ import annotations
 
-from soothe.foundation.loop.cognition.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
+from soothe.foundation.sloop.cognition.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
 
 
 def test_simple_query_expected_output_requires_result_block() -> None:

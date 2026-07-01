@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     ToolCallHead,

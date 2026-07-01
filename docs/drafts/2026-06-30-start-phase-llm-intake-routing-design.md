@@ -10,7 +10,7 @@
 
 Today, the start-phase pipeline (user goal → first CoreAgent task) uses a mix of keyword/rule heuristics and LLM calls arranged sequentially. This has two problems:
 
-1. **Heuristic judgment is unintelligent.** `IntentClassifier._is_likely_agentic` (`packages/soothe/src/soothe/foundation/loop/intention/classifier.py:260`) classifies any query with `len > 80` chars, `> 15` words, or `≥ 2` newlines as `agentic` *without* consulting the LLM. A long trivia question ("What is the airspeed velocity of an unladen swallow, and how does it vary across swallow species in different wind conditions...?") is forced down the agentic path. The `simple_bypass` string-prefix match (`simple_bypass.py:28`, `startswith("I will complete this goal directly:")`) is similarly content-blind.
+1. **Heuristic judgment is unintelligent.** `IntentClassifier._is_likely_agentic` (`packages/soothe/src/soothe/foundation/sloop/intention/classifier.py:260`) classifies any query with `len > 80` chars, `> 15` words, or `≥ 2` newlines as `agentic` *without* consulting the LLM. A long trivia question ("What is the airspeed velocity of an unladen swallow, and how does it vary across swallow species in different wind conditions...?") is forced down the agentic path. The `simple_bypass` string-prefix match (`simple_bypass.py:28`, `startswith("I will complete this goal directly:")`) is similarly content-blind.
 
 2. **First-message latency is high.** On a fresh first message, the critical path runs these LLM/IO steps strictly sequentially (none parallelized):
    - Intent classification LLM call (`_runner_strange_loop.py:447`)

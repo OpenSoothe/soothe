@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.prompts.user_message import (
+from soothe.foundation.sloop.prompts.user_message import (
     UserMessageBuilder,
     flatten_user_message_content,
 )

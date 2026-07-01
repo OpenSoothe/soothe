@@ -161,13 +161,13 @@ Existing config files with `enabled: false` continue to work unchanged. No migra
 
 | File | Change |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/loop/engine/context_lifecycle.py` | **New**: ContextEngineLifecycle class |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` | Add `ce_lifecycle` field |
-| `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Create lifecycle, call `on_goal_start()` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py` | Call `on_plan_ingested()` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_generate.py` | Pass `context_bundle` from lifecycle |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Call `on_steps_executed()` |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/goal_completion.py` | Replace `ce.save()` with `on_goal_complete()` |
+| `packages/soothe/src/soothe/foundation/sloop/engine/context_lifecycle.py` | **New**: ContextEngineLifecycle class |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/runtime_context.py` | Add `ce_lifecycle` field |
+| `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py` | Create lifecycle, call `on_goal_start()` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_assess.py` | Call `on_plan_ingested()` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_generate.py` | Pass `context_bundle` from lifecycle |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/record_iteration.py` | Call `on_steps_executed()` |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` | Replace `ce.save()` with `on_goal_complete()` |
 | `packages/soothe/src/soothe/config/models.py` | Flip `enabled` default to True |
 | `packages/soothe/tests/unit/core/loop/engine/test_context_lifecycle.py` | **New**: lifecycle unit tests |
 | `packages/soothe/tests/integration/context/test_ce_strange_loop_equivalence.py` | Add lifecycle + goal completion tests |

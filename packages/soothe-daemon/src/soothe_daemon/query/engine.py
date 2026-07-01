@@ -374,24 +374,20 @@ class QueryEngine:
         if client_id:
             await d._session_manager.release_loop_ownership(client_id)
 
-    async def _broadcast_stream_tuple(
+    def _prepare_stream_tuple_events(
         self,
-        loop_id: str,
         namespace: tuple[str, ...],
         mode: str,
         data: Any,
         *,
         coalescer: Any | None = None,
-    ) -> None:
-        """Broadcast one runner stream tuple to loop subscribers."""
+    ) -> tuple[list[dict[str, Any]], Any | None]:
+        """Expand one runner tuple into wire events and optional card-ingest payload."""
         if mode == "updates":
-            return
-        d = self._daemon
-        wire_data = data
-        if mode == "messages":
-            wire_data = prepare_stream_data_for_wire(data)
-        # Batch tool call updates into single event (IG-426)
-        tool_updates: list[dict[str, Any]] = []
+            return [], None
+
+        wire_data = prepare_stream_data_for_wire(data) if mode == "messages" else data
+        events: list[dict[str, Any]] = []
         stripped_tool_metadata = False
         if (
             mode == "messages"
@@ -402,8 +398,7 @@ class QueryEngine:
             if isinstance(msg_wire, dict):
                 tool_updates = list(extract_tool_call_updates_from_wire_message(msg_wire))
                 if tool_updates:
-                    await self._broadcast_loop_message(
-                        loop_id,
+                    events.append(
                         {
                             "type": "event",
                             "namespace": list(namespace),
@@ -413,7 +408,7 @@ class QueryEngine:
                                 "updates": tool_updates,
                                 "count": len(tool_updates),
                             },
-                        },
+                        }
                     )
                     if coalescer is not None:
                         wire_data = coalescer.strip_tool_metadata_for_batch(wire_data)
@@ -428,7 +423,7 @@ class QueryEngine:
                 has_content = bool(text)
                 has_phase = bool(flat.get("phase"))
                 if not has_content and not has_phase:
-                    return
+                    return events, wire_data
         if (
             mode == "messages"
             and isinstance(wire_data, (tuple, list))
@@ -436,22 +431,79 @@ class QueryEngine:
             and coalescer is not None
             and coalescer.should_skip_tool_message_wire(wire_data[0])
         ):
-            return
-        await self._broadcast_loop_message(
-            loop_id,
+            return events, None
+        events.append(
             {
                 "type": "event",
                 "namespace": list(namespace),
                 "mode": mode,
                 "data": wire_data,
-            },
+            }
         )
+        return events, wire_data
+
+    async def _broadcast_coalescer_outputs(
+        self,
+        loop_id: str,
+        outputs: list[tuple[tuple[str, ...], str, Any]],
+        *,
+        coalescer: Any | None = None,
+    ) -> None:
+        """Broadcast all tuples from one coalescer step as a single batch when possible."""
+        if not outputs:
+            return
+
+        batch_events: list[dict[str, Any]] = []
+        d = self._daemon
         card_manager = getattr(d, "_card_manager", None)
-        if card_manager is not None:
-            try:
-                await card_manager.ingest_stream_tuple(loop_id, namespace, mode, wire_data)
-            except Exception:
-                logger.debug("Card stream binding failed for loop %s", loop_id, exc_info=True)
+
+        for namespace, mode, data in outputs:
+            events, wire_data = self._prepare_stream_tuple_events(
+                namespace,
+                mode,
+                data,
+                coalescer=coalescer,
+            )
+            batch_events.extend(events)
+            if card_manager is not None and wire_data is not None:
+                try:
+                    await card_manager.ingest_stream_tuple(loop_id, namespace, mode, wire_data)
+                except Exception:
+                    logger.debug(
+                        "Card stream binding enqueue failed for loop %s", loop_id, exc_info=True
+                    )
+
+        if not batch_events:
+            return
+
+        if len(batch_events) == 1:
+            await self._broadcast_loop_message(
+                loop_id,
+                self._loop_scoped_client_message(loop_id, batch_events[0]),
+            )
+            return
+
+        scoped = [self._loop_scoped_client_message(loop_id, event) for event in batch_events]
+        await self._broadcast_loop_message(
+            loop_id,
+            {"type": "event_batch", "loop_id": loop_id, "events": scoped},
+        )
+
+    async def _broadcast_stream_tuple(
+        self,
+        loop_id: str,
+        namespace: tuple[str, ...],
+        mode: str,
+        data: Any,
+        *,
+        coalescer: Any | None = None,
+    ) -> None:
+        """Broadcast one runner stream tuple to loop subscribers."""
+        await self._broadcast_coalescer_outputs(
+            loop_id,
+            [(namespace, mode, data)],
+            coalescer=coalescer,
+        )
 
     def _get_output_streaming_config(self, daemon: Any) -> dict[str, Any]:
         """Get output streaming config parameters from daemon config (RFC-614)."""
@@ -810,8 +862,11 @@ class QueryEngine:
                         yield item
 
                 delivery_mode = (
-                    d._session_manager.get_stream_delivery(effective_loop_id)
-                    if effective_loop_id
+                    d._session_manager.get_stream_delivery(
+                        client_id=client_id,
+                        loop_id=effective_loop_id,
+                    )
+                    if effective_loop_id or client_id
                     else "adaptive"
                 )
                 # Get streaming config parameters (RFC-614)
@@ -826,7 +881,7 @@ class QueryEngine:
                     file_output_dir=streaming_cfg.get("file_output_dir"),
                     workspace=run_workspace,
                     message_coalesce_enabled=streaming_cfg.get("message_coalesce_enabled", True),
-                    coalesce_interval_ms=streaming_cfg.get("streaming_interval_ms", 200),
+                    coalesce_interval_ms=streaming_cfg.get("streaming_interval_ms", 100),
                     tool_batch_enabled=streaming_cfg.get("tool_batch_enabled", True),
                     tool_batch_interval_ms=streaming_cfg.get("tool_batch_interval_ms", 200),
                     suppress_redundant_stream_tool_updates=streaming_cfg.get(
@@ -913,26 +968,21 @@ class QueryEngine:
 
                         if effective_loop_id:
                             ns_tuple = tuple(namespace) if namespace else ()
-                            for out_ns, out_mode, out_data in coalescer.ingest(
-                                ns_tuple, mode, data
-                            ):
-                                await self._broadcast_stream_tuple(
+                            outputs = list(coalescer.ingest(ns_tuple, mode, data))
+                            if outputs:
+                                await self._broadcast_coalescer_outputs(
                                     effective_loop_id,
-                                    out_ns,
-                                    out_mode,
-                                    out_data,
+                                    outputs,
                                     coalescer=coalescer,
                                 )
 
-                    for out_ns, out_mode, out_data in coalescer.flush():
-                        if effective_loop_id:
-                            await self._broadcast_stream_tuple(
-                                effective_loop_id,
-                                out_ns,
-                                out_mode,
-                                out_data,
-                                coalescer=coalescer,
-                            )
+                    flush_outputs = list(coalescer.flush())
+                    if effective_loop_id and flush_outputs:
+                        await self._broadcast_coalescer_outputs(
+                            effective_loop_id,
+                            flush_outputs,
+                            coalescer=coalescer,
+                        )
 
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
 
@@ -1062,7 +1112,7 @@ class QueryEngine:
                     drain_cfg = self._get_output_streaming_config(d)
                     await d._session_manager.await_loop_delivery_drained(
                         effective_loop_id,
-                        batch_timeout_s=drain_cfg.get("streaming_interval_ms", 300) / 1000.0,
+                        batch_timeout_s=drain_cfg.get("streaming_interval_ms", 100) / 1000.0,
                     )
                     # RFC-450 §9.4: Send complete message to terminate the subscription
                     # stream. Clients subscribed via loop_subscribe expect an explicit
@@ -1227,7 +1277,7 @@ class QueryEngine:
                 response_schema_strict=response_schema_strict,
             )
 
-            from soothe.foundation.loop.utils.messages import LoopAIMessage
+            from soothe.foundation.sloop.utils.messages import LoopAIMessage
 
             phase = direct_intent_hint
             ai_flat = _serialize_for_json(

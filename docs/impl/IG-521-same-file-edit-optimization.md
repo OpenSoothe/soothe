@@ -109,8 +109,8 @@ After this implementation, the following must always hold:
 | `packages/soothe/src/soothe/middleware/_builder.py` | **Modify** | `EditCoalescingMiddleware` already mounted in the stack (position ~1d); log messages cleaned of internal identifiers. |
 | `packages/soothe/src/soothe/config/models.py` | **Modify** | Config field descriptions cleaned of internal identifiers (no behavioral change). |
 | `packages/soothe/src/soothe/foundation/context/models.py` | **Modify** | Minor cleanup. |
-| `packages/soothe/src/soothe/foundation/loop/state/execution_checkpoint.py` | **Modify** | Minor cleanup. |
-| `packages/soothe/src/soothe/foundation/loop/state/schemas.py` | **Modify** | Minor cleanup. |
+| `packages/soothe/src/soothe/foundation/sloop/state/execution_checkpoint.py` | **Modify** | Minor cleanup. |
+| `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` | **Modify** | Minor cleanup. |
 | `packages/soothe/src/soothe/runner/__init__.py` | **Modify** | Minor cleanup. |
 | `packages/soothe-daemon/src/soothe_daemon/config/models.py` | **Modify** | Daemon config description cleanup (mirrors soothe config). |
 | `packages/soothe-daemon/src/soothe_daemon/health/checks/observability_check.py` | **Modify** | Minor cleanup. |

@@ -6,8 +6,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-
-from soothe.foundation.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.foundation.sloop.state.persistence.sqlite_backend import SQLitePersistenceBackend
 
 
 @pytest.fixture

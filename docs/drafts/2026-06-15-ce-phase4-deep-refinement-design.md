@@ -127,8 +127,8 @@ giving the agent the conversational context it needs to answer ...
 
 | File | Change |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py` | Replace `len(ctx.checkpoint.goal_history) >= 2` with CE query helper; update docstring |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/bounded_evidence_gather.py` | Remove checkpoint fallback |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_assess.py` | Replace `len(ctx.checkpoint.goal_history) >= 2` with CE query helper; update docstring |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/bounded_evidence_gather.py` | Remove checkpoint fallback |
 | `docs/specs/RFC-624-context-engine.md` | Update §60 Stage 2 section with post-cleanup refinements |
 
 ---

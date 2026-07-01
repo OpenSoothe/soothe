@@ -225,7 +225,7 @@ def purge_loop_context_engine_state(
     db_path: Path | None = None,
 ) -> None:
     """Delete ContextEngine rows for ``loop_id`` from the shared database."""
-    from soothe.foundation.loop.state.persistence.runtime_paths import (
+    from soothe.foundation.sloop.state.persistence.runtime_paths import (
         resolve_context_engine_db_path,
     )
 
