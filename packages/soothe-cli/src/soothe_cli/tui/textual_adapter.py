@@ -186,6 +186,9 @@ class TextualUIAdapter:
         execute card; this field preserves the final text for dedupe (``execute_wave`` path).
         """
 
+        self._goal_completion_mounted_this_turn: bool = False
+        """True when a standalone ``goal_completion`` assistant card was mounted this turn."""
+
         self._tool_to_step: dict[str, CognitionStepMessage] = {}
         """tool_call_id → step card while awaiting a matching ``ToolMessage``."""
 
@@ -295,6 +298,11 @@ def _stream_end_pending_error_message(
     daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
 ) -> str:
     """Choose a user-visible label when the stream ends with in-flight steps."""
+    from soothe_cli.cli.execution.daemon_errors import (
+        is_daemon_worker_subprocess_lost,
+        is_daemon_worker_thread_lost,
+    )
+
     if bool(getattr(daemon_session, "last_turn_cancellation_seen", False)):
         return "Stream cancelled"
     end_state = getattr(daemon_session, "last_turn_end_state", None)
@@ -302,6 +310,9 @@ def _stream_end_pending_error_message(
         return "Stream cancelled"
     if end_state == "connection_lost":
         return "Connection lost during stream"
+    err_msg = getattr(daemon_session, "last_turn_error_message", None) or ""
+    if is_daemon_worker_thread_lost(err_msg) or is_daemon_worker_subprocess_lost(err_msg):
+        return "Worker stopped during stream"
     if end_state == "idle" and any(
         getattr(widget, "_status", "") in {"running", "queued"}
         for widget in adapter._current_step_messages.values()
@@ -559,10 +570,50 @@ def _lookup_subagent_card_for_task_scope(
     return adapter._subagent_cards_by_key.get(_subagent_registry_key(step_id, task_idx))
 
 
+def _register_execute_namespace_binding(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    ns_key: tuple[str, ...],
+    *,
+    step_id: str = "",
+) -> None:
+    """Bind an execute namespace to its step card for later lookups.
+
+    Custom loop events (step_started, step_completed) carry the root namespace
+    ``()`` and register the step card under ``_step_by_namespace[()]``. But LLM
+    message chunks — including ``usage_metadata`` for token accounting — arrive
+    under the actual execute namespace (e.g. ``("execute:{thread_id}",)`` or a
+    parallel branch ``("execute:{thread_id}", "N")``). Without binding, the
+    namespace lookup in ``_resolve_token_target_card`` misses for parallel
+    waves where the single-active-step fallback cannot disambiguate.
+
+    Called when a step-scope tool call or message is first seen for an execute
+    namespace so subsequent token-usage chunks resolve correctly.
+    """
+    if not ns_key or not is_step_card_tool_scope(ns_key=ns_key):
+        return
+    if adapter._step_by_namespace.get(ns_key) is not None:
+        return  # already bound
+    sid = str(step_id or "").strip()
+    if sid:
+        step_w = adapter._current_step_messages.get(sid)
+        if step_w is not None:
+            adapter._step_by_namespace[ns_key] = step_w
+            return
+    # Single active step: infer the binding
+    if len(router.active_step_ids) == 1:
+        only_sid = next(iter(router.active_step_ids))
+        step_w = adapter._current_step_messages.get(only_sid)
+        if step_w is not None:
+            adapter._step_by_namespace[ns_key] = step_w
+
+
 def _resolve_token_target_card(
     adapter: TextualUIAdapter,
     router: StepTaskRouter,
     ns_key: tuple[str, ...],
+    *,
+    message: Any = None,
 ) -> Any | None:
     """Resolve step or SubAgent card for per-card token accounting.
 
@@ -573,6 +624,23 @@ def _resolve_token_target_card(
         step_w = adapter._step_by_namespace.get(ns_key)
         if step_w is not None:
             return step_w
+        # Try to infer step_id from tool_calls on the message (parallel waves)
+        if message is not None:
+            tool_calls = getattr(message, "tool_calls", None) or []
+            for tc in tool_calls:
+                # Tool calls can be dicts (LangChain) or objects
+                tcid = ""
+                if isinstance(tc, dict):
+                    tcid = str(tc.get("id", "") or "").strip()
+                else:
+                    tcid = str(getattr(tc, "id", "") or "").strip()
+                if tcid:
+                    parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+                    if parsed_sid:
+                        step_w = adapter._current_step_messages.get(parsed_sid)
+                        if step_w is not None:
+                            adapter._step_by_namespace[ns_key] = step_w
+                            return step_w
         if len(router.active_step_ids) == 1:
             only_sid = next(iter(router.active_step_ids))
             return adapter._current_step_messages.get(only_sid)
@@ -1249,16 +1317,18 @@ def _tui_goal_completion_matches_prior_main_visible_answer(
     body = _tui_main_assistant_body_for_dedupe(output_text)
     if not body:
         return False
-    step_prior = _tui_main_assistant_body_for_dedupe(
-        adapter._last_completed_main_step_execute_prose
-    )
-    if step_prior and body == step_prior:
-        return True
-    flush_prior = _tui_main_assistant_body_for_dedupe(adapter._last_main_flushed_assistant_prose)
-    if flush_prior and body == flush_prior:
-        return True
-    pending_prior = _tui_main_assistant_body_for_dedupe(pending_execute_text)
-    return bool(pending_prior) and body == pending_prior
+    priors = [
+        _tui_main_assistant_body_for_dedupe(adapter._last_completed_main_step_execute_prose),
+        _tui_main_assistant_body_for_dedupe(adapter._last_main_flushed_assistant_prose),
+        _tui_main_assistant_body_for_dedupe(pending_execute_text),
+    ]
+    priors = [p for p in priors if p]
+    if not priors:
+        return False
+    # Never suppress a full synthesis report when only a shorter preview was shown.
+    if len(body) > max(len(p) for p in priors):
+        return False
+    return any(body == p for p in priors)
 
 
 def _tui_effective_ai_blocks(
@@ -1450,6 +1520,14 @@ async def apply_tool_call_wire_update(
             ns_key=ns_key,
         )
         if step_w is not None and name != "task":
+            # Bind the execute namespace to this step card so token-usage
+            # chunks resolve correctly during parallel waves.
+            _register_execute_namespace_binding(
+                adapter,
+                router,
+                ns_key,
+                step_id=str(getattr(step_w, "_step_id", "") or bound_step_id),
+            )
             update_payload = dict(display_args or {})
             if not update_payload and raw_args_stream:
                 update_payload = {"_raw": raw_args_stream}
@@ -1702,10 +1780,39 @@ async def _finalize_goal_completion_stream(
         adapter._sync_message_content(stream_msg.id, stream_msg._content)
     goal_completion_stream_by_namespace.pop(ns_key, None)
     assistant_message_by_namespace[ns_key] = stream_msg
+    adapter._goal_completion_mounted_this_turn = True
     if adapter._set_active_message:
         adapter._set_active_message(None)
     if adapter._set_spinner:
         await adapter._set_spinner("Thinking")
+
+
+async def _flush_inflight_goal_completion_streams(
+    adapter: TextualUIAdapter,
+    *,
+    goal_completion_stream_by_namespace: dict[tuple[Any, ...], AssistantMessage],
+    assistant_message_by_namespace: dict[tuple[Any, ...], Any],
+    goal_loop_start_monotonic: float | None,
+    turn_start_monotonic: float | None,
+) -> None:
+    """Finalize partial goal_completion cards before abort or safety-net errors."""
+    if not goal_completion_stream_by_namespace:
+        return
+    await asyncio.gather(
+        *[
+            _finalize_goal_completion_stream(
+                adapter,
+                stream_msg,
+                ns_key=ns_key,
+                goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                assistant_message_by_namespace=assistant_message_by_namespace,
+                extra_text="",
+                goal_loop_start_monotonic=goal_loop_start_monotonic,
+                turn_start_monotonic=turn_start_monotonic,
+            )
+            for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items())
+        ]
+    )
 
 
 async def _handle_interrupt_cleanup(
@@ -2136,6 +2243,7 @@ async def execute_task_textual(
     router = adapter._step_router
     router.reset_turn()
     ui_coalesce = TurnToolUiCoalescer()
+    adapter._goal_completion_mounted_this_turn = False
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
@@ -2383,14 +2491,18 @@ async def execute_task_textual(
                                     captured_input_tokens = max(
                                         captured_input_tokens, input_toks + output_toks
                                     )
-                                    token_card = _resolve_token_target_card(adapter, router, ns_key)
+                                    token_card = _resolve_token_target_card(
+                                        adapter, router, ns_key, message=message
+                                    )
                                     if token_card is not None:
                                         token_card.record_token_usage(input_toks, output_toks)
                                 elif total_toks:
                                     # Fallback: model gives only total (no split)
                                     turn_stats.record_request(active_model, total_toks, 0)
                                     captured_input_tokens = max(captured_input_tokens, total_toks)
-                                    token_card = _resolve_token_target_card(adapter, router, ns_key)
+                                    token_card = _resolve_token_target_card(
+                                        adapter, router, ns_key, message=message
+                                    )
                                     if token_card is not None:
                                         token_card.record_token_usage(total_toks, 0)
 
@@ -2546,6 +2658,7 @@ async def execute_task_textual(
                             )
                             await adapter._mount_message(output_widget)
                             await output_widget.write_initial_content()
+                            adapter._goal_completion_mounted_this_turn = True
                             if adapter._sync_message_content and output_widget.id:
                                 adapter._sync_message_content(
                                     output_widget.id,
@@ -2902,6 +3015,18 @@ async def execute_task_textual(
                                             ns_key=ns_key,
                                         )
                                         if active_step is not None:
+                                            # Bind the execute namespace to this step card
+                                            # so token-usage chunks resolve correctly
+                                            # during parallel waves.
+                                            _register_execute_namespace_binding(
+                                                adapter,
+                                                router,
+                                                ns_key,
+                                                step_id=str(
+                                                    getattr(active_step, "_step_id", "")
+                                                    or bound_step_id
+                                                ),
+                                            )
                                             if active_step.has_tool_call_row(lookup_id):
                                                 if not ui_coalesce.should_skip_messages_arg_refresh(
                                                     str(lookup_id)
@@ -3444,6 +3569,13 @@ async def execute_task_textual(
         await dispatch_hook("task.complete", {"loop_id": loop_id})
 
     except (asyncio.CancelledError, KeyboardInterrupt):
+        await _flush_inflight_goal_completion_streams(
+            adapter,
+            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+            assistant_message_by_namespace=assistant_message_by_namespace,
+            goal_loop_start_monotonic=goal_loop_start_monotonic,
+            turn_start_monotonic=start_time,
+        )
         app_exiting = bool(is_shutting_down()) if is_shutting_down is not None else False
         await _handle_interrupt_cleanup(
             adapter=adapter,
@@ -3458,6 +3590,16 @@ async def execute_task_textual(
         )
         _log_turn_event_stats(ev_stats, turn_stats, daemon_session)
         return turn_stats
+
+    except Exception:
+        await _flush_inflight_goal_completion_streams(
+            adapter,
+            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+            assistant_message_by_namespace=assistant_message_by_namespace,
+            goal_loop_start_monotonic=goal_loop_start_monotonic,
+            turn_start_monotonic=start_time,
+        )
+        raise
 
     # Update token count and return stats
     turn_stats.wall_time_seconds = time.monotonic() - start_time

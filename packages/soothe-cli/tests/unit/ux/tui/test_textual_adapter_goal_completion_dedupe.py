@@ -78,3 +78,17 @@ def test_plan_direct_prose_must_not_count_as_flushed_main_answer() -> None:
         ns_key=(),
         output_text="## Result\nFirst ten lines of README…",
     )
+
+
+def test_long_goal_completion_not_deduped_against_short_step_preview() -> None:
+    """Full synthesis must remain visible when only a short execute preview was shown."""
+    adapter = _make_adapter()
+    adapter._last_completed_main_step_execute_prose = "Found 3 README files."
+    long_report = "## Investigation report\n\n" + (
+        "Detailed findings about the repository structure. " * 20
+    )
+    assert not _tui_goal_completion_matches_prior_main_visible_answer(
+        adapter,
+        ns_key=(),
+        output_text=long_report,
+    )

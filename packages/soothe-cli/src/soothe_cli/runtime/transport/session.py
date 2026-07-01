@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Match headless daemon client: brief read window after ``idle`` so stream events
 # that arrive slightly after status are not dropped (``cli/execution/daemon.py``).
-_POST_IDLE_DRAIN_DEADLINE_S = 2.5
+_POST_IDLE_DRAIN_DEADLINE_S = 30.0
 
 # Align with ``bootstrap_loop_session`` daemon-ready wait (RFC-450 §8.2).
 _RPC_HANDSHAKE_TIMEOUT_S = 20.0
@@ -91,6 +91,7 @@ class TuiDaemonSession:
         self.turn_event_stats = TurnEventStats()
         self.last_turn_end_state: str | None = None
         self.last_turn_cancellation_seen: bool = False
+        self.last_turn_error_message: str | None = None
 
     @property
     def loop_id(self) -> str | None:
@@ -248,6 +249,14 @@ class TuiDaemonSession:
         """Ask the daemon to cancel the in-flight query (same wire path as ``/cancel``)."""
         await self._client.notify("slash_command", {"cmd": "/cancel"})
 
+    async def cancel_active_turn(self) -> None:
+        """Cancel the in-flight query on the active loop (IG-533 ordering contract).
+
+        Call before switching ``loop_id`` (e.g. ``/clear``) so synthesis on the
+        prior loop is torn down server-side instead of filtered client-side.
+        """
+        await self.cancel_remote_query()
+
     async def _drain_stream_events_after_idle(
         self,
         *,
@@ -316,6 +325,7 @@ class TuiDaemonSession:
         self.turn_event_stats = TurnEventStats()
         self.last_turn_end_state = None
         self.last_turn_cancellation_seen = False
+        self.last_turn_error_message = None
         query_started = False
         expected_loop_id = self._loop_id
         self._streaming = True
@@ -431,6 +441,9 @@ class TuiDaemonSession:
                     # Graph auto-resumes LangGraph interrupts server-side; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                         continue
+            except Exception as exc:
+                self.last_turn_error_message = str(exc)
+                raise
             finally:
                 self._streaming = False
 
@@ -650,6 +663,17 @@ class TuiDaemonSession:
         if not isinstance(raw, list):
             return []
         return [m for m in raw if isinstance(m, dict)]
+
+    async def fetch_goal_completion_text(self, loop_id: str) -> str | None:
+        """Return the latest persisted ``goal_completion`` body for a loop, if any."""
+        rows = await self.fetch_conversation_log(loop_id, limit=200, include_events=False)
+        for row in reversed(rows):
+            if row.get("phase") != "goal_completion":
+                continue
+            text = row.get("text") or row.get("content") or ""
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+        return None
 
 
 DaemonSession = TuiDaemonSession

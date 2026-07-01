@@ -48,6 +48,46 @@ async def test_response_pusher_maps_cancelled_to_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_response_pusher_blocks_instead_of_dropping_slow_consumer() -> None:
+    """Chunk delivery must wait for queue space instead of dropping after 0.5s."""
+    loop = asyncio.get_running_loop()
+    out: asyncio.Queue[tuple[str, object]] = asyncio.Queue(maxsize=1)
+    pusher = ResponsePusher(loop, out)
+
+    pusher.push_from_worker("chunk", ((), "messages", "first"))
+    await asyncio.sleep(0.05)
+    msg_type, payload = await asyncio.wait_for(out.get(), timeout=1.0)
+    assert msg_type == "chunk"
+    assert payload == ((), "messages", "first")
+
+    pusher.push_from_worker("chunk", ((), "messages", "second"))
+    await asyncio.sleep(0.05)
+    pusher.push_from_worker("chunk", ((), "messages", "third"))
+    await asyncio.sleep(0.05)
+
+    msg_type, payload = await asyncio.wait_for(out.get(), timeout=1.0)
+    assert msg_type == "chunk"
+    assert payload == ((), "messages", "second")
+
+    msg_type, payload = await asyncio.wait_for(out.get(), timeout=1.0)
+    assert msg_type == "chunk"
+    assert payload == ((), "messages", "third")
+
+
+def test_chunk_is_goal_completion_detects_phase_tag() -> None:
+    from soothe_daemon.runner.response_bridge import _chunk_is_goal_completion
+
+    gc_chunk = (
+        (),
+        "messages",
+        ({"type": "AIMessageChunk", "content": "report", "phase": "goal_completion"}, {}),
+    )
+    plain_chunk = ((), "messages", ({"type": "AIMessageChunk", "content": "hi"}, {}))
+    assert _chunk_is_goal_completion(gc_chunk)
+    assert not _chunk_is_goal_completion(plain_chunk)
+
+
+@pytest.mark.asyncio
 async def test_response_pusher_done_message() -> None:
     loop = asyncio.get_running_loop()
     out: asyncio.Queue[tuple[str, object]] = asyncio.Queue()

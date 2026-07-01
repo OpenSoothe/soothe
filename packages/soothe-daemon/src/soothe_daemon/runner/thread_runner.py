@@ -40,6 +40,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Last error per worker thread (survives unexpected thread exit for watchdog logs).
+_worker_last_errors: dict[str, str] = {}
+_worker_last_errors_lock = threading.Lock()
+
+
+def _record_worker_last_error(worker_id: str, exc: BaseException) -> None:
+    with _worker_last_errors_lock:
+        _worker_last_errors[worker_id] = f"{type(exc).__name__}: {exc}"
+
+
+def _pop_worker_last_error(worker_id: str) -> str | None:
+    with _worker_last_errors_lock:
+        return _worker_last_errors.pop(worker_id, None)
+
 
 class WorkerThreadStatus(StrEnum):
     """Worker thread status."""
@@ -281,6 +295,7 @@ def _thread_worker_body(
                     RuntimeError(f"Request exceeded {timeout_seconds}s timeout"),
                 )
             except Exception as exc:
+                _record_worker_last_error(worker_id, exc)
                 _emit("error", exc)
             finally:
                 if runner is not None:
@@ -326,6 +341,7 @@ def _thread_worker_body(
                 req.loop_id,
                 request_id,
             )
+            _record_worker_last_error(worker_id, exc)
             try:
                 _emit("error", exc)
             except Exception:
@@ -676,10 +692,15 @@ class ThreadPool:
     async def _handle_dead_worker(self, worker: WorkerThreadState) -> None:
         """Recover from a dead thread: fail in-flight work and respawn the slot."""
         logger.warning(
-            "ThreadPool: worker %s thread ended (busy=%s, request_id=%s)",
+            "ThreadPool: worker %s thread ended (busy=%s, loop_id=%s, request_id=%s, status=%s%s)",
             worker.worker_id,
             worker.status == WorkerThreadStatus.BUSY,
+            worker.current_loop_id,
             worker.current_request_id,
+            worker.status,
+            f", last_error={last_err!r}"
+            if (last_err := _pop_worker_last_error(worker.worker_id))
+            else "",
         )
         if worker.current_request_id is not None:
             await self._route_failure_for_dead_busy_worker(worker)

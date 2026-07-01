@@ -65,6 +65,7 @@ active_router_profile: production
 # ============================================================
 agent:
   autonomous:
+    enabled: false
     max_parallel_goals: 6
     max_loops: 8
   loop:
