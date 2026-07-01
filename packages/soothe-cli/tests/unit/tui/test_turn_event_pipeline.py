@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
+from soothe_sdk.core.events import STRANGE_LOOP_STEP_COMPLETED
 
 from soothe_cli.runtime.state.session_stats import TurnEventStats, TurnLatencyStats
 from soothe_cli.runtime.turn.pipeline import (
@@ -19,7 +20,6 @@ from soothe_cli.runtime.turn.pipeline import (
     TurnEventPipeline,
     run_turn_pipeline,
 )
-from soothe_sdk.core.events import STRANGE_LOOP_STEP_COMPLETED
 from soothe_cli.runtime.turn.prepare import TurnPrepareState, prepare_turn_chunk
 
 
