@@ -44,6 +44,7 @@ router_profiles:
       fast: "dashscope:kimi-k2.5"
       think: "dashscope:glm-5.2"
       image: "dashscope:kimi-k2.5"
+      ocr: null
       embedding: "dashscope:multimodal-embedding-v1"
     embedding_dims: 1024  # multimodal-embedding-v1 fixed output size
 
