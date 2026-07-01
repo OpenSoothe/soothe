@@ -1,7 +1,9 @@
 <PLAN_GENERATE>
-Output: plan_action, type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
+Output: type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
 
 Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in the GOAL: section.
+When assess ``Status: continue`` and DAG STATUS shows pending or ready steps, the runtime
+reuses the in-flight plan automatically — you only run when a fresh decision is needed.
 
 **Language lock**:
 - Use the same natural language as the current goal statement in GOAL:.
@@ -10,8 +12,6 @@ Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in 
 - Keep code, file paths, identifiers, and quoted literals unchanged.
 
 **Step count**: Follow EXECUTION_POLICIES (first wave: 1–2 only; later: 1–3).
-
-**plan_action**: ``keep`` (reuse plan) or ``new`` (fresh decision per rules above).
 
 **type**:
 - ``execute_steps``: Required at iteration 0 or when step_results empty.
@@ -105,7 +105,9 @@ but NO ONE will see it or answer. Use ``kind="ask_user"`` with ``questions`` ins
 - ``dependency``: only when one or more steps set ``dependencies``; executor respects the DAG.
 - Never output ``sequential`` (removed); invalid values fail validation.
 
-**reasoning**: Brief third-person justification.
+**reasoning** (≤500 chars): First-person cognition narrative for the user (shown in the TUI).
+Start with ``I'll`` or ``Let me`` and briefly justify the plan strategy in one or two sentences.
+Example: ``I'll read the config first, then patch the timeout field based on what I find.``
 **next_action**: First person, one sentence, max ~300 chars.
 
 **On failure**: If prior steps failed, propose a different approach—do not repeat same step text.

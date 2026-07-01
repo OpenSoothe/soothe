@@ -971,7 +971,7 @@ class LLMPlanner:
             thread_id: Thread id for Langfuse session correlation.
 
         Returns:
-            PlanGeneration with plan_action and top-level decision fields.
+            PlanGeneration with top-level decision fields and first-person reasoning.
         """
         plan_result, _ = await self._generate_plan_with_response(
             messages, assessment, goal, iteration, thread_id=thread_id
@@ -1042,11 +1042,8 @@ class LLMPlanner:
                     raise ValueError("PlanGeneration returned None after retries")
 
                 logger.debug(
-                    "[Plan] action=%s steps=%d next=%s",
-                    plan_result.plan_action,
-                    len(plan_result.steps)
-                    if plan_result.plan_action == "new" and isinstance(plan_result.steps, list)
-                    else 0,
+                    "[Plan] steps=%d next=%s",
+                    len(plan_result.steps) if isinstance(plan_result.steps, list) else 0,
                     preview_first(plan_result.next_action, chars=80),
                 )
 
@@ -1103,11 +1100,9 @@ class LLMPlanner:
                             )
                             if plan_result is not None:
                                 logger.debug(
-                                    "[Plan] action=%s steps=%d next=%s (after network retry)",
-                                    plan_result.plan_action,
+                                    "[Plan] steps=%d next=%s (after network retry)",
                                     len(plan_result.steps)
-                                    if plan_result.plan_action == "new"
-                                    and isinstance(plan_result.steps, list)
+                                    if isinstance(plan_result.steps, list)
                                     else 0,
                                     preview_first(plan_result.next_action, chars=80),
                                 )
@@ -1148,10 +1143,9 @@ class LLMPlanner:
             error_detail,
         )
         return PlanGeneration(
-            plan_action="new",
             type="execute_steps",
             execution_mode="parallel",
-            reasoning="Fallback default plan after plan generation failure.",
+            reasoning="I'll proceed with a default plan after plan generation failed.",
             steps=step_actions_to_plan_generate_steps(
                 _default_agent_decision(goal, iteration).steps
             ),
@@ -1161,8 +1155,6 @@ class LLMPlanner:
     @staticmethod
     def _plan_generation_to_decision(plan_result: Any) -> AgentDecision | None:
         """Rebuild `AgentDecision` from flattened `PlanGeneration` fields."""
-        if plan_result.plan_action != "new":
-            return None
         if (
             plan_result.type is None
             or plan_result.execution_mode is None
@@ -1187,6 +1179,7 @@ class LLMPlanner:
         """Combine StatusAssessment and PlanGeneration results (RFC-604, IG-152).
 
         Uses plan_result.next_action for the user-facing action line (IG-329).
+        Populates ``plan_reasoning`` from plan-generate ``reasoning`` for TUI cognition cards.
 
         Args:
             assessment: StatusAssessment result
@@ -1200,6 +1193,7 @@ class LLMPlanner:
 
         # Use plan_result.next_action (concrete, actionable)
         action_text = plan_result.next_action.strip()
+        plan_reasoning = (plan_result.reasoning or "").strip()
 
         logger.debug("[PlanAction] %s", preview_first(action_text, chars=80))
         decision = self._plan_generation_to_decision(plan_result)
@@ -1209,8 +1203,8 @@ class LLMPlanner:
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             assessment_reasoning="",
-            plan_reasoning="",
-            plan_action=plan_result.plan_action,
+            plan_reasoning=plan_reasoning,
+            plan_action="new",
             decision=decision,
             next_action=action_text,
             require_goal_completion=assessment.require_goal_completion,
@@ -1381,7 +1375,7 @@ class LLMPlanner:
         from soothe.foundation.context.planning.completion import (
             determine_goal_completion_needs,
         )
-        from soothe.foundation.sloop.state.schemas import PlanResult
+        from soothe.foundation.sloop.state.schemas import PlanResult, derive_plan_action
 
         if assessment.status == "done":
             gc_mode = (
@@ -1410,6 +1404,30 @@ class LLMPlanner:
                 next_action="Goal achieved successfully",
                 require_goal_completion=require_completion,
                 full_output=state.last_execute_assistant_text,
+            )
+
+        if (
+            derive_plan_action(
+                assessment_status=assessment.status,
+                has_remaining_steps=state.has_remaining_steps(),
+            )
+            == "keep"
+        ):
+            logger.info(
+                "[PlanGen] Reusing in-flight plan (%d step(s) remain)",
+                len(state.current_decision.steps) - len(state.dependency_completion_ids())
+                if state.current_decision
+                else 0,
+            )
+            return PlanResult(
+                status=assessment.status,
+                goal_progress=assessment.goal_progress,
+                assessment_reasoning="",
+                plan_reasoning="",
+                plan_action="keep",
+                decision=None,
+                next_action="I'll continue with the remaining steps in the current plan.",
+                require_goal_completion=assessment.require_goal_completion,
             )
 
         # RFC-630: the legacy simple-query bypass (prefixed 1-step plan) is
@@ -1452,16 +1470,15 @@ class LLMPlanner:
         )
 
         # Guard: reject premature type="final" at iteration 0 with no execution
-        if plan_result.plan_action == "new" and plan_result.type == "final":
+        if plan_result.type == "final":
             if state.iteration == 0 and len(state.step_results) == 0:
                 logger.warning(
                     "[Guard] Reject 'final' type at iter=0 no execution; forcing execute_steps"
                 )
                 plan_result = PlanGeneration(
-                    plan_action="new",
                     type="execute_steps",
                     execution_mode="parallel",
-                    reasoning="Initial execution to gather evidence for goal assessment",
+                    reasoning="I'll start by gathering evidence for this goal.",
                     steps=step_actions_to_plan_generate_steps(
                         _default_agent_decision(goal, state.iteration).steps
                     ),

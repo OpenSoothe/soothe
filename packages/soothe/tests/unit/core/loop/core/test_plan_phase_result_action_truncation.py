@@ -7,6 +7,7 @@ Verifies that next_action field:
 """
 
 import pytest
+
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -31,7 +32,6 @@ def sample_assessment() -> StatusAssessment:
 def sample_plan_result() -> PlanGeneration:
     """Create sample Phase 2 plan."""
     return PlanGeneration(
-        plan_action="new",
         type="execute_steps",
         steps=[
             PlanGenerateStep(
@@ -41,7 +41,7 @@ def sample_plan_result() -> PlanGeneration:
             ),
         ],
         execution_mode="parallel",
-        reasoning="Need to check implementation details",
+        reasoning="I'll check implementation details before proposing changes.",
         next_action="Read key implementation files from cli/, shared/, and tui/ directories",
     )
 
@@ -56,7 +56,7 @@ def test_next_action_uses_plan_action(
     result = planner._combine_results(sample_assessment, sample_plan_result)
 
     assert result.assessment_reasoning == ""
-    assert result.plan_reasoning == ""  # IG-329: no phase-2 strategy string
+    assert result.plan_reasoning == sample_plan_result.reasoning
 
     # Should use plan_result.next_action (concrete action)
     assert result.next_action == sample_plan_result.next_action
@@ -78,7 +78,6 @@ def test_next_action_preserves_full_text(
     )  # 138 chars
 
     plan_result = PlanGeneration(
-        plan_action="new",
         type=sample_plan_result.type,
         steps=sample_plan_result.steps,
         execution_mode=sample_plan_result.execution_mode,

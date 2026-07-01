@@ -13,7 +13,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.state.schemas import (
     LoopState,
@@ -22,10 +26,6 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.protocols.planner import PlanContext
 
 GOAL = "translate the README into French"
@@ -112,7 +112,6 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
     )
 
     plan_generation = PlanGeneration(
-        plan_action="new",
         type="execute_steps",
         steps=[
             PlanGenerateStep(
@@ -122,7 +121,7 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
             )
         ],
         execution_mode="parallel",
-        reasoning="model rationale text that should stay in the AI dump",
+        reasoning="I'll translate section by section and keep the model rationale in the dump.",
         next_action="I'll translate section by section.",
     )
     planner._generate_plan_with_response = AsyncMock(  # type: ignore[method-assign]
@@ -153,7 +152,7 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
 
     # A2 does NOT apply to plan-generate: the `steps` list and `reasoning`
     # are the value of the recording, so the AI dump stays verbatim.
-    assert "model rationale text that should stay" in recorded_ai.content
+    assert "I'll translate section by section and keep the model rationale" in recorded_ai.content
     assert recorded_ai.phase == "plan_generate"
 
 
