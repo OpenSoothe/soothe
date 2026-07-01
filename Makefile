@@ -96,7 +96,7 @@ sync:
 	@echo "All packages synced"
 
 sync-verify:
-	@.venv/bin/python -c "import importlib.util; pkgs=('psycopg_pool','jsonschema','langfuse'); missing=[p for p in pkgs if importlib.util.find_spec(p) is None]; assert not missing, f'Missing: {missing}'"
+	@.venv/bin/python -c "import importlib.util; pkgs=('psycopg_pool','jsonschema','langfuse','jinja2'); missing=[p for p in pkgs if importlib.util.find_spec(p) is None]; assert not missing, f'Missing: {missing}'"
 	@echo "Critical dependencies verified"
 
 # ============================================================================

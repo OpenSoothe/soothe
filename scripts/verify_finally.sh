@@ -162,7 +162,7 @@ UV_SYNC_CMD=(uv sync --all-packages --all-extras)
 _verify_critical_deps() {
   .venv/bin/python - <<'PY'
 import importlib.util
-pkgs = ("psycopg_pool", "jsonschema", "langfuse")
+pkgs = ("psycopg_pool", "jsonschema", "langfuse", "jinja2")
 missing = [p for p in pkgs if importlib.util.find_spec(p) is None]
 assert not missing, f"Missing packages after sync (broken mirror?): {missing}"
 PY
