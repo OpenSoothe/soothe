@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 import soothe.foundation.sloop.state.persistence.shared_pool as shared_pool
 from soothe.foundation.sloop.state.persistence.manager import (
     StrangeLoopCheckpointPersistenceManager,

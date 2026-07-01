@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from langgraph.types import Command, Interrupt
+
 from soothe.foundation.sloop.clarification import (
     ClarificationCapture,
     ClarificationDetector,

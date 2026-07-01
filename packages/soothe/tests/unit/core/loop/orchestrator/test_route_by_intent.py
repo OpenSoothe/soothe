@@ -9,6 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.orchestrator.nodes.init_or_resume import node_init_or_resume

@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
+
+from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.utils.messages import (
     LoopAIMessage,
     LoopHumanMessage,
     _record_ledger_message,
 )
-
-from soothe.foundation.context.engine import ContextEngine
 
 
 def _make_state_with_ce() -> tuple[LoopState, ContextEngine]:

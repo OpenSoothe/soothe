@@ -9,6 +9,7 @@ Tests for:
 import uuid
 
 import pytest
+
 from soothe.foundation.sloop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )

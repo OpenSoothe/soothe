@@ -7,6 +7,10 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.sloop.clarification import (
     ClarificationAnswer,
     answer_to_state,
@@ -19,10 +23,6 @@ from soothe.foundation.sloop.orchestrator.nodes.execute_steps import (
 )
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction, StepResult
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 def _make_ce() -> ContextEngine:
@@ -304,9 +304,8 @@ async def test_branch1_ce_bound_does_not_re_emit_planner_ask(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CE-bound loop state must persist the synth result before Branch 2 runs."""
-    from soothe.foundation.sloop.state.schemas import LoopState
-
     from soothe.foundation.context.models import StepNode
+    from soothe.foundation.sloop.state.schemas import LoopState
 
     decision = AgentDecision(
         type="execute_steps",

@@ -1,11 +1,10 @@
 """Tests for failure intent classifier (IG-433)."""
 
+from soothe.config.models import FailureIntentConfig
 from soothe.foundation.sloop.utils.failure_intent_classifier import (
     classify_failure_intent_keyword,
     is_missing_prerequisite_intent,
 )
-
-from soothe.config.models import FailureIntentConfig
 
 
 class TestFailureIntentClassifier:

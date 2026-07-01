@@ -8,11 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from soothe.foundation.sloop.state.sloop_manager import (
     StrangeLoopStateManager,
     _is_async_loop_runtime_error,
 )
-
 from soothe.runner._worker_utils import cancel_orphan_loop_tasks
 
 

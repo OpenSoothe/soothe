@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+
 from soothe.foundation.sloop.utils.json_parsing import _load_llm_json_dict
 
 

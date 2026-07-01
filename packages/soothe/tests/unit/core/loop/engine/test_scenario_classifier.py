@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from soothe.foundation.sloop.engine.scenario_classifier import (
     ScenarioClassification,
     _extract_execution_summary,

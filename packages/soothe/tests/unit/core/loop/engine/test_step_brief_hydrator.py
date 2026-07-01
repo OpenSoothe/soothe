@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+
 from soothe.foundation.sloop.engine.step_brief_hydrator import StepBriefHydration, StepBriefHydrator
 from soothe.foundation.sloop.state.schemas import StepAction
 

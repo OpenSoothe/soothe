@@ -11,7 +11,6 @@ from soothe.foundation.sloop.state.schemas import (
     PlanResult,
     StepAction,
 )
-
 from soothe.protocols.planner import PlanContext
 
 

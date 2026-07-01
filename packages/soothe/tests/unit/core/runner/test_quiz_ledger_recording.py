@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.runner._runner_phases import PhasesMixin
 
 

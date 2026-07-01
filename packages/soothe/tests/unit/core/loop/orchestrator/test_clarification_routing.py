@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langgraph.graph import END
+
 from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.sloop.orchestrator.routing import (
     route_after_assess,
