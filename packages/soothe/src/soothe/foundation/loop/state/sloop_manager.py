@@ -651,10 +651,6 @@ class StrangeLoopStateManager:
                 # Periodic flush: ensure latest checkpoint is persisted
                 if self._last_save_checkpoint:
                     await self._do_save_checkpoint(self._last_save_checkpoint)
-                    logger.debug(
-                        "Periodic checkpoint flush: loop=%s",
-                        self.loop_id,
-                    )
 
             except asyncio.CancelledError:
                 # Final flush on shutdown
