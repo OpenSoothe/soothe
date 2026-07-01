@@ -139,7 +139,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     )
 
     synthesis_gen = SynthesisGenerator(
-        strange_loop.loop_planner._model,
+        strange_loop.goal_synthesis_model(),
         strange_loop.core_agent,
         strange_loop.config,
         loop_id=ctx.state_manager.loop_id,

@@ -313,13 +313,20 @@ class _UIMixin:
             if self._loading_widget:
                 await self._loading_widget.remove()
                 self._loading_widget = None
+            self._connect_spinner_start_mono = None
             return
 
         thinking_status = self.query_one("#thinking-status", Container)
 
+        connect_start_mono: float | None = None
+        if not self._agent_running:
+            if self._connect_spinner_start_mono is None:
+                self._connect_spinner_start_mono = _monotonic()
+            connect_start_mono = self._connect_spinner_start_mono
+
         if self._loading_widget is None:
             # Create new
-            turn_mono = self._inflight_turn_start if self._agent_running else None
+            turn_mono = self._inflight_turn_start if self._agent_running else connect_start_mono
             self._loading_widget = LoadingWidget(
                 status,
                 turn_start_mono=turn_mono,
@@ -329,6 +336,12 @@ class _UIMixin:
         else:
             if self._agent_running:
                 self._loading_widget.set_turn_start_mono(self._inflight_turn_start)
+            elif connect_start_mono is not None:
+                self._loading_widget.set_turn_start_mono(connect_start_mono)
+            if self._loading_widget.parent is not thinking_status:
+                if self._loading_widget.is_attached:
+                    await self._loading_widget.remove()
+                await thinking_status.mount(self._loading_widget)
             # Update existing (also clears a clarification pause)
             self._loading_widget.activate_status(status, show_interrupt_hint=show_interrupt_hint)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back

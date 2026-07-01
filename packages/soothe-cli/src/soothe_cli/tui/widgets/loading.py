@@ -89,6 +89,7 @@ class LoadingWidget(Static):
         self._animation_timer: Timer | None = None
         self._paused = False
         self._paused_total_elapsed: int = 0
+        self._last_rendered_elapsed: int = -1
 
     @staticmethod
     def _format_status_line(status: str) -> str:
@@ -133,9 +134,12 @@ class LoadingWidget(Static):
         now = monotonic()
         if self._turn_start_mono is None:
             self._turn_start_mono = now
+        self._last_rendered_elapsed = int(self._elapsed_seconds())
         self._refresh_line()
-        # Reduced from 0.1s (10fps) to 0.2s (5fps) to reduce UI thread contention
-        self._animation_timer = self.set_interval(0.2, self._update_animation)
+        # Textual reports ``is_mounted=False`` inside ``on_mount``; start unconditionally here.
+        if self._animation_timer is None:
+            # Reduced from 0.1s (10fps) to 0.2s (5fps) to reduce UI thread contention
+            self._animation_timer = self.set_interval(0.2, self._update_animation)
 
     def on_unmount(self) -> None:
         """Stop the animation timer when the widget leaves the DOM."""
@@ -156,17 +160,32 @@ class LoadingWidget(Static):
             self._animation_timer.stop()
             self._animation_timer = None
 
+    def _ensure_animation_timer(self) -> None:
+        """Start the animation timer when mounted and not already running."""
+        if not self.is_mounted or self._animation_timer is not None:
+            return
+        # Reduced from 0.1s (10fps) to 0.2s (5fps) to reduce UI thread contention
+        self._animation_timer = self.set_interval(0.2, self._update_animation)
+
     def _update_animation(self) -> None:
         """Advance the spinner and repaint the full line."""
         if self._paused:
             return
 
-        # Skip update if widget is not visible on screen
-        if not self.is_on_screen:
-            return
+        elapsed_int = int(self._elapsed_seconds())
+        on_screen = self.is_on_screen
+        should_refresh = False
 
-        self._spinner.next_frame()
-        self._refresh_line()
+        if on_screen:
+            self._spinner.next_frame()
+            should_refresh = True
+        elif elapsed_int != self._last_rendered_elapsed:
+            # Keep elapsed-time ticks alive even when the row is temporarily off-screen.
+            should_refresh = True
+
+        if should_refresh:
+            self._last_rendered_elapsed = elapsed_int
+            self._refresh_line()
 
     def set_status(self, status: str) -> None:
         """Update the status text.
@@ -185,6 +204,8 @@ class LoadingWidget(Static):
         if show_interrupt_hint is not None:
             self._show_interrupt_hint = show_interrupt_hint
         if self.is_mounted:
+            self._ensure_animation_timer()
+            self._last_rendered_elapsed = int(self._elapsed_seconds())
             self._refresh_line()
 
     def set_turn_start_mono(self, turn_start: float) -> None:
@@ -211,6 +232,8 @@ class LoadingWidget(Static):
         self._paused = False
         self._status = "Thinking"
         if self.is_mounted:
+            self._ensure_animation_timer()
+            self._last_rendered_elapsed = int(self._elapsed_seconds())
             self._refresh_line()
 
     def stop(self) -> None:

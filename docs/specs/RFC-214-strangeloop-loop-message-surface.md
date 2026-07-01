@@ -82,7 +82,7 @@ The ledger captures all orchestration-visible conversation:
 - **execute-step** phase: step execution turns (human inputs, AI outcomes)
 - Special flows: synthesis, thread checks, goal completion
 
-Each turn is marked with `phase` for filtering. CoreAgent receives only execute-step messages (see §3.1 for parallel-branch replay of predecessor execute rows into isolated checkpoints).
+Each turn is marked with `phase` for filtering. CoreAgent receives only execute-step messages (see §3.1 for how dependent steps ground predecessor output on isolated branch checkpoints).
 
 ### P3: Ledger as Authoritative Plan Context
 
@@ -215,7 +215,7 @@ The `loop_messages` ledger is a complete record of the entire StrangeLoop conver
 2. **Complete audit trail**: The ledger is the single source of truth for the full StrangeLoop conversation. Checkpoint recovery, debugging, and observability all benefit from a complete history.
 3. **Iteration continuity**: When the planner re-assesses after an execute wave, it sees its own prior assessment and plan as preceding turns, not as a flattened summary.
 
-**CoreAgent isolation**: When building messages for CoreAgent execution, ledger projection filters to `phase="execute_step"` only. Plan-phase messages are excluded — CoreAgent never sees planning reasoning in its thread. **Parallel branch checkpoints** (§3.1) prepend a bounded transitive-predecessor slice from the same ledger before the current envelope; that slice is still execute-phase rows only. This keeps CoreAgent's message history focused on tool execution and prevents planning internals from leaking into tool-call context.
+**CoreAgent isolation**: When building messages for CoreAgent execution, ledger projection filters to `phase="execute_step"` only. Plan-phase messages are excluded — CoreAgent never sees planning reasoning in its thread. **Parallel branch checkpoints** (§3.1) use a fresh isolated namespace per step; predecessor output for **dependent steps within the same goal** is delivered only via the `PRIOR STEP EVIDENCE` section inside the current execute envelope — not by replaying prior Human/AI ledger rows into the graph input (which would duplicate the same AI body). **Loop-continuation bootstrap** (RFC-225) is the exception: it still replays prior-goal `execute_step` ledger rows when no dependent-step envelope exists.
 
 **Ledger Structure:**
 
@@ -228,14 +228,24 @@ The ledger contains ONLY orchestration-visible messages in adjacent pairs:
 
 ### 3.1 Parallel execute branches and LangGraph checkpoint isolation
 
-When several steps run in one wave with **independent** LangGraph checkpoints per step, the runtime may use a **derived** `thread_id` for CoreAgent (for example `{logical_thread}__p{step_id}`) so each step’s checkpoint stays isolated from siblings. A new namespace starts with an **empty** CoreAgent message list even though the orchestration ledger (`LoopState.loop_messages`) already holds prior execute turns on the **logical** thread.
+When several steps run in one wave with **independent** LangGraph checkpoints per step, the runtime uses a **derived** `thread_id` for CoreAgent (for example `{logical_thread}__step_{step_id}`) so each step’s checkpoint stays isolated from siblings. A new namespace starts with an **empty** CoreAgent message list even though the orchestration ledger (`LoopState.loop_messages`) already holds prior execute turns on the **logical** thread.
 
-**Requirement:** Dependency-ordered work must still see completed predecessor **execute** evidence. The executor therefore builds CoreAgent input as:
+**Requirement:** Dependency-ordered work must still see completed predecessor **execute** evidence without sibling cross-talk.
 
-1. **Predecessor replay (optional):** Deep-copied `LoopHumanMessage` / `LoopAIMessage` rows from `loop_messages` with `phase="execute_step"`, in ledger order, whose `step_id` lies in the **transitive dependency closure** of the current step (per the scoped `AgentDecision`). Sibling steps in the same parallel wave are **excluded**—only predecessors the DAG names are replayed.
-2. **Current envelope:** The standard execute-step `LoopHumanMessage` envelope for this step (goal + step instruction + dynamic context), as in §2.
+#### Dependent steps (same goal, DAG `dependencies`)
 
-Replay is a **projection** of the single authoritative ledger, not a second transcript. A configurable cap limits how many predecessor messages are copied (large waves stay bounded); when set, `plan_prompt_ledger.plan_ledger_max_messages` may serve as that upper bound.
+The executor builds CoreAgent input as a **single** execute-step envelope:
+
+1. **Current envelope only:** `LoopHumanMessage` with `GOAL`, optional `PRIOR STEP EVIDENCE`, and `EXECUTION HINTS` (see §2). Predecessor bodies are built from the latest transitive-predecessor `LoopAIMessage` rows in `loop_messages`, or from `StepResult` when ledger text is missing, via `build_prior_step_evidence()` (capped at 4000 characters with ellipsis truncation).
+2. **No ledger replay:** The executor does **not** deep-copy predecessor Human/AI ledger rows into the graph input. Replaying those rows while also embedding the same AI text under `PRIOR STEP EVIDENCE` duplicates predecessor content (observed as ~2× token cost and confused step boundaries in production traces).
+
+The authoritative ledger remains unchanged — plan-assess, plan-generate, and synthesis still read full `loop_messages`.
+
+#### Loop-continuation bootstrap (`continue_loop=True`, no dependencies)
+
+When a new goal continues a prior loop (RFC-225), the first bootstrap step has no `dependencies` and no `PRIOR STEP EVIDENCE` envelope section. The executor sends a **single** execute envelope whose `PRIOR GOAL COMPLETION` section carries the prior goal’s synthesized completion report (from checkpoint `goal_completion` or ledger `phase=goal_completion` AI rows). Prior-goal `execute_step` Human/AI ledger rows are **not** replayed into CoreAgent input — the completion report is the authoritative continuation context.
+
+When `continue` has actionable recommendations in that report, `plan_assess` may escalate to `plan_generate` instead of bootstrap (RFC-226).
 
 `StepResult` and ledger appends continue to use the **logical** `thread_id`; only the LangGraph stream/checkpoint namespace may use the derived id.
 
@@ -438,7 +448,8 @@ CoreAgent.astream(messages)
   |     Static: identity + tools + policies + directives
   |     Semi-static: workspace rules + workspace + environment + memory summary + context + thread + protocols
   +-- Message list: execute-step ledger projection (see §3); on **parallel branch** namespaces,
-  |     optional transitive-predecessor replay (§3.1) then the current-step envelope
+  |     dependent steps: single current envelope with `PRIOR STEP EVIDENCE` (§3.1);
+  |     loop-continuation bootstrap: optional prior-goal ledger replay then envelope
   +-- CoreAgent thread (per checkpoint namespace) receives only that projection + envelope — never plan-phase rows
   |
   v
@@ -501,7 +512,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 
 **Current**: Synthesis, thread checks, and parallel branches historically used ad hoc context (e.g. empty branch checkpoints without predecessor execute history).
 
-**Target**: `LoopAIMessage(phase="goal_completion")`, `LoopHumanMessage(phase="thread_check")`. All orchestration turns in ledger. **Parallel branches:** replay transitive-predecessor `execute_step` ledger rows into the branch CoreAgent input before the current envelope (§3.1); logical ledger remains canonical.
+**Target**: `LoopAIMessage(phase="goal_completion")`, `LoopHumanMessage(phase="thread_check")`. All orchestration turns in ledger. **Parallel branches:** dependent steps receive predecessor output only inside the current envelope’s `PRIOR STEP EVIDENCE` block (§3.1); loop-continuation bootstrap may still replay prior-goal execute rows; logical ledger remains canonical.
 
 ### G9: Volatile Content in System Prompt Breaks Caching
 
@@ -601,7 +612,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 1. **Plan reconstruction without LangGraph dependency**: Given a resumed StrangeLoop checkpoint, Plan can reconstruct full context from ledger + metadata alone.
 2. **Deterministic step-outcome pairing**: Each completed step has exactly one `(LoopHumanMessage, LoopAIMessage)` pair in the ledger.
 3. **Serde round-trip fidelity**: Checkpoint serialization preserves `LoopHumanMessage`/`LoopAIMessage` types, never deserializes as `dict`.
-4. **CoreAgent isolation**: CoreAgent input contains only `phase="execute_step"` messages (and the current-step envelope). Plan-phase reasoning never leaks into CoreAgent context. Parallel branch namespaces (§3.1) additionally receive a bounded predecessor slice from the same ledger—never plan-phase rows.
+4. **CoreAgent isolation**: CoreAgent input contains only `phase="execute_step"` messages (and the current-step envelope). Plan-phase reasoning never leaks into CoreAgent context. Parallel branch namespaces (§3.1) ground same-goal dependent steps via `PRIOR STEP EVIDENCE` in the envelope only — not by replaying predecessor ledger rows. Loop-continuation bootstrap may still prepend prior-goal execute ledger rows.
 
 ### Cache Performance
 
@@ -623,3 +634,4 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 | 2026-05-08 | Major revision: volatility-tiered prompt architecture, user message envelope, complete ledger with plan-assess/plan-generate phases, CoreAgent isolation, reference-based dedup, cache optimization, G9-G11, amendments to RFC-104/206/217 |
 | 2026-05-13 | Execute-step envelope layout: `<CURRENT_GOAL>` + `<USER_QUERY>` before `--- Context ---` + `<DYNAMIC_CONTEXT>` (goal no longer nested under `<DYNAMIC_CONTEXT>`). `<CURRENT_GOAL>` omits iteration suffixes (stripped if present on stored goal text); execute iteration is not duplicated in the envelope — use ledger / message metadata. |
 | 2026-05-13 | §3.1 **Parallel execute branches:** isolated LangGraph `thread_id` per concurrent step; executor injects transitive-predecessor `execute_step` ledger replay before the step envelope so branches see dependency history without sibling cross-talk. G8 target text aligned. |
+| 2026-07-01 | §3.1 **Dependent-step deduplication:** same-goal DAG dependents ground predecessors only via `PRIOR STEP EVIDENCE` in the execute envelope (single Human message to CoreAgent). Removed predecessor Human/AI ledger replay for dependent steps — it duplicated AI bodies already embedded in the envelope. **Loop-continuation bootstrap** now uses envelope `PRIOR GOAL COMPLETION` only (no `prior_loop_execute_messages()` replay). G8 and success-criterion §4 aligned. |

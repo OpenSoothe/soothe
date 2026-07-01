@@ -11,6 +11,7 @@ from typing import Any
 
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import StatusAssessment
+from soothe.foundation.sloop.utils.loop_reason_display import is_displayable_plan_reasoning
 
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
@@ -89,7 +90,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     ctx.scratch.plan_result = plan_result
 
     plan_reasoning = (plan_result.plan_reasoning or "").strip()
-    if plan_reasoning:
+    if is_displayable_plan_reasoning(plan_reasoning):
         await ctx.emit(
             "generate",
             {

@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -43,8 +44,8 @@ def _astream_messages(mock_agent: MagicMock) -> list:
 
 
 @pytest.mark.asyncio
-async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
-    """Multi-dependency steps inject transitive predecessor ledger messages."""
+async def test_multi_dep_step_uses_envelope_evidence_only() -> None:
+    """Multi-dependency steps ground predecessors via PRIOR STEP EVIDENCE, not ledger replay."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -54,7 +55,7 @@ async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
         id="C",
         description="third",
         expected_output="o3",
-        dependencies=["A", "B"],  # Multi-dep triggers message injection
+        dependencies=["A", "B"],
     )
     decision = AgentDecision(
         type="execute_steps",
@@ -103,16 +104,17 @@ async def test_multi_dep_step_injects_transitive_predecessor_ledger() -> None:
         loop_state=state,
     )
 
-    # Multi-dep steps inject predecessor messages (transitive closure)
     messages = _astream_messages(mock_agent)
-    # Should have predecessor messages + execute envelope
-    assert len(messages) >= 1
-    # Last message should be the execute envelope
-    assert isinstance(messages[-1], LoopHumanMessage)
-    assert messages[-1].phase == "execute_step"
-    assert "third" in str(messages[-1].content)
+    assert len(messages) == 1
+    envelope = str(messages[0].content)
+    assert "PRIOR STEP EVIDENCE" in envelope
+    assert "ledger-ai-A" in envelope
+    assert "ledger-ai-B" in envelope
+    assert "ledger-human-A" not in envelope
+    assert isinstance(messages[0], LoopHumanMessage)
+    assert messages[0].phase == "execute_step"
+    assert "third" in envelope
 
-    # Thread fork from main (multi-dep fallback)
     cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
     assert cfg["thread_id"] == "logical-t__step_C"
 
@@ -170,11 +172,12 @@ async def test_singleton_dependent_step_uses_fresh_thread_and_evidence() -> None
     assert state.step_thread_ids.get("B") == "logical-t__step_B"
 
     messages = _astream_messages(mock_agent)
-    assert len(messages) >= 2
-    envelope = str(messages[-1].content)
+    assert len(messages) == 1
+    envelope = str(messages[0].content)
     assert "PRIOR STEP EVIDENCE" in envelope
     assert "ledger-ai-A with failure details" in envelope
     assert "do not repeat completed discovery steps" in envelope
+    assert "ledger-human-A" not in envelope
 
 
 @pytest.mark.asyncio
@@ -234,20 +237,16 @@ async def test_step_without_loop_state_uses_main_thread() -> None:
 
 
 @pytest.mark.asyncio
-async def test_multi_dep_respects_plan_ledger_max_messages_cap() -> None:
-    """Multi-dep predecessor injection respects plan_ledger_max_messages cap."""
+async def test_multi_dep_sends_single_envelope_message() -> None:
+    """Dependent steps send one execute envelope; no predecessor ledger replay."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
-
-    cfg = MagicMock()
-    cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_messages = 3
-    cfg.agent.loop.concurrency.max_parallel_tools = 5
 
     step_c = StepAction(
         id="C",
         description="consume",
         expected_output="o",
-        dependencies=["A", "B"],  # Multi-dep
+        dependencies=["A", "B"],
     )
     decision = AgentDecision(
         type="execute_steps",
@@ -268,7 +267,7 @@ async def test_multi_dep_respects_plan_ledger_max_messages_cap() -> None:
         loop_messages=ledger,
         step_thread_ids={"A": "logical-t__step_A", "B": "logical-t__step_B"},
     )
-    executor = Executor(mock_agent, config=cfg, checkpointer=mock_checkpointer)
+    executor = Executor(mock_agent, checkpointer=mock_checkpointer)
 
     await executor._execute_step_collecting_events(
         step_c,
@@ -277,8 +276,7 @@ async def test_multi_dep_respects_plan_ledger_max_messages_cap() -> None:
     )
 
     messages = _astream_messages(mock_agent)
-    # Should have up to cap predecessor messages + execute envelope
-    assert len(messages) <= 4  # cap=3 predecessors + 1 envelope
+    assert len(messages) == 1
 
 
 @pytest.mark.asyncio
@@ -341,10 +339,10 @@ async def test_step_without_current_decision_uses_main_thread() -> None:
 
 
 @pytest.mark.asyncio
-async def test_multi_dep_injection_logs_threadfork(
+async def test_multi_dep_does_not_log_threadfork_injection(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Multi-dep steps log ThreadFork message injection."""
+    """Dependent steps no longer replay predecessor ledger rows into graph input."""
     caplog.set_level(logging.INFO)
 
     mock_agent = _make_mock_agent()
@@ -354,7 +352,7 @@ async def test_multi_dep_injection_logs_threadfork(
         id="C",
         description="third",
         expected_output="o3",
-        dependencies=["A", "B"],  # Multi-dep triggers injection
+        dependencies=["A", "B"],
     )
     decision = AgentDecision(
         type="execute_steps",
@@ -381,8 +379,8 @@ async def test_multi_dep_injection_logs_threadfork(
         loop_state=state,
     )
 
-    assert "[ThreadFork]" in caplog.text
-    assert "injected" in caplog.text
+    assert "[ThreadFork]" not in caplog.text
+    assert len(_astream_messages(mock_agent)) == 1
 
 
 @pytest.mark.asyncio
@@ -458,8 +456,8 @@ async def test_hydrate_dependent_steps_skipped_when_disabled() -> None:
 
 
 @pytest.mark.asyncio
-async def test_continue_loop_bootstrap_injects_prior_execute_ledger() -> None:
-    """Loop continuation bootstrap replays prior execute_step ledger rows."""
+async def test_continue_loop_bootstrap_uses_prior_goal_completion_envelope() -> None:
+    """Loop continuation bootstrap grounds prior work via PRIOR GOAL COMPLETION only."""
     mock_agent = _make_mock_agent()
     step = StepAction(id="bootstrap", description="Continue prior work")
     decision = AgentDecision(
@@ -467,6 +465,9 @@ async def test_continue_loop_bootstrap_injects_prior_execute_ledger() -> None:
         steps=[step],
         execution_mode="parallel",
         reasoning="r",
+    )
+    completion_body = (
+        "## Recommendations\nImplement envelope-only continuation grounding for the next goal."
     )
     ledger = [
         LoopHumanMessage(
@@ -479,6 +480,11 @@ async def test_continue_loop_bootstrap_injects_prior_execute_ledger() -> None:
             content="ledger-ai-prior git diff output",
             phase="execute_step",
             step_id="MUY-01",
+            thread_id="logical-t",
+        ),
+        LoopAIMessage(
+            content=completion_body,
+            phase="goal_completion",
             thread_id="logical-t",
         ),
     ]
@@ -500,14 +506,9 @@ async def test_continue_loop_bootstrap_injects_prior_execute_ledger() -> None:
     )
 
     messages = _astream_messages(mock_agent)
-    assert any(
-        getattr(m, "content", "") == "ledger-human-prior"
-        or "ledger-ai-prior git diff output" in str(getattr(m, "content", ""))
-        for m in messages
-    )
-    envelope = messages[-1].content if messages else ""
-    assert (
-        "review" in envelope.lower()
-        or "continue" in envelope.lower()
-        or "prior" in envelope.lower()
-    )
+    assert len(messages) == 1
+    envelope = str(getattr(messages[0], "content", ""))
+    assert "PRIOR GOAL COMPLETION" in envelope
+    assert completion_body in envelope
+    assert "ledger-human-prior" not in envelope
+    assert "ledger-ai-prior git diff output" not in envelope

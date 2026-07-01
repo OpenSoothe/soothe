@@ -75,3 +75,53 @@ def test_loading_widget_startup_mode_still_shows_elapsed() -> None:
         assert widget._elapsed_seconds() == 12.0
         hint = widget._format_hint_line(widget._elapsed_seconds(), include_interrupt=False)
     assert hint == "(12s)"
+
+
+@pytest.mark.asyncio
+async def test_loading_widget_activate_status_restarts_stopped_timer() -> None:
+    from textual.app import App, ComposeResult
+    from textual.containers import Container
+
+    class _Harness(App[None]):
+        def compose(self) -> ComposeResult:
+            yield Container(id="thinking-status")
+
+    app = _Harness()
+    async with app.run_test() as pilot:
+        container = app.query_one("#thinking-status", Container)
+        widget = LoadingWidget("Waiting for agent to be ready", show_interrupt_hint=False)
+        await container.mount(widget)
+        await pilot.pause()
+        assert widget._animation_timer is not None
+        widget._stop_timer()
+        widget.activate_status("Connecting to daemon", show_interrupt_hint=False)
+        assert widget._animation_timer is not None
+        await pilot.pause(1.1)
+        assert int(widget._elapsed_seconds()) >= 1
+
+
+@pytest.mark.asyncio
+async def test_loading_widget_elapsed_ticks_after_connect_status_change() -> None:
+    """Daemon connect updates the label without freezing the elapsed-time counter."""
+    from textual.app import App, ComposeResult
+    from textual.containers import Container
+
+    class _Harness(App[None]):
+        def compose(self) -> ComposeResult:
+            yield Container(id="thinking-status")
+
+    app = _Harness()
+    async with app.run_test() as pilot:
+        container = app.query_one("#thinking-status", Container)
+        widget = LoadingWidget("Waiting for agent to be ready", show_interrupt_hint=False)
+        await container.mount(widget)
+        await pilot.pause(1.1)
+        elapsed_before = int(widget._elapsed_seconds())
+        widget.activate_status("Connecting to daemon", show_interrupt_hint=False)
+        await pilot.pause(1.1)
+        elapsed_after = int(widget._elapsed_seconds())
+        assert elapsed_before >= 1
+        assert elapsed_after >= elapsed_before + 1
+        assert widget._format_hint_line(float(elapsed_after), include_interrupt=False) == (
+            f"({elapsed_after}s)"
+        )

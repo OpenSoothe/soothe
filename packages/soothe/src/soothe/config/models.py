@@ -1387,6 +1387,9 @@ class StrangeLoopConfig(BaseModel):
         tool_retry: Tool failure retry policy.
         llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
         tool_timeout: Tool timeout middleware configuration (IG-511).
+        plan_assess_model_role: Router role for plan-assess LLM calls (default ``think``).
+        plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
+        goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``think``).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1555,6 +1558,24 @@ class StrangeLoopConfig(BaseModel):
         description="Tool timeout middleware configuration",
     )
     """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
+
+    plan_assess_model_role: ModelRole = Field(
+        default="think",
+        description=(
+            "Router model role for plan-assess structured LLM calls "
+            "(status assessment and continuation routing)."
+        ),
+    )
+
+    plan_generate_model_role: ModelRole = Field(
+        default="think",
+        description="Router model role for plan-generate structured LLM calls.",
+    )
+
+    goal_synthesis_model_role: ModelRole = Field(
+        default="think",
+        description="Router model role for goal-completion synthesis streaming.",
+    )
 
     context_engine: ContextEngineConfig = Field(
         default_factory=lambda: ContextEngineConfig(),

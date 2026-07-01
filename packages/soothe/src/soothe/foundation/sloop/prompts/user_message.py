@@ -197,6 +197,7 @@ class UserMessageBuilder:
         dag_context: Any = None,
         skill_context: str | None = None,
         prior_progress: PriorProgressDigest | None = None,
+        prior_goal_completion: str | None = None,
         current_iteration: int | None = None,
         context_bundle: ContextBundle | None = None,
     ) -> str:
@@ -208,6 +209,7 @@ class UserMessageBuilder:
             dag_context: Optional DagPlanningContext.
             skill_context: Skill reference body.
             prior_progress: RFC-227 per-wave digest.
+            prior_goal_completion: Prior goal synthesis report for loop continuation.
             current_iteration: Current loop iteration.
             context_bundle: Optional ContextBundle from ContextEngine.project().
 
@@ -217,6 +219,9 @@ class UserMessageBuilder:
         sections: list[tuple[str, str]] = [
             ("GOAL", _goal_text(goal)),
         ]
+
+        if (prior_goal_completion or "").strip():
+            sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
 
         # Prior progress (with staleness check)
         if prior_progress is not None:
@@ -248,7 +253,7 @@ class UserMessageBuilder:
             (
                 "TASK",
                 "Generate the execution plan: steps (with full_description for actions), "
-                "execution_mode, first-person reasoning, and next_action.",
+                "execution_mode, and first-person reasoning.",
             )
         )
 
@@ -260,6 +265,7 @@ class UserMessageBuilder:
         *,
         execution_hints: str | None = None,
         predecessor_evidence: str | None = None,
+        prior_goal_completion: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
@@ -270,6 +276,7 @@ class UserMessageBuilder:
             step_description: The step's description or full_description (what to execute).
             execution_hints: Hints text with merged task instructions (IG-508).
             predecessor_evidence: Completed predecessor step output for dependent steps.
+            prior_goal_completion: Prior goal synthesis report for loop continuation.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
@@ -283,6 +290,9 @@ class UserMessageBuilder:
 
         if (predecessor_evidence or "").strip():
             sections.append(("PRIOR STEP EVIDENCE", predecessor_evidence.strip()))
+
+        if (prior_goal_completion or "").strip():
+            sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
 
         # IG-508: EXECUTION HINTS now contains merged task instructions
         if execution_hints:

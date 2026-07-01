@@ -481,10 +481,10 @@ class TestPlanGeneration:
         routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
         assert resolve_wire_subagent_for_step(step, routing) == "explore"
 
-    def test_new_requires_flattened_fields(self) -> None:
-        """Plan generation requires top-level decision fields."""
+    def test_new_requires_type(self) -> None:
+        """Plan generation requires top-level type."""
         with pytest.raises(ValidationError):
-            PlanGeneration(next_action="test")
+            PlanGeneration(reasoning="test")
 
     def test_new_final_allows_empty_steps(self) -> None:
         """type=final matches AgentDecision: no execute steps required."""
@@ -492,7 +492,7 @@ class TestPlanGeneration:
             type="final",
             execution_mode="parallel",
             steps=[],
-            next_action="Wrapping up.",
+            reasoning="Wrapping up.",
         )
         assert out.type == "final"
         assert out.steps == []
@@ -504,7 +504,6 @@ class TestPlanGeneration:
                 type="execute_steps",
                 execution_mode="parallel",
                 steps=[],
-                next_action="x",
             )
 
     def test_new_defaults_execution_mode_when_omitted(self) -> None:
@@ -512,7 +511,7 @@ class TestPlanGeneration:
         out = PlanGeneration(
             type="final",
             steps=[],
-            next_action="Done.",
+            reasoning="Done.",
         )
         assert out.execution_mode == "parallel"
 
@@ -522,7 +521,6 @@ class TestPlanGeneration:
         out = PlanGeneration(
             type="execute_steps",
             steps=[step],
-            next_action="Running.",
         )
         assert out.execution_mode == "parallel"
 
@@ -533,7 +531,6 @@ class TestPlanGeneration:
                 type="execute_steps",
                 steps=[PlanGenerateStep(description="x", expected_output="ok")],
                 execution_mode="sequential",
-                next_action="Run.",
             )
         with pytest.raises(ValidationError):
             AgentDecision(
@@ -548,6 +545,7 @@ class TestPlanGeneration:
 
         props = plan_generation_model_for_iteration(1).model_json_schema()["properties"]
         assert "plan_action" not in props
+        assert "next_action" not in props
 
     def test_derive_plan_action(self) -> None:
         from soothe.foundation.sloop.state.schemas import derive_plan_action
@@ -570,7 +568,6 @@ class TestPlanGeneration:
                 type="execute_steps",
                 execution_mode="parallel",
                 steps=steps,
-                next_action="Proceed.",
             )
 
     def test_first_wave_model_accepts_two_steps(self) -> None:
@@ -584,7 +581,6 @@ class TestPlanGeneration:
                 PlanGenerateStep(id="01", description="recon", expected_output="map"),
                 PlanGenerateStep(id="02", description="implement", expected_output="done"),
             ],
-            next_action="Starting.",
         )
         assert len(out.steps) == 2
 
@@ -600,7 +596,6 @@ class TestPlanGeneration:
                 PlanGenerateStep(id="01", description=f"step {i}", expected_output="ok")
                 for i in range(3)
             ],
-            next_action="Proceed.",
         )
         assert len(out.steps) == 3
 

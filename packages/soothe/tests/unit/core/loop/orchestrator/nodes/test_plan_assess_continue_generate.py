@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from soothe.foundation.sloop.orchestrator.nodes.plan_assess import node_plan_assess
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -136,9 +137,15 @@ def _make_ctx(
 
 
 @pytest.mark.asyncio
-async def test_continue_keyword_bootstraps_without_llm_assess() -> None:
-    """Lone ``continue`` uses bootstrap plan with prior goal text and skips assess LLM."""
+async def test_continue_keyword_routes_through_assess_bootstrap() -> None:
+    """Lone ``continue`` uses continuation-assess and envelope-grounded bootstrap plan."""
     ctx = _make_ctx(goal="continue")
+    continuation = ContinuationAssessment(
+        action="bootstrap",
+        reasoning="Prior completion is a short summary only.",
+        goal_progress="low",
+    )
+    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
 
     cancelled_goal = MagicMock()
     cancelled_goal.id = "goal-0"
@@ -153,12 +160,89 @@ async def test_continue_keyword_bootstraps_without_llm_assess() -> None:
     result = await node_plan_assess(ctx, {})
 
     assert result.get("assess_route") == "skip_generate"
+    ctx.strange_loop.loop_planner.assess_continuation.assert_awaited_once()
     assert ctx.scratch.plan_result is not None
     assert ctx.scratch.plan_assessment is None
     step = ctx.scratch.plan_result.decision.steps[0]
-    assert "review all local changes" in step.description
-    assert ctx.scratch.plan_result.terminal_after_execute is False
-    ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
+    assert step.description == "Continue prior goal completion recommendations"
+    assert "PRIOR GOAL COMPLETION" in (step.full_description or "")
+    assert "review all local changes" not in (step.full_description or "")
+    assert "review all local changes" not in step.description
+    assert ctx.scratch.plan_result.terminal_after_execute is True
+
+
+@pytest.mark.asyncio
+async def test_continue_keyword_respects_assess_plan_generate() -> None:
+    """Continue keyword defers bootstrap vs plan_generate to continuation-assess LLM."""
+    ctx = _make_ctx(goal="continue")
+    prior = ctx.checkpoint.goal_history[0]
+    prior.goal_completion = (
+        "## Recommendations\n"
+        "High priority: implement continuation envelope grounding. "
+        "Must complete unit tests and update RFC documentation."
+    )
+    completed_goal = MagicMock()
+    completed_goal.id = "goal-0"
+    completed_goal.description = prior.goal_text
+    completed_goal.status = "completed"
+    completed_goal.action_history = []
+    completed_goal.steps = MagicMock()
+    completed_goal.steps.nodes = {"s1": MagicMock(status="completed")}
+    ctx.ce.get_all_goals.return_value = [completed_goal]
+
+    continuation = ContinuationAssessment(
+        action="plan_generate",
+        reasoning="Prior report lists implementation follow-up work.",
+        goal_progress="none",
+    )
+    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
+
+    result = await node_plan_assess(ctx, {})
+
+    assert result.get("assess_route") == "continue_generate"
+    assert ctx.scratch.plan_assessment is not None
+    assert "implementation follow-up" in ctx.scratch.plan_assessment.assessment_reasoning
+
+
+@pytest.mark.asyncio
+async def test_continue_keyword_plan_event_omits_duplicate_reason_display() -> None:
+    """Continue keyword bootstrap suppresses boilerplate on the plan wire event."""
+    emitted: list[tuple[str, dict[str, object]]] = []
+    ctx = _make_ctx(goal="continue")
+    continuation = ContinuationAssessment(
+        action="bootstrap",
+        reasoning="Prior completion is a short summary only.",
+        goal_progress="low",
+    )
+    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
+
+    cancelled_goal = MagicMock()
+    cancelled_goal.id = "goal-0"
+    cancelled_goal.description = "review all local changes"
+    cancelled_goal.status = "cancelled"
+    cancelled_goal.action_history = []
+    cancelled_goal.steps = MagicMock()
+    cancelled_goal.steps.nodes = {"s1": MagicMock(status="completed")}
+
+    ctx.ce.get_all_goals.return_value = [cancelled_goal]
+
+    async def emit(event_type: str, event_data: object) -> None:
+        if isinstance(event_data, dict):
+            emitted.append((event_type, event_data))
+
+    ctx.emit = emit  # type: ignore[method-assign]
+
+    await node_plan_assess(ctx, {})
+
+    plan_events = [d for t, d in emitted if t == "plan"]
+    assert len(plan_events) == 1
+    assert plan_events[0]["assessment_reasoning"] == ""
+    assert plan_events[0]["plan_reasoning"] == ""
+    assert plan_events[0]["next_action"] == ""
+    assert ctx.scratch.plan_result is not None
+    assert (
+        ctx.scratch.plan_result.assessment_reasoning == "Prior completion is a short summary only."
+    )
 
 
 @pytest.mark.asyncio
