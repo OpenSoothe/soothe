@@ -296,11 +296,17 @@ class _UIMixin:
 
         return children[-1] == self._loading_widget
 
-    async def _set_spinner(self, status: SpinnerStatus) -> None:
+    async def _set_spinner(
+        self,
+        status: SpinnerStatus,
+        *,
+        show_interrupt_hint: bool = True,
+    ) -> None:
         """Show, update, or hide the loading spinner.
 
         Args:
             status: The spinner status to display, or `None` to hide.
+            show_interrupt_hint: When ``False``, omit elapsed-time / esc hint on the row.
         """
         if status is None:
             # Hide
@@ -314,13 +320,17 @@ class _UIMixin:
         if self._loading_widget is None:
             # Create new
             turn_mono = self._inflight_turn_start if self._agent_running else None
-            self._loading_widget = LoadingWidget(status, turn_start_mono=turn_mono)
+            self._loading_widget = LoadingWidget(
+                status,
+                turn_start_mono=turn_mono,
+                show_interrupt_hint=show_interrupt_hint,
+            )
             await thinking_status.mount(self._loading_widget)
         else:
             if self._agent_running:
                 self._loading_widget.set_turn_start_mono(self._inflight_turn_start)
             # Update existing (also clears a clarification pause)
-            self._loading_widget.activate_status(status)
+            self._loading_widget.activate_status(status, show_interrupt_hint=show_interrupt_hint)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
 

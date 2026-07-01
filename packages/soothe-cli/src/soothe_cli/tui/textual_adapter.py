@@ -131,6 +131,8 @@ SPINNER_LABEL_CLASSIFYING = "Classifying request"
 SPINNER_LABEL_EXECUTING = "Executing step"
 SPINNER_LABEL_RUNNING_TOOLS = "Running tools"
 SPINNER_LABEL_AWAITING_ANSWER = "Awaiting your answer"
+SPINNER_LABEL_WAITING_AGENT_READY = "Waiting for agent to be ready"
+SPINNER_LABEL_CONNECTING_DAEMON = "Connecting to daemon"
 
 
 class TextualUIAdapter:
