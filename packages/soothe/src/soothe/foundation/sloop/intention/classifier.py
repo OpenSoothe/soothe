@@ -24,7 +24,7 @@ from .models import (
     IntakeClassificationLLMResult,
     IntakeLabel,
     IntentClassification,
-    TaskComplexity,
+    derive_task_complexity_from_intake,
 )
 from .prompts import (
     INTAKE_CLASSIFICATION_PROMPT,
@@ -214,7 +214,7 @@ class IntentClassifier:
             intake_label=IntakeLabel.QUIZ,
             reasoning=None,
             goal_description=None,
-            task_complexity=TaskComplexity.MINIMAL,
+            task_complexity=derive_task_complexity_from_intake(IntakeLabel.QUIZ),
             quiz_response=None,
         )
 
@@ -232,7 +232,7 @@ class IntentClassifier:
             intake_label=IntakeLabel.COMPLEX,
             reasoning="Let me run the full agent loop to work through this goal.",
             goal_description=query,
-            task_complexity=TaskComplexity.COMPLEX,
+            task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
             quiz_response=None,
         )
 

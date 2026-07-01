@@ -14,6 +14,7 @@ from soothe.foundation.sloop.intention import IntentClassification, IntentClassi
 from soothe.foundation.sloop.intention.models import (
     IntakeClassificationLLMResult,
     IntakeLabel,
+    derive_task_complexity_from_intake,
 )
 from soothe.foundation.sloop.intention.prompts import (
     INTAKE_CLASSIFICATION_PROMPT,
@@ -48,18 +49,34 @@ class TestIntentClassificationModel:
         assert intent.quiz_response is None
 
 
+class TestDeriveTaskComplexityFromIntake:
+    """``task_complexity`` is derived from ``intake_label``, not LLM output."""
+
+    def test_quiz_maps_to_minimal(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.QUIZ) == TaskComplexity.MINIMAL
+
+    def test_trivial_maps_to_simple(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.TRIVIAL) == TaskComplexity.SIMPLE
+
+    def test_simple_maps_to_simple(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.SIMPLE) == TaskComplexity.SIMPLE
+
+    def test_complex_maps_to_complex(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.COMPLEX) == TaskComplexity.COMPLEX
+
+
 class TestIntakeClassificationLLMResult:
     """Test the 4-class intake schema and its resolution (RFC-630)."""
 
     def test_quiz_resolves_to_quiz(self) -> None:
         llm_result = IntakeClassificationLLMResult(
             intake_label=IntakeLabel.QUIZ,
-            task_complexity=TaskComplexity.MINIMAL,
             quiz_response="Hi there!",
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "quiz"
         assert intent.intake_label == IntakeLabel.QUIZ
+        assert intent.task_complexity == TaskComplexity.MINIMAL
         assert intent.quiz_response == "Hi there!"
 
     def test_trivial_resolves_to_agentic_trivial(self) -> None:
@@ -67,11 +84,11 @@ class TestIntakeClassificationLLMResult:
             intake_label=IntakeLabel.TRIVIAL,
             reasoning="one obvious step",
             goal_description="list files in this directory",
-            task_complexity=TaskComplexity.SIMPLE,
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.TRIVIAL
+        assert intent.task_complexity == TaskComplexity.SIMPLE
         assert intent.goal_description == "list files in this directory"
 
     def test_simple_resolves_to_agentic_simple(self) -> None:
@@ -79,22 +96,22 @@ class TestIntakeClassificationLLMResult:
             intake_label=IntakeLabel.SIMPLE,
             reasoning="single focused step",
             goal_description="summarize RFC-220 topology",
-            task_complexity=TaskComplexity.SIMPLE,
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.SIMPLE
+        assert intent.task_complexity == TaskComplexity.SIMPLE
 
     def test_complex_resolves_to_agentic_complex(self) -> None:
         llm_result = IntakeClassificationLLMResult(
             intake_label=IntakeLabel.COMPLEX,
             reasoning="multi-step refactor",
             goal_description="refactor the persistence layer",
-            task_complexity=TaskComplexity.COMPLEX,
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.COMPLEX
+        assert intent.task_complexity == TaskComplexity.COMPLEX
 
 
 class TestIntakeClassificationPrompts:
@@ -122,6 +139,12 @@ class TestIntakeClassificationPrompts:
     def test_primary_prompt_excludes_runtime_state_from_quiz(self) -> None:
         assert "runtime state" in INTAKE_CLASSIFICATION_PROMPT
         assert "workspace" in INTAKE_CLASSIFICATION_PROMPT
+
+    def test_primary_prompt_omits_task_complexity(self) -> None:
+        assert "task_complexity" not in INTAKE_CLASSIFICATION_PROMPT
+
+    def test_retry_prompt_omits_task_complexity(self) -> None:
+        assert "task_complexity" not in INTAKE_CLASSIFICATION_RETRY_PROMPT
 
     def test_primary_prompt_requests_first_person_reasoning(self) -> None:
         prompt = INTAKE_CLASSIFICATION_PROMPT.lower()

@@ -39,3 +39,14 @@ def test_execution_policies_forbids_sequential_mode() -> None:
 
     assert "never ``sequential``" in EXECUTION_POLICIES_FRAGMENT
     assert "only ``parallel`` or ``dependency``" in EXECUTION_POLICIES_FRAGMENT
+
+
+def test_plan_generate_preserves_contract_guards() -> None:
+    """Regression: condensed prompt must retain schema-critical rules."""
+    text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
+    assert "full_description" in text
+    assert "kind=ask_user" in text or 'kind="ask_user"' in text
+    assert "Language lock" in text
+    assert "same natural language as the current goal statement" in text
+    assert "NEVER at iteration 0" in text
+    assert len(text) < 3500  # guard against prompt bloat (was ~5900 bytes pre-condense)

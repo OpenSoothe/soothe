@@ -22,10 +22,9 @@ When intake_label is "quiz", also provide:
 When intake_label is not "quiz", also provide:
 - reasoning: ONE brief first-person sentence (max 20 words) starting with "I'll" or "Let me" — what you will do next and why tools/action are needed. Examples: "I'll inspect the repo layout to map the architecture.", "Let me search the web for today's weather.", "I'll continue from our prior thread and summarize the draft."
 - goal_description: normalized goal description.
-- task_complexity: minimal|simple|medium|complex (minimal=quiz only; simple=one step; medium=several steps; complex=architecture/migration/multi-phase).
 
 JSON schema:
-{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","task_complexity":"minimal"|"simple"|"medium"|"complex","quiz_response":"string|null"}}
+{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","quiz_response":"string|null"}}
 </intent_instructions>
 
 <current_time>{current_time}</current_time>

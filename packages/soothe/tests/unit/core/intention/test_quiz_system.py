@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
+
 from soothe.foundation.sloop.intention.quiz_messages import build_quiz_system_message
 
 
@@ -38,13 +39,11 @@ class TestIntakeClassifierQuizMessages:
         from soothe.foundation.sloop.intention.models import (
             IntakeClassificationLLMResult,
             IntakeLabel,
-            TaskComplexity,
         )
 
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
         mock_result = IntakeClassificationLLMResult(
             intake_label=IntakeLabel.QUIZ,
-            task_complexity=TaskComplexity.MINIMAL,
             quiz_response="I'm Soothe, your assistant.",
         )
 
