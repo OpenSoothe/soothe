@@ -35,6 +35,7 @@ T = TypeVar("T")
 _SENTINEL = object()
 
 # Lower number = higher priority (matches asyncio.PriorityQueue ordering).
+PRIORITY_CRITICAL = -1  # step lifecycle / plan progress — never evict from queue
 PRIORITY_HIGH = 0
 PRIORITY_NORMAL = 1
 PRIORITY_LOW = 2
@@ -82,7 +83,7 @@ class TurnApplyBatcher(Generic[T]):
         """
         self._pending.append(prepared)
         priority = getattr(prepared, "priority", PRIORITY_LOW)
-        if priority == PRIORITY_HIGH:
+        if priority <= PRIORITY_HIGH:
             self._high_priority_count += 1
 
         now = time.monotonic()
@@ -129,6 +130,7 @@ class TurnEventPipeline(Generic[T]):
             maxsize=outbound_maxsize
         )
         self._outbound_seq = 0
+        self._outbound_dropped = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._processor_error: BaseException | None = None
@@ -182,13 +184,105 @@ class TurnEventPipeline(Generic[T]):
         self._thread.start()
 
     def _put_outbound(self, priority: int, item: Any) -> None:
-        """Enqueue a prepared chunk from the processor thread (thread-safe, non-blocking)."""
+        """Enqueue a prepared chunk from the processor thread (thread-safe).
+
+        When the outbound queue is full, evict the lowest-priority buffered chunk
+        (streaming text) instead of dropping the incoming chunk. Step lifecycle
+        events use ``PRIORITY_CRITICAL`` and are never evicted.
+        """
         seq = self._outbound_seq
         self._outbound_seq += 1
+        entry = (priority, seq, item)
         try:
-            self._outbound.put_nowait((priority, seq, item))
+            self._outbound.put_nowait(entry)
+            return
         except queue.Full:
-            logger.warning("Turn outbound queue full; dropping prepared chunk")
+            pass
+
+        if not self._evict_outbound_drop_candidate(incoming_priority=priority):
+            if priority <= PRIORITY_HIGH:
+                # Block briefly so the applier can drain HIGH/CRITICAL backlog.
+                try:
+                    self._outbound.put(entry, block=True, timeout=5.0)
+                    return
+                except queue.Full:
+                    logger.warning(
+                        "Turn outbound queue still full after wait; dropping prepared chunk "
+                        "(priority=%d)",
+                        priority,
+                    )
+                    self._outbound_dropped += 1
+                    return
+            logger.warning(
+                "Turn outbound queue full; dropping low-priority prepared chunk (priority=%d)",
+                priority,
+            )
+            self._outbound_dropped += 1
+            return
+
+        try:
+            self._outbound.put_nowait(entry)
+        except queue.Full:
+            if priority <= PRIORITY_HIGH:
+                try:
+                    self._outbound.put(entry, block=True, timeout=5.0)
+                except queue.Full:
+                    logger.warning(
+                        "Turn outbound queue full after eviction; dropping prepared chunk "
+                        "(priority=%d)",
+                        priority,
+                    )
+                    self._outbound_dropped += 1
+            else:
+                logger.warning(
+                    "Turn outbound queue full after eviction; dropping prepared chunk "
+                    "(priority=%d)",
+                    priority,
+                )
+                self._outbound_dropped += 1
+
+    def _evict_outbound_drop_candidate(self, *, incoming_priority: int) -> bool:
+        """Drop one evictable chunk from the outbound queue to make room.
+
+        Returns:
+            True when a chunk was evicted and the caller should retry ``put_nowait``.
+        """
+        temp: list[tuple[int, int, Any]] = []
+        drop_target: tuple[int, int, Any] | None = None
+        drop_priority = PRIORITY_CRITICAL - 1
+
+        while True:
+            try:
+                temp.append(self._outbound.get_nowait())
+            except queue.Empty:
+                break
+
+        for queued in temp:
+            queued_priority = queued[0]
+            if queued_priority > drop_priority:
+                drop_priority = queued_priority
+                drop_target = queued
+
+        # Never evict CRITICAL/HIGH; only drop NORMAL/LOW when admitting progress events.
+        min_evictable = PRIORITY_NORMAL if incoming_priority <= PRIORITY_HIGH else PRIORITY_LOW
+        if drop_target is None or drop_priority < min_evictable:
+            for queued in temp:
+                self._outbound.put_nowait(queued)
+            return False
+
+        self._outbound_dropped += 1
+        if self._outbound_dropped == 1 or self._outbound_dropped % 500 == 0:
+            logger.warning(
+                "Turn outbound queue overflow: evicted buffered chunk (priority=%d, dropped=%d)",
+                drop_priority,
+                self._outbound_dropped,
+            )
+
+        for queued in temp:
+            if queued is drop_target:
+                continue
+            self._outbound.put_nowait(queued)
+        return True
 
     async def iter_prepared(self) -> AsyncIterator[T]:
         """Yield prepared chunk plans until the stream ends."""
@@ -296,6 +390,7 @@ async def run_turn_pipeline(
 
 
 __all__ = [
+    "PRIORITY_CRITICAL",
     "PRIORITY_HIGH",
     "PRIORITY_LOW",
     "PRIORITY_NORMAL",
