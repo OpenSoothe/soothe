@@ -1,10 +1,14 @@
-"""Continuation plan-generate uses prior goal completion, not step ledger."""
+"""Unified planner ledger projection and continuation envelopes (IG-538)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 from soothe.foundation.sloop.prompts import PromptBuilder
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    project_planner_ledger,
+)
+from soothe.foundation.sloop.prompts.planner_assembly import resolve_planner_projection_mode
 from soothe.foundation.sloop.state.checkpoint import (
     GoalExecutionRecord,
     StrangeLoopCheckpoint,
@@ -41,14 +45,27 @@ def _continuation_state(*, iteration: int = 0) -> LoopState:
         loop_messages=[
             LoopHumanMessage(content="prior execute human", phase="execute_step", thread_id="tid"),
             LoopAIMessage(content="prior execute ai", phase="execute_step", thread_id="tid"),
+            LoopHumanMessage(content="completion human", phase="goal_completion", thread_id="tid"),
             LoopAIMessage(
-                content="ledger-only completion", phase="goal_completion", thread_id="tid"
+                content="ledger completion body", phase="goal_completion", thread_id="tid"
             ),
         ],
     )
 
 
-def test_continuation_plan_generate_skips_ledger_and_uses_checkpoint_completion() -> None:
+def test_new_goal_projection_excludes_execute_step() -> None:
+    state = _continuation_state()
+    projected = project_planner_ledger(
+        state.loop_messages,
+        resolve_planner_projection_mode(state),
+        None,
+    )
+    contents = " ".join(str(getattr(m, "content", "")) for m in projected)
+    assert "ledger completion body" in contents
+    assert "prior execute human" not in contents
+
+
+def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> None:
     prior = GoalExecutionRecord(
         goal_id="g0",
         goal_text="analyze trace",
@@ -71,19 +88,21 @@ def test_continuation_plan_generate_skips_ledger_and_uses_checkpoint_completion(
         exclude_goal_id="g1",
     )
 
-    assert len(msgs) == 2
+    assert len(msgs) == 4  # system + 2 goal_completion ledger + task human
     human = msgs[-1].content
-    assert "PRIOR GOAL COMPLETION:" in human
-    assert "Checkpoint completion body with recommendations." in human
-    assert "ledger-only completion" not in human
-    assert "prior execute human" not in human
+    assert "PRIOR GOALS:" in human
+    assert "GOAL: analyze trace (completed)" in human
+    assert "outcome: see prior assistant message" in human
+    assert "PRIOR GOAL COMPLETION:" not in human
+    assert "Checkpoint completion body" not in human
+    assert "prior execute human" not in " ".join(str(getattr(m, "content", "")) for m in msgs)
 
 
-def test_non_continuation_plan_generate_still_includes_ledger() -> None:
+def test_non_continuation_mid_goal_includes_execute_ledger() -> None:
     state = LoopState(
         goal="read readme",
         thread_id="tid",
-        iteration=0,
+        iteration=1,
         continue_loop=False,
         loop_messages=[
             LoopHumanMessage(content="execute human", phase="execute_step", thread_id="tid"),
@@ -117,5 +136,5 @@ def test_continuation_replan_includes_ledger_after_execution() -> None:
         plan_phase="generate",
     )
 
-    assert len(msgs) == 5
+    assert len(msgs) == 6  # system + 4 ledger + task human
     assert "prior execute human" in " ".join(str(getattr(m, "content", "")) for m in msgs)

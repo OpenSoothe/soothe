@@ -8,7 +8,15 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
-from soothe.foundation.sloop.prompts.plan_ledger_projection import project_loop_messages_for_plan
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    project_planner_ledger,
+    projected_ledger_has_goal_completion,
+    resolve_planner_projection_mode,
+)
+from soothe.foundation.sloop.prompts.planner_assembly import (
+    PlannerCallKind,
+    goal_preview_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +27,63 @@ if TYPE_CHECKING:
     from soothe.protocols.planner import PlanContext
 
 PlanPromptPhase = Literal["assess", "generate"]
+
+
+def _prior_goals_from_checkpoint(
+    checkpoint: Any | None,
+    *,
+    exclude_goal_id: str | None,
+) -> list[Any]:
+    """Build ``PriorGoalSummary`` rows from checkpoint goal history for envelope trees."""
+    from soothe.foundation.context.projection import PriorGoalSummary
+
+    if checkpoint is None:
+        return []
+    out: list[PriorGoalSummary] = []
+    for rec in checkpoint.goal_history:
+        if exclude_goal_id and rec.goal_id == exclude_goal_id:
+            continue
+        if rec.status not in ("completed", "cancelled", "failed"):
+            continue
+        description = (rec.goal_text or "").strip()
+        if not description:
+            continue
+        out.append(
+            PriorGoalSummary(
+                goal_id=rec.goal_id,
+                description=description,
+                status=rec.status,
+                step_summary="",
+                completion_text=(rec.goal_completion or "").strip(),
+            )
+        )
+    return out
+
+
+def _enrich_prior_goals(
+    prior_goals: list[Any],
+    checkpoint: Any | None,
+    *,
+    exclude_goal_id: str | None,
+) -> list[Any]:
+    """Fill missing ``completion_text`` from checkpoint goal records."""
+    if not prior_goals or checkpoint is None:
+        return prior_goals
+    from soothe.foundation.sloop.engine.continuation_context import (
+        checkpoint_completions_by_goal_text,
+    )
+
+    by_text = checkpoint_completions_by_goal_text(checkpoint, exclude_goal_id=exclude_goal_id)
+    enriched: list[Any] = []
+    for pg in prior_goals:
+        completion = (pg.completion_text or "").strip()
+        if not completion:
+            completion = by_text.get((pg.description or "").strip(), "")
+        if completion and completion != (pg.completion_text or ""):
+            enriched.append(pg.model_copy(update={"completion_text": completion}))
+        else:
+            enriched.append(pg)
+    return enriched
 
 
 def _format_dag_context(dag_ctx: Any) -> str:
@@ -58,104 +123,75 @@ class PromptBuilder:
         context: PlanContext,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        call_kind: PlannerCallKind | None = None,
         dag_context: str | None = None,
         context_bundle: ContextBundle | None = None,
         checkpoint: Any | None = None,
         exclude_goal_id: str | None = None,
     ) -> list[BaseMessage]:
-        """Build SystemMessage + plan context + ledger for Plan phase (RFC-207, RFC-214).
-
-        Constructs proper message type separation:
-        - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities.
-        - Projected ``state.loop_messages`` ledger (IG-380): native ``LoopHumanMessage`` /
-          ``LoopAIMessage`` turns, optionally tail-trimmed when ``agentic.plan_prompt_ledger`` caps
-          are set; persisted ``loop_messages`` are never modified.
-        - LoopHumanMessage: ``GOAL:`` (goal) for both ``assess`` and
-          ``generate``, plus optional ``<PRIOR_CONVERSATION>`` when ``recent_messages`` is set
-          (IG-371: no WM block on this human), and optional ``DAG STATUS:`` for generate phase.
-
-        Ledger precedes the plan-context human so ``plan-assess`` / ``plan-generate`` see execute
-        evidence as prior turns, then goal/iteration context in the following user message.
-
-        Args:
-            goal: User's goal description
-            state: Current loop state with ledger, plan metadata
-            context: Planning context with workspace, capabilities
-            plan_phase: ``assess`` = instructions aligned to ``StatusAssessment``; ``generate`` =
-                execution policies + instructions aligned to ``PlanGeneration`` only (IG-372, IG-329).
-            dag_context: Optional XML-formatted DAG context for progressive planning (generate phase).
-            context_bundle: Optional ContextBundle from ContextEngine.project() (RFC-624).
-                When provided, supplementary context (goal lineage, progress, instructions)
-                is injected into the prompt. When None, behavior is unchanged.
-            checkpoint: Optional StrangeLoop checkpoint for continuation prior-goal grounding.
-            exclude_goal_id: Current goal id to exclude from continuation prior-goal resolution.
-
-        Returns:
-            Messages to send to the plan LLM: system, ledger copies, prior thread messages,
-            then optional plan-context human.
-        """
+        """Build SystemMessage + projected ledger + task envelope (RFC-214 §4, IG-538)."""
         from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+        kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
+        projection_mode = resolve_planner_projection_mode(state)
+        ledger_cfg = self.config.agent.loop.plan_prompt_ledger if self.config is not None else None
+        projected = project_planner_ledger(state.loop_messages, projection_mode, ledger_cfg)
+        completion_in_ledger = projected_ledger_has_goal_completion(projected)
+
+        prior_goals = _enrich_prior_goals(
+            list(context_bundle.prior_goals)
+            if context_bundle and context_bundle.prior_goals
+            else [],
+            checkpoint,
+            exclude_goal_id=exclude_goal_id,
+        )
+        if not prior_goals and projection_mode == "new_goal":
+            prior_goals = _prior_goals_from_checkpoint(checkpoint, exclude_goal_id=exclude_goal_id)
 
         system_content = self._build_system_message(
             context,
             state,
-            plan_phase=plan_phase,
+            call_kind=kind,
             context_bundle=context_bundle,
         )
         human_content = self._build_plan_context_human_text(
             goal,
             state,
             context,
-            plan_phase=plan_phase,
+            call_kind=kind,
             dag_context=dag_context,
             context_bundle=context_bundle,
-            checkpoint=checkpoint,
-            exclude_goal_id=exclude_goal_id,
+            projection_mode=projection_mode,
+            completion_in_ledger=completion_in_ledger,
+            prior_goals_override=prior_goals or None,
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
-        # RFC-214: execute ledger as real messages (IG-380: optional projection for plan caps).
-        # Continuation iter=0 plan-generate uses PRIOR GOAL COMPLETION instead of step ledger.
-        from soothe.foundation.sloop.engine.continuation_context import is_continuation_first_plan
-
-        skip_ledger = is_continuation_first_plan(state) and plan_phase == "generate"
-        if not skip_ledger:
-            ledger_cfg = None
-            if self.config is not None:
-                ledger_cfg = self.config.agent.loop.plan_prompt_ledger
-            projected = project_loop_messages_for_plan(state.loop_messages, ledger_cfg)
-            out.extend(projected)
-            if len(projected) != len(state.loop_messages):
-                logger.debug(
-                    "Plan messages: ledger projection len=%d (raw=%d) phase=%s",
-                    len(projected),
-                    len(state.loop_messages),
-                    plan_phase,
-                )
-        elif state.loop_messages:
+        out.extend(projected)
+        if len(projected) != len(state.loop_messages):
             logger.debug(
-                "Plan messages: skipping step ledger for continuation plan-generate (raw=%d)",
+                "Plan messages: ledger projection len=%d (raw=%d) kind=%s mode=%s",
+                len(projected),
                 len(state.loop_messages),
+                kind,
+                projection_mode,
             )
 
-        # RFC-214: Convert prior thread messages from XML strings to native ledger turns
-        # This maximizes cache hits - prior conversation is native message turns, not XML block
         if context.recent_messages:
             for msg_xml in context.recent_messages:
-                # Parse XML strings like "<user>\n...\n</user>" into proper messages
                 msg_xml = msg_xml.strip()
                 if msg_xml.startswith("<user>") and msg_xml.endswith("</user>"):
-                    content = msg_xml[6:-7].strip()  # Strip <user> and </user> tags
+                    content = msg_xml[6:-7].strip()
                     out.append(
                         LoopHumanMessage(
                             content=content,
                             thread_id=state.thread_id,
                             iteration=None,
-                            phase="execute_step",  # Prior thread messages are execute-phase
+                            phase="execute_step",
                         )
                     )
                 elif msg_xml.startswith("<assistant>") and msg_xml.endswith("</assistant>"):
-                    content = msg_xml[11:-12].strip()  # Strip <assistant> and </assistant> tags
+                    content = msg_xml[11:-12].strip()
                     out.append(
                         LoopAIMessage(
                             content=content,
@@ -166,13 +202,14 @@ class PromptBuilder:
                     )
 
         if human_content.strip():
+            phase = "plan_assess" if kind in ("assess", "continuation") else "plan_generate"
             out.append(
                 LoopHumanMessage(
                     content=human_content,
                     thread_id=state.thread_id,
                     iteration=state.iteration,
                     goal_summary=goal[:200],
-                    phase="plan_assess" if plan_phase == "assess" else "plan_generate",  # RFC-214
+                    phase=phase,
                 )
             )
         return out
@@ -183,6 +220,7 @@ class PromptBuilder:
         state: LoopState | None = None,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        call_kind: PlannerCallKind | None = None,
         context_bundle: ContextBundle | None = None,
     ) -> str:
         """Construct static context: policies, instructions, environment, workspace.
@@ -212,16 +250,19 @@ class PromptBuilder:
         from soothe.foundation.sloop.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
             PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
+            PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
             PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
         )
         from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
         parts: list[str] = []
+        kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
 
-        if plan_phase == "assess":
+        if kind == "continuation":
+            parts.append(PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT + "\n")
+        elif kind == "assess":
             parts.append(PLAN_ASSESS_INSTRUCTIONS_FRAGMENT + "\n")
         else:
-            # Plan generation: step policy + schema-aligned PlanGeneration only (IG-329)
             parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
             parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
 
@@ -233,7 +274,7 @@ class PromptBuilder:
         # (status/progress/next_action) that does not author steps touching the workspace.
         # Project rules (AGENTS.md / CLAUDE.md) are injected on execute via CoreAgent
         # system prompt, not plan-generate — keeps the planner cache-stable and lean.
-        if context.workspace and plan_phase == "generate":
+        if context.workspace and kind == "generate":
             parts.append(
                 "<WORKSPACE_RULES>\n"
                 "Project root is under <WORKSPACE><root>. Filesystem tools: workspace-relative "
@@ -347,10 +388,12 @@ class PromptBuilder:
         context: PlanContext,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        call_kind: PlannerCallKind | None = None,
         dag_context: str | None = None,
         context_bundle: ContextBundle | None = None,
-        checkpoint: Any | None = None,
-        exclude_goal_id: str | None = None,
+        projection_mode: str | None = None,
+        completion_in_ledger: bool = False,
+        prior_goals_override: list[Any] | None = None,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -372,18 +415,25 @@ class PromptBuilder:
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
-        from soothe.foundation.sloop.engine.continuation_context import (
-            build_continuation_plan_prior_goal_completion,
-            is_continuation_first_plan,
-        )
         from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
         from soothe.foundation.sloop.state.schemas import next_goal_local_step_id_start
 
         builder = UserMessageBuilder()
+        kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
+        mode = projection_mode or resolve_planner_projection_mode(state)
+        display_goal = goal_preview_text(goal) if mode == "new_goal" else None
 
-        # Build step ID hint for generate phase
+        if kind == "continuation":
+            return builder.build_plan_continuation_message(
+                goal,
+                context_bundle=context_bundle,
+                display_goal=display_goal,
+                completion_in_ledger=completion_in_ledger,
+                prior_goals_override=prior_goals_override,
+            )
+
         step_id_hint = None
-        if plan_phase == "generate":
+        if kind == "generate":
             nxt = next_goal_local_step_id_start(state)
             if nxt > 1:
                 width = max(2, len(str(nxt + 1)))
@@ -401,21 +451,12 @@ class PromptBuilder:
             prior_progress=getattr(state, "prior_progress", None),
             current_iteration=state.iteration,
             context_bundle=context_bundle,
+            display_goal=display_goal,
+            projection_mode=mode,
+            completion_in_ledger=completion_in_ledger,
+            prior_goals_override=prior_goals_override,
         )
 
-        prior_goal_completion = None
-        if is_continuation_first_plan(state) and plan_phase == "generate":
-            prior_goal_completion = build_continuation_plan_prior_goal_completion(
-                loop_messages=state.loop_messages,
-                checkpoint=checkpoint,
-                exclude_goal_id=exclude_goal_id,
-            )
-
-        if plan_phase == "assess":
+        if kind == "assess":
             return builder.build_plan_assess_message(**common_kwargs)
-        else:
-            return builder.build_plan_generate_message(
-                **common_kwargs,
-                step_id_hint=step_id_hint,
-                prior_goal_completion=prior_goal_completion or None,
-            )
+        return builder.build_plan_generate_message(**common_kwargs, step_id_hint=step_id_hint)

@@ -1,0 +1,10 @@
+You are deciding how to handle a follow-up query in an in-progress conversation loop.
+
+Prior goals and outcomes appear in the message history above and in the PRIOR GOALS section when present.
+
+Choose bootstrap when the current request can be answered using prior conversation context alone (e.g. translate, summarize, explain) with no new tools or cross-domain work.
+
+Choose plan_generate when the request needs multiple steps, new tool calls, addresses a topic not covered by prior goals, or when the user says continue/resume/proceed and prior outcomes list recommended next actions to implement.
+
+Return a ContinuationAssessment JSON object with fields: action, reasoning, goal_progress.
+Reasoning: one first-person sentence (240 characters or fewer), e.g. "I'll …" or "I need … because …".

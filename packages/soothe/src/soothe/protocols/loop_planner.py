@@ -68,12 +68,13 @@ class LoopPlannerProtocol(Protocol):
     async def assess_continuation(
         self,
         *,
-        current_goal: str,
-        prior_goal_completion: str = "",
-        capabilities: list[str],
-        thread_id: str | None = None,
+        state: LoopState,
+        context: PlanContext,
+        checkpoint: Any | None = None,
+        exclude_goal_id: str | None = None,
+        context_bundle: Any | None = None,
     ) -> ContinuationAssessment:
-        """RFC-226: iter=0 discriminator for continuation queries.
+        """RFC-226: iter=0 discriminator for continuation queries (RFC-214 §4 assembly).
 
         Routes a follow-up agentic query in an existing loop to either a
         terminal bootstrap (single execute step using prior context) or the
