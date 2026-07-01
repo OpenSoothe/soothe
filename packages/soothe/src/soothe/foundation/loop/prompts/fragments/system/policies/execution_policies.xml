@@ -14,6 +14,12 @@
 
 **DAG dependencies**: Use ``dependencies`` field referencing sibling ``id`` strings (e.g. ``01`` → ``02``).
 
+**Dependent step chains**:
+- **Diagnose→fix**: step 1 = run check / gather failures; step 2 = fix listed items
+  (forbid repeating the check as step 2's first action).
+- **Read→write**: step 1 = read/analyze; step 2 = edit using step 1 findings.
+- Dependent steps require ``full_description`` with concrete follow-up instructions.
+
 **Discovery**: Prefer one recon step + targeted reads over many shallow parallel scans. ``glob`` needs narrow patterns.
 
 **On failure**: Propose different approach, do not repeat same step text.

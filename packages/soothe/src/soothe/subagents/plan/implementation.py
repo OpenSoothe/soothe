@@ -50,7 +50,7 @@ def create_plan_subagent(
         )
         explore_runnable = explore_spec["runnable"]
 
-    runnable = build_plan_engine(model, explore_runnable, plan_opts)
+    runnable = build_plan_engine(model, explore_runnable, plan_opts, soothe_config=config)
 
     return {
         "name": "plan",

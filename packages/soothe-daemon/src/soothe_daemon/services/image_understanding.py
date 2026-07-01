@@ -148,7 +148,20 @@ async def enrich_user_text_with_vision(
     msg = HumanMessage(content=blocks)
 
     invoke_config = _build_vision_invoke_config(config, session_id=session_id)
-    response = await model.ainvoke([msg], config=invoke_config)
+
+    from soothe.utils.llm.invoke_policy import (
+        await_with_llm_call_policy,
+        llm_rate_limit_config_from,
+    )
+
+    async def _invoke() -> Any:
+        return await model.ainvoke([msg], config=invoke_config)
+
+    response = await await_with_llm_call_policy(
+        _invoke,
+        config=llm_rate_limit_config_from(config),
+        thread_id=session_id,
+    )
     summary = str(response.content).strip()
     if not summary:
         summary = "(Vision model returned empty content.)"

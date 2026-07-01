@@ -10,6 +10,7 @@ RFC-307: Identity context (user_id, aksk_id) is stored here for workspace isolat
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -51,7 +52,7 @@ class ThreadStateRegistry:
         self._by_thread: dict[str, ThreadState] = {}
         self._client_active_thread: dict[str, str] = {}
         self._thread_loop: dict[str, str] = {}
-        self._lock: asyncio.Lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
     def get(self, thread_id: str) -> ThreadState | None:
         """Return state for *thread_id* if registered."""
@@ -69,11 +70,13 @@ class ThreadStateRegistry:
         existing = self._by_thread.get(thread_id)
         if existing is not None:
             return existing
-        # Double-checked under lock — safe because we only ever await inside the
-        # lock on the same event-loop thread.
-        st = ThreadState(thread_id=thread_id, is_draft=is_draft)
-        self._by_thread.setdefault(thread_id, st)
-        return self._by_thread[thread_id]
+        with self._lock:
+            existing = self._by_thread.get(thread_id)
+            if existing is not None:
+                return existing
+            st = ThreadState(thread_id=thread_id, is_draft=is_draft)
+            self._by_thread[thread_id] = st
+            return st
 
     def remove(self, thread_id: str) -> None:
         """Drop state for a thread (e.g. after archive/delete)."""

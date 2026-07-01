@@ -9,7 +9,7 @@ Migrated to monitor module per RFC-625. Works with GoalNode from ContextEngine.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -147,6 +147,10 @@ class GoalBackoffReasoner:
             HumanMessage(content=prompt),
         ]
 
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
         from soothe.utils.observability.langfuse import build_traced_config
 
         invoke_config = build_traced_config(
@@ -156,7 +160,14 @@ class GoalBackoffReasoner:
             phase="post-loop",
             run_name="soothe:backoff-reason",
         )
-        response = await self._model.ainvoke(messages, config=invoke_config)
+
+        async def _invoke() -> Any:
+            return await self._model.ainvoke(messages, config=invoke_config)
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(self._soothe_config),
+        )
 
         # Parse response
         response_text = response.content

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -354,6 +354,10 @@ class DreamingDistillationReasoner:
             HumanMessage(content=prompt),
         ]
 
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
         from soothe.utils.observability.langfuse import build_traced_config
 
         invoke_config = build_traced_config(
@@ -363,7 +367,14 @@ class DreamingDistillationReasoner:
             phase="dreaming",
             run_name="soothe:dreaming-distill",
         )
-        response = await self._model.ainvoke(messages, config=invoke_config)
+
+        async def _invoke() -> Any:
+            return await self._model.ainvoke(messages, config=invoke_config)
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(self._soothe_config),
+        )
 
         return response.content
 

@@ -5,9 +5,12 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command
 
 from soothe.config import SootheConfig
 from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
+from soothe.toolkits.progressive.registry import merge_tool_activation
 
 
 def _tool(name: str) -> MagicMock:
@@ -73,8 +76,72 @@ async def test_search_tools_promotes_matches(config: SootheConfig) -> None:
 
     result = await middleware.awrap_tool_call(request, AsyncMock())
 
-    from langchain_core.messages import ToolMessage
+    assert isinstance(result, Command)
+    update = result.update
+    assert isinstance(update, dict)
+    message = update["messages"][0]
+    assert isinstance(message, ToolMessage)
+    assert "wizsearch_search" in str(message.content)
+    assert "wizsearch_search" in update["tool_activation"]["promoted"]
 
-    assert isinstance(result, ToolMessage)
-    assert "wizsearch_search" in str(result.content)
-    assert "wizsearch_search" in request.state["tool_activation"]["promoted"]
+
+@pytest.mark.asyncio
+async def test_second_hop_binds_promoted_tools(config: SootheConfig) -> None:
+    middleware = ProgressiveToolMiddleware(config=config)
+    tools = [
+        _tool("run_command"),
+        _tool("read_file"),
+        _tool("search_tools"),
+        _tool("wizsearch_search"),
+    ]
+    middleware.set_tool_catalog(tools)
+
+    state: dict[str, object] = {"tool_activation": {"sent": set(), "promoted": set()}}
+
+    search_request = MagicMock()
+    search_request.tool_call = {
+        "name": "search_tools",
+        "args": {"query": "wiz", "limit": 5},
+        "id": "s1",
+    }
+    search_request.state = state
+
+    command = await middleware.awrap_tool_call(search_request, AsyncMock())
+    assert isinstance(command, Command)
+    update = command.update
+    assert isinstance(update, dict)
+    merged = merge_tool_activation(state.get("tool_activation"), update.get("tool_activation"))
+    state["tool_activation"] = merged
+
+    class _Req:
+        def __init__(self) -> None:
+            self.state = state
+            self.tools = list(tools)
+
+        def override(self, **kwargs: object) -> _Req:
+            out = _Req()
+            out.state = self.state
+            out.tools = list(kwargs.get("tools", self.tools))  # type: ignore[arg-type]
+            return out
+
+    request = _Req()
+    captured: dict[str, object] = {}
+
+    async def handler(req: object) -> MagicMock:
+        captured["tools"] = getattr(req, "tools", None)
+        return MagicMock()
+
+    await middleware.awrap_model_call(request, handler)  # type: ignore[arg-type]
+
+    bound = captured.get("tools")
+    assert isinstance(bound, list)
+    assert {t.name for t in bound} == {
+        "run_command",
+        "read_file",
+        "search_tools",
+        "wizsearch_search",
+    }
+
+
+def test_state_schema_declares_tool_activation() -> None:
+    assert "tool_activation" in ProgressiveToolMiddleware.state_schema.__annotations__

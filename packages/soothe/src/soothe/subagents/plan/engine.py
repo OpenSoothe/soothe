@@ -79,8 +79,16 @@ def build_plan_engine(
     model: BaseChatModel,
     explore_runnable: Runnable,
     plan_config: PlanSubagentConfig,
+    *,
+    soothe_config: Any | None = None,
 ) -> Any:
     """Compile the plan subagent graph."""
+    from soothe.utils.llm.invoke_policy import (
+        await_with_llm_call_policy,
+        llm_rate_limit_config_from,
+    )
+
+    llm_policy = llm_rate_limit_config_from(soothe_config)
 
     def ingest_task(state: dict[str, Any]) -> dict[str, Any]:
         text = ""
@@ -115,14 +123,18 @@ def build_plan_engine(
             f"## Findings so far\n{findings_block}"
         )
         try:
-            decision = await invoke_structured_chat_typed(
-                model,
-                [
-                    {"role": "system", "content": _COLLECTOR_SYSTEM},
-                    {"role": "user", "content": user},
-                ],
-                CollectorDecision,
-            )
+
+            async def _invoke() -> CollectorDecision:
+                return await invoke_structured_chat_typed(
+                    model,
+                    [
+                        {"role": "system", "content": _COLLECTOR_SYSTEM},
+                        {"role": "user", "content": user},
+                    ],
+                    CollectorDecision,
+                )
+
+            decision = await await_with_llm_call_policy(_invoke, config=llm_policy)
         except Exception:
             logger.exception("Plan subagent: collector structured output failed")
             decision = CollectorDecision(
@@ -190,14 +202,18 @@ def build_plan_engine(
             f"## Previous plan draft\n{prev or '(none — write initial plan)'}"
         )
         try:
-            ref = await invoke_structured_chat_typed(
-                model,
-                [
-                    {"role": "system", "content": _PLANNER_SYSTEM},
-                    {"role": "user", "content": user},
-                ],
-                PlanRefinement,
-            )
+
+            async def _invoke() -> PlanRefinement:
+                return await invoke_structured_chat_typed(
+                    model,
+                    [
+                        {"role": "system", "content": _PLANNER_SYSTEM},
+                        {"role": "user", "content": user},
+                    ],
+                    PlanRefinement,
+                )
+
+            ref = await await_with_llm_call_policy(_invoke, config=llm_policy)
         except Exception:
             logger.exception("Plan subagent: planner structured output failed")
             ref = PlanRefinement(

@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.foundation.loop.cognition.phase import PlanPhase
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.loop.planning.phase import PlanPhase
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -19,6 +20,7 @@ from soothe.foundation.loop.state.schemas import (
 )
 from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
 from soothe.foundation.loop.state.working_memory import LoopWorkingMemory
+from soothe.foundation.loop.utils.continue_keyword import is_continue_keyword
 from soothe.foundation.loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview
@@ -351,6 +353,31 @@ class StrangeLoop:
 
                 await state_manager.save(checkpoint)
 
+            user_submission_line = (goal_user_submission or goal or "").strip()
+            force_continue_loop = is_continue_keyword(user_submission_line)
+            if (
+                force_continue_loop
+                and recovery_valid_resume
+                and goal_record is not None
+                and checkpoint is not None
+            ):
+                goal_record.status = "cancelled"
+                goal_record.completed_at = datetime.now(UTC)
+                checkpoint.status = "idle"
+                goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
+                checkpoint.goal_history.append(goal_record)
+                checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                checkpoint.status = "running"
+                recovery_valid_resume = False
+                iteration = 0
+                await state_manager.save(checkpoint)
+                logger.info(
+                    "[Goal] continue keyword promoted interrupted goal to cancelled; "
+                    "new goal=%s history=%d",
+                    goal_record.goal_id,
+                    len(checkpoint.goal_history),
+                )
+
             # RFC-225: derive continue_loop_mode from the FINAL checkpoint state, AFTER
             # branching has settled goal_history. True iff at least one prior goal exists
             # alongside the active one (i.e., goal_history has 2+ entries). The valid-resume
@@ -359,6 +386,8 @@ class StrangeLoop:
             continue_loop_mode = len(checkpoint.goal_history) >= 2 or (
                 recovery_valid_resume and len(checkpoint.goal_history) >= 2
             )
+            if force_continue_loop and len(checkpoint.goal_history) >= 2:
+                continue_loop_mode = True
 
             state = LoopState(
                 goal=execution_goal,
@@ -404,63 +433,22 @@ class StrangeLoop:
 
             # RFC-624 Phase 4: ContextEngine is always active
             from soothe.foundation.context.engine import ContextEngine as _ContextEngine
+            from soothe.foundation.context.persistence.factory import (
+                resolve_context_engine_persistence,
+            )
             from soothe.foundation.context.planning import StepPlanManagerAdapter
 
             from .context_adapters import (
                 ContextEngineGoalContextAdapter,
             )
 
+            soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
             persistence_backend = self.config.persistence.default_backend
 
-            soothe_home = Path(self.config.home) if hasattr(self.config, "home") else SOOTHE_HOME
-
-            persistence = None
-            if persistence_backend == "postgresql":
-                try:
-                    import asyncpg  # noqa: F401
-                except ImportError:
-                    logger.warning(
-                        "[CE] asyncpg not installed; falling back to SQLite for CE persistence"
-                    )
-                else:
-                    from soothe.foundation.context.persistence.pgsql_backend import (
-                        PgsqlContextPersistence,
-                    )
-
-                    # RFC-612: prefer postgres_base_dsn + database name; fall back to
-                    # soothe_postgres_dsn (single-database legacy DSN).
-                    base_dsn = self.config.persistence.postgres_base_dsn
-                    if base_dsn:
-                        # Strip trailing slash and append checkpoints database name
-                        db_name = self.config.persistence.postgres_databases.get(
-                            "checkpoints", "soothe_checkpoints"
-                        )
-                        pgsql_dsn = f"{base_dsn.rstrip('/')}/{db_name}"
-                    else:
-                        pgsql_dsn = self.config.persistence.soothe_postgres_dsn
-                    if not pgsql_dsn:
-                        msg = "PostgreSQL persistence backend requires postgres_base_dsn or soothe_postgres_dsn in config"
-                        raise ValueError(msg)
-                    persistence = PgsqlContextPersistence(
-                        loop_id=state_manager.loop_id,
-                        dsn=pgsql_dsn,
-                    )
-
-            if persistence is None:
-                if persistence_backend not in ("sqlite", "postgresql"):
-                    msg = f"Unknown CE persistence backend: {persistence_backend}"
-                    raise ValueError(msg)
-                from soothe.foundation.context.persistence.sqlite_backend import (
-                    SqliteContextPersistence,
-                )
-                from soothe.foundation.loop.state.persistence.runtime_paths import (
-                    resolve_context_engine_db_path,
-                )
-
-                persistence = SqliteContextPersistence(
-                    loop_id=state_manager.loop_id,
-                    db_path=resolve_context_engine_db_path(),
-                )
+            persistence = resolve_context_engine_persistence(
+                self.config,
+                state_manager.loop_id,
+            )
 
             # RFC-624 Phase 4: Loop-scoped CE lifecycle. Create once per
             # loop_id, persist across goals. On subsequent calls, reuse the
@@ -512,6 +500,12 @@ class StrangeLoop:
                     len(ce_instance.get_all_goals()),
                     persistence_backend,
                 )
+
+            if force_continue_loop and loaded:
+                for prior in ce_instance.get_all_goals():
+                    if prior.status == "active":
+                        await ce_instance.cancel_goal(prior.id, reason="continue_keyword")
+                await ce_instance.save()
 
             ce_goal = await ce_instance.create_goal(
                 execution_goal,

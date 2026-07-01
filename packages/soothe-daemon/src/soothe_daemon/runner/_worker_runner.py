@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -41,10 +43,94 @@ def acquire_worker_runner(
 
     if cached_runner is None and warmup_runner and reuse_runner:
         runner = SootheRunner(config, identity_runtime=identity_runtime)
-        logger.info("[WorkerRunner] Warmed SootheRunner for worker reuse")
+        logger.debug("[WorkerRunner] Warmed SootheRunner for worker reuse")
         return runner, runner
 
     runner = SootheRunner(config, identity_runtime=identity_runtime)
     if reuse_runner:
         return runner, runner
     return runner, cached_runner
+
+
+async def _materialize_runner_core_agent(
+    runner: SootheRunner,
+    *,
+    config: SootheConfig,
+    warmup_core_agent: bool,
+) -> None:
+    """Compile LazyCoreAgent and attach checkpointer when configured."""
+    if not warmup_core_agent or not config.agent.runtime.lazy_core_agent:
+        return
+
+    from soothe.foundation.core.agent._lazy import LazyCoreAgent
+
+    core_agent = runner._core_agent
+    if isinstance(core_agent, LazyCoreAgent) and core_agent.is_materialized:
+        return
+
+    await runner._materialize_core_agent()
+
+
+def warmup_worker_runner_on_loop(
+    loop: asyncio.AbstractEventLoop,
+    *,
+    config: SootheConfig,
+    reuse_runner: bool,
+    warmup_runner: bool,
+    warmup_core_agent: bool = True,
+    identity_runtime: IdentityRuntime | None = None,
+    worker_id: str = "",
+) -> SootheRunner | None:
+    """Create SootheRunner on a worker loop and optionally materialize CoreAgent.
+
+    Moves the LazyCoreAgent compile cost from the first client request to worker
+    startup so interactive clients avoid a multi-second TUI freeze.
+
+    Args:
+        loop: Dedicated asyncio loop for the worker thread/process.
+        config: Agent configuration.
+        reuse_runner: When True, retain the runner for later requests.
+        warmup_runner: When True, create the runner eagerly.
+        warmup_core_agent: When True, compile CoreAgent during warmup.
+        identity_runtime: Optional identity bundle for CoreAgent middleware.
+        worker_id: Worker identifier for logging.
+
+    Returns:
+        Cached runner when reuse is enabled, otherwise ``None``.
+    """
+    if not (reuse_runner and warmup_runner):
+        return None
+
+    cached_runner, _ = acquire_worker_runner(
+        config=config,
+        cached_runner=None,
+        reuse_runner=reuse_runner,
+        warmup_runner=warmup_runner,
+        identity_runtime=identity_runtime,
+    )
+
+    if not warmup_core_agent:
+        return cached_runner
+
+    materialize_start = time.perf_counter()
+    try:
+        loop.run_until_complete(
+            _materialize_runner_core_agent(
+                cached_runner,
+                config=config,
+                warmup_core_agent=True,
+            )
+        )
+        materialize_ms = (time.perf_counter() - materialize_start) * 1000
+        logger.info(
+            "[WorkerRunner] Warmed CoreAgent for worker %s in %.1fms",
+            worker_id or "unknown",
+            materialize_ms,
+        )
+    except Exception:
+        logger.exception(
+            "[WorkerRunner] CoreAgent warmup failed for worker %s; will retry on first request",
+            worker_id or "unknown",
+        )
+
+    return cached_runner

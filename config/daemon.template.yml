@@ -25,6 +25,7 @@ transports:
 max_concurrent_threads: 100
 max_concurrent_dispatches: 50
 max_concurrent_vision_preflight: 8  # 0 = unlimited
+max_in_flight_broadcasts_per_loop: 80  # 0 = unlimited; blocks only that loop's stream
 max_input_queue_size: 1000
 
 # ============================================================================
@@ -110,16 +111,26 @@ identity:
 # distributed: Ray cluster for horizontal scaling
 
 # Thread pool (DEFAULT) - Lightweight async, fast startup
+# IG-534: Each concurrent synthesis loop occupies one thread for the full turn.
+# IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
+# - max_pool_size ≥ concurrent loops (32 default, supports full parallelism)
+# - min_pool_size pre-warms 8 threads for fast initial dispatch
+# - Lower values cause queue waits; higher values increase memory and PG connection usage.
+#
+# CoreAgent cold start (daemon + TUI): keep agent.runtime.lazy_core_agent=true in soothe
+# config AND warmup_core_agent=true here — lazy defers compile; warmup runs it during
+# daemon "warming" so the first client message does not freeze the TUI (~5–10s saved).
 thread_pool:
   enabled: true
-  min_pool_size: 2
-  max_pool_size: 6
+  min_pool_size: 8  # IG-535: Pre-warm baseline for burst handling
+  max_pool_size: 32  # IG-535: Support 32 concurrent synthesis loops
   idle_timeout_seconds: 120
   max_requests_per_thread: 50
   request_timeout_seconds: 7200  # 2h default; 0 = no timeout
-  thread_startup_timeout_seconds: 10
+  thread_startup_timeout_seconds: 60
   reuse_runner: true
   warmup_runner: true
+  warmup_core_agent: true
 
 # Worker pool - Process-based isolation
 worker_pool:
@@ -133,6 +144,7 @@ worker_pool:
   stuck_worker_timeout_seconds: 180
   reuse_runner: true
   warmup_runner: true
+  warmup_core_agent: true
   dispatch_wait_stats_enabled: true
   dispatch_wait_stats_interval_seconds: 60
   dispatch_wait_stats_idle_pause_seconds: 120

@@ -25,10 +25,17 @@ def _fast_pid_path() -> Path:
 
 def _load_dotenv_if_needed() -> None:
     """Load dotenv only when actually needed (for start/doctor commands)."""
-    from soothe_daemon.bootstrap.env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
+    from soothe_daemon.bootstrap.env import load_dotenv_adjacent_to_yaml
+
+    _ensure_cli_dotenv()
+    return load_dotenv_adjacent_to_yaml
+
+
+def _ensure_cli_dotenv() -> None:
+    """Load local project ``.env`` for every ``soothed`` subcommand."""
+    from soothe_daemon.bootstrap.env import bootstrap_dotenv
 
     bootstrap_dotenv()
-    return load_dotenv_adjacent_to_yaml
 
 
 app = typer.Typer(
@@ -152,6 +159,7 @@ def _fast_find_pid() -> int | None:
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context) -> None:
     """Soothe daemon server - agent runtime with WebSocket transport."""
+    _ensure_cli_dotenv()
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
 
@@ -168,6 +176,7 @@ def daemon_start(
     ] = False,
 ) -> None:
     """Start the Soothe daemon server."""
+    invocation_dir = os.getcwd()
     load_dotenv_adjacent_to_yaml = _load_dotenv_if_needed()
     from soothe_daemon.bootstrap.entrypoint import run_daemon
     from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
@@ -207,6 +216,9 @@ def daemon_start(
     if config:
         command.extend(["--config", config])
 
+    daemon_env = os.environ.copy()
+    daemon_env["SOOTHE_DAEMON_INVOCATION_DIR"] = invocation_dir
+
     try:
         subprocess.Popen(  # noqa: S603
             command,
@@ -214,6 +226,7 @@ def daemon_start(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             cwd=str(_SOOTHE_HOME),
+            env=daemon_env,
         )
     except Exception as exc:
         typer.echo(f"Failed to start daemon: {exc}", err=True)

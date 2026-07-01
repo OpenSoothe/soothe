@@ -29,6 +29,8 @@ from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
 
+_GOAL_FINALIZE_STATUS_LABEL = "Finalizing goal"
+
 _GOAL_COMPLETION_LEDGER_HUMAN = (
     "Produce the final user-facing response summarizing the outcome. "
     "Use the same primary natural language as the user's request; keep code, paths, and quoted literals unchanged."
@@ -100,6 +102,8 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             {"error": "Goal completion reached without plan result", "step_id": ""},
         )
         return {"last_outcome": "fatal"}
+
+    await ctx.emit("plan_phase_status", {"label": _GOAL_FINALIZE_STATUS_LABEL})
 
     perf_start = ctx.scratch.iteration_perf_start or time.perf_counter()
 

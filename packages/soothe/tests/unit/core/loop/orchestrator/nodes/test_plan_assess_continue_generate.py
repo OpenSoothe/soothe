@@ -94,6 +94,7 @@ def _make_ctx(
     strange_loop._build_plan_context = MagicMock(
         return_value=MagicMock(available_capabilities=["read_file", "run_python"]),
     )
+    strange_loop.loop_planner.assess_continuation = AsyncMock()
     # Non-continuation assess path is not under test in this file.
     strange_loop.plan_phase.assess_status = AsyncMock(
         return_value=StatusAssessment(status="continue", goal_progress="low")
@@ -131,7 +132,34 @@ def _make_ctx(
         emit=emit,
         scratch=LoopPhaseScratch(),
         ce=ce,
+        ce_goal_id="goal-active",
     )
+
+
+@pytest.mark.asyncio
+async def test_continue_keyword_bootstraps_without_llm_assess() -> None:
+    """Lone ``continue`` uses bootstrap plan with prior goal text and skips assess LLM."""
+    ctx = _make_ctx(goal="continue")
+
+    cancelled_goal = MagicMock()
+    cancelled_goal.id = "goal-0"
+    cancelled_goal.description = "review all local changes"
+    cancelled_goal.status = "cancelled"
+    cancelled_goal.action_history = []
+    cancelled_goal.steps = MagicMock()
+    cancelled_goal.steps.nodes = {"s1": MagicMock(status="completed")}
+
+    ctx.ce.get_all_goals.return_value = [cancelled_goal]
+
+    result = await node_plan_assess(ctx, {})
+
+    assert result.get("assess_route") == "skip_generate"
+    assert ctx.scratch.plan_result is not None
+    assert ctx.scratch.plan_assessment is None
+    step = ctx.scratch.plan_result.decision.steps[0]
+    assert "review all local changes" in step.description
+    assert ctx.scratch.plan_result.terminal_after_execute is False
+    ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -201,6 +229,7 @@ async def test_continuation_bootstrap_emits_single_combined_reason_card() -> Non
     await node_plan_assess(ctx, {})
 
     assert [t for t, _ in emitted if t == "assess"] == []
+    assert len([t for t, _ in emitted if t == "plan_phase_status"]) == 1
     plan_events = [d for t, d in emitted if t == "plan"]
     assert len(plan_events) == 1
     assert plan_events[0]["assessment_reasoning"] == "Pure translation; no new tools needed."

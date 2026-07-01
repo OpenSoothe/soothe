@@ -288,6 +288,7 @@ class UserMessageBuilder:
         step_description: str,
         *,
         execution_hints: str | None = None,
+        predecessor_evidence: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
@@ -297,6 +298,7 @@ class UserMessageBuilder:
         Args:
             step_description: The step's description or full_description (what to execute).
             execution_hints: Hints text with merged task instructions (IG-508).
+            predecessor_evidence: Completed predecessor step output for dependent steps.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
@@ -307,6 +309,9 @@ class UserMessageBuilder:
         sections: list[tuple[str, str]] = [
             ("GOAL", _goal_text(step_description)),
         ]
+
+        if (predecessor_evidence or "").strip():
+            sections.append(("PRIOR STEP EVIDENCE", predecessor_evidence.strip()))
 
         # IG-508: EXECUTION HINTS now contains merged task instructions
         if execution_hints:

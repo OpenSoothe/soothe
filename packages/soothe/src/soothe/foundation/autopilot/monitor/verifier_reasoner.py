@@ -355,6 +355,10 @@ class DagVerificationReasoner:
             HumanMessage(content=prompt),
         ]
 
+        from soothe.utils.llm.invoke_policy import (
+            await_with_llm_call_policy,
+            llm_rate_limit_config_from,
+        )
         from soothe.utils.observability.langfuse import build_traced_config
 
         invoke_config = build_traced_config(
@@ -364,7 +368,14 @@ class DagVerificationReasoner:
             phase="background",
             run_name="soothe:dag-verify",
         )
-        response = await self._model.ainvoke(messages, config=invoke_config)
+
+        async def _invoke() -> Any:
+            return await self._model.ainvoke(messages, config=invoke_config)
+
+        response = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(self._soothe_config),
+        )
 
         return response.content
 

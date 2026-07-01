@@ -11,6 +11,7 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, Too
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from soothe.toolkits.progressive.registry import merge_tool_activation
 from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
@@ -139,6 +140,7 @@ class _SystemPromptState(TypedDict):
     invoked_mcp_tools: NotRequired[dict[str, dict]]
     disabled_mcp_servers: NotRequired[set[str]]
     cached_mcp_resources: NotRequired[dict[str, str]]
+    tool_activation: NotRequired[Annotated[dict[str, Any], merge_tool_activation]]
 
 
 class SystemPromptMiddleware(AgentMiddleware):
@@ -864,6 +866,9 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         registry.mark_sent(activation, [e.name for e in new_entries])
         state["tool_activation"] = activation
+        from soothe.middleware.progressive_tools import stash_tool_activation_update
+
+        stash_tool_activation_update(activation)
         return f"<AVAILABLE_TOOLS>\n{text}\n</AVAILABLE_TOOLS>"
 
     def _build_strange_loop_output_contract_section(

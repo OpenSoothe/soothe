@@ -8,7 +8,7 @@ import logging
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 import websockets.asyncio.client
@@ -18,6 +18,93 @@ from soothe_sdk.client.intent_hints import validate_loop_input_intent_hint
 from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
 
 logger = logging.getLogger(__name__)
+
+# IG-535 Optimization 1: Priority-aware drop policy for inbound queue.
+# Lower values = keep, higher values = drop candidate.
+_DROP_PRIORITY_CRITICAL = 0  # Never drop: goal_completion, terminal status, errors
+_DROP_PRIORITY_HIGH = 1  # Prefer keep: tool call updates, step events
+_DROP_PRIORITY_NORMAL = 2  # Default drop candidate: streaming text, updates
+
+
+def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
+    """Return priority for drop decision (lower = keep, higher = drop candidate).
+
+    IG-535: Ensures terminal frames and goal_completion are never dropped
+    even when inbound queue is full.
+
+    Args:
+        event: Wire frame dict or None sentinel.
+
+    Returns:
+        Priority level: 0 (never drop) to 2 (drop candidate).
+    """
+    if event is None:
+        return _DROP_PRIORITY_CRITICAL  # Sentinel - never drop
+
+    event_type = event.get("type", "")
+
+    # Unwrap protocol-1 next envelope (RFC-450 §9.3)
+    if event_type == "next":
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            inner_type = payload.get("type", "")
+            inner_mode = payload.get("mode", "")
+            inner_data = payload.get("data")
+
+            # Check for goal_completion in inner messages frame
+            if inner_mode == "messages" and isinstance(inner_data, (tuple, list)):
+                if inner_data and isinstance(inner_data[0], dict):
+                    if inner_data[0].get("phase") == "goal_completion":
+                        return _DROP_PRIORITY_CRITICAL
+
+            # Recurse with inner frame type
+            event_type = inner_type
+
+    # Terminal frames - never drop
+    if event_type == "status":
+        state = event.get("state", "")
+        if state in ("idle", "running", "stopped", "detached"):
+            return _DROP_PRIORITY_CRITICAL
+
+    # Error frames - never drop
+    if event_type == "error":
+        return _DROP_PRIORITY_CRITICAL
+
+    # Connection ack - never drop
+    if event_type == "connection_ack":
+        return _DROP_PRIORITY_CRITICAL
+
+    # Custom events with specific types - prefer keep
+    if event_type == "event" or event.get("type") == "event":
+        mode = event.get("mode", "")
+        if mode == "custom":
+            data = event.get("data")
+            if isinstance(data, dict):
+                custom_type = data.get("type", "")
+                # Cognition events (step started/completed) - prefer keep
+                if custom_type.startswith("soothe.cognition."):
+                    return _DROP_PRIORITY_HIGH
+                # Error events - never drop
+                if custom_type.startswith("soothe.error."):
+                    return _DROP_PRIORITY_CRITICAL
+                # Stream degraded signal - never drop
+                if custom_type == "stream_degraded":
+                    return _DROP_PRIORITY_CRITICAL
+                # Tool call updates batch - prefer keep
+                if custom_type == "soothe.ux.stream_tool_wire.tool_call_updates_batch":
+                    return _DROP_PRIORITY_HIGH
+
+        # Messages mode - check for goal_completion phase in unwrapped data
+        if mode == "messages":
+            data = event.get("data")
+            if isinstance(data, (tuple, list)) and data:
+                first = data[0]
+                if isinstance(first, dict) and first.get("phase") == "goal_completion":
+                    return _DROP_PRIORITY_CRITICAL
+
+    # Default - acceptable drop candidate
+    return _DROP_PRIORITY_NORMAL
+
 
 # Align with soothe_daemon.config.models.WebSocketConfig.max_frame_size (default 10 MiB).
 # The websockets library defaults max_size to 1 MiB, which closes the connection (1009)
@@ -73,11 +160,14 @@ class WebSocketClient:
         self._pending_events: deque[dict[str, Any]] = deque()
         # Background reader drains the socket so daemon sends are not blocked by a
         # stalled consumer (e.g. heavy Textual UI work on the same event loop).
-        self._inbound_maxsize = 10_000
+        # IG-535: Increased from 10_000 to 20_000 for 32 concurrent loops with dense streaming
+        self._inbound_maxsize = 20_000
         self._inbound_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue(
             maxsize=self._inbound_maxsize
         )
         self._inbound_dropped = 0
+        # IG-534: Optional callback for stream degradation events
+        self._on_stream_degraded: Callable[[int, str], None] | None = None
         self._reader_task: asyncio.Task[None] | None = None
         # Coalesce high-frequency daemon_status polls on a long-lived connection.
         self._daemon_status_cache: tuple[float, dict[str, Any]] | None = None
@@ -192,16 +282,93 @@ class WebSocketClient:
         await self._put_inbound_queue(event)
 
     async def _put_inbound_queue(self, event: dict[str, Any] | None) -> None:
+        """Put event into inbound queue with priority-aware drop policy.
+
+        IG-535: When queue is full, find and drop a NORMAL priority frame
+        (streaming text/updates) instead of blindly dropping oldest, which
+        could lose terminal frames (goal_completion, status:idle).
+        """
+        event_priority = _inbound_frame_drop_priority(event)
+
         if self._inbound_queue.full():
-            with contextlib.suppress(asyncio.QueueEmpty):
-                self._inbound_queue.get_nowait()
-            self._inbound_dropped += 1
-            if self._inbound_dropped % 1000 == 1:
-                logger.warning(
-                    "[Client:%s] Inbound queue full; dropping oldest (dropped=%d)",
-                    self._client_id,
-                    self._inbound_dropped,
-                )
+            # Priority-aware drop: find best drop candidate (highest priority value)
+            # by temporarily draining and scanning the queue.
+            temp_items: list[dict[str, Any] | None] = []
+            drop_candidate: dict[str, Any] | None = None
+            drop_priority = -1  # Will only drop if we find priority >= _DROP_PRIORITY_NORMAL
+
+            # Drain queue to scan for drop candidate
+            while True:
+                try:
+                    item = self._inbound_queue.get_nowait()
+                    temp_items.append(item)
+                except asyncio.QueueEmpty:
+                    break
+
+            # Find highest-priority drop candidate (NORMAL = acceptable to drop)
+            for item in temp_items:
+                p = _inbound_frame_drop_priority(item)
+                if p > drop_priority:
+                    drop_priority = p
+                    drop_candidate = item
+
+            # Requeue all except drop candidate (if found with acceptable priority)
+            requeued_critical_or_high = False
+            for item in temp_items:
+                if item is drop_candidate and drop_priority >= _DROP_PRIORITY_NORMAL:
+                    # Skip - this is our drop target
+                    continue
+                self._inbound_queue.put_nowait(item)
+                p = _inbound_frame_drop_priority(item)
+                if p <= _DROP_PRIORITY_HIGH:
+                    requeued_critical_or_high = True
+
+            if drop_candidate is not None and drop_priority >= _DROP_PRIORITY_NORMAL:
+                # Successfully found and dropped a NORMAL frame
+                self._inbound_dropped += 1
+                # IG-534: Emit stream_degraded callback on first drop
+                if self._on_stream_degraded and self._inbound_dropped == 1:
+                    try:
+                        self._on_stream_degraded(1, "inbound_queue_overflow")
+                    except Exception:
+                        logger.debug("Stream degraded callback error", exc_info=True)
+                if self._inbound_dropped == 1 or self._inbound_dropped % 1000 == 0:
+                    logger.warning(
+                        "[Client:%s] Stream degraded: inbound queue overflow "
+                        "(dropped NORMAL frame, dropped=%d)",
+                        self._client_id,
+                        self._inbound_dropped,
+                    )
+            else:
+                # No acceptable drop candidate - queue contains only CRITICAL/HIGH frames
+                # Briefly yield and retry, or if incoming frame is also CRITICAL/HIGH,
+                # force a slot by dropping oldest (rare edge case)
+                if event_priority >= _DROP_PRIORITY_NORMAL and requeued_critical_or_high:
+                    # Incoming is NORMAL, but queue is full of CRITICAL/HIGH
+                    # This shouldn't happen under normal operation; log and yield
+                    logger.debug(
+                        "[Client:%s] Inbound queue full of critical frames, "
+                        "yielding for drain (incoming_priority=%d)",
+                        self._client_id,
+                        event_priority,
+                    )
+                    await asyncio.sleep(0.001)
+                elif event_priority < _DROP_PRIORITY_NORMAL:
+                    # Incoming is CRITICAL/HIGH, force a slot by dropping oldest
+                    # even if it's also critical (rare, but necessary to avoid deadlock)
+                    if temp_items:
+                        # Drop the first item we drained (oldest)
+                        self._inbound_dropped += 1
+                        logger.warning(
+                            "[Client:%s] Force drop oldest to admit CRITICAL/HIGH frame "
+                            "(queue full of critical, dropped=%d)",
+                            self._client_id,
+                            self._inbound_dropped,
+                        )
+                        # Requeue all but the first (oldest)
+                        for item in temp_items[1:]:
+                            self._inbound_queue.put_nowait(item)
+
         await self._inbound_queue.put(event)
 
     async def close(self, *, handshake_timeout: float = 2.0) -> None:
@@ -318,6 +485,20 @@ class WebSocketClient:
             True if connected, False otherwise.
         """
         return self._connected
+
+    @property
+    def inbound_dropped(self) -> int:
+        """Cumulative inbound frames evicted due to queue overflow."""
+        return self._inbound_dropped
+
+    def set_stream_degraded_callback(self, callback: Callable[[int, str], None] | None) -> None:
+        """Set callback for stream degradation notifications (IG-534).
+
+        Args:
+            callback: Function called with (dropped_count, reason) when frames
+                are dropped due to inbound queue overflow. Pass None to disable.
+        """
+        self._on_stream_degraded = callback
 
     def is_connection_alive(self) -> bool:
         """Check if WebSocket connection is actually alive (not closed).
@@ -1055,4 +1236,10 @@ class WebSocketClient:
             return None
 
 
-__all__ = ["WebSocketClient"]
+__all__ = [
+    "WebSocketClient",
+    "_inbound_frame_drop_priority",  # IG-535: Exported for testing
+    "_DROP_PRIORITY_CRITICAL",
+    "_DROP_PRIORITY_HIGH",
+    "_DROP_PRIORITY_NORMAL",
+]

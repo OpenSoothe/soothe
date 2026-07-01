@@ -285,7 +285,20 @@ class ContextWindowManager:
 
             # Call LLM to generate summary
             model = self._config.create_chat_model("fast")
-            summary_response = await model.ainvoke([HumanMessage(content=prompt)])
+
+            async def _invoke() -> Any:
+                return await model.ainvoke([HumanMessage(content=prompt)])
+
+            from soothe.utils.llm.invoke_policy import (
+                await_with_llm_call_policy,
+                llm_rate_limit_config_from,
+            )
+
+            summary_response = await await_with_llm_call_policy(
+                _invoke,
+                config=llm_rate_limit_config_from(self._config),
+                thread_id=thread_id,
+            )
             summary_text = getattr(summary_response, "content", "")
 
             if not summary_text:

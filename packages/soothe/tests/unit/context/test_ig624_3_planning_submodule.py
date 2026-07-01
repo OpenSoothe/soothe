@@ -35,14 +35,12 @@ from soothe.foundation.context.planning.completion import (
     overlaps_with_plan_output,
 )
 from soothe.foundation.context.planning.models import (
+    DagPlanningContext,
     DecompositionRequest,
     DecompositionResult,
     OrchestrationStrategy,
     PlanWave,
     SubGoalSpec,
-)
-from soothe.foundation.loop.planning.manager import (
-    DagPlanningContext,
 )
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
@@ -1097,53 +1095,9 @@ class TestPlanningModels:
         assert strategy.dependency_graph == {}
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Equivalence: PlanManager vs StepPlanManagerAdapter
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class TestPlanManagerEquivalence:
-    """Verify StepPlanManagerAdapter produces equivalent results to PlanManager."""
-
-    def test_determine_goal_completion_matches(self) -> None:
-        """Both paths make the same goal completion decision for identical state."""
-        from soothe.foundation.loop.planning.manager import PlanManager
-
-        # Set up identical state in both paths
-        steps = [_make_step_action("01", "Step 1")]
-        plan_result = _make_plan_result(steps)
-
-        # PlanManager path
-        pm = PlanManager(goal="Test goal")
-        pm.ingest_plan(plan_result, "KFA", 0)
-
-        # Adapter path
-        ce = ContextEngine()
-        goal = GoalNode(description="Test goal")
-        ce._dag.add_goal(goal)
-        adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-        adapter.ingest_plan(plan_result, "KFA", 0)
-
-        state = _make_mock_state()
-
-        for mode in ("llm_only", "heuristic_only", "hybrid"):
-            for llm_decision in (True, False):
-                adapter_result = adapter.determine_goal_completion_needs(
-                    llm_decision=llm_decision, state=state, mode=mode
-                )
-                pm_result = pm.determine_goal_completion_needs(
-                    llm_decision=llm_decision, state=state, mode=mode
-                )
-                assert adapter_result == pm_result, (
-                    f"Mismatch for mode={mode}, llm_decision={llm_decision}: "
-                    f"adapter={adapter_result}, pm={pm_result}"
-                )
-
-    def test_constants_are_single_source(self) -> None:
-        """Constants live in completion.py (single source of truth)."""
-        # completion.py is the only place these are defined;
-        # PlanManager and StepPlanningSubengine both import from there.
-        assert DAG_DEPENDENCY_THRESHOLD == 3
-        assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
-        assert SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
-        assert STRUCTURED_PAYLOAD_MIN_LINES == 6
+def test_completion_constants_single_source() -> None:
+    """Constants live in completion.py (single source of truth)."""
+    assert DAG_DEPENDENCY_THRESHOLD == 3
+    assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
+    assert SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
+    assert STRUCTURED_PAYLOAD_MIN_LINES == 6

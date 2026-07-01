@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.planning.planner import _detect_stuck_loop
+from soothe.foundation.loop.cognition.planner import _detect_stuck_loop
 from soothe.foundation.loop.state.schemas import LoopState, StepResult
 
 

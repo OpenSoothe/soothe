@@ -483,12 +483,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                             else 0
                         )
                 if history_len > 0:
-                    logger.debug(
-                        "Dropping external status write for loop=%s "
-                        "(goal_history len=%d; StrangeLoop owns status)",
-                        loop_id,
-                        history_len,
-                    )
                     local_updates.pop("status", None)
                     if not local_updates:
                         return
@@ -518,7 +512,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                             loop_id,
                         ),
                     )
-            logger.debug("Updated loop metadata: loop=%s fields=%s", loop_id, list(local_updates))
 
         await self._run_with_retry("update_loop_metadata", _do_update)
 

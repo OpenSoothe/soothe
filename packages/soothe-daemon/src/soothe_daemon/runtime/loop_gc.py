@@ -24,6 +24,9 @@ async def _cancel_and_detach_loop(daemon: Any, loop_id: str) -> None:
         await daemon._session_manager.unsubscribe_loop(cid, loop_id)
 
     await daemon._loop_input_dispatcher.cleanup_loop(loop_id)
+    budget = getattr(daemon, "_loop_broadcast_budget", None)
+    if budget is not None:
+        budget.drop_loop(loop_id)
     daemon._thread_registry.cleanup_loop(loop_id)
 
 
@@ -99,6 +102,9 @@ async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] |
         await daemon._session_manager.unsubscribe_loop(cid, loop_id)
 
     await daemon._loop_input_dispatcher.cleanup_loop(loop_id)
+    budget = getattr(daemon, "_loop_broadcast_budget", None)
+    if budget is not None:
+        budget.drop_loop(loop_id)
     # Release in-memory card ledger; display rows are purged via persistence manager.
     card_manager = getattr(daemon, "_card_manager", None)
     if card_manager is not None:

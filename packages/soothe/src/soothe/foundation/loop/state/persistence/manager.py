@@ -101,7 +101,6 @@ class StrangeLoopCheckpointPersistenceManager:
             **fields: Column names and values to update.
         """
         await self._backend.update_loop_metadata(loop_id, **fields)
-        logger.debug("Updated loop metadata: loop=%s fields=%s", loop_id, list(fields))
 
     async def list_loops(
         self,

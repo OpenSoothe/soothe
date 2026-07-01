@@ -14,27 +14,41 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.loop.cognition.trivial_plan import build_trivial_plan
 from soothe.foundation.loop.intention.models import IntakeLabel
-from soothe.foundation.loop.planning.trivial_plan import build_trivial_plan
+from soothe.foundation.loop.utils.continue_keyword import is_continue_keyword
 
 from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
 
 
+def _has_prior_goal_context(ctx: LoopRuntimeContext) -> bool:
+    """True when prior orchestration work exists for continuation routing."""
+    ce = getattr(ctx, "ce", None)
+    current_id = getattr(ctx, "ce_goal_id", None)
+    if ce is not None:
+        for goal in ce.get_all_goals():
+            if current_id and goal.id == current_id:
+                continue
+            completed_steps = [s for s in goal.steps.nodes.values() if s.status == "completed"]
+            if completed_steps or goal.action_history:
+                return True
+            if goal.status in ("completed", "cancelled", "failed"):
+                return True
+    checkpoint = getattr(ctx, "checkpoint", None)
+    return bool(checkpoint and len(checkpoint.goal_history) >= 2)
+
+
 def _is_continuation(ctx: LoopRuntimeContext) -> bool:
     """Structural continuation overlay (RFC-225/RFC-226/RFC-630).
 
-    True when ``continue_loop_mode`` is set and CE has at least one completed
-    prior goal. Continuation is derived from checkpoint state, not classified
-    by the intake LLM.
+    True when ``continue_loop_mode`` is set and prior goal context exists.
+    Continuation is derived from checkpoint state, not classified by the intake LLM.
     """
     if not getattr(ctx, "continue_loop_mode", False):
         return False
-    ce = getattr(ctx, "ce", None)
-    if ce is None:
-        return False
-    return any(g.status == "completed" for g in ce.get_all_goals())
+    return _has_prior_goal_context(ctx)
 
 
 async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -77,7 +91,13 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     # RFC-630: trivial branch — inject a minimal 1-step plan and skip
     # plan_generate entirely. resolve_decision reads scratch.plan_result.
     # Not applicable to continuation turns (they need plan_assess).
-    if intake_label == IntakeLabel.TRIVIAL and not is_continuation:
+    if (
+        intake_label == IntakeLabel.TRIVIAL
+        and not is_continuation
+        and not getattr(ctx, "continue_loop_mode", False)
+        and not is_continue_keyword(ctx.loop_state.goal)
+        and not getattr(ctx, "recovery_valid_resume", False)
+    ):
         goal = getattr(intent, "goal_description", None) or ctx.loop_state.goal
         try:
             ctx.scratch.plan_result = build_trivial_plan(goal)

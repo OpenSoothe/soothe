@@ -319,7 +319,19 @@ class _UIMixin:
         else:
             if self._agent_running:
                 self._loading_widget.set_turn_start_mono(self._inflight_turn_start)
-            # Update existing
-            self._loading_widget.set_status(status)
+            # Update existing (also clears a clarification pause)
+            self._loading_widget.activate_status(status)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
+
+    async def _pause_spinner(self, status: str = "Awaiting your answer") -> None:
+        """Pause the thinking-row spinner while blocked on user input."""
+        if self._loading_widget is None:
+            await self._set_spinner(status)
+        if self._loading_widget is not None:
+            self._loading_widget.pause(status)
+
+    async def _resume_spinner(self) -> None:
+        """Resume the thinking-row spinner after a clarification pause."""
+        if self._loading_widget is not None:
+            self._loading_widget.resume()

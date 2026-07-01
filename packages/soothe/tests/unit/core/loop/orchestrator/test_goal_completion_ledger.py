@@ -12,11 +12,12 @@ from langchain_core.messages import AIMessage
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.context.planning import StepPlanManagerAdapter
+from soothe.foundation.context.planning.models import CompletionStrategy
 from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
 from soothe.foundation.loop.orchestrator.nodes.goal_completion import node_goal_completion
 from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.loop.planning.manager import CompletionStrategy, PlanManager
 from soothe.foundation.loop.state.schemas import LoopState, PlanResult
 from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
@@ -31,7 +32,7 @@ def _make_ce() -> ContextEngine:
 def _ctx(
     *,
     loop_state: LoopState,
-    plan_manager: PlanManager,
+    plan_manager: StepPlanManagerAdapter,
     strange_loop: Mock,
     state_manager: Mock,
     plan_result: PlanResult,
@@ -65,7 +66,7 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     ce._dag.add_goal(goal)
     loop_state.bind_ce(ce, goal.id)
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=True)
-    pm = PlanManager(goal="do thing")
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
 
     strange_loop = Mock()
@@ -135,7 +136,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
         require_goal_completion=True,
         decision=decision,
     )
-    pm = PlanManager(goal="goal txt")
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.ingest_plan(plan_result, "ABC", 1)
     pm.record_step_outcomes(
         [
@@ -196,7 +197,7 @@ async def test_goal_completion_dag_reflects_finalized_goal_status(
     ce._dag.add_goal(goal)
     loop_state.bind_ce(ce, goal.id)
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=True)
-    pm = PlanManager(goal="count all file types")
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
     status_when_reported: dict[str, str | None] = {"value": None}
 
@@ -263,7 +264,7 @@ async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
         phase="execute_step",
     )
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
-    pm = PlanManager(goal="g")
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
 
     strange_loop = Mock()
@@ -308,7 +309,7 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     ce._dag.add_goal(goal)
     loop_state.bind_ce(ce, goal.id)
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
-    pm = PlanManager(goal="g")
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SUMMARY)
 
     strange_loop = Mock()
@@ -407,7 +408,7 @@ async def test_ledger_direct_filters_out_planning_messages_for_final_output() ->
         phase="plan_generate",
     )
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
-    pm = PlanManager(goal="g")
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
 
     strange_loop = Mock()
@@ -438,3 +439,43 @@ async def test_ledger_direct_filters_out_planning_messages_for_final_output() ->
     )
     assert completed_payload is not None
     assert completed_payload["result"].full_output == "execute answer"
+
+
+@pytest.mark.asyncio
+async def test_goal_completion_emits_finalize_phase_status() -> None:
+    ce = _make_ce()
+    loop_state = LoopState(goal="g", thread_id="thr-phase")
+    goal = GoalNode(description="g")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+    plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
+
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        strange_loop=strange_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+        ce=ce,
+        goal=goal,
+    )
+
+    await node_goal_completion(ctx, {})
+
+    phase_emits = [
+        c.args[1] for c in ctx.emit.await_args_list if c.args and c.args[0] == "plan_phase_status"
+    ]
+    assert phase_emits
+    assert phase_emits[0]["label"] == "Finalizing goal"

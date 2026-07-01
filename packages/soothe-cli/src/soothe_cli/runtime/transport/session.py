@@ -326,6 +326,7 @@ class TuiDaemonSession:
         self.last_turn_end_state = None
         self.last_turn_cancellation_seen = False
         self.last_turn_error_message = None
+        inbound_dropped_baseline = getattr(self._client, "inbound_dropped", 0)
         query_started = False
         expected_loop_id = self._loop_id
         self._streaming = True
@@ -446,6 +447,10 @@ class TuiDaemonSession:
                 raise
             finally:
                 self._streaming = False
+                self.turn_event_stats.inbound_dropped = max(
+                    0,
+                    getattr(self._client, "inbound_dropped", 0) - inbound_dropped_baseline,
+                )
 
     async def list_skills(self) -> list[dict[str, Any]]:
         """Return skill rows from the daemon catalog (no filesystem paths)."""

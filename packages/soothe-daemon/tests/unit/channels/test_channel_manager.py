@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -280,7 +280,8 @@ class TestRetryPolicy:
         channel = FailingChannel({}, fail_count=2)
         msg = ChannelMessage(channel="mock", chat_id="123", content="Hello")
 
-        await manager._send_with_retry(channel, "123", msg)
+        with patch("asyncio.sleep"):
+            await manager._send_with_retry(channel, "123", msg)
 
         # Should have retried (failed twice, succeeded on third)
         assert channel._call_count == 3
@@ -306,7 +307,8 @@ class TestRetryPolicy:
         channel = AlwaysFailChannel({})
         msg = ChannelMessage(channel="mock", chat_id="123", content="Hello")
 
-        await manager._send_with_retry(channel, "123", msg)
+        with patch("asyncio.sleep"):
+            await manager._send_with_retry(channel, "123", msg)
 
         # Should have tried max_retries times (default 3)
         assert channel._call_count == 3

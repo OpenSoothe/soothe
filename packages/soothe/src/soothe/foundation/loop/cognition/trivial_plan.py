@@ -11,7 +11,7 @@ iteration.
 
 from __future__ import annotations
 
-from soothe.foundation.loop.planning.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
+from soothe.foundation.loop.cognition.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
 from soothe.foundation.loop.state.schemas import AgentDecision, PlanResult, StepAction
 
 

@@ -249,7 +249,7 @@ class AgentDecision(BaseModel):
         Returns:
             True if there are remaining steps
         """
-        from soothe.foundation.loop.planning.dependency_tokens import (
+        from soothe.foundation.context.dag_utils import (
             expand_dependency_satisfaction_ids,
         )
 
@@ -259,7 +259,7 @@ class AgentDecision(BaseModel):
     def get_ready_steps(self, completed_step_ids: set[str]) -> list[StepAction]:
         """Get steps ready for execution (dependencies satisfied).
 
-        Uses :func:`~soothe.core.loop.planning.dependency_tokens.expand_dependency_satisfaction_ids`
+        Uses :func:`~soothe.foundation.context.dag_utils.expand_dependency_satisfaction_ids`
         so model-local dependency tokens (e.g. ``01``) match prior-wave composite ids
         (e.g. ``KFA-01``) when unambiguous, consistent with the unified plan DAG (IG-400).
 
@@ -269,7 +269,7 @@ class AgentDecision(BaseModel):
         Returns:
             List of steps ready to execute
         """
-        from soothe.foundation.loop.planning.dependency_tokens import (
+        from soothe.foundation.context.dag_utils import (
             expand_dependency_satisfaction_ids,
         )
 

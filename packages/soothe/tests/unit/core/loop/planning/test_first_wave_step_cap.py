@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.loop.planning.planner import LLMPlanner
+from soothe.foundation.loop.cognition.planner import LLMPlanner
 from soothe.foundation.loop.state.schemas import (
     AgentDecision,
     LoopState,

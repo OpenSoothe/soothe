@@ -270,7 +270,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             params,
         )
         conn.commit()
-        logger.debug("Updated loop metadata: loop=%s fields=%s", loop_id, list(updates))
 
     async def list_loops(
         self,

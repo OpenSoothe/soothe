@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock
+from collections import deque
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
+
+import pytest
 
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
+from soothe_cli.tui.app._module_init import QueuedMessage
 
 
 def test_arm_quit_pending_clears_chat_input_when_idle() -> None:
@@ -227,3 +231,84 @@ def test_double_ctrl_c_quits_when_idle() -> None:
     # Should use unified quit path, not clear input again
     app._detach_or_exit.assert_called_once()
     app._chat_input.clear_input.assert_not_called()
+
+
+def test_ctrl_c_preserves_queued_goal_when_interrupting_agent() -> None:
+    """Ctrl+C should cancel the running goal only, not discard queued goals."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._quit_pending = False
+            self._agent_running = True
+            self._agent_worker = MagicMock()
+            self._shell_running = False
+            self._shell_worker = None
+            self._daemon_session = None
+            self._pending_messages = deque([QueuedMessage(text="next goal", mode="normal")])
+            self._queued_widgets = deque()
+            self._deferred_actions = []
+            self.notify = MagicMock()
+            self.set_timer = MagicMock()
+            self.run_worker = MagicMock()
+
+    app = _AppStub()
+    app.action_quit_or_interrupt()
+
+    app._agent_worker.cancel.assert_called_once()
+    assert len(app._pending_messages) == 1
+    assert app._pending_messages[0].text == "next goal"
+
+
+def test_ctrl_c_preserves_queue_when_interrupting_via_daemon() -> None:
+    """Daemon interrupt path should also keep queued goals for post-cancel drain."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._quit_pending = False
+            self._agent_running = True
+            self._agent_worker = MagicMock()
+            self._shell_running = False
+            self._shell_worker = None
+            self._daemon_session = MagicMock()
+            self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
+            self._queued_widgets = deque()
+            self._deferred_actions = []
+            self.notify = MagicMock()
+            self.set_timer = MagicMock()
+            self.run_worker = MagicMock()
+
+    app = _AppStub()
+    app.action_quit_or_interrupt()
+
+    app.run_worker.assert_called_once()
+    coro = app.run_worker.call_args[0][0]
+    assert coro.cr_code.co_name == "_interrupt_daemon_agent_turn"
+    assert len(app._pending_messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_interrupt_daemon_turn_preserves_queue_when_requested() -> None:
+    """_interrupt_daemon_agent_turn(discard_queue=False) keeps pending messages."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._daemon_session = AsyncMock()
+            self._agent_worker = MagicMock()
+            self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
+            self._queued_widgets = deque()
+            self._deferred_actions = []
+
+    app = _AppStub()
+    await app._interrupt_daemon_agent_turn(discard_queue=False)
+
+    app._daemon_session.cancel_remote_query.assert_awaited_once()
+    app._agent_worker.cancel.assert_called_once()
+    assert len(app._pending_messages) == 1
