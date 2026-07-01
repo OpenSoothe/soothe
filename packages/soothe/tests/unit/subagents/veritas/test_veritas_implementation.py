@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
 from soothe.foundation.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
 )
-
 from soothe.subagents.veritas import answer
 from soothe.subagents.veritas import implementation as veritas_impl
 from soothe.utils.llm.structured import StructuredOutputError

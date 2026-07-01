@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 from langchain_community.tools import ShellTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_experimental.tools.python.tool import PythonREPLTool
-from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 
+from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 from soothe.toolkits.execution import (
     KillProcessTool,
     RunBackgroundTool,
