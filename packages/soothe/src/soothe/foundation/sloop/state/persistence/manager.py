@@ -102,6 +102,26 @@ class StrangeLoopCheckpointPersistenceManager:
         """
         await self._backend.update_loop_metadata(loop_id, **fields)
 
+    async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
+        """Persist resume topic only when the loop has no stored topic yet.
+
+        Args:
+            loop_id: Loop identifier.
+            topic: Generated topic label.
+
+        Returns:
+            True when the topic was written, False when one already existed.
+        """
+        setter = getattr(self._backend, "set_resume_topic_once", None)
+        if setter is None:
+            metadata = await self.get_loop_metadata(loop_id)
+            existing = (metadata or {}).get("resume_topic")
+            if isinstance(existing, str) and existing.strip():
+                return False
+            await self.update_loop_metadata(loop_id, resume_topic=topic.strip())
+            return True
+        return await setter(loop_id, topic)
+
     async def list_loops(
         self,
         status_filter: str | None = None,
