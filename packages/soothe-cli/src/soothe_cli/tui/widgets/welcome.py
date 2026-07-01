@@ -48,8 +48,6 @@ class WelcomeBanner(Static):
         loop_id: str | None = None,
         mcp_tool_count: int = 0,
         workspace_path: str | None = None,
-        *,
-        connecting: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize the welcome banner.
@@ -58,15 +56,12 @@ class WelcomeBanner(Static):
             loop_id: Optional StrangeLoop id to display in the banner.
             mcp_tool_count: Number of MCP tools loaded at startup.
             workspace_path: Session workspace path shown in the source row.
-            connecting: When `True`, show a connecting footer instead of
-                the normal ready prompt. Call `set_connected` to transition.
             **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
         self._cli_loop_id: str | None = loop_id
         self._mcp_tool_count = mcp_tool_count
         self._workspace_path = workspace_path
-        self._connecting = connecting
         self._failed = False
         self._failure_error: str = ""
         self._tip: str = pick_session_tip()
@@ -90,12 +85,11 @@ class WelcomeBanner(Static):
         self.update(self._build_banner())
 
     def set_connected(self, mcp_tool_count: int = 0) -> None:
-        """Transition from "connecting" to "ready" state.
+        """Refresh the banner after the daemon session is ready.
 
         Args:
             mcp_tool_count: Number of MCP tools loaded during connection.
         """
-        self._connecting = False
         self._failed = False
         self._mcp_tool_count = mcp_tool_count
         self.update(self._build_banner())
@@ -106,7 +100,6 @@ class WelcomeBanner(Static):
         Args:
             error: Error message describing the server startup failure.
         """
-        self._connecting = False
         self._failed = True
         self._failure_error = error
         self.update(self._build_banner())
@@ -190,8 +183,6 @@ class WelcomeBanner(Static):
 
         if self._failed:
             parts.append(build_failure_footer(self._failure_error))
-        elif self._connecting:
-            parts.append(build_connecting_footer())
         return Content.assemble(*parts)
 
 
@@ -210,11 +201,6 @@ def build_failure_footer(error: str) -> Content:
         (error, colors.error),
         ("\n", colors.error),
     )
-
-
-def build_connecting_footer() -> Content:
-    """Build a footer shown while waiting for the daemon session."""
-    return Content.styled("\nConnecting to daemon...\n", "dim")
 
 
 def resolve_source_display_path(

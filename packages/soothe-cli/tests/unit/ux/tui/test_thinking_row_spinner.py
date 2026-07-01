@@ -55,3 +55,11 @@ def test_loading_widget_activate_status_clears_pause() -> None:
     widget.activate_status("Executing step")
     assert widget._paused is False
     assert widget._status == "Executing step"
+
+
+def test_loading_widget_startup_mode_omits_interrupt_hint() -> None:
+    widget = LoadingWidget("Connecting to daemon", show_interrupt_hint=False)
+    assert widget._show_interrupt_hint is False
+    widget.activate_status("Waiting for agent to be ready", show_interrupt_hint=False)
+    assert widget._show_interrupt_hint is False
+    assert widget._format_status_line("Connecting to daemon") == " Connecting to daemon... "

@@ -407,6 +407,12 @@ class _StartupMixin:
 
     async def _connect_daemon_background(self) -> None:
         """Background worker: connect the TUI directly to the daemon."""
+        from soothe_cli.tui.textual_adapter import (
+            SPINNER_LABEL_CONNECTING_DAEMON,
+            SPINNER_LABEL_WAITING_AGENT_READY,
+        )
+
+        await self._set_spinner(SPINNER_LABEL_WAITING_AGENT_READY, show_interrupt_hint=False)
         try:
             from soothe_sdk.client import (
                 is_daemon_live,
@@ -431,6 +437,8 @@ class _StartupMixin:
                     f"Please start the daemon with: soothed start"
                 )
 
+            await self._set_spinner(SPINNER_LABEL_CONNECTING_DAEMON, show_interrupt_hint=False)
+
             session = TuiDaemonSession(
                 self._daemon_config,
                 workspace=self._cwd,
@@ -446,6 +454,7 @@ class _StartupMixin:
     def on_soothe_app_daemon_ready(self, event: DaemonReady) -> None:
         """Handle successful daemon bootstrap for the TUI."""
         self._connecting = False
+        self.call_after_refresh(lambda: asyncio.create_task(self._set_spinner(None)))
         self._daemon_session = event.session
 
         status_loop_id = event.status_event.get("loop_id")
@@ -524,6 +533,7 @@ class _StartupMixin:
     def on_soothe_app_server_start_failed(self, event: ServerStartFailed) -> None:
         """Handle daemon bootstrap / connection failure."""
         self._connecting = False
+        self.call_after_refresh(lambda: asyncio.create_task(self._set_spinner(None)))
         self._server_startup_error = f"{type(event.error).__name__}: {event.error}"
         logger.error("Daemon connection failed: %s", event.error, exc_info=event.error)
         # Update banner to show persistent failure state
