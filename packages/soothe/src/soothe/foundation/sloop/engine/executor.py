@@ -1054,8 +1054,18 @@ class Executor:
 
         for i, step in enumerate(steps):
             raw = gather_results[i]
+            envelope = self._compose_execute_step_envelope(
+                step,
+                loop_state=state,
+                wire_subagent=step.wire_subagent,
+                workspace=state.workspace,
+            )
+            from soothe.foundation.sloop.cognition.ledger_compaction import (
+                compact_execute_human_content,
+            )
+
             human_msg = LoopHumanMessage(
-                content=f"Execute: {step.description}",
+                content=compact_execute_human_content(step, envelope=envelope),
                 thread_id=state.thread_id,
                 iteration=state.iteration,
                 goal_summary=(state.goal[:200] if state.goal else None),

@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
+
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-
 from soothe.protocols.planner import PlanContext
 
 
@@ -122,8 +122,9 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     assert messages[-1].content.strip().startswith("GOAL:")
     assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
     assert "翻译成中文" in messages[-1].content
-    # TIMESTAMP is in plan-context human (RFC-214)
-    assert "TIMESTAMP:" in messages[-1].content
+    # Volatile clock is on the system prompt footer, not plan-context human.
+    assert "TIMESTAMP:" not in messages[-1].content
+    assert "<TIMESTAMP>" in system_content
 
     # FOLLOW_UP_POLICY in SystemMessage (static rule)
     assert "<FOLLOW_UP_POLICY>" in system_content

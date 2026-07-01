@@ -9,6 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.sloop.engine.act_wave_finalize import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     _last_tool_result_block,
@@ -17,9 +20,6 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult
 from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 def _make_ce() -> ContextEngine:
@@ -68,10 +68,13 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
     ledger_msgs = ce.ledger.get_messages()
     assert len(ledger_msgs) == 4
     h0, a0, h1, a1 = ledger_msgs
-    assert h0.content == "Execute: glob READMEs"
+    assert h0.content.startswith("GOAL RECAP:\n")
+    assert "glob READMEs" in h0.content
+    assert "EXPECTED OUTPUT:\npaths" in h0.content
     assert getattr(h0, "step_id", None) == "s1"
     assert "a.md b.md" in (a0.content or "")
-    assert h1.content == "Execute: count them"
+    assert h1.content.startswith("GOAL RECAP:\n")
+    assert "count them" in h1.content
     assert a1.content == ""
 
 

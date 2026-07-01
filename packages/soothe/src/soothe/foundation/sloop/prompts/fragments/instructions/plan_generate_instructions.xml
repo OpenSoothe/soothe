@@ -20,9 +20,11 @@ reuses the in-flight plan automatically — you only run when a fresh decision i
 **steps** fields:
 - ``id``: Short token (``01``, ``02``) or per STEP ID HINT:.
 - ``description``: Milestone line (<20 words). Executor handles fine-grained work.
-- ``full_description``: Standalone execution brief (50–120 words), like a detailed
-  task delegation description. Required when ``dependencies`` is set. Must state what
-  to do using predecessor output and forbid repeating predecessor discovery actions.
+- ``full_description``: REQUIRED for every ``kind=action`` step. Standalone execution
+  brief (50–120 words), like a detailed task delegation description. Must include
+  concrete scope (paths, modules, identifiers) when known from the goal or context.
+  When ``dependencies`` is set, must state what to do using predecessor output and
+  forbid repeating predecessor discovery actions.
 - ``expected_output``: Checkable completion signal.
 - ``dependencies``: Optional; step ids this depends on.
 - ``kind``: ``action`` (default) or ``ask_user``. See <ASK_USER_STEP>.
