@@ -28,6 +28,8 @@ DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
         # soothe execution
         "run_command",
         "run_python",
+        "run_background",
+        "kill_process",
         # soothe datetime
         "current_datetime",
         # progressive discovery
