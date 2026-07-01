@@ -14,7 +14,6 @@ import random
 from typing import Any, Literal
 
 from soothe.foundation.sloop.engine.continuation_context import (
-    build_continuation_plan_prior_goal_completion,
     build_continue_bootstrap_step_briefs,
     build_prior_goal_summaries,
     polish_continuation_assess_reasoning,
@@ -202,16 +201,21 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 ctx,
                 label=_PLAN_CONTINUATION_STATUS_LABEL,
             )
-            prior_goal_completion = build_continuation_plan_prior_goal_completion(
-                loop_messages=state.loop_messages,
+            context_bundle = None
+            if ctx.ce is not None:
+                try:
+                    context_bundle = await ctx.ce.project(goal_id=ctx.ce_goal_id)
+                except Exception:
+                    logger.debug(
+                        "[Plan] continuation-assess: ContextEngine.project() failed",
+                        exc_info=True,
+                    )
+            assessment = await strange_loop.loop_planner.assess_continuation(
+                state=state,
+                context=context,
                 checkpoint=ctx.checkpoint,
                 exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
-            )
-            assessment = await strange_loop.loop_planner.assess_continuation(
-                current_goal=state.goal,
-                prior_goal_completion=prior_goal_completion,
-                capabilities=context.available_capabilities,
-                thread_id=state.thread_id,
+                context_bundle=context_bundle,
             )
             reason_text = polish_continuation_assess_reasoning(assessment.reasoning or "")
             if assessment.action == "bootstrap":

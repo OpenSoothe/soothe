@@ -106,8 +106,47 @@ def _should_inject_goal_lineage(
     return True
 
 
+def _render_prior_goals_tree(
+    prior_goals: list[PriorGoalSummary],
+    *,
+    completion_in_ledger: bool,
+    completion_preview_chars: int = 160,
+) -> str:
+    """Render prior goals as nested list with GOAL labels (RFC-214 §4.4, IG-538)."""
+    if not prior_goals:
+        return ""
+    blocks: list[str] = []
+    for summary in prior_goals:
+        description = (summary.description or "").strip()
+        if not description:
+            continue
+        status = (summary.status or "unknown").strip()
+        lines = [f"- GOAL: {description} ({status})"]
+        step_summary = (summary.step_summary or "").strip()
+        if step_summary:
+            for step_line in step_summary.splitlines():
+                step_line = step_line.strip()
+                if not step_line:
+                    continue
+                if step_line.startswith("- "):
+                    lines.append(f"  {step_line}")
+                else:
+                    lines.append(f"  - {step_line}")
+        if completion_in_ledger:
+            lines.append("  - outcome: see prior assistant message")
+        else:
+            completion = (summary.completion_text or "").strip()
+            if completion:
+                preview = completion
+                if completion_preview_chars > 0 and len(preview) > completion_preview_chars:
+                    preview = preview[: completion_preview_chars - 1].rstrip() + "…"
+                lines.append(f"  - outcome: {preview}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
 def _render_prior_goals_section(prior_goals: list[PriorGoalSummary]) -> str:
-    """Render completed prior goals from ContextBundle (cross-goal thread context)."""
+    """Render completed prior goals from ContextBundle (legacy flat layout)."""
     if not prior_goals:
         return ""
     blocks: list[str] = []
@@ -138,19 +177,35 @@ def _append_plan_context_sections(
     current_iteration: int | None = None,
     context_bundle: ContextBundle | None = None,
     step_id_hint: str | None = None,
+    projection_mode: str | None = None,
+    completion_in_ledger: bool = False,
+    prior_goals_override: list[PriorGoalSummary] | None = None,
 ) -> None:
     """Append shared plan-phase context blocks in a stable, priority order."""
-    if (prior_goal_completion or "").strip():
-        sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
+    is_new_goal = projection_mode == "new_goal"
+    prior_goals = prior_goals_override
+    if prior_goals is None and context_bundle is not None:
+        prior_goals = context_bundle.prior_goals
 
-    if context_bundle is not None and context_bundle.prior_goals:
-        prior_goals_text = _render_prior_goals_section(context_bundle.prior_goals)
-        if prior_goals_text:
-            sections.append(("PRIOR GOALS", prior_goals_text))
+    if is_new_goal and prior_goals:
+        tree = _render_prior_goals_tree(
+            prior_goals,
+            completion_in_ledger=completion_in_ledger,
+        )
+        if tree:
+            sections.append(("PRIOR GOALS", tree))
+    elif not is_new_goal:
+        if (prior_goal_completion or "").strip() and not completion_in_ledger:
+            sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
+
+        if prior_goals:
+            prior_goals_text = _render_prior_goals_section(prior_goals)
+            if prior_goals_text:
+                sections.append(("PRIOR GOALS", prior_goals_text))
 
     if context_bundle is not None:
         goal_lineage = (context_bundle.goal_lineage or "").strip()
-        if _should_inject_goal_lineage(
+        if (not is_new_goal or not prior_goals) and _should_inject_goal_lineage(
             goal,
             goal_lineage,
             prior_goal_completion=prior_goal_completion,
@@ -237,6 +292,10 @@ class UserMessageBuilder:
         prior_progress: PriorProgressDigest | None = None,
         current_iteration: int | None = None,
         context_bundle: ContextBundle | None = None,
+        display_goal: str | None = None,
+        projection_mode: str | None = None,
+        completion_in_ledger: bool = False,
+        prior_goals_override: list[PriorGoalSummary] | None = None,
     ) -> str:
         """Build user message for the plan-assess phase.
 
@@ -252,7 +311,7 @@ class UserMessageBuilder:
             Structured text message for the plan-assess LoopHumanMessage.
         """
         sections: list[tuple[str, str]] = [
-            ("GOAL", _goal_text(goal)),
+            ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
         ]
 
         _append_plan_context_sections(
@@ -263,6 +322,9 @@ class UserMessageBuilder:
             prior_progress=prior_progress,
             current_iteration=current_iteration,
             context_bundle=context_bundle,
+            projection_mode=projection_mode,
+            completion_in_ledger=completion_in_ledger,
+            prior_goals_override=prior_goals_override,
         )
 
         sections.append(
@@ -286,6 +348,10 @@ class UserMessageBuilder:
         prior_goal_completion: str | None = None,
         current_iteration: int | None = None,
         context_bundle: ContextBundle | None = None,
+        display_goal: str | None = None,
+        projection_mode: str | None = None,
+        completion_in_ledger: bool = False,
+        prior_goals_override: list[PriorGoalSummary] | None = None,
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -303,7 +369,7 @@ class UserMessageBuilder:
             Structured text message for the plan-generate LoopHumanMessage.
         """
         sections: list[tuple[str, str]] = [
-            ("GOAL", _goal_text(goal)),
+            ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
         ]
 
         _append_plan_context_sections(
@@ -316,6 +382,9 @@ class UserMessageBuilder:
             current_iteration=current_iteration,
             context_bundle=context_bundle,
             step_id_hint=step_id_hint,
+            projection_mode=projection_mode,
+            completion_in_ledger=completion_in_ledger,
+            prior_goals_override=prior_goals_override,
         )
 
         sections.append(
@@ -326,6 +395,35 @@ class UserMessageBuilder:
             )
         )
 
+        return _render_sections(sections)
+
+    def build_plan_continuation_message(
+        self,
+        goal: str,
+        *,
+        context_bundle: ContextBundle | None = None,
+        display_goal: str | None = None,
+        completion_in_ledger: bool = False,
+        prior_goals_override: list[PriorGoalSummary] | None = None,
+    ) -> str:
+        """Build task envelope for RFC-226 continuation discriminator (IG-538)."""
+        sections: list[tuple[str, str]] = [
+            ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
+        ]
+        _append_plan_context_sections(
+            sections,
+            goal=goal,
+            context_bundle=context_bundle,
+            projection_mode="new_goal",
+            completion_in_ledger=completion_in_ledger,
+            prior_goals_override=prior_goals_override,
+        )
+        sections.append(
+            (
+                "TASK",
+                "Decide bootstrap vs plan_generate for this follow-up goal.",
+            )
+        )
         return _render_sections(sections)
 
     def build_execute_step_message(
@@ -425,6 +523,7 @@ __all__ = [
     "UserMessageBuilder",
     "_append_plan_context_sections",
     "_render_prior_goals_section",
+    "_render_prior_goals_tree",
     "_should_inject_goal_lineage",
     "flatten_user_message_content",
 ]

@@ -14,8 +14,8 @@ from pathlib import Path
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.foundation.sloop.engine.continuation_context import build_prior_goal_summaries
 from soothe.foundation.sloop.orchestrator.nodes.plan_assess import (
-    _prior_goal_summaries,
     build_continue_loop_bootstrap_plan,
 )
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
@@ -111,14 +111,14 @@ def test_build_bootstrap_plan_terminal_flag_propagates() -> None:
     assert "translate the result to chinese" in (step.full_description or "")
 
 
-# ── _prior_goal_summaries (RFC-226, RFC-624 Phase 4 Stage 2) ───────────────────
+# ── build_prior_goal_summaries (RFC-226, RFC-624 Phase 4 Stage 2) ─────────────
 
 
 def test_prior_goal_summaries_reads_ce_dag() -> None:
-    """Stage 2: _prior_goal_summaries reads from CE GoalStepDAG, not checkpoint."""
+    """Stage 2: build_prior_goal_summaries reads from CE GoalStepDAG, not checkpoint."""
     ce = _make_ce_with_completed_goal()
     ctx = _make_runtime_context_with_ce(ce)
-    summaries = _prior_goal_summaries(ctx)
+    summaries = build_prior_goal_summaries(ce=ctx.ce, checkpoint=ctx.checkpoint)
     assert len(summaries) == 1
     assert summaries[0]["goal_text"] == "count files"
     assert "README" in summaries[0]["completion"]
@@ -153,5 +153,5 @@ def test_prior_goal_summaries_empty_without_ce() -> None:
         scratch=LoopPhaseScratch(),
         continue_loop_mode=False,
     )
-    summaries = _prior_goal_summaries(ctx)
+    summaries = build_prior_goal_summaries(ce=ctx.ce, checkpoint=ctx.checkpoint)
     assert summaries == []

@@ -154,7 +154,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
 
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     """Ledger (execute turns) precedes plan-context human so assess sees history then framing (IG-372)."""
-    state = LoopState(goal="read readme", thread_id="t1", max_iterations=8)
+    state = LoopState(goal="read readme", thread_id="t1", max_iterations=8, iteration=1)
     state.loop_messages = [
         LoopHumanMessage(
             content="Execute: read top of README",

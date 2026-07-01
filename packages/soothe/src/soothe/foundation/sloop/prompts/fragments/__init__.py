@@ -36,6 +36,11 @@ PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read(
     "instructions/plan_generate_instructions.xml", strip=True
 )
 
+# Continuation discriminator (RFC-226, RFC-214 §4, IG-538)
+PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT = _read(
+    "instructions/plan_continuation_discriminate.xml", strip=True
+)
+
 # Prefetch static policy fragments (IG-183 merged policies)
 EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", strip=True)
 
@@ -90,6 +95,7 @@ __all__ = [
     "LOOP_CONTINUATION_GUIDE_FRAGMENT",
     "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
+    "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
     "QUIZ_RESPONSE_GUIDE_FRAGMENT",
     "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",
