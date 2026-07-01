@@ -171,6 +171,9 @@ async def _cmd_clear(
     if not old_loop_id:
         raise ValueError("loop_id required for clear operation")
 
+    if self._query_running:
+        await self._query_engine.cancel_loop(old_loop_id)
+
     # Get state manager from runner
     if self._runner is None or self._runner.state_manager is None:
         raise ValueError("Runner not initialized")

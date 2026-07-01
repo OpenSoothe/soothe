@@ -26,15 +26,30 @@ WORKER_MSG_ERROR = "error"
 WORKER_MSG_CANCELLED = "cancelled"
 WORKER_MSG_TIMEOUT = "timeout"
 
-# IG-477: Backpressure timeout for queue.put() when queue is full
-_QUEUE_PUT_TIMEOUT_SECONDS = 0.5
+# Backpressure: block worker thread until a delivery slot is available.
+_DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 5.0
+_GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 60.0
 
 # IG-477: Limit in-flight chunk deliveries (blocks worker thread when full)
-_MAX_PENDING_CALLBACKS = 100
+_MAX_PENDING_CALLBACKS = 200
 
 # Semaphore slots == max in-flight chunk deliveries. Worker thread blocks on
 # acquire() so LangGraph astream cannot outrun the main-loop consumer.
 _pending_slots = threading.Semaphore(_MAX_PENDING_CALLBACKS)
+
+# Legacy export name kept for tests and callers.
+_QUEUE_PUT_TIMEOUT_SECONDS = _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
+
+
+def _chunk_is_goal_completion(payload: Any) -> bool:
+    """Return True when a worker chunk carries goal_completion synthesis."""
+    if not isinstance(payload, tuple) or len(payload) < 3:
+        return False
+    data = payload[2]
+    if not isinstance(data, tuple) or not data:
+        return False
+    msg = data[0]
+    return isinstance(msg, dict) and msg.get("phase") == "goal_completion"
 
 
 @dataclass(frozen=True)
@@ -68,14 +83,26 @@ class ResponsePusher:
 
         acquired_slot = False
         if msg_type == WORKER_MSG_CHUNK:
-            # Block worker thread until downstream catches up (backpressure)
-            if not _pending_slots.acquire(timeout=_QUEUE_PUT_TIMEOUT_SECONDS):
+            acquire_timeout = (
+                _GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
+                if _chunk_is_goal_completion(payload)
+                else _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
+            )
+            # Block worker thread until downstream catches up (backpressure).
+            if not _pending_slots.acquire(timeout=acquire_timeout):
                 logger.warning(
-                    "ResponsePusher: backpressure timeout (limit=%d), dropping chunk "
-                    "(downstream consumer too slow)",
+                    "ResponsePusher: backpressure timeout (limit=%d, goal_completion=%s); "
+                    "retrying chunk delivery",
                     _MAX_PENDING_CALLBACKS,
+                    _chunk_is_goal_completion(payload),
                 )
-                return
+                if not _pending_slots.acquire(timeout=acquire_timeout):
+                    logger.error(
+                        "ResponsePusher: dropping chunk after backpressure retry "
+                        "(goal_completion=%s)",
+                        _chunk_is_goal_completion(payload),
+                    )
+                    return
             acquired_slot = True
 
         try:
@@ -88,8 +115,8 @@ class ResponsePusher:
     def _deliver(self, msg_type: str, payload: Any, release_slot: bool = False) -> None:
         """Run on the main loop thread; map worker types to asyncio.Queue tuples.
 
-        IG-477: Use put() with timeout for chunks to apply backpressure.
-        Terminal messages (done/error/cancelled) use put_nowait() to ensure delivery.
+        Chunk delivery uses blocking ``queue.put`` so synthesis frames are not
+        dropped when the asyncio queue is momentarily full.
         """
         try:
             if msg_type == WORKER_MSG_TIMEOUT:
@@ -98,21 +125,14 @@ class ResponsePusher:
                 self._queue.put_nowait((WORKER_MSG_ERROR, asyncio.CancelledError()))
             elif msg_type == WORKER_MSG_CHUNK:
 
-                async def _put_with_timeout() -> None:
+                async def _put_chunk() -> None:
                     try:
-                        await asyncio.wait_for(
-                            self._queue.put((WORKER_MSG_CHUNK, payload)),
-                            timeout=_QUEUE_PUT_TIMEOUT_SECONDS,
-                        )
-                    except TimeoutError:
-                        logger.warning(
-                            "ResponsePusher: asyncio queue full (maxsize=100), dropping chunk"
-                        )
+                        await self._queue.put((WORKER_MSG_CHUNK, payload))
                     finally:
                         if release_slot:
                             _pending_slots.release()
 
-                asyncio.create_task(_put_with_timeout())
+                asyncio.create_task(_put_chunk())
             elif msg_type == WORKER_MSG_DONE:
                 self._queue.put_nowait((WORKER_MSG_DONE, None))
             elif msg_type == WORKER_MSG_ERROR:
@@ -136,4 +156,5 @@ __all__ = [
     "WORKER_MSG_TIMEOUT",
     "_QUEUE_PUT_TIMEOUT_SECONDS",
     "_MAX_PENDING_CALLBACKS",
+    "_chunk_is_goal_completion",
 ]

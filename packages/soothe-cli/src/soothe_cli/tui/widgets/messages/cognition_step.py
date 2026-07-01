@@ -1370,16 +1370,16 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.display = True
 
     def set_result_preview(self, text: str) -> None:
-        """Show a 3-line preview of the goal_completion result in the detail area."""
+        """Show a short preview of the goal_completion result in the detail area."""
         if not text.strip():
             return
         lines = text.strip().splitlines()
-        preview_lines = lines[:3]
+        preview_lines = lines[:8]
         preview = "\n".join(preview_lines)
-        remaining = len(lines) - 3
+        remaining = len(lines) - 8
         if remaining > 0:
             ellipsis = get_glyphs().ellipsis
-            preview += f"\n{ellipsis} {remaining} more lines"
+            preview += f"\n{ellipsis} {remaining} more lines — full report below"
         if self._detail_widget is None:
             return
         g = get_glyphs()
