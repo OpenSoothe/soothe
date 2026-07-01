@@ -10,8 +10,8 @@ Separation of concerns (IG-300):
 - analysis/synthesis.py: Execution logic ("how to synthesize?")
 
 Checkpoint isolation (IG-302): synthesis uses a fresh LangGraph ``thread_id`` so the
-checkpointer does not replay the parent thread. The model receives a projected
-user-safe evidence payload plus system report instructions (``synthesis_projection``).
+checkpointer does not replay the parent thread. The model receives execute-step ledger
+messages plus a context human envelope and system report instructions.
 """
 
 from __future__ import annotations
@@ -150,21 +150,26 @@ class SynthesisGenerator:
         )
 
         max_total = self._synthesis_max_chars()
+        ledger_cfg = None
+        if self._soothe_config is not None:
+            ledger_cfg = self._soothe_config.agent.loop.plan_prompt_ledger
         messages = build_synthesis_messages(
             state,
             classification,
             user_query=goal,
             max_chars=max_total,
+            ledger_cfg=ledger_cfg,
         )
 
         approx_chars = sum(
             len(extract_text_from_message_content(getattr(m, "content", ""))) for m in messages
         )
+        execute_ledger_count = max(0, len(messages) - 2)
         logger.info(
-            "Synthesis generator: scenario=%s sections=%d ledger_msgs=%d prompt_msgs=%d approx_chars=%d",
+            "Synthesis generator: scenario=%s sections=%d execute_ledger_msgs=%d prompt_msgs=%d approx_chars=%d",
             classification.scenario,
             len(classification.sections),
-            len(state.loop_messages),
+            execute_ledger_count,
             len(messages),
             approx_chars,
         )
