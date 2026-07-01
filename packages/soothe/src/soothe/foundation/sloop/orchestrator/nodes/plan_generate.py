@@ -88,6 +88,16 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     ctx.scratch.plan_result = plan_result
 
+    plan_reasoning = (plan_result.plan_reasoning or "").strip()
+    if plan_reasoning:
+        await ctx.emit(
+            "generate",
+            {
+                "plan_reasoning": plan_reasoning,
+                "iteration": state.iteration,
+            },
+        )
+
     await ctx.emit(
         "plan",
         {
@@ -95,7 +105,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             "status": plan_result.status,
             "progress": plan_result.goal_progress,
             "next_action": plan_result.next_action,
-            "plan_reasoning": plan_result.plan_reasoning,
             "plan_action": plan_result.plan_action,
         },
     )

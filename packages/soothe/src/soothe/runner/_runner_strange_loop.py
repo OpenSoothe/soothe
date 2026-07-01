@@ -697,6 +697,21 @@ class StrangeLoopMixin:
                             ).to_dict()
                         )
 
+                elif event_type == "generate":
+                    plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
+                    if plan_reasoning:
+                        yield _custom(
+                            LoopAgentReasonEvent(
+                                status="",
+                                progress="",
+                                next_action="",
+                                assessment_reasoning="",
+                                plan_reasoning=plan_reasoning,
+                                iteration=int(event_data.get("iteration", 0)),
+                                plan_action="",
+                            ).to_dict()
+                        )
+
                 elif event_type == "plan":
                     next_action = str(event_data.get("next_action", "")).strip()
                     assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()

@@ -9,6 +9,14 @@ from soothe.runner._runner_strange_loop import (
 )
 
 
+def test_should_emit_loop_reason_event_for_plan_generate_reasoning() -> None:
+    assert _should_emit_loop_reason_event(
+        assessment_reasoning="",
+        plan_reasoning="I'll inspect the adapter module first.",
+        next_action="",
+    )
+
+
 def test_should_emit_loop_reason_event_for_plan_generate_next_action() -> None:
     assert _should_emit_loop_reason_event(
         assessment_reasoning="",

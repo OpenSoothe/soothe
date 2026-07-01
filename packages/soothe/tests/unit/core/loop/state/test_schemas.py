@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+
 from soothe.foundation.sloop.engine.thread_selection import resolve_wire_subagent_for_step
 from soothe.foundation.sloop.state import schemas as schemas_mod
 from soothe.foundation.sloop.state.schemas import (
@@ -481,14 +482,13 @@ class TestPlanGeneration:
         assert resolve_wire_subagent_for_step(step, routing) == "explore"
 
     def test_new_requires_flattened_fields(self) -> None:
-        """plan_action=new requires top-level decision fields."""
+        """Plan generation requires top-level decision fields."""
         with pytest.raises(ValidationError):
-            PlanGeneration(plan_action="new", next_action="test")
+            PlanGeneration(next_action="test")
 
     def test_new_final_allows_empty_steps(self) -> None:
         """type=final matches AgentDecision: no execute steps required."""
         out = PlanGeneration(
-            plan_action="new",
             type="final",
             execution_mode="parallel",
             steps=[],
@@ -501,7 +501,6 @@ class TestPlanGeneration:
         """type=execute_steps still requires at least one step."""
         with pytest.raises(ValidationError):
             PlanGeneration(
-                plan_action="new",
                 type="execute_steps",
                 execution_mode="parallel",
                 steps=[],
@@ -511,7 +510,6 @@ class TestPlanGeneration:
     def test_new_defaults_execution_mode_when_omitted(self) -> None:
         """Omitted execution_mode defaults to parallel (common LLM omission for type=final)."""
         out = PlanGeneration(
-            plan_action="new",
             type="final",
             steps=[],
             next_action="Done.",
@@ -522,7 +520,6 @@ class TestPlanGeneration:
         """execute_steps accepts omitted execution_mode; steps are still required."""
         step = PlanGenerateStep(description="Do work", expected_output="ok")
         out = PlanGeneration(
-            plan_action="new",
             type="execute_steps",
             steps=[step],
             next_action="Running.",
@@ -533,7 +530,6 @@ class TestPlanGeneration:
         """Removed sequential mode is not accepted."""
         with pytest.raises(ValidationError):
             PlanGeneration(
-                plan_action="new",
                 type="execute_steps",
                 steps=[PlanGenerateStep(description="x", expected_output="ok")],
                 execution_mode="sequential",
@@ -546,11 +542,20 @@ class TestPlanGeneration:
                 execution_mode="sequential",
             )
 
-    def test_keep_can_omit_decision_fields(self) -> None:
-        """plan_action=keep does not require decision fields."""
-        out = PlanGeneration(plan_action="keep", next_action="I will continue.")
-        assert out.plan_action == "keep"
-        assert out.steps == []
+    def test_plan_generation_schema_excludes_plan_action(self) -> None:
+        """plan_action is derived at runtime, not part of the LLM schema."""
+        from soothe.foundation.sloop.state.schemas import plan_generation_model_for_iteration
+
+        props = plan_generation_model_for_iteration(1).model_json_schema()["properties"]
+        assert "plan_action" not in props
+
+    def test_derive_plan_action(self) -> None:
+        from soothe.foundation.sloop.state.schemas import derive_plan_action
+
+        assert derive_plan_action(assessment_status="continue", has_remaining_steps=True) == "keep"
+        assert derive_plan_action(assessment_status="continue", has_remaining_steps=False) == "new"
+        assert derive_plan_action(assessment_status="replan", has_remaining_steps=True) == "new"
+        assert derive_plan_action(assessment_status="done", has_remaining_steps=True) == "new"
 
     def test_first_wave_model_rejects_more_than_two_steps(self) -> None:
         from soothe.foundation.sloop.state.schemas import plan_generation_model_for_iteration
@@ -562,7 +567,6 @@ class TestPlanGeneration:
         ]
         with pytest.raises(ValidationError):
             schema(
-                plan_action="new",
                 type="execute_steps",
                 execution_mode="parallel",
                 steps=steps,
@@ -574,7 +578,6 @@ class TestPlanGeneration:
 
         schema = plan_generation_model_for_iteration(0)
         out = schema(
-            plan_action="new",
             type="execute_steps",
             execution_mode="parallel",
             steps=[
@@ -591,7 +594,6 @@ class TestPlanGeneration:
         schema = plan_generation_model_for_iteration(1)
         assert schema is PlanGeneration
         out = PlanGeneration(
-            plan_action="new",
             type="execute_steps",
             execution_mode="parallel",
             steps=[

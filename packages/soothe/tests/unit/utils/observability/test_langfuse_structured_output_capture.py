@@ -19,7 +19,7 @@ def test_extract_structured_output_from_message_with_tool_calls() -> None:
         tool_calls=[
             {
                 "name": "PlanGeneration",
-                "args": {"plan_action": "new", "steps": []},
+                "args": {"type": "execute_steps", "steps": []},
                 "id": "call_123",
             },
         ],
@@ -31,7 +31,7 @@ def test_extract_structured_output_from_message_with_tool_calls() -> None:
     assert result["content"] == ""
     assert len(result["tool_calls"]) == 1
     assert result["tool_calls"][0]["name"] == "PlanGeneration"
-    assert result["tool_calls"][0]["args"]["plan_action"] == "new"
+    assert result["tool_calls"][0]["args"]["type"] == "execute_steps"
 
 
 def test_extract_structured_output_returns_none_without_tool_calls() -> None:
@@ -87,7 +87,6 @@ def test_on_llm_end_captures_structured_output() -> None:
                 {
                     "name": "PlanGeneration",
                     "args": {
-                        "plan_action": "new",
                         "type": "execute_steps",
                         "steps": [{"id": "01", "description": "Test step"}],
                     },
