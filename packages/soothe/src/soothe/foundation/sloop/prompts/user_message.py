@@ -185,8 +185,8 @@ class UserMessageBuilder:
         sections.append(
             (
                 "TASK",
-                "1. Assess whether the current goal is complete or needs more work\n"
-                "2. Return status (continue/replan/done), progress level, and next action",
+                "Assess goal completion: return status (continue/replan/done), goal_progress, "
+                "and first-person assessment_reasoning.",
             )
         )
 
@@ -250,9 +250,8 @@ class UserMessageBuilder:
         sections.append(
             (
                 "TASK",
-                "1. Generate an execution plan for the goal\n"
-                "2. Specify steps with descriptions, expected outputs, and dependencies\n"
-                "3. Return first-person reasoning (I'll / Let me …) and step details",
+                "Generate the execution plan: steps (with full_description for actions), "
+                "execution_mode, first-person reasoning, and next_action.",
             )
         )
 

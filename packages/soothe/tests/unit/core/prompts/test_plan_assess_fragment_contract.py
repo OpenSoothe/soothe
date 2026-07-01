@@ -37,3 +37,8 @@ def test_fragment_preserves_existing_guards() -> None:
     # Pre-existing guards must remain (regression check).
     assert 'NEVER status="done"' in text
     assert 'Never set status="done" without ledger evidence' in text
+
+
+def test_plan_assess_fragment_size_guard() -> None:
+    """Regression: condensed prompt must stay lean (was ~3700 bytes pre-condense)."""
+    assert len(_FRAGMENT_TEXT) < 2800

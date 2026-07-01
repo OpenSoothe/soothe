@@ -49,6 +49,26 @@ class TaskComplexity(StrEnum):
     COMPLEX = "complex"
 
 
+def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplexity:
+    """Map intake label to execute-phase task complexity.
+
+    ``task_complexity`` is derived from ``intake_label`` so the intake LLM
+    only classifies graph routing; downstream execute tuning reuses the same
+    signal without a redundant LLM field.
+
+    Args:
+        intake_label: 4-class intake label from the classifier.
+
+    Returns:
+        Task complexity for ``RoutingClassification`` and system prompt tiers.
+    """
+    if intake_label == IntakeLabel.QUIZ:
+        return TaskComplexity.MINIMAL
+    if intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE):
+        return TaskComplexity.SIMPLE
+    return TaskComplexity.COMPLEX
+
+
 class RoutingClassification(BaseModel):
     """Routing complexity classification for execution path selection.
 
@@ -148,9 +168,6 @@ class IntakeClassificationLLMResult(BaseModel):
         default=None,
         description="Normalized goal description for display and GoalEngine (non-quiz only)",
     )
-    task_complexity: TaskComplexity = Field(
-        description="Routing complexity: minimal (quiz), simple, medium, or complex"
-    )
     quiz_response: str | None = Field(
         default=None,
         description="Direct answer for quiz intents (greeting/thanks/trivia). Concise, from training knowledge.",
@@ -162,15 +179,17 @@ class IntakeClassificationLLMResult(BaseModel):
         Maps the 4-class label onto ``intent_type`` so the quiz fast-path and
         event emission keep working: ``quiz`` → ``quiz``, all others →
         ``agentic``. The 4-class label is preserved on ``intake_label`` for
-        ``route_by_intent``.
+        ``route_by_intent``. ``task_complexity`` is derived from
+        ``intake_label`` (not LLM output).
         """
+        task_complexity = derive_task_complexity_from_intake(self.intake_label)
         if self.intake_label == IntakeLabel.QUIZ:
             return IntentClassification(
                 intent_type="quiz",
                 intake_label=IntakeLabel.QUIZ,
                 reasoning=None,
                 goal_description=None,
-                task_complexity=TaskComplexity.MINIMAL,
+                task_complexity=task_complexity,
                 quiz_response=self.quiz_response,
             )
         return IntentClassification(
@@ -178,7 +197,7 @@ class IntakeClassificationLLMResult(BaseModel):
             intake_label=self.intake_label,
             reasoning=self.reasoning,
             goal_description=self.goal_description,
-            task_complexity=self.task_complexity,
+            task_complexity=task_complexity,
             quiz_response=None,
         )
 
