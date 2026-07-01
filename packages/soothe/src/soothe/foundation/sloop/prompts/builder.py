@@ -289,6 +289,10 @@ class PromptBuilder:
 
             parts.append(build_soothe_workspace_section(Path(context.workspace)) + "\n")
 
+        from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
+
+        parts.append(build_timestamp_xml_footer())
+
         return "\n".join(parts)
 
     def _build_human_message(
@@ -358,7 +362,7 @@ class PromptBuilder:
         plan model sees native human/AI turns instead of a single flattened block.
         Execute-step evidence lives in those ledger messages (IG-368).
 
-        Uses scenario-based structured text (GOAL/INTENT/CONTEXT/TASK) instead
+        Uses scenario-based structured text (GOAL/CONTEXT/TASK) instead
         of XML envelopes.
 
         Args:
@@ -376,13 +380,6 @@ class PromptBuilder:
         from soothe.foundation.sloop.state.schemas import next_goal_local_step_id_start
 
         builder = UserMessageBuilder()
-
-        # Extract intent from state
-        intent_type = "agentic"
-        task_complexity = "medium"
-        if state.intent and hasattr(state.intent, "intent_type"):
-            intent_type = state.intent.intent_type
-            task_complexity = getattr(state.intent, "task_complexity", "medium")
 
         # Build step ID hint for generate phase
         step_id_hint = None
@@ -404,8 +401,6 @@ class PromptBuilder:
             prior_progress=getattr(state, "prior_progress", None),
             current_iteration=state.iteration,
             context_bundle=context_bundle,
-            intent_type=intent_type,
-            task_complexity=task_complexity,
         )
 
         if plan_phase == "assess":

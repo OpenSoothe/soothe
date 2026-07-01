@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import LoopState
 
@@ -102,8 +103,8 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
     )
     assert "GOAL:" in execute
     assert "GOAL:" in plan
-    assert "TIMESTAMP:" in execute
-    assert "TIMESTAMP:" in plan
+    assert "TIMESTAMP:" not in execute
+    assert "TIMESTAMP:" not in plan
 
 
 def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:

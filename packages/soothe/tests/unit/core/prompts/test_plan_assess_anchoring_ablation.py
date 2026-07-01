@@ -20,6 +20,7 @@ messages directly so that is a one-liner.
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -31,7 +32,6 @@ from soothe.foundation.sloop.state.schemas import (
     ToolCallHead,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-
 from soothe.protocols.planner import PlanContext
 
 # ---------------------------------------------------------------------------
@@ -83,9 +83,8 @@ def _plan_context_human(content: str, *, iteration: int, phase: str) -> LoopHuma
 
 def _build_baseline_ledger() -> list[LoopHumanMessage | LoopAIMessage]:
     """The 8-turn ledger that plan-assess #2 sees (RFC-214 projection)."""
-    # iter=0 plan-assess turn (scenario-based format with GOAL: and TIMESTAMP:)
     iter0_plan_assess_human = _plan_context_human(
-        f"GOAL:\n{GOAL}\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00",
+        f"GOAL:\n{GOAL}",
         iteration=0,
         phase="plan_assess",
     )
@@ -96,7 +95,7 @@ def _build_baseline_ledger() -> list[LoopHumanMessage | LoopAIMessage]:
         phase="plan_assess",
     )
     iter0_plan_generate_human = _plan_context_human(
-        f"GOAL:\n{GOAL}\n\nTIMESTAMP: 2026-06-02T10:19:58+00:00",
+        f"GOAL:\n{GOAL}",
         iteration=0,
         phase="plan_generate",
     )
@@ -275,6 +274,15 @@ def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+_SYSTEM_TIMESTAMP_RE = re.compile(r"\n?<TIMESTAMP>\s*\n[^<]+\n</TIMESTAMP>", re.MULTILINE)
+
+
+def _stable_system_sha(system_content: str) -> str:
+    """Hash system prompt excluding volatile ``<TIMESTAMP>`` footer."""
+    stable = _SYSTEM_TIMESTAMP_RE.sub("", system_content)
+    return hashlib.sha256(stable.encode("utf-8")).hexdigest()[:12]
+
+
 def _measure(name: str, msgs: list) -> PromptMetrics:
     system_content = msgs[0].content if msgs else ""
     all_content = "\n".join(getattr(m, "content", "") for m in msgs)
@@ -285,7 +293,7 @@ def _measure(name: str, msgs: list) -> PromptMetrics:
         name=name,
         total_chars=len(all_content),
         approx_tokens=_approx_tokens(all_content),
-        system_sha=hashlib.sha256(system_content.encode("utf-8")).hexdigest()[:12],
+        system_sha=_stable_system_sha(system_content),
         anchor_present=ITER0_ASSESSMENT_REASONING in all_content,
         duplicated_goal_count=ledger_content.count("GOAL:\n"),
         message_count=len(msgs),
@@ -381,23 +389,15 @@ def test_b2_minimal_ledger_just_digest() -> None:
 
 
 def test_c1_makes_recorded_humans_cache_stable() -> None:
-    """Recorded planning humans must lose their volatile TIMESTAMP:."""
+    """Recorded planning humans must not carry volatile TIMESTAMP sections."""
     baseline_ledger = _build_baseline_ledger()
-    c1_ledger = ablation_c1_strip_volatile_timestamp_from_recorded(baseline_ledger)
-    base_recorded_humans = [
+    recorded_humans = [
         m
         for m in baseline_ledger
         if isinstance(m, LoopHumanMessage) and m.phase in {"plan_assess", "plan_generate"}
     ]
-    c1_recorded_humans = [
-        m
-        for m in c1_ledger
-        if isinstance(m, LoopHumanMessage) and m.phase in {"plan_assess", "plan_generate"}
-    ]
-    assert all("TIMESTAMP:" in m.content for m in base_recorded_humans)
-    assert all("TIMESTAMP:" not in m.content for m in c1_recorded_humans)
-    # Anchor still present (C1 targets cache, not anchor).
-    assert ITER0_ASSESSMENT_REASONING in "\n".join(m.content for m in c1_ledger)
+    assert all("TIMESTAMP:" not in m.content for m in recorded_humans)
+    assert ITER0_ASSESSMENT_REASONING in "\n".join(m.content for m in baseline_ledger)
 
 
 def test_d1_dedupes_goal() -> None:
@@ -412,12 +412,13 @@ def test_d1_dedupes_goal() -> None:
 def test_system_sha_is_identical_across_ablations() -> None:
     """All conditions share the same system prompt (changes are ledger-only).
 
-    Confirms cache_read should be high if the system block is reused across calls.
-    Mirrors the trace observation that plan-assess #3 hit cache (1536) but #2 did not.
+    ``<TIMESTAMP>`` footer is volatile per call and excluded from the hash.
     """
     results = _run_all_conditions()
     shas = {r.system_sha for r in results.values()}
     assert len(shas) == 1, f"system message must be identical across conditions; got {shas}"
+    sample_system = _render(_build_state())[0].content
+    assert "<TIMESTAMP>" in sample_system
 
 
 def test_ablation_report_summary(capsys) -> None:

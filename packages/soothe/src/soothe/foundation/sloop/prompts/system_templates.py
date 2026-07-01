@@ -126,8 +126,8 @@ Key rules:
 """
 
 # Cache-stable directive about user-facing prose language. Lives in the system
-# prompt so the per-turn user envelope (which carries volatile timestamp /
-# evidence) stays small and the directive is recorded once in the prefix.
+# prompt so the per-turn user envelope stays small and the directive is recorded
+# once in the prefix.
 RESPONSE_LANGUAGE_HINT_FRAGMENT = (
     "<RESPONSE_LANGUAGE_HINT>\n"
     "Prefer the same natural language as the user's goal for explanations, "
@@ -135,6 +135,23 @@ RESPONSE_LANGUAGE_HINT_FRAGMENT = (
     "quoted literals unchanged.\n"
     "</RESPONSE_LANGUAGE_HINT>"
 )
+
+
+def current_timestamp_iso() -> str:
+    """Return current local-timezone ISO-8601 timestamp for system prompts."""
+    import datetime as dt
+
+    return dt.datetime.now(dt.UTC).astimezone().isoformat()
+
+
+def build_timestamp_xml_footer() -> str:
+    """Append volatile clock to system prompts (bottom-right XML tag).
+
+    User/ledger messages must not carry timestamps — they break prompt-cache
+    prefixes when replayed from the RFC-214 ledger.
+    """
+    return f"<TIMESTAMP>\n{current_timestamp_iso()}\n</TIMESTAMP>"
+
 
 _DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT + _TOOL_ORCHESTRATION_GUIDE
 

@@ -1,15 +1,14 @@
 """Unified scenario-based user message builder for all loop phases.
 
-Replaces XML envelopes with structured text sections (GOAL/INTENT/CONTEXT/TASK).
-Section labels use UPPER_CASE_LABEL: headers — unambiguous for LLMs, cheaper
-than XML tags, and easily parseable for ledger compaction.
+Replaces XML envelopes with structured text sections (GOAL/CONTEXT/TASK).
+Plan and execute user messages omit INTENT — routing is decided in code before
+the plan LLM runs; synthesis retains INTENT for report tone.
 
 System messages retain XML. Only user messages use this format.
 """
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -119,11 +118,6 @@ def _extract_mcp_resource_refs(text: str) -> list[tuple[str, str]]:
     return [(m.group(1), m.group(2)) for m in _MCP_RESOURCE_REF_RE.finditer(text)]
 
 
-def _timestamp_line() -> str:
-    """Return current ISO-8601 timestamp string."""
-    return dt.datetime.now(dt.UTC).astimezone().isoformat()
-
-
 def _render_mcp_resource_blocks(blocks: list[str] | None) -> str:
     """Render pre-resolved MCP resource blocks as text content."""
     if not blocks:
@@ -134,9 +128,8 @@ def _render_mcp_resource_blocks(blocks: list[str] | None) -> str:
 class UserMessageBuilder:
     """Unified scenario-based user message builder for all loop phases.
 
-    Replaces XML envelopes with structured text sections (GOAL/INTENT/CONTEXT/TASK).
-    Each phase method produces the same base skeleton with phase-specific context sections
-    and task instructions.
+    Replaces XML envelopes with structured text sections (GOAL/CONTEXT/TASK).
+    Plan phases omit INTENT (routing is code-driven). Synthesis retains INTENT.
     """
 
     def build_plan_assess_message(
@@ -148,8 +141,6 @@ class UserMessageBuilder:
         prior_progress: PriorProgressDigest | None = None,
         current_iteration: int | None = None,
         context_bundle: ContextBundle | None = None,
-        intent_type: str = "agentic",
-        task_complexity: str = "medium",
     ) -> str:
         """Build user message for the plan-assess phase.
 
@@ -160,15 +151,12 @@ class UserMessageBuilder:
             prior_progress: RFC-227 per-wave digest.
             current_iteration: Current loop iteration for staleness check.
             context_bundle: Optional ContextBundle from ContextEngine.project().
-            intent_type: Intent classification (agentic/quiz).
-            task_complexity: Task complexity level.
 
         Returns:
             Structured text message for the plan-assess LoopHumanMessage.
         """
         sections: list[tuple[str, str]] = [
             ("GOAL", _goal_text(goal)),
-            ("INTENT", f"{intent_type} (complexity: {task_complexity})"),
         ]
 
         # Prior progress (with staleness check)
@@ -188,15 +176,11 @@ class UserMessageBuilder:
         if context_bundle is not None:
             if context_bundle.goal_lineage:
                 sections.append(("GOAL LINEAGE", context_bundle.goal_lineage))
-            if context_bundle.goal_progress:
-                sections.append(("GOAL PROGRESS", context_bundle.goal_progress))
             if context_bundle.step_lineage:
                 sections.append(("STEP LINEAGE", context_bundle.step_lineage))
 
         if (skill_context or "").strip():
             sections.append(("SKILL REFERENCE", skill_context.strip()))
-
-        sections.append(("TIMESTAMP", _timestamp_line()))
 
         sections.append(
             (
@@ -218,8 +202,6 @@ class UserMessageBuilder:
         prior_progress: PriorProgressDigest | None = None,
         current_iteration: int | None = None,
         context_bundle: ContextBundle | None = None,
-        intent_type: str = "agentic",
-        task_complexity: str = "medium",
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -231,15 +213,12 @@ class UserMessageBuilder:
             prior_progress: RFC-227 per-wave digest.
             current_iteration: Current loop iteration.
             context_bundle: Optional ContextBundle from ContextEngine.project().
-            intent_type: Intent classification.
-            task_complexity: Task complexity level.
 
         Returns:
             Structured text message for the plan-generate LoopHumanMessage.
         """
         sections: list[tuple[str, str]] = [
             ("GOAL", _goal_text(goal)),
-            ("INTENT", f"{intent_type} (complexity: {task_complexity})"),
         ]
 
         # Prior progress (with staleness check)
@@ -259,8 +238,6 @@ class UserMessageBuilder:
         if context_bundle is not None:
             if context_bundle.goal_lineage:
                 sections.append(("GOAL LINEAGE", context_bundle.goal_lineage))
-            if context_bundle.goal_progress:
-                sections.append(("GOAL PROGRESS", context_bundle.goal_progress))
             if context_bundle.step_lineage:
                 sections.append(("STEP LINEAGE", context_bundle.step_lineage))
 
@@ -269,8 +246,6 @@ class UserMessageBuilder:
 
         if step_id_hint:
             sections.append(("STEP ID HINT", step_id_hint))
-
-        sections.append(("TIMESTAMP", _timestamp_line()))
 
         sections.append(
             (
@@ -326,8 +301,6 @@ class UserMessageBuilder:
 
         if workspace_state:
             sections.append(("WORKSPACE STATE", workspace_state))
-
-        sections.append(("TIMESTAMP", _timestamp_line()))
 
         return _render_sections(sections)
 
@@ -398,8 +371,8 @@ def flatten_user_message_content(content: str) -> str:
     if not text:
         return ""
 
-    # New format: extract content after "GOAL:" until next section
-    goal_match = re.match(r"GOAL:\s*\n(.+?)(?:\n\n|\Z)", text, re.DOTALL)
+    # New format: extract content after "GOAL:" or compacted "GOAL RECAP:" until next section
+    goal_match = re.match(r"GOAL(?:\s+RECAP)?:\s*\n(.+?)(?:\n\n|\Z)", text, re.DOTALL)
     if goal_match:
         return goal_match.group(1).strip()
 

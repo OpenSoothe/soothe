@@ -146,14 +146,19 @@ def build_synthesis_human_payload(context: SynthesisUserContext) -> str:
 def render_synthesis_system_prompt(classification: ScenarioClassification) -> str:
     """Render system instructions from the synthesis template (no orchestration terms)."""
     from soothe.foundation.sloop.prompts.loader import load_prompt_fragment
+    from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
 
     template = load_prompt_fragment("instructions/synthesis_report_system.xml")
     focus_items = "\n".join(f"- {item}" for item in classification.contextual_focus)
-    return template.render(
-        scenario=classification.scenario,
-        sections=classification.sections,
-        contextual_focus=focus_items,
-        evidence_emphasis=classification.evidence_emphasis,
+    return (
+        template.render(
+            scenario=classification.scenario,
+            sections=classification.sections,
+            contextual_focus=focus_items,
+            evidence_emphasis=classification.evidence_emphasis,
+        )
+        + "\n\n"
+        + build_timestamp_xml_footer()
     )
 
 

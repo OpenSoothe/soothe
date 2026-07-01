@@ -1,10 +1,9 @@
-"""Integration tests: planner records a compacted human ledger pair (C1 + D1).
+"""Integration tests: planner records a compacted human ledger pair (D1).
 
 `LLMPlanner.assess_status` and `LLMPlanner.generate_from_assessment` are the
 two callsites that append (LoopHumanMessage, LoopAIMessage) pairs into
-`state.loop_messages`. After the compaction work, the *recorded* copy must
-have its `TIMESTAMP:` stripped, its `GOAL:` rewritten to
-`GOAL RECAP:`. Plan-assess AI content stays full-fidelity in ledger.
+`state.loop_messages`. After compaction, the *recorded* copy has ``GOAL:``
+rewritten to ``GOAL RECAP:``. Plan-assess AI content stays full-fidelity in ledger.
 """
 
 from __future__ import annotations
@@ -31,9 +30,7 @@ from soothe.protocols.planner import PlanContext
 GOAL = "translate the README into French"
 
 # New scenario-based format for recorded human content
-RECORDED_HUMAN_CONTENT = (
-    f"GOAL:\n{GOAL}\n\nPRIOR PROGRESS:\nhint=low\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
-)
+RECORDED_HUMAN_CONTENT = f"GOAL:\n{GOAL}\n\nPRIOR PROGRESS:\nhint=low"
 
 
 def _make_ce() -> ContextEngine:
@@ -81,8 +78,6 @@ async def test_assess_status_records_compacted_human_and_preserves_ai_dump() -> 
     assert len(msgs) == 2
     recorded_human, recorded_ai = msgs
 
-    # C1: volatile timestamp must be gone from the recorded human.
-    assert "TIMESTAMP:" not in recorded_human.content
     # D1: GOAL: is rewritten so it doesn't anchor as a directive.
     assert "GOAL:\n" not in recorded_human.content
     assert "GOAL RECAP:" in recorded_human.content
@@ -145,8 +140,7 @@ async def test_generate_from_assessment_records_compacted_human_preserves_ai() -
     assert len(msgs) == 2
     recorded_human, recorded_ai = msgs
 
-    # C1 + D1 still apply to plan-generate humans.
-    assert "TIMESTAMP:" not in recorded_human.content
+    # D1 applies to plan-generate humans.
     assert "GOAL:\n" not in recorded_human.content
     assert "GOAL RECAP:" in recorded_human.content
 
@@ -161,9 +155,9 @@ async def test_recorded_humans_are_cache_stable_across_iterations() -> None:
     """Two assess calls on different iterations record identical human content
     (modulo PRIOR PROGRESS, which is rebuilt per iteration).
 
-    The point of C1 is that the *recorded* human stops carrying the volatile
-    timestamp, so two calls that share the same goal + PRIOR PROGRESS produce
-    byte-identical recordings — the prompt-cache prefix is preserved.
+    User messages no longer carry volatile timestamps (clock is on the system
+    prompt footer), so two calls that share the same goal + PRIOR PROGRESS
+    produce byte-identical recordings — the prompt-cache prefix is preserved.
     """
     planner = LLMPlanner(MagicMock())
     planner._prompt_builder.build_plan_messages = MagicMock(  # type: ignore[method-assign]
