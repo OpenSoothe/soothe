@@ -516,6 +516,27 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         await self._run_with_retry("update_loop_metadata", _do_update)
 
+    async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
+        """Write resume topic only when checkpoint_data has no topic yet."""
+        cleaned = topic.strip()
+
+        async def _do_set(pool: AsyncConnectionPool) -> bool:
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        UPDATE agentloop_checkpoints
+                        SET checkpoint_data = checkpoint_data || %s::jsonb,
+                            updated_at = NOW()
+                        WHERE loop_id = %s
+                          AND COALESCE(checkpoint_data->>'resume_topic', '') = ''
+                        """,
+                        (json.dumps({"resume_topic": cleaned}), loop_id),
+                    )
+                    return bool(cur.rowcount)
+
+        return await self._run_with_retry("set_resume_topic_once", _do_set)
+
     async def list_loops(
         self,
         status_filter: str | None = None,

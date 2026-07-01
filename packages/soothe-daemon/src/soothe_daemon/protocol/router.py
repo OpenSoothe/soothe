@@ -61,6 +61,22 @@ def _peek_latest_assistant_response(loop_id: str) -> str | None:
     return None
 
 
+def _resolve_loop_topic(
+    *,
+    goals_completed: int,
+    prompt: str | None,
+    resume_topic: str | None,
+) -> str:
+    """Return the resume-picker topic label for one loop row."""
+    goal_text = (prompt or "").strip()
+    stored = (resume_topic or "").strip()
+    if goals_completed < 1:
+        return goal_text or "(no goal)"
+    if stored:
+        return stored
+    return goal_text or "(no goal)"
+
+
 # Client messages logged at DEBUG on every dispatch; skip types that poll frequently.
 _SKIP_PER_MESSAGE_DEBUG_TYPES = frozenset({"daemon_status", "ping", "pong"})
 
@@ -1455,6 +1471,12 @@ class MessageRouter:
             latest_ai_response = _peek_latest_assistant_response(loop_id)
             if latest_ai_response:
                 entry["latest_ai_response"] = latest_ai_response
+            goals_completed = int(row.get("total_goals_completed") or 0)
+            entry["topic"] = _resolve_loop_topic(
+                goals_completed=goals_completed,
+                prompt=prompt,
+                resume_topic=row.get("resume_topic"),
+            )
             loops.append(entry)
 
         await self._send_response(
