@@ -4,7 +4,7 @@
 **Design**: [docs/drafts/2026-07-01-daemon-tui-performance-isolation-design.md §5](../drafts/2026-07-01-daemon-tui-performance-isolation-design.md)
 **Created**: 2026-07-01
 **Updated**: 2026-07-01
-**Status**: In progress (Optimizations 1, 2, 4 done; defaults tuned for 32 concurrent loops)
+**Status**: Done (Optimizations 1–4; defaults tuned for 32 concurrent loops)
 **Priority**: Post-Phase 1-3 (IG-534) completion
 
 ---
@@ -57,21 +57,21 @@ This IG implements the "hidden bottlenecks" identified in §5 of the performance
 
 ---
 
-## Optimization 3: QueryEngine Batched Broadcast — Deferred
+## Optimization 3: QueryEngine Batched Broadcast — Done
 
 **Problem**: `_broadcast_stream_tuple` called per-tuple, each triggers full EventBus publish with subscriber iteration.
 
 **Files**: `packages/soothe-daemon/src/soothe_daemon/query/engine.py`
 
-**Status**: Deferred — The coalescer already provides batching at the chunk level, and adding another batching layer would require careful coordination with the coalescer's stateful buffers. The complexity/risk ratio is higher than the expected 15% latency win.
-
 ### 3.1 Tasks
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 3.1 Add `BroadcastBatch` helper | Deferred | Requires coalescer coordination |
-| 3.2 Add `_broadcast_batch` method | Deferred | |
-| 3.3 Modify `_process_stream` to use batching | Deferred | |
+| 3.1 `_broadcast_coalescer_outputs` batches coalescer step | **Done** | Emits `event_batch` when >1 frame per ingest/flush |
+| 3.2 `_prepare_stream_tuple_events` helper | **Done** | Preserves tool-batch + skip semantics |
+| 3.3 Unit tests | **Done** | `test_broadcast_batch.py` |
+
+**Exit criteria**: ✅ Fewer EventBus publishes per coalescer step under multi-output ingest.
 
 ---
 
@@ -110,7 +110,7 @@ This IG implements the "hidden bottlenecks" identified in §5 of the performance
 
 1. **Optimization 1** ✅ — WebSocket priority drop (safety-critical, shipped)
 2. **Optimization 2** ✅ — TUI batching (highest latency win, shipped)
-3. **Optimization 3** — Deferred (requires coalescer coordination)
+3. **Optimization 3** ✅ — QueryEngine batched broadcast (shipped)
 4. **Optimization 4** ✅ — Card bind executor (isolation win, shipped)
 
 ---

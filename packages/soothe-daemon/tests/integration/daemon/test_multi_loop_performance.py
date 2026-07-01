@@ -35,6 +35,7 @@ class LoopClientSimulator:
     )
     events_received: list[dict[str, Any]] = field(default_factory=list)
     goal_completion_received: bool = False
+    goal_completion_latency_ms: float | None = None
     terminal_frames_received: list[str] = field(default_factory=list)
     dropped_events: int = 0
     first_event_latency_ms: float | None = None
@@ -59,6 +60,10 @@ class LoopClientSimulator:
                         msg = data[0]
                         if isinstance(msg, dict) and msg.get("phase") == "goal_completion":
                             self.goal_completion_received = True
+                            if self.goal_completion_latency_ms is None:
+                                self.goal_completion_latency_ms = (
+                                    time.monotonic() - self.start_time
+                                ) * 1000
 
                 # Track terminal frames
                 if event.get("type") == "status":
@@ -92,6 +97,11 @@ class MultiLoopMetrics:
             for loop in self.loops
             if loop.first_event_latency_ms is not None
         ]
+        synthesis_latencies = [
+            loop.goal_completion_latency_ms
+            for loop in self.loops
+            if loop.goal_completion_latency_ms is not None
+        ]
 
         # Calculate cross-loop fairness: p95 spread of first-event latencies
         if len(first_event_latencies) > 1:
@@ -104,6 +114,19 @@ class MultiLoopMetrics:
             p95_latency = 0
             latency_spread_ratio = 0
 
+        if synthesis_latencies:
+            sorted_synth = sorted(synthesis_latencies)
+            synth_p95_idx = int(len(sorted_synth) * 0.95)
+            synthesis_p95_ms = sorted_synth[synth_p95_idx]
+        else:
+            synthesis_p95_ms = 0.0
+
+        if first_event_latencies:
+            sorted_first = sorted(first_event_latencies)
+            first_p50_ms = sorted_first[len(sorted_first) // 2]
+        else:
+            first_p50_ms = 0.0
+
         return {
             "test_duration_sec": self.test_duration_sec,
             "total_loops": len(self.loops),
@@ -111,6 +134,8 @@ class MultiLoopMetrics:
             "goal_completion_delivered": goal_completion_delivered,
             "loops_with_terminal_frames": loops_with_terminal,
             "first_event_latency_p95_ms": p95_latency,
+            "first_event_latency_p50_ms": first_p50_ms,
+            "synthesis_visible_p95_ms": synthesis_p95_ms,
             "latency_spread_ratio": latency_spread_ratio,
             "event_bus_drops": self.event_bus_drops,
         }
@@ -292,6 +317,59 @@ async def test_multi_loop_fairness_under_pressure() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_multi_loop_n64_start_delay_gate() -> None:
+    """IG-534 Phase 2 deferred gate: p95 cross-loop start delay ≤ 2× baseline at N=64."""
+    num_loops = 64
+    bus = EventBus()
+    metrics = MultiLoopMetrics()
+
+    for i in range(num_loops):
+        loop_id = f"loop:n64-{i}"
+        client = LoopClientSimulator(
+            loop_id=loop_id,
+            client_id=f"client-{i}",
+            event_queue=asyncio.Queue(maxsize=2000),
+        )
+        await bus.subscribe(f"loop:{loop_id}", client.event_queue)
+        metrics.add_loop(client)
+
+    consumer_tasks = [
+        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+    ]
+
+    async def publish_loop_events(loop_idx: int) -> None:
+        loop_id = f"loop:n64-{loop_idx}"
+        for j in range(20):
+            event = {
+                "type": "event",
+                "loop_id": loop_id,
+                "mode": "messages",
+                "data": ({"phase": "streaming", "content": f"chunk-{j}"}, {}),
+            }
+            await bus.publish(f"loop:{loop_id}", event)
+        await bus.publish(
+            f"loop:{loop_id}",
+            {"type": "status", "loop_id": loop_id, "state": "idle"},
+        )
+
+    start_time = time.monotonic()
+    await asyncio.gather(*[publish_loop_events(i) for i in range(num_loops)])
+    await asyncio.gather(*consumer_tasks)
+    metrics.test_duration_sec = time.monotonic() - start_time
+
+    summary = metrics.get_summary()
+    assert summary["latency_spread_ratio"] <= 2.0, (
+        f"N=64 p95/min start delay ratio {summary['latency_spread_ratio']:.2f} exceeds 2× gate"
+    )
+    assert summary["loops_with_terminal_frames"] >= num_loops
+
+    print("\n=== IG-534 Phase 2: N=64 start-delay gate ===")
+    print(f"latency_spread_ratio={summary['latency_spread_ratio']:.2f}")
+    print(f"p95_first_event_ms={summary['first_event_latency_p95_ms']:.2f}")
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_goal_completion_blocks_on_full_queue() -> None:
     """IG-534: goal_completion frames block when queue full (not dropped).
 
@@ -338,6 +416,108 @@ async def test_goal_completion_blocks_on_full_queue() -> None:
 
     print("\n=== IG-534: goal_completion blocking behavior ===")
     print("goal_completion blocked successfully until queue space available")
+
+
+# ============================================================================
+# Phase 3 Exit Criteria Tests (IG-534)
+# ============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_phase3_synthesis_visible_p95_under_5s() -> None:
+    """IG-534 Phase 3: p95 synthesis delivery within 5s under 32-loop load."""
+    num_loops = 32
+    bus = EventBus()
+    metrics = MultiLoopMetrics()
+
+    for i in range(num_loops):
+        loop_id = f"loop:phase3-synth-{i}"
+        client = LoopClientSimulator(loop_id=loop_id, client_id=f"client-{i}")
+        await bus.subscribe(f"loop:{loop_id}", client.event_queue)
+        metrics.add_loop(client)
+
+    consumer_tasks = [
+        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+    ]
+
+    async def publish_loop_events(loop_idx: int) -> None:
+        loop_id = f"loop:phase3-synth-{loop_idx}"
+        for j in range(30):
+            await bus.publish(
+                f"loop:{loop_id}",
+                {
+                    "type": "event",
+                    "loop_id": loop_id,
+                    "mode": "messages",
+                    "data": ({"phase": "streaming", "content": f"chunk-{j}"}, {}),
+                },
+            )
+        await bus.publish(
+            f"loop:{loop_id}",
+            {
+                "type": "event",
+                "loop_id": loop_id,
+                "mode": "messages",
+                "data": ({"phase": "goal_completion", "content": "final"}, {}),
+            },
+        )
+
+    await asyncio.gather(*[publish_loop_events(i) for i in range(num_loops)])
+    await asyncio.gather(*consumer_tasks)
+
+    summary = metrics.get_summary()
+    assert summary["goal_completion_delivered"] == num_loops
+    assert summary["synthesis_visible_p95_ms"] <= 5000.0, (
+        f"p95 synthesis visible {summary['synthesis_visible_p95_ms']:.0f}ms exceeds 5s gate"
+    )
+
+    print("\n=== IG-534 Phase 3: synthesis visible gate ===")
+    print(f"synthesis_visible_p95_ms={summary['synthesis_visible_p95_ms']:.2f}")
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_phase3_first_chunk_p50_under_load() -> None:
+    """IG-534 Phase 3: first-chunk p50 stays low under concurrent 32-loop load."""
+    num_loops = 32
+    bus = EventBus()
+    metrics = MultiLoopMetrics()
+
+    for i in range(num_loops):
+        loop_id = f"loop:phase3-ttfc-{i}"
+        client = LoopClientSimulator(loop_id=loop_id, client_id=f"client-{i}")
+        await bus.subscribe(f"loop:{loop_id}", client.event_queue)
+        metrics.add_loop(client)
+
+    consumer_tasks = [
+        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+    ]
+
+    async def publish_first_chunk(loop_idx: int) -> None:
+        loop_id = f"loop:phase3-ttfc-{loop_idx}"
+        await bus.publish(
+            f"loop:{loop_id}",
+            {
+                "type": "event",
+                "loop_id": loop_id,
+                "mode": "messages",
+                "data": ({"phase": "streaming", "content": "first"}, {}),
+            },
+        )
+
+    await asyncio.gather(*[publish_first_chunk(i) for i in range(num_loops)])
+    await asyncio.gather(*consumer_tasks)
+
+    summary = metrics.get_summary()
+    # With 100ms coalesce default and direct bus delivery, p50 should be well under
+    # the Phase 2 300ms baseline (240ms = 20% improvement threshold).
+    assert summary["first_event_latency_p50_ms"] <= 240.0, (
+        f"p50 first-chunk {summary['first_event_latency_p50_ms']:.0f}ms exceeds 240ms gate"
+    )
+
+    print("\n=== IG-534 Phase 3: time-to-first-chunk gate ===")
+    print(f"first_event_latency_p50_ms={summary['first_event_latency_p50_ms']:.2f}")
 
 
 # ============================================================================

@@ -172,6 +172,7 @@ class ClientSession:
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
     autopilot_subscribed: bool = False  # RFC-228: receives autopilot__* worker events
     config: SootheConfig | None = None  # RFC-614: daemon config reference
+    stream_delivery: StreamDeliveryMode = "adaptive"  # IG-534 §3.2: per-client preference
     # RFC-450 §9.4: subscription_id tracking for complete messages
     loop_subscription_ids: dict[str, str] = field(default_factory=dict)  # loop_id → subscription_id
 
@@ -225,7 +226,6 @@ class ClientSessionManager:
         self._sessions: dict[str, ClientSession] = {}
         self._lock = asyncio.Lock()
         self._client_loop_ownership: dict[str, str] = {}  # client_id → loop_id
-        self._loop_stream_delivery: dict[str, StreamDeliveryMode] = {}
         self._cancel_callback = cancel_callback
         self._dispatch_cleanup_callback = dispatch_cleanup_callback
         self._config = config
@@ -258,14 +258,36 @@ class ClientSessionManager:
 
         return client_id
 
-    def get_stream_delivery(self, loop_id: str) -> StreamDeliveryMode:  # noqa: D401
-        """Return stream shaping mode for a loop.
+    def get_stream_delivery(
+        self,
+        *,
+        client_id: str | None = None,
+        loop_id: str | None = None,
+    ) -> StreamDeliveryMode:
+        """Return stream shaping mode for a client or loop.
 
-        IG-441: ``batch`` | ``adaptive`` | ``streaming``. Defaults to
-        ``adaptive`` for any loop that has not explicitly subscribed yet —
-        adaptive provides the best UX for unknown workloads.
+        IG-534 §3.2: Preference is stored on ``ClientSession``, not a shared
+        per-loop map. When ``client_id`` is provided, that session's mode wins.
+        Otherwise resolve via the client that owns in-flight work on ``loop_id``.
+
+        Args:
+            client_id: Connected client whose preference to read.
+            loop_id: Loop used to find the owning client when ``client_id`` is omitted.
+
+        Returns:
+            ``batch`` | ``adaptive`` | ``streaming`` (defaults to ``adaptive``).
         """
-        return self._loop_stream_delivery.get(loop_id, "adaptive")
+        if client_id:
+            session = self._sessions.get(client_id)
+            if session is not None:
+                return session.stream_delivery
+        if loop_id:
+            for owner_id, owned_loop in self._client_loop_ownership.items():
+                if owned_loop == loop_id:
+                    session = self._sessions.get(owner_id)
+                    if session is not None:
+                        return session.stream_delivery
+        return "adaptive"
 
     async def subscribe_loop(
         self,
@@ -334,9 +356,9 @@ class ClientSessionManager:
                 if stream_delivery in ("batch", "adaptive", "streaming")
                 else "batch"
             )
-            self._loop_stream_delivery[loop_id] = delivery
+            session.stream_delivery = delivery
         else:
-            delivery = self._loop_stream_delivery.get(loop_id, "adaptive")
+            delivery = session.stream_delivery
 
         # Strict single-loop subscription per client for isolation
         for prev in list(session.subscriptions):

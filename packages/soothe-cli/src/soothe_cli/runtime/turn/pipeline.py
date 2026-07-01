@@ -25,6 +25,10 @@ import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any, Generic, TypeVar
 
+from soothe_sdk.ux.loop_stream import assistant_output_phase
+
+from soothe_cli.runtime.state.session_stats import TurnLatencyStats
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -203,6 +207,17 @@ class TurnEventPipeline(Generic[T]):
             self._thread.join(timeout=2.0)
 
 
+def _record_apply_latency(prepared: Any, latency: TurnLatencyStats | None) -> None:
+    """IG-534 Phase 3: record first-chunk and synthesis-visible timings."""
+    if latency is None or getattr(prepared, "skip", False):
+        return
+    latency.record_first_chunk()
+    if getattr(prepared, "mode", None) == "messages":
+        message = getattr(prepared, "normalized_message", None)
+        if message is not None and assistant_output_phase(message) == "goal_completion":
+            latency.record_goal_completion()
+
+
 async def run_turn_pipeline(
     chunk_source: AsyncIterator[Any],
     process_fn: Callable[[Any], T],
@@ -211,6 +226,7 @@ async def run_turn_pipeline(
     batch_size: int = _DEFAULT_BATCH_SIZE,
     batch_delay_ms: int = _DEFAULT_BATCH_DELAY_MS,
     batching_enabled: bool = True,
+    latency_stats: TurnLatencyStats | None = None,
 ) -> None:
     """Run reader, processor thread, and applier coroutine to completion.
 
@@ -223,10 +239,17 @@ async def run_turn_pipeline(
         batch_size: Maximum chunks per batch when batching enabled (default 10).
         batch_delay_ms: Maximum delay before forced flush (default 50ms).
         batching_enabled: Enable batching for performance (default True; disable for debug).
+        latency_stats: Optional per-turn latency recorder (IG-534 Phase 3).
     """
     loop = asyncio.get_running_loop()
+    if latency_stats is not None and latency_stats.turn_start_monotonic <= 0:
+        latency_stats.turn_start_monotonic = time.monotonic()
     pipeline: TurnEventPipeline[T] = TurnEventPipeline(loop)
     pipeline.start_processor(process_fn)
+
+    async def _apply_with_latency(prepared: T) -> None:
+        _record_apply_latency(prepared, latency_stats)
+        await apply_fn(prepared)
 
     if batching_enabled:
         batcher: TurnApplyBatcher[T] = TurnApplyBatcher(
@@ -241,14 +264,14 @@ async def run_turn_pipeline(
                     batch = batcher.flush()
                     # Apply all items in batch
                     for p in batch:
-                        await apply_fn(p)
+                        await _apply_with_latency(p)
                     # Single yield to event loop per batch (IG-535)
                     await asyncio.sleep(0)
 
             # Final flush for remaining items
             if batcher.has_pending():
                 for p in batcher.flush():
-                    await apply_fn(p)
+                    await _apply_with_latency(p)
 
         try:
             await asyncio.gather(
@@ -261,7 +284,7 @@ async def run_turn_pipeline(
         # Original non-batched path (for debugging or high-frequency streams)
         async def _apply_all() -> None:
             async for prepared in pipeline.iter_prepared():
-                await apply_fn(prepared)
+                await _apply_with_latency(prepared)
 
         try:
             await asyncio.gather(

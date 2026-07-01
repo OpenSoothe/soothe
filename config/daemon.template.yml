@@ -26,6 +26,7 @@ max_concurrent_threads: 100
 max_concurrent_dispatches: 50
 max_concurrent_vision_preflight: 8  # 0 = unlimited
 max_in_flight_broadcasts_per_loop: 80  # 0 = unlimited; blocks only that loop's stream
+card_ingest_queue_maxsize: 500  # IG-534 §2.3: async card binding backlog per loop
 max_input_queue_size: 1000
 
 # ============================================================================

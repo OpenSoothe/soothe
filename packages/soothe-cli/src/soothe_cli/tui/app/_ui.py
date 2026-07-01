@@ -306,7 +306,7 @@ class _UIMixin:
 
         Args:
             status: The spinner status to display, or `None` to hide.
-            show_interrupt_hint: When ``False``, omit elapsed-time / esc hint on the row.
+            show_interrupt_hint: When ``False``, omit only the esc-to-interrupt hint on the row.
         """
         if status is None:
             # Hide
