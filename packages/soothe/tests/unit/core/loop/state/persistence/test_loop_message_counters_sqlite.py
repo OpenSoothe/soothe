@@ -63,6 +63,24 @@ async def test_increment_ai_counter_updates_metadata(
 
 
 @pytest.mark.asyncio
+async def test_set_resume_topic_once_writes_only_first_value(
+    sqlite_backend: SQLitePersistenceBackend,
+) -> None:
+    loop_id = "loop-resume-topic-once"
+    await sqlite_backend.register_loop(loop_id, [], "", status="created")
+
+    first = await sqlite_backend.set_resume_topic_once(loop_id, "Auth module refactor")
+    second = await sqlite_backend.set_resume_topic_once(loop_id, "Different topic")
+
+    assert first is True
+    assert second is False
+
+    meta = await sqlite_backend.get_loop_metadata(loop_id)
+    assert meta is not None
+    assert meta["resume_topic"] == "Auth module refactor"
+
+
+@pytest.mark.asyncio
 async def test_concurrent_increments_both_land(
     sqlite_backend: SQLitePersistenceBackend,
 ) -> None:

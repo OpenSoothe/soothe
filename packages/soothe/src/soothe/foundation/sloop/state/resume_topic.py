@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 _TOPIC_MAX_WORDS = 8
 _LEDGER_ABBREV_MAX_CHARS = 512
 _PER_LINE_MAX_CHARS = 96
+_inflight_loop_ids: set[str] = set()
 
 _TOPIC_PROMPT = """Summarize this agent loop transcript as a short resume topic label.
 Reply with ONLY the topic text: at most {max_words} words, no quotes or punctuation-only answer.
@@ -25,6 +27,26 @@ Prefer the same natural language as the user's goal when obvious.
 Transcript:
 {transcript}
 """
+
+
+def _topic_is_set(value: str | None) -> bool:
+    return bool(str(value or "").strip())
+
+
+async def _load_existing_resume_topic(config: SootheConfig, loop_id: str) -> str | None:
+    from soothe.foundation.sloop.state.persistence.manager import (
+        StrangeLoopCheckpointPersistenceManager,
+    )
+
+    manager = StrangeLoopCheckpointPersistenceManager(config=config)
+    try:
+        metadata = await manager.get_loop_metadata(loop_id)
+    finally:
+        await manager.close()
+    if not metadata:
+        return None
+    stored = metadata.get("resume_topic")
+    return str(stored).strip() if _topic_is_set(stored) else None
 
 
 def _message_role(msg: BaseMessage) -> str:
@@ -75,9 +97,7 @@ def abbreviate_ledger_for_topic(
             continue
         phase = getattr(msg, "phase", None)
         phase_tag = f"[{phase}] " if isinstance(phase, str) and phase else ""
-        lines.append(
-            f"{_message_role(msg)}: {phase_tag}{_clip_line(text, _PER_LINE_MAX_CHARS)}"
-        )
+        lines.append(f"{_message_role(msg)}: {phase_tag}{_clip_line(text, _PER_LINE_MAX_CHARS)}")
 
     if not lines:
         return ""
@@ -170,20 +190,20 @@ async def generate_resume_topic_from_ledger(
     return topic or None
 
 
-async def persist_resume_topic(
+async def persist_resume_topic_once(
     *,
     config: SootheConfig,
     loop_id: str,
     topic: str,
-) -> None:
-    """Persist generated resume topic on loop metadata."""
+) -> bool:
+    """Persist generated resume topic when none is stored yet."""
     from soothe.foundation.sloop.state.persistence.manager import (
         StrangeLoopCheckpointPersistenceManager,
     )
 
     manager = StrangeLoopCheckpointPersistenceManager(config=config)
     try:
-        await manager.update_loop_metadata(loop_id, resume_topic=topic.strip())
+        return await manager.set_resume_topic_once(loop_id, topic.strip())
     finally:
         await manager.close()
 
@@ -195,7 +215,11 @@ async def generate_and_persist_resume_topic(
     ledger_messages: list[Any],
     fast_llm: Any | None = None,
 ) -> None:
-    """Background task: summarize ledger and store resume topic."""
+    """Background task: summarize ledger and store resume topic once."""
+    if await _load_existing_resume_topic(config, loop_id):
+        logger.debug("Resume topic already stored for loop %s; skipping generation", loop_id)
+        return
+
     topic = await generate_resume_topic_from_ledger(
         config,
         ledger_messages,
@@ -204,8 +228,19 @@ async def generate_and_persist_resume_topic(
     if not topic:
         logger.debug("Resume topic generation skipped for loop %s (empty result)", loop_id)
         return
-    await persist_resume_topic(config=config, loop_id=loop_id, topic=topic)
-    logger.info("Stored resume topic for loop %s: %s", loop_id, topic)
+
+    if await _load_existing_resume_topic(config, loop_id):
+        logger.debug(
+            "Resume topic appeared while generating for loop %s; skipping persist",
+            loop_id,
+        )
+        return
+
+    stored = await persist_resume_topic_once(config=config, loop_id=loop_id, topic=topic)
+    if stored:
+        logger.info("Stored resume topic for loop %s: %s", loop_id, topic)
+    else:
+        logger.debug("Resume topic already stored for loop %s; persist skipped", loop_id)
 
 
 def schedule_resume_topic_generation(
@@ -215,12 +250,18 @@ def schedule_resume_topic_generation(
     ledger_messages: list[Any],
     goals_completed: int,
     fast_llm: Any | None = None,
+    existing_resume_topic: str | None = None,
 ) -> None:
     """Fire-and-forget resume topic generation after the first goal completes."""
     if goals_completed != 1:
         return
     if not ledger_messages:
         return
+    if _topic_is_set(existing_resume_topic):
+        return
+    if loop_id in _inflight_loop_ids:
+        return
+    _inflight_loop_ids.add(loop_id)
 
     async def _run() -> None:
         try:
@@ -236,6 +277,8 @@ def schedule_resume_topic_generation(
                 loop_id,
                 exc_info=True,
             )
+        finally:
+            _inflight_loop_ids.discard(loop_id)
 
     try:
         loop = asyncio.get_running_loop()

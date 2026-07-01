@@ -38,6 +38,9 @@ class LoopInfo(TypedDict, total=False):
     prompt: str
     """First user-visible prompt of the loop (the initial goal text)."""
 
+    topic: str
+    """Resume-picker topic label (goal text or LLM summary after first completion)."""
+
     messages: int
     """Total user + assistant turns recorded in the loop."""
 
@@ -217,6 +220,11 @@ async def list_loops_via_daemon_rpc(
         prompt_text = loop_data.get("prompt")
         if isinstance(prompt_text, str) and prompt_text.strip():
             loop_info["prompt"] = prompt_text.strip()
+        topic_text = loop_data.get("topic")
+        if isinstance(topic_text, str) and topic_text.strip():
+            loop_info["topic"] = topic_text.strip()
+        elif "prompt" in loop_info:
+            loop_info["topic"] = loop_info["prompt"]
         latest_ai_response = loop_data.get("latest_ai_response")
         if isinstance(latest_ai_response, str) and latest_ai_response.strip():
             loop_info["latest_ai_response"] = latest_ai_response.strip()

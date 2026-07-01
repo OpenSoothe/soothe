@@ -275,6 +275,32 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         )
         conn.commit()
 
+    async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
+        """Write resume topic only when the loop row has no topic yet."""
+        return await self._writer_to_thread(
+            self._set_resume_topic_once_sync,
+            loop_id,
+            topic.strip(),
+        )
+
+    def _set_resume_topic_once_sync(
+        self,
+        conn: sqlite3.Connection,
+        loop_id: str,
+        topic: str,
+    ) -> bool:
+        cursor = conn.execute(
+            """
+            UPDATE agentloop_loops
+            SET resume_topic = ?
+            WHERE loop_id = ?
+              AND (resume_topic IS NULL OR TRIM(resume_topic) = '')
+            """,
+            (topic, loop_id),
+        )
+        conn.commit()
+        return bool(cursor.rowcount)
+
     async def list_loops(
         self,
         status_filter: str | None = None,
