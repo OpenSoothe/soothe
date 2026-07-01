@@ -454,6 +454,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             "is_ephemeral",
             "last_message_at",
             "current_workspace",
+            "resume_topic",
         }
         updates = {k: v for k, v in fields.items() if k in _allowed}
         if not updates:
@@ -562,6 +563,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                    COALESCE((checkpoint_data->>'ai_message_count')::int, 0)
                        AS ai_message_count,
                    checkpoint_data->>'last_message_at' AS last_message_at,
+                   checkpoint_data->>'resume_topic' AS resume_topic,
                    created_at, updated_at, client_workspace, detached_at
             FROM agentloop_checkpoints
             {where_sql}
@@ -595,6 +597,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     "human_message_count": row["human_message_count"],
                     "ai_message_count": row["ai_message_count"],
                     "last_message_at": row.get("last_message_at"),
+                    "resume_topic": row.get("resume_topic"),
                     "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
                     "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else updated,
                     "client_workspace": row.get("client_workspace"),

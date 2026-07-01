@@ -289,6 +289,9 @@ class AutopilotService:
 
         await self._restore_persisted_goals()
 
+        if self._monitor is not None:
+            await self._monitor.start()
+
         self._running = True
         self._dreaming = False
 
@@ -324,8 +327,6 @@ class AutopilotService:
         self._running = False
         self._dreaming = False
 
-        await self._persist_goals()
-
         # Cancel scheduling task
         if self._scheduling_task:
             self._scheduling_task.cancel()
@@ -334,6 +335,11 @@ class AutopilotService:
             except asyncio.CancelledError:
                 pass
             self._scheduling_task = None
+
+        if self._monitor is not None:
+            await self._monitor.stop()
+
+        await self._persist_goals()
 
         # Cancel any in-flight dispatch consumer tasks (RFC-222 Phase C).
         for goal_id, task in list(self._dispatch_tasks.items()):
@@ -405,17 +411,38 @@ class AutopilotService:
 
             resolved_workspace = str(validate_client_workspace(workspace))
 
-        goal = await self._ce.create_goal(
-            description,
-            priority=priority,
-            parent_id=parent_id,
-            max_retries=max_retries,
-            max_send_backs=max_send_backs,
-            depends_on=depends_on,
-            informs=informs,
-            source_file=source_file,
-            workspace=resolved_workspace,
-        )
+        if self._monitor is not None:
+            intake = await self._monitor.intake_goal(
+                description,
+                priority=priority,
+                workspace=resolved_workspace,
+                depends_on=depends_on,
+                source="user",
+                parent_id=parent_id,
+                max_retries=max_retries,
+                max_send_backs=max_send_backs,
+                informs=informs,
+                source_file=source_file,
+            )
+            if intake.status != "accepted" or not intake.goal_id:
+                msg = intake.reason or f"Goal intake {intake.status}"
+                raise ValueError(msg)
+            goal = await self._ce.get_goal(intake.goal_id)
+            if goal is None:
+                msg = f"Intake accepted but goal {intake.goal_id} missing from ContextEngine"
+                raise RuntimeError(msg)
+        else:
+            goal = await self._ce.create_goal(
+                description,
+                priority=priority,
+                parent_id=parent_id,
+                max_retries=max_retries,
+                max_send_backs=max_send_backs,
+                depends_on=depends_on,
+                informs=informs,
+                source_file=source_file,
+                workspace=resolved_workspace,
+            )
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
         await self._persist_goals()

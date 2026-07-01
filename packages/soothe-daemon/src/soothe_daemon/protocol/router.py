@@ -1821,9 +1821,7 @@ class MessageRouter:
             )
             return
 
-        from soothe_daemon.runtime.loop_autopilot_mode import ensure_loop_autopilot_mode
-
-        autopilot_mode = await ensure_loop_autopilot_mode(d, loop_id, broadcast=False)
+        from soothe_daemon.runtime import DEPRECATED_LOOP_AUTOPILOT_MODE
 
         wire_tier = msg.get("wire_tier", "full")
         # IG-441: three first-class modes (batch / adaptive / streaming);
@@ -1849,7 +1847,7 @@ class MessageRouter:
                 "loop_id": loop_id,
                 "event": "subscribed",
                 "success": True,
-                "autopilot_mode": autopilot_mode,
+                "autopilot_mode": DEPRECATED_LOOP_AUTOPILOT_MODE,
                 "client_id": client_id,
             },
         )
@@ -2044,16 +2042,13 @@ class MessageRouter:
             }
         await d._persistence_manager.update_loop_metadata(loop_id, **meta_updates)
 
-        from soothe_daemon.runtime.loop_autopilot_mode import ensure_loop_autopilot_mode
-
-        autopilot_mode = await ensure_loop_autopilot_mode(d, loop_id, broadcast=True)
+        from soothe_daemon.runtime import DEPRECATED_LOOP_AUTOPILOT_MODE
 
         logger.info(
-            "Created new loop %s (ephemeral=%s workspace=%s autopilot_mode=%s)",
+            "Created new loop %s (ephemeral=%s workspace=%s)",
             loop_id,
             is_ephemeral,
             effective_workspace,
-            autopilot_mode,
         )
 
         # Send response
@@ -2061,7 +2056,7 @@ class MessageRouter:
             "loop_id": loop_id,
             "success": True,
             "is_ephemeral": is_ephemeral,
-            "autopilot_mode": autopilot_mode,
+            "autopilot_mode": DEPRECATED_LOOP_AUTOPILOT_MODE,
         }
         if host_root is not None:
             result["workspace_mapping"] = {

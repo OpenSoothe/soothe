@@ -296,12 +296,11 @@ validate_package_dependencies() {
     cd "$WORKSPACE_ROOT"
 
     # Rule 1: soothe-cli MUST NOT import the daemon runtime
-    CLI_DAEMON_IMPORTS=$(grep -rEl 'from soothe_daemon|import soothe_daemon' packages/soothe-cli/src --include='*.py' 2>/dev/null || true)
-
-    if [ -n "$CLI_DAEMON_IMPORTS" ]; then
+    # Optimized: single grep pass instead of two (check + detail)
+    local violations
+    violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe-cli/src --include='*.py' 2>/dev/null | head -10 || true)
+    if [ -n "$violations" ]; then
         print_fail "cli must not import soothe_daemon"
-        local violations
-        violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe-cli/src --include='*.py' | head -10)
         record_failure_log "Dependency: CLI -> daemon" "$violations"
         return 1
     else
@@ -309,12 +308,10 @@ validate_package_dependencies() {
     fi
 
     # Rule 2: soothe-sdk MUST NOT import any other package
-    SDK_IMPORTS=$(grep -rEl 'from soothe_cli|from soothe_daemon|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null || true)
-
-    if [ -n "$SDK_IMPORTS" ]; then
+    # Optimized: single grep pass instead of two
+    violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
+    if [ -n "$violations" ]; then
         print_fail "sdk must be independent"
-        local violations
-        violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' | head -10)
         record_failure_log "Dependency: SDK independence" "$violations"
         return 1
     else
@@ -322,30 +319,31 @@ validate_package_dependencies() {
     fi
 
     # Rule 3: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
-    SOOTHE_TO_DAEMON_SRC=$(grep -rEl 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' 2>/dev/null || true)
-    if [ -n "$SOOTHE_TO_DAEMON_SRC" ]; then
+    # Optimized: single grep pass instead of two
+    violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' 2>/dev/null | head -10 || true)
+    if [ -n "$violations" ]; then
         print_fail "soothe must not import soothe_daemon"
-        local violations
-        violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' | head -10)
         record_failure_log "Dependency: soothe -> daemon" "$violations"
         return 1
     fi
 
-    if sed -n '/^dependencies = \[/,/\]/p' packages/soothe/pyproject.toml | grep -E '"soothe-daemon' >/dev/null 2>&1; then
+    # Rule 3b: Check pyproject.toml dependencies
+    # Optimized: read file once, grep from variable
+    local soothe_deps daemon_deps
+    soothe_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe/pyproject.toml 2>/dev/null || true)
+    if echo "$soothe_deps" | grep -qE '"soothe-daemon'; then
         print_fail "soothe pyproject.toml lists soothe-daemon in core deps"
-        local violations
-        violations=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe/pyproject.toml | grep -nE '"soothe-daemon')
-        record_failure_log "Dependency: soothe pyproject.toml" "$violations"
+        record_failure_log "Dependency: soothe pyproject.toml" "$(echo "$soothe_deps" | grep -nE '"soothe-daemon')"
         return 1
     fi
     print_ok "soothe ↛ soothe-daemon"
 
     # Rule 4: soothe-daemon MUST NOT depend on soothe-cli in core dependencies
-    if sed -n '/^dependencies = \[/,/\]/p' packages/soothe-daemon/pyproject.toml | grep -E '"soothe-cli' >/dev/null 2>&1; then
+    # Optimized: read file once, grep from variable
+    daemon_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe-daemon/pyproject.toml 2>/dev/null || true)
+    if echo "$daemon_deps" | grep -qE '"soothe-cli'; then
         print_fail "soothe-daemon pyproject.toml lists soothe-cli in core deps"
-        local violations
-        violations=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe-daemon/pyproject.toml | grep -nE '"soothe-cli')
-        record_failure_log "Dependency: daemon pyproject.toml" "$violations"
+        record_failure_log "Dependency: daemon pyproject.toml" "$(echo "$daemon_deps" | grep -nE '"soothe-cli')"
         return 1
     fi
     print_ok "daemon ↛ soothe-cli (runtime)"
@@ -537,6 +535,11 @@ check_formatting() {
         wait "$pid" || true
     done
 
+for pid in "${pids[@]}"; do
+        wait "$pid" || true
+    done
+
+    # Combined loop: collect exit codes and details in one pass
     for pkg in "${ALL_PACKAGES[@]}"; do
         local exit_code
         exit_code=$(cat "$tmpdir/${pkg}.exit")
@@ -545,12 +548,9 @@ check_formatting() {
         else
             print_fail "$pkg"
             format_failed=true
-        fi
-    done
-
-    for pkg in "${ALL_PACKAGES[@]}"; do
-        if [ -f "$tmpdir/details.${pkg}" ]; then
-            format_details+=$(cat "$tmpdir/details.${pkg}")
+            if [ -f "$tmpdir/details.${pkg}" ]; then
+                format_details+=$(cat "$tmpdir/details.${pkg}")
+            fi
         fi
     done
     rm -rf "$tmpdir"
@@ -563,8 +563,6 @@ check_formatting() {
 
     return 0
 }
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # LINTING
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -594,10 +592,11 @@ check_linting() {
         pids+=($!)
     done
 
-    for pid in "${pids[@]}"; do
+for pid in "${pids[@]}"; do
         wait "$pid" || true
     done
 
+    # Combined loop: collect exit codes and details in one pass
     for pkg in "${ALL_PACKAGES[@]}"; do
         local exit_code
         exit_code=$(cat "$tmpdir/${pkg}.exit")
@@ -606,12 +605,9 @@ check_linting() {
         else
             print_fail "$pkg"
             lint_failed=true
-        fi
-    done
-
-    for pkg in "${ALL_PACKAGES[@]}"; do
-        if [ -f "$tmpdir/details.${pkg}" ]; then
-            lint_details+=$(cat "$tmpdir/details.${pkg}")
+            if [ -f "$tmpdir/details.${pkg}" ]; then
+                lint_details+=$(cat "$tmpdir/details.${pkg}")
+            fi
         fi
     done
     rm -rf "$tmpdir"
@@ -833,6 +829,20 @@ print_final_summary() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PARALLEL CHECK WRAPPERS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Run a check function and capture its exit status to a file.
+# Args: $1 = check name, $2 = output file, rest = function + args
+_run_check_to_file() {
+    local check_name="$1"
+    local output_file="$2"
+    shift 2
+    "$@" >/dev/null 2>&1
+    echo $? >"$output_file"
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAIN EXECUTION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -849,9 +859,39 @@ if $DEPS_ONLY; then
 fi
 
 validate_package_dependencies || true
-check_formatting || true
-check_linting || true
-check_asyncapi_drift || true
+
+# Run format, lint, and asyncapi checks in parallel for performance.
+# Each writes its own output, then we collect results.
+if $SKIP_TESTS; then
+    # Quick mode: run checks sequentially (simpler output)
+    check_formatting || true
+    check_linting || true
+    check_asyncapi_drift || true
+else
+    # Full mode: parallelize independent checks
+    tmpdir=$(mktemp -d)
+    pids=()
+
+    # Launch parallel checks
+    check_formatting >"$tmpdir/format.out" 2>&1 &
+    pids+=($!)
+    check_linting >"$tmpdir/lint.out" 2>&1 &
+    pids+=($!)
+    check_asyncapi_drift >"$tmpdir/asyncapi.out" 2>&1 &
+    pids+=($!)
+
+    # Wait for all checks and capture outputs
+    for i in "${!pids[@]}"; do
+        wait "${pids[$i]}" || true
+    done
+
+    # Replay outputs in order
+    cat "$tmpdir/format.out" 2>/dev/null || true
+    cat "$tmpdir/lint.out" 2>/dev/null || true
+    cat "$tmpdir/asyncapi.out" 2>/dev/null || true
+    rm -rf "$tmpdir"
+fi
+
 run_tests || true
 
 print_final_summary

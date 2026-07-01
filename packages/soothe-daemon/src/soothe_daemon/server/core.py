@@ -156,8 +156,6 @@ class SootheDaemon(DaemonHandlersMixin):
         self._stop_event: asyncio.Event | None = None
         max_queue_size = self._daemon_config.max_input_queue_size
         self._loop_input_dispatcher = LoopInputDispatcher(self, max_queue_size=max_queue_size)
-        # Per-loop Solo/Autopilot mode (RFC-625); see loop_autopilot_mode.py
-        self._loop_autopilot_modes: dict[str, str] = {}
         self._cleanup_task: asyncio.Task[None] | None = None
         self._postgres_pool_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
@@ -439,11 +437,11 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 consensus_model = None
                 try:
-                    consensus_model = self._config.create_chat_model("think")
+                    consensus_model = self._config.create_chat_model_with_fallback("think")
                 except Exception:
                     logger.warning(
-                        "[Autopilot] consensus model unavailable; "
-                        "completed goals will suspend until model is configured"
+                        "[Autopilot] consensus model unavailable after think→default "
+                        "fallback; completed goals will suspend until a model is configured"
                     )
 
                 self._autopilot_service = AutopilotService(

@@ -56,7 +56,7 @@ def _to_next_envelope(event: dict[str, Any], subscription_id: str | None) -> dic
     """Wrap a legacy streaming frame as a protocol-1 ``next`` envelope (RFC-450 §9.3).
 
     Free-form streaming frames (``event``, ``command_response``, card replay
-    frames, ``autopilot_mode_changed``) are translated into the unified
+    frames, ``status``) are translated into the unified
     ``{proto, type:"next", payload:{namespace, mode, data}, id?}`` shape. The
     original frame type becomes ``payload.mode``; ``payload.data`` carries the
     frame body (with ``loop_id`` preserved). ``status`` frames and pure

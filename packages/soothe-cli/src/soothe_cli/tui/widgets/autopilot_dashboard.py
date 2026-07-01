@@ -204,7 +204,7 @@ class ControlsWidget(Static):
         ("soothe autopilot goal <id>", "Goal details"),
         ("soothe autopilot cancel <id>", "Cancel goal"),
         ("soothe autopilot wake", "Exit dreaming"),
-        ("/autopilot-toggle", "Toggle solo/autopilot mode"),
+        ("/autopilot <task>", "Submit autopilot job from TUI"),
     ]
 
     DEFAULT_CSS = """
@@ -218,14 +218,9 @@ class ControlsWidget(Static):
 
     def render(self) -> str:
         """Render the controls panel as styled text."""
-        mode_hint = "Switch to Autopilot" if self.mode == "solo" else "Switch to Solo"
-        lines = ["[bold yellow]Available Commands[/] (use CLI)", ""]
+        lines = ["[bold yellow]Available Commands[/] (use CLI or TUI slash command)", ""]
         for cmd, desc in self._COMMANDS:
-            # Highlight mode toggle based on current state
-            if cmd == "/autopilot-toggle":
-                lines.append(f"  [bold cyan]{cmd}[/]  [dim]— {mode_hint}[/]")
-            else:
-                lines.append(f"  [bold]{cmd}[/]  [dim]— {desc}[/]")
+            lines.append(f"  [bold]{cmd}[/]  [dim]— {desc}[/]")
         return "\n".join(lines)
 
 

@@ -681,6 +681,49 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 
 ---
 
+## Guarded Production Pilot (Minimum Bar)
+
+**Status**: Implemented (2026-07-01)
+
+When `agent.autonomous.enabled=true`, the following wiring is required before unattended 24/7 operation. This section tracks the **minimum bar** for a guarded pilot (explicit opt-in, deadlines, monitoring).
+
+### Configuration
+
+| Setting | Pilot recommendation | Notes |
+|---------|---------------------|-------|
+| `agent.autonomous.enabled` | `true` | Master switch; scheduling loop does not start when `false` |
+| `goal_deadline_seconds` | e.g. `3600` | Hang detection; default `null` disables |
+| `max_parallel_goals` | tuned to capacity | Service + runner semaphores |
+| `verify_interval` | `30` | AutopilotMonitor DAG health cadence |
+
+Pydantic default for `enabled` remains **`false`** — production deploys must opt in explicitly.
+
+### Daemon wiring (implemented)
+
+1. **AutopilotService.start/stop** starts and stops **AutopilotMonitor** background loops (verification + dreaming timer).
+2. **submit_task** routes through **AutopilotMonitor.intake_goal** when a monitor is wired (placement analysis path); falls back to direct `ContextEngine.create_goal` when no monitor.
+3. **Consensus model**: `SootheConfig.create_chat_model_with_fallback("think")` tries the `think` router role, then **`default`** on instantiation failure. Router resolution already maps unset `think` → `default`.
+
+### Verification
+
+| Test | Location |
+|------|----------|
+| Monitor lifecycle + intake routing | `packages/soothe/tests/unit/core/autopilot/test_monitor_lifecycle.py` |
+| think→default model fallback | `packages/soothe/tests/unit/config/test_create_chat_model_with_fallback.py` |
+| Enabled daemon starts scheduling + monitor | `packages/soothe-daemon/tests/integration/autopilot/test_autopilot_enabled_startup.py` |
+| Real dispatch E2E (fake runner) | `packages/soothe/tests/unit/core/autopilot/test_real_dispatch.py` |
+
+### Explicitly deferred (post-pilot)
+
+- Full dreaming distillation persistence (procedure / semantic / profile modes)
+- Backoff decision application in AutopilotMonitor
+- Layer 2 proposal tools (`suggest_goal`, `add_finding`)
+- Webhook notifications
+- Token-budget enforcement (gap H3)
+- Per-loop solo/autopilot toggle (removed; use `/autopilot` job submit + `agent.autonomous.enabled`)
+
+---
+
 ## References
 
 - RFC-000: System Conceptual Design
@@ -717,6 +760,10 @@ Remaining gaps (H1, H2, H3, H6, H7, M2–M8, M10) are deliberately out of scope 
 - **`InternalEventBus` singleton dropped** — bus owned by `AutopilotService`, injected to consumers.
 - **`soothe --autopilot` CLI becomes a daemon client.** Legacy in-process multi-goal mode removed.
 - Open questions Q1–Q8 explicitly resolved with defaults.
+
+### 2026-07-01 (Guarded production pilot minimum bar)
+- Documented **Guarded Production Pilot** section: config recommendations, monitor lifecycle wiring, intake routing, consensus model fallback.
+- Implementation: `AutopilotService` starts/stops `AutopilotMonitor`; `submit_task` uses `intake_goal` when monitor wired; `create_chat_model_with_fallback("think")` for daemon consensus model.
 
 ---
 
