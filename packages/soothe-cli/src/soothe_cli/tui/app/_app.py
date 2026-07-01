@@ -173,7 +173,6 @@ class SootheApp(
         # Active StrangeLoop id; LangGraph stores it as configurable.thread_id.
         # Named `_lc_loop_id` to avoid colliding with Textual's App._thread_id.
         self._lc_loop_id = resume_loop_id
-        self._loop_autopilot_mode: str = "solo"
 
         self._initial_prompt = initial_prompt
 

@@ -259,15 +259,6 @@ class _ModelMixin:
             return None
         return resp.get("servers")
 
-    def _apply_loop_autopilot_mode(self, mode: str | None) -> None:
-        """Sync local Solo/Autopilot mode from daemon bootstrap or toggle events."""
-        if mode not in ("solo", "autopilot"):
-            return
-        self._loop_autopilot_mode = mode
-        if self._status_bar is not None:
-            label = "Autopilot" if mode == "autopilot" else "Solo"
-            self._status_bar.set_session_tip(f"Mode: {label}")
-
     async def _show_context_viewer(self) -> None:
         """Show context engine goal DAG and status as a modal screen."""
         from soothe_cli.tui.widgets.context_viewer import ContextViewerScreen

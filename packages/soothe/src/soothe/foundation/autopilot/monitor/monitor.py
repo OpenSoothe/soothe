@@ -94,6 +94,11 @@ class AutopilotMonitor:
         workspace: str | None = None,
         depends_on: list[str] | None = None,
         source: str = "user",
+        parent_id: str | None = None,
+        max_retries: int | None = None,
+        max_send_backs: int | None = None,
+        informs: list[str] | None = None,
+        source_file: str | None = None,
     ) -> GoalIntakeResult:
         """Receive new goal, call CE.create_goal() with placement analysis.
 
@@ -103,6 +108,11 @@ class AutopilotMonitor:
             workspace: Optional workspace constraint
             depends_on: Optional initial dependencies
             source: Goal origin
+            parent_id: Optional parent goal for hierarchical decomposition
+            max_retries: Optional retry budget override
+            max_send_backs: Optional consensus send-back budget override
+            informs: Soft dependency goal IDs
+            source_file: Optional GOAL.md path when file-sourced
 
         Returns:
             GoalIntakeResult with status and goal_id
@@ -126,7 +136,12 @@ class AutopilotMonitor:
         goal = await self._ce.create_goal(
             description,
             priority=placement.adjusted_priority,
+            parent_id=parent_id,
+            max_retries=max_retries,
+            max_send_backs=max_send_backs,
             depends_on=final_deps,
+            informs=informs,
+            source_file=source_file,
             workspace=workspace,
             source=source,
         )

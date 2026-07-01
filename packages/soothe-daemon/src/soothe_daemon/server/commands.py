@@ -79,7 +79,6 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
             "thread": self._cmd_thread,
             "resume": self._cmd_resume,
             "autopilot_dashboard": self._cmd_autopilot_dashboard,
-            "autopilot_toggle": self._cmd_autopilot_toggle,
             "cron_add": self._cmd_cron_add,
         }
 
@@ -505,45 +504,6 @@ async def _cmd_autopilot_dashboard(
     return {"autopilot_dashboard": dashboard}
 
 
-async def _cmd_autopilot_toggle(
-    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
-) -> dict[str, Any]:
-    """Toggle autopilot mode (solo ↔ autopilot) for the bound loop.
-
-    RFC-625: When toggling from solo to autopilot, AutopilotMonitor analyzes
-    the existing linear goal chain and may restructure the DAG.
-    When toggling from autopilot to solo, pending goals are flattened
-    back to a linear chain.
-    """
-    if not checkpoint_thread_id:
-        raise ValueError("Active loop required")
-
-    lid = str(loop_id or "").strip()
-    if not lid:
-        raise ValueError("loop_id required for autopilot toggle")
-
-    from soothe_daemon.runtime.loop_autopilot_mode import (
-        get_loop_autopilot_mode,
-        set_loop_autopilot_mode,
-    )
-
-    current_mode = await get_loop_autopilot_mode(self, lid)
-    new_mode = "autopilot" if current_mode == "solo" else "solo"
-    await set_loop_autopilot_mode(self, lid, new_mode, source="toggle")
-
-    message = f"Switched from {current_mode} to {new_mode} mode"
-
-    return {
-        "autopilot_toggle": {
-            "loop_id": lid,
-            "enabled": new_mode == "autopilot",
-            "mode": new_mode,
-            "previous_mode": current_mode,
-            "message": message,
-        }
-    }
-
-
 # Cron command handlers (RFC-229)
 
 
@@ -617,6 +577,5 @@ __all__ = [
     "_cmd_thread",
     "_cmd_resume",
     "_cmd_autopilot_dashboard",
-    "_cmd_autopilot_toggle",
     "_cmd_cron_add",
 ]

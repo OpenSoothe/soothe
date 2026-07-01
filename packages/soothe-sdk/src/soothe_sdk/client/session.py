@@ -17,6 +17,9 @@ _CONNECT_TIMEOUT_S = 5.0
 _DAEMON_READY_TIMEOUT_S = 20.0
 _SESSION_BOOTSTRAP_TIMEOUT_S = 30.0
 
+# Wire-compat: interactive loops are always solo; daemon jobs use AutopilotService.
+_LEGACY_LOOP_AUTOPILOT_MODE = "solo"
+
 
 async def connect_websocket_with_retries(client: Any) -> None:
     """Connect to the daemon with bounded retries for cold-start races.
@@ -96,14 +99,13 @@ async def bootstrap_loop_session(
     await client.wait_for_connection_ack(ack_timeout_s=daemon_ready_timeout_s)
 
     mapping_data: dict[str, Any] | None = None
-    autopilot_mode: str | None = None
 
     if resume_loop_id:
         # Resume path: reattach to the existing loop via ``loop_reattach`` so the
         # daemon replays card history before we subscribe to the live event stream.
         reattach_params: dict[str, Any] = {"loop_id": resume_loop_id}
         try:
-            reattach_resp = await client.request(
+            await client.request(
                 "loop_reattach",
                 reattach_params,
                 timeout=subscribe_timeout_s,
@@ -114,11 +116,7 @@ async def bootstrap_loop_session(
                 resume_loop_id,
                 exc_info=True,
             )
-            reattach_resp = {}
         loop_id = resume_loop_id
-        # ``loop_reattach`` may surface autopilot_mode in the response result.
-        raw_mode = reattach_resp.get("autopilot_mode")
-        autopilot_mode = str(raw_mode) if raw_mode in ("solo", "autopilot") else None
     else:
         # New-loop path: ``loop_new`` creates the conversation. Per RFC-450 §10.1
         # the field is ``workspace`` (renamed from ``client_workspace``).
@@ -144,8 +142,6 @@ async def bootstrap_loop_session(
         loop_id = str(new_resp.get("loop_id") or "")
         if not loop_id:
             raise ValueError("loop_new response missing loop_id")
-        raw_mode = new_resp.get("autopilot_mode")
-        autopilot_mode = str(raw_mode) if raw_mode in ("solo", "autopilot") else None
 
         # RFC-621: parse workspace mapping for container path translation
         mapping_data = new_resp.get("workspace_mapping")
@@ -181,14 +177,17 @@ async def bootstrap_loop_session(
     )
 
     logger.info(
-        "Subscribed to loop %s with stream_delivery=%s autopilot_mode=%s",
+        "Subscribed to loop %s with stream_delivery=%s",
         loop_id,
         delivery,
-        autopilot_mode,
     )
-    result: dict[str, Any] = {"type": "session_ready", "loop_id": loop_id, "success": True}
-    if autopilot_mode in ("solo", "autopilot"):
-        result["autopilot_mode"] = autopilot_mode
+    result: dict[str, Any] = {
+        "type": "session_ready",
+        "loop_id": loop_id,
+        "success": True,
+        # Deprecated wire field: interactive loops are always solo.
+        "autopilot_mode": _LEGACY_LOOP_AUTOPILOT_MODE,
+    }
     if mapping_data and mapping_data.get("host_root"):
         result["workspace_mapping"] = mapping_data
     return result

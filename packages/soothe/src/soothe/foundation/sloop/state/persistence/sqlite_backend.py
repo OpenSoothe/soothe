@@ -35,6 +35,7 @@ _LOOP_COLUMN_MIGRATIONS: dict[str, str] = {
     "human_message_count": "INTEGER NOT NULL DEFAULT 0",
     "ai_message_count": "INTEGER NOT NULL DEFAULT 0",
     "execution_checkpoint": "TEXT",  # RFC-626 Phase 3: ExecutionCheckpoint JSON blob
+    "resume_topic": "TEXT",
 }
 
 # RFC-225 / IG-445: enriched GoalExecutionRecord fields packed as JSON
@@ -197,7 +198,8 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                    total_duration_ms, total_tokens_used, schema_version,
                    client_workspace, detached_at, user_id, client_workspace_id,
                    is_ephemeral, last_message_at, current_workspace,
-                   human_message_count, ai_message_count, execution_checkpoint
+                   human_message_count, ai_message_count, execution_checkpoint,
+                   resume_topic
             FROM agentloop_loops WHERE loop_id = ?
         """,
             (loop_id,),
@@ -228,6 +230,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             "human_message_count": row[17] or 0,
             "ai_message_count": row[18] or 0,
             "execution_checkpoint": json.loads(row[19]) if row[19] else None,
+            "resume_topic": row[20],
         }
 
     async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
@@ -254,6 +257,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             "is_ephemeral",
             "last_message_at",
             "current_workspace",
+            "resume_topic",
         }
         updates = {k: v for k, v in fields.items() if k in _allowed}
         if not updates:
@@ -315,7 +319,8 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             SELECT loop_id, status, thread_ids, current_thread_id,
                    total_goals_completed, total_thread_switches,
                    created_at, updated_at, client_workspace, detached_at,
-                   human_message_count, ai_message_count, last_message_at
+                   human_message_count, ai_message_count, last_message_at,
+                   resume_topic
             FROM agentloop_loops
             {where_sql}
             ORDER BY created_at DESC
@@ -340,6 +345,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 "human_message_count": row[10] or 0,
                 "ai_message_count": row[11] or 0,
                 "last_message_at": row[12],
+                "resume_topic": row[13],
             }
             result.append(d)
         return result

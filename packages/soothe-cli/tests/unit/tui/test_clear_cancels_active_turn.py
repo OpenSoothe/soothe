@@ -32,7 +32,6 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app._update_status = MagicMock()
     app._update_tokens = MagicMock()
     app._lc_loop_id = "old-loop"
-    app._apply_loop_autopilot_mode = MagicMock()
     app._clear_loop_model_override = MagicMock()
     app._mount_message = AsyncMock()
     app.query_one = MagicMock(side_effect=NoMatches())

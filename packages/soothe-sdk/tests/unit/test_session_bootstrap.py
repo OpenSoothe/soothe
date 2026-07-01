@@ -75,6 +75,7 @@ async def test_bootstrap_new_loop_uses_protocol1_request_and_subscribe(tmp_path:
 
     assert result.get("loop_id") == "loop-created"
     assert result.get("success") is True
+    assert result.get("autopilot_mode") == "solo"
 
     # Handshake
     assert ("request_connection_init", None) in client.calls
