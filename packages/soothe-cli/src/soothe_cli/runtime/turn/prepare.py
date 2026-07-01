@@ -24,7 +24,12 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UP
 
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.runtime.state.session_stats import TurnEventStats
-from soothe_cli.runtime.turn.pipeline import PRIORITY_HIGH, PRIORITY_LOW, PRIORITY_NORMAL
+from soothe_cli.runtime.turn.pipeline import (
+    PRIORITY_CRITICAL,
+    PRIORITY_HIGH,
+    PRIORITY_LOW,
+    PRIORITY_NORMAL,
+)
 from soothe_cli.runtime.wire.chunk_filter import (
     message_has_tool_invocation_metadata,
     updates_chunk_is_noop,
@@ -152,6 +157,16 @@ def _prepare_custom_chunk(
 
     if event_type.startswith("soothe.error"):
         prepared.priority = PRIORITY_HIGH
+        return prepared
+
+    if event_type in (
+        STRANGE_LOOP_STEP_STARTED,
+        STRANGE_LOOP_STEP_QUEUED,
+        STRANGE_LOOP_STEP_COMPLETED,
+        STRANGE_LOOP_PLAN_DECISION,
+    ):
+        prepared.priority = PRIORITY_CRITICAL
+        prepared.skip_custom_progress = True
         return prepared
 
     if event_type in _MAIN_LOOP_CUSTOM_TYPES or event_type == TOOL_CALL_UPDATES_BATCH:

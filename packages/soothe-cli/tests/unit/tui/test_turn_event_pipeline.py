@@ -12,12 +12,14 @@ from langchain_core.messages import AIMessage
 
 from soothe_cli.runtime.state.session_stats import TurnEventStats, TurnLatencyStats
 from soothe_cli.runtime.turn.pipeline import (
+    PRIORITY_CRITICAL,
     PRIORITY_HIGH,
     PRIORITY_LOW,
     TurnApplyBatcher,
     TurnEventPipeline,
     run_turn_pipeline,
 )
+from soothe_sdk.core.events import STRANGE_LOOP_STEP_COMPLETED
 from soothe_cli.runtime.turn.prepare import TurnPrepareState, prepare_turn_chunk
 
 
@@ -150,6 +152,30 @@ def test_loop_assistant_output_message_gets_high_priority() -> None:
     plain = prepare_turn_chunk(state, ((), "messages", (AIMessage(content="hi"), {})))
     assert plain is not None
     assert plain.priority == PRIORITY_LOW
+
+
+def test_step_completed_custom_event_gets_critical_priority() -> None:
+    """Step lifecycle events must never be evicted from the outbound apply queue."""
+    from soothe_cli.runtime.presentation.engine import PresentationEngine
+
+    state = TurnPrepareState(
+        ev_stats=TurnEventStats(),
+        presentation=PresentationEngine(),
+    )
+    prepared = prepare_turn_chunk(
+        state,
+        (
+            (),
+            "custom",
+            {
+                "type": STRANGE_LOOP_STEP_COMPLETED,
+                "step_id": "FOO-02",
+                "success": True,
+            },
+        ),
+    )
+    assert prepared is not None
+    assert prepared.priority == PRIORITY_CRITICAL
 
 
 @pytest.mark.asyncio
