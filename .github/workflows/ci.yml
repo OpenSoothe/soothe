@@ -70,10 +70,7 @@ jobs:
     - name: Install dependencies (workspace)
       run: uv sync
 
-    - name: Check formatting (all packages)
-      run: make format
-
-    - name: Run linter (all packages)
+    - name: Lint (format + ruff check)
       run: make lint
 
     - name: Check AsyncAPI spec drift (RFC-450 §11.3)
