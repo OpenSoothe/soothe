@@ -67,7 +67,7 @@ The `SkillIndex` already has internal mtime-based caching (`rebuild_if_stale()`)
 | `middleware/tool_call_args_middleware.py` | **Create** — extracted args-recording middleware (semaphore dropped) |
 | `middleware/_builder.py` | **Modify** — remove ToolConcurrencyMiddleware, **add ToolCallArgsMiddleware** to preserve args recording on main path |
 | `middleware/tool_timeout.py` | **Modify** — remove ToolConcurrency import |
-| `foundation/loop/engine/executor.py` | **Modify** — checkpointer guard + replace init import with `init_tool_call_args_registry` |
+| `foundation/sloop/engine/executor.py` | **Modify** — checkpointer guard + replace init import with `init_tool_call_args_registry` |
 | `tests/unit/middleware/test_tool_concurrency.py` | **Delete** — if exists |
 | `tests/unit/middleware/test_tool_call_args_registry.py` | **Modify** — add regression test: main stack mounts `ToolCallArgsMiddleware` |
 

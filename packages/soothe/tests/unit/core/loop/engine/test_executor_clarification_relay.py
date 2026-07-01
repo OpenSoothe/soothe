@@ -7,13 +7,12 @@ from typing import Any
 
 import pytest
 from langgraph.types import Command, Interrupt
-
-from soothe.foundation.loop.clarification import (
+from soothe.foundation.sloop.clarification import (
     ClarificationCapture,
     ClarificationDetector,
     LoopStateView,
 )
-from soothe.foundation.loop.engine.executor import Executor
+from soothe.foundation.sloop.engine.executor import Executor
 
 
 def _view() -> LoopStateView:

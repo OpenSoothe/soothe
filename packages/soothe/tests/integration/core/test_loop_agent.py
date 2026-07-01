@@ -6,14 +6,14 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from soothe.foundation.loop import StrangeLoop
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop import StrangeLoop
+from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StatusAssessment,
     StepAction,
 )
+
 from soothe.protocols.planner import PlanContext
 
 
@@ -57,7 +57,7 @@ class MockLoopPlanner:
         self, goal: str, state, context: PlanContext, *, context_engine: Any | None = None
     ):
         """Assess-only call for split graph flow."""
-        from soothe.foundation.loop.state.schemas import StatusAssessment
+        from soothe.foundation.sloop.state.schemas import StatusAssessment
 
         self._assess_count += 1
 

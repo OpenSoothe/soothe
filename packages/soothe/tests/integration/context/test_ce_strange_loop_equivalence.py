@@ -6,15 +6,15 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
     StepResult,
 )
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.planning import StepPlanManagerAdapter
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -166,8 +166,7 @@ class TestLedgerAdapterCEOnly:
     async def test_ce_ledger_receives_all_phases(self) -> None:
         """All phase-tagged messages go to the CE LedgerManager (CE is sole source)."""
         from langchain_core.messages import AIMessage, HumanMessage
-
-        from soothe.foundation.loop.utils.messages import _record_ledger_message
+        from soothe.foundation.sloop.utils.messages import _record_ledger_message
 
         ce = ContextEngine()
 
@@ -194,8 +193,7 @@ class TestLedgerAdapterCEOnly:
     async def test_no_ce_raises_value_error(self) -> None:
         """Stage 2: _record_ledger_message requires a CE instance."""
         from langchain_core.messages import HumanMessage
-
-        from soothe.foundation.loop.utils.messages import _record_ledger_message
+        from soothe.foundation.sloop.utils.messages import _record_ledger_message
 
         msg = HumanMessage(content="test")
         try:

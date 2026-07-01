@@ -34,7 +34,7 @@ TUI adapter needs to track cumulative step count across iterations.
 **Files**:
 - `packages/soothe/src/soothe/foundation/events/catalog.py`
   - Add `total_steps` and `done_steps` fields to `StrangeLoopPlanDecisionEvent`
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/resolve_decision.py`
+- `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/resolve_decision.py`
   - Emit cumulative step counts in plan_decision event
 - `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py`
   - Track and display cumulative step count (optional, cosmetic)

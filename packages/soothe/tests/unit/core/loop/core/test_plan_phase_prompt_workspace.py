@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
+from soothe.foundation.sloop.prompts import PromptBuilder
+from soothe.foundation.sloop.state.schemas import LoopState
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
-from soothe.foundation.loop.prompts import PromptBuilder
-from soothe.foundation.loop.state.schemas import LoopState
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.protocols.planner import PlanContext
 
 
@@ -131,7 +131,7 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
 
 def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
     """Test build_plan_messages() works with current_decision and completed steps."""
-    from soothe.foundation.loop.state.schemas import AgentDecision, StepAction
+    from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction
 
     state = LoopState(goal="g", thread_id="t1", max_iterations=8)
     state.current_decision = AgentDecision(

@@ -5,9 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
-from soothe.foundation.loop.intention import IntentClassification
-from soothe.foundation.loop.orchestrator.nodes.init_or_resume import node_init_or_resume
+from soothe.foundation.sloop.intention import IntentClassification
+from soothe.foundation.sloop.orchestrator.nodes.init_or_resume import node_init_or_resume
 
 
 @pytest.mark.asyncio

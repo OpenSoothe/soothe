@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("psycopg_pool")
 
-from soothe.foundation.loop.state.persistence.postgres_backend import (
+from soothe.foundation.sloop.state.persistence.postgres_backend import (
     PostgreSQLPersistenceBackend,
 )
 

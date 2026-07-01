@@ -12,7 +12,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop.state.persistence.manager import StrangeLoopCheckpointPersistenceManager
+from soothe.foundation.sloop.state.persistence.manager import (
+    StrangeLoopCheckpointPersistenceManager,
+)
 from soothe.foundation.workspace import (
     cleanup_anonymous_workspaces,
     resolve_daemon_workspace,
@@ -218,7 +220,12 @@ class SootheDaemon(DaemonHandlersMixin):
         # Per-loop display card ledger (RFC-413).
         from soothe_daemon.display import LoopCardManager
 
-        self._card_manager: LoopCardManager = LoopCardManager(self)
+        self._card_manager: LoopCardManager = LoopCardManager(
+            self,
+            ingest_queue_maxsize=int(
+                getattr(self._daemon_config, "card_ingest_queue_maxsize", 500) or 500
+            ),
+        )
         # IG-475: Memory profiler (tracemalloc) for leak detection
         self._memory_profiler: MemoryProfiler | None = None
         if self._daemon_config.memory_profiling.enabled:
@@ -1427,14 +1434,14 @@ class SootheDaemon(DaemonHandlersMixin):
             await self._persistence_manager.close()
 
         try:
-            from soothe.foundation.loop.state.persistence.directory_manager import (
+            from soothe.foundation.sloop.state.persistence.directory_manager import (
                 PersistenceDirectoryManager,
             )
-            from soothe.foundation.loop.state.persistence.runtime_paths import (
+            from soothe.foundation.sloop.state.persistence.runtime_paths import (
                 resolve_context_engine_db_path,
                 resolve_display_db_path,
             )
-            from soothe.foundation.loop.state.persistence.wal_maintenance import (
+            from soothe.foundation.sloop.state.persistence.wal_maintenance import (
                 checkpoint_runtime_databases,
             )
 

@@ -16,7 +16,7 @@ All changes are backward compatible and require no configuration updates.
 ## Files Modified
 
 - `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py` - FD limit handling
-- `packages/soothe/src/soothe/foundation/loop/planning/planner.py` - Network retry for planner LLM calls
+- `packages/soothe/src/soothe/foundation/sloop/planning/planner.py` - Network retry for planner LLM calls
 - `packages/soothe/src/soothe/middleware/llm_rate_limit.py` - Connection error retry in middleware
 
 ## Problem Statement
@@ -191,7 +191,7 @@ if completed is None:
 
 ### Phase 2: Network Resilience for Planner LLM Calls
 
-**File:** `packages/soothe/src/soothe/foundation/loop/planning/planner.py`
+**File:** `packages/soothe/src/soothe/foundation/sloop/planning/planner.py`
 
 #### Change 2.1: Add connection error detection helper
 

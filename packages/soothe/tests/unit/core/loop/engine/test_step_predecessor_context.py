@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.engine.step_predecessor_context import (
+from soothe.foundation.sloop.engine.step_predecessor_context import (
     build_dependent_execution_hints,
     build_prior_step_evidence,
     step_needs_brief_hydration,
     template_hydrate_step_brief,
 )
-from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_step_needs_brief_hydration_for_generic_dependent_step() -> None:

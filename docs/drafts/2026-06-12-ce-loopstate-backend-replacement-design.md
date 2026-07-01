@@ -181,15 +181,15 @@ Uses the same connection pool as `StrangeLoopStateManager` (via `persistence.soo
 
 | Component | Lines | Location | Replacement |
 |-----------|-------|----------|-------------|
-| `PlanManager` | ~260 | `foundation/loop/planning/manager.py` | `StepPlanningSubengine` (already exists) |
-| `PlanDAG` | ~350 | `foundation/loop/planning/dag.py` | `GoalStepDAG` (already exists) |
-| `GoalContextManager` | ~200 | `foundation/loop/planning/goal_context.py` | `ContextEngineGoalContextAdapter` logic moves into CE |
-| `ContextEngineLedgerAdapter` | ~35 | `foundation/loop/engine/context_adapters.py` | Direct `LedgerManager` calls |
-| `ContextEngineGoalContextAdapter` | ~190 | `foundation/loop/engine/context_adapters.py` | CE queries (already in `ContextEngineGoalContextAdapter.get_plan_context()`) |
+| `PlanManager` | ~260 | `foundation/sloop/planning/manager.py` | `StepPlanningSubengine` (already exists) |
+| `PlanDAG` | ~350 | `foundation/sloop/planning/dag.py` | `GoalStepDAG` (already exists) |
+| `GoalContextManager` | ~200 | `foundation/sloop/planning/goal_context.py` | `ContextEngineGoalContextAdapter` logic moves into CE |
+| `ContextEngineLedgerAdapter` | ~35 | `foundation/sloop/engine/context_adapters.py` | Direct `LedgerManager` calls |
+| `ContextEngineGoalContextAdapter` | ~190 | `foundation/sloop/engine/context_adapters.py` | CE queries (already in `ContextEngineGoalContextAdapter.get_plan_context()`) |
 | `StepPlanManagerAdapter` | ~60 | `context/planning/step_planner.py` | Direct `StepPlanningSubengine` calls |
-| `ContextEngineLifecycle` | ~144 | `foundation/loop/engine/context_lifecycle.py` | CE operations inline in nodes (simpler with single path) |
+| `ContextEngineLifecycle` | ~144 | `foundation/sloop/engine/context_lifecycle.py` | CE operations inline in nodes (simpler with single path) |
 | `if ce_config.enabled` branches | ~50 | `strange_loop.py` | Removed — CE is always active |
-| `PlanManager` heuristic methods | ~80 | `foundation/loop/planning/manager.py` | Already in `completion.py` |
+| `PlanManager` heuristic methods | ~80 | `foundation/sloop/planning/manager.py` | Already in `completion.py` |
 | `ContextEngineConfig.enabled` | ~5 | `config/models.py` | Removed — always enabled |
 
 **Total removed: ~1,374 lines**

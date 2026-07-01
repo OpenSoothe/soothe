@@ -12,8 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
+from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.fixture
@@ -28,7 +27,7 @@ def temp_state_manager():
         db_path = workspace / "test_loop_checkpoints.db"
 
         with patch(
-            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             state_manager = StrangeLoopStateManager(

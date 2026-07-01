@@ -11,21 +11,22 @@ CE ledger spans all goals via ce.load(), no explicit seeding needed.
 from datetime import UTC, datetime
 from pathlib import Path
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
+from soothe.foundation.sloop.orchestrator.nodes.plan_assess import (
     _prior_goal_summaries,
     build_continue_loop_bootstrap_plan,
 )
-from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.loop.state.checkpoint import (
+from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
-from soothe.foundation.loop.state.schemas import LoopState
+from soothe.foundation.sloop.state.schemas import LoopState
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 def _make_ce_with_completed_goal() -> ContextEngine:

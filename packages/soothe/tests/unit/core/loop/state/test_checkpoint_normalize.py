@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.state.checkpoint import (
+from soothe.foundation.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     normalize_checkpoint_data,
 )

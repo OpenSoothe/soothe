@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from soothe.foundation.sloop.state.schemas import (
+    AgentDecision,
+    LoopState,
+    PlanResult,
+    StepAction,
+    StepResult,
+)
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode
@@ -12,13 +19,6 @@ from soothe.foundation.context.planning.completion import (
     heuristic_requires_goal_completion,
 )
 from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.loop.state.schemas import (
-    AgentDecision,
-    LoopState,
-    PlanResult,
-    StepAction,
-    StepResult,
-)
 
 
 def mock_loop_state(**kwargs) -> LoopState:

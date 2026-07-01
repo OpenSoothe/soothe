@@ -222,10 +222,10 @@ No `db_path` or `dsn` fields. SQLite and PostgreSQL backends derive their connec
 | `soothe/context/persistence/postgres_backend.py` | **New**: PostgresContextPersistence |
 | `soothe/context/persistence/__init__.py` | Update exports |
 | `soothe/config/models.py` | Update ContextEngineConfig (G5) |
-| `soothe/foundation/loop/engine/strange_loop.py` | 4-way persistence switch; use `load_semantic_context()` (G4) |
-| `soothe/foundation/loop/orchestrator/nodes/goal_completion.py` | Add `fail_goal` call (G1) |
-| `soothe/foundation/loop/orchestrator/nodes/execute_steps.py` | Add `ce.save()` after step execution (G3) |
-| `soothe/foundation/loop/orchestrator/nodes/record_iteration.py` | Drop `await` from step method calls (G2) |
+| `soothe/foundation/sloop/engine/strange_loop.py` | 4-way persistence switch; use `load_semantic_context()` (G4) |
+| `soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` | Add `fail_goal` call (G1) |
+| `soothe/foundation/sloop/orchestrator/nodes/execute_steps.py` | Add `ce.save()` after step execution (G3) |
+| `soothe/foundation/sloop/orchestrator/nodes/record_iteration.py` | Drop `await` from step method calls (G2) |
 | `config/config.template.yml` | Update context_engine section |
 | `config/develop/config.yml` | Update context_engine section |
 | `packages/soothe/tests/unit/context/` | New test files for DB persistence |

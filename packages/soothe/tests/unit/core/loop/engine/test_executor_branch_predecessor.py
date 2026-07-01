@@ -8,10 +8,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe.foundation.loop.engine.executor import Executor
-from soothe.foundation.loop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.foundation.sloop.engine.executor import Executor
+from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:

@@ -19,7 +19,7 @@ from soothe.foundation.events import (
     LoopStartedEvent,
     PlanCreatedEvent,
 )
-from soothe.foundation.loop.utils.messages import loop_assistant_messages_chunk
+from soothe.foundation.sloop.utils.messages import loop_assistant_messages_chunk
 from soothe.protocols.planner import PlanContext
 from soothe.protocols.policy import ActionRequest, PolicyContext
 
@@ -147,7 +147,7 @@ class PhasesMixin:
             await self._save_quiz_to_state(user_input, fallback_response, thread_id)
             return
 
-        from soothe.foundation.loop.intention.quiz_messages import build_quiz_system_message
+        from soothe.foundation.sloop.intention.quiz_messages import build_quiz_system_message
 
         assistant_name = getattr(getattr(self._config, "agent", None), "name", None) or "Soothe"
         quiz_user_prompt = f"""Answer this question accurately and concisely using only your training knowledge.
@@ -239,7 +239,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         from soothe.foundation.context.persistence.factory import (
             resolve_context_engine_persistence,
         )
-        from soothe.foundation.loop.utils.messages import (
+        from soothe.foundation.sloop.utils.messages import (
             LoopAIMessage,
             LoopHumanMessage,
             _record_ledger_message,
@@ -363,7 +363,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         Raises:
             ConfigurationError if all retries exhausted.
         """
-        from soothe.foundation.loop.state.persistence.retry_utils import (
+        from soothe.foundation.sloop.state.persistence.retry_utils import (
             is_recoverable_connection_error,
         )
         from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool

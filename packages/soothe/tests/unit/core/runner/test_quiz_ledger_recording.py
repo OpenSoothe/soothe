@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.runner._runner_phases import PhasesMixin
 
 
@@ -62,7 +62,7 @@ async def test_save_quiz_to_ledger_appends_to_prior_entries(tmp_path: Path) -> N
 
     persistence = SqliteContextPersistence(loop_id=loop_id, db_path=db_path)
     ce = ContextEngine(persistence=persistence)
-    from soothe.foundation.loop.utils.messages import _record_ledger_message
+    from soothe.foundation.sloop.utils.messages import _record_ledger_message
 
     _record_ledger_message(
         ce,

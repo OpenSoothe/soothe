@@ -59,7 +59,7 @@ sequenceDiagram
 
 ## P0: PRIOR STEP EVIDENCE in execute envelopes
 
-**Module**: `packages/soothe/src/soothe/foundation/loop/engine/step_predecessor_context.py`
+**Module**: `packages/soothe/src/soothe/foundation/sloop/engine/step_predecessor_context.py`
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -76,8 +76,8 @@ Evidence is capped at `PRIOR_STEP_EVIDENCE_MAX_CHARS` (4000) with ellipsis trunc
 
 **Files**:
 
-- `packages/soothe/src/soothe/foundation/loop/planning/planner.py` — JSON spec + `<PLANNING_RULES>`
-- `packages/soothe/src/soothe/foundation/loop/prompts/fragments/instructions/plan_generate_instructions.xml` — `<DEPENDENT_STEP_RULES>`
+- `packages/soothe/src/soothe/foundation/sloop/planning/planner.py` — JSON spec + `<PLANNING_RULES>`
+- `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/instructions/plan_generate_instructions.xml` — `<DEPENDENT_STEP_RULES>`
 
 Rules added:
 
@@ -92,7 +92,7 @@ P2 hydration is a safety net when the planner still emits generic briefs.
 
 ## P2: Between-wave step brief hydration
 
-**Module**: `packages/soothe/src/soothe/foundation/loop/engine/step_brief_hydrator.py`
+**Module**: `packages/soothe/src/soothe/foundation/sloop/engine/step_brief_hydrator.py`
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -112,8 +112,8 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 
 **Files**:
 
-- `packages/soothe/src/soothe/foundation/loop/engine/thread_selection.py`
-- `packages/soothe/src/soothe/foundation/loop/engine/executor.py`
+- `packages/soothe/src/soothe/foundation/sloop/engine/thread_selection.py`
+- `packages/soothe/src/soothe/foundation/sloop/engine/executor.py`
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -128,15 +128,15 @@ Hydration mutates `step.full_description` in memory for the current wave only; i
 
 | File | Role |
 |------|------|
-| `foundation/loop/engine/step_predecessor_context.py` | Evidence builder, hydration heuristics, execution hints |
-| `foundation/loop/engine/step_brief_hydrator.py` | LLM between-wave brief expansion |
-| `foundation/loop/engine/executor.py` | Orchestrates hydration, envelope, ledger injection |
-| `foundation/loop/engine/thread_selection.py` | Per-step isolated thread IDs |
-| `foundation/loop/engine/predecessor_branch_context.py` | Transitive dep closure + ledger slice helpers |
-| `foundation/loop/prompts/user_message.py` | `PRIOR STEP EVIDENCE` envelope section |
-| `foundation/loop/planning/planner.py` | Dependent-step planning rules |
-| `foundation/loop/prompts/fragments/instructions/plan_generate_instructions.xml` | `<DEPENDENT_STEP_RULES>` |
-| `foundation/loop/orchestrator/nodes/execute_steps.py` | Constructs `StepBriefHydrator` + `Executor` |
+| `foundation/sloop/engine/step_predecessor_context.py` | Evidence builder, hydration heuristics, execution hints |
+| `foundation/sloop/engine/step_brief_hydrator.py` | LLM between-wave brief expansion |
+| `foundation/sloop/engine/executor.py` | Orchestrates hydration, envelope, ledger injection |
+| `foundation/sloop/engine/thread_selection.py` | Per-step isolated thread IDs |
+| `foundation/sloop/engine/predecessor_branch_context.py` | Transitive dep closure + ledger slice helpers |
+| `foundation/sloop/prompts/user_message.py` | `PRIOR STEP EVIDENCE` envelope section |
+| `foundation/sloop/planning/planner.py` | Dependent-step planning rules |
+| `foundation/sloop/prompts/fragments/instructions/plan_generate_instructions.xml` | `<DEPENDENT_STEP_RULES>` |
+| `foundation/sloop/orchestrator/nodes/execute_steps.py` | Constructs `StepBriefHydrator` + `Executor` |
 | `config/models.py` | `step_brief_hydration_enabled` field |
 
 ---

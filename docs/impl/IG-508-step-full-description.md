@@ -132,12 +132,12 @@ def build_execute_step_message(
 
 | File | Change |
 |------|--------|
-| `foundation/loop/state/schemas.py` | Add `full_description` to PlanGenerateStep, StepAction |
-| `foundation/loop/planning/planner.py` | Update JSON spec + prompt rules |
-| `foundation/loop/engine/executor.py` | Use full_description, merge TASK into hints |
-| `foundation/loop/prompts/user_message.py` | Remove INTENT/TASK, simplify signature |
-| `foundation/loop/planning/dag.py` | Handle full_description in DAG assembly |
-| `foundation/loop/orchestrator/nodes/execute_steps.py` | Pass full_description |
+| `foundation/sloop/state/schemas.py` | Add `full_description` to PlanGenerateStep, StepAction |
+| `foundation/sloop/planning/planner.py` | Update JSON spec + prompt rules |
+| `foundation/sloop/engine/executor.py` | Use full_description, merge TASK into hints |
+| `foundation/sloop/prompts/user_message.py` | Remove INTENT/TASK, simplify signature |
+| `foundation/sloop/planning/dag.py` | Handle full_description in DAG assembly |
+| `foundation/sloop/orchestrator/nodes/execute_steps.py` | Pass full_description |
 | `tests/unit/core/prompts/test_user_envelope.py` | Update tests |
 
 ### 6. Backward Compatibility

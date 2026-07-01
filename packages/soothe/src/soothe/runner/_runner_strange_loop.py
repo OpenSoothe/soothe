@@ -22,19 +22,19 @@ from soothe.foundation.events import (
     StrangeLoopStepQueuedEvent,
     StrangeLoopStepStartedEvent,
 )
-from soothe.foundation.loop import StrangeLoop
-from soothe.foundation.loop.clarification.events import (
+from soothe.foundation.sloop import StrangeLoop
+from soothe.foundation.sloop.clarification.events import (
     ClarificationAnsweredEvent,
     ClarificationDeferredEvent,
     ClarificationRequestedEvent,
 )
-from soothe.foundation.loop.intention import build_loop_routing_classification
-from soothe.foundation.loop.utils.events import LoopAgentReasonEvent
-from soothe.foundation.loop.utils.messages import (
+from soothe.foundation.sloop.intention import build_loop_routing_classification
+from soothe.foundation.sloop.utils.events import LoopAgentReasonEvent
+from soothe.foundation.sloop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
-from soothe.foundation.loop.utils.stream_normalize import extract_text_from_message_content
+from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 from soothe.runner._runner_shared import StreamChunk, _custom
 from soothe.utils.text_preview import preview_first
 
@@ -88,7 +88,7 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
     a handle whose ``stop()`` is a no-op so the calling site can stay simple.
     """
     try:
-        from soothe.foundation.loop.state.persistence import (
+        from soothe.foundation.sloop.state.persistence import (
             StrangeLoopCheckpointPersistenceManager,
         )
 
@@ -507,7 +507,7 @@ class StrangeLoopMixin:
         # RFC-622: build the clarification policy from per-request mode + config defaults.
         # Constructed once per goal so the closed-over veritas chat model is reused
         # across all clarifications inside this run.
-        from soothe.foundation.loop.clarification import build_clarification_policy_for_runner
+        from soothe.foundation.sloop.clarification import build_clarification_policy_for_runner
 
         try:
             clarification_policy = build_clarification_policy_for_runner(
@@ -785,7 +785,7 @@ class StrangeLoopMixin:
                     # Empty-loop reclamation: one AI counter bump per completed goal,
                     # so loops that produced any AI output are immune to empty-loop GC.
                     try:
-                        from soothe.foundation.loop.state.persistence import (
+                        from soothe.foundation.sloop.state.persistence import (
                             StrangeLoopCheckpointPersistenceManager,
                         )
 

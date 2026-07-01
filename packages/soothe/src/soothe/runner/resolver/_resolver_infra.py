@@ -141,7 +141,7 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         The runner will create AsyncSqliteSaver from the path in async context.
     """
     try:
-        from soothe.foundation.loop.state.persistence.directory_manager import (
+        from soothe.foundation.sloop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 

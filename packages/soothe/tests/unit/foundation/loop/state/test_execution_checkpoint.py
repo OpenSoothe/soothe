@@ -6,8 +6,7 @@ Tests for the new execution checkpoint pattern with execution-only fields.
 from datetime import UTC, datetime
 
 import pytest
-
-from soothe.foundation.loop.state.execution_checkpoint import (
+from soothe.foundation.sloop.state.execution_checkpoint import (
     ExecutionCheckpoint,
     GoalIndexEntry,
     WaveMetrics,

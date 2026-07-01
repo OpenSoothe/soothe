@@ -111,12 +111,12 @@ if subagent_type == "general-purpose" and "explore" in subagent_graphs:
 
 | File | Change |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/loop/state/schemas.py` | Routing fields, helpers, `StepResult.subgraph_tool_call_count` |
-| `packages/soothe/src/soothe/foundation/loop/engine/thread_selection.py` | `resolve_wire_subagent_for_step()` |
-| `packages/soothe/src/soothe/foundation/loop/engine/executor.py` | Per-step wiring, path hints, split counts |
-| `packages/soothe/src/soothe/foundation/loop/planning/planner.py` | Prompt + finalize wiring |
+| `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` | Routing fields, helpers, `StepResult.subgraph_tool_call_count` |
+| `packages/soothe/src/soothe/foundation/sloop/engine/thread_selection.py` | `resolve_wire_subagent_for_step()` |
+| `packages/soothe/src/soothe/foundation/sloop/engine/executor.py` | Per-step wiring, path hints, split counts |
+| `packages/soothe/src/soothe/foundation/sloop/planning/planner.py` | Prompt + finalize wiring |
 | `packages/soothe/src/soothe/foundation/core/agent/_patch_task_tool.py` | `general-purpose` → `explore` remap |
-| `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/execute_steps.py` | `subgraph_tool_call_count` in step_completed |
+| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/execute_steps.py` | `subgraph_tool_call_count` in step_completed |
 | `packages/soothe-cli/.../cognition_step_activity.py` | Main-only row classification and stats |
 | `packages/soothe-cli/.../cognition_step.py` | Main-only status suffix logic |
 | `packages/soothe/tests/...` | Schema, executor, planner, delegate-finals tests |

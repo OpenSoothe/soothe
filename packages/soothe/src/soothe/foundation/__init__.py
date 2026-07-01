@@ -2,7 +2,7 @@
 
 This package contains:
 - foundation.core: Layer 1 CoreAgent runtime
-- foundation.loop: Layer 2 StrangeLoop orchestration
+- foundation.sloop: Layer 2 StrangeLoop orchestration
 - foundation.autopilot: Layer 3 Goal lifecycle and dispatch (RFC-625)
 - foundation.context: Unified goal/step state management (RFC-625)
 - foundation.events: Shared event system
@@ -12,7 +12,7 @@ This package contains:
 RFC-625: GoalEngine deleted. ContextEngine is the sole source of truth.
 Import paths:
     from soothe.foundation.core import CoreAgent, create_soothe_agent
-    from soothe.foundation.loop import StrangeLoop, LoopState
+    from soothe.foundation.sloop import StrangeLoop, LoopState
     from soothe.foundation.autopilot import AutopilotService, AutopilotMonitor
     from soothe.foundation.context import ContextEngine, GoalNode
     from soothe.foundation.events import GOAL_CREATED
@@ -30,7 +30,7 @@ from soothe.foundation.ai_message import extract_text_from_ai_message
 from soothe.foundation.core import CoreAgent, create_soothe_agent
 
 # Re-export from shared utilities (no circular deps)
-from soothe.foundation.loop import LoopState, PlanResult, StrangeLoop
+from soothe.foundation.sloop import LoopState, PlanResult, StrangeLoop
 from soothe.foundation.workspace import (
     FrameworkFilesystem,
     resolve_daemon_workspace,

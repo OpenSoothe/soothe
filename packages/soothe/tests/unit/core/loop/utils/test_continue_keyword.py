@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.utils.continue_keyword import is_continue_keyword
+from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 
 
 def test_continue_keyword_matches_single_word() -> None:

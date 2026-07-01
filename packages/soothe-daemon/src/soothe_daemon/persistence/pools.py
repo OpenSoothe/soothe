@@ -30,7 +30,7 @@ async def preopen_shared_postgres_pools(
     if not uses_postgresql_persistence(config) or not daemon_config.thread_pool.enabled:
         return
 
-    from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
     await SharedPostgreSQLPool.get_shared_instance(config)
@@ -41,7 +41,7 @@ async def preopen_shared_postgres_pools(
 
 async def release_idle_shared_postgres_pools() -> None:
     """Release idle connections on process-wide shared PostgreSQL pools."""
-    from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
     await SharedPostgreSQLPool.release_idle_shared()
@@ -51,7 +51,7 @@ async def release_idle_shared_postgres_pools() -> None:
 async def close_shared_postgres_pools() -> None:
     """Close shared StrangeLoop and checkpointer pools at daemon shutdown."""
     try:
-        from soothe.foundation.loop.state.persistence.shared_pool import (
+        from soothe.foundation.sloop.state.persistence.shared_pool import (
             SharedPostgreSQLPool,
             close_shared_sqlite_backend_instance,
         )

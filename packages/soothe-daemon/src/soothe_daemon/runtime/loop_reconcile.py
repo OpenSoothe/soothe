@@ -6,7 +6,7 @@ import logging
 import shutil
 from typing import Any
 
-from soothe.foundation.loop.state.persistence.directory_manager import (
+from soothe.foundation.sloop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 

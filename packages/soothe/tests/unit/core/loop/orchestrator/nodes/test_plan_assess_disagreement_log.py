@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from soothe.foundation.loop.orchestrator.nodes.plan_assess import (
+from soothe.foundation.sloop.orchestrator.nodes.plan_assess import (
     _log_prior_progress_disagreement,
 )
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     StatusAssessment,
@@ -36,7 +36,7 @@ def _assess(progress: str) -> StatusAssessment:
 
 
 def test_log_emitted_when_buckets_differ_by_more_than_one(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.foundation.loop.orchestrator.nodes.plan_assess")
+    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.orchestrator.nodes.plan_assess")
     state = _state_with_hint("low")
     _log_prior_progress_disagreement(state, _assess("high"))
     assert any("hint=low vs LLM goal_progress=high" in r.message for r in caplog.records), [
@@ -45,14 +45,14 @@ def test_log_emitted_when_buckets_differ_by_more_than_one(caplog) -> None:
 
 
 def test_no_log_when_buckets_equal(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.foundation.loop.orchestrator.nodes.plan_assess")
+    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.orchestrator.nodes.plan_assess")
     state = _state_with_hint("medium")
     _log_prior_progress_disagreement(state, _assess("medium"))
     assert not [r for r in caplog.records if "hint=" in r.message]
 
 
 def test_no_log_when_off_by_one_bucket(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.foundation.loop.orchestrator.nodes.plan_assess")
+    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.orchestrator.nodes.plan_assess")
     state = _state_with_hint("medium")
     _log_prior_progress_disagreement(state, _assess("high"))
     _log_prior_progress_disagreement(state, _assess("low"))
@@ -60,14 +60,14 @@ def test_no_log_when_off_by_one_bucket(caplog) -> None:
 
 
 def test_log_emitted_when_llm_says_complete_but_hint_low(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.foundation.loop.orchestrator.nodes.plan_assess")
+    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.orchestrator.nodes.plan_assess")
     state = _state_with_hint("low")
     _log_prior_progress_disagreement(state, _assess("complete"))
     assert any("hint=low vs LLM goal_progress=complete" in r.message for r in caplog.records)
 
 
 def test_no_log_when_no_prior_progress(caplog) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.foundation.loop.orchestrator.nodes.plan_assess")
+    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.orchestrator.nodes.plan_assess")
     state = LoopState(goal="g", thread_id="t1", iteration=0)
     _log_prior_progress_disagreement(state, _assess("high"))
     assert not [r for r in caplog.records if "hint=" in r.message]

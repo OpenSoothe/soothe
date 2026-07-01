@@ -18,7 +18,7 @@ async def test_langgraph_checkpoint_exists_false_when_db_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import soothe.foundation.loop.state.persistence.directory_manager as dm
+    import soothe.foundation.sloop.state.persistence.directory_manager as dm
 
     monkeypatch.setattr(
         dm.PersistenceDirectoryManager,
@@ -45,7 +45,7 @@ async def test_langgraph_checkpoint_exists_true_when_row_present(
     conn.commit()
     conn.close()
 
-    import soothe.foundation.loop.state.persistence.directory_manager as dm
+    import soothe.foundation.sloop.state.persistence.directory_manager as dm
 
     monkeypatch.setattr(
         dm.PersistenceDirectoryManager,

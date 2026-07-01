@@ -13,9 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from soothe.foundation.loop.state.checkpoint import GoalExecutionRecord
-from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
+from soothe.foundation.sloop.state.checkpoint import GoalExecutionRecord
+from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.fixture
@@ -25,7 +24,7 @@ def temp_state_manager():
         workspace = Path(tmpdir)
         db_path = workspace / "test_loop_checkpoints.db"
         with patch(
-            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             state_manager = StrangeLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
@@ -61,7 +60,7 @@ async def test_goal_record_round_trip_through_sqlite(temp_state_manager) -> None
 
     # Cold load via fresh manager pointing at the same DB.
     with patch(
-        "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
         sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)

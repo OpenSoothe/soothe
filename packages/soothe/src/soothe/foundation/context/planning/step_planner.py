@@ -26,7 +26,7 @@ from soothe.foundation.context.planning.models import (
 )
 
 if TYPE_CHECKING:
-    from soothe.foundation.loop.state.schemas import PlanResult, StepResult
+    from soothe.foundation.sloop.state.schemas import PlanResult, StepResult
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +252,7 @@ class StepPlanningSubengine:
 
         stats = _extract_dag_stats(goal, len(self._plan_waves))
 
-        from soothe.foundation.loop.utils.messages import last_ledger_ai_content
+        from soothe.foundation.sloop.utils.messages import last_ledger_ai_content
 
         ledger_text = last_ledger_ai_content(state) if state else None
 
