@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 
 import pytest
-
-from soothe.foundation.loop.engine.executor import _log_dependency_execution_residual
-from soothe.foundation.loop.state.schemas import AgentDecision, StepAction
+from soothe.foundation.sloop.engine.executor import _log_dependency_execution_residual
+from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction
 
 
 def test_log_dependency_execution_residual_warns(caplog: pytest.LogCaptureFixture) -> None:

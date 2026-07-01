@@ -88,7 +88,7 @@
 | Tool calls | **NONE** | No wrapper, relies on tool-level timeout |
 | Stream chunk | 0.5s poll | Cooperative cancellation only (NOT timeout) |
 
-**File**: `packages/soothe/src/soothe/foundation/loop/engine/executor.py`
+**File**: `packages/soothe/src/soothe/foundation/sloop/engine/executor.py`
 
 ---
 
@@ -244,4 +244,4 @@ agent:
 - `packages/soothe/src/soothe/toolkits/execution.py:186` — run_command timeout
 - `packages/soothe/src/soothe/mcp/registry.py:488` — MCP tool timeout
 - `packages/soothe-daemon/src/soothe_daemon/runner/thread_runner.py:185` — request timeout
-- `packages/soothe/src/soothe/foundation/loop/engine/graph_interrupt.py:22` — no chunk timeout (IG-506)
+- `packages/soothe/src/soothe/foundation/sloop/engine/graph_interrupt.py:22` — no chunk timeout (IG-506)

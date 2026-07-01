@@ -5,9 +5,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
-from soothe.foundation.loop.engine.step_brief_hydrator import StepBriefHydration, StepBriefHydrator
-from soothe.foundation.loop.state.schemas import StepAction
+from soothe.foundation.sloop.engine.step_brief_hydrator import StepBriefHydration, StepBriefHydrator
+from soothe.foundation.sloop.state.schemas import StepAction
 
 
 @pytest.mark.asyncio
@@ -46,7 +45,7 @@ async def test_hydrator_uses_llm_when_available(monkeypatch: pytest.MonkeyPatch)
         )
 
     monkeypatch.setattr(
-        "soothe.foundation.loop.engine.step_brief_hydrator.invoke_structured_chat_typed",
+        "soothe.foundation.sloop.engine.step_brief_hydrator.invoke_structured_chat_typed",
         _fake_invoke,
     )
 

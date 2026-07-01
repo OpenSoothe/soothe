@@ -305,7 +305,7 @@ loop_gc:
 
 ## References
 
-- `packages/soothe/src/soothe/foundation/loop/state/persistence/directory_manager.py`
+- `packages/soothe/src/soothe/foundation/sloop/state/persistence/directory_manager.py`
 - `packages/soothe-daemon/src/soothe_daemon/display/loop_card_manager.py`
 - `packages/soothe-daemon/src/soothe_daemon/display/loop_card_ledger.py`
 - `packages/soothe/src/soothe/foundation/context/persistence/sqlite_backend.py`

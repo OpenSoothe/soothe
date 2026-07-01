@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 import soothe.config as soothe_config
-from soothe.foundation.loop.state.persistence.manager import (
+from soothe.foundation.sloop.state.persistence.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
 

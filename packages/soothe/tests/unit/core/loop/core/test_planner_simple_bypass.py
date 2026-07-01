@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import HumanMessage
+from soothe.foundation.sloop.cognition.planner import LLMPlanner
+from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment
 
-from soothe.foundation.loop.cognition.planner import LLMPlanner
-from soothe.foundation.loop.state.schemas import LoopState, StatusAssessment
 from soothe.protocols.planner import PlanContext
 
 
@@ -41,7 +41,7 @@ async def test_simple_query_no_longer_bypasses_plan_generate() -> None:
         )
     )
     # Stub _generate_plan to return a minimal plan result without a real LLM call.
-    from soothe.foundation.loop.state.schemas import AgentDecision, PlanResult, StepAction
+    from soothe.foundation.sloop.state.schemas import AgentDecision, PlanResult, StepAction
 
     planner._generate_plan = AsyncMock(  # type: ignore[method-assign]
         return_value=PlanResult(

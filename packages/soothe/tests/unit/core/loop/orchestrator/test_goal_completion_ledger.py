@@ -8,18 +8,18 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from langchain_core.messages import AIMessage
+from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
+from soothe.foundation.sloop.orchestrator.nodes.goal_completion import node_goal_completion
+from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.sloop.state.schemas import LoopState, PlanResult
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.loop.engine.synthesis import SynthesisGenerator
-from soothe.foundation.loop.orchestrator.nodes.goal_completion import node_goal_completion
-from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.loop.state.schemas import LoopState, PlanResult
-from soothe.foundation.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _make_ce() -> ContextEngine:
@@ -117,7 +117,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """When the unified DAG has nodes, goal completion logs it (not user output)."""
-    from soothe.foundation.loop.state.schemas import AgentDecision, StepAction, StepResult
+    from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction, StepResult
 
     caplog.set_level(logging.INFO)
     ce = _make_ce()
@@ -333,7 +333,7 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     )
 
     with patch(
-        "soothe.foundation.loop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
+        "soothe.foundation.sloop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
         return_value="fallback summary body",
     ):
         await node_goal_completion(ctx, {})

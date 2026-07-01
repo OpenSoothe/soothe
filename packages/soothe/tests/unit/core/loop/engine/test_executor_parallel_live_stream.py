@@ -8,11 +8,11 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from soothe.foundation.sloop.engine.executor import Executor, StreamEvent, _ExecuteStepResult
+from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.engine.executor import Executor, StreamEvent, _ExecuteStepResult
-from soothe.foundation.loop.state.schemas import LoopState, StepAction, StepResult
 
 
 def _make_ce() -> ContextEngine:

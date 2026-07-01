@@ -339,7 +339,7 @@ from typing import Protocol, runtime_checkable
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.foundation.core.agent import CoreAgentProtocol
-    from soothe.foundation.loop.state.schemas import LoopState, PlanResult
+    from soothe.foundation.sloop.state.schemas import LoopState, PlanResult
 
 
 @runtime_checkable
@@ -453,9 +453,9 @@ class AutopilotProtocol(Protocol):
 | `soothe.core.security/` | `soothe.foundation.core.security/` | Core |
 | `soothe.core.filesystem/` | `soothe.foundation.core.filesystem/` | Core |
 | `soothe.core.quiz_messages.py` | `soothe.foundation.core.quiz_messages.py` | Core |
-| `soothe.core.loop/` | `soothe.foundation.loop/` | Loop |
-| `soothe.core.prompts/` | `soothe.foundation.loop.prompts/` | Loop |
-| `soothe.core.intention/` | `soothe.foundation.loop.intention/` | Loop |
+| `soothe.core.loop/` | `soothe.foundation.sloop/` | Loop |
+| `soothe.core.prompts/` | `soothe.foundation.sloop.prompts/` | Loop |
+| `soothe.core.intention/` | `soothe.foundation.sloop.intention/` | Loop |
 | `soothe.core.goal_engine/` | `soothe.foundation.autopilot.engine/` | Autopilot |
 | `soothe.core.autopilot/` | `soothe.foundation.autopilot.service/` | Autopilot |
 | `soothe.core.events/` | `soothe.foundation.events/` | Shared |
@@ -477,8 +477,8 @@ class AutopilotProtocol(Protocol):
 |--------|-------|
 | `from soothe.core import CoreAgent` | `from soothe.foundation.core import CoreAgent` |
 | `from soothe.core.agent import create_soothe_agent` | `from soothe.foundation.core.agent import create_soothe_agent` |
-| `from soothe.core.loop import StrangeLoop` | `from soothe.foundation.loop import StrangeLoop` |
-| `from soothe.core.loop.state.schemas import LoopState` | `from soothe.foundation.loop.state.schemas import LoopState` |
+| `from soothe.core.loop import StrangeLoop` | `from soothe.foundation.sloop import StrangeLoop` |
+| `from soothe.core.loop.state.schemas import LoopState` | `from soothe.foundation.sloop.state.schemas import LoopState` |
 | `from soothe.core.goal_engine import GoalEngine` | `from soothe.foundation.autopilot import GoalEngine` |
 | `from soothe.core.autopilot import AutopilotService` | `from soothe.foundation.autopilot import AutopilotService` |
 | `from soothe.core import SootheRunner` | `from soothe.runner import SootheRunner` |
@@ -539,7 +539,7 @@ def __getattr__(name: str) -> Any:
 ### Phase 3: Move Layer Modules (High Risk)
 
 1. Move `soothe.core.agent/` → `soothe.foundation.core.agent/`
-2. Move `soothe.core.loop/` → `soothe.foundation.loop/`
+2. Move `soothe.core.loop/` → `soothe.foundation.sloop/`
 3. Move `soothe.core.goal_engine/` → `soothe.foundation.autopilot.engine/`
 4. Move `soothe.core.autopilot/` → `soothe.foundation.autopilot.service/`
 5. Move `soothe.core.runner/` → `soothe.runner/`

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import pytest
-
-import soothe.foundation.loop.state.persistence.shared_pool as shared_pool
-from soothe.foundation.loop.state.persistence.manager import (
+import soothe.foundation.sloop.state.persistence.shared_pool as shared_pool
+from soothe.foundation.sloop.state.persistence.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
-from soothe.foundation.loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.foundation.sloop.state.persistence.sqlite_backend import SQLitePersistenceBackend
 
 
 @pytest.fixture(autouse=True)

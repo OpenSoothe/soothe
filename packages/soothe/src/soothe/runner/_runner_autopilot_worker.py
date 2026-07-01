@@ -35,8 +35,8 @@ from soothe.foundation.autopilot.engine.models import (
     ToolCallStats,
 )
 from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
-from soothe.foundation.loop import StrangeLoop
-from soothe.foundation.loop.state.schemas import PlanResult
+from soothe.foundation.sloop import StrangeLoop
+from soothe.foundation.sloop.state.schemas import PlanResult
 from soothe.protocols.planner import GoalDirective
 
 from ._runner_shared import StreamChunk, _custom
@@ -110,7 +110,7 @@ class AutopilotWorkerMixin:
         # RFC-622: autopilot is headless — always answer clarifications via veritas.
         # RFC-623: human_attached=False keeps the hard-defer path on veritas failure;
         # there is no operator at the other end to consume an interactive interrupt.
-        from soothe.foundation.loop.clarification import build_clarification_policy_for_runner
+        from soothe.foundation.sloop.clarification import build_clarification_policy_for_runner
 
         try:
             clarification_policy = build_clarification_policy_for_runner(

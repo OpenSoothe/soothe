@@ -298,7 +298,7 @@ class AgentBuilder:
 
         execute_graph = None
         execute_graph_compiler = None
-        from soothe.foundation.loop.engine.executor import ephemeral_execute_stream_enabled
+        from soothe.foundation.sloop.engine.executor import ephemeral_execute_stream_enabled
 
         if ephemeral_execute_stream_enabled():
 

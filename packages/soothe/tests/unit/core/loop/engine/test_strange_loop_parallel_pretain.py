@@ -13,8 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from soothe.foundation.loop.engine.strange_loop import StrangeLoop
+from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
 
 
 def _make_strange_loop() -> StrangeLoop:
@@ -97,14 +96,14 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
         patch("soothe.foundation.context.engine.ContextEngine", return_value=ce_instance),
         patch("soothe.foundation.context.persistence.sqlite_backend.SqliteContextPersistence"),
         patch(
-            "soothe.foundation.loop.state.persistence.runtime_paths.resolve_context_engine_db_path",
+            "soothe.foundation.sloop.state.persistence.runtime_paths.resolve_context_engine_db_path",
             return_value="/tmp/soothe-test.db",
         ),
         patch("soothe.foundation.context.planning.StepPlanManagerAdapter"),
-        patch("soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager") as sm_cls,
-        patch("soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
-        patch("soothe.foundation.loop.engine.strange_loop.LoopRuntimeContext"),
-        patch("soothe.foundation.loop.engine.strange_loop.asyncio.Queue"),
+        patch("soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager") as sm_cls,
+        patch("soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
+        patch("soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext"),
+        patch("soothe.foundation.sloop.engine.strange_loop.asyncio.Queue"),
         patch.object(sl, "plan_phase"),
         patch(
             "soothe.foundation.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",

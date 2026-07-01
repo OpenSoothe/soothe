@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.loop.orchestrator.runner import _langfuse_goal_output_text
+from soothe.foundation.sloop.orchestrator.runner import _langfuse_goal_output_text
 
 
 def test_langfuse_goal_output_text_prefers_goal_completion() -> None:

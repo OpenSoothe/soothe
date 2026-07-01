@@ -9,16 +9,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk
-
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.engine.executor import Executor, StepWaveQueued, StepWaveStart
+from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     StepAction,
     StepResult,
 )
+
+from soothe.foundation.context.engine import ContextEngine
+from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
 
 async def _empty_agent_stream() -> AsyncIterator[Any]:

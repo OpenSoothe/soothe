@@ -52,7 +52,7 @@ def resolve_context_engine_persistence(config: SootheConfig, loop_id: str) -> An
         from soothe.foundation.context.persistence.sqlite_backend import (
             SqliteContextPersistence,
         )
-        from soothe.foundation.loop.state.persistence.runtime_paths import (
+        from soothe.foundation.sloop.state.persistence.runtime_paths import (
             resolve_context_engine_db_path,
         )
 

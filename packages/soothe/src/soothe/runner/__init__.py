@@ -96,7 +96,7 @@ class SootheRunner(
 
         from soothe.foundation.core.agent import create_soothe_agent
         from soothe.foundation.core.agent._lazy import LazyCoreAgent
-        from soothe.foundation.loop.intention import IntentClassifier
+        from soothe.foundation.sloop.intention import IntentClassifier
         from soothe.protocols.concurrency import ConcurrencyPolicy
         from soothe.runner.resolver import (
             resolve_checkpointer,
@@ -343,7 +343,7 @@ class SootheRunner(
         if self._config.persistence.default_backend != "postgresql":
             return None
 
-        from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+        from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
 
         self._sloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
         return self._sloop_shared_pool

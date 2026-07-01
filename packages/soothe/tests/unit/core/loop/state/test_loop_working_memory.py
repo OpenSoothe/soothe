@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from soothe.foundation.loop import LoopWorkingMemory
+from soothe.foundation.sloop import LoopWorkingMemory
+
 from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
 
 

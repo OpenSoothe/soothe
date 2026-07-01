@@ -23,8 +23,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
+from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.fixture
@@ -34,7 +33,7 @@ def temp_state_manager():
         workspace = Path(tmpdir)
         db_path = workspace / "test_clobber_recovery.db"
         with patch(
-            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             state_manager = StrangeLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
@@ -76,7 +75,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
 
     # Cold reload — mimics strange_loop.load() at the start of a new query.
     with patch(
-        "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
         sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
@@ -118,7 +117,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
 
     # Final cold reload confirms persistence of preserved history.
     with patch(
-        "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+        "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
         sm3 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)

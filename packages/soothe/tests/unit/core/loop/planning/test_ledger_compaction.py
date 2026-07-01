@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import soothe.foundation.loop.state.schemas  # noqa: F401 — break circular import
-from soothe.foundation.loop.cognition.ledger_compaction import (
+import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import
+from soothe.foundation.sloop.cognition.ledger_compaction import (
     compact_plan_assess_ai_dump,
     compact_planning_human_content,
 )
-from soothe.foundation.loop.state.schemas import StatusAssessment
+from soothe.foundation.sloop.state.schemas import StatusAssessment
 
 # --- New format tests ---
 

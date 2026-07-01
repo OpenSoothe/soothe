@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from soothe.foundation.loop.prompts import PromptBuilder
-from soothe.foundation.loop.state.schemas import LoopState, PriorProgressDigest, ToolCallHead
+from soothe.foundation.sloop.prompts import PromptBuilder
+from soothe.foundation.sloop.state.schemas import LoopState, PriorProgressDigest, ToolCallHead
+
 from soothe.protocols.planner import PlanContext
 
 

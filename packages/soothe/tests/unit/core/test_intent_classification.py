@@ -9,13 +9,12 @@ is not a classifier concern.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from soothe.foundation.loop.intention import IntentClassification, IntentClassifier, TaskComplexity
-from soothe.foundation.loop.intention.models import (
+from soothe.foundation.sloop.intention import IntentClassification, IntentClassifier, TaskComplexity
+from soothe.foundation.sloop.intention.models import (
     IntakeClassificationLLMResult,
     IntakeLabel,
 )
-from soothe.foundation.loop.intention.prompts import (
+from soothe.foundation.sloop.intention.prompts import (
     INTAKE_CLASSIFICATION_PROMPT,
     INTAKE_CLASSIFICATION_RETRY_PROMPT,
 )

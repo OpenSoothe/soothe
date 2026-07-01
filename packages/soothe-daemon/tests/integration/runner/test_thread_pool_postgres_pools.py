@@ -72,7 +72,7 @@ async def pg_agent_config() -> SootheConfig:
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_singletons() -> None:
     import soothe.runner.resolver.shared_checkpointer_pool as cp_mod
-    from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
 
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()
@@ -106,7 +106,7 @@ async def test_concurrent_thread_workers_share_checkpointer_pool(
     pg_agent_config: SootheConfig, requires_llm_api
 ) -> None:
     """Regression: parallel workers must not each create max_size=8 pools."""
-    from soothe.foundation.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
 
     await SharedPostgreSQLPool.get_shared_instance(pg_agent_config)
     cp = SharedCheckpointerPool.get_or_create_pool(pg_agent_config)

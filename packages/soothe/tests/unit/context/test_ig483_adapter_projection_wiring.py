@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from soothe.foundation.sloop.engine.context_adapters import (
+    ContextEngineGoalContextAdapter,
+    _format_execute_briefing_from_ce_goals,
+)
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.ledger import LedgerManager
@@ -10,10 +14,6 @@ from soothe.foundation.context.models import GoalNode, StepExecution, StepNode
 from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.context.planning.models import DagPlanningContext
 from soothe.foundation.context.projection import ContextBundle
-from soothe.foundation.loop.engine.context_adapters import (
-    ContextEngineGoalContextAdapter,
-    _format_execute_briefing_from_ce_goals,
-)
 
 # ── StepPlanManagerAdapter public API ────────────────────────────────
 
@@ -25,7 +25,7 @@ class TestPlanAdapterPublicAPI:
         ce._dag.add_goal(goal)
 
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-        from soothe.foundation.loop.state.schemas import AgentDecision, StepAction
+        from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction
 
         decision = AgentDecision(
             type="execute_steps",
@@ -36,7 +36,7 @@ class TestPlanAdapterPublicAPI:
                 StepAction(id="S02", description="Step 2", dependencies=["S01"]),
             ],
         )
-        from soothe.foundation.loop.state.schemas import PlanResult
+        from soothe.foundation.sloop.state.schemas import PlanResult
 
         plan_result = PlanResult(
             status="replan",
@@ -253,8 +253,9 @@ class TestFormatExecuteBriefingFromCEGoals:
 class TestPromptBuilderContextBundle:
     def test_build_plan_messages_without_bundle(self) -> None:
         """When context_bundle is None, behavior is unchanged."""
-        from soothe.foundation.loop.prompts.builder import PromptBuilder
-        from soothe.foundation.loop.state.schemas import LoopState
+        from soothe.foundation.sloop.prompts.builder import PromptBuilder
+        from soothe.foundation.sloop.state.schemas import LoopState
+
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -270,8 +271,9 @@ class TestPromptBuilderContextBundle:
 
     def test_build_plan_messages_with_bundle_supplements_system(self) -> None:
         """ContextBundle injects supplementary instructions into system message."""
-        from soothe.foundation.loop.prompts.builder import PromptBuilder
-        from soothe.foundation.loop.state.schemas import LoopState
+        from soothe.foundation.sloop.prompts.builder import PromptBuilder
+        from soothe.foundation.sloop.state.schemas import LoopState
+
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -300,8 +302,9 @@ class TestPromptBuilderContextBundle:
 
     def test_build_plan_messages_with_bundle_supplements_human(self) -> None:
         """ContextBundle injects goal lineage/progress into human message."""
-        from soothe.foundation.loop.prompts.builder import PromptBuilder
-        from soothe.foundation.loop.state.schemas import LoopState
+        from soothe.foundation.sloop.prompts.builder import PromptBuilder
+        from soothe.foundation.sloop.state.schemas import LoopState
+
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -321,7 +324,7 @@ class TestPromptBuilderContextBundle:
             context_bundle=bundle,
         )
         # Find the human message (LoopHumanMessage, not SystemMessage)
-        from soothe.foundation.loop.utils.messages import LoopHumanMessage
+        from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 
         human_msgs = [m for m in messages if isinstance(m, LoopHumanMessage)]
         assert len(human_msgs) >= 1
@@ -335,8 +338,9 @@ class TestPromptBuilderContextBundle:
 
     def test_build_plan_messages_empty_bundle_fields_omitted(self) -> None:
         """Empty ContextBundle fields are not injected."""
-        from soothe.foundation.loop.prompts.builder import PromptBuilder
-        from soothe.foundation.loop.state.schemas import LoopState
+        from soothe.foundation.sloop.prompts.builder import PromptBuilder
+        from soothe.foundation.sloop.state.schemas import LoopState
+
         from soothe.protocols.planner import PlanContext
 
         builder = PromptBuilder()
@@ -355,7 +359,7 @@ class TestPromptBuilderContextBundle:
         assert "<AGENT_INSTRUCTIONS>" not in system_content
         assert "<MEMORY_INSTRUCTIONS>" not in system_content
 
-        from soothe.foundation.loop.utils.messages import LoopHumanMessage
+        from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 
         human_msgs = [m for m in messages if isinstance(m, LoopHumanMessage)]
         if human_msgs:

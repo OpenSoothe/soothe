@@ -13,18 +13,18 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from soothe.foundation.loop import StrangeLoop
-from soothe.foundation.loop.clarification import (
+from soothe.foundation.sloop import StrangeLoop
+from soothe.foundation.sloop.clarification import (
     ClarificationAnswer,
     ClarificationRequest,
 )
-from soothe.foundation.loop.state.schemas import (
+from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StatusAssessment,
     StepAction,
 )
+
 from soothe.protocols.planner import PlanContext
 
 

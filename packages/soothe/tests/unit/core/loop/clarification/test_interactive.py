@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
-from soothe.foundation.loop.clarification import interactive as interactive_mod
-from soothe.foundation.loop.clarification.interactive import InteractiveClarificationPolicy
-from soothe.foundation.loop.clarification.protocol import (
+from soothe.foundation.sloop.clarification import interactive as interactive_mod
+from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
+from soothe.foundation.sloop.clarification.protocol import (
     ClarificationDeferredError,
     ClarificationRequest,
     LoopStateView,

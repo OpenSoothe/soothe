@@ -8,11 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from soothe.foundation.loop.state.sloop_manager import (
+from soothe.foundation.sloop.state.sloop_manager import (
     StrangeLoopStateManager,
     _is_async_loop_runtime_error,
 )
+
 from soothe.runner._worker_utils import cancel_orphan_loop_tasks
 
 
@@ -29,7 +29,7 @@ async def test_close_stops_flush_worker() -> None:
         workspace = Path(tmpdir)
         db_path = workspace / "test_loop_checkpoints.db"
         with patch(
-            "soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             manager = StrangeLoopStateManager(loop_id="async_worker_loop", workspace=workspace)

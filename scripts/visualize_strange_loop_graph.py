@@ -27,8 +27,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages/soothe/src"))
 
 from soothe.config import SootheConfig
-from soothe.foundation.loop.orchestrator.builder import build_strange_loop_graph
-from soothe.foundation.loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
+from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
 
 
 def create_mock_runtime_context() -> LoopRuntimeContext:
@@ -52,7 +52,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_goal_context_manager = MagicMock()
     mock_plan_manager = MagicMock()
 
-    from soothe.foundation.loop.state.checkpoint import (
+    from soothe.foundation.sloop.state.checkpoint import (
         GoalExecutionRecord,
         StrangeLoopCheckpoint,
         ThreadHealthMetrics,
@@ -76,8 +76,8 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         started_at=datetime.now(UTC),
     )
 
-    from soothe.foundation.loop.orchestrator.phase_scratch import LoopPhaseScratch
-    from soothe.foundation.loop.state.schemas import LoopState
+    from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.foundation.sloop.state.schemas import LoopState
 
     state = LoopState(
         goal="Test goal",

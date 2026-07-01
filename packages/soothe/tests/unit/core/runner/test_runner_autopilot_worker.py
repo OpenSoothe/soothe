@@ -13,9 +13,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe.foundation.sloop.state.schemas import PlanResult
 
 from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
-from soothe.foundation.loop.state.schemas import PlanResult
 from soothe.protocols.runner import GoalDispatchEnvelope
 from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
 
@@ -403,7 +403,7 @@ async def test_stream_forces_auto_clarification_policy(
         return sentinel_policy
 
     monkeypatch.setattr(
-        "soothe.foundation.loop.clarification.build_clarification_policy_for_runner",
+        "soothe.foundation.sloop.clarification.build_clarification_policy_for_runner",
         _stub_builder,
         raising=True,
     )
@@ -443,7 +443,7 @@ async def test_stream_continues_when_clarification_builder_fails(
         raise RuntimeError("no model")
 
     monkeypatch.setattr(
-        "soothe.foundation.loop.clarification.build_clarification_policy_for_runner",
+        "soothe.foundation.sloop.clarification.build_clarification_policy_for_runner",
         _raising_builder,
         raising=True,
     )

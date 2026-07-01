@@ -5,12 +5,12 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe.foundation.loop.cognition.parser import parse_plan_from_text
-from soothe.foundation.loop.utils.reflection import (
+from soothe.foundation.sloop.cognition.parser import parse_plan_from_text
+from soothe.foundation.sloop.utils.reflection import (
     reflect_heuristic,
     reflect_with_llm,
 )
+
 from soothe.protocols.planner import (
     GoalContext,
     Plan,

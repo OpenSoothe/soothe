@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from langchain_core.messages import ToolMessage
-
-from soothe.foundation.loop.engine.tool_call_id import _rewrite_tool_message_tool_call_id
+from soothe.foundation.sloop.engine.tool_call_id import _rewrite_tool_message_tool_call_id
 
 
 def test_rewrite_tool_message_in_execute_namespace_uses_step_level_id() -> None:
