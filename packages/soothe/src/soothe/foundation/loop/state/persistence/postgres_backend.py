@@ -203,7 +203,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     """,
                         (loop_id, thread_id, status, data_json),
                     )
-                    logger.debug("Saved checkpoint: loop=%s", loop_id)
 
         await self._run_with_retry("save_checkpoint", _do_save)
 

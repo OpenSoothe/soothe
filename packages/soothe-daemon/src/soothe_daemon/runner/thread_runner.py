@@ -659,6 +659,63 @@ class ThreadPool:
             self._workers_by_loop_id.pop(loop_id, None)
             self._pending_responses.pop(request_id, None)
 
+    async def _recover_stale_busy_worker(self, worker: WorkerThreadState) -> bool:
+        """Recover when a worker exited cleanly but main never received ``done``.
+
+        This happens when ``ResponsePusher`` previously dropped ``done`` on a full
+        queue: the worker thread finishes and later hits idle timeout while
+        ``ThreadPool.submit()`` still waits on the response queue.
+
+        Returns:
+            True if recovery ran (synthetic ``done`` or stale bookkeeping cleared)
+            and the caller should skip the generic dead-worker error path.
+        """
+        req_id = worker.current_request_id
+        if req_id is None or worker.dead_failure_routed:
+            return False
+
+        aio_q = self._pending_responses.get(req_id)
+        if aio_q is None:
+            if worker.status == WorkerThreadStatus.BUSY:
+                logger.warning(
+                    "ThreadPool: worker %s died with stale busy state and no waiter; "
+                    "clearing bookkeeping (loop_id=%s, request_id=%s)",
+                    worker.worker_id,
+                    worker.current_loop_id,
+                    req_id,
+                )
+                await self._mark_worker_idle_and_notify(worker)
+                if worker.current_loop_id:
+                    self._workers_by_loop_id.pop(worker.current_loop_id, None)
+            return True
+
+        if _pop_worker_last_error(worker.worker_id) is not None:
+            return False
+
+        worker.dead_failure_routed = True
+        try:
+            await aio_q.put(("done", None))
+            logger.warning(
+                "ThreadPool: worker %s died with stale busy state; delivered recovery "
+                "done (loop_id=%s, request_id=%s)",
+                worker.worker_id,
+                worker.current_loop_id,
+                req_id,
+            )
+        except Exception:
+            worker.dead_failure_routed = False
+            logger.exception(
+                "ThreadPool: failed to deliver recovery done request_id=%s",
+                req_id,
+            )
+            return False
+
+        await self._mark_worker_idle_and_notify(worker)
+        if worker.current_loop_id:
+            self._workers_by_loop_id.pop(worker.current_loop_id, None)
+        self._pending_responses.pop(req_id, None)
+        return True
+
     async def _route_failure_for_dead_busy_worker(self, worker: WorkerThreadState) -> None:
         """If a worker thread died while handling a request, unblock the waiter with error."""
         req_id = worker.current_request_id
@@ -703,7 +760,9 @@ class ThreadPool:
             else "",
         )
         if worker.current_request_id is not None:
-            await self._route_failure_for_dead_busy_worker(worker)
+            recovered = await self._recover_stale_busy_worker(worker)
+            if not recovered:
+                await self._route_failure_for_dead_busy_worker(worker)
 
         try:
             await self._respawn_worker(worker)

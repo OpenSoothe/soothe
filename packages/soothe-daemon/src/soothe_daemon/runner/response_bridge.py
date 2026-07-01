@@ -112,37 +112,46 @@ class ResponsePusher:
             if acquired_slot:
                 _pending_slots.release()
 
+    def _schedule_queue_put(
+        self,
+        item: tuple[str, Any],
+        *,
+        release_slot: bool = False,
+    ) -> None:
+        """Enqueue onto the asyncio queue, waiting for capacity when full."""
+
+        async def _put() -> None:
+            try:
+                await self._queue.put(item)
+            except Exception:
+                logger.exception(
+                    "ResponsePusher: failed to deliver msg_type=%s",
+                    item[0],
+                )
+            finally:
+                if release_slot:
+                    _pending_slots.release()
+
+        asyncio.create_task(_put())
+
     def _deliver(self, msg_type: str, payload: Any, release_slot: bool = False) -> None:
         """Run on the main loop thread; map worker types to asyncio.Queue tuples.
 
-        Chunk delivery uses blocking ``queue.put`` so synthesis frames are not
-        dropped when the asyncio queue is momentarily full.
+        All deliveries use blocking ``queue.put`` so terminal frames (especially
+        ``done``) are never dropped when the asyncio queue is momentarily full.
         """
-        try:
-            if msg_type == WORKER_MSG_TIMEOUT:
-                self._queue.put_nowait((WORKER_MSG_ERROR, payload))
-            elif msg_type == WORKER_MSG_CANCELLED:
-                self._queue.put_nowait((WORKER_MSG_ERROR, asyncio.CancelledError()))
-            elif msg_type == WORKER_MSG_CHUNK:
-
-                async def _put_chunk() -> None:
-                    try:
-                        await self._queue.put((WORKER_MSG_CHUNK, payload))
-                    finally:
-                        if release_slot:
-                            _pending_slots.release()
-
-                asyncio.create_task(_put_chunk())
-            elif msg_type == WORKER_MSG_DONE:
-                self._queue.put_nowait((WORKER_MSG_DONE, None))
-            elif msg_type == WORKER_MSG_ERROR:
-                self._queue.put_nowait((WORKER_MSG_ERROR, payload))
-            else:
-                logger.warning("ResponsePusher: unknown worker msg_type=%s", msg_type)
-                if release_slot:
-                    _pending_slots.release()
-        except Exception:
-            logger.exception("ResponsePusher: failed to deliver msg_type=%s", msg_type)
+        if msg_type == WORKER_MSG_TIMEOUT:
+            self._schedule_queue_put((WORKER_MSG_ERROR, payload))
+        elif msg_type == WORKER_MSG_CANCELLED:
+            self._schedule_queue_put((WORKER_MSG_ERROR, asyncio.CancelledError()))
+        elif msg_type == WORKER_MSG_CHUNK:
+            self._schedule_queue_put((WORKER_MSG_CHUNK, payload), release_slot=release_slot)
+        elif msg_type == WORKER_MSG_DONE:
+            self._schedule_queue_put((WORKER_MSG_DONE, None))
+        elif msg_type == WORKER_MSG_ERROR:
+            self._schedule_queue_put((WORKER_MSG_ERROR, payload))
+        else:
+            logger.warning("ResponsePusher: unknown worker msg_type=%s", msg_type)
             if release_slot:
                 _pending_slots.release()
 

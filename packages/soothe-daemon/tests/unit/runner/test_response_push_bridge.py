@@ -99,3 +99,22 @@ async def test_response_pusher_done_message() -> None:
     msg_type, payload = await out.get()
     assert msg_type == "done"
     assert payload is None
+
+
+@pytest.mark.asyncio
+async def test_response_pusher_done_waits_when_queue_full() -> None:
+    """Terminal ``done`` must not be dropped when the asyncio queue is full."""
+    loop = asyncio.get_running_loop()
+    out: asyncio.Queue[tuple[str, object]] = asyncio.Queue(maxsize=1)
+    pusher = ResponsePusher(loop, out)
+
+    out.put_nowait(("chunk", ((), "messages", "blocking")))
+    pusher.push_from_worker("done")
+
+    msg_type, payload = await asyncio.wait_for(out.get(), timeout=1.0)
+    assert msg_type == "chunk"
+    assert payload == ((), "messages", "blocking")
+
+    msg_type, payload = await asyncio.wait_for(out.get(), timeout=1.0)
+    assert msg_type == "done"
+    assert payload is None
