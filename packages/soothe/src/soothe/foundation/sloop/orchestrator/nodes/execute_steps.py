@@ -120,14 +120,16 @@ def _append_ask_user_loop_messages(
     next planning iteration. Without this pair the planner re-asks the same
     clarification because it has no record of what was asked or answered.
     """
+    from soothe.foundation.sloop.cognition.ledger_compaction import compact_execute_human_content
     from soothe.foundation.sloop.utils.messages import _record_ledger_message
 
     questions_block = _format_ask_user_questions(questions)
     answers_block = _format_ask_user_answers(
         questions, answers, source=source, confidence=confidence
     )
+    stub_step = StepAction(id=step_id, description=description, expected_output="User answers")
     human = LoopHumanMessage(
-        content=f"Execute: {description}\nQuestions:\n{questions_block}",
+        content=compact_execute_human_content(stub_step) + f"\n\nQUESTIONS:\n{questions_block}",
         thread_id=state.thread_id,
         iteration=state.iteration,
         goal_summary=(state.goal[:200] if state.goal else None),

@@ -976,7 +976,11 @@ class LLMPlanner:
         plan_result, _ = await self._generate_plan_with_response(
             messages, assessment, goal, iteration, thread_id=thread_id
         )
-        return plan_result
+        from soothe.foundation.sloop.cognition.plan_step_briefs import (
+            populate_plan_generate_full_descriptions,
+        )
+
+        return populate_plan_generate_full_descriptions(plan_result, goal)
 
     async def _generate_plan_with_response(
         self,
@@ -1313,7 +1317,7 @@ class LLMPlanner:
             from soothe.foundation.sloop.utils.messages import LoopAIMessage, _record_ledger_message
 
             # Compact the recorded human so the next assess sees cache-stable
-            # prompt prefix (C1 + D1), while preserving full AI response in ledger.
+            # prompt prefix (D1), while preserving full AI response in ledger.
             recorded_human = human_msg.model_copy(
                 update={"content": compact_planning_human_content(str(human_msg.content))}
             )
@@ -1469,6 +1473,16 @@ class LLMPlanner:
             thread_id=state.thread_id,
         )
 
+        from soothe.foundation.sloop.cognition.plan_step_briefs import (
+            populate_plan_generate_full_descriptions,
+        )
+
+        plan_result = populate_plan_generate_full_descriptions(plan_result, goal)
+        if ai_response is plan_result or (
+            hasattr(ai_response, "model_dump") and hasattr(plan_result, "model_dump")
+        ):
+            ai_response = plan_result
+
         # Guard: reject premature type="final" at iteration 0 with no execution
         if plan_result.type == "final":
             if state.iteration == 0 and len(state.step_results) == 0:
@@ -1499,7 +1513,7 @@ class LLMPlanner:
             from soothe.foundation.sloop.utils.messages import LoopAIMessage, _record_ledger_message
 
             # Compact the recorded human so cache stays warm and the goal is
-            # not duplicated as a directive (C1 + D1). The AI dump for
+            # not duplicated as a directive (D1). The AI dump for
             # plan-generate is kept verbatim — its `steps` list IS the value
             # of the recording, and there is no equivalent of `assessment_reasoning`
             # to drop without losing schema fidelity.

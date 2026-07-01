@@ -301,7 +301,7 @@ class TestPromptBuilderContextBundle:
         assert "Memory-based instructions" in system_content
 
     def test_build_plan_messages_with_bundle_supplements_human(self) -> None:
-        """ContextBundle injects goal lineage/progress into human message."""
+        """ContextBundle injects goal/step lineage into human message (not goal progress)."""
         from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
 
@@ -331,8 +331,8 @@ class TestPromptBuilderContextBundle:
         human_content = str(human_msgs[0].content)
         assert "GOAL LINEAGE:" in human_content
         assert "Root → Child" in human_content
-        assert "GOAL PROGRESS:" in human_content
-        assert "2/5 completed" in human_content
+        assert "GOAL PROGRESS:" not in human_content
+        assert "2/5 completed" not in human_content
         assert "STEP LINEAGE:" in human_content
         assert "Reasoning trace here" in human_content
 

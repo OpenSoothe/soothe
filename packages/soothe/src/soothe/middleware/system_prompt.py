@@ -367,10 +367,11 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Scenario guidance
 
         NOT in system prompt (moved to user message):
-        - Date/time → TIMESTAMP:
         - Execution hints → EXECUTION HINTS:
         - Current goal context → ledger / plan turns (not repeated on execute-step message)
         - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
+
+        Volatile clock → ``<TIMESTAMP>`` XML footer on the system prompt (not user/ledger).
 
         Args:
             complexity: One of "minimal", "simple", "medium", "complex". All
@@ -567,10 +568,13 @@ class SystemPromptMiddleware(AgentMiddleware):
         if mcp_block:
             static_sections.append(mcp_block)
 
-        # ── Assemble: static + semi-static (no date line, no execution hints) ──
+        # ── Assemble: static + semi-static ────────────────────────────────
+        from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
+
         parts = ["\n\n".join(static_sections)]
         if semi_static_sections:
             parts.append("\n\n".join(semi_static_sections))
+        parts.append(build_timestamp_xml_footer())
 
         return "\n\n".join(parts)
 

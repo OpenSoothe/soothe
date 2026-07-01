@@ -17,7 +17,7 @@ def test_execute_message_omits_response_language_hint() -> None:
     )
     assert "response_language_hint" not in msg.lower()
     assert "RESPONSE_LANGUAGE_HINT" not in msg
-    assert "TIMESTAMP:" in msg
+    assert "TIMESTAMP:" not in msg
 
 
 def test_execute_message_uses_goal_label() -> None:
@@ -105,6 +105,44 @@ def test_execute_message_omits_prior_step_evidence_when_absent() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message("Solo step")
     assert "PRIOR STEP EVIDENCE:" not in msg
+
+
+def test_plan_assess_message_omits_intent_section() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_assess_message(goal="analyze architecture")
+    assert "GOAL:" in msg
+    assert "INTENT:" not in msg
+
+
+def test_plan_generate_message_omits_intent_section() -> None:
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(goal="analyze architecture")
+    assert "GOAL:" in msg
+    assert "INTENT:" not in msg
+
+
+def test_plan_assess_message_omits_goal_progress_even_with_bundle() -> None:
+    from soothe.foundation.context.projection import ContextBundle
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_assess_message(
+        goal="analyze architecture",
+        context_bundle=ContextBundle(goal_progress="Steps: 2/5 completed"),
+    )
+    assert "GOAL PROGRESS:" not in msg
+    assert "2/5 completed" not in msg
+
+
+def test_plan_generate_message_omits_goal_progress_even_with_bundle() -> None:
+    from soothe.foundation.context.projection import ContextBundle
+
+    builder = UserMessageBuilder()
+    msg = builder.build_plan_generate_message(
+        goal="analyze architecture",
+        context_bundle=ContextBundle(goal_progress="Steps: 2/5 completed"),
+    )
+    assert "GOAL PROGRESS:" not in msg
+    assert "2/5 completed" not in msg
 
 
 def test_plan_assess_message_uses_goal_label() -> None:

@@ -1,25 +1,14 @@
-"""Unit tests for plan-phase ledger compaction (A2 + C1 + D1)."""
+"""Unit tests for plan-phase ledger compaction (A2 + D1)."""
 
 from __future__ import annotations
 
 import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import
 from soothe.foundation.sloop.cognition.ledger_compaction import (
+    compact_execute_human_content,
     compact_plan_assess_ai_dump,
     compact_planning_human_content,
 )
-from soothe.foundation.sloop.state.schemas import StatusAssessment
-
-# --- New format tests ---
-
-
-def test_compact_human_strips_timestamp_line() -> None:
-    content = (
-        "GOAL:\ndo the thing\n\nPRIOR PROGRESS:\nhint=low\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
-    )
-    out = compact_planning_human_content(content)
-    assert "TIMESTAMP:" not in out
-    assert "2026-06-02" not in out
-    assert "PRIOR PROGRESS:" in out, "non-volatile blocks must be preserved"
+from soothe.foundation.sloop.state.schemas import StatusAssessment, StepAction
 
 
 def test_compact_human_rewrites_goal_to_goal_recap() -> None:
@@ -31,13 +20,10 @@ def test_compact_human_rewrites_goal_to_goal_recap() -> None:
 
 
 def test_compact_human_new_format_is_idempotent() -> None:
-    content = "GOAL:\nx\n\nTIMESTAMP: 2026-06-02T10:19:55+00:00"
+    content = "GOAL:\nx\n\nINTENT: agentic"
     once = compact_planning_human_content(content)
     twice = compact_planning_human_content(once)
     assert once == twice
-
-
-# --- Legacy XML format tests (dual-format support) ---
 
 
 def test_compact_human_strips_legacy_context_info_block() -> None:
@@ -67,9 +53,6 @@ def test_compact_human_legacy_format_is_idempotent() -> None:
     once = compact_planning_human_content(content)
     twice = compact_planning_human_content(once)
     assert once == twice
-
-
-# --- Common ---
 
 
 def test_compact_human_passthrough_when_no_markers() -> None:
@@ -121,3 +104,28 @@ def test_compact_plan_assess_survives_model_dump_failure() -> None:
             return "broken-repr"
 
     assert compact_plan_assess_ai_dump(_Broken()) == "broken-repr"
+
+
+def test_compact_execute_human_content_uses_brief_and_expected_output() -> None:
+    step = StepAction(
+        id="01",
+        description="Discover RFCs",
+        full_description="Search docs/specs for autopilot RFC files and list scope areas.",
+        expected_output="RFC list with scope summaries",
+    )
+    out = compact_execute_human_content(step)
+    assert out.startswith("GOAL RECAP:\n")
+    assert "autopilot RFC" in out
+    assert "EXPECTED OUTPUT:\nRFC list with scope summaries" in out
+
+
+def test_compact_execute_human_content_includes_prior_evidence_from_envelope() -> None:
+    step = StepAction(id="02", description="Fix failures", expected_output="tests pass")
+    envelope = (
+        "GOAL:\nFix failures\n\n"
+        "PRIOR STEP EVIDENCE:\nStep 01 — run tests (completed)\n---\nF821 in foo.py\n\n"
+        "EXECUTION HINTS:\nExpected output:\n- tests pass"
+    )
+    out = compact_execute_human_content(step, envelope=envelope)
+    assert "PRIOR STEP EVIDENCE:" in out
+    assert "F821 in foo.py" in out

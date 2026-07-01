@@ -9,6 +9,7 @@ from soothe.foundation.sloop.cognition.continuation_prompts import (
     format_loop_continuation_assess_prompt,
 )
 from soothe.foundation.sloop.cognition.ledger_compaction import (
+    compact_execute_human_content,
     compact_plan_assess_ai_dump,
     compact_planning_human_content,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "LOOP_CONTINUATION_ASSESS_PROMPT",
     "PlanPhase",
     "build_trivial_plan",
+    "compact_execute_human_content",
     "compact_plan_assess_ai_dump",
     "compact_planning_human_content",
     "format_loop_continuation_assess_prompt",
