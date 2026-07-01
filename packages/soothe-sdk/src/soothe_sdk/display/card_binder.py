@@ -355,6 +355,21 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
                 # banner under the resumed transcript that has no live
                 # counterpart — drop it.
                 return None
+            if event_type == "soothe.cognition.intent.classified":
+                reasoning = str(event_data.get("reasoning") or "").strip()
+                if not reasoning:
+                    return None
+                return MessageData(
+                    type=MessageType.COGNITION_REASON,
+                    content="",
+                    timestamp=event_timestamp,
+                    cognition_plan_next_action="",
+                    cognition_plan_status="",
+                    cognition_plan_iteration=0,
+                    cognition_plan_action="",
+                    cognition_plan_assessment="",
+                    cognition_plan_strategy=reasoning,
+                )
             if event_type == "soothe.cognition.strange_loop.reasoned":
                 assessment = str(event_data.get("assessment_reasoning") or "").strip()
                 plan_reasoning = str(event_data.get("plan_reasoning") or "").strip()

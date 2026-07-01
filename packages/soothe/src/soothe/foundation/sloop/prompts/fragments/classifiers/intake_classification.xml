@@ -20,7 +20,7 @@ When intake_label is "quiz", also provide:
 - quiz_response: concise direct answer from training knowledge. For greetings/thanks: brief polite reply. For "who are you": self-identify as {assistant_name}, not vendor/model names.
 
 When intake_label is not "quiz", also provide:
-- reasoning: ONE brief sentence (max 20 words) explaining why tools/action needed. Examples: "Needs file analysis", "Follow-up on prior work", "Requires web search", "Multi-step code change".
+- reasoning: ONE brief first-person sentence (max 20 words) starting with "I'll" or "Let me" — what you will do next and why tools/action are needed. Examples: "I'll inspect the repo layout to map the architecture.", "Let me search the web for today's weather.", "I'll continue from our prior thread and summarize the draft."
 - goal_description: normalized goal description.
 - task_complexity: minimal|simple|medium|complex (minimal=quiz only; simple=one step; medium=several steps; complex=architecture/migration/multi-phase).
 

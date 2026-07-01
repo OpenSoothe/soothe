@@ -230,7 +230,7 @@ class IntentClassifier:
         return IntentClassification(
             intent_type="agentic",
             intake_label=IntakeLabel.COMPLEX,
-            reasoning=f"Classification fallback ({reason})",
+            reasoning="Let me run the full agent loop to work through this goal.",
             goal_description=query,
             task_complexity=TaskComplexity.COMPLEX,
             quiz_response=None,
@@ -247,7 +247,7 @@ class IntentClassifier:
                 intent.goal_description = query
                 logger.debug("Patched missing goal_description")
             if not intent.reasoning:
-                intent.reasoning = "Goal requires tool execution"
+                intent.reasoning = "I'll use tools to work through this goal."
                 logger.debug("Patched missing reasoning")
         return intent
 

@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
+
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage
-
 from soothe.protocols.planner import PlanContext
 
 
@@ -60,9 +60,10 @@ def test_assess_with_config_still_includes_environment_workspace() -> None:
 
 
 def test_assess_omits_workspace_rules_and_instructions(tmp_path) -> None:
-    """plan-assess is a meta-decision; workspace conventions / project rules
-    don't apply to it, so WORKSPACE_RULES and WORKSPACE_INSTRUCTIONS must NOT
-    appear in the assess system prompt even when the workspace has AGENTS.md.
+    """plan-assess is a meta-decision; workspace conventions must NOT appear in assess.
+
+    plan-generate keeps WORKSPACE_RULES (path semantics) but not WORKSPACE_INSTRUCTIONS
+    (AGENTS.md / CLAUDE.md) — those are injected on execute via CoreAgent.
     """
     (tmp_path / "AGENTS.md").write_text("# Project rules\n\nBe terse.\n", encoding="utf-8")
     state = LoopState(goal="analyze", thread_id="t1", iteration=0, max_iterations=8)
@@ -80,10 +81,10 @@ def test_assess_omits_workspace_rules_and_instructions(tmp_path) -> None:
     # Assess: stripped.
     assert "<WORKSPACE_RULES>" not in assess_system
     assert "<WORKSPACE_INSTRUCTIONS>" not in assess_system
-    # Generate: present (authors steps that touch the workspace).
+    # Generate: path rules only; project instructions omitted from planner.
     assert "<WORKSPACE_RULES>" in generate_system
-    assert "<WORKSPACE_INSTRUCTIONS>" in generate_system
-    assert "Be terse." in generate_system
+    assert "<WORKSPACE_INSTRUCTIONS>" not in generate_system
+    assert "Be terse." not in generate_system
 
 
 def test_assess_user_query_in_plan_context_user_message_ig376() -> None:
