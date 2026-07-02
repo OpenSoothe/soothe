@@ -202,7 +202,7 @@ if LANGFUSE_AVAILABLE:
         """Extends Langfuse's handler so chat model traces include the effective system prompt.
 
         ``SystemPromptMiddleware`` registers the effective system text (with
-        ``WORKSPACE_RULES`` / ``WORKSPACE_INSTRUCTIONS`` when applicable) before each model
+        ``WORKSPACE_RULES`` / ``AGENT_INSTRUCTIONS`` when applicable) before each model
         call. LangChain often passes only the shorter graph ``resolve_system_prompt()`` text;
         this handler replaces or prepends the effective prompt on the traced message batch and
         reaffirms generation ``input`` on ``on_llm_end`` so Langfuse UI and exports show it.

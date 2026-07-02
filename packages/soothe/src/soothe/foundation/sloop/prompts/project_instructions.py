@@ -1,7 +1,7 @@
-"""Load workspace AGENTS.md (preferred) or CLAUDE.md for system-message WORKSPACE_INSTRUCTIONS (RFC-214).
+"""Load workspace AGENTS.md (preferred) or CLAUDE.md for system-message AGENT_INSTRUCTIONS (RFC-214).
 
 Progressive disclosure: small files inline verbatim; larger files emit a
-paragraph-clean headline plus a ``<note>`` hint that points the LLM at
+paragraph-clean headline plus a ``<NOTE>`` hint that points the LLM at
 ``read_file`` for the full body. Read+format results are cached per
 ``(path, mtime)`` so repeated prompt builds within a session don't re-hit disk.
 """
@@ -76,7 +76,7 @@ def _agents_md_candidates(workspace: Path) -> list[Path]:
     ]
 
 
-def load_workspace_project_instructions(
+def load_agent_instructions(
     workspace: str | Path | None,
     *,
     max_lines: int = DEFAULT_PROJECT_INSTRUCTION_MAX_LINES,
@@ -90,7 +90,7 @@ def load_workspace_project_instructions(
     3. CLAUDE.md in workspace root (fallback when no AGENTS.md found)
 
     Only ONE file is loaded. Files under ``headline_max_chars`` inline
-    verbatim; larger files emit a partial headline plus a ``<note>`` directing
+    verbatim; larger files emit a partial headline plus a ``<NOTE>`` directing
     the LLM to ``read_file`` for the full body (progressive disclosure).
 
     Args:
@@ -100,7 +100,7 @@ def load_workspace_project_instructions(
             full body is suppressed in favor of a read_file hint.
 
     Returns:
-        XML fragment ``<WORKSPACE_INSTRUCTIONS>`` for system message semi-static tier,
+        XML fragment ``<AGENT_INSTRUCTIONS>`` for execute-type system messages,
         or ``None`` when no files were found or ``workspace`` is unset.
     """
     if not workspace:
@@ -161,10 +161,10 @@ def _build_block_cached(
         inlined=inlined,
     )
     if partial or truncated_lines:
-        note = f'\n<note>Full body — use `read_file("{path}")` to load on demand.</note>'
+        note = f'\n<NOTE>Full body — use `read_file("{path}")` to load on demand.</NOTE>'
     else:
         note = ""
-    return "<WORKSPACE_INSTRUCTIONS>\n" + block + note + "\n</WORKSPACE_INSTRUCTIONS>"
+    return "<AGENT_INSTRUCTIONS>\n" + block + note + "\n</AGENT_INSTRUCTIONS>"
 
 
 def _format_instruction_block(
@@ -178,15 +178,18 @@ def _format_instruction_block(
     """Format one instruction file as a CDATA-wrapped XML element."""
     trunc_attr = "true" if truncated_lines else "false"
     return (
-        f'<file name="{label}" path="{path}" inlined="{inlined}" '
+        f'<FILE name="{label}" path="{path}" inlined="{inlined}" '
         f'truncated_lines="{trunc_attr}">\n'
         f"<![CDATA[\n{body}\n]]>\n"
-        f"</file>"
+        f"</FILE>"
     )
 
+
+load_workspace_project_instructions = load_agent_instructions
 
 __all__ = [
     "DEFAULT_PROJECT_INSTRUCTION_MAX_LINES",
     "PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS",
+    "load_agent_instructions",
     "load_workspace_project_instructions",
 ]

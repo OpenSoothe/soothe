@@ -143,4 +143,30 @@ def test_project_execute_step_graph_input_mid_goal_no_slice_a() -> None:
         decision=decision,
     )
     assert result.cross_goal_projected is False
+    assert result.predecessor_projected is True
     assert len(result.messages) == 2
+
+
+def test_project_execute_step_graph_input_predecessor_false_when_ledger_empty() -> None:
+    step = StepAction(id="02", description="Fix", dependencies=["01"])
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step, StepAction(id="01", description="Verify")],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        current_decision=decision,
+        loop_messages=[],
+        iteration=1,
+    )
+    result = project_execute_step_graph_input(
+        [],
+        state=state,
+        step=step,
+        decision=decision,
+    )
+    assert result.predecessor_projected is False
+    assert result.messages == []

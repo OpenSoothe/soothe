@@ -153,7 +153,11 @@ class TestIntakeClassificationPrompts:
 
     def test_primary_prompt_leads_with_output_contract(self) -> None:
         prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-        assert prompt.index("Output contract") < prompt.index("intake_label (internal routing")
+        assert prompt.index("Output contract") < prompt.index("intake_label (routing")
+
+    def test_primary_prompt_uses_uppercase_intent_instructions_tag(self) -> None:
+        assert "<INTENT_INSTRUCTIONS>" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        assert "<intent_instructions>" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_primary_prompt_forbids_label_jargon_in_reasoning(self) -> None:
         prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()

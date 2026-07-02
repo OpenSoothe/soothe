@@ -123,7 +123,7 @@ class _SystemPromptState(TypedDict):
       - ``workspace`` so the executor's ``_execute_graph_input``
         and ``WorkspaceContextMiddleware.abefore_agent`` writes propagate to
         ``modify_request``. Without this declaration, ``state.get("workspace")``
-        returns ``None`` and WORKSPACE_RULES / WORKSPACE_INSTRUCTIONS / the
+        returns ``None`` and WORKSPACE_RULES / AGENT_INSTRUCTIONS / the
         <WORKSPACE> block all disappear from the execute-step system prompt.
       - Four MCP keys for cross-call MCP state.
 
@@ -417,7 +417,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         #   2. <RESPONSE_LANGUAGE_HINT>    (always — moved from user envelope)
         #   3. <AVAILABLE_TOOLS>           (when progressive tools enabled)
         #   4. <WORKSPACE_RULES>           (when workspace bound)
-        #   5. <WORKSPACE_INSTRUCTIONS>    (when AGENTS.md/CLAUDE.md present)
+        #   5. <AGENT_INSTRUCTIONS>         (when AGENTS.md/CLAUDE.md present)
         #   6. <ENVIRONMENT>               (always)
         #   7. <WORKSPACE>                 (when workspace bound)
         # Everything that follows is gated (context/memory/directive/contract)
@@ -449,18 +449,18 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "(`find . -type f | awk ... | sort | uniq -c`) so the count or analysis runs over the live tree.\n"
                 "</WORKSPACE_RULES>"
             )
-            # Workspace instructions (CLAUDE.md / AGENTS.md) - goal-stable.
+            # Agent instructions (AGENTS.md / CLAUDE.md) - goal-stable.
             from soothe.foundation.sloop.prompts.project_instructions import (
-                load_workspace_project_instructions,
+                load_agent_instructions,
             )
 
-            headline_cap = int(self._config.agent.workspace_instructions_max_chars)
-            ws_instructions = load_workspace_project_instructions(
+            headline_cap = int(self._config.agent.agent_instructions_max_chars)
+            agent_instructions = load_agent_instructions(
                 workspace,
                 headline_max_chars=headline_cap,
             )
-            if ws_instructions:
-                static_sections.append(ws_instructions)
+            if agent_instructions:
+                static_sections.append(agent_instructions)
 
         static_sections.append(env_section)
 

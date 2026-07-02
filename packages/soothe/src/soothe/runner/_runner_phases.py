@@ -518,7 +518,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
             last_assistant_max_chars: Truncation bound for the last assistant turn.
 
         Returns:
-            XML-formatted strings like ``<user>...</user>`` / ``<assistant>...</assistant>``.
+            XML-formatted strings like ``<USER>...</USER>`` / ``<ASSISTANT>...</ASSISTANT>``.
         """
         if not messages:
             return []
@@ -532,9 +532,9 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         lines: list[str] = []
         for i, msg in enumerate(tail):
             if isinstance(msg, HumanMessage):
-                tag = "user"
+                tag = "USER"
             elif isinstance(msg, AIMessage):
-                tag = "assistant"
+                tag = "ASSISTANT"
             else:
                 continue
             content = getattr(msg, "content", "")
